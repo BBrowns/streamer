@@ -1,0 +1,29 @@
+{
+    "name": "streamer",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Cross-platform media streaming aggregator",
+    "workspaces": [
+        "packages/*",
+        "server",
+        "apps/*"
+    ],
+    "scripts": {
+        "dev:server": "npm run dev --workspace=server",
+        "dev:mobile": "npm run start --workspace=apps/mobile",
+        "build": "turbo run build",
+        "test": "turbo run test",
+        "lint": "turbo run lint",
+        "typecheck": "turbo run typecheck",
+        "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+    },
+    "devDependencies": {
+        "prettier": "^3.4.0",
+        "turbo": "^2.4.0",
+        "typescript": "^5.7.0"
+    },
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "packageManager": "npm@10.9.0"
+}

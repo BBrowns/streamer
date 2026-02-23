@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: streamer-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: streamer
+      POSTGRES_PASSWORD: streamer_dev
+      POSTGRES_DB: streamer_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U streamer -d streamer_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      target: dev
+    container_name: streamer-server
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://streamer:streamer_dev@db:5432/streamer_db?schema=public
+      JWT_SECRET: dev-only-secret-change-in-production
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+      PORT: 3001
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      CORS_ORIGINS: http://localhost:8081,http://localhost:19006
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./server/src:/app/server/src
+      - ./packages/shared/src:/app/packages/shared/src
+
+volumes:
+  pgdata:

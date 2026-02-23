@@ -1,0 +1,470 @@
+openapi: '3.1.0'
+info:
+  title: Streamer API
+  description: |
+    Cross-platform media streaming aggregator API.
+    Aggregates metadata and streaming links from remote Add-ons.
+  version: 0.1.0
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3001
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        requestId:
+          type: string
+      required: [error]
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+      required: [accessToken, refreshToken]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, email, createdAt]
+
+    MetaPreview:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [movie, series]
+        name:
+          type: string
+        poster:
+          type: string
+          format: uri
+        description:
+          type: string
+        releaseInfo:
+          type: string
+        imdbRating:
+          type: string
+      required: [id, type, name, poster]
+
+    MetaDetail:
+      allOf:
+        - $ref: '#/components/schemas/MetaPreview'
+        - type: object
+          properties:
+            background:
+              type: string
+              format: uri
+            genres:
+              type: array
+              items:
+                type: string
+            cast:
+              type: array
+              items:
+                type: string
+            director:
+              type: array
+              items:
+                type: string
+            runtime:
+              type: string
+            videos:
+              type: array
+              items:
+                $ref: '#/components/schemas/VideoEntry'
+
+    VideoEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        season:
+          type: integer
+        episode:
+          type: integer
+        released:
+          type: string
+      required: [id, title, season, episode, released]
+
+    Stream:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        title:
+          type: string
+        name:
+          type: string
+        behaviorHints:
+          type: object
+          properties:
+            notWebReady:
+              type: boolean
+            bingeGroup:
+              type: string
+      required: [url]
+
+    AddonManifest:
+      type: object
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        logo:
+          type: string
+          format: uri
+        resources:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                properties:
+                  name:
+                    type: string
+                  types:
+                    type: array
+                    items:
+                      type: string
+                  idPrefixes:
+                    type: array
+                    items:
+                      type: string
+        types:
+          type: array
+          items:
+            type: string
+        catalogs:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+              name:
+                type: string
+      required: [id, version, name, description, resources, types, catalogs]
+
+    InstalledAddon:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        transportUrl:
+          type: string
+          format: uri
+        manifest:
+          $ref: '#/components/schemas/AddonManifest'
+        installedAt:
+          type: string
+          format: date-time
+      required: [id, userId, transportUrl, manifest, installedAt]
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                displayName:
+                  type: string
+              required: [email, password]
+      responses:
+        '201':
+          description: User registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/UserProfile'
+                  tokens:
+                    $ref: '#/components/schemas/AuthTokens'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+              required: [email, password]
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/UserProfile'
+                  tokens:
+                    $ref: '#/components/schemas/AuthTokens'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required: [refreshToken]
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+        '401':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/addons:
+    get:
+      tags: [Add-ons]
+      summary: List installed add-ons
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of installed add-ons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  addons:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InstalledAddon'
+    post:
+      tags: [Add-ons]
+      summary: Install an add-on
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transportUrl:
+                  type: string
+                  format: uri
+              required: [transportUrl]
+      responses:
+        '201':
+          description: Add-on installed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstalledAddon'
+        '400':
+          description: Invalid manifest
+        '409':
+          description: Already installed
+        '502':
+          description: Could not reach add-on
+
+  /api/addons/{id}:
+    delete:
+      tags: [Add-ons]
+      summary: Uninstall an add-on
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Add-on uninstalled
+        '404':
+          description: Add-on not found
+
+  /api/catalog/{type}:
+    get:
+      tags: [Aggregator]
+      summary: Get aggregated catalog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [movie, series]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: skip
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Merged catalog from all add-ons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MetaPreview'
+
+  /api/meta/{type}/{id}:
+    get:
+      tags: [Aggregator]
+      summary: Get metadata for a specific item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    $ref: '#/components/schemas/MetaDetail'
+        '404':
+          description: Metadata not found
+
+  /api/stream/{type}/{id}:
+    get:
+      tags: [Aggregator]
+      summary: Get streams for a specific item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Available streams
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  streams:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Stream'
