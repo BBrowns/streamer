@@ -28,7 +28,7 @@ export class AddonController {
 
     async uninstall(req: Request, res: Response, next: NextFunction) {
         try {
-            await addonService.uninstall(req.user!.userId, req.params.id);
+            await addonService.uninstall(req.user!.userId, req.params.id as string);
             res.status(204).send();
         } catch (err) {
             next(err);
