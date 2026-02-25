@@ -15,9 +15,12 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  refreshTokens      RefreshToken[]
-  addons             InstalledAddon[]
+  refreshTokens       RefreshToken[]
+  addons              InstalledAddon[]
   passwordResetTokens PasswordResetToken[]
+  libraryItems        LibraryItem[]
+  watchProgress       WatchProgress[]
+  traktToken          TraktToken?
 
   @@map("users")
 }
@@ -57,4 +60,56 @@ model InstalledAddon {
 
   @@unique([userId, transportUrl])
   @@map("installed_addons")
+}
+
+// -- NEW MODELS: Library & Watch Progress --
+
+model LibraryItem {
+  id      String   @id @default(uuid())
+  userId  String   @map("user_id")
+  type    String   // "movie" | "series"
+  itemId  String   @map("item_id") // IMDB/TMDB ID
+  title   String
+  poster  String?
+  addedAt DateTime @default(now()) @map("added_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@index([userId, addedAt(sort: Desc)])
+  @@map("library_items")
+}
+
+model WatchProgress {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  type        String
+  itemId      String   @map("item_id")
+  season      Int      @default(0)
+  episode     Int      @default(0)
+  currentTime Float    @map("current_time")
+  duration    Float
+  title       String
+  poster      String?
+  lastWatched DateTime @default(now()) @map("last_watched")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId, season, episode])
+  @@index([userId, lastWatched(sort: Desc)])
+  @@map("watch_progress")
+}
+
+// -- NEW MODEL: Trakt.tv Token Storage --
+
+model TraktToken {
+  id           String   @id @default(uuid())
+  userId       String   @unique @map("user_id")
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  expiresAt    DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("trakt_tokens")
 }

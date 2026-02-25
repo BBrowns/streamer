@@ -8,14 +8,23 @@ import {
     timeout,
     TimeoutStrategy,
     wrap,
+    bulkhead,
     type IPolicy,
 } from 'cockatiel';
 import { env } from '../../config/env.js';
 import { logger } from '../../config/logger.js';
 
-/** Create a resilience policy for outbound add-on requests */
+/**
+ * Create a resilience policy for outbound add-on requests.
+ *
+ * Implements the "Fail-Fast, Recover-Quickly" strategy:
+ * 1. **Timeout**: 5s per request (aggressive — cancels immediately)
+ * 2. **Retry**: 1 retry with exponential backoff (500ms → 2s)
+ * 3. **Circuit Breaker**: Opens after 3 consecutive failures, half-open after 15s
+ * 4. **Bulkhead**: Limits concurrent requests per add-on to prevent resource exhaustion
+ */
 export function createAddonPolicy(addonId: string): IPolicy {
-    // Timeout: 5 seconds per request
+    // Timeout: configurable, defaults to 5 seconds
     const timeoutPolicy = timeout(env.addonTimeoutMs, TimeoutStrategy.Aggressive);
 
     // Retry: 1 retry on failure with exponential backoff
@@ -34,6 +43,13 @@ export function createAddonPolicy(addonId: string): IPolicy {
         logger.warn({ addonId, circuitState: state }, 'Circuit breaker state changed');
     });
 
-    // Wrap policies: timeout → retry → circuit breaker
-    return wrap(timeoutPolicy, retryPolicy, breakerPolicy);
+    // Bulkhead: limit concurrent outbound requests per add-on
+    const bulkheadPolicy = bulkhead(env.addonMaxConcurrent, 20); // max concurrent, max queue
+
+    bulkheadPolicy.onReject(() => {
+        logger.warn({ addonId }, 'Bulkhead rejected request — add-on concurrency limit reached');
+    });
+
+    // Wrap policies: bulkhead → timeout → retry → circuit breaker
+    return wrap(bulkheadPolicy, timeoutPolicy, retryPolicy, breakerPolicy);
 }
