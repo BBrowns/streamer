@@ -99,7 +99,7 @@ export default function DetailScreen() {
 
                         {streamsLoading ? (
                             <ActivityIndicator color="#818cf8" />
-                        ) : streams && streams.length > 0 ? (
+                        ) : (!!streams && streams.length > 0) ? (
                             streams.map((stream, i) => {
                                 const engine = streamEngineManager.resolveEngine(stream);
                                 return (
