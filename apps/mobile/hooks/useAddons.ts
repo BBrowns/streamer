@@ -16,3 +16,4 @@ export function useAddons() {
         staleTime: 2 * 60 * 1000, // 2 min cache
     });
 }
+ret
