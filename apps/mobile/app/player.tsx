@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Modal, 
 import { useRouter } from 'expo-router';
 import { usePlayerStore } from '../stores/playerStore';
 import { streamEngineManager } from '../services/streamEngine/StreamEngineManager';
+import { useUpdateProgress } from '../hooks/useContinueWatching';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { AudioTrack, SubtitleTrack, StreamStats } from '../services/streamEngine/IStreamEngine';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,15 +15,33 @@ try {
     // Web fallback — will use HTML5 video element
 }
 
+// --- Double-Tap Seek Gesture ---
+const SEEK_SECONDS = 10;
+const DOUBLE_TAP_DELAY = 300;
+
+// --- Progress Reporting Interval ---
+const PROGRESS_REPORT_INTERVAL = 15_000; // Report every 15 seconds
+
 export default function PlayerScreen() {
     const router = useRouter();
-    const { currentStream, isBuffering, setBuffering, setProgress, clearPlayer } =
+    const { currentStream, mediaInfo, isBuffering, setBuffering, setProgress, clearPlayer } =
         usePlayerStore();
     const videoRef = useRef<any>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
     const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
     const [stats, setStats] = useState<StreamStats>({ speed: 0, peers: 0 });
+
+    // Double-tap seek state
+    const [seekFeedback, setSeekFeedback] = useState<'left' | 'right' | null>(null);
+    const lastTapRef = useRef<{ time: number; side: 'left' | 'right' } | null>(null);
+    const seekFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Progress reporting
+    const updateProgress = useUpdateProgress();
+    const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const currentTimeRef = useRef(0);
+    const durationRef = useRef(0);
 
     const engine = currentStream ? streamEngineManager.resolveEngine(currentStream) : null;
     const playbackUri = currentStream
@@ -33,11 +52,9 @@ export default function PlayerScreen() {
     useEffect(() => {
         if (!engine) return;
 
-        // Populate tracks
         setAudioTracks(engine.getAudioTracks());
         setSubtitles(engine.getSubtitles());
 
-        // Listen for stats (active when torrent engine is used)
         const onStats = (data: StreamStats) => setStats(data);
         engine.on('stats', onStats);
 
@@ -45,6 +62,78 @@ export default function PlayerScreen() {
             engine.off('stats', onStats);
         };
     }, [engine]);
+
+    // Progress reporting to server (every 15s)
+    useEffect(() => {
+        if (!mediaInfo) return;
+
+        progressTimerRef.current = setInterval(() => {
+            if (currentTimeRef.current > 0 && durationRef.current > 0) {
+                updateProgress.mutate({
+                    type: mediaInfo.type,
+                    itemId: mediaInfo.itemId,
+                    title: mediaInfo.title,
+                    poster: mediaInfo.poster,
+                    season: mediaInfo.season,
+                    episode: mediaInfo.episode,
+                    currentTime: currentTimeRef.current,
+                    duration: durationRef.current,
+                });
+            }
+        }, PROGRESS_REPORT_INTERVAL);
+
+        return () => {
+            // Report final progress on unmount
+            if (currentTimeRef.current > 0 && durationRef.current > 0) {
+                updateProgress.mutate({
+                    type: mediaInfo.type,
+                    itemId: mediaInfo.itemId,
+                    title: mediaInfo.title,
+                    poster: mediaInfo.poster,
+                    season: mediaInfo.season,
+                    episode: mediaInfo.episode,
+                    currentTime: currentTimeRef.current,
+                    duration: durationRef.current,
+                });
+            }
+            if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+        };
+    }, [mediaInfo]);
+
+    const handleProgress = useCallback(
+        ({ currentTime, seekableDuration }: { currentTime: number; seekableDuration: number }) => {
+            currentTimeRef.current = currentTime;
+            durationRef.current = seekableDuration;
+            setProgress(currentTime, seekableDuration);
+        },
+        [setProgress],
+    );
+
+    const handleDoubleTap = useCallback(
+        (side: 'left' | 'right') => {
+            const now = Date.now();
+            const lastTap = lastTapRef.current;
+
+            if (lastTap && now - lastTap.time < DOUBLE_TAP_DELAY && lastTap.side === side) {
+                // Double-tap detected — seek
+                const seekTo =
+                    side === 'right'
+                        ? Math.min(currentTimeRef.current + SEEK_SECONDS, durationRef.current)
+                        : Math.max(currentTimeRef.current - SEEK_SECONDS, 0);
+
+                videoRef.current?.seek?.(seekTo);
+
+                setSeekFeedback(side);
+                if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
+                seekFeedbackTimer.current = setTimeout(() => setSeekFeedback(null), 600);
+
+                lastTapRef.current = null;
+            } else {
+                lastTapRef.current = { time: now, side };
+            }
+        },
+        [],
+    );
 
     const handleSelectAudio = useCallback((id: string) => {
         engine?.setAudioTrack(id);
@@ -61,7 +150,12 @@ export default function PlayerScreen() {
             <View style={styles.container}>
                 <View style={styles.centered}>
                     <Text style={styles.errorText}>No stream selected</Text>
-                    <Pressable style={styles.backBtn} onPress={() => router.back()}>
+                    <Pressable
+                        style={styles.backBtn}
+                        onPress={() => router.back()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Go back"
+                    >
                         <Text style={styles.backBtnText}>Go Back</Text>
                     </Pressable>
                 </View>
@@ -71,12 +165,19 @@ export default function PlayerScreen() {
 
     const headerBar = (
         <View style={styles.header}>
-            <Pressable style={styles.closeBtn} onPress={() => { clearPlayer(); router.back(); }}>
+            <Pressable
+                style={styles.closeBtn}
+                onPress={() => { clearPlayer(); router.back(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Close player"
+            >
                 <Text style={styles.closeBtnText}>✕ Close</Text>
             </Pressable>
             <Pressable
                 style={styles.settingsBtn}
                 onPress={() => setSettingsOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Playback settings"
             >
                 <Ionicons name="settings-sharp" size={20} color="#e0e0ff" />
             </Pressable>
@@ -101,6 +202,31 @@ export default function PlayerScreen() {
         </View>
     );
 
+    // Double-tap seek overlay (shows ±10s feedback)
+    const seekOverlay = seekFeedback && (
+        <View style={[styles.seekOverlay, seekFeedback === 'left' ? styles.seekLeft : styles.seekRight]}>
+            <Text style={styles.seekText}>
+                {seekFeedback === 'left' ? `⏪ ${SEEK_SECONDS}s` : `${SEEK_SECONDS}s ⏩`}
+            </Text>
+        </View>
+    );
+
+    // Gesture zones for double-tap seek (left = rewind, right = forward)
+    const gestureZones = Platform.OS !== 'web' && (
+        <View style={styles.gestureContainer} pointerEvents="box-none">
+            <Pressable
+                style={styles.gestureZoneLeft}
+                onPress={() => handleDoubleTap('left')}
+                accessibilityLabel="Double-tap to seek backward 10 seconds"
+            />
+            <Pressable
+                style={styles.gestureZoneRight}
+                onPress={() => handleDoubleTap('right')}
+                accessibilityLabel="Double-tap to seek forward 10 seconds"
+            />
+        </View>
+    );
+
     const settingsModal = (
         <Modal
             visible={settingsOpen}
@@ -112,7 +238,11 @@ export default function PlayerScreen() {
                 <View style={styles.modalContent}>
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>⚙️ Playback Settings</Text>
-                        <Pressable onPress={() => setSettingsOpen(false)}>
+                        <Pressable
+                            onPress={() => setSettingsOpen(false)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Close settings"
+                        >
                             <Text style={styles.modalClose}>Done</Text>
                         </Pressable>
                     </View>
@@ -132,6 +262,8 @@ export default function PlayerScreen() {
                                 <Pressable
                                     style={[styles.trackItem, item.active && styles.trackActive]}
                                     onPress={() => handleSelectAudio(item.id)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Audio: ${item.label}${item.active ? ', selected' : ''}`}
                                 >
                                     <Text style={styles.trackLabel}>{item.label}</Text>
                                     <Text style={styles.trackLang}>{item.language}</Text>
@@ -152,6 +284,8 @@ export default function PlayerScreen() {
                             <Pressable
                                 style={[styles.trackItem, subtitles.every((s) => !s.active) && styles.trackActive]}
                                 onPress={() => handleSelectSubtitle(null)}
+                                accessibilityRole="button"
+                                accessibilityLabel="Subtitles off"
                             >
                                 <Text style={styles.trackLabel}>Off</Text>
                             </Pressable>
@@ -163,6 +297,8 @@ export default function PlayerScreen() {
                                     <Pressable
                                         style={[styles.trackItem, item.active && styles.trackActive]}
                                         onPress={() => handleSelectSubtitle(item.id)}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Subtitle: ${item.label}${item.active ? ', selected' : ''}`}
                                     >
                                         <Text style={styles.trackLabel}>{item.label}</Text>
                                         <Text style={styles.trackLang}>{item.language}</Text>
@@ -208,6 +344,8 @@ export default function PlayerScreen() {
                         <ActivityIndicator size="large" color="#818cf8" />
                     </View>
                 )}
+                {seekOverlay}
+                {gestureZones}
                 {Video && (
                     <Video
                         ref={videoRef}
@@ -216,9 +354,7 @@ export default function PlayerScreen() {
                         resizeMode="contain"
                         controls
                         onBuffer={({ isBuffering: b }: { isBuffering: boolean }) => setBuffering(b)}
-                        onProgress={({ currentTime, seekableDuration }: any) =>
-                            setProgress(currentTime, seekableDuration)
-                        }
+                        onProgress={handleProgress}
                         onError={(err: any) => {
                             console.error('Video playback error:', err);
                         }}
@@ -261,6 +397,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
+        minWidth: 44,
+        minHeight: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     closeBtnText: {
         color: '#e0e0ff',
@@ -269,9 +409,9 @@ const styles = StyleSheet.create({
     },
     settingsBtn: {
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -290,6 +430,39 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 10,
+    },
+    // Gesture zones for double-tap seek
+    gestureContainer: {
+        ...StyleSheet.absoluteFillObject,
+        flexDirection: 'row',
+        zIndex: 5,
+    },
+    gestureZoneLeft: {
+        flex: 1,
+    },
+    gestureZoneRight: {
+        flex: 1,
+    },
+    // Seek feedback overlay
+    seekOverlay: {
+        position: 'absolute',
+        top: '40%',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderRadius: 24,
+        zIndex: 20,
+    },
+    seekLeft: {
+        left: 40,
+    },
+    seekRight: {
+        right: 40,
+    },
+    seekText: {
+        color: '#e0e0ff',
+        fontSize: 16,
+        fontWeight: '700',
     },
     infoBar: {
         backgroundColor: 'rgba(10, 10, 26, 0.95)',
@@ -322,6 +495,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 10,
         borderRadius: 10,
+        minWidth: 44,
+        minHeight: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     backBtnText: {
         color: '#fff',
@@ -375,6 +552,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         borderRadius: 8,
         marginBottom: 4,
+        minHeight: 44,
     },
     trackActive: {
         backgroundColor: 'rgba(129, 140, 248, 0.15)',

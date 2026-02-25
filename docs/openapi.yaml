@@ -204,7 +204,90 @@ components:
           format: date-time
       required: [id, userId, transportUrl, manifest, installedAt]
 
+    LibraryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [movie, series]
+        itemId:
+          type: string
+        title:
+          type: string
+        poster:
+          type: string
+          format: uri
+          nullable: true
+        addedAt:
+          type: string
+          format: date-time
+      required: [id, userId, type, itemId, title, addedAt]
+
+    WatchProgress:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [movie, series]
+        itemId:
+          type: string
+        season:
+          type: integer
+          nullable: true
+        episode:
+          type: integer
+          nullable: true
+        currentTime:
+          type: number
+        duration:
+          type: number
+        title:
+          type: string
+        poster:
+          type: string
+          format: uri
+          nullable: true
+        lastWatched:
+          type: string
+          format: date-time
+      required: [id, userId, type, itemId, currentTime, duration, title, lastWatched]
+
 paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  features:
+                    type: object
+                    additionalProperties:
+                      type: boolean
+
   /api/auth/register:
     post:
       tags: [Auth]
@@ -468,3 +551,160 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Stream'
+
+  /api/library:
+    get:
+      tags: [Library]
+      summary: Get user's library items
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of library items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LibraryItem'
+    post:
+      tags: [Library]
+      summary: Add item to library
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [movie, series]
+                itemId:
+                  type: string
+                title:
+                  type: string
+                poster:
+                  type: string
+                  format: uri
+              required: [type, itemId, title]
+      responses:
+        '201':
+          description: Item added to library
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryItem'
+        '409':
+          description: Item already in library
+    delete:
+      tags: [Library]
+      summary: Remove item from library
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                itemId:
+                  type: string
+              required: [itemId]
+      responses:
+        '204':
+          description: Item removed
+        '404':
+          description: Item not found
+
+  /api/library/check/{itemId}:
+    get:
+      tags: [Library]
+      summary: Check if item is in library
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inLibrary:
+                    type: boolean
+
+  /api/library/progress:
+    get:
+      tags: [Library]
+      summary: Get continue-watching list
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Continue watching items (< 95% completed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WatchProgress'
+    post:
+      tags: [Library]
+      summary: Report watch progress
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [movie, series]
+                itemId:
+                  type: string
+                season:
+                  type: integer
+                episode:
+                  type: integer
+                currentTime:
+                  type: number
+                duration:
+                  type: number
+                title:
+                  type: string
+                poster:
+                  type: string
+                  format: uri
+              required: [type, itemId, currentTime, duration, title]
+      responses:
+        '200':
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchProgress'
