@@ -18,6 +18,8 @@ export class HLSEngine implements IStreamEngine {
     private listeners = new Map<string, Set<Function>>();
 
     canPlay(stream: Stream): boolean {
+        if (!stream.url) return false;
+
         const url = stream.url.toLowerCase();
         return (
             url.includes('.m3u8') ||
@@ -27,7 +29,7 @@ export class HLSEngine implements IStreamEngine {
     }
 
     getPlaybackUri(stream: Stream): string {
-        return stream.url;
+        return stream.url || '';
     }
 
     getEngineType(): string {

@@ -1,6 +1,10 @@
 /** A single stream link returned by an add-on */
 export interface Stream {
-    url: string;
+    url?: string;
+    ytId?: string;
+    infoHash?: string;
+    fileIdx?: number;
+    externalUrl?: string;
     title?: string;
     name?: string;
     behaviorHints?: {

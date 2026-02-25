@@ -61,19 +61,21 @@ export default function DetailScreen() {
                     <Text style={styles.title}>{meta.name}</Text>
 
                     <View style={styles.metaRow}>
-                        {meta.releaseInfo && (
+                        {!!meta.releaseInfo && (
                             <Text style={styles.metaTag}>{meta.releaseInfo}</Text>
                         )}
-                        {meta.runtime && <Text style={styles.metaTag}>{meta.runtime}</Text>}
-                        {meta.imdbRating && (
+                        {!!meta.runtime && (
+                            <Text style={styles.metaTag}>{meta.runtime}</Text>
+                        )}
+                        {!!meta.imdbRating && (
                             <Text style={styles.ratingTag}>⭐ {meta.imdbRating}</Text>
                         )}
                     </View>
 
-                    {meta.genres && (
+                    {!!meta.genres && meta.genres.length > 0 && (
                         <View style={styles.genreRow}>
-                            {meta.genres.map((g) => (
-                                <View key={g} style={styles.genrePill}>
+                            {meta.genres.map((g, idx) => (
+                                <View key={`${g}-${idx}`} style={styles.genrePill}>
                                     <Text style={styles.genreText}>{g}</Text>
                                 </View>
                             ))}

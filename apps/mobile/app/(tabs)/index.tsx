@@ -30,7 +30,7 @@ function CatalogCard({ item }: { item: MetaPreview }) {
         <Text style={styles.cardTitle} numberOfLines={2}>
           {item.name}
         </Text>
-        {item.imdbRating && (
+        {!!item.imdbRating && (
           <View style={styles.ratingBadge}>
             <Text style={styles.ratingText}>⭐ {item.imdbRating}</Text>
           </View>

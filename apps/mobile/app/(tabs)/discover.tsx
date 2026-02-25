@@ -54,7 +54,7 @@ function CatalogRow({ catalog, addon }: { catalog: CatalogDefinition; addon: Ins
                         <Text style={styles.cardTitle} numberOfLines={1}>
                             {item.name}
                         </Text>
-                        {item.imdbRating && (
+                        {!!item.imdbRating && (
                             <Text style={styles.rating}>⭐ {item.imdbRating}</Text>
                         )}
                     </Pressable>
