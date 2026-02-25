@@ -6,6 +6,8 @@ import {
     ScrollView,
     Pressable,
     ActivityIndicator,
+    Alert,
+    Platform
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useMeta } from '../../../hooks/useMeta';
@@ -23,9 +25,19 @@ export default function DetailScreen() {
 
     const handlePlayStream = (stream: Stream) => {
         const uri = streamEngineManager.getPlaybackUri(stream);
+
         if (uri) {
             setStream(stream);
             router.push('/player');
+        } else {
+            if (Platform.OS === 'web') {
+                window.alert('Unsupported Stream\n\nThis stream does not provide a direct playable URL (it is likely a torrent). A Debrid service or backend webtorrent proxy is required to play this.');
+            } else {
+                Alert.alert(
+                    'Unsupported Stream',
+                    'This stream does not provide a direct playable URL (it is likely a torrent or requires resolution). A Debrid service or backend webtorrent proxy is required to play this natively.'
+                );
+            }
         }
     };
 
