@@ -17,8 +17,14 @@ export default function LoginScreen() {
     const { login, isLoading, error } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [localError, setLocalError] = useState('');
 
     const handleLogin = async () => {
+        setLocalError('');
+        if (!email || !password) {
+            setLocalError('Please fill in all fields');
+            return;
+        }
         try {
             await login({ email, password });
             router.replace('/(tabs)');
@@ -34,10 +40,10 @@ export default function LoginScreen() {
                 <Text style={styles.title}>Welcome Back</Text>
                 <Text style={styles.subtitle}>Sign in to continue</Text>
 
-                {error && (
+                {(error || localError) && (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>
-                            {(error as any)?.response?.data?.error || 'Login failed'}
+                            {localError || (error as any)?.response?.data?.error || 'Login failed'}
                         </Text>
                     </View>
                 )}
