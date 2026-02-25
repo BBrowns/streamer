@@ -1,6 +1,8 @@
 import type { Stream } from '@streamer/shared';
 import type { IStreamEngine } from './IStreamEngine';
 import { HLSEngine } from './HLSEngine';
+import { HttpVideoEngine } from './HttpVideoEngine';
+import { TorrentEngine } from './TorrentEngine';
 
 /**
  * Manages stream engine resolution using the Strategy Pattern.
@@ -13,6 +15,10 @@ export class StreamEngineManager {
     constructor() {
         // Register the HLS engine by default (MVP)
         this.registerEngine(new HLSEngine());
+        // Register fallback HTTP video engine
+        this.registerEngine(new HttpVideoEngine());
+        // Register torrent stub engine
+        this.registerEngine(new TorrentEngine());
     }
 
     registerEngine(engine: IStreamEngine): void {

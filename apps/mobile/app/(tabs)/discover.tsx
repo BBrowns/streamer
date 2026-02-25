@@ -2,78 +2,111 @@ import {
     View,
     Text,
     StyleSheet,
-    FlatList,
-    Image,
     Pressable,
     ActivityIndicator,
+    ScrollView,
+    RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { useCatalog } from '../../hooks/useCatalog';
-import type { MetaPreview } from '@streamer/shared';
+import { useAddons } from '../../hooks/useAddons';
+import { useQueryClient } from '@tanstack/react-query';
+import type { CatalogDefinition, InstalledAddon } from '@streamer/shared';
 import { useAuthStore } from '../../stores/authStore';
-
-const TYPES = ['movie', 'series'] as const;
+import { CatalogRow } from '../../components/catalog/CatalogRow';
+import { ContinueWatchingRow } from '../../components/catalog/ContinueWatchingRow';
 
 export default function DiscoverScreen() {
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
     const router = useRouter();
-    const [selectedType, setSelectedType] = useState<string>('movie');
-    const { data, isLoading } = useCatalog(selectedType);
+    const queryClient = useQueryClient();
+    const { data: addons, isLoading } = useAddons();
+    const [refreshing, setRefreshing] = useState(false);
 
     if (!isAuthenticated) {
         return (
             <View style={styles.centered}>
-                <Text style={styles.emptyText}>Sign in to discover content</Text>
+                <Text style={styles.emptyIcon}>🎬</Text>
+                <Text style={styles.emptyTitle}>Welcome to Streamer</Text>
+                <Text style={styles.emptyText}>Sign in to discover movies and shows</Text>
+                <Pressable
+                    style={styles.ctaBtn}
+                    onPress={() => router.push('/login')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign in"
+                >
+                    <Text style={styles.ctaBtnText}>Sign In</Text>
+                </Pressable>
+            </View>
+        );
+    }
+
+    if (isLoading) {
+        return (
+            <View style={styles.centered}>
+                <ActivityIndicator size="large" color="#818cf8" />
+            </View>
+        );
+    }
+
+    // Collect all catalogs across all addons (Server-Driven UI)
+    const catalogRows: { catalog: CatalogDefinition; addon: InstalledAddon }[] = [];
+    addons?.forEach((addon) => {
+        addon.manifest.catalogs.forEach((catalog) => {
+            catalogRows.push({ catalog, addon });
+        });
+    });
+
+    if (catalogRows.length === 0) {
+        return (
+            <View style={styles.centered}>
+                <Text style={styles.emptyIcon}>🔍</Text>
+                <Text style={styles.emptyTitle}>No Content Sources</Text>
+                <Text style={styles.emptyText}>
+                    Install an add-on in Settings to start discovering content.
+                </Text>
+                <Pressable
+                    style={styles.ctaBtn}
+                    onPress={() => router.push('/addons')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Manage add-ons"
+                >
+                    <Text style={styles.ctaBtnText}>Manage Add-ons</Text>
+                </Pressable>
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.filterRow}>
-                {TYPES.map((type) => (
-                    <Pressable
-                        key={type}
-                        style={[styles.filterBtn, selectedType === type && styles.filterActive]}
-                        onPress={() => setSelectedType(type)}
-                    >
-                        <Text
-                            style={[
-                                styles.filterText,
-                                selectedType === type && styles.filterTextActive,
-                            ]}
-                        >
-                            {type === 'movie' ? '🎬 Movies' : '📺 Series'}
-                        </Text>
-                    </Pressable>
-                ))}
-            </View>
-
-            {isLoading ? (
-                <View style={styles.centered}>
-                    <ActivityIndicator size="large" color="#818cf8" />
-                </View>
-            ) : (
-                <FlatList
-                    data={data}
-                    keyExtractor={(item) => item.id}
-                    numColumns={3}
-                    contentContainerStyle={styles.grid}
-                    renderItem={({ item }) => (
-                        <Pressable
-                            style={styles.card}
-                            onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
-                        >
-                            <Image source={{ uri: item.poster }} style={styles.poster} />
-                            <Text style={styles.cardTitle} numberOfLines={1}>
-                                {item.name}
-                            </Text>
-                        </Pressable>
-                    )}
+        <ScrollView
+            style={styles.container}
+            refreshControl={
+                <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={async () => {
+                        setRefreshing(true);
+                        await queryClient.invalidateQueries({ queryKey: ['addons'] });
+                        await queryClient.invalidateQueries({ queryKey: ['catalog'] });
+                        await queryClient.invalidateQueries({ queryKey: ['progress'] });
+                        setRefreshing(false);
+                    }}
+                    tintColor="#818cf8"
+                    colors={['#818cf8']}
                 />
-            )}
-        </View>
+            }
+        >
+            {/* Continue Watching — always first if there are items */}
+            <ContinueWatchingRow />
+
+            {/* Server-Driven catalog rows from installed add-ons */}
+            {catalogRows.map(({ catalog, addon }) => (
+                <CatalogRow
+                    key={`${addon.id}-${catalog.type}-${catalog.id}`}
+                    catalog={catalog}
+                    addon={addon}
+                />
+            ))}
+        </ScrollView>
     );
 }
 
@@ -82,62 +115,40 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#0a0a1a',
     },
-    filterRow: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        gap: 8,
-    },
-    filterBtn: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#1a1a3e',
-        borderWidth: 1,
-        borderColor: 'rgba(129, 140, 248, 0.15)',
-    },
-    filterActive: {
-        backgroundColor: '#818cf8',
-        borderColor: '#818cf8',
-    },
-    filterText: {
-        color: '#9ca3af',
-        fontWeight: '600',
-        fontSize: 13,
-    },
-    filterTextActive: {
-        color: '#fff',
-    },
     centered: {
         flex: 1,
+        backgroundColor: '#0a0a1a',
         justifyContent: 'center',
         alignItems: 'center',
+        padding: 32,
+    },
+    emptyIcon: {
+        fontSize: 48,
+        marginBottom: 12,
+    },
+    emptyTitle: {
+        color: '#e0e0ff',
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 8,
     },
     emptyText: {
         color: '#9ca3af',
         fontSize: 14,
+        textAlign: 'center',
+        marginBottom: 20,
     },
-    grid: {
-        paddingHorizontal: 12,
-        paddingBottom: 20,
+    ctaBtn: {
+        backgroundColor: '#818cf8',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+        minWidth: 44,
+        minHeight: 44,
     },
-    card: {
-        flex: 1,
-        margin: 4,
-        borderRadius: 10,
-        overflow: 'hidden',
-        backgroundColor: '#1a1a3e',
-        maxWidth: '31%',
-    },
-    poster: {
-        width: '100%',
-        aspectRatio: 2 / 3,
-        backgroundColor: '#2a2a4e',
-    },
-    cardTitle: {
-        color: '#e0e0ff',
-        fontSize: 11,
-        fontWeight: '600',
-        padding: 6,
+    ctaBtnText: {
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 15,
     },
 });

@@ -60,6 +60,25 @@ export class AggregatorController {
             next(err);
         }
     }
+    async search(req: Request, res: Response, next: NextFunction) {
+        try {
+            const query = req.query.q as string;
+            if (!query || query.trim().length === 0) {
+                res.json({ metas: [] });
+                return;
+            }
+
+            const metas = await aggregatorService.search(
+                req.user!.userId,
+                query.trim(),
+                req.requestId,
+            );
+
+            res.json({ metas });
+        } catch (err) {
+            next(err);
+        }
+    }
 }
 
 export const aggregatorController = new AggregatorController();

@@ -7,6 +7,10 @@ export const aggregatorRouter = Router();
 // All aggregator routes require authentication
 aggregatorRouter.use(authMiddleware);
 
+aggregatorRouter.get('/search', (req, res, next) =>
+    aggregatorController.search(req, res, next),
+);
+
 aggregatorRouter.get('/catalog/:type', (req, res, next) =>
     aggregatorController.getCatalog(req, res, next),
 );

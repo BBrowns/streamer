@@ -20,7 +20,6 @@ export class AddonService {
                 throw new AppError(400, 'Invalid add-on manifest format');
             }
             logger.warn({ transportUrl, error: err.message }, 'Failed to fetch add-on manifest');
-            console.error('\n\n--- ADDON FETCH FATAL ERROR ---', err, '\n\n');
             throw new AppError(502, 'Could not reach add-on at the provided URL');
         }
     }

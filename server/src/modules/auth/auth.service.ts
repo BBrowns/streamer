@@ -136,6 +136,114 @@ export class AuthService {
 
         return tokens;
     }
+
+    /**
+     * Generate a password reset token.
+     * In production, send this via email (SendGrid/Resend/SES).
+     * For dev, the token is returned in the response and logged.
+     */
+    async forgotPassword(email: string): Promise<{ resetToken: string }> {
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        // Always return success to avoid email enumeration
+        if (!user) {
+            logger.info({ email }, 'Password reset requested for non-existent email');
+            return { resetToken: '' };
+        }
+
+        // Delete any existing reset tokens for this user
+        await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+
+        const resetToken = uuidv4();
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
+
+        await prisma.passwordResetToken.create({
+            data: {
+                token: resetToken,
+                userId: user.id,
+                expiresAt,
+            },
+        });
+
+        logger.info({ userId: user.id, resetToken }, 'Password reset token generated');
+
+        return { resetToken };
+    }
+
+    async resetPassword(token: string, newPassword: string): Promise<void> {
+        const stored = await prisma.passwordResetToken.findUnique({
+            where: { token },
+            include: { user: true },
+        });
+
+        if (!stored) {
+            throw new AppError(400, 'Invalid reset token');
+        }
+
+        if (stored.expiresAt < new Date()) {
+            await prisma.passwordResetToken.delete({ where: { id: stored.id } });
+            throw new AppError(400, 'Reset token has expired');
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+
+        await prisma.$transaction([
+            prisma.user.update({
+                where: { id: stored.userId },
+                data: { passwordHash },
+            }),
+            prisma.passwordResetToken.delete({ where: { id: stored.id } }),
+            // Invalidate all refresh tokens (force re-login)
+            prisma.refreshToken.deleteMany({ where: { userId: stored.userId } }),
+        ]);
+
+        logger.info({ userId: stored.userId }, 'Password reset successfully');
+    }
+
+    async changePassword(
+        userId: string,
+        currentPassword: string,
+        newPassword: string,
+    ): Promise<void> {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new AppError(404, 'User not found');
+        }
+
+        const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+        if (!valid) {
+            throw new AppError(401, 'Current password is incorrect');
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { passwordHash },
+        });
+
+        logger.info({ userId }, 'Password changed');
+    }
+
+    async updateProfile(
+        userId: string,
+        data: { displayName?: string },
+    ): Promise<UserProfile> {
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: { displayName: data.displayName },
+        });
+
+        logger.info({ userId }, 'Profile updated');
+
+        return {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName ?? undefined,
+            createdAt: user.createdAt.toISOString(),
+        };
+    }
 }
 
 export const authService = new AuthService();

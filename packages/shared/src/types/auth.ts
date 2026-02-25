@@ -25,3 +25,21 @@ export interface UserProfile {
     displayName?: string;
     createdAt: string;
 }
+
+export interface ForgotPasswordRequest {
+    email: string;
+}
+
+export interface ResetPasswordRequest {
+    token: string;
+    newPassword: string;
+}
+
+export interface ChangePasswordRequest {
+    currentPassword: string;
+    newPassword: string;
+}
+
+export interface UpdateProfileRequest {
+    displayName?: string;
+}
