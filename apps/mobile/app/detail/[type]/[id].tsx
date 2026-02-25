@@ -50,10 +50,10 @@ export default function DetailScreen() {
             <Stack.Screen options={{ title: meta.name }} />
             <ScrollView style={styles.container}>
                 {/* Hero Image */}
-                {meta.background && (
+                {!!meta.background && (
                     <Image source={{ uri: meta.background }} style={styles.backdrop} />
                 )}
-                {!meta.background && meta.poster && (
+                {!meta.background && !!meta.poster && (
                     <Image source={{ uri: meta.poster }} style={styles.backdrop} />
                 )}
 

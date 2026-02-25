@@ -110,7 +110,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {displayData && displayData.length === 0 && !isLoading && (
+      {!!displayData && displayData.length === 0 && !isLoading && (
         <View style={styles.centered}>
           <Text style={styles.emptyText}>
             {isSearching
