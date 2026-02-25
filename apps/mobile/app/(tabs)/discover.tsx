@@ -42,7 +42,7 @@ function CatalogRow({ catalog, addon }: { catalog: CatalogDefinition; addon: Ins
             <FlatList
                 horizontal
                 data={data.slice(0, 20)}
-                keyExtractor={(item) => `${addon.id}-${catalog.id}-${item.id}`}
+                keyExtractor={(item) => `${addon.id}-${catalog.type}-${catalog.id}-${item.id}`}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rowScroll}
                 renderItem={({ item }) => (
@@ -132,7 +132,7 @@ export default function DiscoverScreen() {
         >
             {catalogRows.map(({ catalog, addon }) => (
                 <CatalogRow
-                    key={`${addon.id}-${catalog.id}`}
+                    key={`${addon.id}-${catalog.type}-${catalog.id}`}
                     catalog={catalog}
                     addon={addon}
                 />

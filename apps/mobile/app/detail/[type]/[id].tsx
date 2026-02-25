@@ -82,11 +82,11 @@ export default function DetailScreen() {
                         </View>
                     )}
 
-                    {meta.description && (
+                    {!!meta.description && (
                         <Text style={styles.description}>{meta.description}</Text>
                     )}
 
-                    {meta.cast && meta.cast.length > 0 && (
+                    {!!meta.cast && meta.cast.length > 0 && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Cast</Text>
                             <Text style={styles.sectionContent}>{meta.cast.join(', ')}</Text>
