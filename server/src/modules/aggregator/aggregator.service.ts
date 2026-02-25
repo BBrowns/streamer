@@ -30,7 +30,8 @@ async function resilientFetch<T>(
     requestId: string,
 ): Promise<T> {
     const policy = getPolicy(addonId);
-    const url = `${transportUrl.replace(/\/$/, '')}/${resourcePath}`;
+    const base = transportUrl.replace(/\/manifest\.json\/?$/, '').replace(/\/$/, '');
+    const url = `${base}/${resourcePath}`;
 
     const start = Date.now();
 

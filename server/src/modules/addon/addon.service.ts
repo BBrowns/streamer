@@ -8,7 +8,8 @@ import type { AddonManifest, InstalledAddon } from '@streamer/shared';
 export class AddonService {
     /** Fetch and validate manifest from a remote add-on URL */
     async fetchManifest(transportUrl: string): Promise<AddonManifest> {
-        const manifestUrl = transportUrl.replace(/\/$/, '') + '/manifest.json';
+        const base = transportUrl.replace(/\/$/, '');
+        const manifestUrl = base.endsWith('/manifest.json') ? base : `${base}/manifest.json`;
 
         try {
             const { data } = await axios.get(manifestUrl, { timeout: 5000 });
@@ -19,6 +20,7 @@ export class AddonService {
                 throw new AppError(400, 'Invalid add-on manifest format');
             }
             logger.warn({ transportUrl, error: err.message }, 'Failed to fetch add-on manifest');
+            console.error('\n\n--- ADDON FETCH FATAL ERROR ---', err, '\n\n');
             throw new AppError(502, 'Could not reach add-on at the provided URL');
         }
     }

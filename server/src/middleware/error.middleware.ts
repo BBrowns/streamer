@@ -48,6 +48,16 @@ export function errorMiddleware(
         return;
     }
 
+    // Handle malformed JSON from express.json() body parser
+    if (err instanceof SyntaxError && 'body' in err) {
+        logger.warn({ requestId, error: err.message }, 'Malformed JSON request');
+        res.status(400).json({
+            error: 'Invalid JSON payload',
+            requestId,
+        });
+        return;
+    }
+
     logger.error(
         { requestId, error: err.message, stack: err.stack },
         'Unhandled server error',

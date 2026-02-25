@@ -4,7 +4,7 @@ import { aggregatorService } from './aggregator.service.js';
 export class AggregatorController {
     async getCatalog(req: Request, res: Response, next: NextFunction) {
         try {
-            const { type } = req.params;
+            const type = req.params.type as string;
             const search = req.query.search as string | undefined;
             const skip = req.query.skip ? parseInt(req.query.skip as string, 10) : undefined;
 
@@ -24,7 +24,8 @@ export class AggregatorController {
 
     async getMeta(req: Request, res: Response, next: NextFunction) {
         try {
-            const { type, id } = req.params;
+            const type = req.params.type as string;
+            const id = req.params.id as string;
             const meta = await aggregatorService.getMeta(
                 req.user!.userId,
                 type,
@@ -45,7 +46,8 @@ export class AggregatorController {
 
     async getStreams(req: Request, res: Response, next: NextFunction) {
         try {
-            const { type, id } = req.params;
+            const type = req.params.type as string;
+            const id = req.params.id as string;
             const streams = await aggregatorService.getStreams(
                 req.user!.userId,
                 type,
