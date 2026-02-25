@@ -1,19 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import express from 'express';
+import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { createApp } from '../src/app';
 
 /**
  * E2E Golden Path Test
  *
  * Tests the full user journey: Register → Login → Install Addon → Browse → Library
- * Runs against the real Express app with a test database.
+ * Runs against the Express app instance directly using supertest.
+ * This ensures tests pass in CI without requiring the server to run on a port.
  */
 
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-key';
-
-// We test against the running server at localhost:3001
-const BASE_URL = 'http://localhost:3001';
+const app = createApp();
 
 describe('E2E Golden Path', () => {
     const testUser = {
@@ -27,7 +24,7 @@ describe('E2E Golden Path', () => {
     let userId: string;
 
     it('Step 1: Register a new user', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .post('/api/auth/register')
             .send(testUser)
             .expect(201);
@@ -43,7 +40,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 2: Login with the registered user', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .post('/api/auth/login')
             .send({ email: testUser.email, password: testUser.password })
             .expect(200);
@@ -54,7 +51,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 3: Health check returns ok', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .get('/health')
             .expect(200);
 
@@ -63,7 +60,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 4: List addons (empty initially)', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .get('/api/addons')
             .set('Authorization', `Bearer ${accessToken}`)
             .expect(200);
@@ -72,7 +69,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 5: Add item to library', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .post('/api/library')
             .set('Authorization', `Bearer ${accessToken}`)
             .send({
@@ -89,7 +86,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 6: Verify item is in library', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .get('/api/library/check/tt1234567')
             .set('Authorization', `Bearer ${accessToken}`)
             .expect(200);
@@ -98,7 +95,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 7: List library items', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .get('/api/library')
             .set('Authorization', `Bearer ${accessToken}`)
             .expect(200);
@@ -109,7 +106,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 8: Report watch progress', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .post('/api/library/progress')
             .set('Authorization', `Bearer ${accessToken}`)
             .send({
@@ -128,7 +125,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 9: Get continue watching list', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .get('/api/library/progress')
             .set('Authorization', `Bearer ${accessToken}`)
             .expect(200);
@@ -140,7 +137,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 10: Duplicate add should return 409', async () => {
-        await request(BASE_URL)
+        await request(app)
             .post('/api/library')
             .set('Authorization', `Bearer ${accessToken}`)
             .send({
@@ -152,7 +149,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 11: Remove item from library', async () => {
-        await request(BASE_URL)
+        await request(app)
             .delete('/api/library')
             .set('Authorization', `Bearer ${accessToken}`)
             .send({ itemId: 'tt1234567' })
@@ -160,7 +157,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 12: Verify item is no longer in library', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .get('/api/library/check/tt1234567')
             .set('Authorization', `Bearer ${accessToken}`)
             .expect(200);
@@ -169,7 +166,7 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 13: Refresh token', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .post('/api/auth/refresh')
             .send({ refreshToken })
             .expect(200);
@@ -179,14 +176,14 @@ describe('E2E Golden Path', () => {
     });
 
     it('Step 14: Protected routes reject invalid tokens', async () => {
-        await request(BASE_URL)
+        await request(app)
             .get('/api/library')
             .set('Authorization', 'Bearer invalid-token')
             .expect(401);
     });
 
     it('Step 15: Validation rejects malformed body', async () => {
-        const res = await request(BASE_URL)
+        const res = await request(app)
             .post('/api/library')
             .set('Authorization', `Bearer ${accessToken}`)
             .send({ type: 'invalid-type' }); // Missing required fields
