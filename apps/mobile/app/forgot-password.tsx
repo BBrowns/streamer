@@ -10,74 +10,42 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { api } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();
+    const { forgotPassword } = useAuth();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [resetToken, setResetToken] = useState<string | null>(null);
     const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
 
-    const handleSubmit = async () => {
+    const handleForgot = async () => {
         setError('');
+        setSuccessMessage('');
+
         if (!email) {
-            setError('Please enter your email');
+            setError('Please enter your email address');
             return;
         }
 
-        setIsLoading(true);
         try {
-            const { data } = await api.post('/api/auth/forgot-password', { email });
-            setSubmitted(true);
-            // In dev mode, the API returns the reset token for testing
-            if (data.resetToken) {
-                setResetToken(data.resetToken);
+            setIsLoading(true);
+            const res = await forgotPassword({ email });
+
+            // In a real app, you would send an email. 
+            // Here, the backend might return the token in dev mode.
+            if (res.resetToken) {
+                setSuccessMessage(`Reset token generated (Dev Mode): ${res.resetToken}`);
+            } else {
+                setSuccessMessage(res.message || 'Check your email for reset instructions.');
             }
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Something went wrong');
+            setError(err?.response?.data?.error || 'Failed to request password reset');
         } finally {
             setIsLoading(false);
         }
     };
-
-    if (submitted) {
-        return (
-            <KeyboardAvoidingView
-                style={styles.container}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
-                <View style={styles.form}>
-                    <Text style={styles.icon}>📧</Text>
-                    <Text style={styles.title}>Check Your Email</Text>
-                    <Text style={styles.subtitle}>
-                        If an account exists for {email}, a password reset link has been sent.
-                    </Text>
-
-                    {resetToken && (
-                        <View style={styles.devBox}>
-                            <Text style={styles.devLabel}>🧪 Dev Mode — Reset Token:</Text>
-                            <Text style={styles.devToken} selectable>{resetToken}</Text>
-                        </View>
-                    )}
-
-                    <Pressable
-                        style={styles.button}
-                        onPress={() => router.push('/reset-password')}
-                    >
-                        <Text style={styles.buttonText}>Enter Reset Code</Text>
-                    </Pressable>
-
-                    <Pressable onPress={() => router.replace('/login')}>
-                        <Text style={styles.linkText}>
-                            Back to <Text style={styles.linkBold}>Sign In</Text>
-                        </Text>
-                    </Pressable>
-                </View>
-            </KeyboardAvoidingView>
-        );
-    }
 
     return (
         <KeyboardAvoidingView
@@ -85,42 +53,54 @@ export default function ForgotPasswordScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <View style={styles.form}>
-                <Text style={styles.title}>Forgot Password</Text>
-                <Text style={styles.subtitle}>
-                    Enter your email and we'll send you a reset link.
-                </Text>
+                <Text style={styles.title}>Reset Password</Text>
+                <Text style={styles.subtitle}>Enter your email to receive a reset link</Text>
 
-                {error && (
+                {error ? (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>{error}</Text>
                     </View>
+                ) : null}
+
+                {successMessage ? (
+                    <View style={styles.successBox}>
+                        <Text style={styles.successText}>{successMessage}</Text>
+                        <Pressable
+                            style={[styles.button, { marginTop: 16 }]}
+                            onPress={() => router.push('/reset-password')}
+                        >
+                            <Text style={styles.buttonText}>Enter token</Text>
+                        </Pressable>
+                    </View>
+                ) : (
+                    <>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Email"
+                            placeholderTextColor="#6b7280"
+                            value={email}
+                            onChangeText={setEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+
+                        <Pressable
+                            style={[styles.button, isLoading && styles.buttonDisabled]}
+                            onPress={handleForgot}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.buttonText}>Send Reset Link</Text>
+                            )}
+                        </Pressable>
+                    </>
                 )}
 
-                <TextInput
-                    style={styles.input}
-                    placeholder="Email address"
-                    placeholderTextColor="#6b7280"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                />
-
-                <Pressable
-                    style={[styles.button, isLoading && styles.buttonDisabled]}
-                    onPress={handleSubmit}
-                    disabled={isLoading}
-                >
-                    {isLoading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Send Reset Link</Text>
-                    )}
-                </Pressable>
-
-                <Pressable onPress={() => router.replace('/login')}>
+                <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
                     <Text style={styles.linkText}>
-                        Remember your password? <Text style={styles.linkBold}>Sign In</Text>
+                        <Text style={styles.linkBold}>Back to Login</Text>
                     </Text>
                 </Pressable>
             </View>
@@ -137,11 +117,6 @@ const styles = StyleSheet.create({
     form: {
         paddingHorizontal: 32,
     },
-    icon: {
-        fontSize: 48,
-        textAlign: 'center',
-        marginBottom: 16,
-    },
     title: {
         fontSize: 28,
         fontWeight: '800',
@@ -152,7 +127,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#9ca3af',
         marginBottom: 28,
-        lineHeight: 22,
     },
     errorBox: {
         backgroundColor: 'rgba(248, 113, 113, 0.1)',
@@ -164,24 +138,16 @@ const styles = StyleSheet.create({
         color: '#f87171',
         fontSize: 13,
     },
-    devBox: {
-        backgroundColor: 'rgba(129, 140, 248, 0.1)',
-        borderRadius: 10,
-        padding: 14,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(129, 140, 248, 0.3)',
+    successBox: {
+        backgroundColor: 'rgba(52, 211, 153, 0.1)',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 16,
     },
-    devLabel: {
-        color: '#818cf8',
-        fontWeight: '600',
-        fontSize: 12,
-        marginBottom: 6,
-    },
-    devToken: {
-        color: '#e0e0ff',
-        fontSize: 11,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    successText: {
+        color: '#34d399',
+        fontSize: 14,
+        lineHeight: 20,
     },
     input: {
         backgroundColor: '#1a1a3e',

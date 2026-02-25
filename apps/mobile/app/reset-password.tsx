@@ -7,46 +7,34 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
-    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { api } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export default function ResetPasswordScreen() {
     const router = useRouter();
+    const { resetPassword } = useAuth();
     const [token, setToken] = useState('');
     const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
     const handleReset = async () => {
         setError('');
 
-        if (!token) {
-            setError('Please enter the reset token');
-            return;
-        }
-        if (newPassword.length < 8) {
-            setError('Password must be at least 8 characters');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            setError('Passwords do not match');
+        if (!token || !newPassword) {
+            setError('Please enter the token and a new password');
             return;
         }
 
-        setIsLoading(true);
         try {
-            await api.post('/api/auth/reset-password', { token, newPassword });
-            Alert.alert(
-                'Password Reset',
-                'Your password has been reset. Please sign in.',
-                [{ text: 'Sign In', onPress: () => router.replace('/login') }],
-            );
+            setIsLoading(true);
+            await resetPassword({ token, newPassword });
+            alert('Password reset successfully! Please log in.');
+            router.replace('/login');
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Reset failed. Token may be expired.');
+            setError(err?.response?.data?.error || 'Failed to reset password');
         } finally {
             setIsLoading(false);
         }
@@ -58,20 +46,18 @@ export default function ResetPasswordScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <View style={styles.form}>
-                <Text style={styles.title}>Reset Password</Text>
-                <Text style={styles.subtitle}>
-                    Enter the reset token from your email and choose a new password.
-                </Text>
+                <Text style={styles.title}>New Password</Text>
+                <Text style={styles.subtitle}>Enter the reset token and your new password</Text>
 
-                {error && (
+                {error ? (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>{error}</Text>
                     </View>
-                )}
+                ) : null}
 
                 <TextInput
                     style={styles.input}
-                    placeholder="Reset token"
+                    placeholder="Reset Token"
                     placeholderTextColor="#6b7280"
                     value={token}
                     onChangeText={setToken}
@@ -80,18 +66,10 @@ export default function ResetPasswordScreen() {
                 />
                 <TextInput
                     style={styles.input}
-                    placeholder="New password (min 8 chars)"
+                    placeholder="New Password (min 8 chars)"
                     placeholderTextColor="#6b7280"
                     value={newPassword}
                     onChangeText={setNewPassword}
-                    secureTextEntry
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Confirm new password"
-                    placeholderTextColor="#6b7280"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
                     secureTextEntry
                 />
 
@@ -107,9 +85,9 @@ export default function ResetPasswordScreen() {
                     )}
                 </Pressable>
 
-                <Pressable onPress={() => router.replace('/login')}>
+                <Pressable onPress={() => router.replace('/login')} style={{ marginTop: 12 }}>
                     <Text style={styles.linkText}>
-                        Back to <Text style={styles.linkBold}>Sign In</Text>
+                        <Text style={styles.linkBold}>Back to Login</Text>
                     </Text>
                 </Pressable>
             </View>
@@ -136,7 +114,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#9ca3af',
         marginBottom: 28,
-        lineHeight: 22,
     },
     errorBox: {
         backgroundColor: 'rgba(248, 113, 113, 0.1)',
