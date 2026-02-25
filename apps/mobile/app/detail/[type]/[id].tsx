@@ -13,8 +13,17 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useMeta } from '../../../hooks/useMeta';
 import { useStreams } from '../../../hooks/useStreams';
 import { usePlayerStore } from '../../../stores/playerStore';
+import { useAddToLibrary, useIsInLibrary, useRemoveFromLibrary } from '../../../hooks/useLibrary';
 import { streamEngineManager } from '../../../services/streamEngine/StreamEngineManager';
 import type { Stream } from '@streamer/shared';
+import type { MediaInfo } from '../../../stores/playerStore';
+import { useCallback } from 'react';
+
+/** Check if a stream is directly playable (has a real HTTP(S) URL) */
+function isPlayable(stream: Stream): boolean {
+    const uri = streamEngineManager.getPlaybackUri(stream);
+    return !!uri && uri.length > 0;
+}
 
 export default function DetailScreen() {
     const { type, id } = useLocalSearchParams<{ type: string; id: string }>();
@@ -23,22 +32,49 @@ export default function DetailScreen() {
     const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
     const setStream = usePlayerStore((s) => s.setStream);
 
-    const handlePlayStream = (stream: Stream) => {
-        const uri = streamEngineManager.getPlaybackUri(stream);
+    // Library state
+    const { data: inLibrary } = useIsInLibrary(id);
+    const addToLibrary = useAddToLibrary();
+    const removeFromLibrary = useRemoveFromLibrary();
 
-        if (uri) {
-            setStream(stream);
-            router.push('/player');
+    const handleToggleLibrary = useCallback(() => {
+        if (!meta) return;
+        if (inLibrary) {
+            removeFromLibrary.mutate(id);
         } else {
-            if (Platform.OS === 'web') {
-                window.alert('Unsupported Stream\n\nThis stream does not provide a direct playable URL (it is likely a torrent). A Debrid service or backend webtorrent proxy is required to play this.');
-            } else {
-                Alert.alert(
-                    'Unsupported Stream',
-                    'This stream does not provide a direct playable URL (it is likely a torrent or requires resolution). A Debrid service or backend webtorrent proxy is required to play this natively.'
-                );
-            }
+            addToLibrary.mutate({
+                type: type as 'movie' | 'series',
+                itemId: id,
+                title: meta.name,
+                poster: meta.poster,
+            });
         }
+    }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
+
+    const handlePlayStream = (stream: Stream) => {
+        if (!isPlayable(stream)) {
+            const msg = stream.infoHash
+                ? 'This is a torrent stream. Connect a Debrid service (like Real-Debrid) in Settings to unlock torrent playback.'
+                : 'This stream does not provide a direct playable URL. It may require additional resolution.';
+
+            if (Platform.OS === 'web') {
+                window.alert(`Unsupported Stream\n\n${msg}`);
+            } else {
+                Alert.alert('Unsupported Stream', msg);
+            }
+            return;
+        }
+
+        // Build MediaInfo for server progress reporting
+        const mediaInfo: MediaInfo = {
+            type: (type as 'movie' | 'series') ?? 'movie',
+            itemId: id,
+            title: meta?.name ?? stream.title ?? 'Unknown',
+            poster: meta?.poster,
+        };
+
+        setStream(stream, mediaInfo);
+        router.push('/player');
     };
 
     if (metaLoading) {
@@ -84,6 +120,18 @@ export default function DetailScreen() {
                         )}
                     </View>
 
+                    {/* Library Button */}
+                    <Pressable
+                        style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
+                        onPress={handleToggleLibrary}
+                        accessibilityRole="button"
+                        accessibilityLabel={inLibrary ? 'Remove from library' : 'Add to library'}
+                    >
+                        <Text style={[styles.libraryBtnText, inLibrary && styles.libraryBtnTextActive]}>
+                            {inLibrary ? '✓ In Library' : '+ Add to Library'}
+                        </Text>
+                    </Pressable>
+
                     {!!meta.genres && meta.genres.length > 0 && (
                         <View style={styles.genreRow}>
                             {meta.genres.map((g, idx) => (
@@ -114,21 +162,47 @@ export default function DetailScreen() {
                         ) : (!!streams && streams.length > 0) ? (
                             streams.map((stream, i) => {
                                 const engine = streamEngineManager.resolveEngine(stream);
+                                const playable = isPlayable(stream);
+
                                 return (
                                     <Pressable
                                         key={i}
-                                        style={styles.streamCard}
+                                        style={[
+                                            styles.streamCard,
+                                            !playable && styles.streamCardDisabled,
+                                        ]}
                                         onPress={() => handlePlayStream(stream)}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`${playable ? 'Play' : 'Torrent'} stream: ${stream.title || stream.name || `Stream ${i + 1}`}`}
+                                        accessibilityHint={playable ? 'Opens the video player' : 'Requires a Debrid service'}
                                     >
-                                        <View>
+                                        <View style={{ flex: 1 }}>
                                             <Text style={styles.streamTitle}>
                                                 {stream.title || stream.name || `Stream ${i + 1}`}
                                             </Text>
-                                            <Text style={styles.streamEngine}>
-                                                Engine: {engine?.getEngineType() || 'unknown'}
-                                            </Text>
+                                            <View style={styles.streamBadgeRow}>
+                                                <Text style={styles.streamEngine}>
+                                                    {engine?.getEngineType().toUpperCase() || 'UNKNOWN'}
+                                                </Text>
+                                                {!playable && (
+                                                    <View style={styles.torrentBadge}>
+                                                        <Text style={styles.torrentBadgeText}>
+                                                            🔒 Debrid Required
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                                {playable && (
+                                                    <View style={styles.playableBadge}>
+                                                        <Text style={styles.playableBadgeText}>
+                                                            ✓ Playable
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
                                         </View>
-                                        <Text style={styles.playIcon}>▶</Text>
+                                        <Text style={[styles.playIcon, !playable && styles.playIconDisabled]}>
+                                            {playable ? '▶' : '🔒'}
+                                        </Text>
                                     </Pressable>
                                 );
                             })
@@ -194,6 +268,30 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 6,
     },
+    // Library button
+    libraryBtn: {
+        backgroundColor: 'rgba(129, 140, 248, 0.12)',
+        borderWidth: 1,
+        borderColor: '#818cf8',
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignSelf: 'flex-start',
+        marginBottom: 16,
+        minHeight: 44,
+        justifyContent: 'center',
+    },
+    libraryBtnActive: {
+        backgroundColor: '#818cf8',
+    },
+    libraryBtnText: {
+        color: '#818cf8',
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    libraryBtnTextActive: {
+        color: '#fff',
+    },
     genreRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -241,20 +339,57 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         borderWidth: 1,
         borderColor: 'rgba(129, 140, 248, 0.1)',
+        minHeight: 44,
+    },
+    streamCardDisabled: {
+        opacity: 0.55,
+        borderColor: 'rgba(107, 114, 128, 0.2)',
     },
     streamTitle: {
         color: '#e0e0ff',
         fontWeight: '600',
         fontSize: 14,
     },
+    streamBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 4,
+    },
     streamEngine: {
         color: '#6b7280',
-        fontSize: 11,
-        marginTop: 2,
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    torrentBadge: {
+        backgroundColor: 'rgba(251, 146, 60, 0.15)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    torrentBadgeText: {
+        color: '#fb923c',
+        fontSize: 9,
+        fontWeight: '700',
+    },
+    playableBadge: {
+        backgroundColor: 'rgba(74, 222, 128, 0.15)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    playableBadgeText: {
+        color: '#4ade80',
+        fontSize: 9,
+        fontWeight: '700',
     },
     playIcon: {
         color: '#818cf8',
         fontSize: 20,
+        marginLeft: 12,
+    },
+    playIconDisabled: {
+        color: '#6b7280',
     },
     emptyText: {
         color: '#6b7280',
