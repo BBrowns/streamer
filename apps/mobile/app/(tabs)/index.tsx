@@ -7,12 +7,14 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useState, useEffect } from 'react';
 import { useCatalog } from '../../hooks/useCatalog';
+import { useGlobalSearch } from '../../hooks/useGlobalSearch';
 import { useAuthStore } from '../../stores/authStore';
+import { useQueryClient } from '@tanstack/react-query';
 import type { MetaPreview } from '@streamer/shared';
 
 function CatalogCard({ item }: { item: MetaPreview }) {
@@ -41,8 +43,27 @@ function CatalogCard({ item }: { item: MetaPreview }) {
 export default function HomeScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const { data: movies, isLoading, error } = useCatalog('movie', search || undefined);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const isSearching = debouncedSearch.length >= 2;
+
+  // Use global search when user is searching, catalog otherwise
+  const { data: searchResults, isLoading: searchLoading } = useGlobalSearch(debouncedSearch);
+  const { data: movies, isLoading: catalogLoading } = useCatalog('movie');
+
+  const displayData = isSearching ? searchResults : movies;
+  const isLoading = isSearching ? searchLoading : catalogLoading;
 
   if (!isAuthenticated) {
     return (
@@ -65,12 +86,23 @@ export default function HomeScreen() {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search movies..."
+          placeholder="🔍 Search all add-ons..."
           placeholderTextColor="#6b7280"
           value={search}
           onChangeText={setSearch}
         />
+        {isSearching && (
+          <Pressable style={styles.clearBtn} onPress={() => setSearch('')}>
+            <Text style={styles.clearBtnText}>✕</Text>
+          </Pressable>
+        )}
       </View>
+
+      {isSearching && (
+        <Text style={styles.searchHint}>
+          Searching across all installed add-ons...
+        </Text>
+      )}
 
       {isLoading && (
         <View style={styles.centered}>
@@ -78,28 +110,34 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {error && (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>
-            Failed to load catalog. Check your add-ons.
-          </Text>
-        </View>
-      )}
-
-      {movies && movies.length === 0 && !isLoading && (
+      {displayData && displayData.length === 0 && !isLoading && (
         <View style={styles.centered}>
           <Text style={styles.emptyText}>
-            No content found. Install some add-ons in Settings!
+            {isSearching
+              ? `No results for "${debouncedSearch}"`
+              : 'No content found. Install some add-ons in Settings!'}
           </Text>
         </View>
       )}
 
       <FlatList
-        data={movies}
+        data={displayData}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.row}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await queryClient.invalidateQueries({ queryKey: isSearching ? ['search'] : ['catalog'] });
+              setRefreshing(false);
+            }}
+            tintColor="#818cf8"
+            colors={['#818cf8']}
+          />
+        }
         renderItem={({ item }) => <CatalogCard item={item} />}
       />
     </View>
@@ -147,10 +185,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   searchInput: {
+    flex: 1,
     backgroundColor: '#1a1a3e',
     borderRadius: 12,
     paddingHorizontal: 16,
@@ -160,16 +201,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(129, 140, 248, 0.2)',
   },
+  clearBtn: {
+    marginLeft: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(248, 113, 113, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearBtnText: {
+    color: '#f87171',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  searchHint: {
+    color: '#6b7280',
+    fontSize: 11,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
-  },
-  errorText: {
-    color: '#f87171',
-    fontSize: 14,
-    textAlign: 'center',
   },
   emptyText: {
     color: '#9ca3af',

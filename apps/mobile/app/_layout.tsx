@@ -42,8 +42,20 @@ export default function RootLayout() {
           options={{ title: 'Create Account', presentation: 'modal' }}
         />
         <Stack.Screen
+          name="forgot-password"
+          options={{ title: 'Forgot Password', presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="reset-password"
+          options={{ title: 'Reset Password', presentation: 'modal' }}
+        />
+        <Stack.Screen
           name="detail/[type]/[id]"
           options={{ title: '' }}
+        />
+        <Stack.Screen
+          name="addons/index"
+          options={{ title: 'Add-ons' }}
         />
         <Stack.Screen
           name="player"

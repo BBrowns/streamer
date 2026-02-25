@@ -7,28 +7,49 @@ import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { api } from '../services/api';
 
-export default function LoginScreen() {
+export default function ResetPasswordScreen() {
     const router = useRouter();
-    const { login, isLoading, error } = useAuth();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [localError, setLocalError] = useState('');
+    const [token, setToken] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleLogin = async () => {
-        setLocalError('');
-        if (!email || !password) {
-            setLocalError('Please fill in all fields');
+    const handleReset = async () => {
+        setError('');
+
+        if (!token) {
+            setError('Please enter the reset token');
             return;
         }
+        if (newPassword.length < 8) {
+            setError('Password must be at least 8 characters');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
+        setIsLoading(true);
         try {
-            await login({ email, password });
-            router.replace('/(tabs)');
-        } catch { }
+            await api.post('/api/auth/reset-password', { token, newPassword });
+            Alert.alert(
+                'Password Reset',
+                'Your password has been reset. Please sign in.',
+                [{ text: 'Sign In', onPress: () => router.replace('/login') }],
+            );
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Reset failed. Token may be expired.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -37,58 +58,58 @@ export default function LoginScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <View style={styles.form}>
-                <Text style={styles.title}>Welcome Back</Text>
-                <Text style={styles.subtitle}>Sign in to continue</Text>
+                <Text style={styles.title}>Reset Password</Text>
+                <Text style={styles.subtitle}>
+                    Enter the reset token from your email and choose a new password.
+                </Text>
 
-                {(error || localError) && (
+                {error && (
                     <View style={styles.errorBox}>
-                        <Text style={styles.errorText}>
-                            {localError || (error as any)?.response?.data?.error || 'Login failed'}
-                        </Text>
+                        <Text style={styles.errorText}>{error}</Text>
                     </View>
                 )}
 
                 <TextInput
                     style={styles.input}
-                    placeholder="Email"
+                    placeholder="Reset token"
                     placeholderTextColor="#6b7280"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
+                    value={token}
+                    onChangeText={setToken}
                     autoCapitalize="none"
+                    autoCorrect={false}
                 />
                 <TextInput
                     style={styles.input}
-                    placeholder="Password"
+                    placeholder="New password (min 8 chars)"
                     placeholderTextColor="#6b7280"
-                    value={password}
-                    onChangeText={setPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry
+                />
+                <TextInput
+                    style={styles.input}
+                    placeholder="Confirm new password"
+                    placeholderTextColor="#6b7280"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
                     secureTextEntry
                 />
 
                 <Pressable
                     style={[styles.button, isLoading && styles.buttonDisabled]}
-                    onPress={handleLogin}
+                    onPress={handleReset}
                     disabled={isLoading}
                 >
                     {isLoading ? (
                         <ActivityIndicator color="#fff" />
                     ) : (
-                        <Text style={styles.buttonText}>Sign In</Text>
+                        <Text style={styles.buttonText}>Reset Password</Text>
                     )}
                 </Pressable>
 
-                <Pressable onPress={() => router.push('/forgot-password')}>
+                <Pressable onPress={() => router.replace('/login')}>
                     <Text style={styles.linkText}>
-                        <Text style={styles.linkBold}>Forgot password?</Text>
-                    </Text>
-                </Pressable>
-
-                <View style={{ height: 12 }} />
-
-                <Pressable onPress={() => router.replace('/register')}>
-                    <Text style={styles.linkText}>
-                        Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>
+                        Back to <Text style={styles.linkBold}>Sign In</Text>
                     </Text>
                 </Pressable>
             </View>
@@ -115,6 +136,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#9ca3af',
         marginBottom: 28,
+        lineHeight: 22,
     },
     errorBox: {
         backgroundColor: 'rgba(248, 113, 113, 0.1)',

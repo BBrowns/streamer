@@ -155,6 +155,54 @@ export class AggregatorService {
             .flatMap((r) => r.value);
     }
 
+    /** Search across all add-ons and all content types simultaneously, deduplicating by ID */
+    async search(
+        userId: string,
+        query: string,
+        requestId: string,
+    ): Promise<MetaPreview[]> {
+        const addons = await this.getUserAddons(userId);
+        const contentTypes = ['movie', 'series'];
+
+        // Build all search tasks across all addons × all content types
+        const tasks = addons.flatMap((addon) =>
+            contentTypes
+                .filter((type) => this.addonSupportsResource(addon.manifest, 'catalog', type))
+                .map(async (type) => {
+                    const catalogId = this.findCatalogId(addon.manifest, type);
+                    if (!catalogId) return [];
+
+                    const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
+                    const data = await resilientFetch<{ metas: MetaPreview[] }>(
+                        addon.transportUrl,
+                        addon.manifest.id,
+                        path,
+                        requestId,
+                    );
+                    return data.metas || [];
+                }),
+        );
+
+        const results = await Promise.allSettled(tasks);
+
+        // Merge and deduplicate by ID
+        const seen = new Set<string>();
+        const merged: MetaPreview[] = [];
+
+        for (const result of results) {
+            if (result.status === 'fulfilled') {
+                for (const meta of result.value) {
+                    if (!seen.has(meta.id)) {
+                        seen.add(meta.id);
+                        merged.push(meta);
+                    }
+                }
+            }
+        }
+
+        return merged;
+    }
+
     /** Get installed add-ons for user, with manifests */
     private async getUserAddons(userId: string) {
         const addons = await prisma.installedAddon.findMany({
