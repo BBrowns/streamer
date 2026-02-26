@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { AxiosError } from 'axios';
 
 export default function LoginScreen() {
     const router = useRouter();
@@ -43,7 +44,7 @@ export default function LoginScreen() {
                 {(error || localError) && (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>
-                            {localError || (error as any)?.response?.data?.error || 'Login failed'}
+                            {localError || (error instanceof AxiosError ? error.response?.data?.error : null) || 'Login failed'}
                         </Text>
                     </View>
                 )}

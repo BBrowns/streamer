@@ -8,7 +8,7 @@ import type { AudioTrack, SubtitleTrack, StreamStats } from '../services/streamE
 import { Ionicons } from '@expo/vector-icons';
 
 // Conditionally import Video for native only
-let Video: any = null;
+let Video: typeof import('react-native-video').default | null = null;
 try {
     Video = require('react-native-video').default;
 } catch {
@@ -26,7 +26,7 @@ export default function PlayerScreen() {
     const router = useRouter();
     const { currentStream, mediaInfo, isBuffering, setBuffering, setProgress, clearPlayer } =
         usePlayerStore();
-    const videoRef = useRef<any>(null);
+    const videoRef = useRef<import('react-native-video').VideoRef | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
     const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
@@ -355,7 +355,7 @@ export default function PlayerScreen() {
                         controls
                         onBuffer={({ isBuffering: b }: { isBuffering: boolean }) => setBuffering(b)}
                         onProgress={handleProgress}
-                        onError={(err: any) => {
+                        onError={(err: unknown) => {
                             console.error('Video playback error:', err);
                         }}
                     />

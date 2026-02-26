@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { AxiosError } from 'axios';
 
 export default function RegisterScreen() {
     const router = useRouter();
@@ -38,7 +39,7 @@ export default function RegisterScreen() {
                 {error && (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>
-                            {(error as any)?.response?.data?.error || 'Registration failed'}
+                            {(error instanceof AxiosError ? error.response?.data?.error : null) || 'Registration failed'}
                         </Text>
                     </View>
                 )}
