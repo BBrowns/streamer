@@ -7,6 +7,23 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { AudioTrack, SubtitleTrack, StreamStats } from '../services/streamEngine/IStreamEngine';
 import { Ionicons } from '@expo/vector-icons';
 
+// Add dynamically
+let CastButton: any = null;
+let useRemoteMediaClient: any = null;
+let AirPlayButton: any = null;
+
+if (Platform.OS !== 'web') {
+    try {
+        const GoogleCast = require('react-native-google-cast');
+        CastButton = GoogleCast.CastButton;
+        useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
+    } catch { }
+    try {
+        const AirPlay = require('react-native-airplay-btn');
+        AirPlayButton = AirPlay.AirPlayButton;
+    } catch { }
+}
+
 // Conditionally import Video for native only
 let Video: typeof import('react-native-video').default | null = null;
 try {
@@ -43,10 +60,33 @@ export default function PlayerScreen() {
     const currentTimeRef = useRef(0);
     const durationRef = useRef(0);
 
+    const remoteMediaClient = useRemoteMediaClient ? useRemoteMediaClient() : null;
+    const lastCastUriRef = useRef<string | null>(null);
+
     const engine = currentStream ? streamEngineManager.resolveEngine(currentStream) : null;
     const playbackUri = currentStream
         ? streamEngineManager.getPlaybackUri(currentStream)
         : null;
+
+    // Cast Media
+    useEffect(() => {
+        if (!remoteMediaClient || !playbackUri || !currentStream) return;
+
+        if (lastCastUriRef.current !== playbackUri) {
+            lastCastUriRef.current = playbackUri;
+
+            remoteMediaClient.loadMedia({
+                mediaInfo: {
+                    contentUrl: playbackUri,
+                    contentType: playbackUri.includes('.m3u8') ? 'application/x-mpegurl' : 'video/mp4',
+                    metadata: {
+                        type: 'movie',
+                        title: currentStream.title || currentStream.name || 'Video',
+                    }
+                },
+            }).catch(console.error);
+        }
+    }, [remoteMediaClient, playbackUri, currentStream]);
 
     // Subscribe to engine events
     useEffect(() => {
@@ -60,6 +100,7 @@ export default function PlayerScreen() {
 
         return () => {
             engine.off('stats', onStats);
+            engine.stop?.();
         };
     }, [engine]);
 
@@ -173,14 +214,22 @@ export default function PlayerScreen() {
             >
                 <Text style={styles.closeBtnText}>✕ Close</Text>
             </Pressable>
-            <Pressable
-                style={styles.settingsBtn}
-                onPress={() => setSettingsOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Playback settings"
-            >
-                <Ionicons name="settings-sharp" size={20} color="#e0e0ff" />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {CastButton && Platform.OS !== 'web' && (
+                    <CastButton style={{ width: 44, height: 44, tintColor: '#e0e0ff' }} />
+                )}
+                {AirPlayButton && Platform.OS === 'ios' && (
+                    <AirPlayButton style={{ width: 44, height: 44, tintColor: '#e0e0ff' }} />
+                )}
+                <Pressable
+                    style={styles.settingsBtn}
+                    onPress={() => setSettingsOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Playback settings"
+                >
+                    <Ionicons name="settings-sharp" size={20} color="#e0e0ff" />
+                </Pressable>
+            </View>
         </View>
     );
 
@@ -193,11 +242,11 @@ export default function PlayerScreen() {
                 <Text style={styles.engineLabel}>
                     Engine: {engine?.getEngineType().toUpperCase() ?? 'Unknown'}
                 </Text>
-                {stats.peers > 0 && (
+                {stats.peers > 0 ? (
                     <Text style={styles.statsLabel}>
                         ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers} peers
                     </Text>
-                )}
+                ) : null}
             </View>
         </View>
     );
@@ -353,6 +402,7 @@ export default function PlayerScreen() {
                         style={styles.video}
                         resizeMode="contain"
                         controls
+                        allowsExternalPlayback={true}
                         onBuffer={({ isBuffering: b }: { isBuffering: boolean }) => setBuffering(b)}
                         onProgress={handleProgress}
                         onError={(err: unknown) => {
