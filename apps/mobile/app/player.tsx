@@ -5,7 +5,8 @@ import { streamEngineManager } from '../services/streamEngine/StreamEngineManage
 import { useUpdateProgress } from '../hooks/useContinueWatching';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { AudioTrack, SubtitleTrack, StreamStats } from '../services/streamEngine/IStreamEngine';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { DesktopCastModal } from '../components/DesktopCastModal';
 
 // Add dynamically
 let CastButton: any = null;
@@ -48,6 +49,7 @@ export default function PlayerScreen() {
     const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
     const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
     const [stats, setStats] = useState<StreamStats>({ speed: 0, peers: 0 });
+    const [castModalOpen, setCastModalOpen] = useState(false);
 
     // Double-tap seek state
     const [seekFeedback, setSeekFeedback] = useState<'left' | 'right' | null>(null);
@@ -221,6 +223,16 @@ export default function PlayerScreen() {
                 {AirPlayButton && Platform.OS === 'ios' && (
                     <AirPlayButton style={{ width: 44, height: 44, tintColor: '#e0e0ff' }} />
                 )}
+                {Platform.OS === 'web' && (
+                    <Pressable
+                        style={styles.settingsBtn}
+                        onPress={() => setCastModalOpen(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cast to Device"
+                    >
+                        <MaterialIcons name="cast" size={20} color="#e0e0ff" />
+                    </Pressable>
+                )}
                 <Pressable
                     style={styles.settingsBtn}
                     onPress={() => setSettingsOpen(true)}
@@ -378,6 +390,12 @@ export default function PlayerScreen() {
                 </View>
                 {infoBar}
                 {settingsModal}
+                <DesktopCastModal
+                    visible={castModalOpen}
+                    playbackUri={playbackUri}
+                    title={currentStream.title || currentStream.name || 'Video'}
+                    onClose={() => setCastModalOpen(false)}
+                />
             </View>
         );
     }
