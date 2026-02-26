@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { AxiosError } from 'axios';
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();
@@ -40,8 +41,11 @@ export default function ForgotPasswordScreen() {
             } else {
                 setSuccessMessage(res.message || 'Check your email for reset instructions.');
             }
-        } catch (err: any) {
-            setError(err?.response?.data?.error || 'Failed to request password reset');
+        } catch (err: unknown) {
+            const errorMessage = err instanceof AxiosError
+                ? err.response?.data?.error
+                : 'Failed to request password reset';
+            setError(errorMessage || 'Failed to request password reset');
         } finally {
             setIsLoading(false);
         }

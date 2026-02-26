@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import type { InstalledAddon } from '@streamer/shared';
+import { AxiosError } from 'axios';
 
 export default function AddonsScreen() {
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -39,9 +40,11 @@ export default function AddonsScreen() {
             setAddonUrl('');
             Alert.alert('Success', 'Add-on installed! New content will appear on Discover.');
         },
-        onError: (err: any) => {
-            const msg = err.response?.data?.error || 'Failed to install add-on';
-            Alert.alert('Installation Failed', msg);
+        onError: (err: unknown) => {
+            const msg = err instanceof AxiosError
+                ? err.response?.data?.error
+                : 'Failed to install add-on';
+            Alert.alert('Installation Failed', msg || 'Failed to install add-on');
         },
     });
 

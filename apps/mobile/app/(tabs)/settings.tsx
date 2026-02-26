@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { AxiosError } from 'axios';
 
 export default function SettingsScreen() {
     const { user, isAuthenticated } = useAuthStore();
@@ -48,8 +49,11 @@ export default function SettingsScreen() {
             setPwModalOpen(false);
             setCurrentPw('');
             setNewPw('');
-        } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed to change password');
+        } catch (err: unknown) {
+            const errorMessage = err instanceof AxiosError
+                ? err.response?.data?.error
+                : 'Failed to change password';
+            Alert.alert('Error', errorMessage || 'Failed to change password');
         } finally {
             setPwLoading(false);
         }
@@ -69,8 +73,11 @@ export default function SettingsScreen() {
             }
             Alert.alert('Success', 'Profile updated');
             setProfileModalOpen(false);
-        } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.error || 'Failed to update profile');
+        } catch (err: unknown) {
+            const errorMessage = err instanceof AxiosError
+                ? err.response?.data?.error
+                : 'Failed to update profile';
+            Alert.alert('Error', errorMessage || 'Failed to update profile');
         } finally {
             setProfileLoading(false);
         }

@@ -58,12 +58,36 @@ export function errorMiddleware(
         return;
     }
 
+    // Fallback error handler
     logger.error(
-        { requestId, error: err.message, stack: err.stack },
-        'Unhandled server error',
+        {
+            err,
+            requestId: (req as Request & { requestId: string }).requestId,
+        },
+        'Unhandled error',
     );
+
+    if (err.name === 'PrismaClientKnownRequestError') {
+        const prismaErr = err as any;
+        if (prismaErr.code === 'P2003') {
+            // Foreign key constraint failed - usually means user no longer exists but has a valid JWT
+            res.status(401).json({
+                error: 'Unauthorized or related record not found',
+                requestId: (req as Request & { requestId: string }).requestId,
+            });
+            return;
+        }
+        if (prismaErr.code === 'P2025') {
+            res.status(404).json({
+                error: 'Record not found',
+                requestId: (req as Request & { requestId: string }).requestId,
+            });
+            return;
+        }
+    }
+
     res.status(500).json({
         error: 'Internal server error',
-        requestId,
+        requestId: (req as Request & { requestId: string }).requestId,
     });
 }

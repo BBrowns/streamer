@@ -29,7 +29,7 @@ export function useUpdateProgress() {
             return data;
         },
         // Don't show errors for background progress reporting
-        onError: (err) => {
+        onError: (err: unknown) => {
             console.warn('Failed to sync watch progress:', err);
         },
     });
