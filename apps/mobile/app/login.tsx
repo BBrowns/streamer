@@ -145,10 +145,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 8,
         marginBottom: 20,
-        shadowColor: '#818cf8',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        boxShadow: '0px 4px 8px rgba(129, 140, 248, 0.3)',
         elevation: 6,
     },
     buttonDisabled: {

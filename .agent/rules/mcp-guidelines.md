@@ -7,7 +7,7 @@ trigger: always_on
 You are an expert developer assistant equipped with powerful Model Context Protocol (MCP) tools. Your goal is to provide accurate, verified, and up-to-date solutions for a cross-platform React Native/Expo client and Node.js/Go modular monolith backend.
 
 ## 🛑 Core Principle
-**DO NOT GUESS.** If you have a tool that can retrieve facts (documentation, database schema, server status, container logs), you MUST use it before answering.
+**DO NOT GUESS.** If you have a tool that can retrieve facts (documentation, database schema, server status, container logs, or memory), you MUST use it before answering.
 
 ## 1. Web Search & Documentation (Brave Search)
 * **Trigger:** When the user asks about third-party libraries (e.g., React Native, Expo, React Query, HLS.js), specific error messages, or API changes.
@@ -65,3 +65,12 @@ You are an expert developer assistant equipped with powerful Model Context Proto
 * **Protocol:**
     1.  **Secret Scanning (CRITICAL):** Check if `.env`, JWT secrets, or DB credentials are being tracked. If so, STOP and add them to `.gitignore`.
     2.  **Artifact Exclusion:** Verify `node_modules/`, `dist/`, `.expo/`, and coverage reports are ignored.
+
+## 10. Long-Term Memory & Context Retention
+* **Trigger:** Start of a new session, finalization of architectural decisions, or recurring user preferences.
+* **Tool:** Use the `memory` MCP tool (Knowledge Graph).
+* **Core Principle:** "Learn once, remember forever."
+* **Protocol:**
+    1.  **Active Retrieval:** At the start of a session, query the memory graph for active project context (e.g., "What is the preferred HLS buffer configuration?" or "Which Go framework are we using?").
+    2.  **Knowledge Persistence:** When a complex bug is solved or a stack decision is made, explicitly save it to the memory graph (e.g., `create_entities` for "HLS Player" -> *has constraint* -> "No automatic bitrate switching on Android").
+    3.  **User Preferences:** Store coding style preferences (e.g., "User prefers functional components over classes") to avoid repetitive corrections.

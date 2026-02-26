@@ -65,4 +65,7 @@ export interface IStreamEngine {
         event: K,
         callback: (data: StreamEngineEventMap[K]) => void,
     ): void;
+
+    /** Stop and cleanup the engine (optional) */
+    stop?(): void;
 }
