@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, FlatList, ActivityIndicator, Platform } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export interface CastDevice {
     id: string;
@@ -12,9 +13,10 @@ interface Props {
     playbackUri: string;
     title: string;
     onClose: () => void;
+    onCastStart?: (device: CastDevice) => void;
 }
 
-export function DesktopCastModal({ visible, playbackUri, title, onClose }: Props) {
+export function DesktopCastModal({ visible, playbackUri, title, onClose, onCastStart }: Props) {
     const [devices, setDevices] = useState<CastDevice[]>([]);
     const [loading, setLoading] = useState(false);
     const [castingTo, setCastingTo] = useState<string | null>(null);
@@ -52,6 +54,9 @@ export function DesktopCastModal({ visible, playbackUri, title, onClose }: Props
             });
             if (res.ok) {
                 // Success, could show a toast or auto-close
+                if (onCastStart) {
+                    onCastStart(device);
+                }
                 setTimeout(onClose, 1000);
             } else {
                 console.error('Failed to cast:', await res.text());
@@ -64,35 +69,66 @@ export function DesktopCastModal({ visible, playbackUri, title, onClose }: Props
     };
 
     return (
-        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-            <View style={styles.overlay}>
+        <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+            {/* Overlay with slight blur for web */}
+            <View style={[styles.overlay, Platform.OS === 'web' && { backdropFilter: 'blur(12px)' } as any]}>
                 <View style={styles.container}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>Cast to Device</Text>
-                        <Pressable onPress={onClose} hitSlop={10}>
-                            <Text style={styles.closeBtn}>Done</Text>
+                        <View style={styles.headerTextContainer}>
+                            <MaterialIcons name="cast" size={24} color="#a5b4fc" style={{ marginRight: 8 }} />
+                            <Text style={styles.title}>Cast to Device</Text>
+                        </View>
+                        <Pressable
+                            onPress={onClose}
+                            hitSlop={10}
+                            style={({ pressed }) => [styles.closeBtnWrapper, pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] }]}
+                        >
+                            <MaterialIcons name="close" size={24} color="#9ca3af" />
                         </Pressable>
                     </View>
 
                     {loading && devices.length === 0 ? (
-                        <ActivityIndicator style={styles.loader} color="#818cf8" />
+                        <View style={styles.centerBox}>
+                            <ActivityIndicator size="large" color="#818cf8" />
+                            <Text style={styles.emptyText}>Searching for devices...</Text>
+                        </View>
                     ) : devices.length === 0 ? (
-                        <Text style={styles.emptyText}>No devices found on network</Text>
+                        <View style={styles.centerBox}>
+                            <MaterialIcons name="tv-off" size={48} color="#4b5563" />
+                            <Text style={styles.emptyText}>No devices found on network</Text>
+                        </View>
                     ) : (
                         <FlatList
                             data={devices}
                             keyExtractor={(d) => d.id}
+                            contentContainerStyle={{ gap: 12 }}
                             renderItem={({ item }) => {
                                 const isCasting = castingTo === item.id;
+                                const iconName = item.type === 'chromecast' ? 'cast' : 'airplay';
                                 return (
                                     <Pressable
-                                        style={[styles.deviceItem, isCasting && styles.deviceItemActive]}
+                                        style={({ pressed }) => [
+                                            styles.deviceItem,
+                                            isCasting && styles.deviceItemActive,
+                                            pressed && !isCasting && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+                                        ]}
                                         onPress={() => handleCast(item)}
                                         disabled={castingTo !== null}
                                     >
-                                        <Text style={styles.deviceName}>{item.name}</Text>
-                                        <Text style={styles.deviceType}>{item.type}</Text>
-                                        {isCasting && <ActivityIndicator size="small" color="#818cf8" />}
+                                        <View style={styles.deviceInfoContainer}>
+                                            <MaterialIcons name={iconName} size={28} color={isCasting ? '#fff' : '#a5b4fc'} />
+                                            <View style={styles.deviceTextCol}>
+                                                <Text style={[styles.deviceName, isCasting && { color: '#fff' }]}>{item.name}</Text>
+                                                <Text style={[styles.deviceType, isCasting && { color: '#e0e7ff' }]}>
+                                                    {isCasting ? 'Connecting to display...' : `Available • ${item.type}`}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {isCasting ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <MaterialIcons name="chevron-right" size={24} color="#6b7280" />
+                                        )}
                                     </Pressable>
                                 );
                             }}
@@ -100,7 +136,8 @@ export function DesktopCastModal({ visible, playbackUri, title, onClose }: Props
                     )}
 
                     <Pressable style={styles.refreshBtn} onPress={fetchDevices} disabled={loading}>
-                        <Text style={styles.refreshText}>{loading ? 'Scanning...' : 'Refresh Devices'}</Text>
+                        <MaterialIcons name="refresh" size={20} color={loading ? '#6b7280' : '#e5e7eb'} style={{ marginRight: 8 }} />
+                        <Text style={[styles.refreshText, loading && { color: '#6b7280' }]}>{loading ? 'Scanning...' : 'Refresh Devices'}</Text>
                     </Pressable>
                 </View>
             </View>
@@ -111,32 +148,46 @@ export function DesktopCastModal({ visible, playbackUri, title, onClose }: Props
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
     },
     container: {
-        backgroundColor: '#0d0d24',
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        padding: 20,
-        paddingBottom: 40,
-        maxHeight: '60%',
+        backgroundColor: 'rgba(17, 24, 39, 0.85)', // dark gray/blue, slightly transparent
+        borderRadius: 24,
+        padding: 24,
+        width: '100%',
+        maxWidth: 420,
+        maxHeight: '80%',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+        elevation: 10,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
+    },
+    headerTextContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     title: {
         color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 20,
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
-    closeBtn: {
-        color: '#818cf8',
-        fontSize: 16,
-        fontWeight: '600',
+    closeBtnWrapper: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        padding: 6,
+        borderRadius: 20,
     },
     loader: {
         marginVertical: 20,
@@ -144,37 +195,58 @@ const styles = StyleSheet.create({
     emptyText: {
         color: '#9ca3af',
         textAlign: 'center',
-        marginVertical: 20,
+        marginTop: 12,
+        fontSize: 16,
+    },
+    centerBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 40,
     },
     deviceItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#1f2937',
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
         padding: 16,
-        borderRadius: 8,
-        marginBottom: 8,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
     },
     deviceItemActive: {
-        backgroundColor: '#3730a3',
+        backgroundColor: 'rgba(79, 70, 229, 0.3)',
+        borderColor: '#6366f1',
+    },
+    deviceInfoContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    deviceTextCol: {
+        justifyContent: 'center',
     },
     deviceName: {
-        color: '#fff',
+        color: '#f3f4f6',
         fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
     },
     deviceType: {
         color: '#9ca3af',
         fontSize: 12,
-        textTransform: 'uppercase',
+        textTransform: 'capitalize',
     },
     refreshBtn: {
-        marginTop: 16,
-        padding: 12,
+        marginTop: 24,
+        padding: 14,
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 8,
+        backgroundColor: 'transparent',
     },
     refreshText: {
-        color: '#e5e7eb',
+        color: '#9ca3af',
+        fontWeight: '500',
+        fontSize: 14,
     },
 });

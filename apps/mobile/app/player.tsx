@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform, Modal, FlatList, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { usePlayerStore } from '../stores/playerStore';
 import { streamEngineManager } from '../services/streamEngine/StreamEngineManager';
@@ -6,7 +6,7 @@ import { useUpdateProgress } from '../hooks/useContinueWatching';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { AudioTrack, SubtitleTrack, StreamStats } from '../services/streamEngine/IStreamEngine';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { DesktopCastModal } from '../components/DesktopCastModal';
+import { DesktopCastModal, type CastDevice } from '../components/DesktopCastModal';
 
 // Add dynamically
 let CastButton: any = null;
@@ -50,6 +50,7 @@ export default function PlayerScreen() {
     const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
     const [stats, setStats] = useState<StreamStats>({ speed: 0, peers: 0 });
     const [castModalOpen, setCastModalOpen] = useState(false);
+    const [activeCastDevice, setActiveCastDevice] = useState<CastDevice | null>(null);
 
     // Double-tap seek state
     const [seekFeedback, setSeekFeedback] = useState<'left' | 'right' | null>(null);
@@ -151,6 +152,20 @@ export default function PlayerScreen() {
         },
         [setProgress],
     );
+
+    const stopCasting = async () => {
+        if (!activeCastDevice) return;
+        try {
+            await fetch('http://localhost:11470/api/cast/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: activeCastDevice.id, action: 'stop' })
+            });
+        } catch (e) {
+            console.error('Failed to stop cast', e);
+        }
+        setActiveCastDevice(null);
+    };
 
     const handleDoubleTap = useCallback(
         (side: 'left' | 'right') => {
@@ -380,13 +395,46 @@ export default function PlayerScreen() {
             <View style={styles.container}>
                 {headerBar}
                 <View style={styles.playerContainer}>
-                    {/* @ts-ignore — RNW doesn't know about video tag */}
-                    <video
-                        src={playbackUri}
-                        controls
-                        autoPlay
-                        style={{ width: '100%', height: '100%', backgroundColor: '#000' }}
-                    />
+                    {activeCastDevice ? (
+                        <View style={styles.activeCastContainer}>
+                            {mediaInfo?.poster && (
+                                <Image
+                                    style={[StyleSheet.absoluteFillObject, { opacity: 0.3 }]}
+                                    source={{ uri: mediaInfo.poster }}
+                                    blurRadius={20}
+                                    resizeMode="cover"
+                                />
+                            )}
+                            <View style={[styles.activeCastContent, Platform.OS === 'web' && { backdropFilter: 'blur(24px)' } as any]}>
+                                <View style={styles.castIconWrapper}>
+                                    <MaterialIcons name="cast-connected" size={56} color="#818cf8" />
+                                </View>
+                                <Text style={styles.activeCastTitle}>Casting to {activeCastDevice.name}</Text>
+                                <Text style={styles.activeCastSubtitle}>{currentStream.title || currentStream.name}</Text>
+
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        styles.stopCastBtn,
+                                        pressed && { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: 'rgba(239, 68, 68, 0.5)', transform: [{ scale: 0.95 }] }
+                                    ]}
+                                    onPress={stopCasting}
+                                >
+                                    <View style={styles.stopCastContent}>
+                                        <MaterialIcons name="cancel" size={18} color="#fca5a5" />
+                                        <Text style={styles.stopCastBtnText}>Stop Casting</Text>
+                                    </View>
+                                </Pressable>
+                            </View>
+                        </View>
+                    ) : (
+                        /* @ts-ignore — RNW doesn't know about video tag */
+                        <video
+                            src={playbackUri}
+                            controls
+                            autoPlay
+                            style={{ width: '100%', height: '100%', backgroundColor: '#000' }}
+                        />
+                    )}
                 </View>
                 {infoBar}
                 {settingsModal}
@@ -395,6 +443,7 @@ export default function PlayerScreen() {
                     playbackUri={playbackUri}
                     title={currentStream.title || currentStream.name || 'Video'}
                     onClose={() => setCastModalOpen(false)}
+                    onCastStart={(device) => setActiveCastDevice(device)}
                 />
             </View>
         );
@@ -440,6 +489,67 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#000',
+    },
+    activeCastContainer: {
+        flex: 1,
+        width: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#050510',
+    },
+    activeCastContent: {
+        alignItems: 'center',
+        backgroundColor: 'rgba(20, 20, 35, 0.6)',
+        padding: 40,
+        borderRadius: 32,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+    },
+    castIconWrapper: {
+        backgroundColor: 'rgba(129, 140, 248, 0.15)',
+        padding: 24,
+        borderRadius: 40,
+        marginBottom: 24,
+        shadowColor: '#818cf8',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 20,
+    },
+    activeCastTitle: {
+        color: '#fff',
+        fontSize: 22,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    activeCastSubtitle: {
+        color: '#9ca3af',
+        fontSize: 16,
+        marginBottom: 32,
+        textAlign: 'center',
+        maxWidth: 300,
+    },
+    stopCastBtn: {
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        paddingHorizontal: 28,
+        paddingVertical: 14,
+        borderRadius: 30,
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+    },
+    stopCastContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    stopCastBtnText: {
+        color: '#fef2f2',
+        fontWeight: '600',
+        fontSize: 15,
+        letterSpacing: 0.3,
     },
     centered: {
         flex: 1,
