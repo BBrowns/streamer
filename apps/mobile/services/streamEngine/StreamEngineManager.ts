@@ -4,21 +4,33 @@ import { HLSEngine } from './HLSEngine';
 import { HttpVideoEngine } from './HttpVideoEngine';
 import { TorrentEngine } from './TorrentEngine';
 
-/**
- * Manages stream engine resolution using the Strategy Pattern.
- * Engines are registered in priority order; the first engine that
- * can handle a stream is selected.
- */
+export type StreamingStrategy = 'debrid' | 'local';
+
 export class StreamEngineManager {
     private engines: IStreamEngine[] = [];
+    public activeStrategy: StreamingStrategy = 'debrid';
+    public bridgeUrl: string = 'http://127.0.0.1:11470';
+    public bridgeAvailable: boolean = false;
 
     constructor() {
-        // Register the HLS engine by default (MVP)
         this.registerEngine(new HLSEngine());
-        // Register fallback HTTP video engine
         this.registerEngine(new HttpVideoEngine());
-        // Register torrent stub engine
-        this.registerEngine(new TorrentEngine());
+        this.registerEngine(new TorrentEngine(this));
+
+        // Probe for bridge
+        this.detectBridge();
+    }
+
+    async detectBridge() {
+        try {
+            const res = await fetch(`${this.bridgeUrl}/status`);
+            if (res.ok) {
+                this.bridgeAvailable = true;
+                this.activeStrategy = 'local';
+            }
+        } catch (e) {
+            this.bridgeAvailable = false;
+        }
     }
 
     registerEngine(engine: IStreamEngine): void {

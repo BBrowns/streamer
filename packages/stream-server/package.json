@@ -1,0 +1,29 @@
+{
+    "name": "@streamer/stream-server",
+    "version": "1.0.0",
+    "description": "Local P2P daemon and bridge for streaming torrents via HTTP",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outdir=dist --external:express --external:webtorrent --external:cors",
+        "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+        "start": "node dist/index.js"
+    },
+    "devDependencies": {
+        "@types/chromecast-api": "^0.4.5",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^4.17.25",
+        "@types/node": "^20.19.34",
+        "@types/webtorrent": "^0.109.10",
+        "cors": "^2.8.6",
+        "esbuild": "^0.27.3",
+        "express": "^5.2.1",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^5.9.3",
+        "webtorrent": "^1.9.7"
+    },
+    "dependencies": {
+        "airplay-protocol": "^2.0.2",
+        "chromecast-api": "^0.4.2"
+    }
+}
