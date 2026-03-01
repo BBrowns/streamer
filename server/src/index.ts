@@ -1,3 +1,4 @@
+import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
@@ -15,10 +16,13 @@ async function main() {
 
     const app = createApp();
 
-    app.listen(env.port, () => {
+    serve({
+        fetch: app.fetch,
+        port: env.port
+    }, (info) => {
         logger.info(
-            { port: env.port, env: env.nodeEnv },
-            `Streamer server running on port ${env.port}`,
+            { port: info.port, env: env.nodeEnv },
+            `Streamer server running on port ${info.port}`,
         );
     });
 

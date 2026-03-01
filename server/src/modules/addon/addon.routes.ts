@@ -1,12 +1,10 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
 import { addonController } from './addon.controller.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 
-export const addonRouter = Router();
+export const addonRouter = new Hono();
 
-// All add-on routes require authentication
-addonRouter.use(authMiddleware);
-
-addonRouter.get('/', (req, res, next) => addonController.list(req, res, next));
-addonRouter.post('/', (req, res, next) => addonController.install(req, res, next));
-addonRouter.delete('/:id', (req, res, next) => addonController.uninstall(req, res, next));
+addonRouter.use('*', authMiddleware);
+addonRouter.get('/', (c) => addonController.list(c));
+addonRouter.post('/', (c) => addonController.install(c));
+addonRouter.delete('/:id', (c) => addonController.uninstall(c));

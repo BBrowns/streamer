@@ -31,7 +31,8 @@
     },
     "plugins": [
       "expo-router",
-      "react-native-google-cast"
+      "react-native-google-cast",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

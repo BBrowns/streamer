@@ -211,7 +211,7 @@ export class AggregatorService {
 
         return addons.map((a) => ({
             transportUrl: a.transportUrl,
-            manifest: a.manifest as unknown as AddonManifest,
+            manifest: JSON.parse(a.manifest as unknown as string) as AddonManifest,
         }));
     }
 

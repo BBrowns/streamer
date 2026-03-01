@@ -1,7 +1,6 @@
 import {
     View,
     Text,
-    StyleSheet,
     FlatList,
     Image,
     Pressable,
@@ -11,7 +10,6 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../stores/authStore';
 import { useLibrary, useRemoveFromLibrary } from '../../hooks/useLibrary';
-import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { ContinueWatchingRow } from '../../components/catalog/ContinueWatchingRow';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
@@ -22,7 +20,7 @@ function LibraryCard({ item, onRemove }: { item: LibraryItem; onRemove: (id: str
 
     return (
         <Pressable
-            style={styles.libraryCard}
+            className="flex-1 rounded-xl overflow-hidden bg-surface min-h-[44px]"
             onPress={() => router.push(`/detail/${item.type}/${item.itemId}`)}
             onLongPress={() => onRemove(item.itemId)}
             accessibilityRole="button"
@@ -31,12 +29,12 @@ function LibraryCard({ item, onRemove }: { item: LibraryItem; onRemove: (id: str
         >
             <Image
                 source={{ uri: item.poster ?? undefined }}
-                style={styles.cardPoster}
+                className="w-full aspect-[2/3] bg-surface/50"
                 accessibilityLabel={`${item.title} poster`}
             />
-            <View style={styles.cardInfo}>
-                <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.cardMeta}>
+            <View className="p-2">
+                <Text className="text-textMain text-[13px] font-semibold" numberOfLines={2}>{item.title}</Text>
+                <Text className="text-textMuted text-[11px] mt-1">
                     {item.type === 'movie' ? '🎬 Movie' : '📺 Series'}
                 </Text>
             </View>
@@ -58,17 +56,17 @@ export default function LibraryScreen() {
 
     if (!isAuthenticated) {
         return (
-            <View style={styles.centered}>
-                <Text style={styles.emptyIcon}>📚</Text>
-                <Text style={styles.emptyTitle}>Your Library</Text>
-                <Text style={styles.emptyText}>Sign in to access your watchlist</Text>
+            <View className="flex-1 bg-background justify-center items-center p-8">
+                <Text className="text-5xl mb-3">📚</Text>
+                <Text className="text-textMain text-lg font-bold mb-2">Your Library</Text>
+                <Text className="text-textMuted text-sm text-center mb-5 leading-5">Sign in to access your watchlist</Text>
                 <Pressable
-                    style={styles.ctaBtn}
+                    className="bg-primary px-6 py-3 rounded-xl min-w-[44px] min-h-[44px]"
                     onPress={() => router.push('/login')}
                     accessibilityRole="button"
                     accessibilityLabel="Sign in"
                 >
-                    <Text style={styles.ctaBtnText}>Sign In</Text>
+                    <Text className="text-white font-bold text-[15px]">Sign In</Text>
                 </Pressable>
             </View>
         );
@@ -76,26 +74,26 @@ export default function LibraryScreen() {
 
     if (isLoading) {
         return (
-            <View style={styles.centered}>
+            <View className="flex-1 bg-background justify-center items-center p-8">
                 <ActivityIndicator size="large" color="#818cf8" />
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
+        <View className="flex-1 bg-background">
             <FlatList
                 data={items ?? []}
                 keyExtractor={(item) => item.id}
                 numColumns={2}
-                columnWrapperStyle={styles.gridRow}
-                contentContainerStyle={styles.gridContent}
+                columnWrapperStyle={{ paddingHorizontal: 12, gap: 10, marginBottom: 10 }}
+                contentContainerStyle={{ paddingBottom: 24 }}
                 ListHeaderComponent={<ContinueWatchingRow />}
                 ListEmptyComponent={
-                    <View style={styles.emptyList}>
-                        <Text style={styles.emptyIcon}>📭</Text>
-                        <Text style={styles.emptyTitle}>No Items Yet</Text>
-                        <Text style={styles.emptyText}>
+                    <View className="flex-1 justify-center items-center pt-16 px-8">
+                        <Text className="text-5xl mb-3">📭</Text>
+                        <Text className="text-textMain text-lg font-bold mb-2">No Items Yet</Text>
+                        <Text className="text-textMuted text-sm text-center leading-5">
                             Browse the Discover tab and add movies & shows to your library.
                         </Text>
                     </View>
@@ -120,87 +118,3 @@ export default function LibraryScreen() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0a0a1a',
-    },
-    centered: {
-        flex: 1,
-        backgroundColor: '#0a0a1a',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 32,
-    },
-    emptyIcon: {
-        fontSize: 48,
-        marginBottom: 12,
-    },
-    emptyTitle: {
-        color: '#e0e0ff',
-        fontSize: 18,
-        fontWeight: '700',
-        marginBottom: 8,
-    },
-    emptyText: {
-        color: '#9ca3af',
-        fontSize: 14,
-        textAlign: 'center',
-        marginBottom: 20,
-        lineHeight: 20,
-    },
-    emptyList: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingTop: 60,
-        paddingHorizontal: 32,
-    },
-    ctaBtn: {
-        backgroundColor: '#818cf8',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
-        minWidth: 44,
-        minHeight: 44,
-    },
-    ctaBtnText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 15,
-    },
-    gridContent: {
-        paddingBottom: 24,
-    },
-    gridRow: {
-        paddingHorizontal: 12,
-        gap: 10,
-        marginBottom: 10,
-    },
-    libraryCard: {
-        flex: 1,
-        borderRadius: 12,
-        overflow: 'hidden',
-        backgroundColor: '#1a1a3e',
-        minHeight: 44,
-    },
-    cardPoster: {
-        width: '100%',
-        aspectRatio: 2 / 3,
-        backgroundColor: '#2a2a4e',
-    },
-    cardInfo: {
-        padding: 8,
-    },
-    cardTitle: {
-        color: '#e0e0ff',
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    cardMeta: {
-        color: '#6b7280',
-        fontSize: 11,
-        marginTop: 3,
-    },
-});

@@ -1,36 +1,18 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
 import { authController } from './auth.controller.js';
 import { authRateLimiter } from '../../middleware/rateLimiter.middleware.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 
-export const authRouter = Router();
+export const authRouter = new Hono();
 
-// Public routes (rate-limited)
-authRouter.post('/register', authRateLimiter, (req, res, next) =>
-    authController.register(req, res, next),
-);
+authRouter.post('/register', authRateLimiter, (c) => authController.register(c));
+authRouter.post('/login', authRateLimiter, (c) => authController.login(c));
+authRouter.post('/refresh', authRateLimiter, (c) => authController.refresh(c));
+authRouter.post('/forgot-password', authRateLimiter, (c) => authController.forgotPassword(c));
+authRouter.post('/reset-password', authRateLimiter, (c) => authController.resetPassword(c));
 
-authRouter.post('/login', authRateLimiter, (req, res, next) =>
-    authController.login(req, res, next),
-);
+authRouter.use('/change-password', authMiddleware);
+authRouter.post('/change-password', (c) => authController.changePassword(c));
 
-authRouter.post('/refresh', authRateLimiter, (req, res, next) =>
-    authController.refresh(req, res, next),
-);
-
-authRouter.post('/forgot-password', authRateLimiter, (req, res, next) =>
-    authController.forgotPassword(req, res, next),
-);
-
-authRouter.post('/reset-password', authRateLimiter, (req, res, next) =>
-    authController.resetPassword(req, res, next),
-);
-
-// Protected routes (require authentication)
-authRouter.post('/change-password', authMiddleware, (req, res, next) =>
-    authController.changePassword(req, res, next),
-);
-
-authRouter.patch('/profile', authMiddleware, (req, res, next) =>
-    authController.updateProfile(req, res, next),
-);
+authRouter.use('/profile', authMiddleware);
+authRouter.patch('/profile', (c) => authController.updateProfile(c));

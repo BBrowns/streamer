@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
 import { LibraryController } from './library.controller.js';
 import { LibraryService } from '../domain/library.service.js';
 import { PrismaLibraryRepository } from './prisma-library.repository.js';
@@ -11,17 +11,17 @@ const progressRepo = new PrismaWatchProgressRepository();
 const libraryService = new LibraryService(libraryRepo, progressRepo);
 const libraryController = new LibraryController(libraryService);
 
-export const libraryRouter = Router();
+export const libraryRouter = new Hono();
 
 // All library routes require authentication
-libraryRouter.use(authMiddleware);
+libraryRouter.use('*', authMiddleware);
 
 // Library / Watchlist
-libraryRouter.get('/', (req, res, next) => libraryController.getLibrary(req, res, next));
-libraryRouter.post('/', (req, res, next) => libraryController.addToLibrary(req, res, next));
-libraryRouter.delete('/', (req, res, next) => libraryController.removeFromLibrary(req, res, next));
-libraryRouter.get('/check/:itemId', (req, res, next) => libraryController.isInLibrary(req, res, next));
+libraryRouter.get('/', (c) => libraryController.getLibrary(c));
+libraryRouter.post('/', (c) => libraryController.addToLibrary(c));
+libraryRouter.delete('/', (c) => libraryController.removeFromLibrary(c));
+libraryRouter.get('/check/:itemId', (c) => libraryController.isInLibrary(c));
 
 // Watch Progress / Continue Watching
-libraryRouter.get('/progress', (req, res, next) => libraryController.getContinueWatching(req, res, next));
-libraryRouter.post('/progress', (req, res, next) => libraryController.updateProgress(req, res, next));
+libraryRouter.get('/progress', (c) => libraryController.getContinueWatching(c));
+libraryRouter.post('/progress', (c) => libraryController.updateProgress(c));

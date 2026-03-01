@@ -80,7 +80,7 @@ describe('TorrentEngine', () => {
     let engine: TorrentEngine;
 
     beforeEach(() => {
-        engine = new TorrentEngine();
+        engine = new TorrentEngine({} as any);
     });
 
     it('should claim it can play streams with infoHash', () => {

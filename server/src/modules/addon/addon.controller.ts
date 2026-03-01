@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Context } from 'hono';
 import { z } from 'zod';
 import { addonService } from './addon.service.js';
 
@@ -7,32 +7,25 @@ const installSchema = z.object({
 });
 
 export class AddonController {
-    async install(req: Request, res: Response, next: NextFunction) {
-        try {
-            const { transportUrl } = installSchema.parse(req.body);
-            const addon = await addonService.install(req.user!.userId, transportUrl);
-            res.status(201).json(addon);
-        } catch (err) {
-            next(err);
-        }
+    async install(c: Context) {
+        const body = await c.req.json();
+        const { transportUrl } = installSchema.parse(body);
+        const user = c.get('user') as any;
+        const addon = await addonService.install(user.userId, transportUrl);
+        return c.json(addon, 201);
     }
 
-    async list(req: Request, res: Response, next: NextFunction) {
-        try {
-            const addons = await addonService.list(req.user!.userId);
-            res.json({ addons });
-        } catch (err) {
-            next(err);
-        }
+    async list(c: Context) {
+        const user = c.get('user') as any;
+        const addons = await addonService.list(user.userId);
+        return c.json({ addons });
     }
 
-    async uninstall(req: Request, res: Response, next: NextFunction) {
-        try {
-            await addonService.uninstall(req.user!.userId, req.params.id as string);
-            res.status(204).send();
-        } catch (err) {
-            next(err);
-        }
+    async uninstall(c: Context) {
+        const user = c.get('user') as any;
+        const id = c.req.param('id');
+        await addonService.uninstall(user.userId, id);
+        return new Response(null, { status: 204 });
     }
 }
 

@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'child_process';
-import request from 'supertest';
+import { request } from './test-utils.js';
+import crypto from 'crypto';
 
-let container: StartedPostgreSqlContainer;
 let app: any;
 let prisma: any;
+let dbUri: string;
 
 // Mock logger
 vi.mock('../src/config/logger.js', () => ({
@@ -19,18 +19,8 @@ vi.mock('../src/config/logger.js', () => ({
     },
 }));
 
-vi.mock('pino-http', () => ({
-    default: () => (_req: any, _res: any, next: any) => next(),
-}));
-
 beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:17-alpine')
-        .withDatabase('streamer_test')
-        .withUsername('test_user')
-        .withPassword('test_pass')
-        .start();
-
-    const dbUri = container.getConnectionUri() + '?schema=public';
+    dbUri = `file:./test-${crypto.randomUUID()}.db`;
     process.env.DATABASE_URL = dbUri;
     process.env.JWT_SECRET = 'test-secret';
     process.env.PORT = '0';
@@ -38,7 +28,7 @@ beforeAll(async () => {
 
     execSync('npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss', {
         env: { ...process.env, DATABASE_URL: dbUri },
-        stdio: 'inherit',
+        stdio: 'inherit'
     });
 
     const AppMod = await import('../src/app.js');
@@ -50,25 +40,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
     if (prisma) await prisma.$disconnect();
-    if (container) await container.stop();
+    try {
+        const fs = await import('fs');
+        fs.unlinkSync(dbUri.replace('file:', ''));
+    } catch (e) { }
 });
 
-beforeEach(async () => {
-    if (prisma) {
-        await prisma.watchProgress.deleteMany();
-        await prisma.libraryItem.deleteMany();
-        await prisma.installedAddon.deleteMany();
-        await prisma.refreshToken.deleteMany();
-        await prisma.passwordResetToken.deleteMany();
-        await prisma.user.deleteMany();
-    }
-});
+
 
 /** Helper: register a test user and return access token */
-async function createTestUser(email = 'library@test.com') {
+async function createTestUser(email = `library-${Date.now()}-${crypto.randomUUID()}@test.com`) {
     const res = await request(app)
         .post('/api/auth/register')
         .send({ email, password: 'securePassword123!' });
+    if (res.status !== 201) {
+        throw new Error(`Failed to register test user: ${res.status} ${JSON.stringify(res.body)}`);
+    }
     return res.body.tokens.accessToken as string;
 }
 
@@ -173,7 +160,7 @@ describe('Integration: Watch Progress', () => {
     let token: string;
 
     beforeEach(async () => {
-        token = await createTestUser('progress@test.com');
+        token = await createTestUser();
     });
 
     it('should save and retrieve watch progress', async () => {

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Context } from 'hono';
 import { ZodError } from 'zod';
 import { logger } from '../config/logger.js';
 
@@ -12,24 +12,18 @@ export class AppError extends Error {
     }
 }
 
-export function errorMiddleware(
-    err: Error,
-    req: Request,
-    res: Response,
-    _next: NextFunction,
-): void {
-    const requestId = req.requestId || 'unknown';
+export function errorHandler(err: Error, c: Context) {
+    const requestId = c.get('requestId') || 'unknown';
 
     if (err instanceof AppError) {
         logger.warn(
             { requestId, statusCode: err.statusCode, error: err.message },
             'Application error',
         );
-        res.status(err.statusCode).json({
+        return c.json({
             error: err.message,
             requestId,
-        });
-        return;
+        }, err.statusCode as any);
     }
 
     if (err instanceof ZodError) {
@@ -37,57 +31,44 @@ export function errorMiddleware(
             { requestId, issues: err.issues },
             'Validation error',
         );
-        res.status(400).json({
+        return c.json({
             error: 'Validation failed',
             details: err.issues.map((i) => ({
                 path: i.path.join('.'),
                 message: i.message,
             })),
             requestId,
-        });
-        return;
+        }, 400);
     }
 
-    // Handle malformed JSON from express.json() body parser
-    if (err instanceof SyntaxError && 'body' in err) {
+    if (err instanceof SyntaxError && err.message.includes('JSON')) {
         logger.warn({ requestId, error: err.message }, 'Malformed JSON request');
-        res.status(400).json({
+        return c.json({
             error: 'Invalid JSON payload',
             requestId,
-        });
-        return;
+        }, 400);
     }
 
-    // Fallback error handler
-    logger.error(
-        {
-            err,
-            requestId: (req as Request & { requestId: string }).requestId,
-        },
-        'Unhandled error',
-    );
+    logger.error({ err, requestId }, 'Unhandled error');
 
     if (err.name === 'PrismaClientKnownRequestError') {
         const prismaErr = err as any;
         if (prismaErr.code === 'P2003') {
-            // Foreign key constraint failed - usually means user no longer exists but has a valid JWT
-            res.status(401).json({
+            return c.json({
                 error: 'Unauthorized or related record not found',
-                requestId: (req as Request & { requestId: string }).requestId,
-            });
-            return;
+                requestId,
+            }, 401);
         }
         if (prismaErr.code === 'P2025') {
-            res.status(404).json({
+            return c.json({
                 error: 'Record not found',
-                requestId: (req as Request & { requestId: string }).requestId,
-            });
-            return;
+                requestId,
+            }, 404);
         }
     }
 
-    res.status(500).json({
+    return c.json({
         error: 'Internal server error',
-        requestId: (req as Request & { requestId: string }).requestId,
-    });
+        requestId,
+    }, 500);
 }

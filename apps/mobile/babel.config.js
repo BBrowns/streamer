@@ -5,9 +5,11 @@ module.exports = function (api) {
             [
                 'babel-preset-expo',
                 {
+                    jsxImportSource: 'nativewind',
                     unstable_transformImportMeta: true,
                 },
             ],
+            'nativewind/babel',
         ],
     };
 };

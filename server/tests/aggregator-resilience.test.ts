@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { execSync } from 'child_process';
-import express from 'express';
-import request from 'supertest';
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { request } from './test-utils.js';
 
 let container: StartedPostgreSqlContainer;
 let mainApp: any;
@@ -51,7 +52,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
     if (prisma) await prisma.$disconnect();
-    if (container) await container.stop();
+    try {
+        const fs = await import('fs');
+        fs.unlinkSync(dbUri.replace('file:', ''));
+    } catch (e) { }
 });
 
 beforeEach(async () => {
@@ -68,9 +72,9 @@ beforeEach(async () => {
 describe('Aggregator Resilience: Addon Timeout Handling', () => {
     it('should return partial results when slow add-on times out', async () => {
         // Create a mock "slow add-on" server
-        const slowAddon = express();
-        slowAddon.get('/manifest.json', (_req, res) => {
-            res.json({
+        const slowAddon = new Hono();
+        slowAddon.get('/manifest.json', (c) => {
+            return c.json({
                 id: 'slow.test.addon',
                 version: '1.0.0',
                 name: 'Slow Test Addon',
@@ -82,18 +86,17 @@ describe('Aggregator Resilience: Addon Timeout Handling', () => {
         });
 
         // Simulate a 10-second delay (well beyond the 5s timeout)
-        slowAddon.get('/catalog/movie/:catalogId.json', (_req, res) => {
-            setTimeout(() => {
-                res.json({
-                    metas: [
-                        { id: 'tt9999999', type: 'movie', name: 'Slow Movie', poster: 'https://example.com/slow.jpg' },
-                    ],
-                });
-            }, 10000);
+        slowAddon.get('/catalog/movie/:catalogId', async (c) => {
+            await new Promise((resolve) => setTimeout(resolve, 10000));
+            return c.json({
+                metas: [
+                    { id: 'tt9999999', type: 'movie', name: 'Slow Movie', poster: 'https://example.com/slow.jpg' },
+                ],
+            });
         });
 
         // Start the slow add-on on a random port
-        const slowServer = slowAddon.listen(0);
+        const slowServer = serve({ fetch: slowAddon.fetch, port: 0 });
         const slowPort = (slowServer.address() as any).port;
 
         try {

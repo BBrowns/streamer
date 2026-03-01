@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -53,7 +53,7 @@ model InstalledAddon {
   id           String   @id @default(uuid())
   userId       String   @map("user_id")
   transportUrl String   @map("transport_url")
-  manifest     Json
+  manifest     String
   installedAt  DateTime @default(now()) @map("installed_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -76,7 +76,7 @@ model LibraryItem {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, itemId])
-  @@index([userId, addedAt(sort: Desc)])
+  @@index([userId, addedAt])
   @@map("library_items")
 }
 
@@ -96,7 +96,7 @@ model WatchProgress {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, itemId, season, episode])
-  @@index([userId, lastWatched(sort: Desc)])
+  @@index([userId, lastWatched])
   @@map("watch_progress")
 }
 

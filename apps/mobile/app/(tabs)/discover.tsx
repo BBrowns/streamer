@@ -1,7 +1,6 @@
 import {
     View,
     Text,
-    StyleSheet,
     Pressable,
     ActivityIndicator,
     ScrollView,
@@ -25,17 +24,17 @@ export default function DiscoverScreen() {
 
     if (!isAuthenticated) {
         return (
-            <View style={styles.centered}>
-                <Text style={styles.emptyIcon}>🎬</Text>
-                <Text style={styles.emptyTitle}>Welcome to Streamer</Text>
-                <Text style={styles.emptyText}>Sign in to discover movies and shows</Text>
+            <View className="flex-1 bg-background justify-center items-center p-8">
+                <Text className="text-[48px] mb-3">🎬</Text>
+                <Text className="text-textMain text-lg font-bold mb-2">Welcome to Streamer</Text>
+                <Text className="text-textMuted text-sm text-center mb-5">Sign in to discover movies and shows</Text>
                 <Pressable
-                    style={styles.ctaBtn}
+                    className="bg-primary px-6 py-3 rounded-xl min-w-[44px] min-h-[44px]"
                     onPress={() => router.push('/login')}
                     accessibilityRole="button"
                     accessibilityLabel="Sign in"
                 >
-                    <Text style={styles.ctaBtnText}>Sign In</Text>
+                    <Text className="text-white font-bold text-[15px]">Sign In</Text>
                 </Pressable>
             </View>
         );
@@ -43,7 +42,7 @@ export default function DiscoverScreen() {
 
     if (isLoading) {
         return (
-            <View style={styles.centered}>
+            <View className="flex-1 bg-background justify-center items-center p-8">
                 <ActivityIndicator size="large" color="#818cf8" />
             </View>
         );
@@ -59,19 +58,19 @@ export default function DiscoverScreen() {
 
     if (catalogRows.length === 0) {
         return (
-            <View style={styles.centered}>
-                <Text style={styles.emptyIcon}>🔍</Text>
-                <Text style={styles.emptyTitle}>No Content Sources</Text>
-                <Text style={styles.emptyText}>
+            <View className="flex-1 bg-background justify-center items-center p-8">
+                <Text className="text-[48px] mb-3">🔍</Text>
+                <Text className="text-textMain text-lg font-bold mb-2">No Content Sources</Text>
+                <Text className="text-textMuted text-sm text-center mb-5">
                     Install an add-on in Settings to start discovering content.
                 </Text>
                 <Pressable
-                    style={styles.ctaBtn}
+                    className="bg-primary px-6 py-3 rounded-xl min-w-[44px] min-h-[44px]"
                     onPress={() => router.push('/addons')}
                     accessibilityRole="button"
                     accessibilityLabel="Manage add-ons"
                 >
-                    <Text style={styles.ctaBtnText}>Manage Add-ons</Text>
+                    <Text className="text-white font-bold text-[15px]">Manage Add-ons</Text>
                 </Pressable>
             </View>
         );
@@ -79,7 +78,7 @@ export default function DiscoverScreen() {
 
     return (
         <ScrollView
-            style={styles.container}
+            className="flex-1 bg-background"
             refreshControl={
                 <RefreshControl
                     refreshing={refreshing}
@@ -109,46 +108,3 @@ export default function DiscoverScreen() {
         </ScrollView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0a0a1a',
-    },
-    centered: {
-        flex: 1,
-        backgroundColor: '#0a0a1a',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 32,
-    },
-    emptyIcon: {
-        fontSize: 48,
-        marginBottom: 12,
-    },
-    emptyTitle: {
-        color: '#e0e0ff',
-        fontSize: 18,
-        fontWeight: '700',
-        marginBottom: 8,
-    },
-    emptyText: {
-        color: '#9ca3af',
-        fontSize: 14,
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    ctaBtn: {
-        backgroundColor: '#818cf8',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
-        minWidth: 44,
-        minHeight: 44,
-    },
-    ctaBtnText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 15,
-    },
-});

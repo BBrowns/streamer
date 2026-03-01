@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    /* Glassmorphic Brutalism Custom Classes */
+    .glass {
+        @apply bg-surface/60 border border-white/10 backdrop-blur-xl;
+    }
+    
+    .glass-strong {
+        @apply bg-surface/80 border border-white/20 backdrop-blur-2xl;
+    }
+}

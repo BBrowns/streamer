@@ -40,7 +40,7 @@ export class AddonService {
             data: {
                 userId,
                 transportUrl,
-                manifest: manifest as any,
+                manifest: JSON.stringify(manifest),
             },
         });
 
@@ -50,7 +50,7 @@ export class AddonService {
             id: addon.id,
             userId: addon.userId,
             transportUrl: addon.transportUrl,
-            manifest: addon.manifest as unknown as AddonManifest,
+            manifest: JSON.parse(addon.manifest as unknown as string) as AddonManifest,
             installedAt: addon.installedAt.toISOString(),
         };
     }
@@ -66,7 +66,7 @@ export class AddonService {
             id: a.id,
             userId: a.userId,
             transportUrl: a.transportUrl,
-            manifest: a.manifest as unknown as AddonManifest,
+            manifest: JSON.parse(a.manifest as unknown as string) as AddonManifest,
             installedAt: a.installedAt.toISOString(),
         }));
     }

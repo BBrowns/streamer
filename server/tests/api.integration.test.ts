@@ -1,12 +1,11 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'child_process';
-import request from 'supertest';
-import bcrypt from 'bcryptjs';
+import { request } from './test-utils.js';
+import crypto from 'crypto';
 
-let container: StartedPostgreSqlContainer;
 let app: any;
 let prisma: any;
+let dbUri: string;
 
 // Mock logger to be silent in tests
 vi.mock('../src/config/logger.js', () => ({
@@ -20,30 +19,18 @@ vi.mock('../src/config/logger.js', () => ({
     },
 }));
 
-vi.mock('pino-http', () => ({
-    default: () => (_req: any, _res: any, next: any) => next(),
-}));
-
 beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:17-alpine')
-        .withDatabase('streamer_test')
-        .withUsername('test_user')
-        .withPassword('test_pass')
-        .start();
-
-    const dbUri = container.getConnectionUri() + '?schema=public';
+    dbUri = `file:./test-${crypto.randomUUID()}.db`;
     process.env.DATABASE_URL = dbUri;
     process.env.JWT_SECRET = 'test-secret';
     process.env.PORT = '0';
     process.env.LOG_LEVEL = 'silent';
 
-    // Apply migrations/schema to test DB
     execSync('npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss', {
         env: { ...process.env, DATABASE_URL: dbUri },
         stdio: 'inherit'
     });
 
-    // Dynamically import app and prisma to ensure they pick up the test env
     const AppMod = await import('../src/app.js');
     app = AppMod.createApp();
 
@@ -52,31 +39,24 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
-    if (prisma) {
-        await prisma.$disconnect();
-    }
-    if (container) {
-        await container.stop();
-    }
+    if (prisma) await prisma.$disconnect();
+    try {
+        const fs = await import('fs');
+        fs.unlinkSync(dbUri.replace('file:', ''));
+    } catch (e) { }
 });
 
-beforeEach(async () => {
-    if (prisma) {
-        // Clear tables between tests
-        await prisma.installedAddon.deleteMany();
-        await prisma.refreshToken.deleteMany();
-        await prisma.user.deleteMany();
-    }
-});
+
 
 describe('Integration: Auth Flow', () => {
-    const testUser = {
-        email: 'integration@test.com',
+    const getTestUser = () => ({
+        email: `integration-${crypto.randomUUID()}@test.com`,
         password: 'securePassword123!',
         displayName: 'Integration Tester'
-    };
+    });
 
     it('should register a new user successfully', async () => {
+        const testUser = getTestUser();
         const res = await request(app)
             .post('/api/auth/register')
             .send(testUser);
@@ -93,6 +73,7 @@ describe('Integration: Auth Flow', () => {
     });
 
     it('should login and return tokens', async () => {
+        const testUser = getTestUser();
         // Seed user
         await request(app).post('/api/auth/register').send(testUser);
 
@@ -106,6 +87,7 @@ describe('Integration: Auth Flow', () => {
     });
 
     it('should refresh token correctly', async () => {
+        const testUser = getTestUser();
         const regRes = await request(app).post('/api/auth/register').send(testUser);
         const refreshToken = regRes.body.tokens.refreshToken;
 
@@ -121,13 +103,13 @@ describe('Integration: Auth Flow', () => {
 });
 
 describe('Integration: Aggregator Logic', () => {
-    const testUser = {
-        email: 'aggregator@test.com',
-        password: 'securePassword123!'
-    };
     let accessToken: string;
 
     beforeEach(async () => {
+        const testUser = {
+            email: `aggregator-${crypto.randomUUID()}@test.com`,
+            password: 'securePassword123!'
+        };
         const regRes = await request(app).post('/api/auth/register').send(testUser);
         accessToken = regRes.body.tokens.accessToken;
     });

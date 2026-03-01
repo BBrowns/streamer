@@ -1,66 +1,52 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Context } from 'hono';
 import { addToLibrarySchema, updateProgressSchema, removeFromLibrarySchema } from '@streamer/shared';
 import type { LibraryService } from '../domain/library.service.js';
 
 export class LibraryController {
     constructor(private readonly service: LibraryService) { }
 
-    async addToLibrary(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = addToLibrarySchema.parse(req.body);
-            const item = await this.service.addToLibrary(req.user!.userId, data);
-            res.status(201).json(item);
-        } catch (err) {
-            next(err);
-        }
+    async addToLibrary(c: Context) {
+        const body = await c.req.json();
+        const data = addToLibrarySchema.parse(body);
+        const user = c.get('user') as any;
+        const item = await this.service.addToLibrary(user.userId, data);
+        return c.json(item, 201);
     }
 
-    async removeFromLibrary(req: Request, res: Response, next: NextFunction) {
-        try {
-            const { itemId } = removeFromLibrarySchema.parse(req.body);
-            await this.service.removeFromLibrary(req.user!.userId, itemId);
-            res.status(204).send();
-        } catch (err) {
-            next(err);
-        }
+    async removeFromLibrary(c: Context) {
+        const body = await c.req.json();
+        const { itemId } = removeFromLibrarySchema.parse(body);
+        const user = c.get('user') as any;
+        await this.service.removeFromLibrary(user.userId, itemId);
+        return new Response(null, { status: 204 });
     }
 
-    async getLibrary(req: Request, res: Response, next: NextFunction) {
-        try {
-            const items = await this.service.getLibrary(req.user!.userId);
-            res.json({ items });
-        } catch (err) {
-            next(err);
-        }
+    async getLibrary(c: Context) {
+        const user = c.get('user') as any;
+        const items = await this.service.getLibrary(user.userId);
+        return c.json({ items });
     }
 
-    async isInLibrary(req: Request, res: Response, next: NextFunction) {
-        try {
-            const itemId = req.params.itemId as string;
-            const inLibrary = await this.service.isInLibrary(req.user!.userId, itemId);
-            res.json({ inLibrary });
-        } catch (err) {
-            next(err);
-        }
+    async isInLibrary(c: Context) {
+        const itemId = c.req.param('itemId');
+        const user = c.get('user') as any;
+        const inLibrary = await this.service.isInLibrary(user.userId, itemId);
+        return c.json({ inLibrary });
     }
 
-    async updateProgress(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = updateProgressSchema.parse(req.body);
-            const progress = await this.service.updateProgress(req.user!.userId, data);
-            res.json(progress);
-        } catch (err) {
-            next(err);
-        }
+    async updateProgress(c: Context) {
+        const body = await c.req.json();
+        const data = updateProgressSchema.parse(body);
+        const user = c.get('user') as any;
+        const progress = await this.service.updateProgress(user.userId, data);
+        return c.json(progress);
     }
 
-    async getContinueWatching(req: Request, res: Response, next: NextFunction) {
-        try {
-            const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
-            const items = await this.service.getContinueWatching(req.user!.userId, limit);
-            res.json({ items });
-        } catch (err) {
-            next(err);
-        }
+    async getContinueWatching(c: Context) {
+        const limitStr = c.req.query('limit');
+        const limit = limitStr ? parseInt(limitStr, 10) : 20;
+        const user = c.get('user') as any;
+        const items = await this.service.getContinueWatching(user.userId, limit);
+        return c.json({ items });
     }
 }

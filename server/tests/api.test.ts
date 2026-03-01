@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import express from 'express';
-import request from 'supertest';
+import { Hono } from 'express';
+import { request } from './test-utils.js';
 import { createApp } from '../src/app.js';
 
 // Mock prisma
@@ -65,7 +65,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 describe('Auth Module', () => {
-    let app: express.Express;
+    let app: any;
 
     beforeEach(() => {
         app = createApp();
@@ -173,7 +173,7 @@ describe('Health Check', () => {
 });
 
 describe('Aggregator Module', () => {
-    let app: express.Express;
+    let app: any;
     let token: string;
 
     beforeEach(() => {
@@ -231,7 +231,7 @@ describe('Aggregator Module', () => {
 });
 
 describe('Add-on Module', () => {
-    let app: express.Express;
+    let app: any;
     let token: string;
 
     beforeEach(() => {

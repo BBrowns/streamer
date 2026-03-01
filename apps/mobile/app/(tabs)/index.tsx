@@ -1,7 +1,6 @@
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   Image,
   Pressable,
@@ -22,17 +21,17 @@ function CatalogCard({ item }: { item: MetaPreview }) {
 
   return (
     <Pressable
-      style={styles.card}
+      className="flex-1 mx-1 mb-3 rounded-xl overflow-hidden bg-surface max-w-[48%]"
       onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
     >
-      <Image source={{ uri: item.poster }} style={styles.poster} />
-      <View style={styles.cardOverlay}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
+      <Image source={{ uri: item.poster }} className="w-full aspect-[2/3] bg-surface/50" />
+      <View className="p-2">
+        <Text className="text-textMain font-semibold text-[13px]" numberOfLines={2}>
           {item.name}
         </Text>
         {!!item.imdbRating && (
-          <View style={styles.ratingBadge}>
-            <Text style={styles.ratingText}>⭐ {item.imdbRating}</Text>
+          <View className="mt-1">
+            <Text className="text-amber-400 text-[11px] font-semibold">⭐ {item.imdbRating}</Text>
           </View>
         )}
       </View>
@@ -48,7 +47,6 @@ export default function HomeScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Debounce search input by 300ms
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search.trim());
@@ -58,7 +56,6 @@ export default function HomeScreen() {
 
   const isSearching = debouncedSearch.length >= 2;
 
-  // Use global search when user is searching, catalog otherwise
   const { data: searchResults, isLoading: searchLoading } = useGlobalSearch(debouncedSearch);
   const { data: movies, isLoading: catalogLoading } = useCatalog('movie');
 
@@ -67,52 +64,50 @@ export default function HomeScreen() {
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.container}>
-        <View style={styles.heroSection}>
-          <Text style={styles.heroTitle}>🎬 Streamer</Text>
-          <Text style={styles.heroSubtitle}>
-            Your universe of content, aggregated from the open web.
-          </Text>
-          <Pressable style={styles.ctaButton} onPress={() => router.push('/login')}>
-            <Text style={styles.ctaText}>Get Started</Text>
-          </Pressable>
-        </View>
+      <View className="flex-1 bg-background justify-center items-center px-8">
+        <Text className="text-4xl font-extrabold text-textMain mb-3">🎬 Streamer</Text>
+        <Text className="text-base text-textMuted text-center leading-6 mb-8">
+          Your universe of content, aggregated from the open web.
+        </Text>
+        <Pressable className="bg-primary px-8 py-3.5 rounded-xl shadow-lg shadow-primary/40" onPress={() => router.push('/login')}>
+          <Text className="text-white font-bold text-base">Get Started</Text>
+        </Pressable>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchContainer}>
+    <View className="flex-1 bg-background">
+      <View className="flex-row items-center px-4 py-3">
         <TextInput
-          style={styles.searchInput}
+          className="flex-1 bg-surface rounded-xl px-4 py-3 text-textMain text-sm border border-primary/20"
           placeholder="🔍 Search all add-ons..."
           placeholderTextColor="#6b7280"
           value={search}
           onChangeText={setSearch}
         />
         {isSearching && (
-          <Pressable style={styles.clearBtn} onPress={() => setSearch('')}>
-            <Text style={styles.clearBtnText}>✕</Text>
+          <Pressable className="ml-2 w-9 h-9 rounded-full bg-error/15 justify-center items-center" onPress={() => setSearch('')}>
+            <Text className="text-error font-bold text-sm">✕</Text>
           </Pressable>
         )}
       </View>
 
       {isSearching && (
-        <Text style={styles.searchHint}>
+        <Text className="text-textMuted text-[11px] px-4 mb-2">
           Searching across all installed add-ons...
         </Text>
       )}
 
       {isLoading && (
-        <View style={styles.centered}>
+        <View className="flex-1 justify-center items-center p-8">
           <ActivityIndicator size="large" color="#818cf8" />
         </View>
       )}
 
       {!!displayData && displayData.length === 0 && !isLoading && (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>
+        <View className="flex-1 justify-center items-center p-8">
+          <Text className="text-textMuted text-sm text-center">
             {isSearching
               ? `No results for "${debouncedSearch}"`
               : 'No content found. Install some add-ons in Settings!'}
@@ -124,8 +119,8 @@ export default function HomeScreen() {
         data={displayData}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        contentContainerStyle={styles.grid}
-        columnWrapperStyle={styles.row}
+        contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 20 }}
+        columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: 8 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -143,128 +138,3 @@ export default function HomeScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a1a',
-  },
-  heroSection: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  heroTitle: {
-    fontSize: 42,
-    fontWeight: '800',
-    color: '#e0e0ff',
-    marginBottom: 12,
-  },
-  heroSubtitle: {
-    fontSize: 16,
-    color: '#9ca3af',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  ctaButton: {
-    backgroundColor: '#818cf8',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
-    boxShadow: '0px 4px 12px rgba(129, 140, 248, 0.4)',
-    elevation: 8,
-  },
-  ctaText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#1a1a3e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#e0e0ff',
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(129, 140, 248, 0.2)',
-  },
-  clearBtn: {
-    marginLeft: 8,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(248, 113, 113, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clearBtnText: {
-    color: '#f87171',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  searchHint: {
-    color: '#6b7280',
-    fontSize: 11,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyText: {
-    color: '#9ca3af',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  grid: {
-    paddingHorizontal: 8,
-    paddingBottom: 20,
-  },
-  row: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  card: {
-    flex: 1,
-    marginHorizontal: 4,
-    marginBottom: 12,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#1a1a3e',
-    maxWidth: '48%',
-  },
-  poster: {
-    width: '100%',
-    aspectRatio: 2 / 3,
-    backgroundColor: '#2a2a4e',
-  },
-  cardOverlay: {
-    padding: 8,
-  },
-  cardTitle: {
-    color: '#e0e0ff',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  ratingBadge: {
-    marginTop: 4,
-  },
-  ratingText: {
-    color: '#fbbf24',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-});

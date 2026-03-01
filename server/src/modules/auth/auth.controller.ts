@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Context } from 'hono';
 import {
     registerRequestSchema,
     loginRequestSchema,
@@ -11,90 +11,69 @@ import {
 import { authService } from './auth.service.js';
 
 export class AuthController {
-    async register(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = registerRequestSchema.parse(req.body);
-            const result = await authService.register(
-                data.email,
-                data.password,
-                data.displayName,
-            );
-            res.status(201).json(result);
-        } catch (err) {
-            next(err);
-        }
+    async register(c: Context) {
+        const body = await c.req.json();
+        const data = registerRequestSchema.parse(body);
+        const result = await authService.register(
+            data.email,
+            data.password,
+            data.displayName,
+        );
+        return c.json(result, 201);
     }
 
-    async login(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = loginRequestSchema.parse(req.body);
-            const result = await authService.login(data.email, data.password);
-            res.json(result);
-        } catch (err) {
-            next(err);
-        }
+    async login(c: Context) {
+        const body = await c.req.json();
+        const data = loginRequestSchema.parse(body);
+        const result = await authService.login(data.email, data.password);
+        return c.json(result);
     }
 
-    async refresh(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = refreshRequestSchema.parse(req.body);
-            const tokens = await authService.refresh(data.refreshToken);
-            res.json(tokens);
-        } catch (err) {
-            next(err);
-        }
+    async refresh(c: Context) {
+        const body = await c.req.json();
+        const data = refreshRequestSchema.parse(body);
+        const tokens = await authService.refresh(data.refreshToken);
+        return c.json(tokens);
     }
 
-    async forgotPassword(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = forgotPasswordSchema.parse(req.body);
-            const result = await authService.forgotPassword(data.email);
+    async forgotPassword(c: Context) {
+        const body = await c.req.json();
+        const data = forgotPasswordSchema.parse(body);
+        const result = await authService.forgotPassword(data.email);
 
-            // Always return 200 to prevent email enumeration
-            res.json({
-                message: 'If an account with that email exists, a reset token has been generated.',
-                // In dev/staging, include the token for testing
-                ...(process.env.NODE_ENV !== 'production' && result.resetToken
-                    ? { resetToken: result.resetToken }
-                    : {}),
-            });
-        } catch (err) {
-            next(err);
-        }
+        return c.json({
+            message: 'If an account with that email exists, a reset token has been generated.',
+            ...(process.env.NODE_ENV !== 'production' && result.resetToken
+                ? { resetToken: result.resetToken }
+                : {}),
+        });
     }
 
-    async resetPassword(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = resetPasswordSchema.parse(req.body);
-            await authService.resetPassword(data.token, data.newPassword);
-            res.json({ message: 'Password reset successfully. Please log in.' });
-        } catch (err) {
-            next(err);
-        }
+    async resetPassword(c: Context) {
+        const body = await c.req.json();
+        const data = resetPasswordSchema.parse(body);
+        await authService.resetPassword(data.token, data.newPassword);
+        return c.json({ message: 'Password reset successfully. Please log in.' });
     }
 
-    async changePassword(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = changePasswordSchema.parse(req.body);
-            await authService.changePassword(
-                req.user!.userId,
-                data.currentPassword,
-                data.newPassword,
-            );
-            res.json({ message: 'Password changed successfully' });
-        } catch (err) {
-            next(err);
-        }
+    async changePassword(c: Context) {
+        const body = await c.req.json();
+        const data = changePasswordSchema.parse(body);
+        const user = c.get('user') as any;
+        await authService.changePassword(
+            user.userId,
+            data.currentPassword,
+            data.newPassword,
+        );
+        return c.json({ message: 'Password changed successfully' });
     }
 
-    async updateProfile(req: Request, res: Response, next: NextFunction) {
-        try {
-            const data = updateProfileSchema.parse(req.body);
-            const user = await authService.updateProfile(req.user!.userId, data);
-            res.json({ user });
-        } catch (err) {
-            next(err);
-        }
+    async updateProfile(c: Context) {
+        const body = await c.req.json();
+        const data = updateProfileSchema.parse(body);
+        const user = c.get('user') as any;
+        const updatedUser = await authService.updateProfile(user.userId, data);
+        return c.json({ user: updatedUser });
     }
 }
 
