@@ -9,7 +9,7 @@
         "apps/*"
     ],
     "scripts": {
-        "dev:server": "npm run dev --workspace=server",
+        "dev:server": "kill -9 $(lsof -ti :3001) 2>/dev/null; npm run dev --workspace=server",
         "dev:mobile": "npm run start --workspace=apps/mobile",
         "build": "turbo run build",
         "test": "turbo run test",
