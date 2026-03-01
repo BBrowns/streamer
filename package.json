@@ -25,5 +25,24 @@
     "engines": {
         "node": ">=24.0.0"
     },
+    "overrides": {
+        "ip": "^2.0.1",
+        "bittorrent-tracker": {
+            "ip": "^2.0.1"
+        },
+        "ip-set": {
+            "ip": "^2.0.1"
+        },
+        "load-ip-set": {
+            "ip-set": {
+                "ip": "^2.0.1"
+            }
+        },
+        "torrent-discovery": {
+            "bittorrent-tracker": {
+                "ip": "^2.0.1"
+            }
+        }
+    },
     "packageManager": "npm@10.9.0"
 }
