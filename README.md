@@ -48,6 +48,12 @@ npm run dev:mobile
 # Press 'w' for web, 'i' for iOS Simulator
 ```
 
+### 6. Start the desktop app (Electron)
+> Requires the mobile/web app already running on port 8081 (step 5, press `w`)
+```bash
+npm run dev:desktop
+```
+
 ## 🛠 Features
 
 - **Auth** — JWT access + refresh tokens with rotation. Rate-limited by default; bypassed in `test` mode.

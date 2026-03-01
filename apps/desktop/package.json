@@ -1,0 +1,14 @@
+{
+    "name": "@streamer/desktop",
+    "version": "0.1.0",
+    "description": "Electron shell for the Streamer web app",
+    "main": "dist/main.js",
+    "private": true,
+    "scripts": {
+        "dev": "electron dist/main.js",
+        "start": "electron dist/main.js"
+    },
+    "devDependencies": {
+        "electron": "^34.0.0"
+    }
+}
