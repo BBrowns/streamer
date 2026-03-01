@@ -1,4 +1,4 @@
-import { getClient } from './torrent';
+import { getClient } from './torrent.js';
 
 export async function getStats() {
     const client = await getClient();

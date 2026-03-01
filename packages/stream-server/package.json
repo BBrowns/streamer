@@ -1,12 +1,13 @@
 {
     "name": "@streamer/stream-server",
     "version": "1.0.0",
+    "type": "module",
     "description": "Local P2P daemon and bridge for streaming torrents via HTTP",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outdir=dist --external:express --external:webtorrent --external:cors",
-        "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+        "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outdir=dist --external:express --external:webtorrent --external:cors",
+        "dev": "tsx watch src/index.ts",
         "start": "node dist/index.js"
     },
     "devDependencies": {
@@ -17,7 +18,7 @@
         "cors": "^2.8.6",
         "esbuild": "^0.27.3",
         "express": "^5.2.1",
-        "ts-node-dev": "^2.0.0",
+        "tsx": "^4.21.0",
         "typescript": "^5.9.3",
         "webtorrent": "^2.2.0"
     },

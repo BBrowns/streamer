@@ -4,11 +4,9 @@
  * Replaces the abandoned chromecast-api (vulnerable to ip/xml2js CVEs) with
  * a lightweight mDNS-based discovery via the `bonjour-service` package
  * (actively maintained, zero known CVEs) and direct castv2 for playback.
- *
- * AirPlay support was removed — airplay-protocol has no maintained fork and
- * its lodash/xmldom dependencies carry multiple critical CVEs with no fix.
  */
 import { Router, Request, Response } from 'express';
+import type { Client as CastClientType } from 'castv2-client';
 
 const router = Router();
 
@@ -24,12 +22,10 @@ let devices: CastDevice[] = [];
 let bonjour: any = null;
 
 // Lazy-start mDNS discovery when first requested
-function startDiscovery() {
+async function startDiscovery() {
     if (bonjour) return;
     try {
-        // bonjour-service is a maintained, CVE-free replacement for mdns
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const Bonjour = require('bonjour-service');
+        const { default: Bonjour } = await import('bonjour-service');
         bonjour = new Bonjour();
         const browser = bonjour.find({ type: 'googlecast' });
 
@@ -52,13 +48,13 @@ function startDiscovery() {
             const id = `${host}:${service.port}`;
             devices = devices.filter((d) => d.id !== id);
         });
-    } catch {
-        // bonjour-service not installed — discovery unavailable
+    } catch (err) {
+        console.error('Failed to start bonjour discovery:', err);
     }
 }
 
-router.get('/devices', (_req: Request, res: Response) => {
-    startDiscovery();
+router.get('/devices', async (_req: Request, res: Response) => {
+    await startDiscovery();
     res.json(devices.map(({ id, name, type }) => ({ id, name, type })));
 });
 
@@ -71,10 +67,8 @@ router.post('/play', async (req: Request, res: Response) => {
     }
 
     try {
-        // castv2-client provides direct low-level Chromecast protocol access
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { Client, DefaultMediaReceiver } = require('castv2-client');
-        const client = new Client();
+        const { Client, DefaultMediaReceiver } = await import('castv2-client');
+        const client = new Client() as unknown as CastClientType;
 
         await new Promise<void>((resolve, reject) => {
             client.connect({ host: device.host, port: device.port }, (err: Error) => {
@@ -130,9 +124,8 @@ router.post('/control', async (req: Request, res: Response) => {
     }
 
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { Client, DefaultMediaReceiver } = require('castv2-client');
-        const client = new Client();
+        const { Client, DefaultMediaReceiver } = await import('castv2-client');
+        const client = new Client() as unknown as CastClientType;
 
         await new Promise<void>((resolve, reject) => {
             client.connect({ host: device.host, port: device.port }, (err: Error) => {

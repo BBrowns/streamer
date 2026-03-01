@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import { streamRequest } from './torrent';
-import { getStats } from './stats';
-import { castRouter } from './cast';
+import { streamRequest } from './torrent.js';
+import { getStats } from './stats.js';
+import { castRouter } from './cast.js';
 
 const app = express();
 const PORT = process.env.PORT || 11470;
