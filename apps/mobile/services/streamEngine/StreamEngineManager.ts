@@ -11,26 +11,47 @@ export class StreamEngineManager {
     public activeStrategy: StreamingStrategy = 'debrid';
     public bridgeUrl: string = 'http://127.0.0.1:11470';
     public bridgeAvailable: boolean = false;
+    private retryTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor() {
         this.registerEngine(new HLSEngine());
         this.registerEngine(new HttpVideoEngine());
         this.registerEngine(new TorrentEngine(this));
 
-        // Probe for bridge
+        // Probe for bridge, retry periodically if not found
         this.detectBridge();
     }
 
-    async detectBridge() {
+    async detectBridge(): Promise<boolean> {
         try {
-            const res = await fetch(`${this.bridgeUrl}/status`);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 2000);
+            const res = await fetch(`${this.bridgeUrl}/status`, {
+                signal: controller.signal,
+            });
+            clearTimeout(timeout);
             if (res.ok) {
                 this.bridgeAvailable = true;
                 this.activeStrategy = 'local';
+                // Stop retrying once connected
+                if (this.retryTimer) {
+                    clearInterval(this.retryTimer);
+                    this.retryTimer = null;
+                }
+                return true;
             }
-        } catch (e) {
+        } catch {
             this.bridgeAvailable = false;
         }
+
+        // Schedule retries every 5s until bridge comes online
+        if (!this.retryTimer) {
+            this.retryTimer = setInterval(() => {
+                this.detectBridge();
+            }, 5000);
+        }
+
+        return false;
     }
 
     registerEngine(engine: IStreamEngine): void {

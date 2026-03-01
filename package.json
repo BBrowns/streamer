@@ -12,6 +12,7 @@
         "dev:server": "kill -9 $(lsof -ti :3001) 2>/dev/null; npm run dev --workspace=server",
         "dev:mobile": "npm run start --workspace=apps/mobile",
         "dev:desktop": "npm run dev --workspace=@streamer/desktop",
+        "dev:stream-server": "npm run dev --workspace=@streamer/stream-server",
         "build": "turbo run build",
         "test": "turbo run test",
         "lint": "turbo run lint",

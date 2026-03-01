@@ -51,10 +51,30 @@ export default function DetailScreen() {
         }
     }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
-    const handlePlayStream = (stream: Stream) => {
+    const handlePlayStream = async (stream: Stream) => {
+        // For torrent streams, re-probe bridge before blocking
+        if (!isPlayable(stream) && stream.infoHash) {
+            const bridgeUp = await streamEngineManager.detectBridge();
+            if (bridgeUp) {
+                // Bridge just came online — now playable
+                const uri = streamEngineManager.getPlaybackUri(stream);
+                if (uri && uri.length > 0) {
+                    const mediaInfo: MediaInfo = {
+                        type: (type as 'movie' | 'series') ?? 'movie',
+                        itemId: id,
+                        title: meta?.name ?? stream.title ?? 'Unknown',
+                        poster: meta?.poster,
+                    };
+                    setStream(stream, mediaInfo);
+                    router.push('/player');
+                    return;
+                }
+            }
+        }
+
         if (!isPlayable(stream)) {
             const msg = stream.infoHash
-                ? 'This is a torrent stream. Connect a Debrid service (like Real-Debrid) in Settings to unlock torrent playback.'
+                ? 'This is a torrent stream. Start the stream-server daemon first:\n\nnpm run dev:stream-server'
                 : 'This stream does not provide a direct playable URL. It may require additional resolution.';
 
             if (Platform.OS === 'web') {
@@ -174,7 +194,7 @@ export default function DetailScreen() {
                                         onPress={() => handlePlayStream(stream)}
                                         accessibilityRole="button"
                                         accessibilityLabel={`${playable ? 'Play' : 'Torrent'} stream: ${stream.title || stream.name || `Stream ${i + 1}`}`}
-                                        accessibilityHint={playable ? 'Opens the video player' : 'Requires a Debrid service'}
+                                        accessibilityHint={playable ? 'Opens the video player' : 'Requires the stream-server bridge'}
                                     >
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.streamTitle}>
@@ -187,7 +207,7 @@ export default function DetailScreen() {
                                                 {!playable && (
                                                     <View style={styles.torrentBadge}>
                                                         <Text style={styles.torrentBadgeText}>
-                                                            🔒 Debrid Required
+                                                            🧲 Torrent · Bridge
                                                         </Text>
                                                     </View>
                                                 )}
