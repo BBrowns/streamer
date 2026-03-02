@@ -173,25 +173,29 @@ describe('waitForReady', () => {
     });
 });
 
-// ─── streamRequest integration (missing magnet only, no WebTorrent needed) ──
+// ─── waitForReady: EventEmitter guard ────────────────────────────────────────
+
+describe('waitForReady — defensive guard', () => {
+    it('rejects immediately if the torrent object is not an EventEmitter', async () => {
+        const notAnEmitter = { files: [] }; // plain object, no .once()
+        await expect(waitForReady(notAnEmitter as any, 100)).rejects.toThrow(
+            'Torrent object is not an EventEmitter',
+        );
+    });
+});
+
+// ─── streamRequest: missing magnet ────────────────────────────────────────────
 
 describe('streamRequest — input validation', () => {
     it('returns 400 when magnet param is missing', async () => {
-        // We import streamRequest but mock getClient so WebTorrent is never instantiated
-        vi.mock('../torrent.js', async (importOriginal) => {
-            const actual = await importOriginal<typeof import('../torrent.js')>();
-            return {
-                ...actual,
-                getClient: vi.fn().mockResolvedValue(null),
-            };
-        });
-
         const { streamRequest } = await import('../torrent.js');
         const { req, res } = makeReqRes();
 
+        // streamRequest bails out before touching getClient()
         await streamRequest(req, res);
 
         expect(res.status).toHaveBeenCalledWith(400);
         expect(res.send).toHaveBeenCalledWith('Magnet link is missing');
     });
 });
+

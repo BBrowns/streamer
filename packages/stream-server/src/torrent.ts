@@ -13,7 +13,7 @@ export async function getClient(): Promise<any> {
 }
 
 /** Detect MIME type from file extension for correct Content-Type header */
-function mimeFromExt(filename: string): string {
+export function mimeFromExt(filename: string): string {
     const ext = path.extname(filename).toLowerCase();
     const mimes: Record<string, string> = {
         '.mp4': 'video/mp4',
@@ -28,32 +28,56 @@ function mimeFromExt(filename: string): string {
 }
 
 /**
- * Wait for a torrent to be ready (files populated).
- * Webtorrent v2 fires `ready` once metadata is fully parsed.
- * Times out after 30 s to avoid hanging requests forever.
+ * Wait for a torrent's file list to be populated.
+ *
+ * KEY INSIGHT (webtorrent v2): The object returned by `client.add()` IS a full
+ * EventEmitter torrent. The *callback* argument passed to `add(magnet, cb)` is
+ * also the same torrent (fired on 'ready'), so both are valid EventEmitters.
+ *
+ * The `ready` event fires once all metadata is received and `torrent.files` is
+ * populated. We set up our listeners BEFORE yielding control via Promise, so
+ * there is no race between the event and the listener registration.
+ *
+ * Times out after `timeoutMs` (default 30 s) to avoid infinite hangs.
  */
 export function waitForReady(torrent: any, timeoutMs = 30_000): Promise<void> {
     return new Promise((resolve, reject) => {
-        // Already ready — files array has length
+        // Fast path — files already populated (torrent metadata was cached)
         if (torrent.files && torrent.files.length > 0) {
             return resolve();
         }
 
-        const timer = setTimeout(() => {
+        // Defensive guard: if the object is not an EventEmitter, reject cleanly
+        if (typeof torrent.once !== 'function') {
+            return reject(new Error(
+                `Torrent object is not an EventEmitter (got ${typeof torrent}). ` +
+                'Ensure you are using the return value of client.add(), not the callback argument.'
+            ));
+        }
+
+        let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+            timer = null;
             torrent.removeListener('ready', onReady);
             torrent.removeListener('error', onError);
             reject(new Error('Torrent ready timeout'));
         }, timeoutMs);
 
-        const onReady = () => {
-            clearTimeout(timer);
+        const cleanup = () => {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+            torrent.removeListener('ready', onReady);
             torrent.removeListener('error', onError);
+        };
+
+        const onReady = () => {
+            cleanup();
             resolve();
         };
 
         const onError = (err: Error) => {
-            clearTimeout(timer);
-            torrent.removeListener('ready', onReady);
+            cleanup();
             reject(err);
         };
 
@@ -73,21 +97,15 @@ export async function streamRequest(req: Request, res: Response) {
 
     try {
         const torrentClient = await getClient();
-        const existing = torrentClient.get(magnet);
 
-        if (existing) {
-            torrent = existing;
-        } else {
-            // webtorrent v2: add() callback is (err, torrent) or just (torrent)
-            torrent = await new Promise<any>((resolve, reject) => {
-                torrentClient.add(magnet, (errOrTorrent: any) => {
-                    // v2 passes the torrent directly; guard for error-first style
-                    if (errOrTorrent instanceof Error) {
-                        return reject(errOrTorrent);
-                    }
-                    resolve(errOrTorrent);
-                });
-            });
+        // client.get() returns an existing torrent or null
+        torrent = torrentClient.get(magnet);
+
+        if (!torrent) {
+            // IMPORTANT: In webtorrent v2, client.add() returns the torrent
+            // synchronously as a full EventEmitter. We use this return value
+            // (not the callback argument) for event listening.
+            torrent = torrentClient.add(magnet);
         }
 
         await waitForReady(torrent);
