@@ -21,8 +21,14 @@ export async function authMiddleware(c: Context, next: Next) {
         const payload = jwt.verify(token, env.jwtSecret) as AuthPayload;
         c.set('user', payload);
         await next();
-    } catch (err) {
-        logger.warn({ requestId: c.get('requestId'), err }, 'JWT verification failed');
+    } catch (err: any) {
+        // TokenExpiredError is expected — the client will auto-refresh via /auth/refresh
+        // Only log as WARN for genuinely unexpected JWT failures (bad signature, malformed, etc.)
+        if (err?.name === 'TokenExpiredError') {
+            logger.debug({ requestId: c.get('requestId') }, 'JWT expired — client should refresh');
+        } else {
+            logger.warn({ requestId: c.get('requestId'), err }, 'JWT verification failed');
+        }
         return c.json({ error: 'Invalid or expired token' }, 401);
     }
 }
