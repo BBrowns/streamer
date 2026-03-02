@@ -29,7 +29,7 @@ export function mimeFromExt(filename: string): string {
  *
  * Times out after `timeoutMs` (default 30 s) to avoid infinite hangs.
  */
-export function waitForReady(torrent: any, timeoutMs = 30_000): Promise<void> {
+export function waitForReady(torrent: any, timeoutMs = 120_000): Promise<void> {
     return new Promise((resolve, reject) => {
         if (torrent.files && torrent.files.length > 0) {
             return resolve();
