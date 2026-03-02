@@ -8,6 +8,8 @@
     "scripts": {
         "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outdir=dist --external:express --external:webtorrent --external:cors --external:bonjour-service --external:castv2-client",
         "dev": "tsx watch src/index.ts",
+        "test": "vitest run",
+        "test:watch": "vitest",
         "start": "node dist/index.js"
     },
     "devDependencies": {
@@ -20,6 +22,7 @@
         "express": "^5.2.1",
         "tsx": "^4.21.0",
         "typescript": "^5.9.3",
+        "vitest": "^3.2.4",
         "webtorrent": "^2.2.0"
     },
     "dependencies": {
