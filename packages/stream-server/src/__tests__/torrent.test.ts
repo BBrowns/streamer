@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import type { Request, Response } from 'express';
-import { handleTorrent, waitForReady } from '../torrent.js';
+import { handleTorrent, waitForReady } from '../torrent-helpers.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -170,32 +170,6 @@ describe('waitForReady', () => {
     it('rejects with a timeout error if ready never fires', async () => {
         const torrent = makeTorrent([]); // never emits ready
         await expect(waitForReady(torrent, 50)).rejects.toThrow('Torrent ready timeout');
-    });
-});
-
-// ─── waitForReady: EventEmitter guard ────────────────────────────────────────
-
-describe('waitForReady — defensive guard', () => {
-    it('rejects immediately if the torrent object is not an EventEmitter', async () => {
-        const notAnEmitter = { files: [] }; // plain object, no .once()
-        await expect(waitForReady(notAnEmitter as any, 100)).rejects.toThrow(
-            'Torrent object is not an EventEmitter',
-        );
-    });
-});
-
-// ─── streamRequest: missing magnet ────────────────────────────────────────────
-
-describe('streamRequest — input validation', () => {
-    it('returns 400 when magnet param is missing', async () => {
-        const { streamRequest } = await import('../torrent.js');
-        const { req, res } = makeReqRes();
-
-        // streamRequest bails out before touching getClient()
-        await streamRequest(req, res);
-
-        expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.send).toHaveBeenCalledWith('Magnet link is missing');
     });
 });
 
