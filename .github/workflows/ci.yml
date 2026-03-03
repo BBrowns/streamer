@@ -95,6 +95,8 @@ jobs:
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Push DB Schema
         run: npx prisma db push --schema=server/prisma/schema.prisma --skip-generate
+      - name: Force Install Rollup Linux Binary (npm bug workaround)
+        run: npm install @rollup/rollup-linux-x64-gnu
       - name: Run Tests with Coverage
         run: npm run test --workspace=server -- --coverage
         env:
