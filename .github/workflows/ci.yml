@@ -96,7 +96,7 @@ jobs:
       - name: Push DB Schema
         run: npx prisma db push --schema=server/prisma/schema.prisma --skip-generate
       - name: Force Install Missing Native/Coverage Dependencies
-        run: npm install @rollup/rollup-linux-x64-gnu @vitest/coverage-v8
+        run: npm install @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@3.2.4
       - name: Run Tests with Coverage
         run: npm run test --workspace=server -- --coverage
         env:
