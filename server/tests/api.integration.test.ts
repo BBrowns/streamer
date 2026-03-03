@@ -147,6 +147,11 @@ describe("Integration: Aggregator Logic", () => {
       .set("Authorization", `Bearer ${accessToken}`)
       .send({ transportUrl: addonUrl });
 
+    if (installRes.status !== 201) {
+      console.error("DEBUG: addon install failed. Status:", installRes.status);
+      console.error("DEBUG: response body:", installRes.body);
+    }
+
     expect(installRes.status).toBe(201);
     expect(installRes.body).toBeDefined(); // The response IS the addon in this case or has addon depending on controller
 
