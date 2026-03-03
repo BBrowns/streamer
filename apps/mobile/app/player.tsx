@@ -35,11 +35,11 @@ if (Platform.OS !== "web") {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
     useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-  } catch { }
+  } catch {}
   try {
     const AirPlay = require("react-native-airplay-btn");
     AirPlayButton = AirPlay.AirPlayButton;
-  } catch { }
+  } catch {}
 }
 
 const SEEK_SECONDS = 10;
@@ -546,21 +546,31 @@ export default function PlayerScreen() {
           <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/80">
             <ActivityIndicator size="large" color="#818cf8" className="mb-4" />
             <Text className="text-white text-lg font-bold">
-              {streamMetrics?.state === 'finding_peers' ? 'Finding peers...' :
-                streamMetrics?.state === 'connecting' ? 'Connecting to peers...' :
-                  'Buffering...'}
+              {streamMetrics?.state === "finding_peers"
+                ? "Finding peers..."
+                : streamMetrics?.state === "connecting"
+                  ? "Connecting to peers..."
+                  : "Buffering..."}
             </Text>
             {streamMetrics && (
               <Text className="text-textMuted mt-2 text-sm">
-                {streamMetrics.numPeers} peers • {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
+                {streamMetrics.numPeers} peers •{" "}
+                {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
               </Text>
             )}
           </View>
         )}
         {streamState === "error" && (
           <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/95">
-            <MaterialIcons name="error-outline" size={48} color="#fca5a5" className="mb-4" />
-            <Text className="text-error text-lg font-bold text-center mb-2">Connection Failed</Text>
+            <MaterialIcons
+              name="error-outline"
+              size={48}
+              color="#fca5a5"
+              className="mb-4"
+            />
+            <Text className="text-error text-lg font-bold text-center mb-2">
+              Connection Failed
+            </Text>
             <Text className="text-textMuted text-center max-w-[280px] mb-6">
               {errorMessage || "Unable to load stream"}
             </Text>
@@ -572,11 +582,13 @@ export default function PlayerScreen() {
             </Pressable>
           </View>
         )}
-        {isBuffering && streamState !== "loading_metrics" && streamState !== "error" && (
-          <View className="absolute inset-0 justify-center items-center z-10 pointer-events-none">
-            <ActivityIndicator size="large" color="#818cf8" />
-          </View>
-        )}
+        {isBuffering &&
+          streamState !== "loading_metrics" &&
+          streamState !== "error" && (
+            <View className="absolute inset-0 justify-center items-center z-10 pointer-events-none">
+              <ActivityIndicator size="large" color="#818cf8" />
+            </View>
+          )}
         {seekOverlay}
         {gestureZones}
         {player && (

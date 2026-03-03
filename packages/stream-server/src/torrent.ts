@@ -28,6 +28,10 @@ const torrentServers = new Map<string, { server: any; port: number }>();
 /** Maximum concurrent connections per torrent peer */
 const MAX_CONNS = parseInt(process.env.WT_MAX_CONNS || "55", 10);
 
+export function getTorrent(infoHash: string): any {
+  return client?.torrents?.find((t: any) => t.infoHash === infoHash);
+}
+
 export async function getClient(): Promise<any> {
   if (!client) {
     const WebTorrent = (await import("webtorrent")).default;
@@ -39,7 +43,7 @@ export async function getClient(): Promise<any> {
       if (entry) {
         try {
           entry.server.close();
-        } catch {}
+        } catch { }
         torrentServers.delete(torrent.infoHash);
       }
     });
@@ -62,7 +66,7 @@ export async function destroyClient(): Promise<void> {
   for (const [hash, entry] of torrentServers) {
     try {
       entry.server.close();
-    } catch {}
+    } catch { }
     torrentServers.delete(hash);
   }
 
