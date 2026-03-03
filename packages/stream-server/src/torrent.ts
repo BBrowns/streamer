@@ -43,7 +43,7 @@ export async function getClient(): Promise<any> {
       if (entry) {
         try {
           entry.server.close();
-        } catch { }
+        } catch {}
         torrentServers.delete(torrent.infoHash);
       }
     });
@@ -66,7 +66,7 @@ export async function destroyClient(): Promise<void> {
   for (const [hash, entry] of torrentServers) {
     try {
       entry.server.close();
-    } catch { }
+    } catch {}
     torrentServers.delete(hash);
   }
 
