@@ -87,13 +87,11 @@ describe("Auth Module", () => {
       (prisma.user.create as any).mockResolvedValue(mockUser);
       (prisma.refreshToken.create as any).mockResolvedValue({});
 
-      const res = await request(app)
-        .post("/api/auth/register")
-        .send({
-          email: "test@example.com",
-          password: "Password123",
-          displayName: "Test User",
-        });
+      const res = await request(app).post("/api/auth/register").send({
+        email: "test@example.com",
+        password: "Password123",
+        displayName: "Test User",
+      });
 
       expect(res.status).toBe(201);
       expect(res.body.user).toBeDefined();
