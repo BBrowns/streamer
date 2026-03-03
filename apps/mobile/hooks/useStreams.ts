@@ -13,6 +13,9 @@ export function useStreams(type: string, id: string) {
             return data.streams;
         },
         staleTime: 2 * 60 * 1000, // 2 min cache
+        gcTime: 10 * 60 * 1000,   // Keep for 10 min
+        retry: 1,
+        refetchOnReconnect: true,
         enabled: isAuthenticated && !!type && !!id,
     });
 }

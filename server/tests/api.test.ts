@@ -77,7 +77,7 @@ describe('Auth Module', () => {
             const mockUser = {
                 id: 'user-1',
                 email: 'test@example.com',
-                passwordHash: await bcrypt.hash('password123', 12),
+                passwordHash: await bcrypt.hash('Password123', 12),
                 displayName: 'Test User',
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -89,7 +89,7 @@ describe('Auth Module', () => {
 
             const res = await request(app)
                 .post('/api/auth/register')
-                .send({ email: 'test@example.com', password: 'password123', displayName: 'Test User' });
+                .send({ email: 'test@example.com', password: 'Password123', displayName: 'Test User' });
 
             expect(res.status).toBe(201);
             expect(res.body.user).toBeDefined();
@@ -103,7 +103,7 @@ describe('Auth Module', () => {
 
             const res = await request(app)
                 .post('/api/auth/register')
-                .send({ email: 'existing@example.com', password: 'password123' });
+                .send({ email: 'existing@example.com', password: 'Password123' });
 
             expect(res.status).toBe(409);
             expect(res.body.error).toContain('already registered');
@@ -112,7 +112,7 @@ describe('Auth Module', () => {
         it('should return 400 for invalid email', async () => {
             const res = await request(app)
                 .post('/api/auth/register')
-                .send({ email: 'not-an-email', password: 'password123' });
+                .send({ email: 'not-an-email', password: 'Password123' });
 
             expect(res.status).toBe(400);
         });

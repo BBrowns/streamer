@@ -17,6 +17,8 @@ export function useCatalog(type: string, search?: string) {
         },
         enabled: isAuthenticated,
         staleTime: 5 * 60 * 1000, // 5 min cache
+        gcTime: 30 * 60 * 1000,   // Keep for 30 min
         retry: 2,
+        refetchOnReconnect: true,
     });
 }

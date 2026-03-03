@@ -1,10 +1,11 @@
 import { Stack, ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, AppState, type AppStateStatus } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import { restoreQueryCache, persistQueryCache } from '../services/queryPersister';
 import '../global.css';
 
 SplashScreen.preventAutoHideAsync();
@@ -19,8 +20,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000, // Keep data in cache for offline use
       retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
     },
   },
@@ -46,8 +48,23 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 function RootLayout() {
+  const appState = useRef(AppState.currentState);
+
   useEffect(() => {
-    SplashScreen.hideAsync();
+    // Restore offline cache then hide splash
+    restoreQueryCache(queryClient)
+      .catch(() => { /* non-critical */ })
+      .finally(() => SplashScreen.hideAsync());
+
+    // Persist cache when app goes to background
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (appState.current === 'active' && next.match(/inactive|background/)) {
+        persistQueryCache(queryClient).catch(() => { /* non-critical */ });
+      }
+      appState.current = next;
+    });
+
+    return () => sub.remove();
   }, []);
 
   return (

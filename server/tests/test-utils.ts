@@ -11,18 +11,24 @@ export function request(app: Hono | any) {
     };
 }
 
-class RequestBuilder {
+interface TestResponse {
+    status: number;
+    body: any;
+    headers: Record<string, string>;
+}
+
+class RequestBuilder implements PromiseLike<TestResponse> {
     private headers: Record<string, string> = {};
-    private _body?: any;
+    private _body?: string;
 
     constructor(private app: Hono | any, private method: string, private path: string) { }
 
-    set(key: string, value: string) {
+    set(key: string, value: string): this {
         this.headers[key] = value;
         return this;
     }
 
-    send(body: any) {
+    send(body: unknown): this {
         if (typeof body === 'string') {
             this._body = body;
         } else {
@@ -34,7 +40,7 @@ class RequestBuilder {
         return this;
     }
 
-    async execute() {
+    async execute(): Promise<TestResponse> {
         const response = await this.app.request(this.path, {
             method: this.method,
             headers: this.headers,
@@ -55,13 +61,16 @@ class RequestBuilder {
         };
     }
 
-    async expect(status: number) {
+    async expect(status: number): Promise<TestResponse> {
         const res = await this.execute();
         expect(res.status).toBe(status);
         return res;
     }
 
-    then(resolve: any, reject: any) {
-        this.execute().then(resolve).catch(reject);
+    then<TResult1 = TestResponse, TResult2 = never>(
+        onfulfilled?: ((value: TestResponse) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ): Promise<TResult1 | TResult2> {
+        return this.execute().then(onfulfilled, onrejected);
     }
 }

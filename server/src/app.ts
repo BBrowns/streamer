@@ -6,7 +6,7 @@ import { requestId } from 'hono/request-id';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { errorHandler } from './middleware/error.middleware.js';
-import { rateLimiter } from './middleware/rateLimiter.middleware.js';
+import { rateLimiter, authRateLimiter, catalogRateLimiter } from './middleware/rateLimiter.middleware.js';
 import { featureFlags } from './modules/feature-flag/feature-flag.service.js';
 
 import { authRouter } from './modules/auth/auth.routes.js';
@@ -41,7 +41,13 @@ export function createApp() {
         }, 'Request');
     });
 
-    app.use('*', rateLimiter);
+    // Per-route rate limiting
+    app.use('/api/auth/*', authRateLimiter);     // Stricter: 20 req / 15 min
+    app.use('/api/catalog/*', catalogRateLimiter); // Relaxed: 200 req / 15 min
+    app.use('/api/meta/*', catalogRateLimiter);
+    app.use('/api/stream/*', catalogRateLimiter);
+    app.use('/api/search*', catalogRateLimiter);
+    app.use('*', rateLimiter);                    // Global fallback: 100 / 15 min
 
     // Health check
     app.get('/health', (c) => {

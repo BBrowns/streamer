@@ -53,3 +53,26 @@ docker-data/
 # Secrets & keys
 *.pem
 *.key
+*.p12
+*.jks
+
+# Packed tarballs
+*.tgz
+
+# SQLite journals
+*.db-journal
+
+# Sentry
+.sentryclirc
+
+# Vercel
+.vercel/
+
+# Expo EAS
+.eas/
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/

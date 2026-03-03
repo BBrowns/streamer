@@ -7,9 +7,47 @@ import { logger } from '../../config/logger.js';
 import { AppError } from '../../middleware/error.middleware.js';
 import type { AuthTokens, UserProfile } from '@streamer/shared';
 
+/** Maximum failed login attempts before lockout */
+const MAX_LOGIN_ATTEMPTS = 5;
+/** Lockout duration in minutes */
+const LOCKOUT_MINUTES = 15;
+/** In-memory failed attempt tracker (simple — use Redis in production at scale) */
+const failedAttempts = new Map<string, { count: number; lastAttempt: Date }>();
+
+function checkLoginAttempts(email: string): void {
+    const record = failedAttempts.get(email);
+    if (!record) return;
+
+    const lockoutExpiry = new Date(record.lastAttempt.getTime() + LOCKOUT_MINUTES * 60 * 1000);
+    if (record.count >= MAX_LOGIN_ATTEMPTS && new Date() < lockoutExpiry) {
+        const remainingMs = lockoutExpiry.getTime() - Date.now();
+        const remainingMin = Math.ceil(remainingMs / 60_000);
+        throw new AppError(429, `Account locked. Try again in ${remainingMin} minute(s).`);
+    }
+
+    // Reset if lockout has expired
+    if (record.count >= MAX_LOGIN_ATTEMPTS && new Date() >= lockoutExpiry) {
+        failedAttempts.delete(email);
+    }
+}
+
+function recordFailedAttempt(email: string): void {
+    const record = failedAttempts.get(email);
+    if (record) {
+        record.count++;
+        record.lastAttempt = new Date();
+    } else {
+        failedAttempts.set(email, { count: 1, lastAttempt: new Date() });
+    }
+}
+
+function clearFailedAttempts(email: string): void {
+    failedAttempts.delete(email);
+}
+
 function generateTokens(userId: string, email: string): AuthTokens {
     const accessToken = jwt.sign(
-        { userId, email },
+        { userId, email, jti: uuidv4() },
         env.jwtSecret,
         { expiresIn: env.jwtAccessExpiry } as jwt.SignOptions,
     );
@@ -66,15 +104,27 @@ export class AuthService {
         email: string,
         password: string,
     ): Promise<{ user: UserProfile; tokens: AuthTokens }> {
+        // Check if the account is locked out
+        checkLoginAttempts(email);
+
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
+            recordFailedAttempt(email);
             throw new AppError(401, 'Invalid email or password');
         }
 
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) {
+            recordFailedAttempt(email);
+            logger.warn(
+                { email, attempts: failedAttempts.get(email)?.count },
+                'Failed login attempt',
+            );
             throw new AppError(401, 'Invalid email or password');
         }
+
+        // Clear failed attempts on successful login
+        clearFailedAttempts(email);
 
         const tokens = generateTokens(user.id, user.email);
 
@@ -198,6 +248,9 @@ export class AuthService {
             prisma.refreshToken.deleteMany({ where: { userId: stored.userId } }),
         ]);
 
+        // Clear any failed login attempts
+        clearFailedAttempts(stored.user.email);
+
         logger.info({ userId: stored.userId }, 'Password reset successfully');
     }
 
@@ -247,3 +300,8 @@ export class AuthService {
 }
 
 export const authService = new AuthService();
+
+/** Export for testing */
+export function _resetFailedAttempts(): void {
+    failedAttempts.clear();
+}

@@ -2,48 +2,71 @@ import {
     View,
     Text,
     Pressable,
-    ActivityIndicator,
     ScrollView,
     RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useAddons } from '../../hooks/useAddons';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CatalogDefinition, InstalledAddon } from '@streamer/shared';
 import { useAuthStore } from '../../stores/authStore';
 import { CatalogRow } from '../../components/catalog/CatalogRow';
 import { ContinueWatchingRow } from '../../components/catalog/ContinueWatchingRow';
+import { SkeletonRow } from '../../components/ui/SkeletonLoader';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
+import { OfflineBanner } from '../../components/ui/OfflineBanner';
 
-export default function DiscoverScreen() {
+function DiscoverContent() {
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const isHydrated = useAuthStore((s) => s.isHydrated);
     const router = useRouter();
     const queryClient = useQueryClient();
     const { data: addons, isLoading } = useAddons();
     const [refreshing, setRefreshing] = useState(false);
 
+    const handleRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['addons'] }),
+            queryClient.invalidateQueries({ queryKey: ['catalog'] }),
+            queryClient.invalidateQueries({ queryKey: ['progress'] }),
+        ]);
+        setRefreshing(false);
+    }, [queryClient]);
+
+    // Wait for auth hydration
+    if (!isHydrated) {
+        return (
+            <View className="flex-1 bg-background pt-4">
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+            </View>
+        );
+    }
+
     if (!isAuthenticated) {
         return (
-            <View className="flex-1 bg-background justify-center items-center p-8">
-                <Text className="text-[48px] mb-3">🎬</Text>
-                <Text className="text-textMain text-lg font-bold mb-2">Welcome to Streamer</Text>
-                <Text className="text-textMuted text-sm text-center mb-5">Sign in to discover movies and shows</Text>
-                <Pressable
-                    className="bg-primary px-6 py-3 rounded-xl min-w-[44px] min-h-[44px]"
-                    onPress={() => router.push('/login')}
-                    accessibilityRole="button"
-                    accessibilityLabel="Sign in"
-                >
-                    <Text className="text-white font-bold text-[15px]">Sign In</Text>
-                </Pressable>
+            <View className="flex-1 bg-background">
+                <EmptyState
+                    emoji="🎬"
+                    title="Welcome to Streamer"
+                    description="Sign in to discover movies and shows from your add-ons."
+                    actionLabel="Sign In"
+                    onAction={() => router.push('/login')}
+                />
             </View>
         );
     }
 
     if (isLoading) {
         return (
-            <View className="flex-1 bg-background justify-center items-center p-8">
-                <ActivityIndicator size="large" color="#818cf8" />
+            <View className="flex-1 bg-background pt-4">
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
             </View>
         );
     }
@@ -58,20 +81,14 @@ export default function DiscoverScreen() {
 
     if (catalogRows.length === 0) {
         return (
-            <View className="flex-1 bg-background justify-center items-center p-8">
-                <Text className="text-[48px] mb-3">🔍</Text>
-                <Text className="text-textMain text-lg font-bold mb-2">No Content Sources</Text>
-                <Text className="text-textMuted text-sm text-center mb-5">
-                    Install an add-on in Settings to start discovering content.
-                </Text>
-                <Pressable
-                    className="bg-primary px-6 py-3 rounded-xl min-w-[44px] min-h-[44px]"
-                    onPress={() => router.push('/addons')}
-                    accessibilityRole="button"
-                    accessibilityLabel="Manage add-ons"
-                >
-                    <Text className="text-white font-bold text-[15px]">Manage Add-ons</Text>
-                </Pressable>
+            <View className="flex-1 bg-background">
+                <EmptyState
+                    icon="search"
+                    title="No Content Sources"
+                    description="Install an add-on in Settings to start discovering content."
+                    actionLabel="Manage Add-ons"
+                    onAction={() => router.push('/addons')}
+                />
             </View>
         );
     }
@@ -82,18 +99,14 @@ export default function DiscoverScreen() {
             refreshControl={
                 <RefreshControl
                     refreshing={refreshing}
-                    onRefresh={async () => {
-                        setRefreshing(true);
-                        await queryClient.invalidateQueries({ queryKey: ['addons'] });
-                        await queryClient.invalidateQueries({ queryKey: ['catalog'] });
-                        await queryClient.invalidateQueries({ queryKey: ['progress'] });
-                        setRefreshing(false);
-                    }}
+                    onRefresh={handleRefresh}
                     tintColor="#818cf8"
                     colors={['#818cf8']}
                 />
             }
         >
+            <OfflineBanner />
+
             {/* Continue Watching — always first if there are items */}
             <ContinueWatchingRow />
 
@@ -106,5 +119,13 @@ export default function DiscoverScreen() {
                 />
             ))}
         </ScrollView>
+    );
+}
+
+export default function DiscoverScreen() {
+    return (
+        <ErrorBoundary>
+            <DiscoverContent />
+        </ErrorBoundary>
     );
 }

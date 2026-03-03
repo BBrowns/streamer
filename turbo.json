@@ -1,9 +1,17 @@
 {
     "$schema": "https://turbo.build/schema.json",
+    "globalDependencies": [
+        "tsconfig.json"
+    ],
     "tasks": {
         "build": {
             "dependsOn": [
                 "^build"
+            ],
+            "inputs": [
+                "src/**",
+                "tsconfig.json",
+                "package.json"
             ],
             "outputs": [
                 "dist/**",
@@ -14,12 +22,33 @@
         "test": {
             "dependsOn": [
                 "^build"
+            ],
+            "inputs": [
+                "src/**",
+                "tests/**",
+                "**/*.test.ts",
+                "**/*.test.tsx",
+                "vitest.config.ts",
+                "jest.config.js"
+            ],
+            "outputs": [
+                "coverage/**"
             ]
         },
-        "lint": {},
+        "lint": {
+            "inputs": [
+                "src/**",
+                ".eslintrc*",
+                "eslint.config.*"
+            ]
+        },
         "typecheck": {
             "dependsOn": [
                 "^build"
+            ],
+            "inputs": [
+                "src/**",
+                "tsconfig.json"
             ]
         },
         "dev": {

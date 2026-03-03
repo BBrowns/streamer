@@ -14,5 +14,8 @@ export function useAddons() {
         },
         enabled: isAuthenticated,
         staleTime: 2 * 60 * 1000, // 2 min cache
+        gcTime: 30 * 60 * 1000,   // Keep in garbage collection for 30 min
+        retry: 2,
+        refetchOnReconnect: true,
     });
 }

@@ -40,9 +40,18 @@ api.interceptors.response.use(
                     refreshToken,
                 });
 
-                useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
-                originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+                // Pass expiresInMs so authStore can track proactive refresh timing
+                const expiresInMs = data.expiresIn
+                    ? data.expiresIn * 1000
+                    : undefined;
 
+                useAuthStore.getState().setTokens(
+                    data.accessToken,
+                    data.refreshToken,
+                    expiresInMs,
+                );
+
+                originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
                 return api(originalRequest);
             } catch {
                 useAuthStore.getState().logout();
