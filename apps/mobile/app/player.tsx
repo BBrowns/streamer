@@ -35,11 +35,11 @@ if (Platform.OS !== "web") {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
     useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-  } catch {}
+  } catch { }
   try {
     const AirPlay = require("react-native-airplay-btn");
     AirPlayButton = AirPlay.AirPlayButton;
-  } catch {}
+  } catch { }
 }
 
 const SEEK_SECONDS = 10;
@@ -142,10 +142,10 @@ export default function PlayerScreen() {
 
   // Subscribe to SSE metrics for torrent streams
   useEffect(() => {
-    if (currentStream?.infoHash && streamState === "idle") {
+    if (currentStream?.infoHash) {
       subscribeToStreamMetrics(currentStream.infoHash);
     }
-  }, [currentStream?.infoHash, streamState, subscribeToStreamMetrics]);
+  }, [currentStream?.infoHash, subscribeToStreamMetrics]);
 
   // Progress reporting to server (every 15s) and local state sync
   useEffect(() => {

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import EventSource from "react-native-sse";
+import { Platform } from "react-native";
 import type { Stream } from "@streamer/shared";
 
 export interface MediaInfo {
@@ -103,7 +104,11 @@ export const usePlayerStore = create<PlayerState>()(
           clearTimeout(state._peerTimeout);
         }
 
-        const backendUrl = "http://127.0.0.1:11470";
+        const backendUrl = Platform.select({
+          web: "http://localhost:11470",
+          default: "http://10.0.2.2:11470", // Android emulator -> host
+          ios: "http://localhost:11470",
+        });
         const es = new EventSource(
           `${backendUrl}/api/torrent/${infoHash}/metrics`,
         );
