@@ -1,162 +1,104 @@
 import {
-    View,
-    Text,
-    StyleSheet,
-    TextInput,
-    Pressable,
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { AxiosError } from 'axios';
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { AxiosError } from "axios";
 
 export default function RegisterScreen() {
-    const router = useRouter();
-    const { register, isLoading, error } = useAuth();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [displayName, setDisplayName] = useState('');
+  const router = useRouter();
+  const { register, isLoading, error } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
-    const handleRegister = async () => {
-        try {
-            await register({ email, password, displayName: displayName || undefined });
-            router.replace('/(tabs)');
-        } catch { }
-    };
+  const handleRegister = async () => {
+    try {
+      await register({
+        email,
+        password,
+        displayName: displayName || undefined,
+      });
+      router.replace("/(tabs)");
+    } catch {}
+  };
 
-    return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  return (
+    <KeyboardAvoidingView
+      className="flex-1 bg-background justify-center"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View className="px-8">
+        <Text className="text-3xl font-extrabold text-textMain mb-1">
+          Create Account
+        </Text>
+        <Text className="text-sm text-textMuted mb-7">
+          Join the streaming universe
+        </Text>
+
+        {error && (
+          <View className="bg-error/10 rounded-lg p-3 mb-4">
+            <Text className="text-error text-sm">
+              {(error instanceof AxiosError
+                ? (error.response?.data?.error as string)
+                : null) || "Registration failed"}
+            </Text>
+          </View>
+        )}
+
+        <TextInput
+          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          placeholder="Display Name (optional)"
+          placeholderTextColor="#6b7280"
+          value={displayName}
+          onChangeText={setDisplayName}
+        />
+        <TextInput
+          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          placeholder="Email"
+          placeholderTextColor="#6b7280"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TextInput
+          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          placeholder="Password (min 8 chars)"
+          placeholderTextColor="#6b7280"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+
+        <Pressable
+          className={`bg-primary rounded-xl py-3.5 items-center mt-2 mb-5 shadow-lg shadow-primary/30 ${isLoading ? "opacity-60" : ""}`}
+          onPress={handleRegister}
+          disabled={isLoading}
         >
-            <View style={styles.form}>
-                <Text style={styles.title}>Create Account</Text>
-                <Text style={styles.subtitle}>Join the streaming universe</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white font-bold text-base">
+              Create Account
+            </Text>
+          )}
+        </Pressable>
 
-                {error && (
-                    <View style={styles.errorBox}>
-                        <Text style={styles.errorText}>
-                            {(error instanceof AxiosError ? error.response?.data?.error : null) || 'Registration failed'}
-                        </Text>
-                    </View>
-                )}
-
-                <TextInput
-                    style={styles.input}
-                    placeholder="Display Name (optional)"
-                    placeholderTextColor="#6b7280"
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    placeholderTextColor="#6b7280"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password (min 8 chars)"
-                    placeholderTextColor="#6b7280"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                />
-
-                <Pressable
-                    style={[styles.button, isLoading && styles.buttonDisabled]}
-                    onPress={handleRegister}
-                    disabled={isLoading}
-                >
-                    {isLoading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Create Account</Text>
-                    )}
-                </Pressable>
-
-                <Pressable onPress={() => router.replace('/login')}>
-                    <Text style={styles.linkText}>
-                        Already have an account? <Text style={styles.linkBold}>Sign In</Text>
-                    </Text>
-                </Pressable>
-            </View>
-        </KeyboardAvoidingView>
-    );
+        <Pressable onPress={() => router.replace("/login")}>
+          <Text className="text-textMuted text-center text-sm">
+            Already have an account?{" "}
+            <Text className="text-primary font-bold">Sign In</Text>
+          </Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0a0a1a',
-        justifyContent: 'center',
-    },
-    form: {
-        paddingHorizontal: 32,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#e0e0ff',
-        marginBottom: 4,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: '#9ca3af',
-        marginBottom: 28,
-    },
-    errorBox: {
-        backgroundColor: 'rgba(248, 113, 113, 0.1)',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 16,
-    },
-    errorText: {
-        color: '#f87171',
-        fontSize: 13,
-    },
-    input: {
-        backgroundColor: '#1a1a3e',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        color: '#e0e0ff',
-        fontSize: 15,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(129, 140, 248, 0.2)',
-    },
-    button: {
-        backgroundColor: '#818cf8',
-        borderRadius: 12,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: 8,
-        marginBottom: 20,
-        boxShadow: '0px 4px 8px rgba(129, 140, 248, 0.3)',
-        elevation: 6,
-    },
-    buttonDisabled: {
-        opacity: 0.6,
-    },
-    buttonText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    linkText: {
-        color: '#9ca3af',
-        textAlign: 'center',
-        fontSize: 13,
-    },
-    linkBold: {
-        color: '#818cf8',
-        fontWeight: '700',
-    },
-});

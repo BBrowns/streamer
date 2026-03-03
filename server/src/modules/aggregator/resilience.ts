@@ -1,18 +1,61 @@
 import {
-    CircuitBreakerPolicy,
-    ConsecutiveBreaker,
-    ExponentialBackoff,
-    handleAll,
-    retry,
-    circuitBreaker,
-    timeout,
-    TimeoutStrategy,
-    wrap,
-    bulkhead,
-    type IPolicy,
-} from 'cockatiel';
-import { env } from '../../config/env.js';
-import { logger } from '../../config/logger.js';
+  ConsecutiveBreaker,
+  ExponentialBackoff,
+  handleAll,
+  retry,
+  circuitBreaker,
+  timeout,
+  TimeoutStrategy,
+  wrap,
+  bulkhead,
+  type IPolicy,
+} from "cockatiel";
+import { env } from "../../config/env.js";
+import { logger } from "../../config/logger.js";
+
+/**
+ * Resilience metrics per add-on.
+ * Exposed for observability and testing.
+ */
+export interface ResilienceMetrics {
+  timeouts: number;
+  retries: number;
+  circuitOpens: number;
+  bulkheadRejections: number;
+  lastFailure: Date | null;
+}
+
+const metricsMap = new Map<string, ResilienceMetrics>();
+
+function getMetrics(addonId: string): ResilienceMetrics {
+  let m = metricsMap.get(addonId);
+  if (!m) {
+    m = {
+      timeouts: 0,
+      retries: 0,
+      circuitOpens: 0,
+      bulkheadRejections: 0,
+      lastFailure: null,
+    };
+    metricsMap.set(addonId, m);
+  }
+  return m;
+}
+
+/** Get current metrics for an add-on (read-only). */
+export function getAddonMetrics(
+  addonId: string,
+): Readonly<ResilienceMetrics> | undefined {
+  return metricsMap.get(addonId);
+}
+
+/** Get all add-on metrics (for observability endpoints). */
+export function getAllAddonMetrics(): ReadonlyMap<
+  string,
+  Readonly<ResilienceMetrics>
+> {
+  return metricsMap;
+}
 
 /**
  * Create a resilience policy for outbound add-on requests.
@@ -24,32 +67,69 @@ import { logger } from '../../config/logger.js';
  * 4. **Bulkhead**: Limits concurrent requests per add-on to prevent resource exhaustion
  */
 export function createAddonPolicy(addonId: string): IPolicy {
-    // Timeout: configurable, defaults to 5 seconds
-    const timeoutPolicy = timeout(env.addonTimeoutMs, TimeoutStrategy.Aggressive);
+  const metrics = getMetrics(addonId);
 
-    // Retry: 1 retry on failure with exponential backoff
-    const retryPolicy = retry(handleAll, {
-        maxAttempts: 1,
-        backoff: new ExponentialBackoff({ initialDelay: 500, maxDelay: 2000 }),
-    });
+  // Timeout: configurable, defaults to 5 seconds
+  const timeoutPolicy = timeout(env.addonTimeoutMs, TimeoutStrategy.Aggressive);
 
-    // Circuit breaker: opens after 3 consecutive failures, half-open after 15s
-    const breakerPolicy = circuitBreaker(handleAll, {
-        halfOpenAfter: 15_000,
-        breaker: new ConsecutiveBreaker(3),
-    });
+  timeoutPolicy.onTimeout(() => {
+    metrics.timeouts++;
+    metrics.lastFailure = new Date();
+    logger.debug(
+      { addonId, totalTimeouts: metrics.timeouts },
+      "Add-on request timed out",
+    );
+  });
 
-    breakerPolicy.onStateChange((state) => {
-        logger.warn({ addonId, circuitState: state }, 'Circuit breaker state changed');
-    });
+  // Retry: 1 retry on failure with exponential backoff
+  const retryPolicy = retry(handleAll, {
+    maxAttempts: 1,
+    backoff: new ExponentialBackoff({ initialDelay: 500, maxDelay: 2000 }),
+  });
 
-    // Bulkhead: limit concurrent outbound requests per add-on
-    const bulkheadPolicy = bulkhead(env.addonMaxConcurrent, 20); // max concurrent, max queue
+  retryPolicy.onRetry(({ attempt }) => {
+    metrics.retries++;
+    logger.debug(
+      { addonId, attempt, totalRetries: metrics.retries },
+      "Retrying add-on request",
+    );
+  });
 
-    bulkheadPolicy.onReject(() => {
-        logger.warn({ addonId }, 'Bulkhead rejected request — add-on concurrency limit reached');
-    });
+  // Circuit breaker: opens after 3 consecutive failures, half-open after 15s
+  const breakerPolicy = circuitBreaker(handleAll, {
+    halfOpenAfter: 15_000,
+    breaker: new ConsecutiveBreaker(3),
+  });
 
-    // Wrap policies: bulkhead → timeout → retry → circuit breaker
-    return wrap(bulkheadPolicy, timeoutPolicy, retryPolicy, breakerPolicy);
+  breakerPolicy.onStateChange((state) => {
+    const stateStr = String(state);
+    if (stateStr === "open") {
+      metrics.circuitOpens++;
+      metrics.lastFailure = new Date();
+    }
+    logger.warn(
+      { addonId, circuitState: stateStr, totalOpens: metrics.circuitOpens },
+      `Circuit breaker → ${stateStr}`,
+    );
+  });
+
+  // Bulkhead: limit concurrent outbound requests per add-on
+  const bulkheadPolicy = bulkhead(env.addonMaxConcurrent, 20);
+
+  bulkheadPolicy.onReject(() => {
+    metrics.bulkheadRejections++;
+    metrics.lastFailure = new Date();
+    logger.warn(
+      { addonId, totalRejections: metrics.bulkheadRejections },
+      "Bulkhead rejected request — add-on concurrency limit reached",
+    );
+  });
+
+  // Wrap policies: bulkhead → timeout → retry → circuit breaker
+  return wrap(bulkheadPolicy, timeoutPolicy, retryPolicy, breakerPolicy);
+}
+
+/** Reset all metrics — for testing only. */
+export function _resetMetrics(): void {
+  metricsMap.clear();
 }

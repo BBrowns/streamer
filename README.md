@@ -1,51 +1,110 @@
 # Streamer — Media Aggregator
 
-A cross-platform media streaming service built with Expo SDK 54 and a Node.js Modular Monolith backend.
+A cross-platform media streaming aggregator built on an **Expo SDK 54** mobile client and a **Hono** edge-ready Node.js backend. Compatible with [Stremio-style add-on manifests](https://github.com/Stremio/stremio-addon-sdk).
 
-## 🏗 Registry Structure
+## 🏗 Monorepo Structure
 
-- `apps/mobile`: Expo / React Native client (iOS, Android, Web).
-- `server`: Node.js Express 5 backend with Prisma & PostgreSQL.
-- `packages/shared`: Common TypeScript types and Zod validation schemas.
+```
+streamer/
+├── apps/mobile/          # Expo / React Native (iOS, Android, Web)
+├── server/               # Hono API + Prisma + SQLite
+├── packages/
+│   ├── shared/           # Common TypeScript types & Zod schemas
+│   └── stream-server/    # Local P2P daemon (WebTorrent + Chromecast/bonjour)
+```
 
 ## 🚀 Quick Start
 
-### 1. Prerequisites
-- Docker Desktop
+### Prerequisites
+
 - Node.js 24+
+- [k6](https://k6.io/docs/get-started/installation/) _(optional, load testing only)_
 
-### 2. Infrastructure & Database
+### 1. Install dependencies
+
 ```bash
-# Start Postgres & Backend
-docker compose up -d
-
-# Initialize DB (Run from root)
-npm run db:push --workspace=@streamer/server
+npm install
 ```
 
-### 3. Run the Client (Web Mode)
+### 2. Configure the server
+
 ```bash
-cd apps/mobile
-npx expo start --web
+cp server/.env.example server/.env
+# Edit server/.env — set a strong JWT_SECRET at minimum
+# DATABASE_URL defaults to file:./dev.db (SQLite, no server needed)
+```
+
+### 3. Initialise the database
+
+```bash
+npm run db:push --workspace=server
+```
+
+### 4. Start the API server
+
+```bash
+npm run dev:server
+# Runs on http://localhost:3001
+```
+
+### 5. Start the mobile / web app
+
+```bash
+npm run dev:mobile
+# Press 'w' for web, 'i' for iOS Simulator
+```
+
+### 6. Start the desktop app (Electron)
+
+> Requires the mobile/web app already running on port 8081 (step 5, press `w`)
+
+```bash
+npm run dev:desktop
 ```
 
 ## 🛠 Features
 
-- **Auth**: JWT-based authentication with refresh token rotation.
-- **Aggregator**: Resilient fan-out requests to multiple add-ons using Cockatiel circuit breakers.
-- **Add-on Protocol**: Compatible with Stremio-style JSON manifests and resource endpoints.
-- **Video Player**: Strategy Pattern implementation. Supports HLS (.m3u8) out of the box.
+- **Auth** — JWT access + refresh tokens with rotation. Rate-limited by default; bypassed in `test` mode.
+- **Add-on Registry** — Install, remove, and browse Stremio-compatible add-on manifests.
+- **Catalog Aggregator** — Concurrent fan-out to all installed add-ons with 5s timeouts and Cockatiel circuit breakers.
+- **Library** — Persist watched items and resume progress per user.
+- **Video Player** — `expo-video` powered player with Strategy Pattern stream-engine (HLS, MP4, DASH). Torrent streams require the local stream-server daemon.
+- **Casting** — Chromecast device discovery via Bonjour/mDNS (`bonjour-service` + `castv2-client`).
+- **UI** — "Glassmorphic Brutalism" design system via NativeWind v4 (Tailwind for React Native).
+- **Resilience** — Global React Error Boundaries, Sentry exception tracking, and React Query exponential backoff.
 
 ## 🧪 Testing
 
 ```bash
-# Run backend tests
+# Unit & integration tests (Vitest)
 npm run test --workspace=server
 
-# Run load tests (requires k6)
-k6 run k6/load-test.js
+# E2E user journey (requires server running on :3001)
+npx ts-node server/tests/e2e-journey.ts
+
+# Load test — 50 VUs, 50s (requires k6 + server running in NODE_ENV=test)
+NODE_ENV=test npm run dev:server &
+k6 run server/tests/k6-load-test.js
 ```
 
-## 📝 Usage Tip
-To see content in the app, install an add-on in the **Settings** tab. 
-**Sample Add-on URL**: `https://v3-cinemeta.strem.io/manifest.json`
+## ⚙️ Environment Variables
+
+| Variable             | Default                 | Description                                           |
+| -------------------- | ----------------------- | ----------------------------------------------------- |
+| `DATABASE_URL`       | `file:./dev.db`         | SQLite file path (or Turso libSQL URL for production) |
+| `JWT_SECRET`         | _(required)_            | HS256 signing secret — use a long random string       |
+| `JWT_ACCESS_EXPIRY`  | `15m`                   | Access token lifetime                                 |
+| `JWT_REFRESH_EXPIRY` | `7d`                    | Refresh token lifetime                                |
+| `PORT`               | `3001`                  | API server port                                       |
+| `NODE_ENV`           | `development`           | `test` disables rate limiting                         |
+| `CORS_ORIGINS`       | `http://localhost:8081` | Comma-separated allowed origins                       |
+
+## 📝 Usage
+
+To see content in the app, install an add-on from the **Settings** tab.
+
+**Recommended add-ons:**
+| Name | Manifest URL |
+|---|---|
+| Cinemeta (movies & series) | `https://v3-cinemeta.strem.io/manifest.json` |
+| Torrentio (torrent streams) | `https://torrentio.strem.fun/manifest.json` |

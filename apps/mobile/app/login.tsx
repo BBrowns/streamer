@@ -1,168 +1,104 @@
 import {
-    View,
-    Text,
-    StyleSheet,
-    TextInput,
-    Pressable,
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { AxiosError } from 'axios';
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { AxiosError } from "axios";
 
 export default function LoginScreen() {
-    const router = useRouter();
-    const { login, isLoading, error } = useAuth();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [localError, setLocalError] = useState('');
+  const router = useRouter();
+  const { login, isLoading, error } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [localError, setLocalError] = useState("");
 
-    const handleLogin = async () => {
-        setLocalError('');
-        if (!email || !password) {
-            setLocalError('Please fill in all fields');
-            return;
-        }
-        try {
-            await login({ email, password });
-            router.replace('/(tabs)');
-        } catch { }
-    };
+  const handleLogin = async () => {
+    setLocalError("");
+    if (!email || !password) {
+      setLocalError("Please fill in all fields");
+      return;
+    }
+    try {
+      await login({ email, password });
+      router.replace("/(tabs)");
+    } catch {}
+  };
 
-    return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  return (
+    <KeyboardAvoidingView
+      className="flex-1 bg-background justify-center"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View className="px-8">
+        <Text className="text-3xl font-extrabold text-textMain mb-1">
+          Welcome Back
+        </Text>
+        <Text className="text-sm text-textMuted mb-7">Sign in to continue</Text>
+
+        {(error || localError) && (
+          <View className="bg-error/10 rounded-lg p-3 mb-4">
+            <Text className="text-error text-sm">
+              {localError ||
+                (error instanceof AxiosError
+                  ? (error.response?.data?.error as string)
+                  : null) ||
+                "Login failed"}
+            </Text>
+          </View>
+        )}
+
+        <TextInput
+          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          placeholder="Email"
+          placeholderTextColor="#6b7280"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TextInput
+          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          placeholder="Password"
+          placeholderTextColor="#6b7280"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+
+        <Pressable
+          className={`bg-primary rounded-xl py-3.5 items-center mt-2 mb-5 shadow-lg shadow-primary/30 ${isLoading ? "opacity-60" : ""}`}
+          onPress={handleLogin}
+          disabled={isLoading}
         >
-            <View style={styles.form}>
-                <Text style={styles.title}>Welcome Back</Text>
-                <Text style={styles.subtitle}>Sign in to continue</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white font-bold text-base">Sign In</Text>
+          )}
+        </Pressable>
 
-                {(error || localError) && (
-                    <View style={styles.errorBox}>
-                        <Text style={styles.errorText}>
-                            {localError || (error instanceof AxiosError ? error.response?.data?.error : null) || 'Login failed'}
-                        </Text>
-                    </View>
-                )}
+        <Pressable onPress={() => router.push("/forgot-password")}>
+          <Text className="text-textMuted text-center text-sm">
+            <Text className="text-primary font-bold">Forgot password?</Text>
+          </Text>
+        </Pressable>
 
-                <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    placeholderTextColor="#6b7280"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    placeholderTextColor="#6b7280"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                />
+        <View className="h-3" />
 
-                <Pressable
-                    style={[styles.button, isLoading && styles.buttonDisabled]}
-                    onPress={handleLogin}
-                    disabled={isLoading}
-                >
-                    {isLoading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>Sign In</Text>
-                    )}
-                </Pressable>
-
-                <Pressable onPress={() => router.push('/forgot-password')}>
-                    <Text style={styles.linkText}>
-                        <Text style={styles.linkBold}>Forgot password?</Text>
-                    </Text>
-                </Pressable>
-
-                <View style={{ height: 12 }} />
-
-                <Pressable onPress={() => router.replace('/register')}>
-                    <Text style={styles.linkText}>
-                        Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>
-                    </Text>
-                </Pressable>
-            </View>
-        </KeyboardAvoidingView>
-    );
+        <Pressable onPress={() => router.replace("/register")}>
+          <Text className="text-textMuted text-center text-sm">
+            Don't have an account?{" "}
+            <Text className="text-primary font-bold">Sign Up</Text>
+          </Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#0a0a1a',
-        justifyContent: 'center',
-    },
-    form: {
-        paddingHorizontal: 32,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#e0e0ff',
-        marginBottom: 4,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: '#9ca3af',
-        marginBottom: 28,
-    },
-    errorBox: {
-        backgroundColor: 'rgba(248, 113, 113, 0.1)',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 16,
-    },
-    errorText: {
-        color: '#f87171',
-        fontSize: 13,
-    },
-    input: {
-        backgroundColor: '#1a1a3e',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        color: '#e0e0ff',
-        fontSize: 15,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(129, 140, 248, 0.2)',
-    },
-    button: {
-        backgroundColor: '#818cf8',
-        borderRadius: 12,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: 8,
-        marginBottom: 20,
-        boxShadow: '0px 4px 8px rgba(129, 140, 248, 0.3)',
-        elevation: 6,
-    },
-    buttonDisabled: {
-        opacity: 0.6,
-    },
-    buttonText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 16,
-    },
-    linkText: {
-        color: '#9ca3af',
-        textAlign: 'center',
-        fontSize: 13,
-    },
-    linkBold: {
-        color: '#818cf8',
-        fontWeight: '700',
-    },
-});

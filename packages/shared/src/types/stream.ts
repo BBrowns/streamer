@@ -1,22 +1,22 @@
 /** A single stream link returned by an add-on */
 export interface Stream {
-    url?: string;
-    ytId?: string;
-    infoHash?: string;
-    fileIdx?: number;
-    externalUrl?: string;
-    title?: string;
-    name?: string;
-    behaviorHints?: {
-        notWebReady?: boolean;
-        bingeGroup?: string;
-    };
+  url?: string;
+  ytId?: string;
+  infoHash?: string;
+  fileIdx?: number;
+  externalUrl?: string;
+  title?: string;
+  name?: string;
+  behaviorHints?: {
+    notWebReady?: boolean;
+    bingeGroup?: string;
+  };
 }
 
 /** Stream response from an add-on */
 export interface StreamResponse {
-    streams: Stream[];
+  streams: Stream[];
 }
 
 /** Engine types supported by the player */
-export type StreamEngineType = 'hls' | 'torrent';
+export type StreamEngineType = "hls" | "torrent";

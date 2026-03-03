@@ -1,80 +1,174 @@
-import { Router } from 'express';
-// @ts-ignore
-import ChromecastAPI from 'chromecast-api';
-// @ts-ignore
-import AirPlay from 'airplay-protocol';
+/**
+ * Cast Router — Chromecast device discovery & control
+ *
+ * Replaces the abandoned chromecast-api (vulnerable to ip/xml2js CVEs) with
+ * a lightweight mDNS-based discovery via the `bonjour-service` package
+ * (actively maintained, zero known CVEs) and direct castv2 for playback.
+ */
+import { Router, Request, Response } from "express";
+import type { Client as CastClientType } from "castv2-client";
 
 const router = Router();
-const chromecastBrowser = new ChromecastAPI();
-let devices: any[] = [];
 
-chromecastBrowser.on('device', (device: any) => {
-    // Check if device is already added
-    if (!devices.find((d) => d.host === device.host)) {
+interface CastDevice {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  type: "chromecast";
+}
+
+let devices: CastDevice[] = [];
+let bonjour: any = null;
+
+// Lazy-start mDNS discovery when first requested
+async function startDiscovery() {
+  if (bonjour) return;
+  try {
+    const { default: Bonjour } = await import("bonjour-service");
+    bonjour = new Bonjour();
+    const browser = bonjour.find({ type: "googlecast" });
+
+    browser.on("up", (service: any) => {
+      const host = service.addresses?.[0] ?? service.host;
+      const id = `${host}:${service.port}`;
+      if (!devices.find((d) => d.id === id)) {
         devices.push({
-            id: device.host,
-            name: device.friendlyName,
-            type: 'chromecast',
-            _device: device,
+          id,
+          name: service.txt?.fn ?? service.name ?? "Chromecast",
+          host,
+          port: service.port,
+          type: "chromecast",
         });
-    }
+      }
+    });
+
+    browser.on("down", (service: any) => {
+      const host = service.addresses?.[0] ?? service.host;
+      const id = `${host}:${service.port}`;
+      devices = devices.filter((d) => d.id !== id);
+    });
+  } catch (err) {
+    console.error("Failed to start bonjour discovery:", err);
+  }
+}
+
+router.get("/devices", async (_req: Request, res: Response) => {
+  await startDiscovery();
+  res.json(devices.map(({ id, name, type }) => ({ id, name, type })));
 });
 
-// For AirPlay, discovery requires mdns or dnssd, which airplay-protocol doesn't do out of the box.
-// A full implementation would require a Bonjour browser.
-// For now, we'll focus on the Chromecast integration as requested and mock AirPlay if needed,
-// but the plan mentioned both. To keep it simple, we'll expose Cast for now.
+router.post("/play", async (req: Request, res: Response) => {
+  const { deviceId, url, title } = req.body as {
+    deviceId: string;
+    url: string;
+    title?: string;
+  };
+  const device = devices.find((d) => d.id === deviceId);
 
-router.get('/devices', (req, res) => {
-    const list = devices.map(d => ({ id: d.id, name: d.name, type: d.type }));
-    res.json(list);
+  if (!device) {
+    return res.status(404).json({ error: "Device not found" });
+  }
+
+  try {
+    const { Client, DefaultMediaReceiver } = await import("castv2-client");
+    const client = new Client() as unknown as CastClientType;
+
+    await new Promise<void>((resolve, reject) => {
+      client.connect({ host: device.host, port: device.port }, (err: Error) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    const player: any = await new Promise((resolve, reject) => {
+      client.launch(DefaultMediaReceiver, (err: Error, app: any) => {
+        if (err) return reject(err);
+        resolve(app);
+      });
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      player.load(
+        {
+          contentId: url,
+          contentType: "video/mp4",
+          streamType: "BUFFERED",
+          metadata: {
+            type: 0,
+            metadataType: 0,
+            title: title ?? "Streamer",
+          },
+        },
+        { autoplay: true },
+        (err: Error) => {
+          if (err) return reject(err);
+          resolve();
+        },
+      );
+    });
+
+    client.close();
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message ?? "Failed to cast" });
+  }
 });
 
-router.post('/play', (req, res) => {
-    const { deviceId, url, title } = req.body;
-    const device = devices.find(d => d.id === deviceId);
+router.post("/control", async (req: Request, res: Response) => {
+  const { deviceId, action } = req.body as { deviceId: string; action: string };
+  const device = devices.find((d) => d.id === deviceId);
 
-    if (!device) {
-        return res.status(404).json({ error: 'Device not found' });
+  if (!device) {
+    return res.status(404).json({ error: "Device not found" });
+  }
+
+  if (!["pause", "resume", "play", "stop"].includes(action)) {
+    return res.status(400).json({ error: "Unknown action" });
+  }
+
+  try {
+    const { Client, DefaultMediaReceiver } = await import("castv2-client");
+    const client = new Client() as unknown as CastClientType;
+
+    await new Promise<void>((resolve, reject) => {
+      client.connect({ host: device.host, port: device.port }, (err: Error) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+
+    const sessions: any[] = await new Promise((resolve, reject) => {
+      client.getSessions((err: Error, sessions: any[]) => {
+        if (err) return reject(err);
+        resolve(sessions);
+      });
+    });
+
+    if (!sessions.length) {
+      client.close();
+      return res.status(404).json({ error: "No active session" });
     }
 
-    if (device.type === 'chromecast') {
-        device._device.play(url, { title }, (err: any) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-    } else {
-        res.status(400).json({ error: 'Unsupported device type' });
-    }
-});
+    const player: any = await new Promise((resolve, reject) => {
+      client.join(sessions[0], DefaultMediaReceiver, (err: Error, app: any) => {
+        if (err) return reject(err);
+        resolve(app);
+      });
+    });
 
-router.post('/control', (req, res) => {
-    const { deviceId, action } = req.body;
-    const device = devices.find(d => d.id === deviceId);
+    await new Promise<void>((resolve, reject) => {
+      const cb = (err: Error) => (err ? reject(err) : resolve());
+      if (action === "pause") player.pause(cb);
+      else if (action === "stop") player.stop(cb);
+      else player.play(cb);
+    });
 
-    if (!device) {
-        return res.status(404).json({ error: 'Device not found' });
-    }
-
-    if (device.type === 'chromecast') {
-        const castDevice = device._device;
-        switch (action) {
-            case 'pause':
-                castDevice.pause(() => res.json({ success: true }));
-                break;
-            case 'resume':
-            case 'play':
-                castDevice.resume(() => res.json({ success: true }));
-                break;
-            case 'stop':
-                castDevice.stop(() => res.json({ success: true }));
-                break;
-            default:
-                res.status(400).json({ error: 'Unknown action' });
-        }
-    } else {
-        res.status(400).json({ error: 'Unsupported device type' });
-    }
+    client.close();
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message ?? "Control failed" });
+  }
 });
 
 export const castRouter = router;
