@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
 import { execSync } from "child_process";
 import { request } from "./test-utils.js";
 import crypto from "crypto";
@@ -46,7 +46,7 @@ afterAll(async () => {
   try {
     const fs = await import("fs");
     fs.unlinkSync(dbUri.replace("file:", ""));
-  } catch (e) {}
+  } catch (e) { }
 });
 
 describe("Integration: Auth Flow", () => {
@@ -76,7 +76,7 @@ describe("Integration: Auth Flow", () => {
   it("should login and return tokens", async () => {
     const testUser = getTestUser();
     // Seed user
-    await request(app).post("/api/auth/register").send(testUser);
+    await request(app).post("/api/auth/register").send(testUser).expect(201);
 
     const res = await request(app)
       .post("/api/auth/login")
@@ -89,7 +89,7 @@ describe("Integration: Auth Flow", () => {
 
   it("should refresh token correctly", async () => {
     const testUser = getTestUser();
-    const regRes = await request(app).post("/api/auth/register").send(testUser);
+    const regRes = await request(app).post("/api/auth/register").send(testUser).expect(201);
     const refreshToken = regRes.body.tokens.refreshToken;
 
     const refreshRes = await request(app)
@@ -111,7 +111,7 @@ describe("Integration: Aggregator Logic", () => {
       email: `aggregator-${crypto.randomUUID()}@test.com`,
       password: "securePassword123!",
     };
-    const regRes = await request(app).post("/api/auth/register").send(testUser);
+    const regRes = await request(app).post("/api/auth/register").send(testUser).expect(201);
     accessToken = regRes.body.tokens.accessToken;
   });
 

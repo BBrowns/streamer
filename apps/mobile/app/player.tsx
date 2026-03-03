@@ -35,11 +35,11 @@ if (Platform.OS !== "web") {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
     useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-  } catch {}
+  } catch { }
   try {
     const AirPlay = require("react-native-airplay-btn");
     AirPlayButton = AirPlay.AirPlayButton;
-  } catch {}
+  } catch { }
 }
 
 const SEEK_SECONDS = 10;
@@ -52,6 +52,10 @@ export default function PlayerScreen() {
     currentStream,
     mediaInfo,
     isBuffering,
+    streamState,
+    streamMetrics,
+    errorMessage,
+    subscribeToStreamMetrics,
     setBuffering,
     setProgress,
     clearPlayer,
@@ -135,6 +139,13 @@ export default function PlayerScreen() {
       engine.stop?.();
     };
   }, [engine]);
+
+  // Subscribe to SSE metrics for torrent streams
+  useEffect(() => {
+    if (currentStream?.infoHash && streamState === "idle") {
+      subscribeToStreamMetrics(currentStream.infoHash);
+    }
+  }, [currentStream?.infoHash, streamState, subscribeToStreamMetrics]);
 
   // Progress reporting to server (every 15s) and local state sync
   useEffect(() => {
@@ -531,7 +542,37 @@ export default function PlayerScreen() {
       {headerBar}
 
       <View className="flex-1 justify-center items-center bg-black overflow-hidden relative">
-        {isBuffering && (
+        {streamState === "loading_metrics" && (
+          <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/80">
+            <ActivityIndicator size="large" color="#818cf8" className="mb-4" />
+            <Text className="text-white text-lg font-bold">
+              {streamMetrics?.state === 'finding_peers' ? 'Finding peers...' :
+                streamMetrics?.state === 'connecting' ? 'Connecting to peers...' :
+                  'Buffering...'}
+            </Text>
+            {streamMetrics && (
+              <Text className="text-textMuted mt-2 text-sm">
+                {streamMetrics.numPeers} peers • {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
+              </Text>
+            )}
+          </View>
+        )}
+        {streamState === "error" && (
+          <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/95">
+            <MaterialIcons name="error-outline" size={48} color="#fca5a5" className="mb-4" />
+            <Text className="text-error text-lg font-bold text-center mb-2">Connection Failed</Text>
+            <Text className="text-textMuted text-center max-w-[280px] mb-6">
+              {errorMessage || "Unable to load stream"}
+            </Text>
+            <Pressable
+              className="bg-white/10 px-6 py-3 rounded-xl border border-white/20"
+              onPress={() => router.back()}
+            >
+              <Text className="text-white font-semibold">Go Back</Text>
+            </Pressable>
+          </View>
+        )}
+        {isBuffering && streamState !== "loading_metrics" && streamState !== "error" && (
           <View className="absolute inset-0 justify-center items-center z-10 pointer-events-none">
             <ActivityIndicator size="large" color="#818cf8" />
           </View>

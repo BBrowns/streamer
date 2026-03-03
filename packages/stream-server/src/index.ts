@@ -3,6 +3,7 @@ import cors from "cors";
 import { streamRequest, getClient } from "./torrent.js";
 import { getStats } from "./stats.js";
 import { castRouter } from "./cast.js";
+import { metricsHandler } from "./metrics.js";
 
 const app = express();
 const PORT = process.env.PORT || 11470;
@@ -45,6 +46,8 @@ app.get("/stream", streamRequest);
 app.get("/stats", async (_req, res) => {
   res.json(await getStats());
 });
+
+app.get("/api/torrent/:infoHash/metrics", metricsHandler);
 
 app.listen(PORT as number, "127.0.0.1", () => {
   console.log(`Stream server (Bridge) running on http://127.0.0.1:${PORT}`);
