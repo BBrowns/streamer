@@ -1,53 +1,53 @@
 {
-    "name": "streamer",
-    "version": "0.1.0",
-    "private": true,
-    "description": "Cross-platform media streaming aggregator",
-    "workspaces": [
-        "packages/*",
-        "server",
-        "apps/*"
-    ],
-    "scripts": {
-        "dev:server": "kill -9 $(lsof -ti :3001) 2>/dev/null; npm run dev --workspace=server",
-        "dev:mobile": "npm run start --workspace=apps/mobile",
-        "dev:desktop": "npm run dev --workspace=@streamer/desktop",
-        "dev:stream-server": "npm run dev --workspace=@streamer/stream-server",
-        "build": "turbo run build",
-        "test": "turbo run test",
-        "lint": "turbo run lint",
-        "typecheck": "turbo run typecheck",
-        "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-        "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-        "test:all": "turbo run test",
-        "typecheck:all": "turbo run typecheck"
+  "name": "streamer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-platform media streaming aggregator",
+  "workspaces": [
+    "packages/*",
+    "server",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:server": "kill -9 $(lsof -ti :3001) 2>/dev/null; npm run dev --workspace=server",
+    "dev:mobile": "npm run start --workspace=apps/mobile",
+    "dev:desktop": "npm run dev --workspace=@streamer/desktop",
+    "dev:stream-server": "npm run dev --workspace=@streamer/stream-server",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test:all": "turbo run test",
+    "typecheck:all": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.0",
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "overrides": {
+    "ip": "^2.0.1",
+    "bittorrent-tracker": {
+      "ip": "^2.0.1"
     },
-    "devDependencies": {
-        "prettier": "^3.4.0",
-        "turbo": "^2.4.0",
-        "typescript": "^5.7.0"
+    "ip-set": {
+      "ip": "^2.0.1"
     },
-    "engines": {
-        "node": ">=24.0.0"
+    "load-ip-set": {
+      "ip-set": {
+        "ip": "^2.0.1"
+      }
     },
-    "overrides": {
-        "ip": "^2.0.1",
-        "bittorrent-tracker": {
-            "ip": "^2.0.1"
-        },
-        "ip-set": {
-            "ip": "^2.0.1"
-        },
-        "load-ip-set": {
-            "ip-set": {
-                "ip": "^2.0.1"
-            }
-        },
-        "torrent-discovery": {
-            "bittorrent-tracker": {
-                "ip": "^2.0.1"
-            }
-        }
-    },
-    "packageManager": "npm@10.9.0"
+    "torrent-discovery": {
+      "bittorrent-tracker": {
+        "ip": "^2.0.1"
+      }
+    }
+  },
+  "packageManager": "npm@10.9.0"
 }

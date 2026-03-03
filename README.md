@@ -16,15 +16,18 @@ streamer/
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 24+
 - [k6](https://k6.io/docs/get-started/installation/) _(optional, load testing only)_
 
 ### 1. Install dependencies
+
 ```bash
 npm install
 ```
 
 ### 2. Configure the server
+
 ```bash
 cp server/.env.example server/.env
 # Edit server/.env — set a strong JWT_SECRET at minimum
@@ -32,24 +35,29 @@ cp server/.env.example server/.env
 ```
 
 ### 3. Initialise the database
+
 ```bash
 npm run db:push --workspace=server
 ```
 
 ### 4. Start the API server
+
 ```bash
 npm run dev:server
 # Runs on http://localhost:3001
 ```
 
 ### 5. Start the mobile / web app
+
 ```bash
 npm run dev:mobile
 # Press 'w' for web, 'i' for iOS Simulator
 ```
 
 ### 6. Start the desktop app (Electron)
+
 > Requires the mobile/web app already running on port 8081 (step 5, press `w`)
+
 ```bash
 npm run dev:desktop
 ```
@@ -81,15 +89,15 @@ k6 run server/tests/k6-load-test.js
 
 ## ⚙️ Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `file:./dev.db` | SQLite file path (or Turso libSQL URL for production) |
-| `JWT_SECRET` | _(required)_ | HS256 signing secret — use a long random string |
-| `JWT_ACCESS_EXPIRY` | `15m` | Access token lifetime |
-| `JWT_REFRESH_EXPIRY` | `7d` | Refresh token lifetime |
-| `PORT` | `3001` | API server port |
-| `NODE_ENV` | `development` | `test` disables rate limiting |
-| `CORS_ORIGINS` | `http://localhost:8081` | Comma-separated allowed origins |
+| Variable             | Default                 | Description                                           |
+| -------------------- | ----------------------- | ----------------------------------------------------- |
+| `DATABASE_URL`       | `file:./dev.db`         | SQLite file path (or Turso libSQL URL for production) |
+| `JWT_SECRET`         | _(required)_            | HS256 signing secret — use a long random string       |
+| `JWT_ACCESS_EXPIRY`  | `15m`                   | Access token lifetime                                 |
+| `JWT_REFRESH_EXPIRY` | `7d`                    | Refresh token lifetime                                |
+| `PORT`               | `3001`                  | API server port                                       |
+| `NODE_ENV`           | `development`           | `test` disables rate limiting                         |
+| `CORS_ORIGINS`       | `http://localhost:8081` | Comma-separated allowed origins                       |
 
 ## 📝 Usage
 

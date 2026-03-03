@@ -1,76 +1,82 @@
-import { expect } from 'vitest';
-import type { Hono } from 'hono';
+import { expect } from "vitest";
+import type { Hono } from "hono";
 
 export function request(app: Hono | any) {
-    return {
-        get: (path: string) => new RequestBuilder(app, 'GET', path),
-        post: (path: string) => new RequestBuilder(app, 'POST', path),
-        put: (path: string) => new RequestBuilder(app, 'PUT', path),
-        delete: (path: string) => new RequestBuilder(app, 'DELETE', path),
-        patch: (path: string) => new RequestBuilder(app, 'PATCH', path),
-    };
+  return {
+    get: (path: string) => new RequestBuilder(app, "GET", path),
+    post: (path: string) => new RequestBuilder(app, "POST", path),
+    put: (path: string) => new RequestBuilder(app, "PUT", path),
+    delete: (path: string) => new RequestBuilder(app, "DELETE", path),
+    patch: (path: string) => new RequestBuilder(app, "PATCH", path),
+  };
 }
 
 interface TestResponse {
-    status: number;
-    body: any;
-    headers: Record<string, string>;
+  status: number;
+  body: any;
+  headers: Record<string, string>;
 }
 
 class RequestBuilder implements PromiseLike<TestResponse> {
-    private headers: Record<string, string> = {};
-    private _body?: string;
+  private headers: Record<string, string> = {};
+  private _body?: string;
 
-    constructor(private app: Hono | any, private method: string, private path: string) { }
+  constructor(
+    private app: Hono | any,
+    private method: string,
+    private path: string,
+  ) {}
 
-    set(key: string, value: string): this {
-        this.headers[key] = value;
-        return this;
+  set(key: string, value: string): this {
+    this.headers[key] = value;
+    return this;
+  }
+
+  send(body: unknown): this {
+    if (typeof body === "string") {
+      this._body = body;
+    } else {
+      this._body = JSON.stringify(body);
+      if (!this.headers["Content-Type"]) {
+        this.headers["Content-Type"] = "application/json";
+      }
+    }
+    return this;
+  }
+
+  async execute(): Promise<TestResponse> {
+    const response = await this.app.request(this.path, {
+      method: this.method,
+      headers: this.headers,
+      body: this._body,
+    });
+
+    let body;
+    try {
+      body = await response.json();
+    } catch {
+      body = await response.text();
     }
 
-    send(body: unknown): this {
-        if (typeof body === 'string') {
-            this._body = body;
-        } else {
-            this._body = JSON.stringify(body);
-            if (!this.headers['Content-Type']) {
-                this.headers['Content-Type'] = 'application/json';
-            }
-        }
-        return this;
-    }
+    return {
+      status: response.status,
+      body,
+      headers: Object.fromEntries(response.headers.entries()),
+    };
+  }
 
-    async execute(): Promise<TestResponse> {
-        const response = await this.app.request(this.path, {
-            method: this.method,
-            headers: this.headers,
-            body: this._body,
-        });
+  async expect(status: number): Promise<TestResponse> {
+    const res = await this.execute();
+    expect(res.status).toBe(status);
+    return res;
+  }
 
-        let body;
-        try {
-            body = await response.json();
-        } catch {
-            body = await response.text();
-        }
-
-        return {
-            status: response.status,
-            body,
-            headers: Object.fromEntries(response.headers.entries()),
-        };
-    }
-
-    async expect(status: number): Promise<TestResponse> {
-        const res = await this.execute();
-        expect(res.status).toBe(status);
-        return res;
-    }
-
-    then<TResult1 = TestResponse, TResult2 = never>(
-        onfulfilled?: ((value: TestResponse) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-    ): Promise<TResult1 | TResult2> {
-        return this.execute().then(onfulfilled, onrejected);
-    }
+  then<TResult1 = TestResponse, TResult2 = never>(
+    onfulfilled?:
+      | ((value: TestResponse) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    return this.execute().then(onfulfilled, onrejected);
+  }
 }

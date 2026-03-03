@@ -7,27 +7,27 @@ import {
   TextInput,
   RefreshControl,
   useWindowDimensions,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback, memo } from 'react';
-import { useCatalog } from '../../hooks/useCatalog';
-import { useGlobalSearch } from '../../hooks/useGlobalSearch';
-import { useAuthStore } from '../../stores/authStore';
-import { useQueryClient } from '@tanstack/react-query';
-import type { MetaPreview } from '@streamer/shared';
-import { SkeletonCardGrid } from '../../components/ui/SkeletonLoader';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
-import { OfflineBanner } from '../../components/ui/OfflineBanner';
+} from "react-native";
+import { useRouter } from "expo-router";
+import { useState, useEffect, useCallback, memo } from "react";
+import { useCatalog } from "../../hooks/useCatalog";
+import { useGlobalSearch } from "../../hooks/useGlobalSearch";
+import { useAuthStore } from "../../stores/authStore";
+import { useQueryClient } from "@tanstack/react-query";
+import type { MetaPreview } from "@streamer/shared";
+import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
+import { OfflineBanner } from "../../components/ui/OfflineBanner";
 
 /** Responsive column count based on screen width */
 function useResponsiveColumns(): number {
   const { width } = useWindowDimensions();
-  if (width >= 1280) return 6;   // Desktop wide
-  if (width >= 1024) return 5;   // Desktop
-  if (width >= 768) return 4;    // Tablet
-  if (width >= 480) return 3;    // Large phone / landscape
-  return 2;                       // Phone portrait
+  if (width >= 1280) return 6; // Desktop wide
+  if (width >= 1024) return 5; // Desktop
+  if (width >= 768) return 4; // Tablet
+  if (width >= 480) return 3; // Large phone / landscape
+  return 2; // Phone portrait
 }
 
 const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
@@ -39,7 +39,7 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
       className="rounded-xl overflow-hidden bg-surface"
       onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ''}`}
+      accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
       accessibilityHint="Opens details page"
     >
       <Image
@@ -48,12 +48,17 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
         accessibilityIgnoresInvertColors
       />
       <View className="p-2">
-        <Text className="text-textMain font-semibold text-[13px]" numberOfLines={2}>
+        <Text
+          className="text-textMain font-semibold text-[13px]"
+          numberOfLines={2}
+        >
           {item.name}
         </Text>
         {!!item.imdbRating && (
           <View className="mt-1">
-            <Text className="text-amber-400 text-[11px] font-semibold">⭐ {item.imdbRating}</Text>
+            <Text className="text-amber-400 text-[11px] font-semibold">
+              ⭐ {item.imdbRating}
+            </Text>
           </View>
         )}
       </View>
@@ -67,8 +72,8 @@ function HomeContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const numColumns = useResponsiveColumns();
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -80,15 +85,18 @@ function HomeContent() {
 
   const isSearching = debouncedSearch.length >= 2;
 
-  const { data: searchResults, isLoading: searchLoading } = useGlobalSearch(debouncedSearch);
-  const { data: movies, isLoading: catalogLoading } = useCatalog('movie');
+  const { data: searchResults, isLoading: searchLoading } =
+    useGlobalSearch(debouncedSearch);
+  const { data: movies, isLoading: catalogLoading } = useCatalog("movie");
 
   const displayData = isSearching ? searchResults : movies;
   const isLoading = isSearching ? searchLoading : catalogLoading;
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: isSearching ? ['search'] : ['catalog'] });
+    await queryClient.invalidateQueries({
+      queryKey: isSearching ? ["search"] : ["catalog"],
+    });
     setRefreshing(false);
   }, [queryClient, isSearching]);
 
@@ -115,7 +123,7 @@ function HomeContent() {
         </Text>
         <Pressable
           className="bg-primary px-8 py-3.5 rounded-xl shadow-lg shadow-primary/40"
-          onPress={() => router.push('/login')}
+          onPress={() => router.push("/login")}
           accessibilityRole="button"
           accessibilityLabel="Get started and sign in"
         >
@@ -144,7 +152,7 @@ function HomeContent() {
         {isSearching && (
           <Pressable
             className="ml-2 w-9 h-9 rounded-full bg-error/15 justify-center items-center"
-            onPress={() => setSearch('')}
+            onPress={() => setSearch("")}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
           >
@@ -165,15 +173,15 @@ function HomeContent() {
       {/* Empty state */}
       {!!displayData && displayData.length === 0 && !isLoading && (
         <EmptyState
-          emoji={isSearching ? '🔍' : '📦'}
-          title={isSearching ? 'No Results' : 'No Content Found'}
+          emoji={isSearching ? "🔍" : "📦"}
+          title={isSearching ? "No Results" : "No Content Found"}
           description={
             isSearching
               ? `No results for "${debouncedSearch}"`
-              : 'Install some add-ons in Settings to start browsing.'
+              : "Install some add-ons in Settings to start browsing."
           }
-          actionLabel={isSearching ? undefined : 'Manage Add-ons'}
-          onAction={isSearching ? undefined : () => router.push('/addons')}
+          actionLabel={isSearching ? undefined : "Manage Add-ons"}
+          onAction={isSearching ? undefined : () => router.push("/addons")}
         />
       )}
 
@@ -190,7 +198,7 @@ function HomeContent() {
               refreshing={refreshing}
               onRefresh={handleRefresh}
               tintColor="#818cf8"
-              colors={['#818cf8']}
+              colors={["#818cf8"]}
             />
           }
           renderItem={({ item }) => <CatalogCard item={item} />}

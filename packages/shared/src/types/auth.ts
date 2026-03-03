@@ -1,45 +1,45 @@
 /** Auth request/response types */
 export interface RegisterRequest {
-    email: string;
-    password: string;
-    displayName?: string;
+  email: string;
+  password: string;
+  displayName?: string;
 }
 
 export interface LoginRequest {
-    email: string;
-    password: string;
+  email: string;
+  password: string;
 }
 
 export interface AuthTokens {
-    accessToken: string;
-    refreshToken: string;
+  accessToken: string;
+  refreshToken: string;
 }
 
 export interface RefreshRequest {
-    refreshToken: string;
+  refreshToken: string;
 }
 
 export interface UserProfile {
-    id: string;
-    email: string;
-    displayName?: string;
-    createdAt: string;
+  id: string;
+  email: string;
+  displayName?: string;
+  createdAt: string;
 }
 
 export interface ForgotPasswordRequest {
-    email: string;
+  email: string;
 }
 
 export interface ResetPasswordRequest {
-    token: string;
-    newPassword: string;
+  token: string;
+  newPassword: string;
 }
 
 export interface ChangePasswordRequest {
-    currentPassword: string;
-    newPassword: string;
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface UpdateProfileRequest {
-    displayName?: string;
+  displayName?: string;
 }
