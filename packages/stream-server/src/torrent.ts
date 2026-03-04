@@ -148,8 +148,19 @@ export async function streamRequest(req: Request, res: Response) {
         `[stream-server] Reusing existing torrent: ${torrent.infoHash}`,
       );
     } else {
-      // Pass trackers explicitly so every torrent gets our tracker list
-      torrent = torrentClient.add(magnet, { announce: DEFAULT_TRACKERS });
+      // We must embed DEFAULT_TRACKERS directly into the magnet string
+      // because passing { announce: [...] } to client.add() OVERWRITES
+      // the trackers that the client already packaged into the infoHash!
+      let enhancedMagnet = magnet;
+      for (const tr of DEFAULT_TRACKERS) {
+        const encodedTr = `&tr=${encodeURIComponent(tr)}`;
+        if (!enhancedMagnet.includes(encodedTr)) {
+          enhancedMagnet += encodedTr;
+        }
+      }
+
+      // Add the torrent with the fully loaded magnet link
+      torrent = torrentClient.add(enhancedMagnet);
       console.log(
         `[stream-server] Added new torrent: ${torrent.infoHash || "(awaiting metadata)"}`,
       );
