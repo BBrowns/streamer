@@ -29,7 +29,27 @@ export class TorrentEngine implements IStreamEngine {
   getPlaybackUri(stream: Stream): string {
     if (this.bridge.activeStrategy === "local" && this.bridge.bridgeAvailable) {
       // Build the magnet link or infohash to send to the bridge
-      const magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
+      let magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
+
+      // Append default trackers directly to the magnet link to ensure WebTorrent
+      // has immediate tracker URLs before the stream-server even parses it.
+      const trackers = [
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://open.stealth.si:80/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://tracker.bittor.pw:1337/announce",
+        "udp://public.popcornflix.com:6969/announce",
+        "udp://tracker.dler.org:6969/announce",
+        "udp://exodus.desync.com:6969/announce",
+        "udp://open.demonii.com:1337/announce",
+        "wss://tracker.openwebtorrent.com",
+        "wss://tracker.btorrent.xyz",
+        "wss://tracker.fastcast.nz",
+      ];
+      for (const tr of trackers) {
+        magnet += `&tr=${encodeURIComponent(tr)}`;
+      }
+
       this.startStatsPolling();
       return `${this.bridge.bridgeUrl}/stream?magnet=${encodeURIComponent(magnet)}`;
     }

@@ -101,7 +101,11 @@ function RootLayout() {
       >
         <Stack.Screen
           name="(tabs)"
-          options={{ headerShown: false, headerTitle: "" }}
+          options={{
+            headerShown: false,
+            title: "",
+            headerBackTitle: "Back",
+          }}
         />
         <Stack.Screen
           name="login"
