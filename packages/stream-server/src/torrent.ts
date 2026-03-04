@@ -144,11 +144,33 @@ export async function streamRequest(req: Request, res: Response) {
     const existing = await torrentClient.get(magnet);
     if (existing) {
       torrent = existing;
+      console.log(
+        `[stream-server] Reusing existing torrent: ${torrent.infoHash}`,
+      );
     } else {
-      // client.add() returns the Torrent synchronously (extends EventEmitter)
-      torrent = torrentClient.add(magnet);
+      // Pass trackers explicitly so every torrent gets our tracker list
+      torrent = torrentClient.add(magnet, { announce: DEFAULT_TRACKERS });
+      console.log(
+        `[stream-server] Added new torrent: ${torrent.infoHash || "(awaiting metadata)"}`,
+      );
+
+      // Debug logging for peer discovery
+      torrent.on("wire", () => {
+        console.log(
+          `[stream-server] Wire connected! Peers: ${torrent.numPeers}`,
+        );
+      });
+      torrent.on("warning", (msg: string) => {
+        console.warn(`[stream-server] Torrent warning: ${msg}`);
+      });
+      torrent.on("error", (err: Error) => {
+        console.error(`[stream-server] Torrent error: ${err.message}`);
+      });
     }
 
+    console.log(
+      `[stream-server] Waiting for metadata (up to 2 min)... numPeers=${torrent.numPeers}`,
+    );
     // Wait until metadata is received and files[] is populated (timeout: 2 min)
     await waitForReady(torrent, 120_000);
   } catch (err: any) {
