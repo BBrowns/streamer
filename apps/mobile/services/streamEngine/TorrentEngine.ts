@@ -34,14 +34,16 @@ export class TorrentEngine implements IStreamEngine {
       // Append default trackers directly to the magnet link to ensure WebTorrent
       // has immediate tracker URLs before the stream-server even parses it.
       const trackers = [
+        // HTTP trackers (bypass UDP blocks)
+        "http://tracker.opentrackr.org:1337/announce",
+        "http://tracker.renhas.cl:6969/announce",
+        // UDP trackers (fastest for open networks)
         "udp://tracker.opentrackr.org:1337/announce",
-        "udp://open.stealth.si:80/announce",
-        "udp://tracker.torrent.eu.org:451/announce",
-        "udp://tracker.bittor.pw:1337/announce",
-        "udp://public.popcornflix.com:6969/announce",
-        "udp://tracker.dler.org:6969/announce",
+        "udp://tracker.internetwarriors.net:1337/announce",
+        "udp://tracker.leechers-paradise.org:6969/announce",
+        "udp://tracker.coppersurfer.tk:6969/announce",
         "udp://exodus.desync.com:6969/announce",
-        "udp://open.demonii.com:1337/announce",
+        // WebSocket trackers (for WebRTC peers)
         "wss://tracker.openwebtorrent.com",
         "wss://tracker.btorrent.xyz",
         "wss://tracker.fastcast.nz",
@@ -93,11 +95,11 @@ export class TorrentEngine implements IStreamEngine {
   getAudioTracks(): AudioTrack[] {
     return [];
   }
-  setAudioTrack(id: string): void {}
+  setAudioTrack(id: string): void { }
   getSubtitles(): SubtitleTrack[] {
     return [];
   }
-  setSubtitle(id: string | null): void {}
+  setSubtitle(id: string | null): void { }
 
   on(event: string, callback: Function): void {
     if (!this.listeners.has(event)) {

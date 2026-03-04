@@ -30,15 +30,15 @@ const MAX_CONNS = parseInt(process.env.WT_MAX_CONNS || "55", 10);
  * WebTorrent supports UDP, HTTP, and WebSocket trackers.
  */
 const DEFAULT_TRACKERS = [
-  // UDP trackers (fastest for desktop/Node environments)
+  // HTTP trackers (bypass UDP blocks)
+  "http://tracker.opentrackr.org:1337/announce",
+  "http://tracker.renhas.cl:6969/announce",
+  // UDP trackers (fastest for open networks)
   "udp://tracker.opentrackr.org:1337/announce",
-  "udp://open.stealth.si:80/announce",
-  "udp://tracker.torrent.eu.org:451/announce",
-  "udp://tracker.bittor.pw:1337/announce",
-  "udp://public.popcornflix.com:6969/announce",
-  "udp://tracker.dler.org:6969/announce",
+  "udp://tracker.internetwarriors.net:1337/announce",
+  "udp://tracker.leechers-paradise.org:6969/announce",
+  "udp://tracker.coppersurfer.tk:6969/announce",
   "udp://exodus.desync.com:6969/announce",
-  "udp://open.demonii.com:1337/announce",
   // WebSocket trackers (for WebRTC peers)
   "wss://tracker.openwebtorrent.com",
   "wss://tracker.btorrent.xyz",
@@ -91,7 +91,7 @@ export async function destroyClient(): Promise<void> {
   if (serverInstance) {
     try {
       serverInstance.close();
-    } catch {}
+    } catch { }
     serverInstance = null;
     serverPort = 0;
   }
@@ -130,6 +130,9 @@ function getLargestFile(torrent: any): any {
 
 export async function streamRequest(req: Request, res: Response) {
   const magnet = req.query.magnet as string;
+
+  console.log(`[stream-server] Received magnet request at:`, new Date().toISOString());
+  console.log(`[stream-server] Raw req.query.magnet:`, magnet);
 
   if (!magnet) {
     return res.status(400).json({ error: "Magnet link is required" });
