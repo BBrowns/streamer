@@ -99,7 +99,10 @@ function RootLayout() {
           contentStyle: { backgroundColor: "#0a0a1a" },
         }}
       >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="(tabs)"
+          options={{ headerShown: false, headerTitle: "" }}
+        />
         <Stack.Screen
           name="login"
           options={{ title: "Sign In", presentation: "modal" }}

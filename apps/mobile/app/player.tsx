@@ -284,7 +284,10 @@ export default function PlayerScreen() {
         <Text className="text-error text-base mb-4">No stream selected</Text>
         <Pressable
           className="bg-primary px-5 py-2.5 rounded-xl min-w-[44px] min-h-[44px] justify-center items-center"
-          onPress={() => router.back()}
+          onPress={() => {
+            clearPlayer();
+            router.back();
+          }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
@@ -527,7 +530,10 @@ export default function PlayerScreen() {
           </Text>
           <Pressable
             className="bg-white/10 px-6 py-3 rounded-xl border border-white/20"
-            onPress={() => router.back()}
+            onPress={() => {
+              clearPlayer();
+              router.back();
+            }}
           >
             <Text className="text-white font-semibold">Go Back</Text>
           </Pressable>
@@ -630,7 +636,7 @@ export default function PlayerScreen() {
             player={player}
             style={{ width: "100%", height: "100%" }}
             nativeControls={true}
-            allowsFullscreen={true}
+            contentFit="contain"
             showsTimecodes={true}
           />
         )}

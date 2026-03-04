@@ -3,13 +3,38 @@ import type { IStreamEngine } from "./IStreamEngine";
 import { HLSEngine } from "./HLSEngine";
 import { HttpVideoEngine } from "./HttpVideoEngine";
 import { TorrentEngine } from "./TorrentEngine";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
+
+/**
+ * Resolve the stream-server bridge URL dynamically so it works on
+ * Simulator, real iOS devices over Wi-Fi, and Android emulators.
+ */
+function resolveBridgeUrl(): string {
+  if (Platform.OS === "web") {
+    return "http://localhost:11470";
+  }
+
+  if (Platform.OS === "android") {
+    return "http://10.0.2.2:11470";
+  }
+
+  // iOS: derive IP from the Metro bundler host Expo already knows about
+  const metroHost = Constants.expoConfig?.hostUri;
+  if (metroHost) {
+    const ip = metroHost.split(":")[0];
+    return `http://${ip}:11470`;
+  }
+
+  return "http://localhost:11470";
+}
 
 export type StreamingStrategy = "debrid" | "local";
 
 export class StreamEngineManager {
   private engines: IStreamEngine[] = [];
   public activeStrategy: StreamingStrategy = "debrid";
-  public bridgeUrl: string = "http://127.0.0.1:11470";
+  public bridgeUrl: string = resolveBridgeUrl();
   public bridgeAvailable: boolean = false;
   private retryTimer: ReturnType<typeof setInterval> | null = null;
 
