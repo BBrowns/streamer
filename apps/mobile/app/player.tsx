@@ -374,20 +374,22 @@ export default function PlayerScreen() {
   );
 
   // Gesture zones for double-tap seek (left = rewind, right = forward)
-  const gestureZones = Platform.OS !== "web" && (
-    <View className="absolute inset-0 flex-row z-10" pointerEvents="box-none">
-      <Pressable
-        className="flex-1"
-        onPress={() => handleDoubleTap("left")}
-        accessibilityLabel="Double-tap to seek backward 10 seconds"
-      />
-      <Pressable
-        className="flex-1"
-        onPress={() => handleDoubleTap("right")}
-        accessibilityLabel="Double-tap to seek forward 10 seconds"
-      />
-    </View>
-  );
+  const gestureZones = Platform.OS !== "web" &&
+    streamState !== "error" &&
+    streamState !== "loading_metrics" && (
+      <View className="absolute inset-0 flex-row z-10" pointerEvents="box-none">
+        <Pressable
+          className="flex-1"
+          onPress={() => handleDoubleTap("left")}
+          accessibilityLabel="Double-tap to seek backward 10 seconds"
+        />
+        <Pressable
+          className="flex-1"
+          onPress={() => handleDoubleTap("right")}
+          accessibilityLabel="Double-tap to seek forward 10 seconds"
+        />
+      </View>
+    );
 
   const settingsModal = (
     <Modal
@@ -629,7 +631,6 @@ export default function PlayerScreen() {
       {headerBar}
 
       <View className="flex-1 justify-center items-center bg-black overflow-hidden relative">
-        {loadingAndErrorOverlays}
         {seekOverlay}
         {gestureZones}
         {player && (
@@ -641,6 +642,7 @@ export default function PlayerScreen() {
             showsTimecodes={true}
           />
         )}
+        {loadingAndErrorOverlays}
       </View>
 
       {infoBar}

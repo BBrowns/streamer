@@ -105,7 +105,7 @@ async function getTorrentServerPort(torrent: any): Promise<number> {
     // createServer() returns a NodeServer that extends Node's http.Server
     const server = torrent.createServer();
 
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(0, "0.0.0.0", () => {
       const addr = server.address();
       if (!addr || typeof addr === "string") {
         return reject(new Error("Could not bind torrent server"));
