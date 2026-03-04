@@ -28,6 +28,26 @@ const torrentServers = new Map<string, { server: any; port: number }>();
 /** Maximum concurrent connections per torrent peer */
 const MAX_CONNS = parseInt(process.env.WT_MAX_CONNS || "55", 10);
 
+/**
+ * Well-known public trackers to ensure fast peer discovery.
+ * WebTorrent supports UDP, HTTP, and WebSocket trackers.
+ */
+const DEFAULT_TRACKERS = [
+  // UDP trackers (fastest for desktop/Node environments)
+  "udp://tracker.opentrackr.org:1337/announce",
+  "udp://open.stealth.si:80/announce",
+  "udp://tracker.torrent.eu.org:451/announce",
+  "udp://tracker.bittor.pw:1337/announce",
+  "udp://public.popcornflix.com:6969/announce",
+  "udp://tracker.dler.org:6969/announce",
+  "udp://exodus.desync.com:6969/announce",
+  "udp://open.demonii.com:1337/announce",
+  // WebSocket trackers (for WebRTC peers)
+  "wss://tracker.openwebtorrent.com",
+  "wss://tracker.btorrent.xyz",
+  "wss://tracker.fastcast.nz",
+];
+
 export function getTorrent(infoHash: string): any {
   return client?.torrents?.find((t: any) => t.infoHash === infoHash);
 }
@@ -35,7 +55,12 @@ export function getTorrent(infoHash: string): any {
 export async function getClient(): Promise<any> {
   if (!client) {
     const WebTorrent = (await import("webtorrent")).default;
-    client = new WebTorrent({ maxConns: MAX_CONNS });
+    client = new WebTorrent({
+      maxConns: MAX_CONNS,
+      tracker: {
+        announce: DEFAULT_TRACKERS,
+      },
+    });
 
     // Clean up server registry when a torrent is removed
     client.on("remove", (torrent: any) => {
