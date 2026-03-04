@@ -21,8 +21,9 @@ SplashScreen.preventAutoHideAsync();
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
-  tracesSampleRate: 1.0,
-  debug: __DEV__,
+  tracesSampleRate: __DEV__ ? 0 : 1.0,
+  debug: false, // disable verbose Sentry console spam in dev
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN, // only enable if DSN is set
 });
 
 const queryClient = new QueryClient({

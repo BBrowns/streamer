@@ -24,13 +24,17 @@ import {
   type CastDevice,
 } from "../components/DesktopCastModal";
 import { useVideoPlayer, VideoView } from "expo-video";
+import Constants from "expo-constants";
 
-// Add dynamically
-let CastButton: any = null;
-let useRemoteMediaClient: any = null;
-let AirPlayButton: any = null;
+// Native casting modules only work in dev-client / standalone builds.
+// In Expo Go the JS package loads but the native view config is missing,
+// which causes a fatal "View config not found" crash.
+const isExpoGo = Constants.appOwnership === "expo";
+let CastButton: React.ComponentType<any> | null = null;
+let useRemoteMediaClient: (() => unknown) | null = null;
+let AirPlayButton: React.ComponentType<any> | null = null;
 
-if (Platform.OS !== "web") {
+if (Platform.OS !== "web" && !isExpoGo) {
   try {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
@@ -83,8 +87,11 @@ export default function PlayerScreen() {
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationRef = useRef(0);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- conditional hook is
+  // fine here because `useRemoteMediaClient` is always null or always defined
+  // for a given build target (Expo Go vs dev-client).
   const remoteMediaClient = useRemoteMediaClient
-    ? useRemoteMediaClient()
+    ? (useRemoteMediaClient() as any)
     : null;
   const lastCastUriRef = useRef<string | null>(null);
 
