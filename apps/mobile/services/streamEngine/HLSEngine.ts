@@ -28,7 +28,7 @@ export class HLSEngine implements IStreamEngine {
     );
   }
 
-  getPlaybackUri(stream: Stream): string {
+  async getPlaybackUri(stream: Stream): Promise<string> {
     return stream.url || "";
   }
 

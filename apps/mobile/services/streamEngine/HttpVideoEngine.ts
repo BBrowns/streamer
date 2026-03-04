@@ -12,7 +12,7 @@ export class HttpVideoEngine implements IStreamEngine {
     return url.startsWith("http://") || url.startsWith("https://");
   }
 
-  getPlaybackUri(stream: Stream): string {
+  async getPlaybackUri(stream: Stream): Promise<string> {
     return stream.url || "";
   }
 
@@ -25,13 +25,13 @@ export class HttpVideoEngine implements IStreamEngine {
     return [];
   }
 
-  setAudioTrack(id: string): void {}
+  setAudioTrack(id: string): void { }
 
   getSubtitles(): SubtitleTrack[] {
     return [];
   }
 
-  setSubtitle(id: string | null): void {}
+  setSubtitle(id: string | null): void { }
 
   on(event: string, callback: Function): void {
     if (!this.listeners.has(event)) {

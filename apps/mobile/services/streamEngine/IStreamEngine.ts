@@ -37,7 +37,7 @@ export interface IStreamEngine {
   canPlay(stream: Stream): boolean;
 
   /** Get the playback URI for the stream */
-  getPlaybackUri(stream: Stream): string;
+  getPlaybackUri(stream: Stream): Promise<string>;
 
   /** Get the engine type identifier */
   getEngineType(): string;

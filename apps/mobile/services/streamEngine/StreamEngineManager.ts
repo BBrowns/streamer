@@ -87,9 +87,9 @@ export class StreamEngineManager {
     return this.engines.find((e) => e.canPlay(stream)) ?? null;
   }
 
-  getPlaybackUri(stream: Stream): string | null {
+  async getPlaybackUri(stream: Stream): Promise<string | null> {
     const engine = this.resolveEngine(stream);
-    return engine ? engine.getPlaybackUri(stream) : null;
+    return engine ? await engine.getPlaybackUri(stream) : null;
   }
 }
 

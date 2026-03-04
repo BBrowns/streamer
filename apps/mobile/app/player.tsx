@@ -39,11 +39,11 @@ if (Platform.OS !== "web" && !isExpoGo) {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
     useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-  } catch {}
+  } catch { }
   try {
     const AirPlay = require("react-native-airplay-btn");
     AirPlayButton = AirPlay.AirPlayButton;
-  } catch {}
+  } catch { }
 }
 
 const SEEK_SECONDS = 10;
@@ -95,12 +95,26 @@ export default function PlayerScreen() {
     : null;
   const lastCastUriRef = useRef<string | null>(null);
 
+  const [playbackUri, setPlaybackUri] = useState<string | null>(null);
+
   const engine = currentStream
     ? streamEngineManager.resolveEngine(currentStream)
     : null;
-  const playbackUri = currentStream
-    ? streamEngineManager.getPlaybackUri(currentStream)
-    : null;
+
+  // Resolve playback URI asynchronously
+  useEffect(() => {
+    let isMounted = true;
+    if (currentStream) {
+      streamEngineManager.getPlaybackUri(currentStream).then((uri) => {
+        if (isMounted) setPlaybackUri(uri);
+      });
+    } else {
+      setPlaybackUri(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [currentStream]);
 
   // Initialize expo-video player
   const player = useVideoPlayer(playbackUri || "", (p) => {

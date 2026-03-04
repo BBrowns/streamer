@@ -7,6 +7,8 @@ export interface Stream {
   externalUrl?: string;
   title?: string;
   name?: string;
+  type?: string;
+  id?: string;
   behaviorHints?: {
     notWebReady?: boolean;
     bingeGroup?: string;

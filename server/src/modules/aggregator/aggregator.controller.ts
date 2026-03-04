@@ -57,6 +57,24 @@ export class AggregatorController {
     return c.json({ streams });
   }
 
+  async resolveStream(c: Context) {
+    const type = c.req.param("type");
+    const id = c.req.param("id");
+    const infoHash = c.req.param("infoHash");
+    const user = c.get("user") as any;
+    const requestId = c.get("requestId") as string;
+
+    const resolved = await aggregatorService.resolveStream(
+      user.userId,
+      type,
+      id,
+      infoHash,
+      requestId,
+    );
+
+    return c.json({ resolved });
+  }
+
   async search(c: Context) {
     const query = c.req.query("q");
     if (!query || query.trim().length === 0) {
