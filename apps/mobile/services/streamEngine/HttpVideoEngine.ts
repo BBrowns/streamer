@@ -12,7 +12,7 @@ export class HttpVideoEngine implements IStreamEngine {
     return url.startsWith("http://") || url.startsWith("https://");
   }
 
-  getPlaybackUri(stream: Stream): string {
+  async getPlaybackUri(stream: Stream): Promise<string> {
     return stream.url || "";
   }
 

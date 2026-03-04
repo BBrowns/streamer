@@ -17,12 +17,15 @@ import {
 } from "../services/queryPersister";
 import "../global.css";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* Expo Go may not have a native splash screen registered */
+});
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
-  tracesSampleRate: 1.0,
-  debug: __DEV__,
+  tracesSampleRate: __DEV__ ? 0 : 1.0,
+  debug: false, // disable verbose Sentry console spam in dev
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN, // only enable if DSN is set
 });
 
 const queryClient = new QueryClient({
@@ -70,7 +73,7 @@ function RootLayout() {
       .catch(() => {
         /* non-critical */
       })
-      .finally(() => SplashScreen.hideAsync());
+      .finally(() => SplashScreen.hideAsync().catch(() => {}));
 
     // Persist cache when app goes to background
     const sub = AppState.addEventListener("change", (next: AppStateStatus) => {
@@ -96,7 +99,14 @@ function RootLayout() {
           contentStyle: { backgroundColor: "#0a0a1a" },
         }}
       >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            headerShown: false,
+            title: "",
+            headerBackTitle: "Back",
+          }}
+        />
         <Stack.Screen
           name="login"
           options={{ title: "Sign In", presentation: "modal" }}

@@ -24,13 +24,17 @@ import {
   type CastDevice,
 } from "../components/DesktopCastModal";
 import { useVideoPlayer, VideoView } from "expo-video";
+import Constants from "expo-constants";
 
-// Add dynamically
-let CastButton: any = null;
-let useRemoteMediaClient: any = null;
-let AirPlayButton: any = null;
+// Native casting modules only work in dev-client / standalone builds.
+// In Expo Go the JS package loads but the native view config is missing,
+// which causes a fatal "View config not found" crash.
+const isExpoGo = Constants.appOwnership === "expo";
+let CastButton: React.ComponentType<any> | null = null;
+let useRemoteMediaClient: (() => unknown) | null = null;
+let AirPlayButton: React.ComponentType<any> | null = null;
 
-if (Platform.OS !== "web") {
+if (Platform.OS !== "web" && !isExpoGo) {
   try {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
@@ -83,17 +87,34 @@ export default function PlayerScreen() {
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationRef = useRef(0);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- conditional hook is
+  // fine here because `useRemoteMediaClient` is always null or always defined
+  // for a given build target (Expo Go vs dev-client).
   const remoteMediaClient = useRemoteMediaClient
-    ? useRemoteMediaClient()
+    ? (useRemoteMediaClient() as any)
     : null;
   const lastCastUriRef = useRef<string | null>(null);
+
+  const [playbackUri, setPlaybackUri] = useState<string | null>(null);
 
   const engine = currentStream
     ? streamEngineManager.resolveEngine(currentStream)
     : null;
-  const playbackUri = currentStream
-    ? streamEngineManager.getPlaybackUri(currentStream)
-    : null;
+
+  // Resolve playback URI asynchronously
+  useEffect(() => {
+    let isMounted = true;
+    if (currentStream) {
+      streamEngineManager.getPlaybackUri(currentStream).then((uri) => {
+        if (isMounted) setPlaybackUri(uri);
+      });
+    } else {
+      setPlaybackUri(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [currentStream]);
 
   // Initialize expo-video player
   const player = useVideoPlayer(playbackUri || "", (p) => {
@@ -142,18 +163,26 @@ export default function PlayerScreen() {
 
   // Subscribe to SSE metrics for torrent streams
   useEffect(() => {
-    if (currentStream?.infoHash && streamState === "idle") {
+    if (currentStream?.infoHash) {
       subscribeToStreamMetrics(currentStream.infoHash);
     }
-  }, [currentStream?.infoHash, streamState, subscribeToStreamMetrics]);
+  }, [currentStream?.infoHash, subscribeToStreamMetrics]);
 
   // Progress reporting to server (every 15s) and local state sync
   useEffect(() => {
     if (!mediaInfo) return;
 
     progressTimerRef.current = setInterval(() => {
-      const currentTime = player?.currentTime || 0;
-      const duration = player?.duration || 0;
+      // expo-video throws FunctionCallException if the native player
+      // object isn't fully initialised yet (e.g. empty source URI).
+      let currentTime = 0;
+      let duration = 0;
+      try {
+        currentTime = player?.currentTime || 0;
+        duration = player?.duration || 0;
+      } catch {
+        return; // player not ready yet, skip this tick
+      }
 
       setProgress(currentTime, duration);
 
@@ -173,8 +202,14 @@ export default function PlayerScreen() {
 
     return () => {
       // Report final progress on unmount
-      const currentTime = player?.currentTime || 0;
-      const duration = player?.duration || 0;
+      let currentTime = 0;
+      let duration = 0;
+      try {
+        currentTime = player?.currentTime || 0;
+        duration = player?.duration || 0;
+      } catch {
+        /* player already deallocated */
+      }
 
       if (currentTime > 0 && duration > 0) {
         updateProgress.mutate({
@@ -263,7 +298,11 @@ export default function PlayerScreen() {
         <Text className="text-error text-base mb-4">No stream selected</Text>
         <Pressable
           className="bg-primary px-5 py-2.5 rounded-xl min-w-[44px] min-h-[44px] justify-center items-center"
-          onPress={() => router.back()}
+          onPress={() => {
+            router.back();
+            // Delay state cleanup so the navigation fires before re-render
+            setTimeout(() => clearPlayer(), 100);
+          }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
@@ -349,20 +388,22 @@ export default function PlayerScreen() {
   );
 
   // Gesture zones for double-tap seek (left = rewind, right = forward)
-  const gestureZones = Platform.OS !== "web" && (
-    <View className="absolute inset-0 flex-row z-10" pointerEvents="box-none">
-      <Pressable
-        className="flex-1"
-        onPress={() => handleDoubleTap("left")}
-        accessibilityLabel="Double-tap to seek backward 10 seconds"
-      />
-      <Pressable
-        className="flex-1"
-        onPress={() => handleDoubleTap("right")}
-        accessibilityLabel="Double-tap to seek forward 10 seconds"
-      />
-    </View>
-  );
+  const gestureZones = Platform.OS !== "web" &&
+    streamState !== "error" &&
+    streamState !== "loading_metrics" && (
+      <View className="absolute inset-0 flex-row z-10" pointerEvents="box-none">
+        <Pressable
+          className="flex-1"
+          onPress={() => handleDoubleTap("left")}
+          accessibilityLabel="Double-tap to seek backward 10 seconds"
+        />
+        <Pressable
+          className="flex-1"
+          onPress={() => handleDoubleTap("right")}
+          accessibilityLabel="Double-tap to seek forward 10 seconds"
+        />
+      </View>
+    );
 
   const settingsModal = (
     <Modal
@@ -470,12 +511,67 @@ export default function PlayerScreen() {
     </Modal>
   );
 
+  const loadingAndErrorOverlays = (
+    <>
+      {streamState === "loading_metrics" && (
+        <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/80">
+          <ActivityIndicator size="large" color="#818cf8" className="mb-4" />
+          <Text className="text-white text-lg font-bold">
+            {streamMetrics?.state === "finding_peers"
+              ? "Finding peers..."
+              : streamMetrics?.state === "connecting"
+                ? "Connecting to peers..."
+                : "Buffering..."}
+          </Text>
+          {streamMetrics && (
+            <Text className="text-textMuted mt-2 text-sm">
+              {streamMetrics.numPeers} peers •{" "}
+              {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
+            </Text>
+          )}
+        </View>
+      )}
+      {streamState === "error" && (
+        <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/95">
+          <MaterialIcons
+            name="error-outline"
+            size={48}
+            color="#fca5a5"
+            className="mb-4"
+          />
+          <Text className="text-error text-lg font-bold text-center mb-2">
+            Connection Failed
+          </Text>
+          <Text className="text-textMuted text-center max-w-[280px] mb-6">
+            {errorMessage || "Unable to load stream"}
+          </Text>
+          <Pressable
+            className="bg-white/10 px-6 py-3 rounded-xl border border-white/20"
+            onPress={() => {
+              router.back();
+              setTimeout(() => clearPlayer(), 100);
+            }}
+          >
+            <Text className="text-white font-semibold">Go Back</Text>
+          </Pressable>
+        </View>
+      )}
+      {isBuffering &&
+        streamState !== "loading_metrics" &&
+        streamState !== "error" && (
+          <View className="absolute inset-0 justify-center items-center z-10 pointer-events-none">
+            <ActivityIndicator size="large" color="#818cf8" />
+          </View>
+        )}
+    </>
+  );
+
   // Web fallback using HTML5 video
   if (Platform.OS === "web") {
     return (
       <View className="flex-1 bg-black">
         {headerBar}
-        <View className="flex-1 justify-center items-center bg-black">
+        <View className="flex-1 justify-center items-center bg-black overflow-hidden relative">
           {activeCastDevice ? (
             <View className="flex-1 w-full justify-center items-center bg-[#050510]">
               {mediaInfo?.poster && (
@@ -514,13 +610,20 @@ export default function PlayerScreen() {
               </View>
             </View>
           ) : (
-            /* @ts-ignore — RNW doesn't know about video tag */
-            <video
-              src={playbackUri}
-              controls
-              autoPlay
-              style={{ width: "100%", height: "100%", backgroundColor: "#000" }}
-            />
+            <>
+              {loadingAndErrorOverlays}
+              {/* @ts-ignore — RNW doesn't know about video tag */}
+              <video
+                src={playbackUri}
+                controls
+                autoPlay
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: "#000",
+                }}
+              />
+            </>
           )}
         </View>
         {infoBar}
@@ -542,53 +645,6 @@ export default function PlayerScreen() {
       {headerBar}
 
       <View className="flex-1 justify-center items-center bg-black overflow-hidden relative">
-        {streamState === "loading_metrics" && (
-          <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/80">
-            <ActivityIndicator size="large" color="#818cf8" className="mb-4" />
-            <Text className="text-white text-lg font-bold">
-              {streamMetrics?.state === "finding_peers"
-                ? "Finding peers..."
-                : streamMetrics?.state === "connecting"
-                  ? "Connecting to peers..."
-                  : "Buffering..."}
-            </Text>
-            {streamMetrics && (
-              <Text className="text-textMuted mt-2 text-sm">
-                {streamMetrics.numPeers} peers •{" "}
-                {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
-              </Text>
-            )}
-          </View>
-        )}
-        {streamState === "error" && (
-          <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/95">
-            <MaterialIcons
-              name="error-outline"
-              size={48}
-              color="#fca5a5"
-              className="mb-4"
-            />
-            <Text className="text-error text-lg font-bold text-center mb-2">
-              Connection Failed
-            </Text>
-            <Text className="text-textMuted text-center max-w-[280px] mb-6">
-              {errorMessage || "Unable to load stream"}
-            </Text>
-            <Pressable
-              className="bg-white/10 px-6 py-3 rounded-xl border border-white/20"
-              onPress={() => router.back()}
-            >
-              <Text className="text-white font-semibold">Go Back</Text>
-            </Pressable>
-          </View>
-        )}
-        {isBuffering &&
-          streamState !== "loading_metrics" &&
-          streamState !== "error" && (
-            <View className="absolute inset-0 justify-center items-center z-10 pointer-events-none">
-              <ActivityIndicator size="large" color="#818cf8" />
-            </View>
-          )}
         {seekOverlay}
         {gestureZones}
         {player && (
@@ -596,10 +652,11 @@ export default function PlayerScreen() {
             player={player}
             style={{ width: "100%", height: "100%" }}
             nativeControls={true}
-            allowsFullscreen={true}
+            contentFit="contain"
             showsTimecodes={true}
           />
         )}
+        {loadingAndErrorOverlays}
       </View>
 
       {infoBar}

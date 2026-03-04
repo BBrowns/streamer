@@ -2,6 +2,8 @@ import axios from "axios";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
 import { createAddonPolicy } from "./resilience.js";
+import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver.js";
+import { featureFlags } from "../feature-flag/feature-flag.service.js";
 import type {
   AddonManifest,
   MetaPreview,
@@ -160,6 +162,32 @@ export class AggregatorService {
         (r): r is PromiseFulfilledResult<Stream[]> => r.status === "fulfilled",
       )
       .flatMap((r) => r.value);
+  }
+
+  /** Resolve a specific stream (torrent) via Debrid if enabled, otherwise return original */
+  async resolveStream(
+    userId: string,
+    type: string,
+    id: string,
+    infoHash: string,
+    requestId: string,
+  ) {
+    const isRdEnabled = featureFlags.getAll()["real-debrid"];
+    const magnet = `magnet:?xt=urn:btih:${infoHash}`;
+
+    if (isRdEnabled) {
+      const rd = new RealDebridResolver();
+      const resolved = await rd.resolve({ infoHash, title: id }, requestId);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    // Fallback: Return original magnet link
+    return {
+      url: magnet,
+      type: "magnet",
+    };
   }
 
   /** Search across all add-ons and all content types simultaneously, deduplicating by ID */

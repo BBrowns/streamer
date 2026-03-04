@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import EventSource from "react-native-sse";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 import type { Stream } from "@streamer/shared";
 
 export interface MediaInfo {
@@ -103,9 +105,19 @@ export const usePlayerStore = create<PlayerState>()(
           clearTimeout(state._peerTimeout);
         }
 
-        const backendUrl = "http://127.0.0.1:11470";
+        // Derive bridge URL dynamically from Metro host
+        let bridgeUrl: string;
+        if (Platform.OS === "web") {
+          bridgeUrl = "http://localhost:11470";
+        } else if (Platform.OS === "android") {
+          bridgeUrl = "http://10.0.2.2:11470";
+        } else {
+          const metroHost = Constants.expoConfig?.hostUri;
+          const ip = metroHost ? metroHost.split(":")[0] : "localhost";
+          bridgeUrl = `http://${ip}:11470`;
+        }
         const es = new EventSource(
-          `${backendUrl}/api/torrent/${infoHash}/metrics`,
+          `${bridgeUrl}/api/torrent/${infoHash}/metrics`,
         );
 
         const timeout = setTimeout(() => {
@@ -116,12 +128,12 @@ export const usePlayerStore = create<PlayerState>()(
             set({
               streamState: "error",
               errorMessage:
-                "No peers found after 15 seconds. Please try another source.",
+                "No peers found after 45 seconds. The torrent may be inactive or the stream-server may not be reachable.",
               _eventSource: null,
               _peerTimeout: null,
             });
           }
-        }, 15000);
+        }, 45000);
 
         es.addEventListener("message", (event) => {
           if (!event.data) return;

@@ -4,14 +4,12 @@ import {
   FlatList,
   Image,
   Pressable,
-  TextInput,
   RefreshControl,
   useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useState, useEffect, useCallback, memo } from "react";
+import { useCallback, memo } from "react";
 import { useCatalog } from "../../hooks/useCatalog";
-import { useGlobalSearch } from "../../hooks/useGlobalSearch";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { MetaPreview } from "@streamer/shared";
@@ -23,11 +21,11 @@ import { OfflineBanner } from "../../components/ui/OfflineBanner";
 /** Responsive column count based on screen width */
 function useResponsiveColumns(): number {
   const { width } = useWindowDimensions();
-  if (width >= 1280) return 6; // Desktop wide
-  if (width >= 1024) return 5; // Desktop
-  if (width >= 768) return 4; // Tablet
-  if (width >= 480) return 3; // Large phone / landscape
-  return 2; // Phone portrait
+  if (width >= 1280) return 6;
+  if (width >= 1024) return 5;
+  if (width >= 768) return 4;
+  if (width >= 480) return 3;
+  return 2;
 }
 
 const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
@@ -72,35 +70,13 @@ function HomeContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const numColumns = useResponsiveColumns();
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search.trim());
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  const isSearching = debouncedSearch.length >= 2;
-
-  const { data: searchResults, isLoading: searchLoading } =
-    useGlobalSearch(debouncedSearch);
-  const { data: movies, isLoading: catalogLoading } = useCatalog("movie");
-
-  const displayData = isSearching ? searchResults : movies;
-  const isLoading = isSearching ? searchLoading : catalogLoading;
+  const { data: movies, isLoading } = useCatalog("movie");
 
   const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await queryClient.invalidateQueries({
-      queryKey: isSearching ? ["search"] : ["catalog"],
-    });
-    setRefreshing(false);
-  }, [queryClient, isSearching]);
+    await queryClient.invalidateQueries({ queryKey: ["catalog"] });
+  }, [queryClient]);
 
-  // Wait for auth hydration to prevent flash of unauthenticated UI
   if (!isHydrated) {
     return (
       <View className="flex-1 bg-background">
@@ -137,65 +113,28 @@ function HomeContent() {
     <View className="flex-1 bg-background">
       <OfflineBanner />
 
-      {/* Search Bar */}
-      <View className="flex-row items-center px-4 py-3">
-        <TextInput
-          className="flex-1 bg-surface rounded-xl px-4 py-3 text-textMain text-sm border border-primary/20"
-          placeholder="🔍 Search all add-ons..."
-          placeholderTextColor="#6b7280"
-          value={search}
-          onChangeText={setSearch}
-          accessibilityLabel="Search all add-ons"
-          accessibilityHint="Type at least 2 characters to search"
-          returnKeyType="search"
-        />
-        {isSearching && (
-          <Pressable
-            className="ml-2 w-9 h-9 rounded-full bg-error/15 justify-center items-center"
-            onPress={() => setSearch("")}
-            accessibilityRole="button"
-            accessibilityLabel="Clear search"
-          >
-            <Text className="text-error font-bold text-sm">✕</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {isSearching && (
-        <Text className="text-textMuted text-[11px] px-4 mb-2">
-          Searching across all installed add-ons...
-        </Text>
-      )}
-
-      {/* Loading: Skeleton grid */}
       {isLoading && <SkeletonCardGrid count={numColumns * 3} />}
 
-      {/* Empty state */}
-      {!!displayData && displayData.length === 0 && !isLoading && (
+      {!!movies && movies.length === 0 && !isLoading && (
         <EmptyState
-          emoji={isSearching ? "🔍" : "📦"}
-          title={isSearching ? "No Results" : "No Content Found"}
-          description={
-            isSearching
-              ? `No results for "${debouncedSearch}"`
-              : "Install some add-ons in Settings to start browsing."
-          }
-          actionLabel={isSearching ? undefined : "Manage Add-ons"}
-          onAction={isSearching ? undefined : () => router.push("/addons")}
+          emoji="📦"
+          title="No Content Found"
+          description="Install some add-ons in Settings to start browsing."
+          actionLabel="Manage Add-ons"
+          onAction={() => router.push("/addons")}
         />
       )}
 
-      {/* Content grid */}
-      {!isLoading && displayData && displayData.length > 0 && (
+      {!isLoading && movies && movies.length > 0 && (
         <FlatList
-          data={displayData}
+          data={movies}
           keyExtractor={(item) => item.id}
           key={`grid-${numColumns}`}
           numColumns={numColumns}
           contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: 20 }}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={false}
               onRefresh={handleRefresh}
               tintColor="#818cf8"
               colors={["#818cf8"]}

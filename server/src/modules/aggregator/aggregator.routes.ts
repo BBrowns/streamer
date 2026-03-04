@@ -15,3 +15,6 @@ aggregatorRouter.get("/meta/:type/:id", (c) => aggregatorController.getMeta(c));
 aggregatorRouter.get("/stream/:type/:id", (c) =>
   aggregatorController.getStreams(c),
 );
+aggregatorRouter.get("/stream/resolve/:type/:id/:infoHash", (c) =>
+  aggregatorController.resolveStream(c),
+);

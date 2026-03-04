@@ -23,10 +23,65 @@ import type { Stream } from "@streamer/shared";
 import type { MediaInfo } from "../../../stores/playerStore";
 import { useCallback } from "react";
 
-/** Check if a stream is directly playable (has a real HTTP(S) URL) */
-function isPlayable(stream: Stream): boolean {
-  const uri = streamEngineManager.getPlaybackUri(stream);
-  return !!uri && uri.length > 0;
+function StreamItem({
+  stream,
+  index,
+  onPress,
+}: {
+  stream: Stream;
+  index: number;
+  onPress: () => void;
+}) {
+  const [playable, setPlayable] = useState(false);
+  const engine = streamEngineManager.resolveEngine(stream);
+
+  useEffect(() => {
+    let isMounted = true;
+    streamEngineManager.getPlaybackUri(stream).then((uri) => {
+      if (isMounted) setPlayable(!!uri && uri.length > 0);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [stream]);
+
+  return (
+    <Pressable
+      style={[styles.streamCard, !playable && styles.streamCardDisabled]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${playable ? "Play" : "Torrent"} stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
+      accessibilityHint={
+        playable
+          ? "Opens the video player"
+          : "Requires the stream-server bridge"
+      }
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.streamTitle}>
+          {stream.title || stream.name || `Stream ${index + 1}`}
+        </Text>
+        <View style={styles.streamBadgeRow}>
+          <Text style={styles.streamEngine}>
+            {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
+          </Text>
+          {!playable && (
+            <View style={styles.torrentBadge}>
+              <Text style={styles.torrentBadgeText}>🧲 Torrent · Bridge</Text>
+            </View>
+          )}
+          {playable && (
+            <View style={styles.playableBadge}>
+              <Text style={styles.playableBadgeText}>✓ Playable</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <Text style={[styles.playIcon, !playable && styles.playIconDisabled]}>
+        {playable ? "▶" : "🔒"}
+      </Text>
+    </Pressable>
+  );
 }
 
 export default function DetailScreen() {
@@ -56,13 +111,16 @@ export default function DetailScreen() {
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
   const handlePlayStream = async (stream: Stream) => {
-    // For torrent streams, re-probe bridge before blocking
-    if (!isPlayable(stream) && stream.infoHash) {
+    const uri = await streamEngineManager.getPlaybackUri(stream);
+    const playable = !!uri && uri.length > 0;
+
+    // For torrent streams, re-probe bridge if not currently "playable" via debrid or existing bridge
+    if (!playable && stream.infoHash) {
       const bridgeUp = await streamEngineManager.detectBridge();
       if (bridgeUp) {
-        // Bridge just came online — now playable
-        const uri = streamEngineManager.getPlaybackUri(stream);
-        if (uri && uri.length > 0) {
+        // Bridge just came online — retry resolution
+        const retryUri = await streamEngineManager.getPlaybackUri(stream);
+        if (retryUri && retryUri.length > 0) {
           const mediaInfo: MediaInfo = {
             type: (type as "movie" | "series") ?? "movie",
             itemId: id,
@@ -76,9 +134,9 @@ export default function DetailScreen() {
       }
     }
 
-    if (!isPlayable(stream)) {
+    if (!playable) {
       const msg = stream.infoHash
-        ? "This is a torrent stream. Start the stream-server daemon first:\n\nnpm run dev:stream-server"
+        ? "This is a torrent stream. Start the stream-server daemon first:\n\nnpm run dev:stream-server\n\nAlternatively, enable Real-Debrid in your settings if available."
         : "This stream does not provide a direct playable URL. It may require additional resolution.";
 
       if (Platform.OS === "web") {
@@ -192,58 +250,13 @@ export default function DetailScreen() {
               <ActivityIndicator color="#818cf8" />
             ) : !!streams && streams.length > 0 ? (
               streams.map((stream, i) => {
-                const engine = streamEngineManager.resolveEngine(stream);
-                const playable = isPlayable(stream);
-
                 return (
-                  <Pressable
+                  <StreamItem
                     key={i}
-                    style={[
-                      styles.streamCard,
-                      !playable && styles.streamCardDisabled,
-                    ]}
+                    stream={stream}
+                    index={i}
                     onPress={() => handlePlayStream(stream)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${playable ? "Play" : "Torrent"} stream: ${stream.title || stream.name || `Stream ${i + 1}`}`}
-                    accessibilityHint={
-                      playable
-                        ? "Opens the video player"
-                        : "Requires the stream-server bridge"
-                    }
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.streamTitle}>
-                        {stream.title || stream.name || `Stream ${i + 1}`}
-                      </Text>
-                      <View style={styles.streamBadgeRow}>
-                        <Text style={styles.streamEngine}>
-                          {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
-                        </Text>
-                        {!playable && (
-                          <View style={styles.torrentBadge}>
-                            <Text style={styles.torrentBadgeText}>
-                              🧲 Torrent · Bridge
-                            </Text>
-                          </View>
-                        )}
-                        {playable && (
-                          <View style={styles.playableBadge}>
-                            <Text style={styles.playableBadgeText}>
-                              ✓ Playable
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    <Text
-                      style={[
-                        styles.playIcon,
-                        !playable && styles.playIconDisabled,
-                      ]}
-                    >
-                      {playable ? "▶" : "🔒"}
-                    </Text>
-                  </Pressable>
+                  />
                 );
               })
             ) : (

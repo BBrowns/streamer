@@ -5,6 +5,7 @@ import type {
   SubtitleTrack,
   StreamStats,
 } from "./IStreamEngine";
+import { api } from "../api";
 
 interface BridgeConfig {
   activeStrategy: string;
@@ -26,16 +27,50 @@ export class TorrentEngine implements IStreamEngine {
     return !!stream.infoHash;
   }
 
-  getPlaybackUri(stream: Stream): string {
+  async getPlaybackUri(stream: Stream): Promise<string> {
+    // 1. Try to resolve via Backend (Real-Debrid Fallback)
+    try {
+      const { data } = await api.get(
+        `/api/stream/resolve/${stream.type || "movie"}/${stream.id || stream.infoHash}/${stream.infoHash}`,
+      );
+      if (
+        data.resolved &&
+        data.resolved.url &&
+        data.resolved.type !== "magnet"
+      ) {
+        console.log("[TorrentEngine] Resolved via Debrid:", data.resolved.url);
+        return data.resolved.url;
+      }
+    } catch (e) {
+      console.warn(
+        "[TorrentEngine] Debrid resolution failed, falling back to local bridge",
+      );
+    }
+
+    // 2. Fallback to Local Bridge (stream-server)
     if (this.bridge.activeStrategy === "local" && this.bridge.bridgeAvailable) {
       // Build the magnet link or infohash to send to the bridge
-      const magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
+      let magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
+
+      // Append default trackers directly to the magnet link
+      const trackers = [
+        "http://tracker.opentrackr.org:1337/announce",
+        "http://tracker.renhas.cl:6969/announce",
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://tracker.internetwarriors.net:1337/announce",
+        "udp://tracker.leechers-paradise.org:6969/announce",
+        "wss://tracker.openwebtorrent.com",
+        "wss://tracker.btorrent.xyz",
+        "wss://tracker.fastcast.nz",
+      ];
+      for (const tr of trackers) {
+        magnet += `&tr=${encodeURIComponent(tr)}`;
+      }
+
       this.startStatsPolling();
       return `${this.bridge.bridgeUrl}/stream?magnet=${encodeURIComponent(magnet)}`;
     }
 
-    // Debrid strategy would be handled differently (e.g. creating the direct link before passing to HttpVideoEngine)
-    // If no bridge, return empty string to trigger Unsupported Alert
     return "";
   }
 
