@@ -91,7 +91,7 @@ export async function destroyClient(): Promise<void> {
   if (serverInstance) {
     try {
       serverInstance.close();
-    } catch { }
+    } catch {}
     serverInstance = null;
     serverPort = 0;
   }
@@ -131,7 +131,10 @@ function getLargestFile(torrent: any): any {
 export async function streamRequest(req: Request, res: Response) {
   const magnet = req.query.magnet as string;
 
-  console.log(`[stream-server] Received magnet request at:`, new Date().toISOString());
+  console.log(
+    `[stream-server] Received magnet request at:`,
+    new Date().toISOString(),
+  );
   console.log(`[stream-server] Raw req.query.magnet:`, magnet);
 
   if (!magnet) {

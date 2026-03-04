@@ -23,8 +23,6 @@ import type { Stream } from "@streamer/shared";
 import type { MediaInfo } from "../../../stores/playerStore";
 import { useCallback } from "react";
 
-
-
 function StreamItem({
   stream,
   index,

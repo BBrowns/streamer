@@ -33,12 +33,18 @@ export class TorrentEngine implements IStreamEngine {
       const { data } = await api.get(
         `/api/stream/resolve/${stream.type || "movie"}/${stream.id || stream.infoHash}/${stream.infoHash}`,
       );
-      if (data.resolved && data.resolved.url && data.resolved.type !== "magnet") {
+      if (
+        data.resolved &&
+        data.resolved.url &&
+        data.resolved.type !== "magnet"
+      ) {
         console.log("[TorrentEngine] Resolved via Debrid:", data.resolved.url);
         return data.resolved.url;
       }
     } catch (e) {
-      console.warn("[TorrentEngine] Debrid resolution failed, falling back to local bridge");
+      console.warn(
+        "[TorrentEngine] Debrid resolution failed, falling back to local bridge",
+      );
     }
 
     // 2. Fallback to Local Bridge (stream-server)
@@ -102,11 +108,11 @@ export class TorrentEngine implements IStreamEngine {
   getAudioTracks(): AudioTrack[] {
     return [];
   }
-  setAudioTrack(id: string): void { }
+  setAudioTrack(id: string): void {}
   getSubtitles(): SubtitleTrack[] {
     return [];
   }
-  setSubtitle(id: string | null): void { }
+  setSubtitle(id: string | null): void {}
 
   on(event: string, callback: Function): void {
     if (!this.listeners.has(event)) {

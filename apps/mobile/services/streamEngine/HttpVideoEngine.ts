@@ -25,13 +25,13 @@ export class HttpVideoEngine implements IStreamEngine {
     return [];
   }
 
-  setAudioTrack(id: string): void { }
+  setAudioTrack(id: string): void {}
 
   getSubtitles(): SubtitleTrack[] {
     return [];
   }
 
-  setSubtitle(id: string | null): void { }
+  setSubtitle(id: string | null): void {}
 
   on(event: string, callback: Function): void {
     if (!this.listeners.has(event)) {

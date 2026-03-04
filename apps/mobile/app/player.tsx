@@ -39,11 +39,11 @@ if (Platform.OS !== "web" && !isExpoGo) {
     const GoogleCast = require("react-native-google-cast");
     CastButton = GoogleCast.CastButton;
     useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-  } catch { }
+  } catch {}
   try {
     const AirPlay = require("react-native-airplay-btn");
     AirPlayButton = AirPlay.AirPlayButton;
-  } catch { }
+  } catch {}
 }
 
 const SEEK_SECONDS = 10;

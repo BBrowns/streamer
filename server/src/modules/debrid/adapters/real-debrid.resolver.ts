@@ -183,7 +183,7 @@ export class RealDebridResolver implements IDebridResolver {
         );
         // Clean up the unfinished torrent from the user's account
         await this.request("DELETE", `/torrents/delete/${torrentId}`).catch(
-          () => { },
+          () => {},
         );
         return null;
       }
