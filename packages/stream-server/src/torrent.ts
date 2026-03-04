@@ -5,13 +5,9 @@
  * 1. Client hits GET /stream?magnet=...
  * 2. Bridge adds torrent to webtorrent client (non-blocking)
  * 3. Bridge waits for 'ready' event (metadata received, files populated)
- * 4. Bridge starts a per-torrent HTTP server on a random port (if not already running)
- *    The webtorrent NodeServer handles range requests, partial content, DLNA etc natively
+ * 4. The shared client HTTP server (started once) serves all torrents
  * 5. Bridge returns 302 redirect → webtorrent server URL for the largest video file
  * 6. expo-video follows redirect, streams directly from webtorrent
- *
- * This avoids blocking a single HTTP request for up to 60s waiting for metadata.
- * The webtorrent server streams pieces as they arrive — no full download needed.
  */
 import { Request, Response } from "express";
 import { waitForReady } from "./torrent-helpers.js";
@@ -22,8 +18,9 @@ export { handleTorrent, waitForReady, mimeFromExt } from "./torrent-helpers.js";
 // Lazily initialized webtorrent client
 let client: any = null;
 
-// Per-torrent server registry: infoHash → { server, port }
-const torrentServers = new Map<string, { server: any; port: number }>();
+// Shared HTTP server instance (created once via client.createServer())
+let serverInstance: any = null;
+let serverPort: number = 0;
 
 /** Maximum concurrent connections per torrent peer */
 const MAX_CONNS = parseInt(process.env.WT_MAX_CONNS || "55", 10);
@@ -62,37 +59,41 @@ export async function getClient(): Promise<any> {
       },
     });
 
-    // Clean up server registry when a torrent is removed
-    client.on("remove", (torrent: any) => {
-      const entry = torrentServers.get(torrent.infoHash);
-      if (entry) {
-        try {
-          entry.server.close();
-        } catch {}
-        torrentServers.delete(torrent.infoHash);
-      }
-    });
-
     client.on("error", (err: Error) => {
       console.error("[stream-server] WebTorrent client error:", err.message);
+    });
+
+    // Create the shared HTTP server (webtorrent v2 API)
+    serverInstance = client.createServer();
+    await new Promise<void>((resolve, reject) => {
+      serverInstance.server.listen(0, "0.0.0.0", () => {
+        const addr = serverInstance.server.address();
+        if (addr && typeof addr !== "string") {
+          serverPort = addr.port;
+          console.log(
+            `[stream-server] WebTorrent HTTP server on port ${serverPort}`,
+          );
+        }
+        resolve();
+      });
+      serverInstance.server.on("error", reject);
     });
   }
   return client;
 }
 
 /**
- * Gracefully destroy the webtorrent client and all per-torrent HTTP servers.
- * Called on process shutdown and exposed for testing.
+ * Gracefully destroy the webtorrent client and shared HTTP server.
  */
 export async function destroyClient(): Promise<void> {
   if (!client) return;
 
-  // Shut down all per-torrent HTTP servers
-  for (const [hash, entry] of torrentServers) {
+  if (serverInstance) {
     try {
-      entry.server.close();
+      serverInstance.close();
     } catch {}
-    torrentServers.delete(hash);
+    serverInstance = null;
+    serverPort = 0;
   }
 
   return new Promise<void>((resolve) => {
@@ -119,39 +120,12 @@ process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 process.on("SIGINT", () => handleShutdown("SIGINT"));
 
 /**
- * Start (or retrieve) the webtorrent HTTP server for a specific torrent.
- * Returns the port number once the server is listening.
+ * Pick the largest file from a torrent (most likely the video).
  */
-async function getTorrentServerPort(torrent: any): Promise<number> {
-  const existing = torrentServers.get(torrent.infoHash);
-  if (existing) return existing.port;
-
-  return new Promise((resolve, reject) => {
-    // createServer() returns a NodeServer that extends Node's http.Server
-    const server = torrent.createServer();
-
-    server.listen(0, "0.0.0.0", () => {
-      const addr = server.address();
-      if (!addr || typeof addr === "string") {
-        return reject(new Error("Could not bind torrent server"));
-      }
-      torrentServers.set(torrent.infoHash, { server, port: addr.port });
-      resolve(addr.port);
-    });
-
-    server.on("error", (err: Error) => reject(err));
-  });
-}
-
-/**
- * Pick the largest file from a torrent and return its path for the redirect URL.
- * webtorrent's server uses: /webtorrent/<infoHash>/<filePath>
- */
-function getLargestFilePath(torrent: any): string {
-  const file: any = torrent.files.reduce((a: any, b: any) =>
+function getLargestFile(torrent: any): any {
+  return torrent.files.reduce((a: any, b: any) =>
     (a.length ?? 0) > (b.length ?? 0) ? a : b,
   );
-  return file.path;
 }
 
 export async function streamRequest(req: Request, res: Response) {
@@ -175,7 +149,7 @@ export async function streamRequest(req: Request, res: Response) {
       torrent = torrentClient.add(magnet);
     }
 
-    // Wait until metadata is received and files[] is populated (default timeout: 2 min)
+    // Wait until metadata is received and files[] is populated (timeout: 2 min)
     await waitForReady(torrent, 120_000);
   } catch (err: any) {
     const msg = err?.message ?? "Failed to load torrent";
@@ -202,21 +176,18 @@ export async function streamRequest(req: Request, res: Response) {
   }
 
   try {
-    const port = await getTorrentServerPort(torrent);
-    const filePath = getLargestFilePath(torrent);
-    // Use the same host as the incoming request so mobile callers (LAN IP) can follow the redirect
+    const file = getLargestFile(torrent);
+    // file.streamURL is a relative path like /webtorrent/<infoHash>/<encodedFilePath>
+    const streamPath = file.streamURL;
+    // Use the incoming request's hostname so the mobile client can follow the redirect
     const host = req.hostname || "127.0.0.1";
-    // webtorrent server URL format: /webtorrent/<infoHash>/<filePath>
-    const streamUrl = `http://${host}:${port}/webtorrent/${torrent.infoHash}/${encodeURIComponent(filePath)}`;
+    const streamUrl = `http://${host}:${serverPort}${streamPath}`;
     console.log(
       `[stream-server] Redirecting to webtorrent server: ${streamUrl}`,
     );
     return res.redirect(302, streamUrl);
   } catch (err: any) {
-    console.error(
-      "[stream-server] Failed to start torrent HTTP server:",
-      err?.message,
-    );
+    console.error("[stream-server] Failed to build stream URL:", err?.message);
     return res.status(503).json({ error: "Failed to start stream server" });
   }
 }
