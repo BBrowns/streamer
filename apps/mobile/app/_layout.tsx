@@ -17,7 +17,9 @@ import {
 } from "../services/queryPersister";
 import "../global.css";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* Expo Go may not have a native splash screen registered */
+});
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
@@ -71,7 +73,7 @@ function RootLayout() {
       .catch(() => {
         /* non-critical */
       })
-      .finally(() => SplashScreen.hideAsync());
+      .finally(() => SplashScreen.hideAsync().catch(() => {}));
 
     // Persist cache when app goes to background
     const sub = AppState.addEventListener("change", (next: AppStateStatus) => {

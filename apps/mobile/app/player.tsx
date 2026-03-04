@@ -159,8 +159,16 @@ export default function PlayerScreen() {
     if (!mediaInfo) return;
 
     progressTimerRef.current = setInterval(() => {
-      const currentTime = player?.currentTime || 0;
-      const duration = player?.duration || 0;
+      // expo-video throws FunctionCallException if the native player
+      // object isn't fully initialised yet (e.g. empty source URI).
+      let currentTime = 0;
+      let duration = 0;
+      try {
+        currentTime = player?.currentTime || 0;
+        duration = player?.duration || 0;
+      } catch {
+        return; // player not ready yet, skip this tick
+      }
 
       setProgress(currentTime, duration);
 
@@ -180,8 +188,14 @@ export default function PlayerScreen() {
 
     return () => {
       // Report final progress on unmount
-      const currentTime = player?.currentTime || 0;
-      const duration = player?.duration || 0;
+      let currentTime = 0;
+      let duration = 0;
+      try {
+        currentTime = player?.currentTime || 0;
+        duration = player?.duration || 0;
+      } catch {
+        /* player already deallocated */
+      }
 
       if (currentTime > 0 && duration > 0) {
         updateProgress.mutate({
