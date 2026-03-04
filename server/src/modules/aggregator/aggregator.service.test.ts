@@ -55,12 +55,12 @@ describe("AggregatorService", () => {
         size: 100,
       };
       vi.mocked(RealDebridResolver).mockImplementation(
-        () =>
-          ({
-            resolve: vi.fn().mockResolvedValue(mockResolved),
-            canResolve: vi.fn().mockReturnValue(true),
-            getAccountStatus: vi.fn(),
-          }) as any,
+        function (this: any) {
+          this.resolve = vi.fn().mockResolvedValue(mockResolved);
+          this.canResolve = vi.fn().mockReturnValue(true);
+          this.getAccountStatus = vi.fn();
+          return this;
+        } as any,
       );
 
       const result = await service.resolveStream(
@@ -109,12 +109,12 @@ describe("AggregatorService", () => {
       });
 
       vi.mocked(RealDebridResolver).mockImplementation(
-        () =>
-          ({
-            resolve: vi.fn().mockResolvedValue(null),
-            canResolve: vi.fn().mockReturnValue(true),
-            getAccountStatus: vi.fn(),
-          }) as any,
+        function (this: any) {
+          this.resolve = vi.fn().mockResolvedValue(null);
+          this.canResolve = vi.fn().mockReturnValue(true);
+          this.getAccountStatus = vi.fn();
+          return this;
+        } as any,
       );
 
       const result = await service.resolveStream(
