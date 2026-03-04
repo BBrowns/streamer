@@ -285,8 +285,9 @@ export default function PlayerScreen() {
         <Pressable
           className="bg-primary px-5 py-2.5 rounded-xl min-w-[44px] min-h-[44px] justify-center items-center"
           onPress={() => {
-            clearPlayer();
             router.back();
+            // Delay state cleanup so the navigation fires before re-render
+            setTimeout(() => clearPlayer(), 100);
           }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -531,8 +532,8 @@ export default function PlayerScreen() {
           <Pressable
             className="bg-white/10 px-6 py-3 rounded-xl border border-white/20"
             onPress={() => {
-              clearPlayer();
               router.back();
+              setTimeout(() => clearPlayer(), 100);
             }}
           >
             <Text className="text-white font-semibold">Go Back</Text>

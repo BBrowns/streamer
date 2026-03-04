@@ -128,12 +128,12 @@ export const usePlayerStore = create<PlayerState>()(
             set({
               streamState: "error",
               errorMessage:
-                "No peers found after 15 seconds. Please try another source.",
+                "No peers found after 45 seconds. The torrent may be inactive or the stream-server may not be reachable.",
               _eventSource: null,
               _peerTimeout: null,
             });
           }
-        }, 15000);
+        }, 45000);
 
         es.addEventListener("message", (event) => {
           if (!event.data) return;
