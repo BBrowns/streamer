@@ -10,9 +10,14 @@ jest.mock("expo-secure-store", () => ({
 // Mock react-native-reanimated
 jest.mock("react-native-reanimated", () => {
   const Reanimated = require("react-native-reanimated/mock");
-  Reanimated.default.call = () => {};
+  Reanimated.default.call = () => { };
   return Reanimated;
 });
+
+// Mock AsyncStorage
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
+);
 
 // Mock expo-router
 jest.mock("expo-router", () => ({
@@ -26,7 +31,7 @@ jest.mock("expo-router", () => ({
 
 beforeAll(() => {
   // Suppress console errors for unhandled promise rejections if any during tests
-  jest.spyOn(console, "error").mockImplementation(() => {});
+  jest.spyOn(console, "error").mockImplementation(() => { });
 });
 
 // Mock window for React 19 test renderer

@@ -7,7 +7,7 @@ import {
 import type { LibraryService } from "../domain/library.service.js";
 
 export class LibraryController {
-  constructor(private readonly service: LibraryService) { }
+  constructor(private readonly service: LibraryService) {}
 
   async addToLibrary(c: Context) {
     const body = await c.req.json();

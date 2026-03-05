@@ -5,16 +5,10 @@
       "name": "bittorrent-tracker",
       "severity": "high",
       "isDirect": false,
-      "via": [
-        "ip"
-      ],
-      "effects": [
-        "torrent-discovery"
-      ],
+      "via": ["ip"],
+      "effects": ["torrent-discovery"],
       "range": ">=1.0.0",
-      "nodes": [
-        "node_modules/bittorrent-tracker"
-      ],
+      "nodes": ["node_modules/bittorrent-tracker"],
       "fixAvailable": true
     },
     "electron": {
@@ -29,10 +23,7 @@
           "title": "Electron has ASAR Integrity Bypass via resource modification",
           "url": "https://github.com/advisories/GHSA-vmqv-hx8q-j7mg",
           "severity": "moderate",
-          "cwe": [
-            "CWE-94",
-            "CWE-829"
-          ],
+          "cwe": ["CWE-94", "CWE-829"],
           "cvss": {
             "score": 6.1,
             "vectorString": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:L/I:H/A:L"
@@ -42,9 +33,7 @@
       ],
       "effects": [],
       "range": "<35.7.5",
-      "nodes": [
-        "node_modules/electron"
-      ],
+      "nodes": ["node_modules/electron"],
       "fixAvailable": {
         "name": "electron",
         "version": "40.6.1",
@@ -63,9 +52,7 @@
           "title": "ip SSRF improper categorization in isPublic",
           "url": "https://github.com/advisories/GHSA-2p57-rm9w-gvfp",
           "severity": "high",
-          "cwe": [
-            "CWE-918"
-          ],
+          "cwe": ["CWE-918"],
           "cvss": {
             "score": 8.1,
             "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
@@ -73,14 +60,9 @@
           "range": "<=2.0.1"
         }
       ],
-      "effects": [
-        "bittorrent-tracker",
-        "ip-set"
-      ],
+      "effects": ["bittorrent-tracker", "ip-set"],
       "range": "*",
-      "nodes": [
-        "node_modules/ip"
-      ],
+      "nodes": ["node_modules/ip"],
       "fixAvailable": {
         "name": "webtorrent",
         "version": "0.7.3",
@@ -91,16 +73,10 @@
       "name": "ip-set",
       "severity": "high",
       "isDirect": false,
-      "via": [
-        "ip"
-      ],
-      "effects": [
-        "load-ip-set"
-      ],
+      "via": ["ip"],
+      "effects": ["load-ip-set"],
       "range": "<=2.2.0",
-      "nodes": [
-        "node_modules/ip-set"
-      ],
+      "nodes": ["node_modules/ip-set"],
       "fixAvailable": {
         "name": "webtorrent",
         "version": "0.7.3",
@@ -111,16 +87,10 @@
       "name": "load-ip-set",
       "severity": "high",
       "isDirect": false,
-      "via": [
-        "ip-set"
-      ],
-      "effects": [
-        "webtorrent"
-      ],
+      "via": ["ip-set"],
+      "effects": ["webtorrent"],
       "range": "*",
-      "nodes": [
-        "node_modules/load-ip-set"
-      ],
+      "nodes": ["node_modules/load-ip-set"],
       "fixAvailable": {
         "name": "webtorrent",
         "version": "0.7.3",
@@ -131,29 +101,20 @@
       "name": "torrent-discovery",
       "severity": "high",
       "isDirect": false,
-      "via": [
-        "bittorrent-tracker"
-      ],
+      "via": ["bittorrent-tracker"],
       "effects": [],
       "range": "*",
-      "nodes": [
-        "node_modules/torrent-discovery"
-      ],
+      "nodes": ["node_modules/torrent-discovery"],
       "fixAvailable": true
     },
     "webtorrent": {
       "name": "webtorrent",
       "severity": "high",
       "isDirect": true,
-      "via": [
-        "load-ip-set",
-        "torrent-discovery"
-      ],
+      "via": ["load-ip-set", "torrent-discovery"],
       "effects": [],
       "range": ">=0.8.0",
-      "nodes": [
-        "node_modules/webtorrent"
-      ],
+      "nodes": ["node_modules/webtorrent"],
       "fixAvailable": {
         "name": "webtorrent",
         "version": "0.7.3",

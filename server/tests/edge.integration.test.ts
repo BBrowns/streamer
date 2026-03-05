@@ -41,7 +41,7 @@ describe("Error Handling & Edge Cases", () => {
   });
 
   it("should handle unhandled/fatal errors correctly", async () => {
-    const stdErr = vi.spyOn(console, "error").mockImplementation(() => { });
+    const stdErr = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await request(app).get("/fatal-error");
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("Internal server error");

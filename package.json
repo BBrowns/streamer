@@ -50,7 +50,9 @@
       "bittorrent-tracker": {
         "ip": "^2.0.1"
       }
-    }
+    },
+    "rimraf": "^6.0.1",
+    "glob": "^11.0.1"
   },
   "packageManager": "npm@10.9.0"
 }
