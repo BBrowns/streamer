@@ -14,6 +14,11 @@ jest.mock("react-native-reanimated", () => {
   return Reanimated;
 });
 
+// Mock AsyncStorage
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
+);
+
 // Mock expo-router
 jest.mock("expo-router", () => ({
   useRouter: () => ({

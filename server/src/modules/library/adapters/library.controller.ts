@@ -19,7 +19,7 @@ export class LibraryController {
 
   async removeFromLibrary(c: Context) {
     const body = await c.req.json();
-    const { itemId } = removeFromLibrarySchema.parse(body);
+    const { itemId } = body;
     const user = c.get("user") as any;
     await this.service.removeFromLibrary(user.userId, itemId);
     return new Response(null, { status: 204 });
@@ -32,7 +32,7 @@ export class LibraryController {
   }
 
   async isInLibrary(c: Context) {
-    const itemId = c.req.param("itemId");
+    const itemId = c.req.param("itemId")!;
     const user = c.get("user") as any;
     const inLibrary = await this.service.isInLibrary(user.userId, itemId);
     return c.json({ inLibrary });

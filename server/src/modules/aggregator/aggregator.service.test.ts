@@ -54,14 +54,12 @@ describe("AggregatorService", () => {
         host: "rd",
         size: 100,
       };
-      vi.mocked(RealDebridResolver).mockImplementation(
-        () =>
-          ({
-            resolve: vi.fn().mockResolvedValue(mockResolved),
-            canResolve: vi.fn().mockReturnValue(true),
-            getAccountStatus: vi.fn(),
-          }) as any,
-      );
+      vi.mocked(RealDebridResolver).mockImplementation(function (this: any) {
+        this.resolve = vi.fn().mockResolvedValue(mockResolved);
+        this.canResolve = vi.fn().mockReturnValue(true);
+        this.getAccountStatus = vi.fn();
+        return this;
+      } as any);
 
       const result = await service.resolveStream(
         mockStream.userId,
@@ -108,14 +106,12 @@ describe("AggregatorService", () => {
         "server-driven-ui": true,
       });
 
-      vi.mocked(RealDebridResolver).mockImplementation(
-        () =>
-          ({
-            resolve: vi.fn().mockResolvedValue(null),
-            canResolve: vi.fn().mockReturnValue(true),
-            getAccountStatus: vi.fn(),
-          }) as any,
-      );
+      vi.mocked(RealDebridResolver).mockImplementation(function (this: any) {
+        this.resolve = vi.fn().mockResolvedValue(null);
+        this.canResolve = vi.fn().mockReturnValue(true);
+        this.getAccountStatus = vi.fn();
+        return this;
+      } as any);
 
       const result = await service.resolveStream(
         mockStream.userId,

@@ -21,7 +21,7 @@ import {
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
 import type { MediaInfo } from "../../../stores/playerStore";
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 
 function StreamItem({
   stream,

@@ -59,7 +59,7 @@ afterAll(async () => {
 
 describe("Integration: Auth Flow", () => {
   const getTestUser = () => ({
-    email: `integration-${crypto.randomUUID()}@test.com`,
+    email: `integration-login-${crypto.randomUUID()}@test.com`,
     password: "securePassword123!",
     displayName: "Integration Tester",
   });
@@ -96,7 +96,11 @@ describe("Integration: Auth Flow", () => {
   });
 
   it("should refresh token correctly", async () => {
-    const testUser = getTestUser();
+    const testUser = {
+      email: `integration-refresh-${crypto.randomUUID()}@test.com`,
+      password: "securePassword123!",
+      displayName: "Integration Tester Refresh",
+    };
     const regRes = await request(app)
       .post("/api/auth/register")
       .send(testUser)
@@ -105,9 +109,9 @@ describe("Integration: Auth Flow", () => {
 
     const refreshRes = await request(app)
       .post("/api/auth/refresh")
-      .send({ refreshToken });
+      .send({ refreshToken })
+      .expect(200);
 
-    expect(refreshRes.status).toBe(200);
     expect(refreshRes.body.accessToken).toBeDefined();
     expect(refreshRes.body.refreshToken).toBeDefined();
     expect(refreshRes.body.refreshToken).not.toBe(refreshToken); // Refresh rotation

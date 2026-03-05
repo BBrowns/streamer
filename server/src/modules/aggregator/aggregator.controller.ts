@@ -3,7 +3,7 @@ import { aggregatorService } from "./aggregator.service.js";
 
 export class AggregatorController {
   async getCatalog(c: Context) {
-    const type = c.req.param("type");
+    const type = c.req.param("type") as string;
     const search = c.req.query("search");
     const skipStr = c.req.query("skip");
     const skip = skipStr ? parseInt(skipStr, 10) : undefined;
@@ -22,8 +22,8 @@ export class AggregatorController {
   }
 
   async getMeta(c: Context) {
-    const type = c.req.param("type");
-    const id = c.req.param("id");
+    const type = c.req.param("type") as string;
+    const id = c.req.param("id") as string;
     const user = c.get("user") as any;
     const requestId = c.get("requestId") as string;
 
@@ -42,8 +42,8 @@ export class AggregatorController {
   }
 
   async getStreams(c: Context) {
-    const type = c.req.param("type");
-    const id = c.req.param("id");
+    const type = c.req.param("type") as string;
+    const id = c.req.param("id") as string;
     const user = c.get("user") as any;
     const requestId = c.get("requestId") as string;
 
@@ -58,11 +58,11 @@ export class AggregatorController {
   }
 
   async resolveStream(c: Context) {
-    const type = c.req.param("type");
-    const id = c.req.param("id");
-    const infoHash = c.req.param("infoHash");
+    const type = c.req.param("type")!;
+    const id = c.req.param("id")!;
+    const infoHash = c.req.param("infoHash")!;
     const user = c.get("user") as any;
-    const requestId = c.get("requestId") as string;
+    const requestId = c.get("requestId");
 
     const resolved = await aggregatorService.resolveStream(
       user.userId,

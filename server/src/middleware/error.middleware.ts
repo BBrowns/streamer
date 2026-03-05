@@ -29,12 +29,13 @@ export function errorHandler(err: Error, c: Context) {
     );
   }
 
-  if (err instanceof ZodError) {
-    logger.warn({ requestId, issues: err.issues }, "Validation error");
+  if (err.name === "ZodError" || err instanceof ZodError) {
+    const zodError = err as ZodError;
+    logger.warn({ requestId, issues: zodError.issues }, "Validation error");
     return c.json(
       {
         error: "Validation failed",
-        details: err.issues.map((i) => ({
+        details: zodError.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
         })),
