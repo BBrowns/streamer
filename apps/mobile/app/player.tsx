@@ -26,24 +26,36 @@ import {
 import { useVideoPlayer, VideoView } from "expo-video";
 import Constants from "expo-constants";
 
+import { NativeModules } from "react-native";
+
 // Native casting modules only work in dev-client / standalone builds.
-// In Expo Go the JS package loads but the native view config is missing,
-// which causes a fatal "View config not found" crash.
-const isExpoGo = Constants.appOwnership === "expo";
+// We must safely check if the actual native modules are compiled into the binary.
+const hasGoogleCast = !!NativeModules.RNGCSessionManager;
+const hasAirPlay = !!NativeModules.RNAirplayBtn;
+
 let CastButton: React.ComponentType<any> | null = null;
 let useRemoteMediaClient: (() => unknown) | null = null;
 let AirPlayButton: React.ComponentType<any> | null = null;
 
-if (Platform.OS !== "web" && !isExpoGo) {
-  try {
-    const GoogleCast = require("react-native-google-cast");
-    CastButton = GoogleCast.CastButton;
-    useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-  } catch {}
-  try {
-    const AirPlay = require("react-native-airplay-btn");
-    AirPlayButton = AirPlay.AirPlayButton;
-  } catch {}
+if (Platform.OS !== "web") {
+  if (hasGoogleCast) {
+    try {
+      const GoogleCast = require("react-native-google-cast");
+      CastButton = GoogleCast.CastButton;
+      useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
+    } catch (e) {
+      console.warn("Failed to load react-native-google-cast", e);
+    }
+  }
+
+  if (hasAirPlay) {
+    try {
+      const AirPlay = require("react-native-airplay-btn");
+      AirPlayButton = AirPlay.AirPlayButton;
+    } catch (e) {
+      console.warn("Failed to load react-native-airplay-btn", e);
+    }
+  }
 }
 
 const SEEK_SECONDS = 10;
