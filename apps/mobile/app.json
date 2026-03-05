@@ -31,7 +31,13 @@
       "expo-router",
       "react-native-google-cast",
       "expo-video",
-      "@sentry/react-native",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "your-organization",
+          "project": "your-project"
+        }
+      ],
       "expo-font"
     ],
     "experiments": {
