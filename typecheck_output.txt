@@ -1,0 +1,34 @@
+
+> streamer@0.1.0 typecheck
+> turbo run typecheck
+
+• turbo 2.8.13
+• Packages in scope: @streamer/desktop, @streamer/server, @streamer/shared, @streamer/stream-server, mobile
+• Running typecheck in 5 packages
+• Remote caching disabled
+@streamer/shared:typecheck: cache hit, replaying logs 1d9460e479951be3
+@streamer/shared:typecheck: 
+@streamer/shared:typecheck: 
+@streamer/shared:typecheck: > @streamer/shared@0.1.0 typecheck
+@streamer/shared:typecheck: > tsc --noEmit
+@streamer/shared:typecheck: 
+@streamer/shared:typecheck: ⠙[1G[0K
+@streamer/shared:build: cache hit, replaying logs 438020d0bc35a135
+@streamer/shared:build: 
+@streamer/shared:build: 
+@streamer/shared:build: > @streamer/shared@0.1.0 build
+@streamer/shared:build: > tsc
+@streamer/shared:build: 
+@streamer/shared:build: ⠙[1G[0K
+@streamer/server:typecheck: cache hit, replaying logs e21be59cd233eb3c
+@streamer/server:typecheck: 
+@streamer/server:typecheck: 
+@streamer/server:typecheck: > @streamer/server@0.1.0 typecheck
+@streamer/server:typecheck: > tsc --noEmit
+@streamer/server:typecheck: 
+@streamer/server:typecheck: ⠙[1G[0K
+
+ Tasks:    3 successful, 3 total
+Cached:    3 cached, 3 total
+  Time:    236ms >>> FULL TURBO
+
