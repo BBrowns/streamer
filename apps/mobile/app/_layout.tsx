@@ -93,10 +93,10 @@ function RootLayout() {
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: "#0a0a1a" },
-          headerTintColor: "#e0e0ff",
+          headerStyle: { backgroundColor: "#000000" },
+          headerTintColor: "#ffffff",
           headerTitleStyle: { fontWeight: "700" },
-          contentStyle: { backgroundColor: "#0a0a1a" },
+          contentStyle: { backgroundColor: "#000000" },
         }}
       >
         <Stack.Screen

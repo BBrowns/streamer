@@ -6,16 +6,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#0a0a1a",
-        surface: "#1a1a3e",
-        "surface-bright": "#252552",
-        primary: "#818cf8",
-        "primary-dim": "rgba(129, 140, 248, 0.15)",
-        accent: "#a78bfa",
-        textMain: "#e0e0ff",
-        textMuted: "#9ca3af",
-        error: "#f87171",
-        success: "#34d399",
+        background: "#000000",
+        surface: "#0f0f0f",
+        "surface-bright": "#1a1a1a",
+        primary: "#e50914", // Netflix-esque vibrant red accent
+        "primary-dim": "rgba(229, 9, 20, 0.15)",
+        accent: "#ffffff",
+        textMain: "#ffffff",
+        textMuted: "#a3a3a3",
+        error: "#ef4444",
+        success: "#22c55e",
         warning: "#f59e0b",
       },
       borderRadius: {
@@ -30,6 +30,10 @@ module.exports = {
       spacing: {
         18: "4.5rem",
         88: "22rem",
+      },
+      fontFamily: {
+        // We will default to system sans for now, but explicit slots allow for easy swapping to 'Inter' or 'Roboto' later if loaded.
+        sans: ["System"],
       },
     },
   },

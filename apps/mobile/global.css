@@ -3,12 +3,16 @@
 @tailwind utilities;
 
 @layer utilities {
-    /* Glassmorphic Brutalism Custom Classes */
+    /* Glassmorphic AMOLED Custom Classes */
     .glass {
-        @apply bg-surface/60 border border-white/10 backdrop-blur-xl;
+        @apply bg-[#0f0f0f]/60 border border-white/5 backdrop-blur-xl;
     }
     
     .glass-strong {
-        @apply bg-surface/80 border border-white/20 backdrop-blur-2xl;
+        @apply bg-[#0f0f0f]/80 border border-white/10 backdrop-blur-2xl;
+    }
+
+    .glass-panel {
+        @apply bg-black/40 border border-white/5 backdrop-blur-3xl;
     }
 }
