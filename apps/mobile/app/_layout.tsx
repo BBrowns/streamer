@@ -8,6 +8,7 @@ import {
   Text,
   Pressable,
   AppState,
+  StyleSheet,
   type AppStateStatus,
 } from "react-native";
 import * as Sentry from "@sentry/react-native";
@@ -46,19 +47,14 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   }, [error]);
 
   return (
-    <View className="flex-1 bg-background justify-center items-center p-8">
-      <Text className="text-[48px] mb-3">⚠️</Text>
-      <Text className="text-error text-xl font-bold mb-2">
-        Something went wrong
-      </Text>
-      <Text className="text-textMuted text-sm text-center mb-6 leading-5">
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorEmoji}>⚠️</Text>
+      <Text style={styles.errorTitle}>Something went wrong</Text>
+      <Text style={styles.errorMessage}>
         {error.message || "An unexpected error occurred."}
       </Text>
-      <Pressable
-        className="bg-primary px-6 py-3.5 rounded-xl shadow-lg shadow-primary/40"
-        onPress={retry}
-      >
-        <Text className="text-white font-bold text-base">Try Again</Text>
+      <Pressable style={styles.retryButton} onPress={retry}>
+        <Text style={styles.retryButtonText}>Try Again</Text>
       </Pressable>
     </View>
   );
@@ -93,10 +89,10 @@ function RootLayout() {
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: "#0a0a1a" },
-          headerTintColor: "#e0e0ff",
+          headerStyle: { backgroundColor: "#000000" },
+          headerTintColor: "#ffffff",
           headerTitleStyle: { fontWeight: "700" },
-          contentStyle: { backgroundColor: "#0a0a1a" },
+          contentStyle: { backgroundColor: "#000000" },
         }}
       >
         <Stack.Screen
@@ -139,3 +135,39 @@ function RootLayout() {
 }
 
 export default Sentry.wrap(RootLayout);
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    backgroundColor: "#050510",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  errorEmoji: { fontSize: 48, marginBottom: 12 },
+  errorTitle: {
+    color: "#ef4444",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  errorMessage: {
+    color: "#94a3b8",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: "#818cf8",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: "#818cf8",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  retryButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
+});

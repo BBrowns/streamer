@@ -88,52 +88,55 @@ export const CatalogRow = memo(CatalogRowInner);
 
 const styles = StyleSheet.create({
   rowContainer: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   rowHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "baseline",
     paddingHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   rowTitle: {
-    color: "#e0e0ff",
-    fontSize: 17,
-    fontWeight: "700",
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "800",
   },
   rowSource: {
-    color: "#6b7280",
-    fontSize: 11,
+    color: "#a1a1aa",
+    fontSize: 12,
+    fontWeight: "600",
   },
   rowScroll: {
-    paddingHorizontal: 12,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 12,
   },
   card: {
-    width: 120,
-    borderRadius: 10,
+    width: 130, // Slightly wider
+    borderRadius: 12, // Smoother border radius
+    backgroundColor: "#0a0a0a",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
-    backgroundColor: "#1a1a3e",
   },
   poster: {
-    width: 120,
-    height: 180,
-    backgroundColor: "#2a2a4e",
+    width: 130,
+    height: 195, // Maintains 2:3 aspect ratio perfectly
+    backgroundColor: "#141414",
   },
   cardTitle: {
-    color: "#e0e0ff",
-    fontSize: 11,
-    fontWeight: "600",
-    paddingHorizontal: 6,
-    paddingTop: 6,
+    color: "#e5e5e5",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingHorizontal: 8,
+    paddingTop: 8,
     paddingBottom: 2,
   },
   rating: {
     color: "#fbbf24",
-    fontSize: 10,
-    fontWeight: "600",
-    paddingHorizontal: 6,
-    paddingBottom: 6,
+    fontSize: 11,
+    fontWeight: "700",
+    paddingHorizontal: 8,
+    paddingBottom: 8,
   },
 });

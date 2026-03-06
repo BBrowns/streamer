@@ -2,10 +2,8 @@ import {
   View,
   Text,
   Pressable,
-  ActivityIndicator,
   Platform,
-  Modal,
-  FlatList,
+  StyleSheet,
   Image,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -18,49 +16,23 @@ import type {
   SubtitleTrack,
   StreamStats,
 } from "../services/streamEngine/IStreamEngine";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import {
   DesktopCastModal,
   type CastDevice,
 } from "../components/DesktopCastModal";
 import { useVideoPlayer, VideoView } from "expo-video";
-import Constants from "expo-constants";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { NativeModules } from "react-native";
-
-// Native casting modules only work in dev-client / standalone builds.
-// We must safely check if the actual native modules are compiled into the binary.
-const hasGoogleCast = !!NativeModules.RNGCSessionManager;
-const hasAirPlay = !!NativeModules.RNAirplayBtn;
-
-let CastButton: React.ComponentType<any> | null = null;
-let useRemoteMediaClient: (() => unknown) | null = null;
-let AirPlayButton: React.ComponentType<any> | null = null;
-
-if (Platform.OS !== "web") {
-  if (hasGoogleCast) {
-    try {
-      const GoogleCast = require("react-native-google-cast");
-      CastButton = GoogleCast.CastButton;
-      useRemoteMediaClient = GoogleCast.useRemoteMediaClient;
-    } catch (e) {
-      console.warn("Failed to load react-native-google-cast", e);
-    }
-  }
-
-  if (hasAirPlay) {
-    try {
-      const AirPlay = require("react-native-airplay-btn");
-      AirPlayButton = AirPlay.AirPlayButton;
-    } catch (e) {
-      console.warn("Failed to load react-native-airplay-btn", e);
-    }
-  }
-}
+import { useRemoteMediaClient } from "../components/player/castModules";
+import { PlayerOverlay } from "../components/player/PlayerOverlay";
+import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
+import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
+import { PlayerControls } from "../components/player/PlayerControls";
 
 const SEEK_SECONDS = 10;
 const DOUBLE_TAP_DELAY = 300;
-const PROGRESS_REPORT_INTERVAL = 15_000; // Report every 15 seconds
+const PROGRESS_REPORT_INTERVAL = 15_000;
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -72,10 +44,10 @@ export default function PlayerScreen() {
     streamMetrics,
     errorMessage,
     subscribeToStreamMetrics,
-    setBuffering,
     setProgress,
     clearPlayer,
   } = usePlayerStore();
+
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
@@ -85,7 +57,6 @@ export default function PlayerScreen() {
     null,
   );
 
-  // Double-tap seek state
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
     null,
   );
@@ -94,26 +65,44 @@ export default function PlayerScreen() {
   );
   const seekFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Progress reporting
   const updateProgress = useUpdateProgress();
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const durationRef = useRef(0);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- conditional hook is
-  // fine here because `useRemoteMediaClient` is always null or always defined
-  // for a given build target (Expo Go vs dev-client).
   const remoteMediaClient = useRemoteMediaClient
     ? (useRemoteMediaClient() as any)
     : null;
   const lastCastUriRef = useRef<string | null>(null);
 
-  const [playbackUri, setPlaybackUri] = useState<string | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = setTimeout(() => {
+      setControlsVisible(false);
+    }, 4000);
+  }, []);
+
+  const toggleControls = useCallback(() => {
+    if (controlsVisible) {
+      setControlsVisible(false);
+      if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    } else {
+      showControls();
+    }
+  }, [controlsVisible, showControls]);
+
+  // Brightness and Volume states (mocking brightness visually via overlay)
+  const [fakeBrightness, setFakeBrightness] = useState(1.0);
+  const [showBrightnessFeedback, setShowBrightnessFeedback] = useState(false);
+  const [showVolumeFeedback, setShowVolumeFeedback] = useState(false);
+
+  const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const engine = currentStream
     ? streamEngineManager.resolveEngine(currentStream)
     : null;
 
-  // Resolve playback URI asynchronously
   useEffect(() => {
     let isMounted = true;
     if (currentStream) {
@@ -128,18 +117,14 @@ export default function PlayerScreen() {
     };
   }, [currentStream]);
 
-  // Initialize expo-video player
   const player = useVideoPlayer(playbackUri || "", (p) => {
     p.play();
   });
 
-  // Cast Media
   useEffect(() => {
     if (!remoteMediaClient || !playbackUri || !currentStream) return;
-
     if (lastCastUriRef.current !== playbackUri) {
       lastCastUriRef.current = playbackUri;
-
       remoteMediaClient
         .loadMedia({
           mediaInfo: {
@@ -157,43 +142,34 @@ export default function PlayerScreen() {
     }
   }, [remoteMediaClient, playbackUri, currentStream]);
 
-  // Subscribe to engine events
   useEffect(() => {
     if (!engine) return;
-
     setAudioTracks(engine.getAudioTracks());
     setSubtitles(engine.getSubtitles());
-
     const onStats = (data: StreamStats) => setStats(data);
     engine.on("stats", onStats);
-
     return () => {
       engine.off("stats", onStats);
       engine.stop?.();
     };
   }, [engine]);
 
-  // Subscribe to SSE metrics for torrent streams
   useEffect(() => {
     if (currentStream?.infoHash) {
       subscribeToStreamMetrics(currentStream.infoHash);
     }
   }, [currentStream?.infoHash, subscribeToStreamMetrics]);
 
-  // Progress reporting to server (every 15s) and local state sync
   useEffect(() => {
     if (!mediaInfo) return;
-
     progressTimerRef.current = setInterval(() => {
-      // expo-video throws FunctionCallException if the native player
-      // object isn't fully initialised yet (e.g. empty source URI).
       let currentTime = 0;
       let duration = 0;
       try {
         currentTime = player?.currentTime || 0;
         duration = player?.duration || 0;
       } catch {
-        return; // player not ready yet, skip this tick
+        return;
       }
 
       setProgress(currentTime, duration);
@@ -206,23 +182,19 @@ export default function PlayerScreen() {
           poster: mediaInfo.poster,
           season: mediaInfo.season,
           episode: mediaInfo.episode,
-          currentTime: currentTime,
-          duration: duration,
+          currentTime,
+          duration,
         });
       }
     }, PROGRESS_REPORT_INTERVAL);
 
     return () => {
-      // Report final progress on unmount
-      let currentTime = 0;
-      let duration = 0;
+      let currentTime = 0,
+        duration = 0;
       try {
         currentTime = player?.currentTime || 0;
         duration = player?.duration || 0;
-      } catch {
-        /* player already deallocated */
-      }
-
+      } catch {}
       if (currentTime > 0 && duration > 0) {
         updateProgress.mutate({
           type: mediaInfo.type,
@@ -231,8 +203,8 @@ export default function PlayerScreen() {
           poster: mediaInfo.poster,
           season: mediaInfo.season,
           episode: mediaInfo.episode,
-          currentTime: currentTime,
-          duration: duration,
+          currentTime,
+          duration,
         });
       }
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
@@ -253,426 +225,364 @@ export default function PlayerScreen() {
     setActiveCastDevice(null);
   };
 
-  const handleDoubleTap = useCallback(
+  const waitingTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTap = useCallback(
     (side: "left" | "right") => {
       const now = Date.now();
       const lastTap = lastTapRef.current;
-
       if (
         lastTap &&
         now - lastTap.time < DOUBLE_TAP_DELAY &&
         lastTap.side === side
       ) {
-        const currentTime = player?.currentTime || 0;
-        const duration = player?.duration || 0;
-
-        const seekTo =
-          side === "right"
-            ? Math.min(currentTime + SEEK_SECONDS, duration)
-            : Math.max(currentTime - SEEK_SECONDS, 0);
-
+        // Double tap confirmed
+        if (waitingTapTimer.current) clearTimeout(waitingTapTimer.current);
         player?.seekBy(side === "right" ? SEEK_SECONDS : -SEEK_SECONDS);
-
         setSeekFeedback(side);
         if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
         seekFeedbackTimer.current = setTimeout(
           () => setSeekFeedback(null),
           600,
         );
-
         lastTapRef.current = null;
       } else {
+        // Single tap candidate
         lastTapRef.current = { time: now, side };
+        if (waitingTapTimer.current) clearTimeout(waitingTapTimer.current);
+        waitingTapTimer.current = setTimeout(() => {
+          toggleControls();
+          lastTapRef.current = null;
+        }, DOUBLE_TAP_DELAY);
       }
     },
-    [player],
+    [player, toggleControls],
   );
 
-  const handleSelectAudio = useCallback(
-    (id: string) => {
-      engine?.setAudioTrack(id);
-      setAudioTracks(engine?.getAudioTracks() ?? []);
-    },
-    [engine],
-  );
-
-  const handleSelectSubtitle = useCallback(
-    (id: string | null) => {
-      engine?.setSubtitle(id);
-      setSubtitles(engine?.getSubtitles() ?? []);
-    },
-    [engine],
-  );
+  const handleClose = useCallback(() => {
+    router.back();
+    setTimeout(() => clearPlayer(), 100);
+  }, [router, clearPlayer]);
 
   if (!currentStream || !playbackUri) {
     return (
-      <View className="flex-1 bg-black justify-center items-center">
-        <Text className="text-error text-base mb-4">No stream selected</Text>
-        <Pressable
-          className="bg-primary px-5 py-2.5 rounded-xl min-w-[44px] min-h-[44px] justify-center items-center"
-          onPress={() => {
-            router.back();
-            // Delay state cleanup so the navigation fires before re-render
-            setTimeout(() => clearPlayer(), 100);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Text className="text-white font-semibold flex-row">Go Back</Text>
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>No stream selected</Text>
+        <Pressable style={styles.errorButton} onPress={handleClose}>
+          <Text style={styles.errorButtonText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
 
-  const headerBar = (
-    <View className="flex-row justify-between items-center pt-[60px] px-4 pb-2 bg-black/80 z-20">
-      <Pressable
-        className="bg-white/10 px-4 py-2 rounded-full min-w-[44px] min-h-[44px] justify-center items-center"
-        onPress={() => {
-          clearPlayer();
-          router.back();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Close player"
-      >
-        <Text className="text-textMain font-semibold text-sm">✕ Close</Text>
-      </Pressable>
-      <View className="flex-row items-center gap-3">
-        {CastButton && Platform.OS !== "web" && (
-          <CastButton style={{ width: 44, height: 44, tintColor: "#e0e0ff" }} />
-        )}
-        {AirPlayButton && Platform.OS === "ios" && (
-          <AirPlayButton
-            style={{ width: 44, height: 44, tintColor: "#e0e0ff" }}
-          />
-        )}
-        {Platform.OS === "web" && (
-          <Pressable
-            className="bg-white/10 w-11 h-11 rounded-full justify-center items-center"
-            onPress={() => setCastModalOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Cast to Device"
-          >
-            <MaterialIcons name="cast" size={20} color="#e0e0ff" />
-          </Pressable>
-        )}
-        <Pressable
-          className="bg-white/10 w-11 h-11 rounded-full justify-center items-center"
-          onPress={() => setSettingsOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Playback settings"
-        >
-          <Ionicons name="settings-sharp" size={20} color="#e0e0ff" />
-        </Pressable>
-      </View>
-    </View>
-  );
-
-  const infoBar = (
-    <View className="bg-[#0a0a1a]/95 px-4 py-3 pb-10 z-20">
-      <Text className="text-textMain font-bold text-[15px]">
-        🎬 {currentStream.title || currentStream.name || "Now Playing"}
-      </Text>
-      <View className="flex-row items-center gap-3 mt-1">
-        <Text className="text-textMuted text-[11px]">
-          Engine: {engine?.getEngineType().toUpperCase() ?? "Unknown"}
-        </Text>
-        {stats.peers > 0 ? (
-          <Text className="text-primary text-[11px] font-semibold">
-            ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers} peers
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-
-  // Double-tap seek overlay (shows ±10s feedback)
-  const seekOverlay = seekFeedback && (
-    <View
-      className={`absolute top-[40%] px-5 py-2.5 bg-black/70 rounded-3xl z-20 ${seekFeedback === "left" ? "left-10" : "right-10"}`}
-    >
-      <Text className="text-textMain text-base font-bold">
-        {seekFeedback === "left"
-          ? `⏪ ${SEEK_SECONDS}s`
-          : `${SEEK_SECONDS}s ⏩`}
-      </Text>
-    </View>
-  );
-
-  // Gesture zones for double-tap seek (left = rewind, right = forward)
-  const gestureZones = Platform.OS !== "web" &&
-    streamState !== "error" &&
-    streamState !== "loading_metrics" && (
-      <View className="absolute inset-0 flex-row z-10" pointerEvents="box-none">
-        <Pressable
-          className="flex-1"
-          onPress={() => handleDoubleTap("left")}
-          accessibilityLabel="Double-tap to seek backward 10 seconds"
-        />
-        <Pressable
-          className="flex-1"
-          onPress={() => handleDoubleTap("right")}
-          accessibilityLabel="Double-tap to seek forward 10 seconds"
-        />
-      </View>
-    );
-
-  const settingsModal = (
-    <Modal
-      visible={settingsOpen}
-      animationType="slide"
-      transparent
-      onRequestClose={() => setSettingsOpen(false)}
-    >
-      <View className="flex-1 bg-black/70 justify-end z-50">
-        <View className="bg-[#0d0d24] rounded-t-[20px] p-5 pb-10 max-h-[60%]">
-          <View className="flex-row justify-between items-center mb-5">
-            <Text className="text-textMain text-lg font-bold">
-              ⚙️ Playback Settings
-            </Text>
-            <Pressable
-              onPress={() => setSettingsOpen(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Close settings"
-            >
-              <Text className="text-primary font-bold text-[15px]">Done</Text>
-            </Pressable>
-          </View>
-
-          {/* Audio Tracks */}
-          <Text className="text-textMain text-sm font-bold mb-2">
-            🔊 Audio Tracks
-          </Text>
-          {audioTracks.length === 0 ? (
-            <Text className="text-textMuted text-xs italic">
-              No selectable audio tracks — using default.
-            </Text>
-          ) : (
-            <FlatList
-              data={audioTracks}
-              keyExtractor={(t) => t.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  className={`flex-row items-center py-2.5 px-3 rounded-lg mb-1 min-h-[44px] ${item.active ? "bg-primary/15" : ""}`}
-                  onPress={() => handleSelectAudio(item.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Audio: ${item.label}${item.active ? ", selected" : ""}`}
-                >
-                  <Text className="text-textMain text-sm flex-1">
-                    {item.label}
-                  </Text>
-                  <Text className="text-textMuted text-xs mr-2">
-                    {item.language}
-                  </Text>
-                  {item.active && (
-                    <Text className="text-primary font-bold text-base">✓</Text>
-                  )}
-                </Pressable>
-              )}
-            />
-          )}
-
-          {/* Subtitles */}
-          <Text className="text-textMain text-sm font-bold mt-5 mb-2">
-            💬 Subtitles
-          </Text>
-          {subtitles.length === 0 ? (
-            <Text className="text-textMuted text-xs italic">
-              No subtitle tracks available.
-            </Text>
-          ) : (
-            <>
-              <Pressable
-                className={`flex-row items-center py-2.5 px-3 rounded-lg mb-1 min-h-[44px] ${subtitles.every((s) => !s.active) ? "bg-primary/15" : ""}`}
-                onPress={() => handleSelectSubtitle(null)}
-                accessibilityRole="button"
-                accessibilityLabel="Subtitles off"
-              >
-                <Text className="text-textMain text-sm flex-1">Off</Text>
-              </Pressable>
-              <FlatList
-                data={subtitles}
-                keyExtractor={(t) => t.id}
-                scrollEnabled={false}
-                renderItem={({ item }) => (
-                  <Pressable
-                    className={`flex-row items-center py-2.5 px-3 rounded-lg mb-1 min-h-[44px] ${item.active ? "bg-primary/15" : ""}`}
-                    onPress={() => handleSelectSubtitle(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Subtitle: ${item.label}${item.active ? ", selected" : ""}`}
-                  >
-                    <Text className="text-textMain text-sm flex-1">
-                      {item.label}
-                    </Text>
-                    <Text className="text-textMuted text-xs mr-2">
-                      {item.language}
-                    </Text>
-                    {item.active && (
-                      <Text className="text-primary font-bold text-base">
-                        ✓
-                      </Text>
-                    )}
-                  </Pressable>
-                )}
-              />
-            </>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const loadingAndErrorOverlays = (
-    <>
-      {streamState === "loading_metrics" && (
-        <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/80">
-          <ActivityIndicator size="large" color="#818cf8" className="mb-4" />
-          <Text className="text-white text-lg font-bold">
-            {streamMetrics?.state === "finding_peers"
-              ? "Finding peers..."
-              : streamMetrics?.state === "connecting"
-                ? "Connecting to peers..."
-                : "Buffering..."}
-          </Text>
-          {streamMetrics && (
-            <Text className="text-textMuted mt-2 text-sm">
-              {streamMetrics.numPeers} peers •{" "}
-              {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
-            </Text>
-          )}
-        </View>
-      )}
-      {streamState === "error" && (
-        <View className="absolute inset-0 justify-center items-center z-10 p-6 bg-black/95">
-          <MaterialIcons
-            name="error-outline"
-            size={48}
-            color="#fca5a5"
-            className="mb-4"
-          />
-          <Text className="text-error text-lg font-bold text-center mb-2">
-            Connection Failed
-          </Text>
-          <Text className="text-textMuted text-center max-w-[280px] mb-6">
-            {errorMessage || "Unable to load stream"}
-          </Text>
-          <Pressable
-            className="bg-white/10 px-6 py-3 rounded-xl border border-white/20"
-            onPress={() => {
-              router.back();
-              setTimeout(() => clearPlayer(), 100);
-            }}
-          >
-            <Text className="text-white font-semibold">Go Back</Text>
-          </Pressable>
-        </View>
-      )}
-      {isBuffering &&
-        streamState !== "loading_metrics" &&
-        streamState !== "error" && (
-          <View className="absolute inset-0 justify-center items-center z-10 pointer-events-none">
-            <ActivityIndicator size="large" color="#818cf8" />
-          </View>
-        )}
-    </>
-  );
-
-  // Web fallback using HTML5 video
+  // Web fallback
   if (Platform.OS === "web") {
     return (
-      <View className="flex-1 bg-black">
-        {headerBar}
-        <View className="flex-1 justify-center items-center bg-black overflow-hidden relative">
+      <View style={styles.container}>
+        <PlayerOverlay
+          currentStream={currentStream}
+          engineType={engine?.getEngineType() ?? "Unknown"}
+          stats={stats}
+          onClose={handleClose}
+          onSettings={() => setSettingsOpen(true)}
+          onWebCast={() => setCastModalOpen(true)}
+        />
+        <View style={styles.videoContainer}>
           {activeCastDevice ? (
-            <View className="flex-1 w-full justify-center items-center bg-[#050510]">
+            <View style={styles.castContainer}>
               {mediaInfo?.poster && (
                 <Image
-                  className="absolute inset-0 opacity-30 blur-xl"
                   source={{ uri: mediaInfo.poster }}
-                  resizeMode="cover"
+                  style={styles.castBg}
+                  blurRadius={20}
                 />
               )}
-              <View className="items-center bg-[#141423]/60 p-10 rounded-[32px] border border-white/10 shadow-2xl backdrop-blur-3xl">
-                <View className="bg-primary/15 p-6 rounded-[40px] mb-6 shadow shadow-primary/40">
+              <View style={styles.castCard}>
+                <View style={styles.castIconWrap}>
                   <MaterialIcons
                     name="cast-connected"
                     size={56}
                     color="#818cf8"
                   />
                 </View>
-                <Text className="text-white text-[22px] font-bold mb-2">
+                <Text style={styles.castTitle}>
                   Casting to {activeCastDevice.name}
                 </Text>
-                <Text className="text-textMuted text-base mb-8 text-center max-w-[300px]">
+                <Text style={styles.castSubtitle}>
                   {currentStream.title || currentStream.name}
                 </Text>
-
-                <Pressable
-                  className="flex-row items-center gap-2 bg-error/10 px-7 py-3.5 rounded-full border border-error/30 active:bg-error/20 active:border-error/50 active:scale-95 transition-all"
-                  onPress={stopCasting}
-                >
-                  <View className="flex-row items-center gap-2">
-                    <MaterialIcons name="cancel" size={18} color="#fca5a5" />
-                    <Text className="text-[#fef2f2] font-semibold text-[15px] tracking-wide">
-                      Stop Casting
-                    </Text>
-                  </View>
+                <Pressable style={styles.stopCastBtn} onPress={stopCasting}>
+                  <MaterialIcons name="cancel" size={18} color="#fca5a5" />
+                  <Text style={styles.stopCastText}>Stop Casting</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
             <>
-              {loadingAndErrorOverlays}
-              {/* @ts-ignore — RNW doesn't know about video tag */}
+              <PlayerStatusOverlay
+                streamState={streamState}
+                streamMetrics={streamMetrics}
+                isBuffering={isBuffering}
+                errorMessage={errorMessage}
+                onBack={handleClose}
+              />
+              {/* @ts-ignore */}
               <video
                 src={playbackUri}
                 controls
                 autoPlay
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  backgroundColor: "#000",
-                }}
+                style={styles.webVideo}
               />
             </>
           )}
         </View>
-        {infoBar}
-        {settingsModal}
+
+        <PlayerSettingsModal
+          visible={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          audioTracks={audioTracks}
+          subtitles={subtitles}
+          onSelectAudio={(id) => {
+            engine?.setAudioTrack(id);
+            setAudioTracks(engine?.getAudioTracks() ?? []);
+          }}
+          onSelectSubtitle={(id) => {
+            engine?.setSubtitle(id);
+            setSubtitles(engine?.getSubtitles() ?? []);
+          }}
+        />
         <DesktopCastModal
           visible={castModalOpen}
           playbackUri={playbackUri}
           title={currentStream.title || currentStream.name || "Video"}
           onClose={() => setCastModalOpen(false)}
-          onCastStart={(device) => setActiveCastDevice(device)}
+          onCastStart={setActiveCastDevice}
         />
       </View>
     );
   }
 
-  // Native player using expo-video
   return (
-    <View className="flex-1 bg-black">
-      {headerBar}
-
-      <View className="flex-1 justify-center items-center bg-black overflow-hidden relative">
-        {seekOverlay}
-        {gestureZones}
-        {player && (
-          <VideoView
-            player={player}
-            style={{ width: "100%", height: "100%" }}
-            nativeControls={true}
-            contentFit="contain"
-            showsTimecodes={true}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={styles.container}>
+        {controlsVisible && (
+          <PlayerOverlay
+            currentStream={currentStream}
+            engineType={engine?.getEngineType() ?? "Unknown"}
+            stats={stats}
+            onClose={handleClose}
+            onSettings={() => setSettingsOpen(true)}
           />
         )}
-        {loadingAndErrorOverlays}
-      </View>
 
-      {infoBar}
-      {settingsModal}
-    </View>
+        <View style={styles.videoContainer}>
+          {seekFeedback && (
+            <View
+              style={[
+                styles.seekOverlay,
+                seekFeedback === "left" ? { left: 40 } : { right: 40 },
+              ]}
+            >
+              <Text style={styles.seekText}>
+                {seekFeedback === "left"
+                  ? `⏪ ${SEEK_SECONDS}s`
+                  : `${SEEK_SECONDS}s ⏩`}
+              </Text>
+            </View>
+          )}
+
+          {showBrightnessFeedback && (
+            <View style={styles.feedbackOverlay}>
+              <Text style={styles.feedbackText}>
+                ☀️ Brightness: {Math.round(fakeBrightness * 100)}%
+              </Text>
+            </View>
+          )}
+
+          {showVolumeFeedback && player && (
+            <View style={styles.feedbackOverlay}>
+              <Text style={styles.feedbackText}>
+                🔊 Volume: {Math.round(player.volume * 100)}%
+              </Text>
+            </View>
+          )}
+
+          {streamState !== "error" && streamState !== "loading_metrics" && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <View style={{ flex: 1, flexDirection: "row" }}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => handleTap("left")}
+                />
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => handleTap("right")}
+                />
+              </View>
+            </View>
+          )}
+
+          {player && (
+            <VideoView
+              player={player}
+              style={{ width: "100%", height: "100%" }}
+              nativeControls={false}
+              contentFit="contain"
+            />
+          )}
+
+          <PlayerStatusOverlay
+            streamState={streamState}
+            streamMetrics={streamMetrics}
+            isBuffering={isBuffering}
+            errorMessage={errorMessage}
+            onBack={handleClose}
+          />
+
+          <PlayerControls
+            player={player}
+            currentTime={player?.currentTime || 0}
+            duration={player?.duration || 0}
+            isVisible={controlsVisible}
+            isPlaying={player?.playing ?? false}
+            onPlayPause={() => {
+              if (player?.playing) player.pause();
+              else player?.play();
+            }}
+          />
+        </View>
+
+        {/* Fake Brightness Filter */}
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: `rgba(0,0,0,${1.0 - fakeBrightness})`,
+              pointerEvents: "none",
+            },
+          ]}
+        />
+
+        <PlayerSettingsModal
+          visible={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          audioTracks={audioTracks}
+          subtitles={subtitles}
+          onSelectAudio={(id) => {
+            engine?.setAudioTrack(id);
+            setAudioTracks(engine?.getAudioTracks() ?? []);
+          }}
+          onSelectSubtitle={(id) => {
+            engine?.setSubtitle(id);
+            setSubtitles(engine?.getSubtitles() ?? []);
+          }}
+        />
+      </View>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#000" },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: { color: "#fca5a5", fontSize: 16, marginBottom: 16 },
+  errorButton: {
+    backgroundColor: "#e50914",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorButtonText: { color: "#fff", fontWeight: "600" },
+  videoContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
+    overflow: "hidden",
+  },
+  webVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
+  seekOverlay: {
+    position: "absolute",
+    top: "40%",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 24,
+    zIndex: 20,
+  },
+  seekText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  feedbackOverlay: {
+    position: "absolute",
+    top: 40,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 20,
+    zIndex: 20,
+  },
+  feedbackText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
+  castContainer: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#050510",
+  },
+  castBg: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    opacity: 0.3,
+  },
+  castCard: {
+    alignItems: "center",
+    backgroundColor: "rgba(20,20,35,0.6)",
+    padding: 40,
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  castIconWrap: {
+    backgroundColor: "rgba(129,140,248,0.15)",
+    padding: 24,
+    borderRadius: 40,
+    marginBottom: 24,
+  },
+  castTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  castSubtitle: {
+    color: "#a1a1aa",
+    fontSize: 16,
+    marginBottom: 32,
+    textAlign: "center",
+    maxWidth: 300,
+  },
+  stopCastBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(252,165,165,0.1)",
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: "rgba(252,165,165,0.3)",
+  },
+  stopCastText: { color: "#fef2f2", fontWeight: "600", fontSize: 15 },
+});

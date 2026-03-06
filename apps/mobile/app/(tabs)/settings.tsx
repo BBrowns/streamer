@@ -6,6 +6,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -96,28 +97,28 @@ function SettingsContent() {
 
   if (!isAuthenticated) {
     return (
-      <View className="flex-1 bg-background justify-center items-center">
-        <Text className="text-textMuted mb-4" accessibilityRole="text">
+      <View style={styles.unauthContainer}>
+        <Text style={styles.unauthText} accessibilityRole="text">
           Sign in to manage settings
         </Text>
         <Pressable
-          className="bg-primary px-6 py-3 rounded-lg min-w-[44px] min-h-[44px] justify-center items-center"
+          style={styles.signInButton}
           onPress={() => router.push("/login")}
           accessibilityRole="button"
           accessibilityLabel="Sign in to your account"
         >
-          <Text className="text-white font-bold">Sign In</Text>
+          <Text style={styles.signInText}>Sign In</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-background p-4">
+    <View style={styles.container}>
       {/* User Info */}
-      <View className="mb-6">
+      <View style={styles.section}>
         <Pressable
-          className="flex-row items-center bg-surface rounded-xl p-4 space-x-3 min-h-[56px]"
+          style={styles.menuItem}
           onPress={() => {
             setDisplayName(user?.displayName || "");
             setProfileModalOpen(true);
@@ -126,19 +127,16 @@ function SettingsContent() {
           accessibilityLabel={`Edit profile for ${user?.displayName || user?.email}`}
           accessibilityHint="Opens profile editor"
         >
-          <View className="w-12 h-12 rounded-full bg-primary justify-center items-center">
-            <Text
-              className="text-white text-xl font-bold"
-              accessibilityElementsHidden
-            >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText} accessibilityElementsHidden>
               {user?.email?.charAt(0).toUpperCase()}
             </Text>
           </View>
-          <View className="flex-1 ml-3">
-            <Text className="text-textMain font-bold text-base">
+          <View style={styles.menuItemTextContainer}>
+            <Text style={styles.menuItemTitle}>
               {user?.displayName || user?.email}
             </Text>
-            <Text className="text-textMuted text-xs">{user?.email}</Text>
+            <Text style={styles.menuItemSubtitle}>{user?.email}</Text>
           </View>
           <Ionicons
             name="pencil"
@@ -150,15 +148,15 @@ function SettingsContent() {
       </View>
 
       {/* Menu Items */}
-      <View className="mb-6">
+      <View style={styles.section}>
         <Pressable
-          className="flex-row items-center bg-surface rounded-xl p-3.5 space-x-3 min-h-[56px]"
+          style={styles.menuItem}
           onPress={() => router.push("/addons")}
           accessibilityRole="button"
           accessibilityLabel="Manage add-ons"
           accessibilityHint="Install and remove content sources"
         >
-          <View className="w-10 h-10 rounded-lg bg-primary/15 justify-center items-center">
+          <View style={styles.iconContainer}>
             <Ionicons
               name="extension-puzzle"
               size={20}
@@ -166,11 +164,9 @@ function SettingsContent() {
               accessibilityElementsHidden
             />
           </View>
-          <View className="flex-1 ml-3">
-            <Text className="text-textMain font-semibold text-[15px]">
-              Manage Add-ons
-            </Text>
-            <Text className="text-textMuted text-[11px] mt-0.5">
+          <View style={styles.menuItemTextContainer}>
+            <Text style={styles.menuItemTitle}>Manage Add-ons</Text>
+            <Text style={styles.menuItemSubtitle}>
               Install and remove content sources
             </Text>
           </View>
@@ -182,10 +178,10 @@ function SettingsContent() {
           />
         </Pressable>
 
-        <View className="h-2" />
+        <View style={styles.spacer} />
 
         <Pressable
-          className="flex-row items-center bg-surface rounded-xl p-3.5 space-x-3 min-h-[56px]"
+          style={styles.menuItem}
           onPress={() => {
             setCurrentPw("");
             setNewPw("");
@@ -195,7 +191,7 @@ function SettingsContent() {
           accessibilityLabel="Change password"
           accessibilityHint="Opens password change form"
         >
-          <View className="w-10 h-10 rounded-lg bg-primary/15 justify-center items-center">
+          <View style={styles.iconContainer}>
             <Ionicons
               name="lock-closed"
               size={20}
@@ -203,11 +199,9 @@ function SettingsContent() {
               accessibilityElementsHidden
             />
           </View>
-          <View className="flex-1 ml-3">
-            <Text className="text-textMain font-semibold text-[15px]">
-              Change Password
-            </Text>
-            <Text className="text-textMuted text-[11px] mt-0.5">
+          <View style={styles.menuItemTextContainer}>
+            <Text style={styles.menuItemTitle}>Change Password</Text>
+            <Text style={styles.menuItemSubtitle}>
               Update your account password
             </Text>
           </View>
@@ -221,9 +215,9 @@ function SettingsContent() {
       </View>
 
       {/* Logout */}
-      <View className="flex-1" />
+      <View style={styles.flexSpacer} />
       <Pressable
-        className="bg-error/10 border border-error/30 rounded-xl py-3 items-center min-h-[48px]"
+        style={styles.logoutButton}
         onPress={() => {
           logout();
           queryClient.clear();
@@ -233,7 +227,7 @@ function SettingsContent() {
         accessibilityLabel="Sign out"
         accessibilityHint="Logs you out and clears cached data"
       >
-        <Text className="text-error font-semibold">Sign Out</Text>
+        <Text style={styles.logoutText}>Sign Out</Text>
       </Pressable>
 
       {/* Change Password Modal */}
@@ -243,20 +237,16 @@ function SettingsContent() {
         transparent
         onRequestClose={() => setPwModalOpen(false)}
       >
-        <View className="flex-1 bg-black/70 justify-end">
-          <View className="bg-[#0d0d24] rounded-t-2xl p-5 pb-10">
-            <View className="flex-row justify-between items-center mb-5">
-              <Text className="text-textMain text-lg font-bold">
-                🔒 Change Password
-              </Text>
+        <View style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔒 Change Password</Text>
               <Pressable onPress={() => setPwModalOpen(false)}>
-                <Text className="text-primary font-bold text-[15px]">
-                  Cancel
-                </Text>
+                <Text style={styles.modalCancel}>Cancel</Text>
               </Pressable>
             </View>
             <TextInput
-              className="bg-surface rounded-xl px-4 py-3 text-textMain text-sm mb-3 border border-primary/20"
+              style={styles.modalInput}
               placeholder="Current password"
               placeholderTextColor="#6b7280"
               value={currentPw}
@@ -266,7 +256,7 @@ function SettingsContent() {
               autoComplete="current-password"
             />
             <TextInput
-              className="bg-surface rounded-xl px-4 py-3 text-textMain text-sm mb-3 border border-primary/20"
+              style={styles.modalInput}
               placeholder="New password (min 8 chars)"
               placeholderTextColor="#6b7280"
               value={newPw}
@@ -276,7 +266,7 @@ function SettingsContent() {
               autoComplete="new-password"
             />
             <Pressable
-              className={`bg-primary rounded-xl py-3 items-center mt-2 min-h-[48px] ${pwLoading ? "opacity-50" : ""}`}
+              style={[styles.modalButton, pwLoading && styles.opacity50]}
               onPress={handleChangePassword}
               disabled={pwLoading}
               accessibilityRole="button"
@@ -286,7 +276,7 @@ function SettingsContent() {
               {pwLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text className="text-white font-bold">Update Password</Text>
+                <Text style={styles.modalButtonText}>Update Password</Text>
               )}
             </Pressable>
           </View>
@@ -300,20 +290,16 @@ function SettingsContent() {
         transparent
         onRequestClose={() => setProfileModalOpen(false)}
       >
-        <View className="flex-1 bg-black/70 justify-end">
-          <View className="bg-[#0d0d24] rounded-t-2xl p-5 pb-10">
-            <View className="flex-row justify-between items-center mb-5">
-              <Text className="text-textMain text-lg font-bold">
-                ✏️ Edit Profile
-              </Text>
+        <View style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>✏️ Edit Profile</Text>
               <Pressable onPress={() => setProfileModalOpen(false)}>
-                <Text className="text-primary font-bold text-[15px]">
-                  Cancel
-                </Text>
+                <Text style={styles.modalCancel}>Cancel</Text>
               </Pressable>
             </View>
             <TextInput
-              className="bg-surface rounded-xl px-4 py-3 text-textMain text-sm mb-3 border border-primary/20"
+              style={styles.modalInput}
               placeholder="Display name"
               placeholderTextColor="#6b7280"
               value={displayName}
@@ -322,7 +308,7 @@ function SettingsContent() {
               autoComplete="name"
             />
             <Pressable
-              className={`bg-primary rounded-xl py-3 items-center mt-2 min-h-[48px] ${profileLoading ? "opacity-50" : ""}`}
+              style={[styles.modalButton, profileLoading && styles.opacity50]}
               onPress={handleUpdateProfile}
               disabled={profileLoading}
               accessibilityRole="button"
@@ -332,7 +318,7 @@ function SettingsContent() {
               {profileLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text className="text-white font-bold">Save</Text>
+                <Text style={styles.modalButtonText}>Save</Text>
               )}
             </Pressable>
           </View>
@@ -349,3 +335,107 @@ export default function SettingsScreen() {
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  unauthContainer: {
+    flex: 1,
+    backgroundColor: "#050510",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  unauthText: { color: "#94a3b8", marginBottom: 16 },
+  signInButton: {
+    backgroundColor: "#818cf8",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  signInText: { color: "#ffffff", fontWeight: "bold" },
+  container: { flex: 1, backgroundColor: "#050510", padding: 16 },
+  section: { marginBottom: 24 },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#141423",
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 56,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#818cf8",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: { color: "#ffffff", fontSize: 20, fontWeight: "bold" },
+  menuItemTextContainer: { flex: 1, marginLeft: 12 },
+  menuItemTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 16 },
+  menuItemSubtitle: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "rgba(129, 140, 248, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  spacer: { height: 8 },
+  flexSpacer: { flex: 1 },
+  logoutButton: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    minHeight: 48,
+  },
+  logoutText: { color: "#ef4444", fontWeight: "600" },
+  modalBg: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#0d0d24",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: { color: "#f8fafc", fontSize: 18, fontWeight: "bold" },
+  modalCancel: { color: "#818cf8", fontWeight: "bold", fontSize: 15 },
+  modalInput: {
+    backgroundColor: "#141423",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: "#f8fafc",
+    fontSize: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(129, 140, 248, 0.2)",
+  },
+  modalButton: {
+    backgroundColor: "#818cf8",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 8,
+    minHeight: 48,
+  },
+  modalButtonText: { color: "#ffffff", fontWeight: "bold" },
+  opacity50: { opacity: 0.5 },
+});
