@@ -36,7 +36,7 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
     <View style={styles.container}>
       <Pressable onPress={handlePress} style={styles.pressable}>
         <Image
-          source={{ uri: featuredItem.background || featuredItem.poster }}
+          source={{ uri: featuredItem.poster }}
           style={styles.image}
           resizeMode="cover"
         />

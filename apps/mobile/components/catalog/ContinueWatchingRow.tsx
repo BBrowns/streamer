@@ -40,12 +40,14 @@ function ContinueWatchingCard({ item }: { item: WatchProgress }) {
       accessibilityLabel={`Continue watching ${item.title}, ${remainingMinutes} minutes remaining`}
       accessibilityHint="Opens the detail page to resume playback"
     >
-      <Image
-        source={{ uri: item.poster ?? undefined }}
-        style={styles.poster}
-        accessibilityLabel={`${item.title} poster`}
-      />
-      <ProgressBar current={item.currentTime} total={item.duration} />
+      <View style={styles.posterContainer}>
+        <Image
+          source={{ uri: item.poster ?? undefined }}
+          style={styles.poster}
+          accessibilityLabel={`${item.title} poster`}
+        />
+        <ProgressBar current={item.currentTime} total={item.duration} />
+      </View>
       <View style={styles.cardInfo}>
         <Text style={styles.cardTitle} numberOfLines={1}>
           {item.title}
@@ -107,19 +109,32 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#1a1a3e",
   },
-  poster: {
+  posterContainer: {
     width: 160,
     height: 90,
     backgroundColor: "#2a2a4e",
+    position: "relative",
+  },
+  poster: {
+    width: 160,
+    height: 90,
   },
   progressTrack: {
-    height: 3,
-    backgroundColor: "rgba(129, 140, 248, 0.2)",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   progressFill: {
-    height: 3,
+    height: 4,
     backgroundColor: "#818cf8",
-    borderRadius: 2,
+    shadowColor: "#818cf8",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cardInfo: {
     padding: 8,
