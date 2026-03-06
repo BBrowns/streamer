@@ -4,19 +4,21 @@ import {
   Pressable,
   ScrollView,
   RefreshControl,
+  StyleSheet,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, Stack } from "expo-router";
 import { useState, useCallback } from "react";
-import { useAddons } from "../../hooks/useAddons";
-import { useQueryClient } from "@tanstack/react-query";
-import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
-import { useAuthStore } from "../../stores/authStore";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { SkeletonRow } from "../../components/ui/SkeletonLoader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
+import { useAuthStore } from "../../stores/authStore";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAddons } from "../../hooks/useAddons";
+import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
+import { HeroBanner } from "../../components/catalog/HeroBanner";
 
 function DiscoverContent() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -39,7 +41,7 @@ function DiscoverContent() {
   // Wait for auth hydration
   if (!isHydrated) {
     return (
-      <View className="flex-1 bg-background pt-4">
+      <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: 16 }}>
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
@@ -49,7 +51,7 @@ function DiscoverContent() {
 
   if (!isAuthenticated) {
     return (
-      <View className="flex-1 bg-background">
+      <View style={{ flex: 1, backgroundColor: "#000000" }}>
         <EmptyState
           emoji="🎬"
           title="Welcome to Streamer"
@@ -63,7 +65,7 @@ function DiscoverContent() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-background pt-4">
+      <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: 16 }}>
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
@@ -82,7 +84,7 @@ function DiscoverContent() {
 
   if (catalogRows.length === 0) {
     return (
-      <View className="flex-1 bg-background">
+      <View style={{ flex: 1, backgroundColor: "#000000" }}>
         <EmptyState
           icon="search"
           title="No Content Sources"
@@ -96,17 +98,23 @@ function DiscoverContent() {
 
   return (
     <ScrollView
-      className="flex-1 bg-background"
+      style={{ flex: 1, backgroundColor: "#000000" }}
+      contentInsetAdjustmentBehavior="never"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={handleRefresh}
-          tintColor="#818cf8"
-          colors={["#818cf8"]}
+          tintColor="#e50914"
+          colors={["#e50914"]}
         />
       }
     >
       <OfflineBanner />
+
+      {/* Hero Banner featuring first catalog's first item */}
+      {catalogRows.length > 0 && (
+        <HeroBanner catalog={catalogRows[0].catalog} />
+      )}
 
       {/* Continue Watching — always first if there are items */}
       <ContinueWatchingRow />
@@ -126,6 +134,7 @@ function DiscoverContent() {
 export default function DiscoverScreen() {
   return (
     <ErrorBoundary>
+      <Stack.Screen options={{ headerShown: false }} />
       <DiscoverContent />
     </ErrorBoundary>
   );
