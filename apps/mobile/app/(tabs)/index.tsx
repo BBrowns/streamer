@@ -119,6 +119,7 @@ function HomeContent() {
 
       {!isLoading && movies && movies.length > 0 && (
         <FlatList
+          testID="home-grid"
           data={movies}
           keyExtractor={(item) => item.id}
           key={`grid-${numColumns}`}

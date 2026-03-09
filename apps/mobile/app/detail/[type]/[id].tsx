@@ -25,6 +25,8 @@ import {
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
 import type { MediaInfo } from "../../../stores/playerStore";
+import { useDownloadStore } from "../../../stores/downloadStore";
+import { downloadService } from "../../../services/DownloadService";
 import { useCallback, useState, useEffect } from "react";
 
 const { height } = Dimensions.get("window");
@@ -34,13 +36,19 @@ function StreamItem({
   stream,
   index,
   onPress,
+  onDownload,
 }: {
   stream: Stream;
   index: number;
   onPress: () => void;
+  onDownload: () => void;
 }) {
   const [playable, setPlayable] = useState(false);
   const engine = streamEngineManager.resolveEngine(stream);
+  const id = stream.infoHash || stream.url || `stream_${index}`;
+  const task = useDownloadStore((state) => state.tasks[id]);
+  const isDownloading = task?.status === "Downloading";
+  const isCompleted = task?.status === "Completed";
 
   useEffect(() => {
     let isMounted = true;
@@ -87,9 +95,30 @@ function StreamItem({
           )}
         </View>
       </View>
-      <Text style={[styles.playIcon, !playable && styles.playIconDisabled]}>
-        {playable ? "▶" : "🔒"}
-      </Text>
+      <View style={styles.streamActions}>
+        <Pressable
+          style={styles.downloadIconBtn}
+          onPress={() => {
+            hapticImpactLight();
+            onDownload();
+          }}
+          disabled={!playable || isCompleted}
+        >
+          {isDownloading ? (
+            <ActivityIndicator size="small" color="#818cf8" />
+          ) : (
+            <Ionicons
+              name={isCompleted ? "cloud-offline" : "download-outline"}
+              size={22}
+              color={isCompleted ? "#4ade80" : playable ? "#818cf8" : "#3f3f46"}
+            />
+          )}
+        </Pressable>
+
+        <Text style={[styles.playIcon, !playable && styles.playIconDisabled]}>
+          {playable ? "▶" : "🔒"}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -123,19 +152,34 @@ export default function DetailScreen() {
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
   const handlePlayStream = async (stream: Stream) => {
+    // Check if downloaded first
+    const id = stream.infoHash || stream.url;
+    const task = useDownloadStore.getState().tasks[id || ""];
+
+    if (task?.status === "Completed" && task.localUri) {
+      console.log("[DetailScreen] Playing from local storage:", task.localUri);
+      setStream({ ...stream, url: task.localUri }, {
+        type: (type as "movie" | "series") ?? "movie",
+        itemId: id || "unknown",
+        title: meta?.name ?? stream.title ?? "Unknown",
+        poster: meta?.poster,
+      });
+      router.push("/player");
+      return;
+    }
+
     const uri = await streamEngineManager.getPlaybackUri(stream);
     const playable = !!uri && uri.length > 0;
 
-    // For torrent streams, re-probe bridge if not currently "playable" via debrid or existing bridge
+    // ... existing bridge logic ...
     if (!playable && stream.infoHash) {
       const bridgeUp = await streamEngineManager.detectBridge();
       if (bridgeUp) {
-        // Bridge just came online — retry resolution
         const retryUri = await streamEngineManager.getPlaybackUri(stream);
         if (retryUri && retryUri.length > 0) {
           const mediaInfo: MediaInfo = {
             type: (type as "movie" | "series") ?? "movie",
-            itemId: id,
+            itemId: id || "unknown",
             title: meta?.name ?? stream.title ?? "Unknown",
             poster: meta?.poster,
           };
@@ -148,27 +192,40 @@ export default function DetailScreen() {
 
     if (!playable) {
       const msg = stream.infoHash
-        ? "This is a torrent stream. Start the stream-server daemon first:\n\nnpm run dev:stream-server\n\nAlternatively, enable Real-Debrid in your settings if available."
-        : "This stream does not provide a direct playable URL. It may require additional resolution.";
+        ? "This is a torrent stream. Start the stream-server bridge first."
+        : "This stream is not playable.";
 
-      if (Platform.OS === "web") {
-        window.alert(`Unsupported Stream\n\n${msg}`);
-      } else {
-        Alert.alert("Unsupported Stream", msg);
-      }
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Unsupported Stream", msg);
       return;
     }
 
-    // Build MediaInfo for server progress reporting
     const mediaInfo: MediaInfo = {
       type: (type as "movie" | "series") ?? "movie",
-      itemId: id,
+      itemId: id || "unknown",
       title: meta?.name ?? stream.title ?? "Unknown",
       poster: meta?.poster,
     };
 
     setStream(stream, mediaInfo);
     router.push("/player");
+  };
+
+  const handleDownloadStream = async (stream: Stream) => {
+    if (!meta) return;
+
+    const mediaInfo: any = {
+      itemId: id,
+      type: type,
+      title: meta.name,
+      poster: meta.poster,
+    };
+
+    try {
+      await downloadService.startDownload(stream, mediaInfo);
+    } catch (e) {
+      Alert.alert("Download Error", "Failed to start download.");
+    }
   };
 
   if (metaLoading) {
@@ -295,6 +352,7 @@ export default function DetailScreen() {
                     stream={stream}
                     index={i}
                     onPress={() => handlePlayStream(stream)}
+                    onDownload={() => handleDownloadStream(stream)}
                   />
                 );
               })
@@ -509,6 +567,14 @@ const styles = StyleSheet.create({
   },
   playIconDisabled: {
     color: "#52525b",
+  },
+  streamActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  downloadIconBtn: {
+    padding: 4,
   },
   emptyText: {
     color: "#6b7280",

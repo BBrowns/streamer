@@ -20,15 +20,29 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo } from "react";
 import type { LibraryItem } from "@streamer/shared";
 import * as Haptics from "expo-haptics";
+import { useDownloadStore } from "../../stores/downloadStore";
+import { Ionicons } from "@expo/vector-icons";
 
 function LibraryCard({
   item,
   onRemove,
 }: {
-  item: LibraryItem;
-  onRemove: (id: string) => void;
+  item: any; // Can be LibraryItem or DownloadMediaItem
+  onRemove: (id: string, isDownload?: boolean) => void;
 }) {
   const router = useRouter();
+  const itemId = item.itemId || item.id;
+
+  // Check download status for this item
+  // Note: We might have multiple streams for one item, but the store usually tracks per-item as well if we simplify.
+  // For now, we'll just check if ANY task for this itemId exists if we were tracking by infoHash.
+  // Actually, for the library view, we'll try to find a task that matches this itemId.
+  const tasks = useDownloadStore((state) => state.tasks);
+  const task = Object.values(tasks).find(t => t.mediaInfo.itemId === itemId);
+
+  const isDownloading = task?.status === "Downloading";
+  const isCompleted = task?.status === "Completed";
+  const progress = task?.progress || 0;
 
   const handleLongPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -43,9 +57,9 @@ function LibraryCard({
         },
         (buttonIndex) => {
           if (buttonIndex === 1) {
-            router.push(`/detail/${item.type}/${item.itemId}`);
+            router.push(`/detail/${item.type}/${itemId}`);
           } else if (buttonIndex === 2) {
-            onRemove(item.itemId);
+            onRemove(itemId, !!task);
           }
         },
       );
@@ -54,12 +68,12 @@ function LibraryCard({
         { text: "Cancel", style: "cancel" },
         {
           text: "View Details",
-          onPress: () => router.push(`/detail/${item.type}/${item.itemId}`),
+          onPress: () => router.push(`/detail/${item.type}/${itemId}`),
         },
         {
-          text: "Remove",
+          text: task ? "Remove Download" : "Remove",
           style: "destructive",
-          onPress: () => onRemove(item.itemId),
+          onPress: () => onRemove(itemId, !!task),
         },
       ]);
     }
@@ -68,7 +82,7 @@ function LibraryCard({
   return (
     <Pressable
       style={styles.cardContainer}
-      onPress={() => router.push(`/detail/${item.type}/${item.itemId}`)}
+      onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
       onLongPress={handleLongPress}
       accessibilityRole="button"
       accessibilityLabel={`${item.title}. Long press for options`}
@@ -86,6 +100,17 @@ function LibraryCard({
         <Text style={styles.cardSubtitle}>
           {item.type === "movie" ? "🎬 Movie" : "📺 Series"}
         </Text>
+        {isDownloading && (
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+          </View>
+        )}
+        {isCompleted && (
+          <View style={styles.downloadBadge}>
+            <Ionicons name="cloud-offline" size={12} color="#4ade80" />
+            <Text style={styles.downloadBadgeText}>Offline</Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -97,24 +122,41 @@ export default function LibraryScreen() {
   const queryClient = useQueryClient();
   const { data: items, isLoading } = useLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
+  const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<"all" | "movie" | "show">(
+  const [activeFilter, setActiveFilter] = useState<"all" | "movie" | "show" | "offline">(
     "all",
   );
 
   const handleRemove = useCallback(
-    (itemId: string) => {
+    (itemId: string, isDownload?: boolean) => {
+      if (isDownload) {
+        // find task id (which might be infohash)
+        const task = Object.values(tasks).find(t => t.mediaInfo.itemId === itemId);
+        if (task) {
+          const { downloadService } = require("../../services/DownloadService");
+          downloadService.deleteDownload(task.id);
+        }
+      }
       removeFromLibrary.mutate(itemId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [removeFromLibrary],
+    [removeFromLibrary, tasks],
   );
 
   const filteredItems = useMemo(() => {
+    if (activeFilter === "offline") {
+      // Map download tasks to a similar structure as LibraryItem
+      return Object.values(tasks).map(t => ({
+        ...t.mediaInfo,
+        itemId: t.mediaInfo.itemId,
+        id: t.id, // using task id for list key
+      }));
+    }
     if (!items) return [];
     if (activeFilter === "all") return items;
     return items.filter((item) => item.type === activeFilter);
-  }, [items, activeFilter]);
+  }, [items, tasks, activeFilter]);
 
   if (!isAuthenticated) {
     return (
@@ -147,8 +189,8 @@ export default function LibraryScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={filteredItems}
-        keyExtractor={(item) => item.id}
+        data={filteredItems as any[]}
+        keyExtractor={(item) => item.id || item.itemId}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
@@ -216,6 +258,25 @@ export default function LibraryScreen() {
                     ]}
                   >
                     Series
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.filterChip,
+                    activeFilter === "offline" && styles.filterChipActive,
+                  ]}
+                  onPress={() => {
+                    setActiveFilter("offline");
+                    Haptics.selectionAsync();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      activeFilter === "offline" && styles.filterChipTextActive,
+                    ]}
+                  >
+                    Offline
                   </Text>
                 </Pressable>
               </ScrollView>
@@ -345,4 +406,26 @@ const styles = StyleSheet.create({
   cardInfo: { padding: 8 },
   cardTitle: { color: "#f8fafc", fontSize: 13, fontWeight: "600" },
   cardSubtitle: { color: "#94a3b8", fontSize: 11, marginTop: 4 },
+  progressContainer: {
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: "#818cf8",
+  },
+  downloadBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+  },
+  downloadBadgeText: {
+    color: "#4ade80",
+    fontSize: 10,
+    fontWeight: "700",
+  },
 });

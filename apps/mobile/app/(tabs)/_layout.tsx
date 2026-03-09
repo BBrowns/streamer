@@ -22,6 +22,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
+          tabBarAccessibilityLabel: "Home",
         }}
       />
       <Tabs.Screen
@@ -31,6 +32,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="compass" size={size} color={color} />
           ),
+          tabBarAccessibilityLabel: "Discover",
         }}
       />
       <Tabs.Screen
@@ -40,6 +42,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="bookmark" size={size} color={color} />
           ),
+          tabBarAccessibilityLabel: "Library",
         }}
       />
       <Tabs.Screen
@@ -49,6 +52,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings" size={size} color={color} />
           ),
+          tabBarAccessibilityLabel: "Settings",
         }}
       />
     </Tabs>

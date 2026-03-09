@@ -98,6 +98,7 @@ function DiscoverContent() {
 
   return (
     <ScrollView
+      testID="discover-screen"
       style={{ flex: 1, backgroundColor: "#000000" }}
       contentInsetAdjustmentBehavior="never"
       refreshControl={
