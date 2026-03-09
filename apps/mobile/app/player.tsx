@@ -117,8 +117,8 @@ export default function PlayerScreen() {
     };
   }, [currentStream]);
 
-  const player = useVideoPlayer(playbackUri || "", (p) => {
-    p.play();
+  const player = useVideoPlayer(playbackUri ?? null, (p) => {
+    if (playbackUri) p.play();
   });
 
   useEffect(() => {

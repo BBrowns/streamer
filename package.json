@@ -64,5 +64,9 @@
       "prettier --write"
     ]
   },
-  "packageManager": "npm@10.9.0"
+  "packageManager": "npm@10.9.0",
+  "dependencies": {
+    "expo": "~55.0.5",
+    "expo-video": "~55.0.10"
+  }
 }
