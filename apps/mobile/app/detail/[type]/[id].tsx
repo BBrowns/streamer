@@ -35,30 +35,21 @@ const BACKDROP_HEIGHT = height * 0.55;
 function StreamItem({
   stream,
   index,
+  playable,
   onPress,
   onDownload,
 }: {
   stream: Stream;
   index: number;
+  playable: boolean;
   onPress: () => void;
   onDownload: () => void;
 }) {
-  const [playable, setPlayable] = useState(false);
   const engine = streamEngineManager.resolveEngine(stream);
   const id = stream.infoHash || stream.url || `stream_${index}`;
   const task = useDownloadStore((state) => state.tasks[id]);
   const isDownloading = task?.status === "Downloading";
   const isCompleted = task?.status === "Completed";
-
-  useEffect(() => {
-    let isMounted = true;
-    streamEngineManager.getPlaybackUri(stream).then((uri) => {
-      if (isMounted) setPlayable(!!uri && uri.length > 0);
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, [stream]);
 
   return (
     <Pressable
@@ -130,6 +121,26 @@ export default function DetailScreen() {
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
 
+  // Resolve playability for ALL streams in a single batch (eliminates N+1)
+  const [playableMap, setPlayableMap] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!streams || streams.length === 0) return;
+    let mounted = true;
+    Promise.all(
+      streams.map(async (s, i) => {
+        const key = s.infoHash || s.url || `stream_${i}`;
+        const uri = await streamEngineManager.getPlaybackUri(s);
+        return [key, !!uri && uri.length > 0] as [string, boolean];
+      }),
+    ).then((entries) => {
+      if (!mounted) return;
+      setPlayableMap(Object.fromEntries(entries));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [streams]);
+
   // Library state
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
@@ -152,17 +163,21 @@ export default function DetailScreen() {
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
   const handlePlayStream = async (stream: Stream) => {
-    // Check if downloaded first
-    const id = stream.infoHash || stream.url;
-    const task = useDownloadStore.getState().tasks[id || ""];
+    // Check if downloaded first — guard against empty localUri
+    const streamId = stream.infoHash || stream.url;
+    const task = useDownloadStore.getState().tasks[streamId || ""];
 
-    if (task?.status === "Completed" && task.localUri) {
+    if (
+      task?.status === "Completed" &&
+      task.localUri &&
+      task.localUri.length > 5
+    ) {
       console.log("[DetailScreen] Playing from local storage:", task.localUri);
       setStream(
         { ...stream, url: task.localUri },
         {
           type: (type as "movie" | "series") ?? "movie",
-          itemId: id || "unknown",
+          itemId: streamId || "unknown",
           title: meta?.name ?? stream.title ?? "Unknown",
           poster: meta?.poster,
         },
@@ -349,11 +364,13 @@ export default function DetailScreen() {
               <ActivityIndicator color="#818cf8" />
             ) : !!streams && streams.length > 0 ? (
               streams.map((stream, i) => {
+                const streamId = stream.infoHash || stream.url || `stream_${i}`;
                 return (
                   <StreamItem
-                    key={i}
+                    key={streamId}
                     stream={stream}
                     index={i}
+                    playable={playableMap[streamId] ?? false}
                     onPress={() => handlePlayStream(stream)}
                     onDownload={() => handleDownloadStream(stream)}
                   />
