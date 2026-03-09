@@ -158,12 +158,15 @@ export default function DetailScreen() {
 
     if (task?.status === "Completed" && task.localUri) {
       console.log("[DetailScreen] Playing from local storage:", task.localUri);
-      setStream({ ...stream, url: task.localUri }, {
-        type: (type as "movie" | "series") ?? "movie",
-        itemId: id || "unknown",
-        title: meta?.name ?? stream.title ?? "Unknown",
-        poster: meta?.poster,
-      });
+      setStream(
+        { ...stream, url: task.localUri },
+        {
+          type: (type as "movie" | "series") ?? "movie",
+          itemId: id || "unknown",
+          title: meta?.name ?? stream.title ?? "Unknown",
+          poster: meta?.poster,
+        },
+      );
       router.push("/player");
       return;
     }

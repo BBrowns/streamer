@@ -38,7 +38,7 @@ function LibraryCard({
   // For now, we'll just check if ANY task for this itemId exists if we were tracking by infoHash.
   // Actually, for the library view, we'll try to find a task that matches this itemId.
   const tasks = useDownloadStore((state) => state.tasks);
-  const task = Object.values(tasks).find(t => t.mediaInfo.itemId === itemId);
+  const task = Object.values(tasks).find((t) => t.mediaInfo.itemId === itemId);
 
   const isDownloading = task?.status === "Downloading";
   const isCompleted = task?.status === "Completed";
@@ -102,7 +102,9 @@ function LibraryCard({
         </Text>
         {isDownloading && (
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+            <View
+              style={[styles.progressBar, { width: `${progress * 100}%` }]}
+            />
           </View>
         )}
         {isCompleted && (
@@ -124,15 +126,17 @@ export default function LibraryScreen() {
   const removeFromLibrary = useRemoveFromLibrary();
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<"all" | "movie" | "show" | "offline">(
-    "all",
-  );
+  const [activeFilter, setActiveFilter] = useState<
+    "all" | "movie" | "show" | "offline"
+  >("all");
 
   const handleRemove = useCallback(
     (itemId: string, isDownload?: boolean) => {
       if (isDownload) {
         // find task id (which might be infohash)
-        const task = Object.values(tasks).find(t => t.mediaInfo.itemId === itemId);
+        const task = Object.values(tasks).find(
+          (t) => t.mediaInfo.itemId === itemId,
+        );
         if (task) {
           const { downloadService } = require("../../services/DownloadService");
           downloadService.deleteDownload(task.id);
@@ -147,7 +151,7 @@ export default function LibraryScreen() {
   const filteredItems = useMemo(() => {
     if (activeFilter === "offline") {
       // Map download tasks to a similar structure as LibraryItem
-      return Object.values(tasks).map(t => ({
+      return Object.values(tasks).map((t) => ({
         ...t.mediaInfo,
         itemId: t.mediaInfo.itemId,
         id: t.id, // using task id for list key

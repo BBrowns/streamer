@@ -18,3 +18,7 @@ aggregatorRouter.get("/stream/:type/:id", (c) =>
 aggregatorRouter.get("/stream/resolve/:type/:id/:infoHash", (c) =>
   aggregatorController.resolveStream(c),
 );
+// Bulk resolve: POST /stream/resolve-bulk { type, infoHashes: string[] }
+aggregatorRouter.post("/stream/resolve-bulk", (c) =>
+  aggregatorController.resolveStreamsBulk(c),
+);
