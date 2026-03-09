@@ -365,16 +365,6 @@ export default function PlayerScreen() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
-        {controlsVisible && (
-          <PlayerOverlay
-            currentStream={currentStream}
-            engineType={engine?.getEngineType() ?? "Unknown"}
-            stats={stats}
-            onClose={handleClose}
-            onSettings={() => setSettingsOpen(true)}
-          />
-        )}
-
         <View style={styles.videoContainer}>
           {seekFeedback && (
             <View
@@ -422,7 +412,7 @@ export default function PlayerScreen() {
             </View>
           )}
 
-          {player && (
+          {player && playbackUri && (
             <VideoView
               player={player}
               style={{ width: "100%", height: "100%" }}
@@ -438,18 +428,6 @@ export default function PlayerScreen() {
             errorMessage={errorMessage}
             onBack={handleClose}
           />
-
-          <PlayerControls
-            player={player}
-            currentTime={player?.currentTime || 0}
-            duration={player?.duration || 0}
-            isVisible={controlsVisible}
-            isPlaying={player?.playing ?? false}
-            onPlayPause={() => {
-              if (player?.playing) player.pause();
-              else player?.play();
-            }}
-          />
         </View>
 
         {/* Fake Brightness Filter */}
@@ -461,6 +439,32 @@ export default function PlayerScreen() {
               pointerEvents: "none",
             },
           ]}
+        />
+
+        {/* PlayerOverlay and PlayerControls rendered AFTER videoContainer and
+            brightness filter — in React Native later siblings sit on top, so
+            the Close button and scrubber are always touchable above the
+            fullscreen left/right tap zones */}
+        {controlsVisible && (
+          <PlayerOverlay
+            currentStream={currentStream}
+            engineType={engine?.getEngineType() ?? "Unknown"}
+            stats={stats}
+            onClose={handleClose}
+            onSettings={() => setSettingsOpen(true)}
+          />
+        )}
+
+        <PlayerControls
+          player={player}
+          currentTime={player?.currentTime || 0}
+          duration={player?.duration || 0}
+          isVisible={controlsVisible}
+          isPlaying={player?.playing ?? false}
+          onPlayPause={() => {
+            if (player?.playing) player.pause();
+            else player?.play();
+          }}
         />
 
         <PlayerSettingsModal
