@@ -6,6 +6,7 @@ import {
   Pressable,
   RefreshControl,
   useWindowDimensions,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, memo } from "react";
@@ -33,8 +34,7 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
 
   return (
     <Pressable
-      style={{ flex: 1, marginHorizontal: 4, marginBottom: 12 }}
-      className="rounded-xl overflow-hidden bg-surface"
+      style={styles.cardContainer}
       onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
       accessibilityRole="button"
       accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
@@ -42,21 +42,16 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
     >
       <Image
         source={{ uri: item.poster }}
-        className="w-full aspect-[2/3] bg-surface/50"
+        style={styles.cardImage}
         accessibilityIgnoresInvertColors
       />
-      <View className="p-2">
-        <Text
-          className="text-textMain font-semibold text-[13px]"
-          numberOfLines={2}
-        >
+      <View style={styles.cardInfo}>
+        <Text style={styles.cardTitle} numberOfLines={2}>
           {item.name}
         </Text>
         {!!item.imdbRating && (
-          <View className="mt-1">
-            <Text className="text-amber-400 text-[11px] font-semibold">
-              ⭐ {item.imdbRating}
-            </Text>
+          <View style={styles.ratingContainer}>
+            <Text style={styles.ratingText}>⭐ {item.imdbRating}</Text>
           </View>
         )}
       </View>
@@ -79,7 +74,7 @@ function HomeContent() {
 
   if (!isHydrated) {
     return (
-      <View className="flex-1 bg-background">
+      <View style={styles.container}>
         <SkeletonCardGrid count={6} />
       </View>
     );
@@ -87,30 +82,27 @@ function HomeContent() {
 
   if (!isAuthenticated) {
     return (
-      <View className="flex-1 bg-background justify-center items-center px-8">
-        <Text
-          className="text-4xl font-extrabold text-textMain mb-3"
-          accessibilityRole="header"
-        >
+      <View style={styles.authContainer}>
+        <Text style={styles.authTitle} accessibilityRole="header">
           🎬 Streamer
         </Text>
-        <Text className="text-base text-textMuted text-center leading-6 mb-8">
+        <Text style={styles.authSubtitle}>
           Your universe of content, aggregated from the open web.
         </Text>
         <Pressable
-          className="bg-primary px-8 py-3.5 rounded-xl shadow-lg shadow-primary/40"
+          style={styles.authButton}
           onPress={() => router.push("/login")}
           accessibilityRole="button"
           accessibilityLabel="Get started and sign in"
         >
-          <Text className="text-white font-bold text-base">Get Started</Text>
+          <Text style={styles.authButtonText}>Get Started</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-background">
+    <View style={styles.container}>
       <OfflineBanner />
 
       {isLoading && <SkeletonCardGrid count={numColumns * 3} />}
@@ -127,6 +119,7 @@ function HomeContent() {
 
       {!isLoading && movies && movies.length > 0 && (
         <FlatList
+          testID="home-grid"
           data={movies}
           keyExtractor={(item) => item.id}
           key={`grid-${numColumns}`}
@@ -157,3 +150,56 @@ export default function HomeScreen() {
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#050510" },
+  cardContainer: {
+    flex: 1,
+    marginHorizontal: 4,
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#141423",
+  },
+  cardImage: {
+    width: "100%",
+    aspectRatio: 2 / 3,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  cardInfo: { padding: 8 },
+  cardTitle: { color: "#f8fafc", fontWeight: "600", fontSize: 13 },
+  ratingContainer: { marginTop: 4 },
+  ratingText: { color: "#fbbf24", fontSize: 11, fontWeight: "600" },
+  authContainer: {
+    flex: 1,
+    backgroundColor: "#050510",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  authTitle: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#f8fafc",
+    marginBottom: 12,
+  },
+  authSubtitle: {
+    fontSize: 16,
+    color: "#94a3b8",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  authButton: {
+    backgroundColor: "#818cf8",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: "#818cf8",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  authButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
+});

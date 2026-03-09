@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -33,18 +34,16 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-background justify-center"
+      style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View className="px-8">
-        <Text className="text-3xl font-extrabold text-textMain mb-1">
-          Welcome Back
-        </Text>
-        <Text className="text-sm text-textMuted mb-7">Sign in to continue</Text>
+      <View style={styles.formContainer}>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to continue</Text>
 
         {(error || localError) && (
-          <View className="bg-error/10 rounded-lg p-3 mb-4">
-            <Text className="text-error text-sm">
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>
               {localError ||
                 (error instanceof AxiosError
                   ? (error.response?.data?.error as string)
@@ -55,7 +54,7 @@ export default function LoginScreen() {
         )}
 
         <TextInput
-          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          style={styles.input}
           placeholder="Email"
           placeholderTextColor="#6b7280"
           value={email}
@@ -64,7 +63,7 @@ export default function LoginScreen() {
           autoCapitalize="none"
         />
         <TextInput
-          className="bg-surface rounded-xl px-4 py-3.5 text-textMain text-base mb-3 border border-primary/20"
+          style={styles.input}
           placeholder="Password"
           placeholderTextColor="#6b7280"
           value={password}
@@ -73,32 +72,75 @@ export default function LoginScreen() {
         />
 
         <Pressable
-          className={`bg-primary rounded-xl py-3.5 items-center mt-2 mb-5 shadow-lg shadow-primary/30 ${isLoading ? "opacity-60" : ""}`}
+          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
           onPress={handleLogin}
           disabled={isLoading}
         >
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text className="text-white font-bold text-base">Sign In</Text>
+            <Text style={styles.loginButtonText}>Sign In</Text>
           )}
         </Pressable>
 
         <Pressable onPress={() => router.push("/forgot-password")}>
-          <Text className="text-textMuted text-center text-sm">
-            <Text className="text-primary font-bold">Forgot password?</Text>
+          <Text style={styles.linkTextCentered}>
+            <Text style={styles.linkTextPrimary}>Forgot password?</Text>
           </Text>
         </Pressable>
 
-        <View className="h-3" />
+        <View style={styles.spacer} />
 
         <Pressable onPress={() => router.replace("/register")}>
-          <Text className="text-textMuted text-center text-sm">
+          <Text style={styles.linkTextCentered}>
             Don't have an account?{" "}
-            <Text className="text-primary font-bold">Sign Up</Text>
+            <Text style={styles.linkTextPrimary}>Sign Up</Text>
           </Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#050510", justifyContent: "center" },
+  formContainer: { paddingHorizontal: 32 },
+  title: { fontSize: 30, fontWeight: "900", color: "#f8fafc", marginBottom: 4 },
+  subtitle: { fontSize: 14, color: "#94a3b8", marginBottom: 28 },
+  errorContainer: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: { color: "#ef4444", fontSize: 14 },
+  input: {
+    backgroundColor: "#141423",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: "#f8fafc",
+    fontSize: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(129, 140, 248, 0.2)",
+  },
+  loginButton: {
+    backgroundColor: "#818cf8",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 20,
+    shadowColor: "#818cf8",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  loginButtonDisabled: { opacity: 0.6 },
+  loginButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
+  linkTextCentered: { color: "#94a3b8", textAlign: "center", fontSize: 14 },
+  linkTextPrimary: { color: "#818cf8", fontWeight: "bold" },
+  spacer: { height: 12 },
+});

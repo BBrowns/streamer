@@ -3,6 +3,7 @@ import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
 import { createAddonPolicy } from "./resilience.js";
 import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver.js";
+import type { ResolvedStream } from "../debrid/ports/debrid.ports.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
 import type {
   AddonManifest,
@@ -188,6 +189,39 @@ export class AggregatorService {
       url: magnet,
       type: "magnet",
     };
+  }
+
+  /** Bulk-resolve multiple infoHashes in a single request (eliminates N+1 from detail screen) */
+  async resolveStreamsBulk(
+    userId: string,
+    type: string,
+    infoHashes: string[],
+    requestId: string,
+  ): Promise<Record<string, ResolvedStream | { url: string; type: string }>> {
+    const results = await Promise.allSettled(
+      infoHashes.map((infoHash) =>
+        this.resolveStream(userId, type, infoHash, infoHash, requestId),
+      ),
+    );
+
+    const resolved: Record<
+      string,
+      ResolvedStream | { url: string; type: string }
+    > = {};
+    for (let i = 0; i < infoHashes.length; i++) {
+      const result = results[i];
+      if (result.status === "fulfilled") {
+        resolved[infoHashes[i]] = result.value;
+      } else {
+        // Fallback: raw magnet
+        resolved[infoHashes[i]] = {
+          url: `magnet:?xt=urn:btih:${infoHashes[i]}`,
+          type: "magnet",
+        };
+      }
+    }
+
+    return resolved;
   }
 
   /** Search across all add-ons and all content types simultaneously, deduplicating by ID */

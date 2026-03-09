@@ -75,6 +75,27 @@ export class AggregatorController {
     return c.json({ resolved });
   }
 
+  async resolveStreamsBulk(c: Context) {
+    const body = await c.req.json<{ type: string; infoHashes: string[] }>();
+    const { type, infoHashes } = body;
+
+    if (!type || !Array.isArray(infoHashes) || infoHashes.length === 0) {
+      return c.json({ error: "type and infoHashes[] are required" }, 400);
+    }
+
+    const user = c.get("user") as any;
+    const requestId = c.get("requestId") as string;
+
+    const resolved = await aggregatorService.resolveStreamsBulk(
+      user.userId,
+      type,
+      infoHashes,
+      requestId,
+    );
+
+    return c.json({ resolved });
+  }
+
   async search(c: Context) {
     const query = c.req.query("q");
     if (!query || query.trim().length === 0) {

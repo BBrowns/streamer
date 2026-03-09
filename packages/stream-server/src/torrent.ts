@@ -171,14 +171,34 @@ export async function streamRequest(req: Request, res: Response) {
         `[stream-server] Added new torrent: ${torrent.infoHash || "(awaiting metadata)"}`,
       );
 
-      // Debug logging for peer discovery
+      // Throttled peer logging — log only on first connection and every 10 peers
+      let _lastLoggedPeers = -1;
       torrent.on("wire", () => {
-        console.log(
-          `[stream-server] Wire connected! Peers: ${torrent.numPeers}`,
-        );
+        const n = torrent.numPeers;
+        if (_lastLoggedPeers === -1 || n >= _lastLoggedPeers + 10) {
+          console.log(
+            `[stream-server] Peers: ${n} (infoHash: ${torrent.infoHash?.slice(0, 8) ?? "…"})`,
+          );
+          _lastLoggedPeers = n;
+        }
       });
+
+      // Known-transient tracker warnings are debug noise, not actionable errors
+      const TRANSIENT_PATTERNS = [
+        "ENOTFOUND",
+        "fetch failed",
+        "Error connecting",
+        "timed out",
+        "ECONNREFUSED",
+      ];
       torrent.on("warning", (msg: string) => {
-        console.warn(`[stream-server] Torrent warning: ${msg}`);
+        const msgStr = String(msg);
+        const isTransient = TRANSIENT_PATTERNS.some((p) => msgStr.includes(p));
+        if (isTransient) {
+          // Suppress expected tracker failures — not actionable
+          return;
+        }
+        console.warn(`[stream-server] Torrent warning: ${msgStr}`);
       });
       torrent.on("error", (err: Error) => {
         console.error(`[stream-server] Torrent error: ${err.message}`);
