@@ -5,6 +5,7 @@ import {
   Platform,
   StyleSheet,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { usePlayerStore } from "../stores/playerStore";
@@ -21,6 +22,7 @@ import {
   DesktopCastModal,
   type CastDevice,
 } from "../components/DesktopCastModal";
+import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -120,6 +122,14 @@ export default function PlayerScreen() {
   const player = useVideoPlayer(playbackUri ?? null, (p) => {
     if (playbackUri) p.play();
   });
+
+  // Track whether the video is actually playing or still buffering
+  const { status: playerStatus } = useEvent(player, "statusChange", {
+    status: player.status,
+  });
+  const videoReady = playerStatus === "readyToPlay";
+  const videoLoading =
+    !playbackUri || playerStatus === "loading" || playerStatus === "idle";
 
   useEffect(() => {
     if (!remoteMediaClient || !playbackUri || !currentStream) return;
@@ -397,20 +407,23 @@ export default function PlayerScreen() {
             </View>
           )}
 
-          {streamState !== "error" && streamState !== "loading_metrics" && (
-            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              <View style={{ flex: 1, flexDirection: "row" }}>
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => handleTap("left")}
-                />
-                <Pressable
-                  style={{ flex: 1 }}
-                  onPress={() => handleTap("right")}
-                />
+          {/* Only enable seek tap zones when video is actually playing */}
+          {streamState !== "error" &&
+            streamState !== "loading_metrics" &&
+            videoReady && (
+              <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+                <View style={{ flex: 1, flexDirection: "row" }}>
+                  <Pressable
+                    style={{ flex: 1 }}
+                    onPress={() => handleTap("left")}
+                  />
+                  <Pressable
+                    style={{ flex: 1 }}
+                    onPress={() => handleTap("right")}
+                  />
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
           {player && playbackUri && (
             <VideoView
@@ -428,6 +441,24 @@ export default function PlayerScreen() {
             errorMessage={errorMessage}
             onBack={handleClose}
           />
+
+          {/* Video loading overlay — always shows a Close button */}
+          {videoLoading && (
+            <View style={styles.videoLoadingOverlay}>
+              <ActivityIndicator size="large" color="#818cf8" />
+              <Text style={styles.videoLoadingText}>
+                {!playbackUri
+                  ? "Connecting to stream..."
+                  : "Buffering video..."}
+              </Text>
+              <Pressable
+                style={styles.videoLoadingCloseBtn}
+                onPress={handleClose}
+              >
+                <Text style={styles.videoLoadingCloseBtnText}>✕ Close</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         {/* Fake Brightness Filter */}
@@ -589,4 +620,31 @@ const styles = StyleSheet.create({
     borderColor: "rgba(252,165,165,0.3)",
   },
   stopCastText: { color: "#fef2f2", fontWeight: "600", fontSize: 15 },
+  videoLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.85)",
+    zIndex: 25,
+    gap: 16,
+  },
+  videoLoadingText: {
+    color: "#e0e0ff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  videoLoadingCloseBtn: {
+    marginTop: 24,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  videoLoadingCloseBtnText: {
+    color: "#f8fafc",
+    fontWeight: "600",
+    fontSize: 14,
+  },
 });

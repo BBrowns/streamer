@@ -22,7 +22,7 @@ export function PlayerOverlay({
   onWebCast,
 }: PlayerOverlayProps) {
   return (
-    <View style={styles.overlay} pointerEvents="none">
+    <View style={styles.overlay} pointerEvents="box-none">
       {/* Top Bar */}
       <View style={styles.topBar} pointerEvents="auto">
         <Pressable
