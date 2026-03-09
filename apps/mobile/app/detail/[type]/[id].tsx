@@ -367,7 +367,7 @@ export default function DetailScreen() {
                 const streamId = stream.infoHash || stream.url || `stream_${i}`;
                 return (
                   <StreamItem
-                    key={streamId}
+                    key={`${streamId}_${i}`}
                     stream={stream}
                     index={i}
                     playable={playableMap[streamId] ?? false}

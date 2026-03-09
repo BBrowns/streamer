@@ -442,7 +442,7 @@ export default function PlayerScreen() {
             onBack={handleClose}
           />
 
-          {/* Video loading overlay — always shows a Close button */}
+          {/* Video loading overlay — high z-index to stay above VideoView/Status */}
           {videoLoading && (
             <View style={styles.videoLoadingOverlay}>
               <ActivityIndicator size="large" color="#818cf8" />
@@ -451,12 +451,6 @@ export default function PlayerScreen() {
                   ? "Connecting to stream..."
                   : "Buffering video..."}
               </Text>
-              <Pressable
-                style={styles.videoLoadingCloseBtn}
-                onPress={handleClose}
-              >
-                <Text style={styles.videoLoadingCloseBtnText}>✕ Close</Text>
-              </Pressable>
             </View>
           )}
         </View>
@@ -474,9 +468,9 @@ export default function PlayerScreen() {
 
         {/* PlayerOverlay and PlayerControls rendered AFTER videoContainer and
             brightness filter — in React Native later siblings sit on top, so
-            the Close button and scrubber are always touchable above the
-            fullscreen left/right tap zones */}
-        {controlsVisible && (
+            the Close button and scrubber are always touchable.
+            We force PlayerOverlay visible during loading to ensure exit is possible. */}
+        {(controlsVisible || videoLoading) && (
           <PlayerOverlay
             currentStream={currentStream}
             engineType={engine?.getEngineType() ?? "Unknown"}
