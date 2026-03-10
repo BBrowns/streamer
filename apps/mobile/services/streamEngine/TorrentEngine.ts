@@ -6,6 +6,7 @@ import type {
   StreamStats,
 } from "./IStreamEngine";
 import { api } from "../api";
+import { Platform } from "react-native";
 
 interface BridgeConfig {
   activeStrategy: string;
@@ -68,7 +69,12 @@ export class TorrentEngine implements IStreamEngine {
       }
 
       this.startStatsPolling();
-      return `${this.bridge.bridgeUrl}/stream?magnet=${encodeURIComponent(magnet)}`;
+      const bridgeStreamUrl = `${this.bridge.bridgeUrl}/stream?magnet=${encodeURIComponent(magnet)}`;
+      // iOS cannot play MKV natively — request server-side remux to MP4
+      if (Platform.OS === "ios") {
+        return `${bridgeStreamUrl}&remux=mp4`;
+      }
+      return bridgeStreamUrl;
     }
 
     return "";
