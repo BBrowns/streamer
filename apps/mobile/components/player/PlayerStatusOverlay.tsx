@@ -3,6 +3,7 @@ import {
   Text,
   ActivityIndicator,
   Pressable,
+  Platform,
   StyleSheet,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -49,6 +50,13 @@ export function PlayerStatusOverlay({
   }
 
   if (streamState === "error") {
+    const isMkvHint =
+      Platform.OS === "ios" &&
+      (errorMessage?.toLowerCase().includes("format") ||
+        errorMessage?.toLowerCase().includes("codec") ||
+        errorMessage?.toLowerCase().includes("could not") ||
+        errorMessage?.toLowerCase().includes("mkv"));
+
     return (
       <View style={styles.errorOverlay}>
         <MaterialIcons
@@ -57,9 +65,13 @@ export function PlayerStatusOverlay({
           color="#fca5a5"
           style={styles.errorIcon}
         />
-        <Text style={styles.errorTitle}>Connection Failed</Text>
+        <Text style={styles.errorTitle}>
+          {isMkvHint ? "Unsupported Format" : "Connection Failed"}
+        </Text>
         <Text style={styles.errorMessage}>
-          {errorMessage || "Unable to load stream"}
+          {isMkvHint
+            ? "This stream uses the MKV container format, which iOS cannot play natively. Try using the web player instead."
+            : errorMessage || "Unable to load stream"}
         </Text>
         <Pressable style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>Go Back</Text>
