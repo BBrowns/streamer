@@ -31,6 +31,7 @@ import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
+import { WebPlayer } from "../components/player/WebPlayer";
 
 const SEEK_SECONDS = 10;
 const DOUBLE_TAP_DELAY = 300;
@@ -285,90 +286,40 @@ export default function PlayerScreen() {
     );
   }
 
-  // Web fallback
+  // Web player — custom controls layered on top of <video>
   if (Platform.OS === "web") {
     return (
-      <View style={styles.container}>
-        <PlayerOverlay
-          currentStream={currentStream}
-          engineType={engine?.getEngineType() ?? "Unknown"}
-          stats={stats}
-          onClose={handleClose}
-          onSettings={() => setSettingsOpen(true)}
-          onWebCast={() => setCastModalOpen(true)}
-        />
-        <View style={styles.videoContainer}>
-          {activeCastDevice ? (
-            <View style={styles.castContainer}>
-              {mediaInfo?.poster && (
-                <Image
-                  source={{ uri: mediaInfo.poster }}
-                  style={styles.castBg}
-                  blurRadius={20}
-                />
-              )}
-              <View style={styles.castCard}>
-                <View style={styles.castIconWrap}>
-                  <MaterialIcons
-                    name="cast-connected"
-                    size={56}
-                    color="#818cf8"
-                  />
-                </View>
-                <Text style={styles.castTitle}>
-                  Casting to {activeCastDevice.name}
-                </Text>
-                <Text style={styles.castSubtitle}>
-                  {currentStream.title || currentStream.name}
-                </Text>
-                <Pressable style={styles.stopCastBtn} onPress={stopCasting}>
-                  <MaterialIcons name="cancel" size={18} color="#fca5a5" />
-                  <Text style={styles.stopCastText}>Stop Casting</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <>
-              <PlayerStatusOverlay
-                streamState={streamState}
-                streamMetrics={streamMetrics}
-                isBuffering={isBuffering}
-                errorMessage={errorMessage}
-                onBack={handleClose}
-              />
-              {/* @ts-ignore */}
-              <video
-                src={playbackUri}
-                controls
-                autoPlay
-                style={styles.webVideo}
-              />
-            </>
-          )}
-        </View>
-
-        <PlayerSettingsModal
-          visible={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          audioTracks={audioTracks}
-          subtitles={subtitles}
-          onSelectAudio={(id) => {
-            engine?.setAudioTrack(id);
-            setAudioTracks(engine?.getAudioTracks() ?? []);
-          }}
-          onSelectSubtitle={(id) => {
-            engine?.setSubtitle(id);
-            setSubtitles(engine?.getSubtitles() ?? []);
-          }}
-        />
-        <DesktopCastModal
-          visible={castModalOpen}
-          playbackUri={playbackUri}
-          title={currentStream.title || currentStream.name || "Video"}
-          onClose={() => setCastModalOpen(false)}
-          onCastStart={setActiveCastDevice}
-        />
-      </View>
+      <WebPlayer
+        playbackUri={playbackUri}
+        currentStream={currentStream}
+        mediaInfo={mediaInfo}
+        engine={engine}
+        stats={stats}
+        streamState={streamState}
+        streamMetrics={streamMetrics}
+        isBuffering={isBuffering}
+        errorMessage={errorMessage}
+        audioTracks={audioTracks}
+        subtitles={subtitles}
+        settingsOpen={settingsOpen}
+        castModalOpen={castModalOpen}
+        activeCastDevice={activeCastDevice}
+        onClose={handleClose}
+        onSettings={() => setSettingsOpen(true)}
+        onSettingsClose={() => setSettingsOpen(false)}
+        onWebCast={() => setCastModalOpen(true)}
+        onCastClose={() => setCastModalOpen(false)}
+        onCastStart={setActiveCastDevice}
+        onStopCasting={stopCasting}
+        onSelectAudio={(id) => {
+          engine?.setAudioTrack(id);
+          setAudioTracks(engine?.getAudioTracks() ?? []);
+        }}
+        onSelectSubtitle={(id) => {
+          engine?.setSubtitle(id);
+          setSubtitles(engine?.getSubtitles() ?? []);
+        }}
+      />
     );
   }
 
