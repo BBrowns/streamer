@@ -105,8 +105,8 @@ function DiscoverContent() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={handleRefresh}
-          tintColor="#e50914"
-          colors={["#e50914"]}
+          tintColor="#00f2ff"
+          colors={["#00f2ff"]}
         />
       }
     >

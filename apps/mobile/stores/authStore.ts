@@ -8,6 +8,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   tokenExpiresAt: number | null;
+  deviceId: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
 
@@ -22,12 +23,13 @@ interface AuthState {
     refreshToken: string,
     expiresInMs?: number,
   ) => void;
+  setDeviceId: (id: string) => void;
   setHydrated: (hydrated: boolean) => void;
   logout: () => void;
   isTokenExpired: () => boolean;
 }
 
-const DEFAULT_TOKEN_EXPIRY_MS = 14 * 60 * 1000; // 14 minutes (slightly under 15m JWT default)
+const DEFAULT_TOKEN_EXPIRY_MS = 14 * 60 * 1000; // 14 minutes
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -36,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       tokenExpiresAt: null,
+      deviceId: null,
       isAuthenticated: false,
       isHydrated: false,
 
@@ -54,6 +57,8 @@ export const useAuthStore = create<AuthState>()(
           refreshToken,
           tokenExpiresAt: Date.now() + (expiresInMs ?? DEFAULT_TOKEN_EXPIRY_MS),
         }),
+
+      setDeviceId: (id) => set({ deviceId: id }),
 
       setHydrated: (hydrated) => set({ isHydrated: hydrated }),
 
@@ -84,6 +89,7 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         tokenExpiresAt: state.tokenExpiresAt,
         isAuthenticated: state.isAuthenticated,
+        deviceId: state.deviceId,
       }),
     },
   ),

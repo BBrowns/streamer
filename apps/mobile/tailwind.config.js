@@ -6,17 +6,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#000000",
-        surface: "#0f0f0f",
-        "surface-bright": "#1a1a1a",
-        primary: "#e50914", // Netflix-esque vibrant red accent
-        "primary-dim": "rgba(229, 9, 20, 0.15)",
+        background: "#010101", // True Black for AMOLED
+        surface: "#080808", // Almost black for panels
+        "surface-bright": "#121212",
+        primary: "#00f2ff", // Cyber Cyan - aggressive & modern
+        "primary-dim": "rgba(0, 242, 255, 0.1)",
         accent: "#ffffff",
         textMain: "#ffffff",
-        textMuted: "#a3a3a3",
-        error: "#ef4444",
-        success: "#22c55e",
-        warning: "#f59e0b",
+        textMuted: "#888888",
+        error: "#ff3b3b",
+        success: "#00ff88",
+        warning: "#ffd600",
       },
       borderRadius: {
         "2xl": "16px",

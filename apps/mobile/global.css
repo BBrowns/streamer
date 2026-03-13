@@ -5,14 +5,14 @@
 @layer utilities {
     /* Glassmorphic AMOLED Custom Classes */
     .glass {
-        @apply bg-[#0f0f0f]/60 border border-white/5 backdrop-blur-xl;
+        @apply bg-black/60 border border-white/5 backdrop-blur-2xl;
     }
     
     .glass-strong {
-        @apply bg-[#0f0f0f]/80 border border-white/10 backdrop-blur-2xl;
+        @apply bg-black/80 border border-white/10 backdrop-blur-3xl;
     }
 
     .glass-panel {
-        @apply bg-black/40 border border-white/5 backdrop-blur-3xl;
+        @apply bg-[#080808]/40 border border-white/5 backdrop-blur-[40px];
     }
 }

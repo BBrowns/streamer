@@ -42,11 +42,14 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach access token to every request
+// Attach access token and device ID to every request
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const { accessToken, deviceId } = useAuthStore.getState();
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+  if (deviceId) {
+    config.headers["X-Device-Id"] = deviceId;
   }
   return config;
 });
