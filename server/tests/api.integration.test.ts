@@ -10,6 +10,8 @@ import {
 import { execSync } from "child_process";
 import { request } from "./test-utils.js";
 import crypto from "crypto";
+import { _resetFailedAttempts } from "../src/modules/auth/auth.service.js";
+import { _resetStore } from "../src/middleware/rateLimiter.middleware.js";
 
 let app: any;
 let prisma: any;
@@ -55,6 +57,11 @@ afterAll(async () => {
     const fs = await import("fs");
     fs.unlinkSync(dbUri.replace("file:", ""));
   } catch (e) {}
+});
+
+beforeEach(() => {
+  _resetFailedAttempts();
+  _resetStore();
 });
 
 describe("Integration: Auth Flow", () => {
