@@ -21,8 +21,24 @@ model User {
   libraryItems        LibraryItem[]
   watchProgress       WatchProgress[]
   traktToken          TraktToken?
+  sessions            ActiveSession[]
 
   @@map("users")
+}
+
+model ActiveSession {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  deviceId     String   @map("device_id")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  lastActivity DateTime @default(now()) @map("last_activity")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId, lastActivity])
+  @@map("active_sessions")
 }
 
 model PasswordResetToken {

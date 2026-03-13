@@ -83,14 +83,17 @@ function StreamItem({
           <Text style={styles.streamEngine}>
             {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
           </Text>
+          {stream.seeders !== undefined && (
+            <Text style={styles.seederBadge}>👥 {stream.seeders}</Text>
+          )}
           {!playable && (
             <View style={styles.torrentBadge}>
-              <Text style={styles.torrentBadgeText}>🧲 Torrent · Bridge</Text>
+              <Text style={styles.torrentBadgeText}>TORRENT</Text>
             </View>
           )}
           {playable && (
             <View style={styles.playableBadge}>
-              <Text style={styles.playableBadgeText}>✓ Playable</Text>
+              <Text style={styles.playableBadgeText}>PLAYABLE</Text>
             </View>
           )}
         </View>
@@ -125,16 +128,77 @@ function StreamItem({
 
 export default function DetailScreen() {
   const { type, id } = useLocalSearchParams<{ type: string; id: string }>();
+  const castType = type as "movie" | "series";
   const router = useRouter();
   const { data: meta, isLoading: metaLoading } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
 
+  if (metaLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#00f2ff" />
+      </View>
+    );
+  }
+
+  if (!meta) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Content not found</Text>
+      </View>
+    );
+  }
+
+  const [selectedResolution, setSelectedResolution] = useState<string | null>(
+    null,
+  );
+
+  // Group streams by resolution
+  const groupedStreams = (streams || []).reduce(
+    (acc, s) => {
+      const res = s.resolution || "SD";
+      if (!acc[res]) acc[res] = [];
+      acc[res].push(s);
+      return acc;
+    },
+    {} as Record<string, Stream[]>,
+  );
+
+  const availableResolutions = Object.keys(groupedStreams).sort((a, b) => {
+    const order: Record<string, number> = {
+      "2160p": 0,
+      "1080p": 1,
+      "720p": 2,
+      "480p": 3,
+      SD: 4,
+    };
+    return (order[a] ?? 99) - (order[b] ?? 99);
+  });
+
+  const [playableMap, setPlayableMap] = useState<Record<string, boolean>>({});
   // Library state
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
 
+  useEffect(() => {
+    if (!streams || streams.length === 0) return;
+    let mounted = true;
+    Promise.all(
+      streams.map(async (s, i) => {
+        const key = s.infoHash || s.url || `stream_${i}`;
+        const uri = await streamEngineManager.getPlaybackUri(s);
+        return [key, !!uri && uri.length > 0] as [string, boolean];
+      }),
+    ).then((entries) => {
+      if (!mounted) return;
+      setPlayableMap(Object.fromEntries(entries));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [streams]);
   const handleToggleLibrary = useCallback(() => {
     if (!meta) return;
     hapticImpactLight();
@@ -143,7 +207,7 @@ export default function DetailScreen() {
     } else {
       hapticSuccess();
       addToLibrary.mutate({
-        type: type as "movie" | "series",
+        type: castType,
         itemId: id,
         title: meta.name,
         poster: meta.poster,
@@ -152,16 +216,18 @@ export default function DetailScreen() {
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
   const handlePlayStream = async (stream: Stream) => {
-    // Check if downloaded first
-    const id = stream.infoHash || stream.url;
-    const task = useDownloadStore.getState().tasks[id || ""];
+    const streamId = stream.infoHash || stream.url;
+    const task = useDownloadStore.getState().tasks[streamId || ""];
 
-    if (task?.status === "Completed" && task.localUri) {
-      console.log("[DetailScreen] Playing from local storage:", task.localUri);
+    if (
+      task?.status === "Completed" &&
+      task.localUri &&
+      task.localUri.length > 5
+    ) {
       setStream(
         { ...stream, url: task.localUri },
         {
-          type: (type as "movie" | "series") ?? "movie",
+          type: castType,
           itemId: id || "unknown",
           title: meta?.name ?? stream.title ?? "Unknown",
           poster: meta?.poster,
@@ -174,7 +240,6 @@ export default function DetailScreen() {
     const uri = await streamEngineManager.getPlaybackUri(stream);
     const playable = !!uri && uri.length > 0;
 
-    // ... existing bridge logic ...
     if (!playable && stream.infoHash) {
       const bridgeUp = await streamEngineManager.detectBridge();
       if (bridgeUp) {
@@ -203,49 +268,34 @@ export default function DetailScreen() {
       return;
     }
 
-    const mediaInfo: MediaInfo = {
-      type: (type as "movie" | "series") ?? "movie",
+    setStream(stream, {
+      type: castType,
       itemId: id || "unknown",
       title: meta?.name ?? stream.title ?? "Unknown",
       poster: meta?.poster,
-    };
-
-    setStream(stream, mediaInfo);
+    });
     router.push("/player");
   };
 
   const handleDownloadStream = async (stream: Stream) => {
     if (!meta) return;
-
-    const mediaInfo: any = {
-      itemId: id,
-      type: type,
-      title: meta.name,
-      poster: meta.poster,
-    };
-
     try {
-      await downloadService.startDownload(stream, mediaInfo);
+      await downloadService.startDownload(stream, {
+        itemId: id,
+        type: castType,
+        title: meta.name,
+        poster: meta.poster,
+      });
     } catch (e) {
       Alert.alert("Download Error", "Failed to start download.");
     }
   };
 
-  if (metaLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#818cf8" />
-      </View>
-    );
-  }
-
-  if (!meta) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>Content not found</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (availableResolutions.length > 0 && !selectedResolution) {
+      setSelectedResolution(availableResolutions[0]);
+    }
+  }, [availableResolutions, selectedResolution]);
 
   return (
     <View style={styles.container}>
@@ -280,7 +330,7 @@ export default function DetailScreen() {
           )}
 
           <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.8)", "#000000"]}
+            colors={["transparent", "rgba(1,1,1,0.6)", "#010101"]}
             locations={[0.4, 0.8, 1]}
             style={styles.heroGradient}
           />
@@ -305,10 +355,6 @@ export default function DetailScreen() {
           <Pressable
             style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
             onPress={handleToggleLibrary}
-            accessibilityRole="button"
-            accessibilityLabel={
-              inLibrary ? "Remove from library" : "Add to library"
-            }
           >
             <Text
               style={[
@@ -341,24 +387,55 @@ export default function DetailScreen() {
             </View>
           )}
 
-          {/* Streams */}
+          {/* Streams Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🎬 Available Streams</Text>
+            <Text style={styles.sectionTitle}>🎬 Select Quality</Text>
 
             {streamsLoading ? (
-              <ActivityIndicator color="#818cf8" />
-            ) : !!streams && streams.length > 0 ? (
-              streams.map((stream, i) => {
-                return (
-                  <StreamItem
-                    key={i}
-                    stream={stream}
-                    index={i}
-                    onPress={() => handlePlayStream(stream)}
-                    onDownload={() => handleDownloadStream(stream)}
-                  />
-                );
-              })
+              <ActivityIndicator color="#00f2ff" />
+            ) : availableResolutions.length > 0 ? (
+              <>
+                <View style={styles.resContainer}>
+                  {availableResolutions.map((res) => (
+                    <Pressable
+                      key={res}
+                      style={[
+                        styles.resBubble,
+                        selectedResolution === res && styles.resBubbleActive,
+                      ]}
+                      onPress={() => {
+                        hapticImpactLight();
+                        setSelectedResolution(res);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.resText,
+                          selectedResolution === res && styles.resTextActive,
+                        ]}
+                      >
+                        {res === "2160p" ? "4K" : res.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <View style={styles.streamList}>
+                  {groupedStreams[selectedResolution!]?.map((stream, i) => {
+                    const streamId =
+                      stream.infoHash || stream.url || `stream_${i}`;
+                    return (
+                      <StreamItem
+                        key={`${streamId}_${i}`}
+                        stream={stream}
+                        index={i}
+                        onPress={() => handlePlayStream(stream)}
+                        onDownload={() => handleDownloadStream(stream)}
+                      />
+                    );
+                  })}
+                </View>
+              </>
             ) : (
               <Text style={styles.emptyText}>
                 No streams available. Install more add-ons.
@@ -374,26 +451,26 @@ export default function DetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#010101",
   },
   centered: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#010101",
     justifyContent: "center",
     alignItems: "center",
   },
   errorText: {
-    color: "#f87171",
+    color: "#ff3b3b",
   },
   floatingBack: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 50 : 20, // Rough safe area estimate
+    top: Platform.OS === "ios" ? 50 : 20,
     left: 16,
     zIndex: 10,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -403,7 +480,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#000000",
   },
   heroGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -411,15 +488,16 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    marginTop: -80, // Pull up into the gradient
+    marginTop: -80,
     zIndex: 2,
-    minHeight: height * 0.6, // Ensure enough height to scroll nicely
+    minHeight: height * 0.6,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "900",
     color: "#ffffff",
     marginBottom: 12,
+    letterSpacing: -0.5,
   },
   metaRow: {
     flexDirection: "row",
@@ -428,44 +506,45 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   metaTag: {
-    color: "#a1a1aa",
+    color: "#888888",
     fontSize: 13,
     fontWeight: "600",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 10,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   ratingTag: {
-    color: "#fbbf24",
+    color: "#ffd600",
     fontSize: 13,
     fontWeight: "700",
-    backgroundColor: "rgba(251,191,36,0.1)",
-    paddingHorizontal: 10,
+    backgroundColor: "rgba(255,214,0,0.1)",
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  // Library button
   libraryBtn: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    borderColor: "rgba(0, 242, 255, 0.2)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     alignSelf: "flex-start",
     marginBottom: 24,
-    minHeight: 44,
+    minHeight: 48,
     justifyContent: "center",
   },
   libraryBtnActive: {
-    backgroundColor: "#ffffff",
-    borderColor: "#ffffff",
+    backgroundColor: "#00f2ff",
+    borderColor: "#00f2ff",
   },
   libraryBtnText: {
-    color: "#ffffff",
-    fontWeight: "700",
+    color: "#00f2ff",
+    fontWeight: "800",
     fontSize: 14,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   libraryBtnTextActive: {
     color: "#000000",
@@ -477,112 +556,143 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   genrePill: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 12,
+    borderColor: "rgba(255, 255, 255, 0.07)",
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   genreText: {
-    color: "#e5e5e5",
+    color: "#bbbbbb",
     fontSize: 12,
     fontWeight: "600",
   },
   description: {
-    color: "#d4d4d8",
+    color: "#cccccc",
     fontSize: 15,
     lineHeight: 24,
-    marginBottom: 28,
+    marginBottom: 32,
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 32,
   },
   sectionTitle: {
     color: "#ffffff",
     fontWeight: "800",
     fontSize: 18,
-    marginBottom: 12,
+    marginBottom: 20,
+    letterSpacing: 0.5,
   },
-  sectionContent: {
-    color: "#a1a1aa",
+  resContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
+  },
+  resBubble: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  resBubbleActive: {
+    backgroundColor: "#00f2ff",
+    borderColor: "#00f2ff",
+  },
+  resText: {
+    color: "#888888",
     fontSize: 14,
-    lineHeight: 22,
+    fontWeight: "800",
+  },
+  resTextActive: {
+    color: "#000000",
+  },
+  streamList: {
+    gap: 12,
   },
   streamCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#0a0a0a",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
+    backgroundColor: "#080808",
+    borderRadius: 16,
+    padding: 20,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    minHeight: 50,
+    borderColor: "rgba(255, 255, 255, 0.05)",
   },
   streamCardDisabled: {
-    opacity: 0.5,
-    borderColor: "rgba(255, 255, 255, 0.05)",
+    opacity: 0.4,
   },
   streamTitle: {
     color: "#ffffff",
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: 16,
+    marginBottom: 8,
   },
   streamBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 6,
   },
   streamEngine: {
-    color: "#71717a",
+    color: "#555555",
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   torrentBadge: {
-    backgroundColor: "rgba(251, 146, 60, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: "rgba(255, 214, 0, 0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 6,
   },
   torrentBadgeText: {
-    color: "#fb923c",
+    color: "#ffd600",
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   playableBadge: {
-    backgroundColor: "rgba(74, 222, 128, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 6,
   },
   playableBadgeText: {
-    color: "#4ade80",
+    color: "#00f2ff",
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   playIcon: {
     color: "#ffffff",
-    fontSize: 22,
-    marginLeft: 12,
+    fontSize: 24,
   },
   playIconDisabled: {
-    color: "#52525b",
+    color: "#333333",
   },
   streamActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 20,
   },
   downloadIconBtn: {
     padding: 4,
   },
   emptyText: {
-    color: "#6b7280",
-    fontSize: 13,
+    color: "#555555",
+    fontSize: 14,
     textAlign: "center",
-    paddingVertical: 20,
+    paddingVertical: 40,
+  },
+  sectionContent: {
+    color: "#888888",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  seederBadge: {
+    color: "#00ff88",
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 4,
   },
 });

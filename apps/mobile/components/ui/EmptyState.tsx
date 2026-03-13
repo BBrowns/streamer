@@ -38,7 +38,7 @@ export function EmptyState({
         <Text style={styles.emoji}>{emoji}</Text>
       ) : icon ? (
         <View style={styles.iconContainer}>
-          <Ionicons name={icon} size={48} color="#818cf8" />
+          <Ionicons name={icon} size={48} color="#00f2ff" />
         </View>
       ) : null}
 
@@ -77,39 +77,48 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "rgba(129, 140, 248, 0.12)",
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   title: {
-    color: "#e0e0ff",
-    fontSize: 18,
-    fontWeight: "700",
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "900",
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: -0.5,
   },
   description: {
-    color: "#9ca3af",
-    fontSize: 14,
+    color: "#888888",
+    fontSize: 15,
     textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 20,
-    maxWidth: 280,
+    lineHeight: 22,
+    marginBottom: 28,
+    maxWidth: 300,
+    fontWeight: "600",
   },
   button: {
-    backgroundColor: "#818cf8",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: "#00f2ff",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 14,
     minWidth: 44,
     minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#00f2ff",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   buttonText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 15,
+    color: "#000000",
+    fontWeight: "900",
+    fontSize: 16,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

@@ -30,7 +30,9 @@ export function createApp() {
       origin: env.corsOrigins,
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", "X-Device-Id"],
+      exposeHeaders: ["Content-Length", "X-Request-Id"],
+      maxAge: 600,
     }),
   );
 
@@ -50,14 +52,6 @@ export function createApp() {
       "Request",
     );
   });
-
-  // Per-route rate limiting
-  app.use("/api/auth/*", authRateLimiter); // Stricter: 20 req / 15 min
-  app.use("/api/catalog/*", catalogRateLimiter); // Relaxed: 200 req / 15 min
-  app.use("/api/meta/*", catalogRateLimiter);
-  app.use("/api/stream/*", catalogRateLimiter);
-  app.use("/api/search*", catalogRateLimiter);
-  app.use("*", rateLimiter); // Global fallback: 100 / 15 min
 
   // Health check
   app.get("/health", (c) => {

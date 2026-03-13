@@ -1,5 +1,7 @@
 import type { Context } from "hono";
+import { env } from "../../config/env.js";
 import { aggregatorService } from "./aggregator.service.js";
+import { SessionService } from "../auth/session.service.js";
 
 export class AggregatorController {
   async getCatalog(c: Context) {
@@ -64,6 +66,27 @@ export class AggregatorController {
     const user = c.get("user") as any;
     const requestId = c.get("requestId");
 
+    const deviceId = c.req.header("X-Device-Id") || "unknown";
+
+    // Track active session heartbeat
+    const sessionCount = await SessionService.heartbeat(
+      user.userId,
+      deviceId,
+      c.req.header("X-Forwarded-For") || "127.0.0.1",
+      c.req.header("User-Agent"),
+    );
+
+    // Enforcement: Check if session limit is reached
+    if (sessionCount > env.maxConcurrentSessions) {
+      return c.json(
+        {
+          error: "Device Limit Reached",
+          message: `Your account is active on ${sessionCount} devices. The limit is ${env.maxConcurrentSessions}. Please close other sessions and try again.`,
+        },
+        403,
+      );
+    }
+
     const resolved = await aggregatorService.resolveStream(
       user.userId,
       type,
@@ -85,6 +108,27 @@ export class AggregatorController {
 
     const user = c.get("user") as any;
     const requestId = c.get("requestId") as string;
+
+    const deviceId = c.req.header("X-Device-Id") || "unknown";
+
+    // Track active session heartbeat
+    const sessionCount = await SessionService.heartbeat(
+      user.userId,
+      deviceId,
+      c.req.header("X-Forwarded-For") || "127.0.0.1",
+      c.req.header("User-Agent"),
+    );
+
+    // Enforcement: Check if session limit is reached
+    if (sessionCount > env.maxConcurrentSessions) {
+      return c.json(
+        {
+          error: "Device Limit Reached",
+          message: `Your account is active on ${sessionCount} devices. The limit is ${env.maxConcurrentSessions}. Please close other sessions and try again.`,
+        },
+        403,
+      );
+    }
 
     const resolved = await aggregatorService.resolveStreamsBulk(
       user.userId,

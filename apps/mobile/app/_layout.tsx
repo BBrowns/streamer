@@ -17,6 +17,8 @@ import {
   persistQueryCache,
 } from "../services/queryPersister";
 import "../global.css";
+import { DesktopLayout } from "../components/ui/DesktopLayout";
+import { useAuthStore } from "../stores/authStore";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -62,6 +64,16 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 function RootLayout() {
   const appState = useRef(AppState.currentState);
+  const { deviceId, setDeviceId } = useAuthStore();
+
+  useEffect(() => {
+    if (!deviceId) {
+      const newId =
+        Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15);
+      setDeviceId(newId);
+    }
+  }, [deviceId]);
 
   useEffect(() => {
     // Restore offline cache then hide splash
@@ -87,49 +99,51 @@ function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: "#000000" },
-          headerTintColor: "#ffffff",
-          headerTitleStyle: { fontWeight: "700" },
-          contentStyle: { backgroundColor: "#000000" },
-        }}
-      >
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShown: false,
-            title: "",
-            headerBackTitle: "Back",
+      <DesktopLayout>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: "#010101" },
+            headerTintColor: "#ffffff",
+            headerTitleStyle: { fontWeight: "700" },
+            contentStyle: { backgroundColor: "#010101" },
           }}
-        />
-        <Stack.Screen
-          name="login"
-          options={{ title: "Sign In", presentation: "modal" }}
-        />
-        <Stack.Screen
-          name="register"
-          options={{ title: "Create Account", presentation: "modal" }}
-        />
-        <Stack.Screen
-          name="forgot-password"
-          options={{ title: "Forgot Password", presentation: "modal" }}
-        />
-        <Stack.Screen
-          name="reset-password"
-          options={{ title: "Reset Password", presentation: "modal" }}
-        />
-        <Stack.Screen name="detail/[type]/[id]" options={{ title: "" }} />
-        <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />
-        <Stack.Screen
-          name="player"
-          options={{
-            title: "Now Playing",
-            headerShown: false,
-            presentation: "fullScreenModal",
-          }}
-        />
-      </Stack>
+        >
+          <Stack.Screen
+            name="(tabs)"
+            options={{
+              headerShown: false,
+              title: "",
+              headerBackTitle: "Back",
+            }}
+          />
+          <Stack.Screen
+            name="login"
+            options={{ title: "Sign In", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="register"
+            options={{ title: "Create Account", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="forgot-password"
+            options={{ title: "Forgot Password", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="reset-password"
+            options={{ title: "Reset Password", presentation: "modal" }}
+          />
+          <Stack.Screen name="detail/[type]/[id]" options={{ title: "" }} />
+          <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />
+          <Stack.Screen
+            name="player"
+            options={{
+              title: "Now Playing",
+              headerShown: false,
+              presentation: "fullScreenModal",
+            }}
+          />
+        </Stack>
+      </DesktopLayout>
     </QueryClientProvider>
   );
 }

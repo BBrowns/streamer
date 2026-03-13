@@ -1,12 +1,13 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
+import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
 
 class DownloadService {
   private downloadResumables: Record<string, FileSystem.DownloadResumable> = {};
 
-  async startDownload(stream: Stream, mediaInfo: DownloadMediaItem) {
+  async startDownload(stream: Stream, mediaInfo: MediaInfo) {
     const { addTask, updateProgress, setStatus, tasks } =
       useDownloadStore.getState();
 

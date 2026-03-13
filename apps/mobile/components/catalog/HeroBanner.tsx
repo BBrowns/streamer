@@ -41,8 +41,8 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
           resizeMode="cover"
         />
         <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.6)", "#000000"]}
-          locations={[0.4, 0.8, 1]}
+          colors={["transparent", "rgba(1,1,1,0.4)", "#010101"]}
+          locations={[0.2, 0.6, 1]}
           style={styles.gradient}
         >
           <View style={styles.content}>
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   container: {
     width,
     height: HERO_HEIGHT,
-    backgroundColor: "#000000",
+    backgroundColor: "#010101",
   },
   pressable: {
     flex: 1,
@@ -117,23 +117,30 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   playButton: {
-    backgroundColor: "#ffffff",
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
+    backgroundColor: "#00f2ff",
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
+    shadowColor: "#00f2ff",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   playButtonText: {
     color: "#000000",
-    fontWeight: "800",
+    fontWeight: "900",
     fontSize: 16,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   infoButton: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
@@ -141,7 +148,9 @@ const styles = StyleSheet.create({
   },
   infoButtonText: {
     color: "#ffffff",
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 16,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

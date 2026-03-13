@@ -27,7 +27,7 @@ function LibraryCard({
   item,
   onRemove,
 }: {
-  item: any; // Can be LibraryItem or DownloadMediaItem
+  item: LibraryItem;
   onRemove: (id: string, isDownload?: boolean) => void;
 }) {
   const router = useRouter();
@@ -185,7 +185,7 @@ export default function LibraryScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#818cf8" />
+        <ActivityIndicator size="large" color="#00f2ff" />
       </View>
     );
   }
@@ -307,8 +307,8 @@ export default function LibraryScreen() {
               await queryClient.invalidateQueries({ queryKey: ["progress"] });
               setRefreshing(false);
             }}
-            tintColor="#818cf8"
-            colors={["#818cf8"]}
+            tintColor="#00f2ff"
+            colors={["#00f2ff"]}
           />
         }
         renderItem={({ item }) => (
@@ -343,16 +343,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   signInButton: {
-    backgroundColor: "#818cf8",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: "#00f2ff",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 14,
     minWidth: 44,
     minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
   },
-  signInButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 15 },
+  signInButtonText: { color: "#000000", fontWeight: "900", fontSize: 15 },
   loadingContainer: {
     flex: 1,
     backgroundColor: "#050510",
@@ -365,16 +365,16 @@ const styles = StyleSheet.create({
   filterContainer: { marginBottom: 16 },
   filterScroll: { paddingHorizontal: 16, gap: 8 },
   filterChip: {
-    backgroundColor: "rgba(129,140,248,0.1)",
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(129,140,248,0.2)",
+    borderColor: "rgba(0, 242, 255, 0.2)",
   },
-  filterChipActive: { backgroundColor: "#818cf8", borderColor: "#818cf8" },
-  filterChipText: { color: "#a1a1aa", fontSize: 13, fontWeight: "600" },
-  filterChipTextActive: { color: "#ffffff" },
+  filterChipActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
+  filterChipText: { color: "#888888", fontSize: 13, fontWeight: "800" },
+  filterChipTextActive: { color: "#000000" },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -397,9 +397,11 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#141423",
+    backgroundColor: "#080808",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
     minHeight: 44,
   },
   cardImage: {
@@ -419,7 +421,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "#818cf8",
+    backgroundColor: "#00f2ff",
   },
   downloadBadge: {
     flexDirection: "row",

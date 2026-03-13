@@ -129,13 +129,13 @@ export function SkeletonRow() {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: "#1a1a3e",
+    backgroundColor: "#000000", // Darkened for AMOLED
     overflow: "hidden",
   },
   card: {
     width: "100%",
     aspectRatio: 2 / 3,
-    borderRadius: 12,
+    borderRadius: 16,
   },
   row: {
     width: "100%",

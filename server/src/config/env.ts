@@ -24,6 +24,9 @@ const envSchema = z.object({
   // CORS
   CORS_ORIGINS: z.string().default("http://localhost:8081"),
 
+  // Sessions
+  MAX_CONCURRENT_SESSIONS: z.string().default("2").transform(Number),
+
   // Aggregator
   ADDON_TIMEOUT_MS: z.string().default("5000").transform(Number),
   ADDON_MAX_CONCURRENT: z.string().default("10").transform(Number),
@@ -61,6 +64,9 @@ export const env = {
 
   // CORS
   corsOrigins: envData.CORS_ORIGINS.split(","),
+
+  // Sessions
+  maxConcurrentSessions: envData.MAX_CONCURRENT_SESSIONS,
 
   // Aggregator
   addonTimeoutMs: envData.ADDON_TIMEOUT_MS,

@@ -57,7 +57,7 @@ function CatalogRowInner({
     return (
       <View style={styles.rowContainer}>
         <Text style={styles.rowTitle}>{catalog.name}</Text>
-        <ActivityIndicator color="#818cf8" style={{ marginVertical: 20 }} />
+        <ActivityIndicator color="#00f2ff" style={{ marginVertical: 20 }} />
       </View>
     );
   }
@@ -112,31 +112,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    width: 130, // Slightly wider
-    borderRadius: 12, // Smoother border radius
-    backgroundColor: "#0a0a0a",
+    width: 140,
+    borderRadius: 16,
+    backgroundColor: "#080808",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
   poster: {
-    width: 130,
-    height: 195, // Maintains 2:3 aspect ratio perfectly
-    backgroundColor: "#141414",
+    width: 140,
+    height: 210,
+    backgroundColor: "#121212",
   },
   cardTitle: {
-    color: "#e5e5e5",
-    fontSize: 12,
-    fontWeight: "700",
-    paddingHorizontal: 8,
-    paddingTop: 8,
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingTop: 10,
     paddingBottom: 2,
+    letterSpacing: -0.2,
   },
   rating: {
-    color: "#fbbf24",
+    color: "#ffd600",
     fontSize: 11,
-    fontWeight: "700",
-    paddingHorizontal: 8,
-    paddingBottom: 8,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
 });

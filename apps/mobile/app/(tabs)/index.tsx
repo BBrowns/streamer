@@ -129,8 +129,8 @@ function HomeContent() {
             <RefreshControl
               refreshing={false}
               onRefresh={handleRefresh}
-              tintColor="#818cf8"
-              colors={["#818cf8"]}
+              tintColor="#00f2ff"
+              colors={["#00f2ff"]}
             />
           }
           renderItem={({ item }) => <CatalogCard item={item} />}
@@ -152,14 +152,16 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050510" },
+  container: { flex: 1, backgroundColor: "#010101" },
   cardContainer: {
     flex: 1,
-    marginHorizontal: 4,
-    marginBottom: 12,
-    borderRadius: 12,
+    marginHorizontal: 6,
+    marginBottom: 16,
+    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#141423",
+    backgroundColor: "#080808",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
   },
   cardImage: {
     width: "100%",
@@ -167,12 +169,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
   },
   cardInfo: { padding: 8 },
-  cardTitle: { color: "#f8fafc", fontWeight: "600", fontSize: 13 },
+  cardTitle: {
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: 13,
+    letterSpacing: -0.2,
+  },
   ratingContainer: { marginTop: 4 },
-  ratingText: { color: "#fbbf24", fontSize: 11, fontWeight: "600" },
+  ratingText: { color: "#ffd600", fontSize: 11, fontWeight: "800" },
   authContainer: {
     flex: 1,
-    backgroundColor: "#050510",
+    backgroundColor: "#010101",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
@@ -191,15 +198,21 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   authButton: {
-    backgroundColor: "#818cf8",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: "#818cf8",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+    backgroundColor: "#00f2ff",
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: "#00f2ff",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 8,
   },
-  authButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
+  authButtonText: {
+    color: "#000000",
+    fontWeight: "900",
+    fontSize: 16,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });

@@ -39,6 +39,22 @@ export async function authMiddleware(c: Context, next: Next) {
     }
 
     c.set("user", payload);
+
+    // Multi-Device Session Logic
+    const deviceId = c.req.header("x-device-id") || "unknown-browser";
+    const ip = c.req.header("x-forwarded-for") || "127.0.0.1";
+    const userAgent = c.req.header("user-agent");
+
+    // Proactive heartbeart — don't await/block to keep API latency low
+    // In a real high-scale app, this would be in Redis.
+    const { SessionService } =
+      await import("../modules/auth/session.service.js");
+    SessionService.heartbeat(payload.userId, deviceId, ip, userAgent).catch(
+      () => {},
+    );
+
+    c.set("deviceId", deviceId);
+
     await next();
   } catch (err: any) {
     // TokenExpiredError is expected — the client will auto-refresh via /auth/refresh
