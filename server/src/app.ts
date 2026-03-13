@@ -30,7 +30,9 @@ export function createApp() {
       origin: env.corsOrigins,
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", "X-Device-Id"],
+      exposeHeaders: ["Content-Length", "X-Request-Id"],
+      maxAge: 600,
     }),
   );
 
