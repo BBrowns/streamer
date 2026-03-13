@@ -10,6 +10,8 @@ export const streamSchema = z.object({
       bingeGroup: z.string().optional(),
     })
     .optional(),
+  resolution: z.string().optional(),
+  seeders: z.number().optional(),
 });
 
 export const streamResponseSchema = z.object({

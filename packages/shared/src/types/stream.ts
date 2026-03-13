@@ -9,6 +9,8 @@ export interface Stream {
   name?: string;
   type?: string;
   id?: string;
+  resolution?: string;
+  seeders?: number;
   behaviorHints?: {
     notWebReady?: boolean;
     bingeGroup?: string;
