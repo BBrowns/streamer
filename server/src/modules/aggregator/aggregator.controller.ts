@@ -7,6 +7,7 @@ export class AggregatorController {
   async getCatalog(c: Context) {
     const type = c.req.param("type") as string;
     const search = c.req.query("search");
+    const catalogId = c.req.query("id");
     const skipStr = c.req.query("skip");
     const skip = skipStr ? parseInt(skipStr, 10) : undefined;
     const user = c.get("user") as any;
@@ -18,6 +19,7 @@ export class AggregatorController {
       requestId,
       search,
       skip,
+      catalogId,
     );
 
     return c.json({ metas });

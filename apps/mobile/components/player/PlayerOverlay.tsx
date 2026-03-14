@@ -22,7 +22,10 @@ export function PlayerOverlay({
   onWebCast,
 }: PlayerOverlayProps) {
   return (
-    <View style={styles.overlay} pointerEvents="none">
+    <View
+      style={styles.overlay}
+      pointerEvents={Platform.OS === "web" ? "box-none" : "box-none"}
+    >
       {/* Top Bar */}
       <View style={styles.topBar} pointerEvents="auto">
         <Pressable
@@ -33,6 +36,20 @@ export function PlayerOverlay({
         >
           <Text style={styles.closeButtonText}>✕ Close</Text>
         </Pressable>
+
+        {Platform.OS === "web" && (
+          <View style={styles.webTitleContainer}>
+            <Text style={styles.webTitle} numberOfLines={1}>
+              {currentStream.title || currentStream.name || "Now Playing"}
+            </Text>
+            {stats.peers > 0 && (
+              <Text style={styles.webStats}>
+                ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers} peers
+              </Text>
+            )}
+          </View>
+        )}
+
         <View style={styles.topControls}>
           {CastButton && Platform.OS !== "web" && (
             <CastButton
@@ -65,20 +82,22 @@ export function PlayerOverlay({
         </View>
       </View>
 
-      {/* Info Bar (Bottom) */}
-      <View style={styles.infoBar} pointerEvents="auto">
-        <Text style={styles.infoTitle}>
-          🎬 {currentStream.title || currentStream.name || "Now Playing"}
-        </Text>
-        <View style={styles.infoSubRow}>
-          <Text style={styles.engineText}>Engine: {engineType}</Text>
-          {stats.peers > 0 && (
-            <Text style={styles.speedText}>
-              ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers} peers
-            </Text>
-          )}
+      {/* Info Bar (Bottom) - Only on native to avoid blocking web controls */}
+      {Platform.OS !== "web" && (
+        <View style={styles.infoBar} pointerEvents="auto">
+          <Text style={styles.infoTitle}>
+            🎬 {currentStream.title || currentStream.name || "Now Playing"}
+          </Text>
+          <View style={styles.infoSubRow}>
+            <Text style={styles.engineText}>Engine: {engineType}</Text>
+            {stats.peers > 0 && (
+              <Text style={styles.speedText}>
+                ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers} peers
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -113,6 +132,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   closeButtonText: { color: "#f8fafc", fontWeight: "600", fontSize: 14 },
+  webTitleContainer: {
+    flex: 1,
+    marginHorizontal: 16,
+    alignItems: "center",
+  },
+  webTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  webStats: {
+    color: "#00f2ff",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+  },
   topControls: { flexDirection: "row", alignItems: "center", gap: 12 },
   iconButton: {
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -136,5 +171,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   engineText: { color: "#a1a1aa", fontSize: 11 },
-  speedText: { color: "#818cf8", fontSize: 11, fontWeight: "600" },
+  speedText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  bufferingContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bufferingIcon: {
+    marginRight: 8,
+  },
+  bufferingText: {
+    color: "#00f2ff",
+    fontSize: 18,
+    fontWeight: "700",
+  },
 });

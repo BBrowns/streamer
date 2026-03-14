@@ -12,6 +12,15 @@
 import { Request, Response } from "express";
 import { spawn } from "child_process";
 import { waitForReady } from "./torrent-helpers.js";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DOWNLOADS_DIR = path.resolve(process.cwd(), "downloads");
+if (!fs.existsSync(DOWNLOADS_DIR)) {
+  fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
+}
 
 // Re-export pure helpers for stats.ts and tests
 export { handleTorrent, waitForReady, mimeFromExt } from "./torrent-helpers.js";
@@ -55,6 +64,9 @@ const MAX_ACTIVE_TORRENTS = parseInt(
 /** Track last access time per infoHash for pruning */
 const lastAccessMap = new Map<string, number>();
 
+/** Track which torrents are persistent downloads (won't be pruned) */
+const persistentMap = new Map<string, { itemId: string; addedAt: number }>();
+
 export function getTorrent(infoHash: string): any {
   if (client) {
     const t = client.torrents?.find((t: any) => t.infoHash === infoHash);
@@ -69,10 +81,13 @@ export function getTorrent(infoHash: string): any {
  */
 export async function pruneTorrents(client: any) {
   const torrents = client.torrents || [];
-  if (torrents.length < MAX_ACTIVE_TORRENTS) return;
+  // Only prune torrents that are NOT persistent
+  const prunable = torrents.filter((t: any) => !persistentMap.has(t.infoHash));
+
+  if (prunable.length < MAX_ACTIVE_TORRENTS) return;
 
   // Sort by last access time (ascending)
-  const sorted = [...torrents].sort((a, b) => {
+  const sorted = [...prunable].sort((a, b) => {
     const timeA = lastAccessMap.get(a.infoHash) || 0;
     const timeB = lastAccessMap.get(b.infoHash) || 0;
     return timeA - timeB;
@@ -271,11 +286,11 @@ export async function streamRequest(req: Request, res: Response) {
         }
       }
 
-      // Add the torrent with the fully loaded magnet link
-      torrent = torrentClient.add(enhancedMagnet);
+      // Add the torrent with the fully loaded magnet link and persistent path
+      torrent = torrentClient.add(enhancedMagnet, { path: DOWNLOADS_DIR });
       lastAccessMap.set(torrent.infoHash, Date.now());
       console.log(
-        `[stream-server] Added new torrent: ${torrent.infoHash || "(awaiting metadata)"}`,
+        `[stream-server] Added new torrent: ${torrent.infoHash || "(awaiting metadata)"} at ${DOWNLOADS_DIR}`,
       );
 
       // Throttled peer logging — log only on first connection and every 10 peers
@@ -455,5 +470,67 @@ export async function streamRequest(req: Request, res: Response) {
   } catch (err: any) {
     console.error("[stream-server] Failed to build stream URL:", err?.message);
     return res.status(503).json({ error: "Failed to start stream server" });
+  }
+}
+
+export async function downloadRequest(req: Request, res: Response) {
+  const { magnet, itemId } = req.body;
+  if (!magnet || !itemId) {
+    return res.status(400).json({ error: "Magnet and itemId are required" });
+  }
+
+  try {
+    const torrentClient = await getClient();
+    let torrent = await torrentClient.get(magnet);
+
+    if (!torrent) {
+      // Add with path to ensure it stays on disk
+      torrent = torrentClient.add(magnet, { path: DOWNLOADS_DIR });
+      console.log(`[stream-server] Starting persistent download: ${itemId}`);
+    }
+
+    persistentMap.set(torrent.infoHash, { itemId, addedAt: Date.now() });
+    res.json({ status: "queued", infoHash: torrent.infoHash });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function listDownloadsRequest(_req: Request, res: Response) {
+  try {
+    const torrentClient = await getClient();
+    const downloads = (torrentClient.torrents || [])
+      .filter((t: any) => persistentMap.has(t.infoHash))
+      .map((t: any) => ({
+        infoHash: t.infoHash,
+        itemId: persistentMap.get(t.infoHash)?.itemId,
+        progress: t.progress,
+        status: t.done ? "Completed" : "Downloading",
+        downloadSpeed: t.downloadSpeed,
+        numPeers: t.numPeers,
+      }));
+
+    res.json({ downloads });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function deleteDownloadRequest(req: Request, res: Response) {
+  const { infoHash } = req.params;
+  try {
+    const torrentClient = await getClient();
+    const torrent = torrentClient.get(infoHash);
+    if (torrent) {
+      await new Promise<void>((resolve) => {
+        torrent.destroy(() => {
+          persistentMap.delete(infoHash);
+          resolve();
+        });
+      });
+    }
+    res.json({ status: "deleted" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 }

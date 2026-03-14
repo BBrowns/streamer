@@ -11,6 +11,10 @@ import {
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { Button } from "../components/ui/Button";
+import { Typography } from "../components/ui/Typography";
+import { TextField } from "../components/ui/TextField";
+import { Theme } from "../constants/DesignSystem";
 import { AxiosError } from "axios";
 
 export default function ResetPasswordScreen() {
@@ -50,55 +54,65 @@ export default function ResetPasswordScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.form}>
-        <Text style={styles.title}>New Password</Text>
-        <Text style={styles.subtitle}>
-          Enter the reset token and your new password
-        </Text>
+      {" "}
+      <View style={styles.formContainer}>
+        <Typography variant="h1" align="center" style={styles.title}>
+          Reset Password
+        </Typography>
+        <Typography
+          variant="body"
+          color={Theme.colors.textMuted}
+          align="center"
+          style={styles.subtitle}
+        >
+          Enter the token from your email and your new password
+        </Typography>
 
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={styles.errorContainer}>
+            <Typography variant="caption" color={Theme.colors.error}>
+              {error}
+            </Typography>
           </View>
         ) : null}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Reset Token"
-          placeholderTextColor="#6b7280"
+        <TextField
+          label="Reset Token"
+          placeholder="Enter the 6-digit token"
           value={token}
           onChangeText={setToken}
-          autoCapitalize="none"
-          autoCorrect={false}
+          icon="key-outline"
         />
-        <TextInput
-          style={styles.input}
-          placeholder="New Password (min 8 chars)"
-          placeholderTextColor="#6b7280"
+        <TextField
+          label="New Password"
+          placeholder="Enter your new password"
           value={newPassword}
           onChangeText={setNewPassword}
           secureTextEntry
+          icon="lock-closed-outline"
+        />
+
+        <Button
+          title="Reset Password"
+          onPress={handleReset}
+          isLoading={isLoading}
+          style={styles.button}
         />
 
         <Pressable
-          style={[styles.button, isLoading && styles.buttonDisabled]}
-          onPress={handleReset}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Reset Password</Text>
-          )}
-        </Pressable>
-
-        <Pressable
           onPress={() => router.replace("/login")}
-          style={{ marginTop: 12 }}
+          style={styles.backBtn}
         >
-          <Text style={styles.linkText}>
-            <Text style={styles.linkBold}>Back to Login</Text>
-          </Text>
+          <Typography
+            variant="body"
+            align="center"
+            color={Theme.colors.textMuted}
+          >
+            Back to{" "}
+            <Typography color={Theme.colors.primary} weight="800">
+              Sign In
+            </Typography>
+          </Typography>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -111,66 +125,34 @@ const styles = StyleSheet.create({
     backgroundColor: "#0a0a1a",
     justifyContent: "center",
   },
-  form: {
+  formContainer: {
+    // Renamed from form
     paddingHorizontal: 32,
+    maxWidth: 420,
+    width: "100%",
+    alignSelf: "center",
   },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#e0e0ff",
-    marginBottom: 4,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginBottom: 28,
+    marginBottom: 32,
   },
-  errorBox: {
-    backgroundColor: "rgba(248, 113, 113, 0.1)",
-    borderRadius: 8,
+  errorContainer: {
+    // Renamed from errorBox
+    backgroundColor: "rgba(255, 59, 59, 0.1)",
     padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: "#f87171",
-    fontSize: 13,
-  },
-  input: {
-    backgroundColor: "#1a1a3e",
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: "#e0e0ff",
-    fontSize: 15,
-    marginBottom: 12,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: "rgba(129, 140, 248, 0.2)",
+    borderColor: "rgba(255, 59, 59, 0.2)",
   },
   button: {
-    backgroundColor: "#818cf8",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 20,
-    boxShadow: "0px 4px 8px rgba(129, 140, 248, 0.3)",
-    elevation: 6,
+    marginTop: 12,
+    marginBottom: 24,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  linkText: {
-    color: "#9ca3af",
-    textAlign: "center",
-    fontSize: 13,
-  },
-  linkBold: {
-    color: "#818cf8",
-    fontWeight: "700",
+  backBtn: {
+    // New style
+    marginTop: 16,
   },
 });

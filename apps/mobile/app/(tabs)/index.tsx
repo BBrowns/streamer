@@ -8,16 +8,21 @@ import {
   useWindowDimensions,
   StyleSheet,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, memo } from "react";
 import { useCatalog } from "../../hooks/useCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
+import { Card } from "../../components/ui/Card";
+import { Typography } from "../../components/ui/Typography";
+import { Theme } from "../../constants/DesignSystem";
 import type { MetaPreview } from "@streamer/shared";
 import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
+import { Button } from "../../components/ui/Button";
 
 /** Responsive column count based on screen width */
 function useResponsiveColumns(): number {
@@ -33,29 +38,13 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
   const router = useRouter();
 
   return (
-    <Pressable
-      style={styles.cardContainer}
+    <Card
+      title={item.name}
+      subtitle={item.imdbRating ? `⭐ ${item.imdbRating}` : undefined}
+      image={item.poster}
       onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
-      accessibilityHint="Opens details page"
-    >
-      <Image
-        source={{ uri: item.poster }}
-        style={styles.cardImage}
-        accessibilityIgnoresInvertColors
-      />
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.name}
-        </Text>
-        {!!item.imdbRating && (
-          <View style={styles.ratingContainer}>
-            <Text style={styles.ratingText}>⭐ {item.imdbRating}</Text>
-          </View>
-        )}
-      </View>
-    </Pressable>
+      style={styles.card}
+    />
   );
 });
 
@@ -83,20 +72,32 @@ function HomeContent() {
   if (!isAuthenticated) {
     return (
       <View style={styles.authContainer}>
-        <Text style={styles.authTitle} accessibilityRole="header">
-          🎬 Streamer
-        </Text>
-        <Text style={styles.authSubtitle}>
-          Your universe of content, aggregated from the open web.
-        </Text>
-        <Pressable
-          style={styles.authButton}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Get started and sign in"
+        <View style={styles.authHeader}>
+          <Ionicons
+            name="play-circle"
+            size={56}
+            color={Theme.colors.primary}
+            style={styles.authIcon}
+          />
+          <Typography variant="h1" style={{ fontSize: 44 }}>
+            Streamer
+          </Typography>
+        </View>
+        <Typography
+          variant="body"
+          color={Theme.colors.textMuted}
+          align="center"
+          style={styles.authSubtitle}
         >
-          <Text style={styles.authButtonText}>Get Started</Text>
-        </Pressable>
+          Your universe of content, aggregated from the open web, delivered in a
+          premium experience.
+        </Typography>
+        <Button
+          title="Get Started"
+          onPress={() => router.push("/login")}
+          size="lg"
+          style={styles.authButton}
+        />
       </View>
     );
   }
@@ -109,7 +110,7 @@ function HomeContent() {
 
       {!!movies && movies.length === 0 && !isLoading && (
         <EmptyState
-          emoji="📦"
+          icon="cube-outline"
           title="No Content Found"
           description="Install some add-ons in Settings to start browsing."
           actionLabel="Manage Add-ons"
@@ -152,67 +153,35 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#010101" },
-  cardContainer: {
+  container: { flex: 1, backgroundColor: Theme.colors.background },
+  card: {
     flex: 1,
     marginHorizontal: 6,
     marginBottom: 16,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#080808",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
   },
-  cardImage: {
-    width: "100%",
-    aspectRatio: 2 / 3,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  cardInfo: { padding: 8 },
-  cardTitle: {
-    color: "#ffffff",
-    fontWeight: "800",
-    fontSize: 13,
-    letterSpacing: -0.2,
-  },
-  ratingContainer: { marginTop: 4 },
-  ratingText: { color: "#ffd600", fontSize: 11, fontWeight: "800" },
   authContainer: {
     flex: 1,
-    backgroundColor: "#010101",
+    backgroundColor: Theme.colors.background,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
   },
-  authTitle: {
-    fontSize: 36,
-    fontWeight: "900",
-    color: "#f8fafc",
-    marginBottom: 12,
+  authHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  authIcon: {
+    marginRight: 16,
   },
   authSubtitle: {
-    fontSize: 16,
-    color: "#94a3b8",
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: 48,
+    maxWidth: 500,
   },
   authButton: {
-    backgroundColor: "#00f2ff",
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 16,
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  authButtonText: {
-    color: "#000000",
-    fontWeight: "900",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    paddingHorizontal: 48,
+    marginTop: 16,
+    width: "100%",
+    maxWidth: 300,
   },
 });

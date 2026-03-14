@@ -11,6 +11,10 @@ import {
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { Button } from "../components/ui/Button";
+import { Typography } from "../components/ui/Typography";
+import { TextField } from "../components/ui/TextField";
+import { Theme } from "../constants/DesignSystem";
 import { AxiosError } from "axios";
 
 export default function LoginScreen() {
@@ -38,64 +42,75 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.formContainer}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
+        <Typography variant="h1" align="center" style={styles.title}>
+          Welcome Back
+        </Typography>
+        <Typography
+          variant="body"
+          color={Theme.colors.textMuted}
+          align="center"
+          style={styles.subtitle}
+        >
+          Sign in to access your media library
+        </Typography>
 
-        {(error || localError) && (
+        {error && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>
-              {localError ||
-                (error instanceof AxiosError
-                  ? (error.response?.data?.error as string)
-                  : null) ||
-                "Login failed"}
-            </Text>
+            <Typography variant="caption" color={Theme.colors.error}>
+              {error instanceof AxiosError
+                ? (error.response?.data?.error as string)
+                : (error as Error).message || "Login failed"}
+            </Typography>
           </View>
         )}
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#6b7280"
+        <TextField
+          label="Email Address"
+          placeholder="Enter your email"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          icon="mail-outline"
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#6b7280"
+        <TextField
+          label="Password"
+          placeholder="Enter your password"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          icon="lock-closed-outline"
         />
-
-        <Pressable
-          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+        <Button
+          title="Sign In"
           onPress={handleLogin}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          )}
-        </Pressable>
-
-        <Pressable onPress={() => router.push("/forgot-password")}>
-          <Text style={styles.linkTextCentered}>
-            <Text style={styles.linkTextPrimary}>Forgot password?</Text>
-          </Text>
-        </Pressable>
-
-        <View style={styles.spacer} />
-
-        <Pressable onPress={() => router.replace("/register")}>
-          <Text style={styles.linkTextCentered}>
+          isLoading={isLoading}
+          disabled={!email || !password}
+          style={styles.loginButton}
+        />
+        <Pressable onPress={() => router.push("/register")}>
+          <Typography
+            variant="body"
+            align="center"
+            color={Theme.colors.textMuted}
+          >
             Don't have an account?{" "}
-            <Text style={styles.linkTextPrimary}>Sign Up</Text>
-          </Text>
+            <Typography color={Theme.colors.primary} weight="800">
+              Sign Up
+            </Typography>
+          </Typography>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push("/forgot-password")}
+          style={styles.forgotBtn}
+        >
+          <Typography
+            variant="caption"
+            align="center"
+            color={Theme.colors.textMuted}
+          >
+            Forgot Password?
+          </Typography>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -104,65 +119,31 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#010101", justifyContent: "center" },
-  formContainer: { paddingHorizontal: 32 },
+  formContainer: {
+    paddingHorizontal: 32,
+    maxWidth: 420,
+    width: "100%",
+    alignSelf: "center",
+  },
   title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: "#ffffff",
-    marginBottom: 6,
-    letterSpacing: -0.5,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    color: "#888888",
     marginBottom: 32,
-    fontWeight: "600",
   },
   errorContainer: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderRadius: 10,
+    backgroundColor: "rgba(255, 59, 59, 0.1)",
     padding: 12,
-    marginBottom: 16,
-  },
-  errorText: { color: "#ef4444", fontSize: 14, fontWeight: "600" },
-  input: {
-    backgroundColor: "#080808",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    color: "#ffffff",
-    fontSize: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(255, 59, 59, 0.2)",
   },
   loginButton: {
-    backgroundColor: "#00f2ff",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
     marginTop: 12,
     marginBottom: 24,
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
   },
-  loginButtonDisabled: { opacity: 0.6 },
-  loginButtonText: {
-    color: "#000000",
-    fontWeight: "900",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  forgotBtn: {
+    marginTop: 16,
   },
-  linkTextCentered: {
-    color: "#888888",
-    textAlign: "center",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  linkTextPrimary: { color: "#00f2ff", fontWeight: "800" },
-  spacer: { height: 12 },
 });

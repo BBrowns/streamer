@@ -1,5 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Button } from "./Button";
+import { Theme } from "../../constants/DesignSystem";
 
 interface EmptyStateProps {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -49,14 +51,7 @@ export function EmptyState({
       ) : null}
 
       {actionLabel && onAction ? (
-        <Pressable
-          style={styles.button}
-          onPress={onAction}
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-        >
-          <Text style={styles.buttonText}>{actionLabel}</Text>
-        </Pressable>
+        <Button title={actionLabel} onPress={onAction} style={styles.button} />
       ) : null}
     </View>
   );
@@ -100,25 +95,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   button: {
-    backgroundColor: "#00f2ff",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 14,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  buttonText: {
-    color: "#000000",
-    fontWeight: "900",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginTop: 8,
+    minWidth: 160,
   },
 });

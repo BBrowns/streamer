@@ -133,10 +133,14 @@ const styles = StyleSheet.create({
   progressFill: {
     height: 4,
     backgroundColor: "#00f2ff",
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
+    boxShadow: [
+      {
+        color: "#00f2ff", // Opacity 1 is default
+        offsetX: 0,
+        offsetY: 0,
+        blurRadius: 6,
+      },
+    ],
     elevation: 3,
   },
   cardInfo: {

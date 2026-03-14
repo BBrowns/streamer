@@ -79,9 +79,11 @@ export default function PlayerScreen() {
   const showControls = useCallback(() => {
     setControlsVisible(true);
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    // On web/desktop, we might want longer or indefinite visibility for controls
+    const timeout = Platform.OS === "web" ? 8000 : 4000;
     controlsTimerRef.current = setTimeout(() => {
       setControlsVisible(false);
-    }, 4000);
+    }, timeout);
   }, []);
 
   const toggleControls = useCallback(() => {
@@ -279,15 +281,24 @@ export default function PlayerScreen() {
   if (Platform.OS === "web") {
     return (
       <View style={styles.container}>
-        <PlayerOverlay
-          currentStream={currentStream}
-          engineType={engine?.getEngineType() ?? "Unknown"}
-          stats={stats}
-          onClose={handleClose}
-          onSettings={() => setSettingsOpen(true)}
-          onWebCast={() => setCastModalOpen(true)}
-        />
-        <View style={styles.videoContainer}>
+        {controlsVisible && (
+          <PlayerOverlay
+            currentStream={currentStream}
+            engineType={engine?.getEngineType() ?? "Unknown"}
+            stats={stats}
+            onClose={handleClose}
+            onSettings={() => setSettingsOpen(true)}
+            onWebCast={() => setCastModalOpen(true)}
+          />
+        )}
+        <Pressable
+          style={styles.videoContainer}
+          onPress={toggleControls}
+          onPointerDown={(e) => {
+            // Prevent pointer down from stopping propagation if we want to hit the video element
+            // but we actually want the click to toggle UI
+          }}
+        >
           {activeCastDevice ? (
             <View style={styles.castContainer}>
               {mediaInfo?.poster && (
@@ -331,11 +342,16 @@ export default function PlayerScreen() {
                 src={playbackUri}
                 controls
                 autoPlay
-                style={styles.webVideo}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: "#000",
+                  pointerEvents: "auto",
+                }}
               />
             </>
           )}
-        </View>
+        </Pressable>
 
         <PlayerSettingsModal
           visible={settingsOpen}
@@ -385,8 +401,8 @@ export default function PlayerScreen() {
             >
               <Text style={styles.seekText}>
                 {seekFeedback === "left"
-                  ? `⏪ ${SEEK_SECONDS}s`
-                  : `${SEEK_SECONDS}s ⏩`}
+                  ? `${SEEK_SECONDS}s ◄◄`
+                  : `►► ${SEEK_SECONDS}s`}
               </Text>
             </View>
           )}
@@ -394,7 +410,7 @@ export default function PlayerScreen() {
           {showBrightnessFeedback && (
             <View style={styles.feedbackOverlay}>
               <Text style={styles.feedbackText}>
-                ☀️ Brightness: {Math.round(fakeBrightness * 100)}%
+                Brightness: {Math.round(fakeBrightness * 100)}%
               </Text>
             </View>
           )}
@@ -402,7 +418,7 @@ export default function PlayerScreen() {
           {showVolumeFeedback && player && (
             <View style={styles.feedbackOverlay}>
               <Text style={styles.feedbackText}>
-                🔊 Volume: {Math.round(player.volume * 100)}%
+                Volume: {Math.round(player.volume * 100)}%
               </Text>
             </View>
           )}

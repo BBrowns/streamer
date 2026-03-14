@@ -1,3 +1,4 @@
+import Fuse from "fuse.js";
 import axios from "axios";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
@@ -70,21 +71,43 @@ export class AggregatorService {
     requestId: string,
     search?: string,
     skip?: number,
+    catalogId?: string,
   ): Promise<MetaPreview[]> {
     const addons = await this.getUserAddons(userId);
 
     const results = await Promise.allSettled(
       addons
-        .filter((a) => this.addonSupportsResource(a.manifest, "catalog", type))
+        .filter((a) => {
+          const supportsType = this.addonSupportsResource(
+            a.manifest,
+            "catalog",
+            type,
+          );
+          if (!supportsType) return false;
+          if (catalogId) {
+            return a.manifest.catalogs.some(
+              (c) => c.id === catalogId && c.type === type,
+            );
+          }
+          return true;
+        })
         .map(async (addon) => {
-          const catalogId = this.findCatalogId(addon.manifest, type);
-          if (!catalogId) return [];
+          const actualCatalogId =
+            catalogId || this.findCatalogId(addon.manifest, type);
+          if (!actualCatalogId) return [];
 
-          let path = `catalog/${type}/${catalogId}.json`;
+          // Use Stremio standard: catalog/{type}/{id}/{extra}.json
+          // If no extras, it's just catalog/{type}/{id}.json
           const extras: string[] = [];
           if (search) extras.push(`search=${encodeURIComponent(search)}`);
           if (skip) extras.push(`skip=${skip}`);
-          if (extras.length > 0) path += `?${extras.join("&")}`;
+
+          let path: string;
+          if (extras.length > 0) {
+            path = `catalog/${type}/${actualCatalogId}/${extras.join("&")}.json`;
+          } else {
+            path = `catalog/${type}/${actualCatalogId}.json`;
+          }
 
           const data = await resilientFetch<{ metas: MetaPreview[] }>(
             addon.transportUrl,
@@ -92,16 +115,36 @@ export class AggregatorService {
             path,
             requestId,
           );
+          logger.debug(
+            {
+              requestId,
+              addonId: addon.manifest.id,
+              catalogId: actualCatalogId,
+              path,
+              itemCount: data?.metas?.length || 0,
+            },
+            "Fetched catalog",
+          );
           return data.metas || [];
         }),
     );
 
-    return results
-      .filter(
-        (r): r is PromiseFulfilledResult<MetaPreview[]> =>
-          r.status === "fulfilled",
-      )
-      .flatMap((r) => r.value);
+    // Merge and deduplicate by ID across all add-ons for this catalog
+    const seen = new Set<string>();
+    const merged: MetaPreview[] = [];
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        for (const meta of result.value) {
+          if (!seen.has(meta.id)) {
+            seen.add(meta.id);
+            merged.push(meta);
+          }
+        }
+      }
+    }
+
+    return merged;
   }
 
   /** Fetch metadata from add-ons that support this type/id */
@@ -266,54 +309,134 @@ export class AggregatorService {
     return resolved;
   }
 
-  /** Search across all add-ons and all content types simultaneously, deduplicating by ID */
+  /** Search across all add-ons and all content types simultaneously, deduplicating by ID and re-ranking */
   async search(
     userId: string,
     query: string,
     requestId: string,
   ): Promise<MetaPreview[]> {
-    const addons = await this.getUserAddons(userId);
-    const contentTypes = ["movie", "series"];
+    try {
+      const addons = await this.getUserAddons(userId);
+      const contentTypes = ["movie", "series"];
 
-    // Build all search tasks across all addons × all content types
-    const tasks = addons.flatMap((addon) =>
-      contentTypes
-        .filter((type) =>
-          this.addonSupportsResource(addon.manifest, "catalog", type),
-        )
-        .map(async (type) => {
-          const catalogId = this.findCatalogId(addon.manifest, type);
-          if (!catalogId) return [];
+      // Build all search tasks across all addons × all content types
+      const tasks = addons.flatMap((addon) =>
+        contentTypes
+          .filter((type) =>
+            this.addonSupportsResource(addon.manifest, "catalog", type),
+          )
+          .map(async (type) => {
+            // Find a catalog that explicitly supports search, or fallback to the first one
+            const catalog =
+              addon.manifest.catalogs.find(
+                (c) =>
+                  c.type === type && c.extra?.some((e) => e.name === "search"),
+              ) || addon.manifest.catalogs.find((c) => c.type === type);
 
-          const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
-          const data = await resilientFetch<{ metas: MetaPreview[] }>(
-            addon.transportUrl,
-            addon.manifest.id,
-            path,
-            requestId,
-          );
-          return data.metas || [];
-        }),
-    );
+            if (!catalog) return [];
+            const catalogId = catalog.id;
 
-    const results = await Promise.allSettled(tasks);
+            const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
+            try {
+              const data = await resilientFetch<{ metas: MetaPreview[] }>(
+                addon.transportUrl,
+                addon.manifest.id,
+                path,
+                requestId,
+              );
+              logger.debug(
+                {
+                  requestId,
+                  addonId: addon.manifest.id,
+                  catalogId,
+                  path,
+                  itemCount: data?.metas?.length || 0,
+                },
+                "Fetched search results",
+              );
+              return data.metas || [];
+            } catch (err: any) {
+              // Silently swallow search failures from individual addons to keep results flowing
+              logger.warn(
+                { requestId, addonId: addon.manifest.id, error: err.message },
+                "Search fetch failed for addon",
+              );
+              return [];
+            }
+          }),
+      );
 
-    // Merge and deduplicate by ID
-    const seen = new Set<string>();
-    const merged: MetaPreview[] = [];
+      const results = await Promise.allSettled(tasks);
 
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        for (const meta of result.value) {
-          if (!seen.has(meta.id)) {
-            seen.add(meta.id);
-            merged.push(meta);
+      // Merge and deduplicate by ID
+      const seen = new Set<string>();
+      const merged: MetaPreview[] = [];
+
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          for (const meta of result.value) {
+            if (
+              meta &&
+              typeof meta === "object" &&
+              meta.id &&
+              !seen.has(meta.id)
+            ) {
+              seen.add(meta.id);
+              merged.push(meta);
+            }
           }
         }
       }
-    }
 
-    return merged;
+      if (merged.length === 0) return [];
+
+      // --- RE-RANKING LOGIC ---
+      // 1. Fuzzy match scoring (40% weight)
+      // 2. Popularity / Rating scoring (60% weight)
+
+      // ESM Interop safety
+      const FuseConstructor: any = (Fuse as any).default || Fuse;
+
+      const fuse = new FuseConstructor(merged, {
+        keys: ["name"],
+        includeScore: true,
+        threshold: 0.5, // Slightly more relaxed threshold
+      });
+
+      const fuzzyResults = fuse.search(query);
+
+      // Map merged items to their scores for sorting
+      const scoredMetas = merged.map((meta) => {
+        const fuzzyMatch: any = fuzzyResults.find(
+          (r: any) => r.item.id === meta.id,
+        );
+
+        // Fuse score: 0 = perfect, 1 = no match.
+        // We normalize so 1 = perfect, 0 = no match.
+        const textScore = fuzzyMatch ? 1 - (fuzzyMatch.score || 0) : 0;
+
+        // Normalize IMDB rating (0.0 to 1.0)
+        const rating = parseFloat(meta.imdbRating || "0");
+        const popularityScore = isNaN(rating) ? 0 : Math.min(rating / 10, 1.0);
+
+        // Weighted final score
+        const finalScore = textScore * 0.4 + popularityScore * 0.6;
+
+        return { meta, finalScore: isNaN(finalScore) ? 0 : finalScore };
+      });
+
+      // Sort descending by total score
+      scoredMetas.sort((a, b) => b.finalScore - a.finalScore);
+
+      return scoredMetas.map((sm) => sm.meta);
+    } catch (err: any) {
+      logger.error(
+        { requestId, err: err.message, stack: err.stack },
+        "Search re-ranking crashed",
+      );
+      // Fallback: return everything raw if re-ranking fails
+      return [];
+    }
   }
 
   /** Get installed add-ons for user, with manifests */
@@ -322,10 +445,29 @@ export class AggregatorService {
       where: { userId },
     });
 
-    return addons.map((a) => ({
-      transportUrl: a.transportUrl,
-      manifest: JSON.parse(a.manifest as unknown as string) as AddonManifest,
-    }));
+    return addons
+      .map((a) => {
+        try {
+          const manifest =
+            typeof a.manifest === "string"
+              ? JSON.parse(a.manifest)
+              : a.manifest;
+          return {
+            transportUrl: a.transportUrl,
+            manifest: manifest as AddonManifest,
+          };
+        } catch (err) {
+          logger.error(
+            { addonId: a.id, error: err },
+            "Failed to parse addon manifest",
+          );
+          return null;
+        }
+      })
+      .filter(
+        (a): a is { transportUrl: string; manifest: AddonManifest } =>
+          a !== null,
+      );
   }
 
   /** Check if an add-on supports a given resource type */

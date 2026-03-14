@@ -1,11 +1,28 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet, Platform, Dimensions } from "react-native";
+import { useEffect } from "react";
+import { downloadService } from "../../services/DownloadService";
+import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
 
 export default function TabLayout() {
+  const { width } = Dimensions.get("window");
+  const isDesktop = Platform.OS === "web" && width > 1024;
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      // Small delay to allow bridge detection to complete
+      const timer = setTimeout(() => {
+        downloadService.syncDesktopDownloads();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   return (
     <Tabs
       screenOptions={{
+        headerShown: !isDesktop, // Hide header on desktop
         headerStyle: styles.header,
         headerTintColor: "#ffffff",
         headerTitleStyle: {
@@ -13,7 +30,10 @@ export default function TabLayout() {
           fontSize: 24,
           letterSpacing: -0.5,
         },
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          isDesktop && { display: "none" }, // Hide on desktop
+        ],
         tabBarActiveTintColor: "#00f2ff",
         tabBarInactiveTintColor: "#555555",
         tabBarLabelStyle: {
@@ -49,6 +69,21 @@ export default function TabLayout() {
             />
           ),
           tabBarAccessibilityLabel: "Discover",
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: "Search",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "search" : "search-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+          tabBarAccessibilityLabel: "Search",
+          href: isDesktop ? null : "/search", // Hide in tab bar on desktop
         }}
       />
       <Tabs.Screen

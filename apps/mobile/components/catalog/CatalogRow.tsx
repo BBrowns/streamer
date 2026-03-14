@@ -8,36 +8,29 @@ import {
   Pressable,
   ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAddonCatalog } from "../../hooks/useAddonCatalog";
-import type {
+import {
   MetaPreview,
   CatalogDefinition,
   InstalledAddon,
 } from "@streamer/shared";
+import { Card } from "../ui/Card";
+import { Typography } from "../ui/Typography";
+import { Theme } from "../../constants/DesignSystem";
 
 function CatalogCard({ item }: { item: MetaPreview }) {
   const router = useRouter();
 
   return (
-    <Pressable
-      style={styles.card}
+    <Card
+      title={item.name}
+      subtitle={item.imdbRating ? `⭐ ${item.imdbRating}` : undefined}
+      image={item.poster}
       onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
-    >
-      <Image
-        source={{ uri: item.poster }}
-        style={styles.poster}
-        accessibilityLabel={`${item.name} poster`}
-      />
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {item.name}
-      </Text>
-      {!!item.imdbRating && (
-        <Text style={styles.rating}>⭐ {item.imdbRating}</Text>
-      )}
-    </Pressable>
+      style={styles.card}
+    />
   );
 }
 
@@ -51,13 +44,21 @@ function CatalogRowInner({
   catalog: CatalogDefinition;
   addon: InstalledAddon;
 }) {
-  const { data, isLoading } = useAddonCatalog(catalog.type);
+  const { data, isLoading } = useAddonCatalog(catalog.type, catalog.id);
 
   if (isLoading) {
     return (
       <View style={styles.rowContainer}>
-        <Text style={styles.rowTitle}>{catalog.name}</Text>
-        <ActivityIndicator color="#00f2ff" style={{ marginVertical: 20 }} />
+        <Typography
+          variant="h3"
+          style={{ paddingHorizontal: 16, marginBottom: 12 }}
+        >
+          {catalog.name}
+        </Typography>
+        <ActivityIndicator
+          color={Theme.colors.primary}
+          style={{ marginVertical: 20 }}
+        />
       </View>
     );
   }
@@ -67,8 +68,14 @@ function CatalogRowInner({
   return (
     <View style={styles.rowContainer}>
       <View style={styles.rowHeader}>
-        <Text style={styles.rowTitle}>{catalog.name}</Text>
-        <Text style={styles.rowSource}>{addon.manifest.name}</Text>
+        <Typography variant="h3">{catalog.name}</Typography>
+        <Typography
+          variant="caption"
+          color={Theme.colors.textMuted}
+          weight="700"
+        >
+          {addon.manifest.name}
+        </Typography>
       </View>
       <FlatList
         horizontal
@@ -93,19 +100,9 @@ const styles = StyleSheet.create({
   rowHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "baseline",
+    alignItems: "center",
     paddingHorizontal: 16,
     marginBottom: 12,
-  },
-  rowTitle: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  rowSource: {
-    color: "#a1a1aa",
-    fontSize: 12,
-    fontWeight: "600",
   },
   rowScroll: {
     paddingHorizontal: 16,
@@ -113,31 +110,5 @@ const styles = StyleSheet.create({
   },
   card: {
     width: 140,
-    borderRadius: 16,
-    backgroundColor: "#080808",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    overflow: "hidden",
-  },
-  poster: {
-    width: 140,
-    height: 210,
-    backgroundColor: "#121212",
-  },
-  cardTitle: {
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "800",
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 2,
-    letterSpacing: -0.2,
-  },
-  rating: {
-    color: "#ffd600",
-    fontSize: 11,
-    fontWeight: "800",
-    paddingHorizontal: 10,
-    paddingBottom: 10,
   },
 });

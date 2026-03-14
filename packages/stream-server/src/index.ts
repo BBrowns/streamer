@@ -1,6 +1,12 @@
 import express from "express";
 import cors from "cors";
-import { streamRequest, getClient } from "./torrent.js";
+import {
+  streamRequest,
+  getClient,
+  downloadRequest,
+  listDownloadsRequest,
+  deleteDownloadRequest,
+} from "./torrent.js";
 import { getStats } from "./stats.js";
 import { castRouter } from "./cast.js";
 import { metricsHandler } from "./metrics.js";
@@ -48,6 +54,10 @@ app.get("/stats", async (_req, res) => {
 });
 
 app.get("/api/torrent/:infoHash/metrics", metricsHandler);
+
+app.post("/api/download", downloadRequest);
+app.get("/api/downloads", listDownloadsRequest);
+app.delete("/api/download/:infoHash", deleteDownloadRequest);
 
 app.listen(PORT as number, "0.0.0.0", () => {
   console.log(`Stream server (Bridge) running on http://0.0.0.0:${PORT}`);

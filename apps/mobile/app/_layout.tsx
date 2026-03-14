@@ -9,6 +9,8 @@ import {
   Pressable,
   AppState,
   StyleSheet,
+  Platform,
+  useWindowDimensions,
   type AppStateStatus,
 } from "react-native";
 import * as Sentry from "@sentry/react-native";
@@ -16,9 +18,11 @@ import {
   restoreQueryCache,
   persistQueryCache,
 } from "../services/queryPersister";
+import { Ionicons } from "@expo/vector-icons";
 import "../global.css";
 import { DesktopLayout } from "../components/ui/DesktopLayout";
 import { useAuthStore } from "../stores/authStore";
+import { downloadService } from "../services/DownloadService";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -50,7 +54,12 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
   return (
     <View style={styles.errorContainer}>
-      <Text style={styles.errorEmoji}>⚠️</Text>
+      <Ionicons
+        name="alert-circle-outline"
+        size={48}
+        color="#ef4444"
+        style={{ marginBottom: 12 }}
+      />
       <Text style={styles.errorTitle}>Something went wrong</Text>
       <Text style={styles.errorMessage}>
         {error.message || "An unexpected error occurred."}
@@ -63,6 +72,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 function RootLayout() {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width > 1024;
   const appState = useRef(AppState.currentState);
   const { deviceId, setDeviceId } = useAuthStore();
 
@@ -93,6 +104,9 @@ function RootLayout() {
       appState.current = next;
     });
 
+    // Initialize download service (bridge polling)
+    downloadService.initialize().catch(() => {});
+
     return () => sub.remove();
   }, []);
 
@@ -102,6 +116,7 @@ function RootLayout() {
       <DesktopLayout>
         <Stack
           screenOptions={{
+            headerShown: !isDesktop, // Hide header on desktop
             headerStyle: { backgroundColor: "#010101" },
             headerTintColor: "#ffffff",
             headerTitleStyle: { fontWeight: "700" },
@@ -135,6 +150,14 @@ function RootLayout() {
           <Stack.Screen name="detail/[type]/[id]" options={{ title: "" }} />
           <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />
           <Stack.Screen
+            name="settings/change-password"
+            options={{ title: "Change Password" }}
+          />
+          <Stack.Screen
+            name="settings/edit-profile"
+            options={{ title: "Edit Profile" }}
+          />
+          <Stack.Screen
             name="player"
             options={{
               title: "Now Playing",
@@ -158,7 +181,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 32,
   },
-  errorEmoji: { fontSize: 48, marginBottom: 12 },
   errorTitle: {
     color: "#ef4444",
     fontSize: 20,
@@ -177,10 +199,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
-    shadowColor: "#818cf8",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
+    boxShadow: [
+      {
+        color: "rgba(129, 140, 248, 0.4)",
+        offsetX: 0,
+        offsetY: 4,
+        blurRadius: 10,
+      },
+    ],
     elevation: 6,
   },
   retryButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },

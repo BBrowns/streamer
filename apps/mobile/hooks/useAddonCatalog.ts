@@ -7,14 +7,19 @@ import { useAuthStore } from "../stores/authStore";
  * Fetch a specific catalog type from the aggregator.
  * Used by the Discover screen to populate each catalog row.
  */
-export function useAddonCatalog(type: string, search?: string) {
+export function useAddonCatalog(
+  type: string,
+  catalogId: string,
+  search?: string,
+) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   return useQuery<MetaPreview[]>({
-    queryKey: ["catalog", type, search],
+    queryKey: ["catalog", type, catalogId, search],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
+      params.set("id", catalogId);
 
       const qs = params.toString();
       const { data } = await api.get(

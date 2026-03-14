@@ -21,6 +21,7 @@ web-build/
 # IDE
 .idea/
 .vscode/
+.roo/
 *.swp
 *.swo
 *~
@@ -39,6 +40,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Application Downloads
+downloads/
+packages/stream-server/downloads/
 
 # Prisma
 server/prisma/*.db

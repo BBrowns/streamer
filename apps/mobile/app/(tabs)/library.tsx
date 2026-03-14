@@ -11,8 +11,11 @@ import {
   Platform,
   Alert,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { useAuthStore } from "../../stores/authStore";
 import { useLibrary, useRemoveFromLibrary } from "../../hooks/useLibrary";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
@@ -21,7 +24,21 @@ import { useState, useCallback, useMemo } from "react";
 import type { LibraryItem } from "@streamer/shared";
 import * as Haptics from "expo-haptics";
 import { useDownloadStore } from "../../stores/downloadStore";
-import { Ionicons } from "@expo/vector-icons";
+import { Typography } from "../../components/ui/Typography";
+import { GlassPanel } from "../../components/ui/GlassPanel";
+import { Card } from "../../components/ui/Card";
+import { Button } from "../../components/ui/Button";
+import { Theme } from "../../constants/DesignSystem";
+
+/** Responsive column count based on screen width */
+function useResponsiveColumns(): number {
+  const { width } = useWindowDimensions();
+  if (width >= 1280) return 6;
+  if (width >= 1024) return 5;
+  if (width >= 768) return 4;
+  if (width >= 480) return 3;
+  return 2;
+}
 
 function LibraryCard({
   item,
@@ -80,41 +97,56 @@ function LibraryCard({
   };
 
   return (
-    <Pressable
-      style={styles.cardContainer}
-      onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
-      onLongPress={handleLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.title}. Long press for options`}
-      accessibilityHint="Opens detail page"
-    >
-      <Image
-        source={{ uri: item.poster ?? undefined }}
-        style={styles.cardImage}
-        accessibilityLabel={`${item.title} poster`}
+    <View style={styles.cardWrapper}>
+      <Card
+        title={item.title}
+        subtitle={item.type === "movie" ? "🎬 Movie" : "📺 Series"}
+        image={item.poster ?? undefined}
+        onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
+        style={styles.card}
       />
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.cardSubtitle}>
-          {item.type === "movie" ? "🎬 Movie" : "📺 Series"}
-        </Text>
+      <View style={styles.cardOverlay}>
         {isDownloading && (
-          <View style={styles.progressContainer}>
-            <View
-              style={[styles.progressBar, { width: `${progress * 100}%` }]}
-            />
+          <View style={styles.downloadStatusRow}>
+            <View style={styles.progressContainer}>
+              <View
+                style={[styles.progressBar, { width: `${progress * 100}%` }]}
+              />
+            </View>
+            <Typography
+              variant="caption"
+              weight="800"
+              color={Theme.colors.primary}
+              style={styles.progressText}
+            >
+              {Math.round(progress * 100)}%
+            </Typography>
           </View>
         )}
         {isCompleted && (
-          <View style={styles.downloadBadge}>
-            <Ionicons name="cloud-offline" size={12} color="#4ade80" />
-            <Text style={styles.downloadBadgeText}>Offline</Text>
-          </View>
+          <GlassPanel intensity="high" style={styles.downloadBadge}>
+            <Ionicons
+              name="cloud-offline"
+              size={12}
+              color={Theme.colors.primary}
+            />
+            <Typography
+              variant="caption"
+              color={Theme.colors.primary}
+              weight="800"
+              style={{ marginLeft: 4 }}
+            >
+              OFFLINE
+            </Typography>
+          </GlassPanel>
         )}
       </View>
-    </Pressable>
+      <Pressable
+        onLongPress={handleLongPress}
+        style={StyleSheet.absoluteFill}
+        delayLongPress={200}
+      />
+    </View>
   );
 }
 
@@ -162,22 +194,28 @@ export default function LibraryScreen() {
     return items.filter((item) => item.type === activeFilter);
   }, [items, tasks, activeFilter]);
 
+  const numColumns = useResponsiveColumns();
+
   if (!isAuthenticated) {
     return (
       <View style={styles.authContainer}>
-        <Text style={styles.authIcon}>📚</Text>
-        <Text style={styles.authTitle}>Your Library</Text>
-        <Text style={styles.authSubtitle}>
-          Sign in to access your watchlist
-        </Text>
-        <Pressable
-          style={styles.signInButton}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Sign in"
+        <Typography variant="h1" align="center" style={{ marginBottom: 12 }}>
+          📚 Library
+        </Typography>
+        <Typography
+          variant="body"
+          color={Theme.colors.textMuted}
+          align="center"
+          style={{ marginBottom: 32 }}
         >
-          <Text style={styles.signInButtonText}>Sign In</Text>
-        </Pressable>
+          Sign in to access your watchlist and synchronized collection
+        </Typography>
+        <Button
+          title="Sign In"
+          onPress={() => router.push("/login")}
+          size="lg"
+          style={styles.authButton}
+        />
       </View>
     );
   }
@@ -193,10 +231,14 @@ export default function LibraryScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        key={`library-grid-${numColumns}`}
         data={filteredItems as any[]}
         keyExtractor={(item) => item.id || item.itemId}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
+        numColumns={numColumns}
+        columnWrapperStyle={[
+          styles.columnWrapper,
+          numColumns > 2 && { justifyContent: "flex-start" },
+        ]}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
@@ -207,96 +249,55 @@ export default function LibraryScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.filterScroll}
               >
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "all" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("all");
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "all" && styles.filterChipTextActive,
-                    ]}
+                {[
+                  { id: "all", label: "All" },
+                  { id: "movie", label: "Movies" },
+                  { id: "show", label: "Series" },
+                  { id: "offline", label: "Offline" },
+                ].map((filter) => (
+                  <Pressable
+                    key={filter.id}
+                    onPress={() => {
+                      setActiveFilter(filter.id as any);
+                      Haptics.selectionAsync();
+                    }}
                   >
-                    All
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "movie" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("movie");
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "movie" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Movies
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "show" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("show");
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "show" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Series
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "offline" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("offline");
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "offline" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Offline
-                  </Text>
-                </Pressable>
+                    <GlassPanel
+                      intensity={activeFilter === filter.id ? "high" : "low"}
+                      style={[
+                        styles.filterChip,
+                        activeFilter === filter.id && styles.filterChipActive,
+                      ]}
+                      bordered={activeFilter === filter.id}
+                    >
+                      <Typography
+                        variant="caption"
+                        weight="800"
+                        color={
+                          activeFilter === filter.id
+                            ? Theme.colors.black
+                            : Theme.colors.textMuted
+                        }
+                      >
+                        {filter.label}
+                      </Typography>
+                    </GlassPanel>
+                  </Pressable>
+                ))}
               </ScrollView>
             </View>
           </>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>No Items Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              {activeFilter === "all"
+          <EmptyState
+            icon="bookmark-outline"
+            title="Your library is empty"
+            description={
+              activeFilter === "all"
                 ? "Browse the Discover tab and add movies & shows to your library."
-                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`}
-            </Text>
-          </View>
+                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`
+            }
+          />
         }
         refreshControl={
           <RefreshControl
@@ -320,118 +321,81 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050510" },
+  container: { flex: 1, backgroundColor: Theme.colors.background },
   authContainer: {
     flex: 1,
-    backgroundColor: "#050510",
+    backgroundColor: Theme.colors.background,
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
   },
-  authIcon: { fontSize: 48, marginBottom: 12 },
-  authTitle: {
-    color: "#f8fafc",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
+  authButton: {
+    width: "100%",
+    maxWidth: 320,
   },
-  authSubtitle: {
-    color: "#94a3b8",
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  signInButton: {
-    backgroundColor: "#00f2ff",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 14,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  signInButtonText: { color: "#000000", fontWeight: "900", fontSize: 15 },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#050510",
+    backgroundColor: Theme.colors.background,
     justifyContent: "center",
     alignItems: "center",
-    padding: 32,
   },
   columnWrapper: { paddingHorizontal: 12, gap: 10, marginBottom: 10 },
   listContent: { paddingBottom: 24 },
   filterContainer: { marginBottom: 16 },
   filterScroll: { paddingHorizontal: 16, gap: 8 },
   filterChip: {
-    backgroundColor: "rgba(0, 242, 255, 0.1)",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(0, 242, 255, 0.2)",
+    borderRadius: Theme.radius.full,
   },
-  filterChipActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
-  filterChipText: { color: "#888888", fontSize: 13, fontWeight: "800" },
-  filterChipTextActive: { color: "#000000" },
-  emptyContainer: {
+  filterChipActive: {
+    backgroundColor: Theme.colors.primary,
+  },
+  cardWrapper: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 64,
-    paddingHorizontal: 32,
+    maxWidth: Platform.OS === "web" ? 180 : "48%",
   },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: {
-    color: "#f8fafc",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    color: "#94a3b8",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  cardContainer: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#080808",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    minHeight: 44,
-  },
-  cardImage: {
+  card: {
     width: "100%",
-    aspectRatio: 2 / 3,
-    backgroundColor: "rgba(255,255,255,0.05)",
   },
-  cardInfo: { padding: 8 },
-  cardTitle: { color: "#f8fafc", fontSize: 13, fontWeight: "600" },
-  cardSubtitle: { color: "#94a3b8", fontSize: 11, marginTop: 4 },
+  cardOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 10,
+  },
+  downloadStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+    padding: 6,
+    borderRadius: 8,
+    gap: 8,
+  },
   progressContainer: {
-    height: 3,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    flex: 1,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
     borderRadius: 2,
-    marginTop: 8,
     overflow: "hidden",
   },
   progressBar: {
     height: "100%",
-    backgroundColor: "#00f2ff",
+    backgroundColor: Theme.colors.primary,
+  },
+  progressText: {
+    minWidth: 32,
+    textAlign: "right",
   },
   downloadBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 6,
-  },
-  downloadBadgeText: {
-    color: "#4ade80",
-    fontSize: 10,
-    fontWeight: "700",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "rgba(0, 242, 255, 0.2)",
   },
 });

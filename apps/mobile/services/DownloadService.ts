@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform, Alert } from "react-native";
 import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
 import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
@@ -6,10 +7,91 @@ import type { Stream } from "@streamer/shared";
 
 class DownloadService {
   private downloadResumables: Record<string, FileSystem.DownloadResumable> = {};
+  private pollInterval: any = null;
+  private isInitialized: boolean = false;
+
+  async initialize() {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
+
+    if (Platform.OS === "web") {
+      const { tasks } = useDownloadStore.getState();
+      const hasActiveTasks = Object.values(tasks).some(
+        (t) => t.status === "Downloading",
+      );
+
+      if (hasActiveTasks) {
+        console.log("[DownloadService] Resuming bridge polling on startup");
+        this.startPolling();
+      }
+    }
+  }
 
   async startDownload(stream: Stream, mediaInfo: MediaInfo) {
     const { addTask, updateProgress, setStatus, tasks } =
       useDownloadStore.getState();
+
+    if (Platform.OS === "web") {
+      // If bridge is available (Electron/Desktop), use persistent download
+      if (
+        streamEngineManager.bridgeAvailable &&
+        streamEngineManager.activeStrategy === "local"
+      ) {
+        const id = stream.infoHash || stream.url || mediaInfo.itemId;
+        if (
+          tasks[id]?.status === "Downloading" ||
+          tasks[id]?.status === "Completed"
+        )
+          return;
+
+        addTask(id, { ...mediaInfo, downloadUrl: "" });
+        setStatus(id, "Downloading");
+
+        try {
+          let magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
+          // Append trackers... (simplified for brevity, mirroring TorrentEngine)
+          const trackers = ["udp://tracker.opentrackr.org:1337/announce"];
+          for (const tr of trackers) magnet += `&tr=${encodeURIComponent(tr)}`;
+
+          const res = await fetch(
+            `${streamEngineManager.bridgeUrl}/api/download`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ magnet, itemId: mediaInfo.itemId }),
+            },
+          );
+
+          if (!res.ok) throw new Error("Bridge download failed");
+          console.log("[DownloadService] Bridge download started");
+
+          // Start polling for progress
+          this.startPolling();
+        } catch (e: any) {
+          console.error("[DownloadService] Bridge download error:", e);
+          setStatus(id, "Error", undefined, e.message);
+        }
+        return;
+      }
+
+      // Browser fallback (native <a> trigger)
+      const downloadUrl = await streamEngineManager.getPlaybackUri(stream);
+      if (!downloadUrl) {
+        Alert.alert("Error", "Could not resolve download URL");
+        return;
+      }
+
+      const id = stream.infoHash || stream.url || mediaInfo.itemId;
+      const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
+
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
 
     // 1. Resolve playback URI
     const downloadUrl = await streamEngineManager.getPlaybackUri(stream);
@@ -132,6 +214,70 @@ class DownloadService {
       }
     } else {
       removeTask(id);
+    }
+  }
+
+  async syncDesktopDownloads() {
+    if (Platform.OS !== "web" || !streamEngineManager.bridgeAvailable) return;
+
+    const { setStatus, tasks, updateProgress } = useDownloadStore.getState();
+
+    try {
+      const res = await fetch(`${streamEngineManager.bridgeUrl}/api/downloads`);
+      if (!res.ok) return;
+
+      const { downloads } = await res.json();
+      let activeDownloads = 0;
+
+      for (const dl of downloads) {
+        const id = dl.infoHash;
+        if (tasks[id]) {
+          const newStatus =
+            dl.status === "Completed" ? "Completed" : "Downloading";
+          const progress = dl.progress || 0;
+
+          if (newStatus === "Downloading") activeDownloads++;
+
+          const localUri =
+            newStatus === "Completed"
+              ? `${streamEngineManager.bridgeUrl}/stream?magnet=magnet:?xt=urn:btih:${id}`
+              : undefined;
+
+          // Always update progress if it changed
+          if (tasks[id].progress !== progress) {
+            updateProgress(id, progress, 0, 0); // sizes aren't strictly needed for UI bar but could be added
+          }
+
+          if (tasks[id].status !== newStatus) {
+            setStatus(id, newStatus, localUri);
+          }
+        }
+      }
+
+      // If no active downloads, stop polling
+      if (activeDownloads === 0 && this.pollInterval) {
+        this.stopPolling();
+      } else if (activeDownloads > 0 && !this.pollInterval) {
+        this.startPolling();
+      }
+    } catch (e) {
+      console.warn("[DownloadService] Failed to sync desktop downloads:", e);
+    }
+  }
+
+  private startPolling() {
+    if (this.pollInterval) return;
+    console.log("[DownloadService] Starting bridge polling");
+    this.pollInterval = setInterval(() => {
+      this.syncDesktopDownloads();
+    }, 3000);
+  }
+
+  private stopPolling() {
+    if (this.pollInterval) {
+      console.log("[DownloadService] Stopping bridge polling");
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
     }
   }
 }

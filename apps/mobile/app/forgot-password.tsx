@@ -11,6 +11,11 @@ import {
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+import { Button } from "../components/ui/Button";
+import { Typography } from "../components/ui/Typography";
+import { TextField } from "../components/ui/TextField";
+import { GlassPanel } from "../components/ui/GlassPanel";
+import { Theme } from "../constants/DesignSystem";
 import { AxiosError } from "axios";
 
 export default function ForgotPasswordScreen() {
@@ -61,58 +66,77 @@ export default function ForgotPasswordScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.form}>
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.subtitle}>
+      {" "}
+      <View style={styles.formContainer}>
+        <Typography variant="h1" align="center" style={styles.title}>
+          Forgot Password
+        </Typography>
+        <Typography
+          variant="body"
+          color={Theme.colors.textMuted}
+          align="center"
+          style={styles.subtitle}
+        >
           Enter your email to receive a reset link
-        </Text>
+        </Typography>
 
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={styles.errorContainer}>
+            <Typography variant="caption" color={Theme.colors.error}>
+              {error}
+            </Typography>
           </View>
         ) : null}
 
         {successMessage ? (
-          <View style={styles.successBox}>
-            <Text style={styles.successText}>{successMessage}</Text>
-            <Pressable
-              style={[styles.button, { marginTop: 16 }]}
-              onPress={() => router.push("/reset-password")}
+          <GlassPanel style={styles.successBox}>
+            <Typography
+              variant="body"
+              align="center"
+              color={Theme.colors.success}
+              style={styles.successText}
             >
-              <Text style={styles.buttonText}>Enter token</Text>
-            </Pressable>
-          </View>
+              {successMessage}
+            </Typography>
+            <Button
+              title="Enter token"
+              onPress={() => router.push("/reset-password")}
+              variant="secondary"
+              style={{ marginTop: 16 }}
+            />
+          </GlassPanel>
         ) : (
           <>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#6b7280"
+            <TextField
+              label="Email Address"
+              placeholder="Enter your email"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              icon="mail-outline"
             />
 
-            <Pressable
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+            <Button
+              title="Send Reset Link"
               onPress={handleForgot}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Send Reset Link</Text>
-              )}
-            </Pressable>
+              isLoading={isLoading}
+              style={styles.button}
+            />
           </>
         )}
 
-        <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
-          <Text style={styles.linkText}>
-            <Text style={styles.linkBold}>Back to Login</Text>
-          </Text>
+        <Pressable onPress={() => router.push("/login")} style={styles.backBtn}>
+          <Typography
+            variant="body"
+            align="center"
+            color={Theme.colors.textMuted}
+          >
+            Back to{" "}
+            <Typography color={Theme.colors.primary} weight="800">
+              Sign In
+            </Typography>
+          </Typography>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -125,77 +149,40 @@ const styles = StyleSheet.create({
     backgroundColor: "#0a0a1a",
     justifyContent: "center",
   },
-  form: {
+  formContainer: {
     paddingHorizontal: 32,
+    maxWidth: 420,
+    width: "100%",
+    alignSelf: "center",
   },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#e0e0ff",
-    marginBottom: 4,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginBottom: 28,
+    marginBottom: 32,
   },
-  errorBox: {
-    backgroundColor: "rgba(248, 113, 113, 0.1)",
-    borderRadius: 8,
+  errorContainer: {
+    backgroundColor: "rgba(255, 59, 59, 0.1)",
     padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: "#f87171",
-    fontSize: 13,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 59, 59, 0.2)",
   },
   successBox: {
-    backgroundColor: "rgba(52, 211, 153, 0.1)",
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
+    padding: 20,
+    marginBottom: 24,
+    backgroundColor: "rgba(0, 255, 136, 0.05)",
+    borderColor: "rgba(0, 255, 136, 0.2)",
   },
   successText: {
-    color: "#34d399",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  input: {
-    backgroundColor: "#1a1a3e",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: "#e0e0ff",
-    fontSize: 15,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(129, 140, 248, 0.2)",
+    marginBottom: 8,
   },
   button: {
-    backgroundColor: "#818cf8",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 20,
-    boxShadow: "0px 4px 8px rgba(129, 140, 248, 0.3)",
-    elevation: 6,
+    marginTop: 12,
+    marginBottom: 24,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  linkText: {
-    color: "#9ca3af",
-    textAlign: "center",
-    fontSize: 13,
-  },
-  linkBold: {
-    color: "#818cf8",
-    fontWeight: "700",
+  backBtn: {
+    marginTop: 16,
   },
 });

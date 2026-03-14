@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -17,6 +18,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { AxiosError } from "axios";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { clearQueryCache } from "../../services/queryPersister";
+import { Button } from "../../components/ui/Button";
+import { Typography } from "../../components/ui/Typography";
+import { TextField } from "../../components/ui/TextField";
+import { GlassPanel } from "../../components/ui/GlassPanel";
+import { Theme } from "../../constants/DesignSystem";
 
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
@@ -98,17 +104,20 @@ function SettingsContent() {
   if (!isAuthenticated) {
     return (
       <View style={styles.unauthContainer}>
-        <Text style={styles.unauthText} accessibilityRole="text">
-          Sign in to manage settings
-        </Text>
-        <Pressable
-          style={styles.signInButton}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Sign in to your account"
+        <Typography
+          variant="body"
+          color={Theme.colors.textMuted}
+          align="center"
+          style={{ marginBottom: 24, maxWidth: 400 }}
         >
-          <Text style={styles.signInText}>Sign In</Text>
-        </Pressable>
+          Sign in to manage your account and add-ons
+        </Typography>
+        <Button
+          title="Sign In"
+          onPress={() => router.push("/login")}
+          size="lg"
+          style={styles.signInButton}
+        />
       </View>
     );
   }
@@ -118,117 +127,118 @@ function SettingsContent() {
       {/* User Info */}
       <View style={styles.section}>
         <Pressable
-          style={styles.menuItem}
           onPress={() => {
-            setDisplayName(user?.displayName || "");
-            setProfileModalOpen(true);
+            if (Platform.OS === "web") {
+              router.push("/settings/edit-profile");
+            } else {
+              setDisplayName(user?.displayName || "");
+              setProfileModalOpen(true);
+            }
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Edit profile for ${user?.displayName || user?.email}`}
-          accessibilityHint="Opens profile editor"
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText} accessibilityElementsHidden>
-              {user?.email?.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemTitle}>
-              {user?.displayName || user?.email}
-            </Text>
-            <Text style={styles.menuItemSubtitle}>{user?.email}</Text>
-          </View>
-          <Ionicons
-            name="pencil"
-            size={16}
-            color="#6b7280"
-            accessibilityElementsHidden
-          />
+          <GlassPanel style={styles.menuItem}>
+            <View style={styles.avatar}>
+              <Typography variant="h2" color={Theme.colors.black}>
+                {user?.email?.charAt(0).toUpperCase()}
+              </Typography>
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Typography variant="h3">
+                {user?.displayName || user?.email}
+              </Typography>
+              <Typography variant="caption" color={Theme.colors.textMuted}>
+                {user?.email}
+              </Typography>
+            </View>
+            <Ionicons name="pencil" size={16} color={Theme.colors.textMuted} />
+          </GlassPanel>
         </Pressable>
       </View>
 
       {/* Menu Items */}
       <View style={styles.section}>
         <Pressable
-          style={styles.menuItem}
           onPress={() => router.push("/addons")}
           accessibilityRole="button"
-          accessibilityLabel="Manage add-ons"
-          accessibilityHint="Install and remove content sources"
         >
-          <View style={styles.iconContainer}>
+          <GlassPanel style={styles.menuItem}>
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name="extension-puzzle"
+                size={20}
+                color={Theme.colors.primary}
+              />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Typography variant="body" weight="700">
+                Manage Add-ons
+              </Typography>
+              <Typography variant="caption" color={Theme.colors.textMuted}>
+                Install and remove content sources
+              </Typography>
+            </View>
             <Ionicons
-              name="extension-puzzle"
-              size={20}
-              color="#00f2ff"
-              accessibilityElementsHidden
+              name="chevron-forward"
+              size={18}
+              color={Theme.colors.textMuted}
             />
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemTitle}>Manage Add-ons</Text>
-            <Text style={styles.menuItemSubtitle}>
-              Install and remove content sources
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#6b7280"
-            accessibilityElementsHidden
-          />
+          </GlassPanel>
         </Pressable>
 
         <View style={styles.spacer} />
 
         <Pressable
-          style={styles.menuItem}
           onPress={() => {
-            setCurrentPw("");
-            setNewPw("");
-            setPwModalOpen(true);
+            if (Platform.OS === "web") {
+              router.push("/settings/change-password");
+            } else {
+              setCurrentPw("");
+              setNewPw("");
+              setPwModalOpen(true);
+            }
           }}
           accessibilityRole="button"
-          accessibilityLabel="Change password"
-          accessibilityHint="Opens password change form"
         >
-          <View style={styles.iconContainer}>
+          <GlassPanel style={styles.menuItem}>
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: "rgba(129, 140, 248, 0.15)" },
+              ]}
+            >
+              <Ionicons name="lock-closed" size={20} color="#818cf8" />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Typography variant="body" weight="700">
+                Change Password
+              </Typography>
+              <Typography variant="caption" color={Theme.colors.textMuted}>
+                Update your account password
+              </Typography>
+            </View>
             <Ionicons
-              name="lock-closed"
-              size={20}
-              color="#818cf8"
-              accessibilityElementsHidden
+              name="chevron-forward"
+              size={18}
+              color={Theme.colors.textMuted}
             />
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemTitle}>Change Password</Text>
-            <Text style={styles.menuItemSubtitle}>
-              Update your account password
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#6b7280"
-            accessibilityElementsHidden
-          />
+          </GlassPanel>
         </Pressable>
       </View>
 
       {/* Logout */}
-      <View style={styles.flexSpacer} />
-      <Pressable
-        style={styles.logoutButton}
-        onPress={() => {
-          logout();
-          queryClient.clear();
-          clearQueryCache();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Sign out"
-        accessibilityHint="Logs you out and clears cached data"
-      >
-        <Text style={styles.logoutText}>Sign Out</Text>
-      </Pressable>
+      <View style={styles.logoutContainer}>
+        <Button
+          title="Sign Out"
+          onPress={() => {
+            logout();
+            queryClient.clear();
+            clearQueryCache();
+          }}
+          variant="danger"
+          style={styles.logoutButton}
+        />
+      </View>
 
       {/* Change Password Modal */}
       <Modal
@@ -238,48 +248,52 @@ function SettingsContent() {
         onRequestClose={() => setPwModalOpen(false)}
       >
         <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
+          <GlassPanel style={styles.modalContent} intensity="high">
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔒 Change Password</Text>
+              <View style={styles.modalTitleContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={24}
+                  color={Theme.colors.primary}
+                  style={styles.modalTitleIcon}
+                />
+                <Typography variant="h2">Change Password</Typography>
+              </View>
               <Pressable onPress={() => setPwModalOpen(false)}>
-                <Text style={styles.modalCancel}>Cancel</Text>
+                <Typography
+                  variant="body"
+                  color={Theme.colors.textMuted}
+                  weight="700"
+                >
+                  Cancel
+                </Typography>
               </Pressable>
             </View>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Current password"
-              placeholderTextColor="#6b7280"
+
+            <TextField
+              label="Current Password"
+              placeholder="Enter current password"
               value={currentPw}
               onChangeText={setCurrentPw}
               secureTextEntry
-              accessibilityLabel="Current password"
-              autoComplete="current-password"
+              icon="shield-outline"
             />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="New password (min 8 chars)"
-              placeholderTextColor="#6b7280"
+            <TextField
+              label="New Password"
+              placeholder="Min 8 characters"
               value={newPw}
               onChangeText={setNewPw}
               secureTextEntry
-              accessibilityLabel="New password, minimum 8 characters"
-              autoComplete="new-password"
+              icon="lock-closed-outline"
             />
-            <Pressable
-              style={[styles.modalButton, pwLoading && styles.opacity50]}
+
+            <Button
+              title="Update Password"
               onPress={handleChangePassword}
-              disabled={pwLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Update password"
-              accessibilityState={{ disabled: pwLoading }}
-            >
-              {pwLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.modalButtonText}>Update Password</Text>
-              )}
-            </Pressable>
-          </View>
+              isLoading={pwLoading}
+              style={styles.modalButton}
+            />
+          </GlassPanel>
         </View>
       </Modal>
 
@@ -291,37 +305,43 @@ function SettingsContent() {
         onRequestClose={() => setProfileModalOpen(false)}
       >
         <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
+          <GlassPanel style={styles.modalContent} intensity="high">
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>✏️ Edit Profile</Text>
+              <View style={styles.modalTitleContainer}>
+                <Ionicons
+                  name="person-outline"
+                  size={24}
+                  color={Theme.colors.primary}
+                  style={styles.modalTitleIcon}
+                />
+                <Typography variant="h2">Edit Profile</Typography>
+              </View>
               <Pressable onPress={() => setProfileModalOpen(false)}>
-                <Text style={styles.modalCancel}>Cancel</Text>
+                <Typography
+                  variant="body"
+                  color={Theme.colors.textMuted}
+                  weight="700"
+                >
+                  Cancel
+                </Typography>
               </Pressable>
             </View>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Display name"
-              placeholderTextColor="#6b7280"
+
+            <TextField
+              label="Display Name"
+              placeholder="Name others will see"
               value={displayName}
               onChangeText={setDisplayName}
-              accessibilityLabel="Display name"
-              autoComplete="name"
+              icon="person-outline"
             />
-            <Pressable
-              style={[styles.modalButton, profileLoading && styles.opacity50]}
+
+            <Button
+              title="Save Changes"
               onPress={handleUpdateProfile}
-              disabled={profileLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Save profile changes"
-              accessibilityState={{ disabled: profileLoading }}
-            >
-              {profileLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.modalButtonText}>Save</Text>
-              )}
-            </Pressable>
-          </View>
+              isLoading={profileLoading}
+              style={styles.modalButton}
+            />
+          </GlassPanel>
         </View>
       </Modal>
     </View>
@@ -339,112 +359,94 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   unauthContainer: {
     flex: 1,
-    backgroundColor: "#050510",
+    backgroundColor: Theme.colors.background,
     justifyContent: "center",
     alignItems: "center",
+    padding: 32,
   },
-  unauthText: { color: "#94a3b8", marginBottom: 16 },
   signInButton: {
-    backgroundColor: "#818cf8",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
+    width: "100%",
+    maxWidth: 320,
   },
-  signInText: { color: "#ffffff", fontWeight: "bold" },
-  container: { flex: 1, backgroundColor: "#050510", padding: 16 },
+  container: { flex: 1, backgroundColor: Theme.colors.background, padding: 16 },
   section: { marginBottom: 24 },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#080808",
-    borderRadius: 16,
     padding: 16,
-    minHeight: 64,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    minHeight: 72,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#00f2ff",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Theme.colors.primary,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    ...Theme.shadows.primary,
   },
-  avatarText: { color: "#000000", fontSize: 24, fontWeight: "900" },
-  menuItemTextContainer: { flex: 1, marginLeft: 12 },
-  menuItemTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 16 },
-  menuItemSubtitle: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
+  menuItemTextContainer: { flex: 1, marginLeft: 16 },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "rgba(129, 140, 248, 0.15)",
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
   },
-  spacer: { height: 8 },
-  flexSpacer: { flex: 1 },
-  logoutButton: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.3)",
-    borderRadius: 12,
-    paddingVertical: 12,
+  spacer: { height: 12 },
+  logoutContainer: {
+    marginTop: 48,
     alignItems: "center",
-    minHeight: 48,
   },
-  logoutText: { color: "#ef4444", fontWeight: "600" },
+  logoutButton: {
+    width: "100%",
+    maxWidth: 280,
+  },
   modalBg: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    ...Platform.select({
+      web: {
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 20,
+      },
+      default: {
+        justifyContent: "flex-end",
+      },
+    }),
   },
   modalContent: {
-    backgroundColor: "#0d0d0d",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    ...Platform.select({
+      web: {
+        borderRadius: 24,
+        width: "100%",
+        maxWidth: 480,
+        overflow: "hidden",
+      },
+      default: {
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+      },
+    }),
     padding: 24,
-    paddingBottom: 50,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
+    paddingBottom: Platform.OS === "web" ? 32 : 48,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  modalTitle: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
-  modalCancel: { color: "#888888", fontWeight: "800", fontSize: 15 },
-  modalInput: {
-    backgroundColor: "#121212",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: "#ffffff",
-    fontSize: 15,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+  modalTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  modalTitleIcon: {
+    marginRight: 10,
   },
   modalButton: {
-    backgroundColor: "#00f2ff",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
     marginTop: 12,
-    minHeight: 52,
   },
-  modalButtonText: { color: "#000000", fontWeight: "900", fontSize: 16 },
-  opacity50: { opacity: 0.5 },
 });

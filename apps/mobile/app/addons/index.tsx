@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../stores/authStore";
 import { api } from "../../services/api";
 import type { InstalledAddon } from "@streamer/shared";
@@ -168,7 +169,7 @@ export default function AddonsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a1a",
+    backgroundColor: "#010101",
   },
   installSection: {
     padding: 16,
@@ -192,30 +193,31 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: "#1a1a3e",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#e0e0ff",
-    fontSize: 13,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: "#ffffff",
+    fontSize: 14,
     borderWidth: 1,
-    borderColor: "rgba(129, 140, 248, 0.2)",
+    borderColor: "rgba(255, 255, 255, 0.08)",
   },
   installBtn: {
-    backgroundColor: "#818cf8",
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    backgroundColor: "#00f2ff",
+    paddingHorizontal: 24,
+    borderRadius: 12,
     justifyContent: "center",
-    minWidth: 80,
+    minWidth: 90,
     alignItems: "center",
   },
   disabledBtn: {
     opacity: 0.5,
   },
   installBtnText: {
-    color: "#fff",
-    fontWeight: "700",
+    color: "#000000",
+    fontWeight: "900",
     fontSize: 14,
+    textTransform: "uppercase",
   },
   listSection: {
     flex: 1,
@@ -227,23 +229,25 @@ const styles = StyleSheet.create({
   addonCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a3e",
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 10,
-    gap: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
   },
   addonIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "rgba(129, 140, 248, 0.2)",
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
   },
   addonIconText: {
-    color: "#818cf8",
-    fontSize: 18,
+    color: "#00f2ff",
+    fontSize: 20,
     fontWeight: "800",
   },
   addonInfo: {
