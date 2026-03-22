@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Link, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSearchStore } from "../../stores/searchStore";
+import { useState } from "react";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -19,7 +19,7 @@ interface DesktopLayoutProps {
 export function DesktopLayout({ children }: DesktopLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { query, setQuery } = useSearchStore();
+  const [query, setQuery] = useState("");
   const searchInputRef = useRef<TextInput>(null);
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
@@ -49,7 +49,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 
     if (text.length > 0 && pathname !== "/search") {
       searchTimeoutRef.current = setTimeout(() => {
-        router.push("/search");
+        router.push("/search" as any);
       }, 300); // 300ms debounce
     }
   };
