@@ -76,3 +76,22 @@ docker-data/
 *.swo
 *~
 .idea/
+
+# Expo specific
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.p8
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# generated native folders
+/ios
+/android
+
+# Stream server
+packages/stream-server/downloads/
