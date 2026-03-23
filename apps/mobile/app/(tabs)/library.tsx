@@ -15,6 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
 import { useLibrary, useRemoveFromLibrary } from "../../hooks/useLibrary";
+import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo } from "react";
@@ -126,6 +127,7 @@ export default function LibraryScreen() {
   const removeFromLibrary = useRemoveFromLibrary();
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
+  const numColumns = useResponsiveColumns();
   const [activeFilter, setActiveFilter] = useState<
     "all" | "movie" | "show" | "offline"
   >("all");
@@ -193,9 +195,10 @@ export default function LibraryScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        key={numColumns} // Force remount cleanly when numColumns changes
         data={filteredItems as any[]}
         keyExtractor={(item) => item.id || item.itemId}
-        numColumns={2}
+        numColumns={numColumns}
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={

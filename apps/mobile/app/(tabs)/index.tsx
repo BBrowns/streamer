@@ -16,20 +16,11 @@ import { useCatalog } from "../../hooks/useCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { MetaPreview } from "@streamer/shared";
+import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
-
-/** Responsive column count based on screen width */
-function useResponsiveColumns(): number {
-  const { width } = useWindowDimensions();
-  if (width >= 1280) return 6;
-  if (width >= 1024) return 5;
-  if (width >= 768) return 4;
-  if (width >= 480) return 3;
-  return 2;
-}
 
 const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
   const router = useRouter();
