@@ -1,8 +1,11 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet, Platform, useWindowDimensions } from "react-native";
 
 export default function TabLayout() {
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
+
   return (
     <Tabs
       screenOptions={{
@@ -13,7 +16,7 @@ export default function TabLayout() {
           fontSize: 24,
           letterSpacing: -0.5,
         },
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, isDesktop && { display: "none" }],
         tabBarActiveTintColor: "#00f2ff",
         tabBarInactiveTintColor: "#555555",
         tabBarLabelStyle: {

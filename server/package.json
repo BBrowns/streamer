@@ -18,7 +18,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.10",
     "@hono/zod-validator": "^0.7.6",
-    "@prisma/client": "^7.4.2",
+    "@prisma/client": "^6.19.2",
     "@streamer/shared": "*",
     "axios": "^1.7.9",
     "bcryptjs": "^3.0.2",
@@ -37,13 +37,13 @@
     "@types/jsonwebtoken": "^9.0.0",
     "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^8.57.1",
-    "prisma": "^7.4.2",
+    "prisma": "^6.19.2",
     "supertest": "^7.0.0",
     "testcontainers": "^11.12.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^4.0.18",
-    "@vitest/coverage-v8": "^4.0.18"
+    "vitest": "^4.0.18"
   }
 }

@@ -130,10 +130,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#fff",
     transform: [{ translateX: -8 }],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
   },
 });

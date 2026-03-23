@@ -74,7 +74,12 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 function NavLink({ href, icon, activeIcon, label, active }: any) {
   return (
     <Link href={href} asChild>
-      <View style={[styles.navLink, active && styles.navLinkActive]}>
+      <View
+        style={StyleSheet.flatten([
+          styles.navLink,
+          active && styles.navLinkActive,
+        ])}
+      >
         <Ionicons
           name={active ? activeIcon : icon}
           size={24}

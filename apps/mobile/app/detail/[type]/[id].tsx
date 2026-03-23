@@ -134,25 +134,47 @@ export default function DetailScreen() {
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
 
-  if (metaLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#00f2ff" />
-      </View>
-    );
-  }
-
-  if (!meta) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>Content not found</Text>
-      </View>
-    );
-  }
-
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
     null,
   );
+  const [playableMap, setPlayableMap] = useState<Record<string, boolean>>({});
+  const { data: inLibrary } = useIsInLibrary(id);
+  const addToLibrary = useAddToLibrary();
+  const removeFromLibrary = useRemoveFromLibrary();
+
+  useEffect(() => {
+    if (!streams || streams.length === 0) return;
+    let mounted = true;
+    Promise.all(
+      streams.map(async (s, i) => {
+        const key = s.infoHash || s.url || `stream_${i}`;
+        const uri = await streamEngineManager.getPlaybackUri(s);
+        return [key, !!uri && uri.length > 0] as [string, boolean];
+      }),
+    ).then((entries) => {
+      if (!mounted) return;
+      setPlayableMap(Object.fromEntries(entries));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [streams]);
+
+  const handleToggleLibrary = useCallback(() => {
+    if (!meta) return;
+    hapticImpactLight();
+    if (inLibrary) {
+      removeFromLibrary.mutate(id);
+    } else {
+      hapticSuccess();
+      addToLibrary.mutate({
+        type: castType,
+        itemId: id,
+        title: meta.name,
+        poster: meta.poster,
+      });
+    }
+  }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
   // Group streams by resolution
   const groupedStreams = (streams || []).reduce(
@@ -176,44 +198,27 @@ export default function DetailScreen() {
     return (order[a] ?? 99) - (order[b] ?? 99);
   });
 
-  const [playableMap, setPlayableMap] = useState<Record<string, boolean>>({});
-  // Library state
-  const { data: inLibrary } = useIsInLibrary(id);
-  const addToLibrary = useAddToLibrary();
-  const removeFromLibrary = useRemoveFromLibrary();
-
   useEffect(() => {
-    if (!streams || streams.length === 0) return;
-    let mounted = true;
-    Promise.all(
-      streams.map(async (s, i) => {
-        const key = s.infoHash || s.url || `stream_${i}`;
-        const uri = await streamEngineManager.getPlaybackUri(s);
-        return [key, !!uri && uri.length > 0] as [string, boolean];
-      }),
-    ).then((entries) => {
-      if (!mounted) return;
-      setPlayableMap(Object.fromEntries(entries));
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [streams]);
-  const handleToggleLibrary = useCallback(() => {
-    if (!meta) return;
-    hapticImpactLight();
-    if (inLibrary) {
-      removeFromLibrary.mutate(id);
-    } else {
-      hapticSuccess();
-      addToLibrary.mutate({
-        type: castType,
-        itemId: id,
-        title: meta.name,
-        poster: meta.poster,
-      });
+    if (availableResolutions.length > 0 && !selectedResolution) {
+      setSelectedResolution(availableResolutions[0]);
     }
-  }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
+  }, [availableResolutions, selectedResolution]);
+
+  if (metaLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#00f2ff" />
+      </View>
+    );
+  }
+
+  if (!meta) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Content not found</Text>
+      </View>
+    );
+  }
 
   const handlePlayStream = async (stream: Stream) => {
     const streamId = stream.infoHash || stream.url;
@@ -290,12 +295,6 @@ export default function DetailScreen() {
       Alert.alert("Download Error", "Failed to start download.");
     }
   };
-
-  useEffect(() => {
-    if (availableResolutions.length > 0 && !selectedResolution) {
-      setSelectedResolution(availableResolutions[0]);
-    }
-  }, [availableResolutions, selectedResolution]);
 
   return (
     <View style={styles.container}>

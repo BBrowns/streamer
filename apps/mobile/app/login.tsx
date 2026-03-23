@@ -11,7 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { AxiosError } from "axios";
+import { extractErrorMessage } from "../utils/error";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -41,14 +41,10 @@ export default function LoginScreen() {
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to continue</Text>
 
-        {(error || localError) && (
+        {!!(error || localError) && (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>
-              {localError ||
-                (error instanceof AxiosError
-                  ? (error.response?.data?.error as string)
-                  : null) ||
-                "Login failed"}
+              {localError || extractErrorMessage(error)}
             </Text>
           </View>
         )}
@@ -143,11 +139,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 12,
     marginBottom: 24,
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
   },
   loginButtonDisabled: { opacity: 0.6 },
   loginButtonText: {

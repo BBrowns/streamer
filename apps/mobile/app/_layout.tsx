@@ -177,11 +177,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
-    shadowColor: "#818cf8",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
   },
   retryButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
 });

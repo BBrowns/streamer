@@ -7,9 +7,11 @@ import {
   RefreshControl,
   useWindowDimensions,
   StyleSheet,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useCallback, memo } from "react";
+import { useCallback, memo, useState } from "react";
+import * as Haptics from "expo-haptics";
 import { useCatalog } from "../../hooks/useCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
@@ -66,7 +68,8 @@ function HomeContent() {
   const queryClient = useQueryClient();
   const numColumns = useResponsiveColumns();
 
-  const { data: movies, isLoading } = useCatalog("movie");
+  const [activeFilter, setActiveFilter] = useState<"movie" | "series">("movie");
+  const { data: movies, isLoading } = useCatalog(activeFilter);
 
   const handleRefresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ["catalog"] });
@@ -104,6 +107,55 @@ function HomeContent() {
   return (
     <View style={styles.container}>
       <OfflineBanner />
+
+      {isAuthenticated && isHydrated && (
+        <View style={styles.filterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScroll}
+          >
+            <Pressable
+              style={[
+                styles.filterChip,
+                activeFilter === "movie" && styles.filterChipActive,
+              ]}
+              onPress={() => {
+                setActiveFilter("movie");
+                Haptics.selectionAsync();
+              }}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === "movie" && styles.filterChipTextActive,
+                ]}
+              >
+                Movies
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.filterChip,
+                activeFilter === "series" && styles.filterChipActive,
+              ]}
+              onPress={() => {
+                setActiveFilter("series");
+                Haptics.selectionAsync();
+              }}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === "series" && styles.filterChipTextActive,
+                ]}
+              >
+                TV Shows
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      )}
 
       {isLoading && <SkeletonCardGrid count={numColumns * 3} />}
 
@@ -177,6 +229,19 @@ const styles = StyleSheet.create({
   },
   ratingContainer: { marginTop: 4 },
   ratingText: { color: "#ffd600", fontSize: 11, fontWeight: "800" },
+  filterContainer: { marginBottom: 16, marginTop: 8 },
+  filterScroll: { paddingHorizontal: 16, gap: 8 },
+  filterChip: {
+    backgroundColor: "rgba(0, 242, 255, 0.1)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0, 242, 255, 0.2)",
+  },
+  filterChipActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
+  filterChipText: { color: "#888888", fontSize: 13, fontWeight: "800" },
+  filterChipTextActive: { color: "#000000" },
   authContainer: {
     flex: 1,
     backgroundColor: "#010101",
@@ -202,11 +267,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingVertical: 16,
     borderRadius: 16,
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 8,
   },
   authButtonText: {
     color: "#000000",
