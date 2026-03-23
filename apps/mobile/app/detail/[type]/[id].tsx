@@ -49,6 +49,7 @@ function StreamItem({
   const task = useDownloadStore((state) => state.tasks[id]);
   const isDownloading = task?.status === "Downloading";
   const isCompleted = task?.status === "Completed";
+  const progress = task?.progress || 0;
 
   useEffect(() => {
     let isMounted = true;
