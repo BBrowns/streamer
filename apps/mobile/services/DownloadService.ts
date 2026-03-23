@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
 import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
@@ -30,7 +31,28 @@ class DownloadService {
       return;
     }
 
-    // 2. Prepare local path
+    const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
+
+    // WEB IMPLEMENTATION: Trigger browser native download popup
+    if (Platform.OS === "web") {
+      try {
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // We can't track perfect granular progress natively via link clicks, just mark it completed
+        addTask(id, { ...mediaInfo, downloadUrl });
+        setStatus(id, "Completed", downloadUrl);
+      } catch (e: any) {
+        setStatus(id, "Error", undefined, e.message);
+      }
+      return;
+    }
+
+    // LOCAL NATIVE IMPLEMENTATION
     // We'll use a specific directory for downloads
     const downloadDir = `${FileSystem.documentDirectory}downloads/`;
     const dirInfo = await FileSystem.getInfoAsync(downloadDir);
@@ -38,7 +60,6 @@ class DownloadService {
       await FileSystem.makeDirectoryAsync(downloadDir, { intermediates: true });
     }
 
-    const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
     const localUri = `${downloadDir}${filename}`;
 
     addTask(id, { ...mediaInfo, downloadUrl });
@@ -122,6 +143,13 @@ class DownloadService {
   async deleteDownload(id: string) {
     const { tasks, removeTask } = useDownloadStore.getState();
     const task = tasks[id];
+
+    if (Platform.OS === "web") {
+      // Browser files are stored externally by the user; we only clear our state
+      removeTask(id);
+      return;
+    }
+
     if (task && task.localUri) {
       try {
         await FileSystem.deleteAsync(task.localUri, { idempotent: true });

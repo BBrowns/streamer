@@ -107,8 +107,10 @@ function StreamItem({
           }}
           disabled={!playable || isCompleted}
         >
-          {isDownloading ? (
-            <ActivityIndicator size="small" color="#818cf8" />
+          {isDownloading || task?.status === "Paused" ? (
+            <Text style={{ color: "#818cf8", fontSize: 13, fontWeight: "900" }}>
+              {(progress * 100).toFixed(0)}%
+            </Text>
           ) : (
             <Ionicons
               name={isCompleted ? "cloud-offline" : "download-outline"}

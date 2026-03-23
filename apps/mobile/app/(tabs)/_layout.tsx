@@ -69,6 +69,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="downloads"
+        options={{
+          title: "Downloads",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "cloud-download" : "cloud-download-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+          tabBarAccessibilityLabel: "Downloads",
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
