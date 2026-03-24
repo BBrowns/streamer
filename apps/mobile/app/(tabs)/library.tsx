@@ -98,9 +98,16 @@ function LibraryCard({
         <Text style={styles.cardTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={styles.cardSubtitle}>
-          {item.type === "movie" ? "🎬 Movie" : "📺 Series"}
-        </Text>
+        <View style={styles.cardTypeRow}>
+          <Ionicons
+            name={item.type === "movie" ? "film-outline" : "tv-outline"}
+            size={11}
+            color="#6b7280"
+          />
+          <Text style={styles.cardSubtitle}>
+            {item.type === "movie" ? "Movie" : "Series"}
+          </Text>
+        </View>
         {isDownloading && (
           <View style={styles.progressContainer}>
             <View
@@ -110,7 +117,7 @@ function LibraryCard({
         )}
         {isCompleted && (
           <View style={styles.downloadBadge}>
-            <Ionicons name="cloud-offline" size={12} color="#4ade80" />
+            <Ionicons name="arrow-down-circle" size={13} color="#4ade80" />
             <Text style={styles.downloadBadgeText}>Offline</Text>
           </View>
         )}
@@ -167,7 +174,12 @@ export default function LibraryScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.authContainer}>
-        <Text style={styles.authIcon}>📚</Text>
+        <Ionicons
+          name="bookmarks-outline"
+          size={56}
+          color="#374151"
+          style={{ marginBottom: 16 }}
+        />
         <Text style={styles.authTitle}>Your Library</Text>
         <Text style={styles.authSubtitle}>
           Sign in to access your watchlist
@@ -398,8 +410,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+  cardTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   cardContainer: {
     flex: 1,
+    maxWidth: 260,
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#080808",

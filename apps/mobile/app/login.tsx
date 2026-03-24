@@ -100,7 +100,12 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#010101", justifyContent: "center" },
-  formContainer: { paddingHorizontal: 32 },
+  formContainer: {
+    paddingHorizontal: 32,
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+  },
   title: {
     fontSize: 32,
     fontWeight: "900",

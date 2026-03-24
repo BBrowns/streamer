@@ -98,7 +98,12 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#050510", justifyContent: "center" },
-  formContainer: { paddingHorizontal: 32 },
+  formContainer: {
+    paddingHorizontal: 32,
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+  },
   title: { fontSize: 30, fontWeight: "900", color: "#f8fafc", marginBottom: 4 },
   subtitle: { fontSize: 14, color: "#94a3b8", marginBottom: 28 },
   errorContainer: {

@@ -124,6 +124,9 @@ const styles = StyleSheet.create({
   },
   form: {
     paddingHorizontal: 32,
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
   },
   title: {
     fontSize: 28,

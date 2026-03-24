@@ -115,120 +115,122 @@ function SettingsContent() {
 
   return (
     <View style={styles.container}>
-      {/* User Info */}
-      <View style={styles.section}>
-        <Pressable
-          style={styles.menuItem}
-          onPress={() => {
-            setDisplayName(user?.displayName || "");
-            setProfileModalOpen(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit profile for ${user?.displayName || user?.email}`}
-          accessibilityHint="Opens profile editor"
-        >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText} accessibilityElementsHidden>
-              {user?.email?.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemTitle}>
-              {user?.displayName || user?.email}
-            </Text>
-            <Text style={styles.menuItemSubtitle}>{user?.email}</Text>
-          </View>
-          <Ionicons
-            name="pencil"
-            size={16}
-            color="#6b7280"
-            accessibilityElementsHidden
-          />
-        </Pressable>
-      </View>
-
-      {/* Menu Items */}
-      <View style={styles.section}>
-        <Pressable
-          style={styles.menuItem}
-          onPress={() => router.push("/addons")}
-          accessibilityRole="button"
-          accessibilityLabel="Manage add-ons"
-          accessibilityHint="Install and remove content sources"
-        >
-          <View style={styles.iconContainer}>
+      <View style={styles.contentWrapper}>
+        {/* User Info */}
+        <View style={styles.section}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setDisplayName(user?.displayName || "");
+              setProfileModalOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit profile for ${user?.displayName || user?.email}`}
+            accessibilityHint="Opens profile editor"
+          >
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText} accessibilityElementsHidden>
+                {user?.email?.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={styles.menuItemTitle}>
+                {user?.displayName || user?.email}
+              </Text>
+              <Text style={styles.menuItemSubtitle}>{user?.email}</Text>
+            </View>
             <Ionicons
-              name="extension-puzzle"
-              size={20}
-              color="#00f2ff"
+              name="pencil"
+              size={16}
+              color="#6b7280"
               accessibilityElementsHidden
             />
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemTitle}>Manage Add-ons</Text>
-            <Text style={styles.menuItemSubtitle}>
-              Install and remove content sources
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#6b7280"
-            accessibilityElementsHidden
-          />
-        </Pressable>
+          </Pressable>
+        </View>
 
-        <View style={styles.spacer} />
-
-        <Pressable
-          style={styles.menuItem}
-          onPress={() => {
-            setCurrentPw("");
-            setNewPw("");
-            setPwModalOpen(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Change password"
-          accessibilityHint="Opens password change form"
-        >
-          <View style={styles.iconContainer}>
+        {/* Menu Items */}
+        <View style={styles.section}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => router.push("/addons")}
+            accessibilityRole="button"
+            accessibilityLabel="Manage add-ons"
+            accessibilityHint="Install and remove content sources"
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name="extension-puzzle"
+                size={20}
+                color="#00f2ff"
+                accessibilityElementsHidden
+              />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={styles.menuItemTitle}>Manage Add-ons</Text>
+              <Text style={styles.menuItemSubtitle}>
+                Install and remove content sources
+              </Text>
+            </View>
             <Ionicons
-              name="lock-closed"
-              size={20}
-              color="#818cf8"
+              name="chevron-forward"
+              size={18}
+              color="#6b7280"
               accessibilityElementsHidden
             />
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemTitle}>Change Password</Text>
-            <Text style={styles.menuItemSubtitle}>
-              Update your account password
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#6b7280"
-            accessibilityElementsHidden
-          />
+          </Pressable>
+
+          <View style={styles.spacer} />
+
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setCurrentPw("");
+              setNewPw("");
+              setPwModalOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Change password"
+            accessibilityHint="Opens password change form"
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name="lock-closed"
+                size={20}
+                color="#818cf8"
+                accessibilityElementsHidden
+              />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={styles.menuItemTitle}>Change Password</Text>
+              <Text style={styles.menuItemSubtitle}>
+                Update your account password
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color="#6b7280"
+              accessibilityElementsHidden
+            />
+          </Pressable>
+        </View>
+
+        {/* Logout */}
+        <View style={styles.flexSpacer} />
+        <Pressable
+          style={styles.logoutButton}
+          onPress={() => {
+            logout();
+            queryClient.clear();
+            clearQueryCache();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          accessibilityHint="Logs you out and clears cached data"
+        >
+          <Text style={styles.logoutText}>Sign Out</Text>
         </Pressable>
       </View>
-
-      {/* Logout */}
-      <View style={styles.flexSpacer} />
-      <Pressable
-        style={styles.logoutButton}
-        onPress={() => {
-          logout();
-          queryClient.clear();
-          clearQueryCache();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Sign out"
-        accessibilityHint="Logs you out and clears cached data"
-      >
-        <Text style={styles.logoutText}>Sign Out</Text>
-      </Pressable>
 
       {/* Change Password Modal */}
       <Modal
@@ -240,7 +242,14 @@ function SettingsContent() {
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔒 Change Password</Text>
+              <View style={styles.modalTitleRow}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#818cf8"
+                />
+                <Text style={styles.modalTitle}>Change Password</Text>
+              </View>
               <Pressable onPress={() => setPwModalOpen(false)}>
                 <Text style={styles.modalCancel}>Cancel</Text>
               </Pressable>
@@ -293,7 +302,10 @@ function SettingsContent() {
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>✏️ Edit Profile</Text>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="pencil-outline" size={20} color="#00f2ff" />
+                <Text style={styles.modalTitle}>Edit Profile</Text>
+              </View>
               <Pressable onPress={() => setProfileModalOpen(false)}>
                 <Text style={styles.modalCancel}>Cancel</Text>
               </Pressable>
@@ -356,6 +368,12 @@ const styles = StyleSheet.create({
   },
   signInText: { color: "#ffffff", fontWeight: "bold" },
   container: { flex: 1, backgroundColor: "#050510", padding: 16 },
+  contentWrapper: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 600,
+    alignSelf: "center",
+  },
   section: { marginBottom: 24 },
   menuItem: {
     flexDirection: "row",
@@ -420,6 +438,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalTitle: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
+  modalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   modalCancel: { color: "#888888", fontWeight: "800", fontSize: 15 },
   modalInput: {
     backgroundColor: "#121212",

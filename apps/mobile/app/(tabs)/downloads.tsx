@@ -163,7 +163,7 @@ export default function DownloadsScreen() {
   if (tasks.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="cloud-download-outline" size={64} color="#333" />
+        <Ionicons name="cloud-download-outline" size={64} color="#374151" />
         <Text style={styles.emptyTitle}>No Downloads</Text>
         <Text style={styles.emptyText}>
           Movies and shows you download will appear here.
@@ -174,18 +174,20 @@ export default function DownloadsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerSubtitle}>Manage your offline content</Text>
-        <Pressable onPress={confirmClearAll} style={styles.clearBtn}>
-          <Text style={styles.clearBtnText}>Clear All</Text>
-        </Pressable>
+      <View style={styles.contentWrapper}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerSubtitle}>Manage your offline content</Text>
+          <Pressable onPress={confirmClearAll} style={styles.clearBtn}>
+            <Text style={styles.clearBtnText}>Clear All</Text>
+          </Pressable>
+        </View>
+        <FlatList
+          data={tasks}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <DownloadCard task={item} />}
+          contentContainerStyle={styles.listContent}
+        />
       </View>
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <DownloadCard task={item} />}
-        contentContainerStyle={styles.listContent}
-      />
     </View>
   );
 }
@@ -194,6 +196,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#010101",
+  },
+  contentWrapper: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
   },
   headerRow: {
     flexDirection: "row",
