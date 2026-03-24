@@ -204,7 +204,8 @@ export default function PlayerScreen() {
           e.preventDefault();
           player?.seekBy(-SEEK_SECONDS);
           setSeekFeedback("left");
-          if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
+          if (seekFeedbackTimer.current)
+            clearTimeout(seekFeedbackTimer.current);
           seekFeedbackTimer.current = setTimeout(
             () => setSeekFeedback(null),
             600,
@@ -216,7 +217,8 @@ export default function PlayerScreen() {
           e.preventDefault();
           player?.seekBy(SEEK_SECONDS);
           setSeekFeedback("right");
-          if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
+          if (seekFeedbackTimer.current)
+            clearTimeout(seekFeedbackTimer.current);
           seekFeedbackTimer.current = setTimeout(
             () => setSeekFeedback(null),
             600,
