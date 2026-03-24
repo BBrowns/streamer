@@ -134,14 +134,20 @@ function NavLink({
   label: string;
   active: boolean;
 }) {
+  const [isHovered, setIsHovered] = React.useState(false);
+  const isWeb = Platform.OS === "web";
+
   return (
     <Link href={href as any} asChild>
       <Pressable
         style={({ pressed }) => [
           styles.navLink,
           active && styles.navLinkActive,
+          isWeb && isHovered && !active && styles.navLinkHovered,
           pressed && styles.navLinkPressed,
         ]}
+        onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
+        onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
         accessibilityRole="link"
         accessibilityLabel={label}
       >
@@ -150,9 +156,15 @@ function NavLink({
           <Ionicons
             name={active ? activeIcon : icon}
             size={20}
-            color={active ? "#00f2ff" : "#6b7280"}
+            color={active || (isWeb && isHovered) ? "#00f2ff" : "#6b7280"}
+            style={{ transition: "color 0.2s ease" } as any}
           />
-          <Text style={[styles.navLabel, active && styles.navLabelActive]}>
+          <Text
+            style={[
+              styles.navLabel,
+              (active || (isWeb && isHovered)) && styles.navLabelActive,
+            ]}
+          >
             {label}
           </Text>
         </View>
@@ -213,12 +225,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
-  },
+    transition: "all 0.2s ease-in-out",
+  } as any,
   navLinkActive: {
     backgroundColor: "rgba(0, 242, 255, 0.08)",
   },
+  navLinkHovered: {
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+  },
   navLinkPressed: {
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   activeBar: {
     position: "absolute",
@@ -240,7 +256,8 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     fontSize: 14,
     fontWeight: "600",
-  },
+    transition: "color 0.2s ease",
+  } as any,
   navLabelActive: {
     color: "#e2e8f0",
     fontWeight: "700",

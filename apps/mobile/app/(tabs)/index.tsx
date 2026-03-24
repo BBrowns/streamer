@@ -89,11 +89,18 @@ const HeroBanner = memo(function HeroBanner({ item }: { item: MetaPreview }) {
 // ─── Catalog Card ────────────────────────────────────────────────────────────
 const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
   const router = useRouter();
+  const [isHovered, setIsHovered] = useState(false);
+  const isWeb = Platform.OS === "web";
 
   return (
     <Pressable
-      style={styles.cardContainer}
+      style={[
+        styles.cardContainer,
+        isWeb && isHovered && styles.cardContainerHovered,
+      ]}
       onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
+      onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
+      onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
       accessibilityHint="Opens details page"
@@ -101,13 +108,22 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
       <View style={{ position: "relative" }}>
         <Image
           source={{ uri: item.poster }}
-          style={styles.cardImage}
+          style={[
+            styles.cardImage,
+            isWeb && isHovered && (styles.cardImageHovered as any),
+          ]}
           accessibilityIgnoresInvertColors
         />
         <WatchProgressBar itemId={item.id} />
       </View>
       <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
+        <Text
+          style={[
+            styles.cardTitle,
+            isWeb && isHovered && styles.cardTitleHovered,
+          ]}
+          numberOfLines={2}
+        >
           {item.name}
         </Text>
         {!!item.imdbRating && (
@@ -421,10 +437,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)",
   },
+  cardContainerHovered: {
+    borderColor: "#00f2ff",
+    transform: [{ scale: 1.05 }],
+    zIndex: 10,
+    boxShadow: "0 10px 30px rgba(0, 242, 255, 0.25)",
+  } as any,
   cardImage: {
     width: "100%",
     aspectRatio: 2 / 3,
     backgroundColor: "rgba(255,255,255,0.05)",
+    transition: "all 0.4s cubic-bezier(0.2, 1, 0.3, 1)",
+  } as any,
+  cardImageHovered: {
+    filter: "brightness(1.15) contrast(1.05)",
   },
   cardInfo: { padding: 8 },
   cardTitle: {
@@ -432,6 +458,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
     letterSpacing: -0.2,
+    transition: "color 0.2s ease",
+  } as any,
+  cardTitleHovered: {
+    color: "#00f2ff",
   },
   ratingContainer: { marginTop: 4 },
   ratingText: { color: "#ffd600", fontSize: 11, fontWeight: "800" },
