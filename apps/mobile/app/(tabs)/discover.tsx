@@ -48,6 +48,29 @@ function DiscoverContent() {
     setRefreshing(false);
   }, [queryClient]);
 
+  // Collect all catalogs across all addons (Server-Driven UI)
+  const allCatalogRows = useMemo(() => {
+    const rows: {
+      catalog: CatalogDefinition;
+      addon: InstalledAddon;
+    }[] = [];
+    addons?.forEach((addon) => {
+      addon.manifest.catalogs.forEach((catalog) => {
+        rows.push({ catalog, addon });
+      });
+    });
+    return rows;
+  }, [addons]);
+
+  // Apply active filter
+  const catalogRows = useMemo(
+    () =>
+      activeFilter
+        ? allCatalogRows.filter((r) => r.catalog.type === activeFilter)
+        : allCatalogRows,
+    [activeFilter, allCatalogRows],
+  );
+
   // Wait for auth hydration
   if (!isHydrated) {
     return (
@@ -82,26 +105,6 @@ function DiscoverContent() {
       </View>
     );
   }
-
-  // Collect all catalogs across all addons (Server-Driven UI)
-  const allCatalogRows: {
-    catalog: CatalogDefinition;
-    addon: InstalledAddon;
-  }[] = [];
-  addons?.forEach((addon) => {
-    addon.manifest.catalogs.forEach((catalog) => {
-      allCatalogRows.push({ catalog, addon });
-    });
-  });
-
-  // Apply active filter
-  const catalogRows = useMemo(
-    () =>
-      activeFilter
-        ? allCatalogRows.filter((r) => r.catalog.type === activeFilter)
-        : allCatalogRows,
-    [activeFilter, allCatalogRows.length],
-  );
 
   if (catalogRows.length === 0) {
     return (

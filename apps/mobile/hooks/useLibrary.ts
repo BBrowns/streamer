@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
 import type { LibraryItem, AddToLibraryRequest } from "@streamer/shared";
+import { useAuthStore } from "../stores/authStore";
 
 /** Query key factory */
 const libraryKeys = {
@@ -11,17 +12,22 @@ const libraryKeys = {
 
 /** Fetch the user's full library */
 export function useLibrary() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return useQuery({
     queryKey: libraryKeys.list(),
     queryFn: async () => {
       const { data } = await api.get<{ items: LibraryItem[] }>("/api/library");
       return data.items;
     },
+    enabled: isAuthenticated,
   });
 }
 
 /** Check if a specific item is in the library */
 export function useIsInLibrary(itemId: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return useQuery({
     queryKey: libraryKeys.check(itemId),
     queryFn: async () => {
@@ -30,7 +36,7 @@ export function useIsInLibrary(itemId: string) {
       );
       return data.inLibrary;
     },
-    enabled: !!itemId,
+    enabled: isAuthenticated && !!itemId,
   });
 }
 

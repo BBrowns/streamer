@@ -31,6 +31,7 @@ import { downloadService } from "../../../services/DownloadService";
 import { useCallback, useState, useEffect } from "react";
 import { useToastStore } from "../../../stores/toastStore";
 import { WatchProgressBar } from "../../../components/ui/WatchProgressBar";
+import { EpisodeSelector } from "../../../components/catalog/EpisodeSelector";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -234,8 +235,14 @@ export default function DetailScreen() {
     );
   }
 
-  const handlePlayStream = async (stream: Stream) => {
+  const handlePlayStream = async (
+    stream: Stream,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => {
     const streamId = stream.infoHash || stream.url;
+
     const task = useDownloadStore.getState().tasks[streamId || ""];
 
     if (
@@ -248,10 +255,15 @@ export default function DetailScreen() {
         {
           type: castType,
           itemId: id || "unknown",
-          title: meta?.name ?? stream.title ?? "Unknown",
+          title: episodeTitle
+            ? `${meta?.name} - ${episodeTitle}`
+            : (meta?.name ?? stream.title ?? "Unknown"),
           poster: meta?.poster,
+          season,
+          episode,
         },
       );
+
       router.push("/player");
       return;
     }
@@ -267,9 +279,14 @@ export default function DetailScreen() {
           const mediaInfo: MediaInfo = {
             type: (type as "movie" | "series") ?? "movie",
             itemId: id || "unknown",
-            title: meta?.name ?? stream.title ?? "Unknown",
+            title: episodeTitle
+              ? `${meta?.name} - ${episodeTitle}`
+              : (meta?.name ?? stream.title ?? "Unknown"),
             poster: meta?.poster,
+            season,
+            episode,
           };
+
           setStream(stream, mediaInfo);
           router.push("/player");
           return;
@@ -290,9 +307,14 @@ export default function DetailScreen() {
     setStream(stream, {
       type: castType,
       itemId: id || "unknown",
-      title: meta?.name ?? stream.title ?? "Unknown",
+      title: episodeTitle
+        ? `${meta?.name} - ${episodeTitle}`
+        : (meta?.name ?? stream.title ?? "Unknown"),
       poster: meta?.poster,
+      season,
+      episode,
     });
+
     router.push("/player");
   };
 
@@ -405,10 +427,23 @@ export default function DetailScreen() {
           {/* Streams Section */}
           <View style={styles.section}>
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="layers-outline" size={18} color="#00f2ff" />
-              <Text style={styles.sectionTitle}>Select Quality</Text>
+              <Ionicons
+                name={castType === "series" ? "list" : "layers-outline"}
+                size={18}
+                color="#00f2ff"
+              />
+              <Text style={styles.sectionTitle}>
+                {castType === "series" ? "Episodes" : "Select Quality"}
+              </Text>
             </View>
-            {streamsLoading ? (
+
+            {castType === "series" ? (
+              <EpisodeSelector
+                seriesId={id}
+                videos={meta.videos || []}
+                onPlayStream={handlePlayStream}
+              />
+            ) : streamsLoading ? (
               <ActivityIndicator color="#00f2ff" />
             ) : availableResolutions.length > 0 ? (
               <>
@@ -557,11 +592,23 @@ export default function DetailScreen() {
           {/* Streams Section */}
           <View style={styles.section}>
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="layers-outline" size={18} color="#00f2ff" />
-              <Text style={styles.sectionTitle}>Select Quality</Text>
+              <Ionicons
+                name={castType === "series" ? "list" : "layers-outline"}
+                size={18}
+                color="#00f2ff"
+              />
+              <Text style={styles.sectionTitle}>
+                {castType === "series" ? "Episodes" : "Select Quality"}
+              </Text>
             </View>
 
-            {streamsLoading ? (
+            {castType === "series" ? (
+              <EpisodeSelector
+                seriesId={id}
+                videos={meta.videos || []}
+                onPlayStream={handlePlayStream}
+              />
+            ) : streamsLoading ? (
               <ActivityIndicator color="#00f2ff" />
             ) : availableResolutions.length > 0 ? (
               <>
