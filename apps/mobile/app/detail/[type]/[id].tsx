@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
-  Dimensions, // NEW
+  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient"; // NEW
@@ -28,6 +29,8 @@ import type { MediaInfo } from "../../../stores/playerStore";
 import { useDownloadStore } from "../../../stores/downloadStore";
 import { downloadService } from "../../../services/DownloadService";
 import { useCallback, useState, useEffect } from "react";
+import { useToastStore } from "../../../stores/toastStore";
+import { WatchProgressBar } from "../../../components/ui/WatchProgressBar";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -49,6 +52,7 @@ function StreamItem({
   const task = useDownloadStore((state) => state.tasks[id]);
   const isDownloading = task?.status === "Downloading";
   const isCompleted = task?.status === "Completed";
+  const progress = task?.progress || 0;
 
   useEffect(() => {
     let isMounted = true;
@@ -107,8 +111,10 @@ function StreamItem({
           }}
           disabled={!playable || isCompleted}
         >
-          {isDownloading ? (
-            <ActivityIndicator size="small" color="#818cf8" />
+          {isDownloading || task?.status === "Paused" ? (
+            <Text style={{ color: "#818cf8", fontSize: 13, fontWeight: "900" }}>
+              {(progress * 100).toFixed(0)}%
+            </Text>
           ) : (
             <Ionicons
               name={isCompleted ? "cloud-offline" : "download-outline"}
@@ -133,26 +139,56 @@ export default function DetailScreen() {
   const { data: meta, isLoading: metaLoading } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
-
-  if (metaLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#00f2ff" />
-      </View>
-    );
-  }
-
-  if (!meta) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>Content not found</Text>
-      </View>
-    );
-  }
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
 
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
     null,
   );
+  const [playableMap, setPlayableMap] = useState<Record<string, boolean>>({});
+  const { data: inLibrary } = useIsInLibrary(id);
+  const addToLibrary = useAddToLibrary();
+  const removeFromLibrary = useRemoveFromLibrary();
+
+  useEffect(() => {
+    if (!streams || streams.length === 0) return;
+    let mounted = true;
+    Promise.all(
+      streams.map(async (s, i) => {
+        const key = s.infoHash || s.url || `stream_${i}`;
+        const uri = await streamEngineManager.getPlaybackUri(s);
+        return [key, !!uri && uri.length > 0] as [string, boolean];
+      }),
+    ).then((entries) => {
+      if (!mounted) return;
+      setPlayableMap(Object.fromEntries(entries));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [streams]);
+
+  const handleToggleLibrary = useCallback(() => {
+    if (!meta) return;
+    hapticImpactLight();
+    const { show } = useToastStore.getState();
+    if (inLibrary) {
+      removeFromLibrary.mutate(id, {
+        onSuccess: () => show("Removed from Library", "info"),
+      });
+    } else {
+      hapticSuccess();
+      addToLibrary.mutate(
+        {
+          type: castType,
+          itemId: id,
+          title: meta.name,
+          poster: meta.poster,
+        },
+        { onSuccess: () => show(`Added to Library`, "success") },
+      );
+    }
+  }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 
   // Group streams by resolution
   const groupedStreams = (streams || []).reduce(
@@ -176,44 +212,27 @@ export default function DetailScreen() {
     return (order[a] ?? 99) - (order[b] ?? 99);
   });
 
-  const [playableMap, setPlayableMap] = useState<Record<string, boolean>>({});
-  // Library state
-  const { data: inLibrary } = useIsInLibrary(id);
-  const addToLibrary = useAddToLibrary();
-  const removeFromLibrary = useRemoveFromLibrary();
-
   useEffect(() => {
-    if (!streams || streams.length === 0) return;
-    let mounted = true;
-    Promise.all(
-      streams.map(async (s, i) => {
-        const key = s.infoHash || s.url || `stream_${i}`;
-        const uri = await streamEngineManager.getPlaybackUri(s);
-        return [key, !!uri && uri.length > 0] as [string, boolean];
-      }),
-    ).then((entries) => {
-      if (!mounted) return;
-      setPlayableMap(Object.fromEntries(entries));
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [streams]);
-  const handleToggleLibrary = useCallback(() => {
-    if (!meta) return;
-    hapticImpactLight();
-    if (inLibrary) {
-      removeFromLibrary.mutate(id);
-    } else {
-      hapticSuccess();
-      addToLibrary.mutate({
-        type: castType,
-        itemId: id,
-        title: meta.name,
-        poster: meta.poster,
-      });
+    if (availableResolutions.length > 0 && !selectedResolution) {
+      setSelectedResolution(availableResolutions[0]);
     }
-  }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
+  }, [availableResolutions, selectedResolution]);
+
+  if (metaLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#00f2ff" />
+      </View>
+    );
+  }
+
+  if (!meta) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Content not found</Text>
+      </View>
+    );
+  }
 
   const handlePlayStream = async (stream: Stream) => {
     const streamId = stream.infoHash || stream.url;
@@ -291,12 +310,160 @@ export default function DetailScreen() {
     }
   };
 
-  useEffect(() => {
-    if (availableResolutions.length > 0 && !selectedResolution) {
-      setSelectedResolution(availableResolutions[0]);
-    }
-  }, [availableResolutions, selectedResolution]);
+  // ─── Desktop Two-Panel Layout ──────────────────────────────────────────
+  if (isDesktop) {
+    return (
+      <View style={styles.containerDesktop}>
+        <Stack.Screen options={{ headerShown: false }} />
 
+        {/* Left: Poster panel */}
+        <View style={styles.desktopPosterPanel}>
+          <Pressable
+            style={styles.desktopBackBtn}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="chevron-back" size={20} color="#888" />
+            <Text style={styles.desktopBackText}>Back</Text>
+          </Pressable>
+          {!!meta.poster && (
+            <Image
+              source={{ uri: meta.poster }}
+              style={styles.desktopPoster}
+              resizeMode="cover"
+            />
+          )}
+          {/* Library action under poster */}
+          <Pressable
+            style={[
+              styles.libraryBtn,
+              inLibrary && styles.libraryBtnActive,
+              { marginTop: 16, alignSelf: "stretch" },
+            ]}
+            onPress={handleToggleLibrary}
+          >
+            <Text
+              style={[
+                styles.libraryBtnText,
+                inLibrary && styles.libraryBtnTextActive,
+              ]}
+            >
+              {inLibrary ? "✓ In Library" : "+ Add to Library"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Right: Scrollable info + streams */}
+        <ScrollView
+          style={styles.desktopInfoPanel}
+          contentContainerStyle={{ padding: 36, paddingBottom: 60 }}
+        >
+          {/* Background art subtle overlay */}
+          {!!meta.background && (
+            <Image
+              source={{ uri: meta.background }}
+              style={styles.desktopBgArt}
+              resizeMode="cover"
+            />
+          )}
+          <View style={styles.desktopBgOverlay} />
+
+          <Text style={styles.desktopTitle}>{meta.name}</Text>
+
+          <View style={styles.metaRow}>
+            {!!meta.releaseInfo && (
+              <Text style={styles.metaTag}>{meta.releaseInfo}</Text>
+            )}
+            {!!meta.runtime && (
+              <Text style={styles.metaTag}>{meta.runtime}</Text>
+            )}
+            {!!meta.imdbRating && (
+              <Text style={styles.ratingTag}>⭐ {meta.imdbRating}</Text>
+            )}
+          </View>
+
+          {!!meta.genres && meta.genres.length > 0 && (
+            <View style={styles.genreRow}>
+              {meta.genres.map((g, idx) => (
+                <View key={`${g}-${idx}`} style={styles.genrePill}>
+                  <Text style={styles.genreText}>{g}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {!!meta.description && (
+            <Text style={styles.description}>{meta.description}</Text>
+          )}
+
+          {!!meta.cast && meta.cast.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Cast</Text>
+              <Text style={styles.sectionContent}>{meta.cast.join(", ")}</Text>
+            </View>
+          )}
+
+          {/* Streams Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="layers-outline" size={18} color="#00f2ff" />
+              <Text style={styles.sectionTitle}>Select Quality</Text>
+            </View>
+            {streamsLoading ? (
+              <ActivityIndicator color="#00f2ff" />
+            ) : availableResolutions.length > 0 ? (
+              <>
+                <View style={styles.resContainer}>
+                  {availableResolutions.map((res) => (
+                    <Pressable
+                      key={res}
+                      style={[
+                        styles.resBubble,
+                        selectedResolution === res && styles.resBubbleActive,
+                      ]}
+                      onPress={() => {
+                        hapticImpactLight();
+                        setSelectedResolution(res);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.resText,
+                          selectedResolution === res && styles.resTextActive,
+                        ]}
+                      >
+                        {res === "2160p" ? "4K" : res.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.streamList}>
+                  {groupedStreams[selectedResolution!]?.map((stream, i) => {
+                    const streamId =
+                      stream.infoHash || stream.url || `stream_${i}`;
+                    return (
+                      <StreamItem
+                        key={`${streamId}_${i}`}
+                        stream={stream}
+                        index={i}
+                        onPress={() => handlePlayStream(stream)}
+                        onDownload={() => handleDownloadStream(stream)}
+                      />
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>
+                No streams available. Install more add-ons.
+              </Text>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ─── Mobile Layout (unchanged) ──────────────────────────────────────────
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -389,7 +556,10 @@ export default function DetailScreen() {
 
           {/* Streams Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🎬 Select Quality</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="layers-outline" size={18} color="#00f2ff" />
+              <Text style={styles.sectionTitle}>Select Quality</Text>
+            </View>
 
             {streamsLoading ? (
               <ActivityIndicator color="#00f2ff" />
@@ -451,7 +621,64 @@ export default function DetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#010101",
+    backgroundColor: "#07070e",
+  },
+  containerDesktop: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#07070e",
+  },
+  desktopPosterPanel: {
+    width: 280,
+    backgroundColor: "#0a0a14",
+    borderRightWidth: 1,
+    borderRightColor: "rgba(255,255,255,0.06)",
+    padding: 24,
+    paddingTop: 16,
+  },
+  desktopBackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 20,
+  },
+  desktopBackText: {
+    color: "#6b7280",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  desktopPoster: {
+    width: "100%",
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
+    backgroundColor: "#111",
+  },
+  desktopInfoPanel: {
+    flex: 1,
+    backgroundColor: "#07070e",
+  },
+  desktopBgArt: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 300,
+    opacity: 0.08,
+  },
+  desktopBgOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 300,
+    backgroundColor: "rgba(7,7,14,0.7)",
+  },
+  desktopTitle: {
+    fontSize: 40,
+    fontWeight: "900",
+    color: "#ffffff",
+    marginBottom: 12,
+    letterSpacing: -1,
   },
   centered: {
     flex: 1,
@@ -583,6 +810,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 20,
     letterSpacing: 0.5,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 20,
   },
   resContainer: {
     flexDirection: "row",

@@ -11,8 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { AxiosError } from "axios";
-
+import { extractErrorMessage } from "../utils/error";
 export default function RegisterScreen() {
   const router = useRouter();
   const { register, isLoading, error } = useAuth();
@@ -40,13 +39,9 @@ export default function RegisterScreen() {
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Join the streaming universe</Text>
 
-        {error && (
+        {!!error && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>
-              {(error instanceof AxiosError
-                ? (error.response?.data?.error as string)
-                : null) || "Registration failed"}
-            </Text>
+            <Text style={styles.errorText}>{extractErrorMessage(error)}</Text>
           </View>
         )}
 
@@ -103,7 +98,12 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#050510", justifyContent: "center" },
-  formContainer: { paddingHorizontal: 32 },
+  formContainer: {
+    paddingHorizontal: 32,
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+  },
   title: { fontSize: 30, fontWeight: "900", color: "#f8fafc", marginBottom: 4 },
   subtitle: { fontSize: 14, color: "#94a3b8", marginBottom: 28 },
   errorContainer: {
@@ -131,11 +131,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
     marginBottom: 20,
-    shadowColor: "#818cf8",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
   },
   registerButtonDisabled: { opacity: 0.6 },
   registerButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },

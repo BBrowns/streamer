@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useAddonCatalog } from "../../hooks/useAddonCatalog";
 import type { MetaPreview, CatalogDefinition } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
+import { Ionicons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
 const HERO_HEIGHT = height * 0.65; // Take up 65% of the screen height
@@ -56,10 +57,16 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
             )}
             <View style={styles.buttonRow}>
               <View style={styles.playButton} pointerEvents="none">
-                <Text style={styles.playButtonText}>▶ Play</Text>
+                <Ionicons name="play" size={18} color="#000" />
+                <Text style={styles.playButtonText}>Play</Text>
               </View>
               <View style={styles.infoButton} pointerEvents="none">
-                <Text style={styles.infoButtonText}>ⓘ Info</Text>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#fff"
+                />
+                <Text style={styles.infoButtonText}>Info</Text>
               </View>
             </View>
           </View>
@@ -98,10 +105,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "center",
     marginBottom: 12,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
+    textShadow: "0px 2px 4px rgba(0,0,0,0.5)",
+  } as any,
   description: {
     color: "#e5e5e5",
     fontSize: 14,
@@ -118,39 +123,32 @@ const styles = StyleSheet.create({
   },
   playButton: {
     backgroundColor: "#00f2ff",
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#00f2ff",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    gap: 8,
   },
   playButtonText: {
     color: "#000000",
     fontWeight: "900",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 15,
   },
   infoButton: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
   infoButtonText: {
     color: "#ffffff",
-    fontWeight: "800",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontWeight: "700",
+    fontSize: 15,
   },
 });

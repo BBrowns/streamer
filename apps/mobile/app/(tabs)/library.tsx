@@ -15,6 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
 import { useLibrary, useRemoveFromLibrary } from "../../hooks/useLibrary";
+import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo } from "react";
@@ -22,6 +23,7 @@ import type { LibraryItem } from "@streamer/shared";
 import * as Haptics from "expo-haptics";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { Ionicons } from "@expo/vector-icons";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 function LibraryCard({
   item,
@@ -97,9 +99,16 @@ function LibraryCard({
         <Text style={styles.cardTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={styles.cardSubtitle}>
-          {item.type === "movie" ? "🎬 Movie" : "📺 Series"}
-        </Text>
+        <View style={styles.cardTypeRow}>
+          <Ionicons
+            name={item.type === "movie" ? "film-outline" : "tv-outline"}
+            size={11}
+            color="#6b7280"
+          />
+          <Text style={styles.cardSubtitle}>
+            {item.type === "movie" ? "Movie" : "Series"}
+          </Text>
+        </View>
         {isDownloading && (
           <View style={styles.progressContainer}>
             <View
@@ -109,7 +118,7 @@ function LibraryCard({
         )}
         {isCompleted && (
           <View style={styles.downloadBadge}>
-            <Ionicons name="cloud-offline" size={12} color="#4ade80" />
+            <Ionicons name="arrow-down-circle" size={13} color="#4ade80" />
             <Text style={styles.downloadBadgeText}>Offline</Text>
           </View>
         )}
@@ -126,6 +135,7 @@ export default function LibraryScreen() {
   const removeFromLibrary = useRemoveFromLibrary();
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
+  const numColumns = useResponsiveColumns();
   const [activeFilter, setActiveFilter] = useState<
     "all" | "movie" | "show" | "offline"
   >("all");
@@ -165,7 +175,12 @@ export default function LibraryScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.authContainer}>
-        <Text style={styles.authIcon}>📚</Text>
+        <Ionicons
+          name="bookmarks-outline"
+          size={56}
+          color="#374151"
+          style={{ marginBottom: 16 }}
+        />
         <Text style={styles.authTitle}>Your Library</Text>
         <Text style={styles.authSubtitle}>
           Sign in to access your watchlist
@@ -193,9 +208,10 @@ export default function LibraryScreen() {
   return (
     <View style={styles.container}>
       <FlatList
+        key={numColumns} // Force remount cleanly when numColumns changes
         data={filteredItems as any[]}
         keyExtractor={(item) => item.id || item.itemId}
-        numColumns={2}
+        numColumns={numColumns}
         columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
@@ -288,15 +304,15 @@ export default function LibraryScreen() {
           </>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>No Items Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              {activeFilter === "all"
+          <EmptyState
+            icon="bookmarks-outline"
+            title="No Items Yet"
+            description={
+              activeFilter === "all"
                 ? "Browse the Discover tab and add movies & shows to your library."
-                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`}
-            </Text>
-          </View>
+                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`
+            }
+          />
         }
         refreshControl={
           <RefreshControl
@@ -395,8 +411,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+  cardTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   cardContainer: {
     flex: 1,
+    maxWidth: 260,
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#080808",

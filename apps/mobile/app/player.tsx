@@ -161,6 +161,78 @@ export default function PlayerScreen() {
   }, [currentStream?.infoHash, subscribeToStreamMetrics]);
 
   useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input (e.g. search)
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case " ":
+        case "k":
+          e.preventDefault();
+          if (player?.playing) player.pause();
+          else player?.play();
+          showControls();
+          break;
+        case "f":
+          e.preventDefault();
+          // Fullscreen logic for web
+          const videoElement = document.querySelector("video");
+          if (videoElement) {
+            if (!document.fullscreenElement) {
+              videoElement.requestFullscreen().catch(console.error);
+            } else {
+              document.exitFullscreen().catch(console.error);
+            }
+          }
+          break;
+        case "m":
+          e.preventDefault();
+          if (player) {
+            player.muted = !player.muted;
+            showControls();
+          }
+          break;
+        case "arrowleft":
+        case "j":
+          e.preventDefault();
+          player?.seekBy(-SEEK_SECONDS);
+          setSeekFeedback("left");
+          if (seekFeedbackTimer.current)
+            clearTimeout(seekFeedbackTimer.current);
+          seekFeedbackTimer.current = setTimeout(
+            () => setSeekFeedback(null),
+            600,
+          );
+          showControls();
+          break;
+        case "arrowright":
+        case "l":
+          e.preventDefault();
+          player?.seekBy(SEEK_SECONDS);
+          setSeekFeedback("right");
+          if (seekFeedbackTimer.current)
+            clearTimeout(seekFeedbackTimer.current);
+          seekFeedbackTimer.current = setTimeout(
+            () => setSeekFeedback(null),
+            600,
+          );
+          showControls();
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [player, showControls]);
+
+  useEffect(() => {
     if (!mediaInfo) return;
     progressTimerRef.current = setInterval(() => {
       let currentTime = 0;

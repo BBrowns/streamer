@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { SkeletonRow } from "../../components/ui/SkeletonLoader";
@@ -19,6 +19,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAddons } from "../../hooks/useAddons";
 import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
 import { HeroBanner } from "../../components/catalog/HeroBanner";
+import { Ionicons } from "@expo/vector-icons";
+
+const FILTERS = [
+  { label: "All", type: null },
+  { label: "Movies", type: "movie" },
+  { label: "Series", type: "series" },
+] as const;
+
+type FilterType = (typeof FILTERS)[number]["type"];
 
 function DiscoverContent() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -27,6 +36,7 @@ function DiscoverContent() {
   const queryClient = useQueryClient();
   const { data: addons, isLoading } = useAddons();
   const [refreshing, setRefreshing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterType>(null);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -53,7 +63,7 @@ function DiscoverContent() {
     return (
       <View style={{ flex: 1, backgroundColor: "#000000" }}>
         <EmptyState
-          emoji="🎬"
+          icon="film-outline"
           title="Welcome to Streamer"
           description="Sign in to discover movies and shows from your add-ons."
           actionLabel="Sign In"
@@ -74,13 +84,24 @@ function DiscoverContent() {
   }
 
   // Collect all catalogs across all addons (Server-Driven UI)
-  const catalogRows: { catalog: CatalogDefinition; addon: InstalledAddon }[] =
-    [];
+  const allCatalogRows: {
+    catalog: CatalogDefinition;
+    addon: InstalledAddon;
+  }[] = [];
   addons?.forEach((addon) => {
     addon.manifest.catalogs.forEach((catalog) => {
-      catalogRows.push({ catalog, addon });
+      allCatalogRows.push({ catalog, addon });
     });
   });
+
+  // Apply active filter
+  const catalogRows = useMemo(
+    () =>
+      activeFilter
+        ? allCatalogRows.filter((r) => r.catalog.type === activeFilter)
+        : allCatalogRows,
+    [activeFilter, allCatalogRows.length],
+  );
 
   if (catalogRows.length === 0) {
     return (
@@ -112,6 +133,35 @@ function DiscoverContent() {
     >
       <OfflineBanner />
 
+      {/* Quick Filters */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {FILTERS.map((f) => (
+            <Pressable
+              key={f.label}
+              style={[
+                styles.filterChip,
+                activeFilter === f.type && styles.filterChipActive,
+              ]}
+              onPress={() => setActiveFilter(f.type)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === f.type && styles.filterChipTextActive,
+                ]}
+              >
+                {f.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
       {/* Hero Banner featuring first catalog's first item */}
       {catalogRows.length > 0 && (
         <HeroBanner catalog={catalogRows[0].catalog} />
@@ -140,3 +190,35 @@ export default function DiscoverScreen() {
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  filterSection: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  filterChip: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  filterChipActive: {
+    backgroundColor: "#00f2ff",
+    borderColor: "#00f2ff",
+  },
+  filterChipText: {
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  filterChipTextActive: {
+    color: "#000000",
+  },
+});
