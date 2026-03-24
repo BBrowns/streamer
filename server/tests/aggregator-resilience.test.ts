@@ -7,18 +7,16 @@ import {
   afterAll,
   beforeEach,
 } from "vitest";
-import {
-  PostgreSqlContainer,
-  StartedPostgreSqlContainer,
-} from "@testcontainers/postgresql";
 import { execSync } from "child_process";
+import { randomUUID } from "crypto";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { request } from "./test-utils.js";
 
-let container: StartedPostgreSqlContainer;
 let mainApp: any;
 let prisma: any;
+const dbFile = `test-resilience-${randomUUID()}.db`;
+const dbUrl = `file:./${dbFile}`;
 
 // Mock logger
 vi.mock("../src/config/logger.js", () => ({
@@ -37,14 +35,7 @@ vi.mock("pino-http", () => ({
 }));
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer("postgres:17-alpine")
-    .withDatabase("streamer_test")
-    .withUsername("test_user")
-    .withPassword("test_pass")
-    .start();
-
-  const dbUri = container.getConnectionUri() + "?schema=public";
-  process.env.DATABASE_URL = dbUri;
+  process.env.DATABASE_URL = dbUrl;
   process.env.JWT_SECRET = "test-secret";
   process.env.PORT = "0";
   process.env.LOG_LEVEL = "silent";
@@ -52,8 +43,8 @@ beforeAll(async () => {
   execSync(
     "npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss",
     {
-      env: { ...process.env, DATABASE_URL: dbUri },
-      stdio: "inherit",
+      env: { ...process.env, DATABASE_URL: dbUrl },
+      stdio: "pipe",
     },
   );
 
@@ -68,7 +59,7 @@ afterAll(async () => {
   if (prisma) await prisma.$disconnect();
   try {
     const fs = await import("fs");
-    fs.unlinkSync(dbUri.replace("file:", ""));
+    fs.unlinkSync(dbFile);
   } catch (e) {}
 });
 
@@ -78,7 +69,6 @@ beforeEach(async () => {
     await prisma.libraryItem.deleteMany();
     await prisma.installedAddon.deleteMany();
     await prisma.refreshToken.deleteMany();
-    await prisma.passwordResetToken.deleteMany();
     await prisma.user.deleteMany();
   }
 });

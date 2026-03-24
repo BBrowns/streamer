@@ -37,7 +37,7 @@ describe("Error Handling & Edge Cases", () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Validation failed");
     expect(res.body.details).toBeDefined();
-    expect(res.body.details[0].message).toContain("Required");
+    expect(res.body.details[0].message).toContain("Invalid input");
   });
 
   it("should handle unhandled/fatal errors correctly", async () => {
