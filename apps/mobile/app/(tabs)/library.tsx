@@ -23,6 +23,7 @@ import type { LibraryItem } from "@streamer/shared";
 import * as Haptics from "expo-haptics";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { Ionicons } from "@expo/vector-icons";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 function LibraryCard({
   item,
@@ -303,15 +304,15 @@ export default function LibraryScreen() {
           </>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>No Items Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              {activeFilter === "all"
+          <EmptyState
+            icon="bookmarks-outline"
+            title="No Items Yet"
+            description={
+              activeFilter === "all"
                 ? "Browse the Discover tab and add movies & shows to your library."
-                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`}
-            </Text>
-          </View>
+                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`
+            }
+          />
         }
         refreshControl={
           <RefreshControl

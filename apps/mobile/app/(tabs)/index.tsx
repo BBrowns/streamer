@@ -269,7 +269,7 @@ function HomeContent() {
 
           {!!movies && movies.length === 0 && !isLoading && (
             <EmptyState
-              emoji="📦"
+              icon="cube-outline"
               title="No Content Found"
               description="Install some add-ons in Settings to start browsing."
               actionLabel="Manage Add-ons"
