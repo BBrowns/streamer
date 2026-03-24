@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "../services/api";
 import type { WatchProgress, UpdateProgressRequest } from "@streamer/shared";
+import { useAuthStore } from "../stores/authStore";
 
 /** Query key factory */
 const progressKeys = {
@@ -10,6 +11,8 @@ const progressKeys = {
 
 /** Fetch the continue-watching list (items < 95% completed) */
 export function useContinueWatching() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   return useQuery({
     queryKey: progressKeys.continueWatching(),
     queryFn: async () => {
@@ -18,6 +21,7 @@ export function useContinueWatching() {
       );
       return data.items;
     },
+    enabled: isAuthenticated,
     // Refetch when screen is focused to catch progress updates from player
     refetchOnWindowFocus: true,
   });
