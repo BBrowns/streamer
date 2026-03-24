@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useGlobalSearch } from "../../hooks/useGlobalSearch";
 import type { MetaPreview } from "@streamer/shared";
 
@@ -25,11 +26,45 @@ interface Props {
 
 export function CommandPalette({ visible, onClose }: Props) {
   const [query, setQuery] = useState("");
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<TextInput>(null);
   const router = useRouter();
   const { data: results, isFetching } = useGlobalSearch(query);
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Load recent searches on mount
+  useEffect(() => {
+    const loadRecent = async () => {
+      try {
+        const stored = await AsyncStorage.getItem("@search_history");
+        if (stored) setRecentSearches(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to load search history", e);
+      }
+    };
+    loadRecent();
+  }, [visible]);
+
+  const saveSearch = useCallback(
+    async (text: string) => {
+      if (!text || text.trim().length === 0) return;
+      const clean = text.trim();
+      const updated = [clean, ...recentSearches.filter((s) => s !== clean)].slice(0, 5);
+      setRecentSearches(updated);
+      try {
+        await AsyncStorage.setItem("@search_history", JSON.stringify(updated));
+      } catch (e) {
+        console.error("Failed to save search history", e);
+      }
+    },
+    [recentSearches],
+  );
+
+  const clearHistory = async () => {
+    setRecentSearches([]);
+    await AsyncStorage.removeItem("@search_history");
+  };
 
   useEffect(() => {
     if (visible) {
@@ -56,10 +91,11 @@ export function CommandPalette({ visible, onClose }: Props) {
 
   const handleSelect = useCallback(
     (item: MetaPreview) => {
+      saveSearch(query || item.name);
       onClose();
       router.push(`/detail/${item.type}/${item.id}`);
     },
-    [onClose, router],
+    [onClose, router, query, saveSearch],
   );
 
   return (
@@ -105,7 +141,37 @@ export function CommandPalette({ visible, onClose }: Props) {
           <View style={styles.divider} />
 
           {/* Results */}
-          {query.length < 2 ? (
+          {query.length === 0 ? (
+            <View style={styles.historyContainer}>
+              <View style={styles.historyHeader}>
+                <Text style={styles.historyTitle}>RECENT SEARCHES</Text>
+                {recentSearches.length > 0 && (
+                  <Pressable onPress={clearHistory}>
+                    <Text style={styles.historyClear}>Clear</Text>
+                  </Pressable>
+                )}
+              </View>
+              {recentSearches.length > 0 ? (
+                <View style={styles.historyList}>
+                  {recentSearches.map((s) => (
+                    <Pressable
+                      key={s}
+                      style={styles.historyItem}
+                      onPress={() => setQuery(s)}
+                    >
+                      <Ionicons name="time-outline" size={16} color="#6b7280" />
+                      <Text style={styles.historyItemText}>{s}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.hint}>
+                  <Ionicons name="search-outline" size={32} color="#374151" />
+                  <Text style={styles.hintText}>No recent searches</Text>
+                </View>
+              )}
+            </View>
+          ) : query.length < 2 ? (
             <View style={styles.hint}>
               <Ionicons name="search-outline" size={32} color="#374151" />
               <Text style={styles.hintText}>
@@ -272,4 +338,41 @@ const styles = StyleSheet.create({
   },
   footerKey: { color: "#9ca3af", fontSize: 11, fontWeight: "700" },
   footerLabel: { color: "#4b5563", fontSize: 12, marginRight: 8 },
+  historyContainer: {
+    paddingVertical: 12,
+  },
+  historyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  historyTitle: {
+    color: "#4b5563",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  historyClear: {
+    color: "#00f2ff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  historyList: {
+    paddingHorizontal: 12,
+  },
+  historyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  historyItemText: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "500",
+  },
 });

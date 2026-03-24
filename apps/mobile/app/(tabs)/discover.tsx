@@ -112,6 +112,26 @@ function DiscoverContent() {
     >
       <OfflineBanner />
 
+      {/* Quick Filters */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {["Trending", "Movies", "Series", "Action", "Comedy", "Animation", "Sci-Fi"].map((tag, i) => (
+            <Pressable
+              key={tag}
+              style={[styles.filterChip, i === 0 && styles.filterChipActive]}
+            >
+              <Text style={[styles.filterChipText, i === 0 && styles.filterChipTextActive]}>
+                {tag}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
       {/* Hero Banner featuring first catalog's first item */}
       {catalogRows.length > 0 && (
         <HeroBanner catalog={catalogRows[0].catalog} />
@@ -140,3 +160,36 @@ export default function DiscoverScreen() {
     </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  filterSection: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  filterChip: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  filterChipActive: {
+    backgroundColor: "#00f2ff",
+    borderColor: "#00f2ff",
+  },
+  filterChipText: {
+    color: "#94a3b8",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  filterChipTextActive: {
+    color: "#000000",
+  },
+});
+
