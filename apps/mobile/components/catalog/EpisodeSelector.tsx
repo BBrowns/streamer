@@ -105,7 +105,8 @@ function EpisodeStreamList({
         S{season} E{episode} — Streams
       </Text>
       {streams.map((stream, i) => {
-        const key = stream.infoHash || stream.url || `s_${i}`;
+        // Use a combination of identifier and index to guarantee uniqueness
+        const key = `${stream.infoHash || stream.url || "stream"}-${i}`;
         return (
           <Pressable
             key={key}
