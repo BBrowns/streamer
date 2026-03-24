@@ -51,9 +51,7 @@ function EpisodeRow({
         >
           {video.title}
         </Text>
-        {releasedDate && (
-          <Text style={styles.epDate}>{releasedDate}</Text>
-        )}
+        {releasedDate && <Text style={styles.epDate}>{releasedDate}</Text>}
       </View>
       {isSelected && (
         <Ionicons name="chevron-forward" size={16} color="#00f2ff" />
@@ -132,9 +130,7 @@ function EpisodeStreamList({
                   </View>
                 )}
                 {stream.seeders !== undefined && (
-                  <Text style={styles.seederText}>
-                    👥 {stream.seeders}
-                  </Text>
+                  <Text style={styles.seederText}>👥 {stream.seeders}</Text>
                 )}
               </View>
             </View>
@@ -151,7 +147,12 @@ function EpisodeStreamList({
 interface EpisodeSelectorProps {
   seriesId: string;
   videos: VideoEntry[];
-  onPlayStream: (stream: Stream, episodeTitle: string, season: number, episode: number) => void;
+  onPlayStream: (
+    stream: Stream,
+    episodeTitle: string,
+    season: number,
+    episode: number,
+  ) => void;
 }
 
 export const EpisodeSelector = memo(function EpisodeSelector({

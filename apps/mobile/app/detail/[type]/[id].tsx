@@ -33,7 +33,6 @@ import { useToastStore } from "../../../stores/toastStore";
 import { WatchProgressBar } from "../../../components/ui/WatchProgressBar";
 import { EpisodeSelector } from "../../../components/catalog/EpisodeSelector";
 
-
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
 
@@ -494,7 +493,6 @@ export default function DetailScreen() {
               </Text>
             )}
           </View>
-
         </ScrollView>
       </View>
     );
@@ -661,7 +659,6 @@ export default function DetailScreen() {
               </Text>
             )}
           </View>
-
         </View>
       </ScrollView>
     </View>

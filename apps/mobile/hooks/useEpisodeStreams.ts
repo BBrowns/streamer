@@ -14,10 +14,7 @@ export function useEpisodeStreams(
 ) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const enabled =
-    isAuthenticated &&
-    !!seriesId &&
-    season !== null &&
-    episode !== null;
+    isAuthenticated && !!seriesId && season !== null && episode !== null;
 
   const episodeId =
     season !== null && episode !== null
