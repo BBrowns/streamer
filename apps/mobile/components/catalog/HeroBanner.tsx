@@ -61,7 +61,11 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
                 <Text style={styles.playButtonText}>Play</Text>
               </View>
               <View style={styles.infoButton} pointerEvents="none">
-                <Ionicons name="information-circle-outline" size={18} color="#fff" />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#fff"
+                />
                 <Text style={styles.infoButtonText}>Info</Text>
               </View>
             </View>

@@ -84,7 +84,10 @@ function DiscoverContent() {
   }
 
   // Collect all catalogs across all addons (Server-Driven UI)
-  const allCatalogRows: { catalog: CatalogDefinition; addon: InstalledAddon }[] = [];
+  const allCatalogRows: {
+    catalog: CatalogDefinition;
+    addon: InstalledAddon;
+  }[] = [];
   addons?.forEach((addon) => {
     addon.manifest.catalogs.forEach((catalog) => {
       allCatalogRows.push({ catalog, addon });
@@ -219,4 +222,3 @@ const styles = StyleSheet.create({
     color: "#000000",
   },
 });
-

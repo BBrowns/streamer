@@ -50,7 +50,10 @@ export function CommandPalette({ visible, onClose }: Props) {
     async (text: string) => {
       if (!text || text.trim().length === 0) return;
       const clean = text.trim();
-      const updated = [clean, ...recentSearches.filter((s) => s !== clean)].slice(0, 5);
+      const updated = [
+        clean,
+        ...recentSearches.filter((s) => s !== clean),
+      ].slice(0, 5);
       setRecentSearches(updated);
       try {
         await AsyncStorage.setItem("@search_history", JSON.stringify(updated));
