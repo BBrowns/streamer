@@ -42,7 +42,9 @@ export function WatchProgressBar({
 
   return (
     <View style={[styles.track, style]}>
-      <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
+      <View
+        style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]}
+      />
     </View>
   );
 }

@@ -117,7 +117,10 @@ function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
-      <CommandPalette visible={searchOpen} onClose={() => setSearchOpen(false)} />
+      <CommandPalette
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
       <ToastContainer />
       <DesktopLayout onSearchOpen={() => setSearchOpen(true)}>
         <Stack

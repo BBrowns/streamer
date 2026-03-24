@@ -36,8 +36,17 @@ export function CommandPalette({ visible, onClose }: Props) {
       setQuery("");
       setTimeout(() => inputRef.current?.focus(), 50);
       Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 140, friction: 10 }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 140,
+          friction: 10,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       scaleAnim.setValue(0.95);
@@ -50,7 +59,7 @@ export function CommandPalette({ visible, onClose }: Props) {
       onClose();
       router.push(`/detail/${item.type}/${item.id}`);
     },
-    [onClose, router]
+    [onClose, router],
   );
 
   return (
@@ -69,7 +78,10 @@ export function CommandPalette({ visible, onClose }: Props) {
           ]}
         >
           {/* Search Input */}
-          <Pressable style={styles.inputRow} onPress={() => inputRef.current?.focus()}>
+          <Pressable
+            style={styles.inputRow}
+            onPress={() => inputRef.current?.focus()}
+          >
             <Ionicons name="search" size={20} color="#6b7280" />
             <TextInput
               ref={inputRef}
@@ -96,7 +108,9 @@ export function CommandPalette({ visible, onClose }: Props) {
           {query.length < 2 ? (
             <View style={styles.hint}>
               <Ionicons name="search-outline" size={32} color="#374151" />
-              <Text style={styles.hintText}>Type at least 2 characters to search</Text>
+              <Text style={styles.hintText}>
+                Type at least 2 characters to search
+              </Text>
             </View>
           ) : results && results.length === 0 && !isFetching ? (
             <View style={styles.hint}>
@@ -128,7 +142,9 @@ export function CommandPalette({ visible, onClose }: Props) {
                     </Text>
                     <View style={styles.resultMeta}>
                       <Ionicons
-                        name={item.type === "movie" ? "film-outline" : "tv-outline"}
+                        name={
+                          item.type === "movie" ? "film-outline" : "tv-outline"
+                        }
                         size={12}
                         color="#6b7280"
                       />
@@ -136,7 +152,9 @@ export function CommandPalette({ visible, onClose }: Props) {
                         {item.type === "movie" ? "Movie" : "Series"}
                       </Text>
                       {!!item.imdbRating && (
-                        <Text style={styles.resultRating}>⭐ {item.imdbRating}</Text>
+                        <Text style={styles.resultRating}>
+                          ⭐ {item.imdbRating}
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -148,9 +166,13 @@ export function CommandPalette({ visible, onClose }: Props) {
 
           {/* Footer hint */}
           <View style={styles.footer}>
-            <View style={styles.footerBadge}><Text style={styles.footerKey}>↵</Text></View>
+            <View style={styles.footerBadge}>
+              <Text style={styles.footerKey}>↵</Text>
+            </View>
             <Text style={styles.footerLabel}>Open</Text>
-            <View style={styles.footerBadge}><Text style={styles.footerKey}>Esc</Text></View>
+            <View style={styles.footerBadge}>
+              <Text style={styles.footerKey}>Esc</Text>
+            </View>
             <Text style={styles.footerLabel}>Close</Text>
           </View>
         </Animated.View>
@@ -217,7 +239,12 @@ const styles = StyleSheet.create({
   },
   resultInfo: { flex: 1 },
   resultTitle: { color: "#f1f5f9", fontSize: 15, fontWeight: "700" },
-  resultMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  resultMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 3,
+  },
   resultType: { color: "#6b7280", fontSize: 12 },
   resultRating: { color: "#fbbf24", fontSize: 12, fontWeight: "700" },
   hint: {

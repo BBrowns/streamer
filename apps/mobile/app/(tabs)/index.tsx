@@ -24,6 +24,7 @@ import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
 import { Ionicons } from "@expo/vector-icons";
 import { WatchProgressBar } from "../../components/ui/WatchProgressBar";
+import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 
 // ─── Hero Banner ─────────────────────────────────────────────────────────────
 const HeroBanner = memo(function HeroBanner({ item }: { item: MetaPreview }) {
@@ -200,6 +201,7 @@ function HomeContent() {
       ListHeaderComponent={
         <View style={styles.container}>
           <OfflineBanner />
+          <ContinueWatchingRow />
 
           {/* Desktop hero banner */}
           {isDesktop && heroItem && <HeroBanner item={heroItem} />}

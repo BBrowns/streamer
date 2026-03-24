@@ -8,7 +8,11 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useToastStore, type Toast, type ToastType } from "../../stores/toastStore";
+import {
+  useToastStore,
+  type Toast,
+  type ToastType,
+} from "../../stores/toastStore";
 
 // ─── Individual Toast ─────────────────────────────────────────────────────────
 function ToastItem({ toast }: { toast: Toast }) {
@@ -18,25 +22,44 @@ function ToastItem({ toast }: { toast: Toast }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(opacity, { toValue: 1, useNativeDriver: true, tension: 120, friction: 10 }),
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }),
+      Animated.spring(opacity, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 120,
+        friction: 10,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 120,
+        friction: 10,
+      }),
     ]).start();
 
     const timer = setTimeout(() => {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: -10, duration: 200, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: -10,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]).start();
     }, 3200);
 
     return () => clearTimeout(timer);
   }, []);
 
-  const icon: Record<ToastType, React.ComponentProps<typeof Ionicons>["name"]> = {
-    success: "checkmark-circle",
-    error: "alert-circle",
-    info: "information-circle",
-  };
+  const icon: Record<ToastType, React.ComponentProps<typeof Ionicons>["name"]> =
+    {
+      success: "checkmark-circle",
+      error: "alert-circle",
+      info: "information-circle",
+    };
   const color: Record<ToastType, string> = {
     success: "#4ade80",
     error: "#f87171",
@@ -48,7 +71,9 @@ function ToastItem({ toast }: { toast: Toast }) {
       style={[styles.toast, { opacity, transform: [{ translateY }] }]}
     >
       <Ionicons name={icon[toast.type]} size={20} color={color[toast.type]} />
-      <Text style={styles.message} numberOfLines={2}>{toast.message}</Text>
+      <Text style={styles.message} numberOfLines={2}>
+        {toast.message}
+      </Text>
       <Pressable onPress={() => dismiss(toast.id)} hitSlop={8}>
         <Ionicons name="close" size={16} color="#6b7280" />
       </Pressable>

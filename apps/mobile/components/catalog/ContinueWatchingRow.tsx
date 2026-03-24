@@ -65,6 +65,10 @@ function ContinueWatchingCard({ item }: { item: WatchProgress }) {
 
 const MemoizedCard = memo(ContinueWatchingCard);
 
+import { Ionicons } from "@expo/vector-icons";
+
+// ... (ProgressBar and ContinueWatchingCard components stay mostly same, just updating styles)
+
 /** Continue Watching horizontal row for the Discover/Home screen */
 export function ContinueWatchingRow() {
   const { data: items, isLoading } = useContinueWatching();
@@ -73,7 +77,16 @@ export function ContinueWatchingRow() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>▶️ Continue Watching</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.titleWithIcon}>
+          <Ionicons name="play-circle-outline" size={22} color="#00f2ff" />
+          <Text style={styles.sectionTitle}>Continue Watching</Text>
+        </View>
+        <Pressable style={styles.seeAllBtn}>
+          <Text style={styles.seeAllText}>See All</Text>
+          <Ionicons name="chevron-forward" size={14} color="#6b7280" />
+        </Pressable>
+      </View>
       <FlatList
         horizontal
         data={items}
@@ -90,62 +103,83 @@ export function ContinueWatchingRow() {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 24,
+    marginBottom: 32,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  titleWithIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   sectionTitle: {
     color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "900",
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: "800",
     letterSpacing: -0.5,
+  },
+  seeAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  seeAllText: {
+    color: "#6b7280",
+    fontSize: 14,
+    fontWeight: "600",
   },
   listContent: {
     paddingHorizontal: 12,
-    gap: 10,
+    gap: 14,
   },
   card: {
-    width: 180,
-    borderRadius: 16,
+    width: 240, // Increased width for desktop look
+    borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#080808",
+    backgroundColor: "#0a0a14",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(255,255,255,0.06)",
   },
   posterContainer: {
-    width: 180,
-    height: 101,
+    width: 240,
+    height: 135, // 16:9 ratio
     backgroundColor: "#121212",
     position: "relative",
   },
   poster: {
-    width: 180,
-    height: 101,
+    width: 240,
+    height: 135,
   },
   progressTrack: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: 4,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    height: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   progressFill: {
-    height: 4,
+    height: 3,
     backgroundColor: "#00f2ff",
+    borderRadius: 2,
   },
   cardInfo: {
-    padding: 8,
+    padding: 12,
   },
   cardTitle: {
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "800",
+    color: "#e2e8f0",
+    fontSize: 14,
+    fontWeight: "700",
   },
   cardSub: {
-    color: "#888888",
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 4,
   },
 });
