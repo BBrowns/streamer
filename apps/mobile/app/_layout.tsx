@@ -1,7 +1,7 @@
 import { Stack, ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import {
   View,
@@ -9,6 +9,7 @@ import {
   Pressable,
   AppState,
   StyleSheet,
+  Platform,
   type AppStateStatus,
 } from "react-native";
 import * as Sentry from "@sentry/react-native";
@@ -19,6 +20,8 @@ import {
 import "../global.css";
 import { DesktopLayout } from "../components/ui/DesktopLayout";
 import { useAuthStore } from "../stores/authStore";
+import { ToastContainer } from "../components/ui/ToastContainer";
+import { CommandPalette } from "../components/ui/CommandPalette";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -65,6 +68,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 function RootLayout() {
   const appState = useRef(AppState.currentState);
   const { deviceId, setDeviceId } = useAuthStore();
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     if (!deviceId) {
@@ -96,10 +100,26 @@ function RootLayout() {
     return () => sub.remove();
   }, []);
 
+  // ⌘K / Ctrl+K keyboard shortcut for global search
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+      if (e.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
-      <DesktopLayout>
+      <CommandPalette visible={searchOpen} onClose={() => setSearchOpen(false)} />
+      <ToastContainer />
+      <DesktopLayout onSearchOpen={() => setSearchOpen(true)}>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: "#010101" },

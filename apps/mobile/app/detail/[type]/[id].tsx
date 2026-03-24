@@ -29,6 +29,8 @@ import type { MediaInfo } from "../../../stores/playerStore";
 import { useDownloadStore } from "../../../stores/downloadStore";
 import { downloadService } from "../../../services/DownloadService";
 import { useCallback, useState, useEffect } from "react";
+import { useToastStore } from "../../../stores/toastStore";
+import { WatchProgressBar } from "../../../components/ui/WatchProgressBar";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -169,16 +171,22 @@ export default function DetailScreen() {
   const handleToggleLibrary = useCallback(() => {
     if (!meta) return;
     hapticImpactLight();
+    const { show } = useToastStore.getState();
     if (inLibrary) {
-      removeFromLibrary.mutate(id);
+      removeFromLibrary.mutate(id, {
+        onSuccess: () => show("Removed from Library", "info"),
+      });
     } else {
       hapticSuccess();
-      addToLibrary.mutate({
-        type: castType,
-        itemId: id,
-        title: meta.name,
-        poster: meta.poster,
-      });
+      addToLibrary.mutate(
+        {
+          type: castType,
+          itemId: id,
+          title: meta.name,
+          poster: meta.poster,
+        },
+        { onSuccess: () => show(`Added to Library`, "success") },
+      );
     }
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
 

@@ -23,6 +23,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
 import { Ionicons } from "@expo/vector-icons";
+import { WatchProgressBar } from "../../components/ui/WatchProgressBar";
 
 // ─── Hero Banner ─────────────────────────────────────────────────────────────
 const HeroBanner = memo(function HeroBanner({ item }: { item: MetaPreview }) {
@@ -96,11 +97,14 @@ const CatalogCard = memo(function CatalogCard({ item }: { item: MetaPreview }) {
       accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
       accessibilityHint="Opens details page"
     >
-      <Image
-        source={{ uri: item.poster }}
-        style={styles.cardImage}
-        accessibilityIgnoresInvertColors
-      />
+      <View style={{ position: "relative" }}>
+        <Image
+          source={{ uri: item.poster }}
+          style={styles.cardImage}
+          accessibilityIgnoresInvertColors
+        />
+        <WatchProgressBar itemId={item.id} />
+      </View>
       <View style={styles.cardInfo}>
         <Text style={styles.cardTitle} numberOfLines={2}>
           {item.name}

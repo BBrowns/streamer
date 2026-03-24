@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
+  onSearchOpen?: () => void;
 }
 
 const NAV_ITEMS = [
@@ -41,7 +42,7 @@ const NAV_ITEMS = [
   },
 ];
 
-export function DesktopLayout({ children }: DesktopLayoutProps) {
+export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
   const pathname = usePathname();
   const { width } = Dimensions.get("window");
   const isDesktop = Platform.OS === "web" && width > 1024;
@@ -92,6 +93,25 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
             label="Settings"
             active={pathname === "/settings"}
           />
+          {/* Search button */}
+          {!!onSearchOpen && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.navLink,
+                pressed && styles.navLinkPressed,
+              ]}
+              onPress={onSearchOpen}
+              accessibilityLabel="Search (⌘K)"
+            >
+              <View style={styles.navLinkInner}>
+                <Ionicons name="search-outline" size={20} color="#6b7280" />
+                <Text style={styles.navLabel}>Search</Text>
+              </View>
+              <View style={styles.kbdHint}>
+                <Text style={styles.kbdText}>⌘K</Text>
+              </View>
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -231,5 +251,18 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     backgroundColor: "#07070e",
+  },
+  kbdHint: {
+    marginLeft: "auto",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: 8,
+  },
+  kbdText: {
+    color: "#4b5563",
+    fontSize: 10,
+    fontWeight: "800",
   },
 });
