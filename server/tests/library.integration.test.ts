@@ -28,7 +28,9 @@ vi.mock("../src/config/logger.js", () => ({
 }));
 
 beforeAll(async () => {
-  dbUri = `file:./test-${crypto.randomUUID()}.db`;
+  dbUri =
+    process.env.DATABASE_URL ||
+    "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
   process.env.DATABASE_URL = dbUri;
   process.env.JWT_SECRET = "test-secret";
   process.env.PORT = "0";
@@ -51,10 +53,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (prisma) await prisma.$disconnect();
-  try {
-    const fs = await import("fs");
-    fs.unlinkSync(dbUri.replace("file:", ""));
-  } catch (e) {}
 });
 
 /** Helper: register a test user and return access token */

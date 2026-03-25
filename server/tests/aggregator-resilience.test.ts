@@ -35,6 +35,9 @@ vi.mock("pino-http", () => ({
 }));
 
 beforeAll(async () => {
+  const dbUrl =
+    process.env.DATABASE_URL ||
+    "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
   process.env.DATABASE_URL = dbUrl;
   process.env.JWT_SECRET = "test-secret";
   process.env.PORT = "0";
@@ -57,10 +60,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (prisma) await prisma.$disconnect();
-  try {
-    const fs = await import("fs");
-    fs.unlinkSync(dbFile);
-  } catch (e) {}
 });
 
 beforeEach(async () => {
