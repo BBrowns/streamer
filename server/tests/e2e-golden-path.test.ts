@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { expect, describe, it, beforeAll, afterAll } from "vitest";
+import { execSync } from "child_process";
 import { request } from "./test-utils.js";
 import { createApp } from "../src/app";
 
@@ -11,6 +12,32 @@ import { createApp } from "../src/app";
  */
 
 const app = createApp();
+
+beforeAll(async () => {
+  const envUrl = process.env.DATABASE_URL;
+  const dbUrl =
+    envUrl?.startsWith("postgresql://") || envUrl?.startsWith("postgres://")
+      ? envUrl
+      : "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
+
+  process.env.DATABASE_URL = dbUrl;
+  process.env.JWT_SECRET = "test-secret";
+  process.env.PORT = "0";
+  process.env.LOG_LEVEL = "silent";
+
+  execSync(
+    "npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss",
+    {
+      env: { ...process.env, DATABASE_URL: dbUrl },
+      stdio: "inherit",
+    },
+  );
+}, 60000);
+
+afterAll(async () => {
+  const { prisma } = await import("../src/prisma/client.js");
+  if (prisma) await prisma.$disconnect();
+});
 
 describe("E2E Golden Path", () => {
   const testUser = {
