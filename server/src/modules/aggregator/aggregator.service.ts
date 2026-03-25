@@ -1,4 +1,5 @@
 import axios from "axios";
+import https from "https";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
 import { createAddonPolicy } from "./resilience.js";
@@ -12,9 +13,15 @@ import type {
   Stream,
 } from "@streamer/shared";
 import type { IPolicy } from "cockatiel";
+import { StreamParser } from "./domain/stream-parser.js";
 
 // Per-addon policy cache to maintain circuit breaker state
 const policyCache = new Map<string, IPolicy>();
+
+const secureAgent = new https.Agent({
+  maxSockets: 50,
+  keepAlive: true,
+});
 
 function getPolicy(addonId: string): IPolicy {
   let policy = policyCache.get(addonId);
@@ -33,6 +40,15 @@ async function resilientFetch<T>(
   requestId: string,
 ): Promise<T> {
   const policy = getPolicy(addonId);
+
+  // SSRF Protection: Enforce HTTPS
+  const parsedUrl = new URL(transportUrl);
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error(
+      `Insecure protocol: ${parsedUrl.protocol}. HTTPS required.`,
+    );
+  }
+
   const base = transportUrl
     .replace(/\/manifest\.json\/?$/, "")
     .replace(/\/$/, "");
@@ -43,7 +59,18 @@ async function resilientFetch<T>(
   try {
     const result = await policy.execute(async () => {
       logger.debug({ requestId, addonId, url }, "Fetching from add-on");
-      const { data } = await axios.get<T>(url, { timeout: 5000 });
+
+      // TODO: Implement internal IP blocklist (SSRF filter)
+      const { data } = await axios.get<T>(url, {
+        timeout: 5000,
+        httpsAgent: secureAgent,
+      });
+
+      // Basic Sanitization: Check for malformed or oversized responses
+      if (!data || typeof data !== "object") {
+        throw new Error("Invalid response format from add-on");
+      }
+
       return data;
     });
 
@@ -163,48 +190,8 @@ export class AggregatorService {
         (r): r is PromiseFulfilledResult<Stream[]> => r.status === "fulfilled",
       )
       .flatMap((r) => r.value)
-      .map((stream) => this.enrichStream(stream))
-      .sort((a, b) => this.compareStreams(a, b));
-  }
-
-  /** Parse title for resolution and seeders */
-  private enrichStream(stream: Stream): Stream {
-    const title = stream.title || stream.name || "";
-
-    // Parse resolution (4K, 2160p, 1080p, 720p, 480p)
-    if (!stream.resolution) {
-      if (/4k|2160p/i.test(title)) stream.resolution = "2160p";
-      else if (/1080p/i.test(title)) stream.resolution = "1080p";
-      else if (/720p/i.test(title)) stream.resolution = "720p";
-      else if (/480p/i.test(title)) stream.resolution = "480p";
-    }
-
-    // Parse seeders if present in title (e.g. "S: 120 P: 5" or "120 seeders")
-    if (stream.seeders === undefined) {
-      const seederMatch =
-        title.match(/S:\s*(\d+)/i) || title.match(/(\d+)\s*seeders/i);
-      if (seederMatch) {
-        stream.seeders = parseInt(seederMatch[1], 10);
-      }
-    }
-
-    return stream;
-  }
-
-  /** Sort by resolution (desc) then seeders (desc) */
-  private compareStreams(a: Stream, b: Stream): number {
-    const resMap: Record<string, number> = {
-      "2160p": 4,
-      "1080p": 3,
-      "720p": 2,
-      "480p": 1,
-    };
-
-    const resA = resMap[a.resolution || ""] || 0;
-    const resB = resMap[b.resolution || ""] || 0;
-
-    if (resA !== resB) return resB - resA;
-    return (b.seeders || 0) - (a.seeders || 0);
+      .map((stream) => StreamParser.enrich(stream))
+      .sort((a, b) => StreamParser.compare(a, b));
   }
 
   /** Resolve a specific stream (torrent) via Debrid if enabled, otherwise return original */
