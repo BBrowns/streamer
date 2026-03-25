@@ -2,14 +2,17 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    globals: true,
-    environment: "node",
-    include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "lcov"],
-      include: ["src/**/*.ts"],
-      exclude: ["src/prisma/**", "src/config/**"],
+    // Disable multi-threading and parallel file execution to prevent
+    // database contention on the shared PostgreSQL instance.
+    poolOptions: {
+      threads: {
+        singleThread: true,
+      },
     },
+    fileParallelism: false,
+    environment: "node",
+    // Increase timeout for DB-heavy integration tests
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 });
