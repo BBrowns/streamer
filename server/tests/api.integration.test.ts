@@ -30,11 +30,12 @@ vi.mock("../src/config/logger.js", () => ({
 }));
 
 beforeAll(async () => {
-  // Use existing DATABASE_URL from env (set in CI or .env)
-  // or default to a reasonable local dev postgres URL
+  const envUrl = process.env.DATABASE_URL;
   dbUri =
-    process.env.DATABASE_URL ||
-    "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
+    envUrl?.startsWith("postgresql://") || envUrl?.startsWith("postgres://")
+      ? envUrl
+      : "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
+
   process.env.DATABASE_URL = dbUri;
   process.env.JWT_SECRET = "test-secret";
   process.env.PORT = "0";

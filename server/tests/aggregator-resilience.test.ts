@@ -35,9 +35,12 @@ vi.mock("pino-http", () => ({
 }));
 
 beforeAll(async () => {
+  const envUrl = process.env.DATABASE_URL;
   const dbUrl =
-    process.env.DATABASE_URL ||
-    "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
+    envUrl?.startsWith("postgresql://") || envUrl?.startsWith("postgres://")
+      ? envUrl
+      : "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
+
   process.env.DATABASE_URL = dbUrl;
   process.env.JWT_SECRET = "test-secret";
   process.env.PORT = "0";
