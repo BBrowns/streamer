@@ -25,7 +25,7 @@ export interface TraktWatchlistItem {
 /** Port: Trakt.tv API client for watch history sync */
 export interface ITraktClient {
   /** Exchange OAuth code for tokens */
-  exchangeCode(code: string): Promise<TraktTokens>;
+  exchangeCode(code: string, redirectUri?: string): Promise<TraktTokens>;
 
   /** Refresh expired tokens */
   refreshTokens(refreshToken: string): Promise<TraktTokens>;

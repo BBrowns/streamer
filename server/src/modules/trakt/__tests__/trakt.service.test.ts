@@ -79,4 +79,24 @@ describe("TraktService", () => {
 
     expect(mockClient.syncWatchHistory).not.toHaveBeenCalled();
   });
+
+  it("should connect account with code and optional redirectUri", async () => {
+    mockClient.exchangeCode.mockResolvedValue({
+      accessToken: "access",
+      refreshToken: "refresh",
+      expiresAt: new Date(),
+    });
+
+    await traktService.connectAccount(
+      "user-1",
+      "test-code",
+      "mobile://trakt-callback",
+    );
+
+    expect(mockClient.exchangeCode).toHaveBeenCalledWith(
+      "test-code",
+      "mobile://trakt-callback",
+    );
+    expect(mockRepo.upsert).toHaveBeenCalledWith("user-1", expect.any(Object));
+  });
 });
