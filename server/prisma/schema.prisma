@@ -21,6 +21,7 @@ model User {
   libraryItems        LibraryItem[]
   watchProgress       WatchProgress[]
   traktToken          TraktToken?
+  traktSyncQueue      TraktSyncQueue[]
   sessions            ActiveSession[]
 
   @@map("users")
@@ -126,10 +127,29 @@ model TraktToken {
   expiresAt    DateTime @map("expires_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+  
   @@map("trakt_tokens")
 }
- 
+
+model TraktSyncQueue {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // "movie" or "episode"
+  imdbId    String?  @map("imdb_id")
+  title     String
+  season    Int?
+  episode   Int?
+  watchedAt DateTime @default(now()) @map("watched_at")
+  attempts  Int      @default(0)
+  lastError String?  @map("last_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("trakt_sync_queue")
+}
+
 enum ContentType {
   movie
   series

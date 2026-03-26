@@ -4,6 +4,7 @@ import type {
   TraktTokens,
   TraktWatchItem,
   TraktWatchlistItem,
+  TraktScrobbleItem,
 } from "../ports/trakt.ports.js";
 import { logger } from "../../../config/logger.js";
 
@@ -128,5 +129,48 @@ export class TraktClient implements ITraktClient {
       imdbId: item[item.type].ids.imdb,
       tmdbId: item[item.type].ids.tmdb,
     }));
+  }
+
+  async scrobble(
+    accessToken: string,
+    action: "start" | "pause" | "stop",
+    item: TraktScrobbleItem,
+  ): Promise<void> {
+    const payload: any = {
+      progress: item.progress,
+      app_version: "1.0.0",
+      app_date: new Date().toISOString().split("T")[0],
+    };
+
+    const itemData = {
+      ids: {
+        imdb: item.imdbId,
+        tmdb: item.tmdbId,
+      },
+      title: item.title,
+      season: item.season,
+      number: item.episode,
+    };
+
+    if (item.type === "movie") {
+      payload.movie = itemData;
+    } else {
+      payload.episode = itemData;
+    }
+
+    try {
+      await axios.post(`${this.baseUrl}/scrobble/${action}`, payload, {
+        headers: {
+          ...this.headers,
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+    } catch (err: any) {
+      logger.error(
+        { error: err.response?.data || err.message, action },
+        "Failed to scrobble to Trakt",
+      );
+      // We don't throw for scrobbling as it's a "fire and forget" real-time sync
+    }
   }
 }
