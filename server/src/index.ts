@@ -3,12 +3,16 @@ import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { prisma } from "./prisma/client.js";
+import { traktService } from "./modules/trakt/adapters/trakt.routes.js";
 
 async function main() {
   // Verify database connection
   try {
     await prisma.$connect();
     logger.info("Database connected");
+
+    // Start Trakt background sync
+    traktService.startBackgroundSync();
   } catch (err) {
     logger.fatal({ err }, "Failed to connect to database");
     process.exit(1);
@@ -32,6 +36,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutting down gracefully...");
+    traktService.stopBackgroundSync();
     await prisma.$disconnect();
     process.exit(0);
   };

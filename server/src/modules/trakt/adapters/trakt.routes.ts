@@ -41,3 +41,17 @@ traktRouter.get("/status", async (c) => {
   const token = await traktService.getValidToken(userId);
   return c.json({ connected: !!token });
 });
+
+/** POST /api/trakt/scrobble/:action - Scrobble playback status */
+traktRouter.post("/scrobble/:action", async (c) => {
+  const action = c.req.param("action") as "start" | "pause" | "stop";
+  const data = await c.req.json();
+  const userId = c.get("userId" as any) as string;
+
+  if (!["start", "pause", "stop"].includes(action)) {
+    return c.json({ error: "Invalid action" }, 400);
+  }
+
+  await traktService.scrobble(userId, action, data);
+  return c.json({ status: "success" });
+});
