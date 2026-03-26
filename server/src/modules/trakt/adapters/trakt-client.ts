@@ -27,12 +27,12 @@ export class TraktClient implements ITraktClient {
     };
   }
 
-  async exchangeCode(code: string): Promise<TraktTokens> {
+  async exchangeCode(code: string, redirectUri?: string): Promise<TraktTokens> {
     const response = await axios.post(`${this.baseUrl}/oauth/token`, {
       code,
       client_id: this.clientId,
       client_secret: this.clientSecret,
-      redirect_uri: this.redirectUri,
+      redirect_uri: redirectUri || this.redirectUri,
       grant_type: "authorization_code",
     });
 
