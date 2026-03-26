@@ -16,12 +16,15 @@ traktRouter.use("*", authMiddleware);
 
 /** POST /api/trakt/connect - Connect Trakt account with OAuth code */
 traktRouter.post("/connect", async (c) => {
-  const { code } = (await c.req.json()) as { code: string };
+  const { code, redirectUri } = (await c.req.json()) as {
+    code: string;
+    redirectUri?: string;
+  };
   const userId = c.get("userId" as any) as string;
 
   if (!code) return c.json({ error: "Code is required" }, 400);
 
-  await traktService.connectAccount(userId, code);
+  await traktService.connectAccount(userId, code, redirectUri);
   return c.json({ status: "connected" });
 });
 

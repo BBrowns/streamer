@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AxiosError } from "axios";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { clearQueryCache } from "../../services/queryPersister";
+import { useTrakt } from "../../hooks/useTrakt";
 
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
@@ -24,6 +25,12 @@ function SettingsContent() {
   const setAuth = useAuthStore((s) => s.setAuth);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const {
+    connected,
+    isLoading: isTraktLoading,
+    connect,
+    disconnect,
+  } = useTrakt();
 
   // Change Password state
   const [pwModalOpen, setPwModalOpen] = useState(false);
@@ -177,6 +184,63 @@ function SettingsContent() {
               color="#6b7280"
               accessibilityElementsHidden
             />
+          </Pressable>
+
+          <View style={styles.spacer} />
+
+          <Pressable
+            style={styles.menuItem}
+            onPress={
+              connected
+                ? () => {
+                    Alert.alert(
+                      "Disconnect Trakt",
+                      "Are you sure you want to unlink your Trakt.tv account?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Disconnect",
+                          style: "destructive",
+                          onPress: () => disconnect(),
+                        },
+                      ],
+                    );
+                  }
+                : connect
+            }
+            disabled={isTraktLoading}
+            accessibilityRole="button"
+            accessibilityLabel={
+              connected ? "Disconnect Trakt.tv" : "Connect Trakt.tv"
+            }
+            accessibilityHint={
+              connected ? "Unlinks your account" : "Opens Trakt.tv login"
+            }
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name="tv-outline"
+                size={20}
+                color={connected ? "#ed1c24" : "#94a3b8"}
+                accessibilityElementsHidden
+              />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={styles.menuItemTitle}>Trakt.tv</Text>
+              <Text style={styles.menuItemSubtitle}>
+                {connected ? "Connected" : "Sync watch history across devices"}
+              </Text>
+            </View>
+            {isTraktLoading ? (
+              <ActivityIndicator size="small" color="#6b7280" />
+            ) : (
+              <Ionicons
+                name={connected ? "checkmark-circle" : "chevron-forward"}
+                size={18}
+                color={connected ? "#10b981" : "#6b7280"}
+                accessibilityElementsHidden
+              />
+            )}
           </Pressable>
 
           <View style={styles.spacer} />

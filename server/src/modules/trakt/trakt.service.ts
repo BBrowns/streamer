@@ -73,8 +73,12 @@ export class TraktService {
   }
 
   /** Handle OAuth callback code */
-  async connectAccount(userId: string, code: string): Promise<void> {
-    const tokens = await this.traktClient.exchangeCode(code);
+  async connectAccount(
+    userId: string,
+    code: string,
+    redirectUri?: string,
+  ): Promise<void> {
+    const tokens = await this.traktClient.exchangeCode(code, redirectUri);
     await this.traktRepo.upsert(userId, tokens);
     logger.info({ userId }, "Trakt account connected");
   }
