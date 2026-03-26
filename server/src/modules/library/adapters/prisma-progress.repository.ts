@@ -1,4 +1,5 @@
 import { prisma } from "../../../prisma/client.js";
+import { ContentType } from "@prisma/client";
 import type {
   IWatchProgressRepository,
   WatchProgressRecord,
@@ -30,7 +31,7 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
 
   async upsert(data: {
     userId: string;
-    type: string;
+    type: ContentType;
     itemId: string;
     season?: number | null;
     episode?: number | null;

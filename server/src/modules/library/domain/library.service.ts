@@ -1,3 +1,4 @@
+import { ContentType } from "@prisma/client";
 import { logger } from "../../../config/logger.js";
 import { AppError } from "../../../middleware/error.middleware.js";
 import type {
@@ -29,7 +30,7 @@ export class LibraryService {
 
     const record = await this.libraryRepo.create({
       userId,
-      type: data.type,
+      type: data.type as ContentType,
       itemId: data.itemId,
       title: data.title,
       poster: data.poster ?? null,
@@ -78,7 +79,7 @@ export class LibraryService {
   ): Promise<WatchProgress> {
     const record = await this.progressRepo.upsert({
       userId,
-      type: data.type,
+      type: data.type as ContentType,
       itemId: data.itemId,
       season: data.season ?? null,
       episode: data.episode ?? null,
