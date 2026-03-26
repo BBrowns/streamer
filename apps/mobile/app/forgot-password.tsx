@@ -32,7 +32,8 @@ export default function ForgotPasswordScreen() {
 
     try {
       setIsLoading(true);
-      const res = await forgotPassword({ email });
+      const normalizedEmail = email.toLowerCase().trim();
+      const res = await forgotPassword({ email: normalizedEmail });
 
       // In a real app, you would send an email.
       // Here, the backend might return the token in dev mode.
