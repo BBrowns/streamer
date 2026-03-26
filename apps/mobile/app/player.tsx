@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { usePlayerStore } from "../stores/playerStore";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { useUpdateProgress } from "../hooks/useContinueWatching";
+import { useTraktScrobbler } from "../hooks/useTraktScrobbler";
 import { useEffect, useRef, useState, useCallback } from "react";
 import type {
   AudioTrack,
@@ -47,6 +48,8 @@ export default function PlayerScreen() {
     setProgress,
     clearPlayer,
   } = usePlayerStore();
+
+  useTraktScrobbler();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
