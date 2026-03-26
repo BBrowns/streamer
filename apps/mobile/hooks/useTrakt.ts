@@ -8,10 +8,10 @@ import { Alert } from "react-native";
 // You should get these from a config or env
 const TRAKT_CLIENT_ID =
   process.env.EXPO_PUBLIC_TRAKT_CLIENT_ID || "YOUR_CLIENT_ID";
-const REDIRECT_URI = Linking.createURL("trakt-callback");
 
 export function useTrakt() {
   const queryClient = useQueryClient();
+  const REDIRECT_URI = Linking.createURL("trakt-callback");
 
   const { data: status, isLoading: isStatusLoading } = useQuery({
     queryKey: ["trakt-status"],
@@ -68,7 +68,7 @@ export function useTrakt() {
       console.error("OAuth failed", err);
       Alert.alert("Error", "Failed to open Trakt.tv login.");
     }
-  }, [connectMutation]);
+  }, [connectMutation, REDIRECT_URI]);
 
   return {
     connected: !!status?.connected,
