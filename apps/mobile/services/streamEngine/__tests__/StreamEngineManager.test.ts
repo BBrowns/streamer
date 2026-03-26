@@ -11,6 +11,10 @@ describe("StreamEngineManager", () => {
     manager = new StreamEngineManager();
   });
 
+  afterEach(() => {
+    manager.destroy();
+  });
+
   describe("resolveEngine", () => {
     it("should resolve HLS engine for .m3u8 URLs", () => {
       const stream: Stream = { url: "https://cdn.example.com/video.m3u8" };
@@ -45,24 +49,24 @@ describe("StreamEngineManager", () => {
   });
 
   describe("getPlaybackUri", () => {
-    it("should return the URL for HTTP streams", () => {
+    it("should return the URL for HTTP streams", async () => {
       const stream: Stream = { url: "https://cdn.example.com/video.mp4" };
-      const uri = manager.getPlaybackUri(stream);
+      const uri = await manager.getPlaybackUri(stream);
       expect(uri).toBe("https://cdn.example.com/video.mp4");
     });
 
-    it("should return empty string for torrent streams (not directly playable)", () => {
+    it("should return empty string for torrent streams (not directly playable)", async () => {
       const stream: Stream = {
         url: "",
         infoHash: "abc123def456",
       };
-      const uri = manager.getPlaybackUri(stream);
+      const uri = await manager.getPlaybackUri(stream);
       expect(uri).toBe("");
     });
 
-    it("should return null for completely unresolvable streams", () => {
+    it("should return null for completely unresolvable streams", async () => {
       const stream: Stream = { url: "" };
-      const uri = manager.getPlaybackUri(stream);
+      const uri = await manager.getPlaybackUri(stream);
       expect(uri).toBeNull();
     });
   });
@@ -83,6 +87,10 @@ describe("TorrentEngine", () => {
     engine = new TorrentEngine({} as any);
   });
 
+  afterEach(() => {
+    engine.stop();
+  });
+
   it("should claim it can play streams with infoHash", () => {
     const stream: Stream = { url: "", infoHash: "deadbeef" };
     expect(engine.canPlay(stream)).toBe(true);
@@ -93,9 +101,10 @@ describe("TorrentEngine", () => {
     expect(engine.canPlay(stream)).toBe(false);
   });
 
-  it("should return empty string as playback URI (stub)", () => {
+  it("should return empty string as playback URI (stub)", async () => {
     const stream: Stream = { url: "", infoHash: "deadbeef" };
-    expect(engine.getPlaybackUri(stream)).toBe("");
+    const uri = await engine.getPlaybackUri(stream);
+    expect(uri).toBe("");
   });
 
   it("should identify itself as torrent engine", () => {
@@ -121,9 +130,8 @@ describe("HttpVideoEngine", () => {
     expect(engine.canPlay({ url: "stremio://foo" })).toBe(false);
   });
 
-  it("should return the URL as-is for playback", () => {
-    expect(engine.getPlaybackUri({ url: "https://x.com/v.mp4" })).toBe(
-      "https://x.com/v.mp4",
-    );
+  it("should return the URL as-is for playback", async () => {
+    const uri = await engine.getPlaybackUri({ url: "https://x.com/v.mp4" });
+    expect(uri).toBe("https://x.com/v.mp4");
   });
 });

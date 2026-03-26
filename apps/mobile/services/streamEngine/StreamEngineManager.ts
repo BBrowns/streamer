@@ -44,7 +44,9 @@ export class StreamEngineManager {
     this.registerEngine(new TorrentEngine(this));
 
     // Probe for bridge, retry periodically if not found
-    this.detectBridge();
+    if (process.env.NODE_ENV !== "test") {
+      this.detectBridge();
+    }
   }
 
   async detectBridge(): Promise<boolean> {
@@ -90,6 +92,22 @@ export class StreamEngineManager {
   async getPlaybackUri(stream: Stream): Promise<string | null> {
     const engine = this.resolveEngine(stream);
     return engine ? await engine.getPlaybackUri(stream) : null;
+  }
+
+  destroy(): void {
+    if (this.retryTimer) {
+      clearInterval(this.retryTimer);
+      this.retryTimer = null;
+    }
+    // Any other cleanup for engines that might have timers
+    this.engines.forEach((e) => {
+      if ("stop" in e && typeof e.stop === "function") {
+        e.stop();
+      }
+      if ("destroy" in e && typeof e.destroy === "function") {
+        e.destroy();
+      }
+    });
   }
 }
 
