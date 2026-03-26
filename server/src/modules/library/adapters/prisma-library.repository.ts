@@ -1,4 +1,5 @@
 import { prisma } from "../../../prisma/client.js";
+import { ContentType } from "@prisma/client";
 import type {
   ILibraryRepository,
   LibraryItemRecord,
@@ -47,7 +48,7 @@ export class PrismaLibraryRepository implements ILibraryRepository {
 
   async create(data: {
     userId: string;
-    type: string;
+    type: ContentType;
     itemId: string;
     title: string;
     poster?: string | null;

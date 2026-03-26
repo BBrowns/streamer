@@ -39,7 +39,7 @@ beforeAll(async () => {
   const dbUrl =
     envUrl?.startsWith("postgresql://") || envUrl?.startsWith("postgres://")
       ? envUrl
-      : "postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public";
+      : "postgresql://streamer:streamer_dev@127.0.0.1:5432/streamer_db?schema=public";
 
   process.env.DATABASE_URL = dbUrl;
   process.env.JWT_SECRET = "test-secret";

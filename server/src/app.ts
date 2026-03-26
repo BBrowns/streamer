@@ -17,6 +17,7 @@ import { authRouter } from "./modules/auth/auth.routes.js";
 import { addonRouter } from "./modules/addon/addon.routes.js";
 import { aggregatorRouter } from "./modules/aggregator/aggregator.routes.js";
 import { libraryRouter } from "./modules/library/adapters/library.routes.js";
+import { traktRouter } from "./modules/trakt/adapters/trakt.routes.js";
 
 export function createApp() {
   const app = new Hono();
@@ -66,6 +67,7 @@ export function createApp() {
   app.route("/api/auth", authRouter);
   app.route("/api/addons", addonRouter);
   app.route("/api/library", libraryRouter);
+  app.route("/api/trakt", traktRouter);
   app.route("/api", aggregatorRouter);
 
   // Error handler

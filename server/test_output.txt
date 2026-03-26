@@ -1,0 +1,818 @@
+
+> @streamer/server@0.1.0 test
+> vitest run tests/library.integration.test.ts --reporter=verbose
+
+[1m[43m DEPRECATED [49m[22m [33m`test.poolOptions` was removed in Vitest 4. All previous `poolOptions` are now top-level options. Please, refer to the migration guide: https://vitest.dev/guide/migration#pool-rework[39m
+
+[1m[46m RUN [49m[22m [36mv4.1.0 [39m[90m/Users/julianbruinsma/Documents/Playground /streamer/server[39m
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "streamer_db", schema "public" at "127.0.0.1:5432"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v6.19.2) to ./../node_modules/@prisma/client in 99ms
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:info Starting a postgresql pool with 21 connections.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould add an item to the library
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "9fb04943-d73a-486b-9b68-9f76769685e1",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           title: "The Shawshank Redemption",
+           poster: "https://example.com/poster.jpg"
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould add an item to the library[33m 362[2mms[22m[39m
+[31m   → expected 500 to be 201 // Object.is equality[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "0314b7ee-7b60-423d-b837-5fdd7c15cb2b",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           title: "The Shawshank Redemption",
+           poster: null
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould reject duplicate library items
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "0314b7ee-7b60-423d-b837-5fdd7c15cb2b",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           title: "The Shawshank Redemption",
+           poster: null
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould reject duplicate library items[32m 271[2mms[22m[39m
+[31m   → expected 500 to be 409 // Object.is equality[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "7ae209b1-529c-4230-9936-f7362bc64499",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           title: "Shawshank",
+           poster: null
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "7ae209b1-529c-4230-9936-f7362bc64499",
+           type: "SERIES",
+                 ~~~~~~~~
+           itemId: "tt0903747",
+           title: "Breaking Bad",
+           poster: null
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould list library items
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE "public"."library_items"."user_id" = $1 ORDER BY "public"."library_items"."added_at" DESC OFFSET $2
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould list library items[32m 272[2mms[22m[39m
+[31m   → expected [] to have a length of 2 but got +0[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "76a26e92-36c6-4a0e-aa55-27f490fec6ac",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           title: "Shawshank",
+           poster: null
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould remove an item from the library
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould remove an item from the library[32m 255[2mms[22m[39m
+[31m   → expected 404 to be 204 // Object.is equality[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:error 
+Invalid `prisma.libraryItem.create()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-library.repository.ts:56:43
+
+  53   title: string;
+  54   poster?: string | null;
+  55 }): Promise<LibraryItemRecord> {
+→ 56   const item = await prisma.libraryItem.create({
+         data: {
+           userId: "70520999-232c-4601-a14f-f8937b61fecf",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           title: "Shawshank",
+           poster: null
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Library Module[2m > [22m[2mshould check if an item is in the library
+[22m[39mprisma:query SELECT "public"."library_items"."id", "public"."library_items"."user_id", "public"."library_items"."type"::text, "public"."library_items"."item_id", "public"."library_items"."title", "public"."library_items"."poster", "public"."library_items"."added_at" FROM "public"."library_items" WHERE (("public"."library_items"."user_id" = $1 AND "public"."library_items"."item_id" = $2) AND 1=1) LIMIT $3 OFFSET $4
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould check if an item is in the library[32m 252[2mms[22m[39m
+[31m   → expected false to be true // Object.is equality[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould save and retrieve watch progress
+[22m[39mprisma:error 
+Invalid `prisma.watchProgress.upsert()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-progress.repository.ts:43:47
+
+  40   title: string;
+  41   poster?: string | null;
+  42 }): Promise<WatchProgressRecord> {
+→ 43   const record = await prisma.watchProgress.upsert({
+         where: {
+           userId_itemId_season_episode: {
+             userId: "fbef3413-98e0-4fa9-a5fa-3bcb8676ba67",
+             itemId: "tt0111161",
+             season: 0,
+             episode: 0
+           }
+         },
+         create: {
+           userId: "fbef3413-98e0-4fa9-a5fa-3bcb8676ba67",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           season: 0,
+           episode: 0,
+           currentTime: 3600,
+           duration: 8520,
+           title: "The Shawshank Redemption",
+           poster: null
+         },
+         update: {
+           currentTime: 3600,
+           duration: 8520,
+           title: "The Shawshank Redemption",
+           poster: null,
+           lastWatched: new Date("2026-03-26T07:18:15.132Z")
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Watch Progress[2m > [22mshould save and retrieve watch progress[32m 251[2mms[22m[39m
+[31m   → expected 500 to be 200 // Object.is equality[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:error 
+Invalid `prisma.watchProgress.upsert()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-progress.repository.ts:43:47
+
+  40   title: string;
+  41   poster?: string | null;
+  42 }): Promise<WatchProgressRecord> {
+→ 43   const record = await prisma.watchProgress.upsert({
+         where: {
+           userId_itemId_season_episode: {
+             userId: "ca7f227b-87c4-4b83-bc46-72e58f6587fb",
+             itemId: "tt0111161",
+             season: 0,
+             episode: 0
+           }
+         },
+         create: {
+           userId: "ca7f227b-87c4-4b83-bc46-72e58f6587fb",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           season: 0,
+           episode: 0,
+           currentTime: 1000,
+           duration: 8520,
+           title: "Shawshank",
+           poster: null
+         },
+         update: {
+           currentTime: 1000,
+           duration: 8520,
+           title: "Shawshank",
+           poster: null,
+           lastWatched: new Date("2026-03-26T07:18:15.382Z")
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:error 
+Invalid `prisma.watchProgress.upsert()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-progress.repository.ts:43:47
+
+  40   title: string;
+  41   poster?: string | null;
+  42 }): Promise<WatchProgressRecord> {
+→ 43   const record = await prisma.watchProgress.upsert({
+         where: {
+           userId_itemId_season_episode: {
+             userId: "ca7f227b-87c4-4b83-bc46-72e58f6587fb",
+             itemId: "tt0111161",
+             season: 0,
+             episode: 0
+           }
+         },
+         create: {
+           userId: "ca7f227b-87c4-4b83-bc46-72e58f6587fb",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           season: 0,
+           episode: 0,
+           currentTime: 5000,
+           duration: 8520,
+           title: "Shawshank",
+           poster: null
+         },
+         update: {
+           currentTime: 5000,
+           duration: 8520,
+           title: "Shawshank",
+           poster: null,
+           lastWatched: new Date("2026-03-26T07:18:15.385Z")
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query SELECT "public"."watch_progress"."id", "public"."watch_progress"."user_id", "public"."watch_progress"."type"::text, "public"."watch_progress"."item_id", "public"."watch_progress"."season", "public"."watch_progress"."episode", "public"."watch_progress"."current_time", "public"."watch_progress"."duration", "public"."watch_progress"."title", "public"."watch_progress"."poster", "public"."watch_progress"."last_watched" FROM "public"."watch_progress" WHERE "public"."watch_progress"."user_id" = $1 ORDER BY "public"."watch_progress"."last_watched" DESC LIMIT $2 OFFSET $3
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould upsert progress (update existing entry)
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query SELECT "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Watch Progress[2m > [22mshould upsert progress (update existing entry)[32m 256[2mms[22m[39m
+[31m   → expected [] to have a length of 1 but got +0[39m
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query INSERT INTO "public"."users" ("id","email","password_hash","created_at","updated_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."users"."id", "public"."users"."email", "public"."users"."password_hash", "public"."users"."display_name", "public"."users"."created_at", "public"."users"."updated_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query INSERT INTO "public"."refresh_tokens" ("id","token","user_id","expires_at","created_at") VALUES ($1,$2,$3,$4,$5) RETURNING "public"."refresh_tokens"."id", "public"."refresh_tokens"."token", "public"."refresh_tokens"."user_id", "public"."refresh_tokens"."expires_at", "public"."refresh_tokens"."created_at"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:error 
+Invalid `prisma.watchProgress.upsert()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-progress.repository.ts:43:47
+
+  40   title: string;
+  41   poster?: string | null;
+  42 }): Promise<WatchProgressRecord> {
+→ 43   const record = await prisma.watchProgress.upsert({
+         where: {
+           userId_itemId_season_episode: {
+             userId: "8ac1991c-15d8-460a-a4e9-470dbccd8cf0",
+             itemId: "tt0111161",
+             season: 0,
+             episode: 0
+           }
+         },
+         create: {
+           userId: "8ac1991c-15d8-460a-a4e9-470dbccd8cf0",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0111161",
+           season: 0,
+           episode: 0,
+           currentTime: 9600,
+           duration: 10000,
+           title: "Completed Movie",
+           poster: null
+         },
+         update: {
+           currentTime: 9600,
+           duration: 10000,
+           title: "Completed Movie",
+           poster: null,
+           lastWatched: new Date("2026-03-26T07:18:15.643Z")
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:error 
+Invalid `prisma.watchProgress.upsert()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/library/adapters/prisma-progress.repository.ts:43:47
+
+  40   title: string;
+  41   poster?: string | null;
+  42 }): Promise<WatchProgressRecord> {
+→ 43   const record = await prisma.watchProgress.upsert({
+         where: {
+           userId_itemId_season_episode: {
+             userId: "8ac1991c-15d8-460a-a4e9-470dbccd8cf0",
+             itemId: "tt0903747",
+             season: 0,
+             episode: 0
+           }
+         },
+         create: {
+           userId: "8ac1991c-15d8-460a-a4e9-470dbccd8cf0",
+           type: "MOVIE",
+                 ~~~~~~~
+           itemId: "tt0903747",
+           season: 0,
+           episode: 0,
+           currentTime: 4000,
+           duration: 10000,
+           title: "In Progress Movie",
+           poster: null
+         },
+         update: {
+           currentTime: 4000,
+           duration: 10000,
+           title: "In Progress Movie",
+           poster: null,
+           lastWatched: new Date("2026-03-26T07:18:15.645Z")
+         }
+       })
+
+Invalid value for argument `type`. Expected ContentType.
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query DELETE FROM "public"."active_sessions" WHERE ("public"."active_sessions"."user_id" = $1 AND "public"."active_sessions"."last_activity" < $2)
+
+[90mstdout[2m | tests/library.integration.test.ts[2m > [22m[2mIntegration: Watch Progress[2m > [22m[2mshould filter out completed items from continue watching
+[22m[39mprisma:query SELECT "public"."watch_progress"."id", "public"."watch_progress"."user_id", "public"."watch_progress"."type"::text, "public"."watch_progress"."item_id", "public"."watch_progress"."season", "public"."watch_progress"."episode", "public"."watch_progress"."current_time", "public"."watch_progress"."duration", "public"."watch_progress"."title", "public"."watch_progress"."poster", "public"."watch_progress"."last_watched" FROM "public"."watch_progress" WHERE "public"."watch_progress"."user_id" = $1 ORDER BY "public"."watch_progress"."last_watched" DESC LIMIT $2 OFFSET $3
+
+[90mstdout[2m | tests/library.integration.test.ts
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts
+[22m[39mprisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."active_sessions"."id" FROM "public"."active_sessions" WHERE "public"."active_sessions"."user_id" = $1 OFFSET $2) AS "sub"
+
+[90mstdout[2m | tests/library.integration.test.ts
+[22m[39mprisma:query INSERT INTO "public"."active_sessions" ("id","user_id","device_id","ip_address","last_activity") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("user_id","device_id") DO UPDATE SET "last_activity" = $6, "ip_address" = $7 WHERE (("public"."active_sessions"."user_id" = $8 AND "public"."active_sessions"."device_id" = $9) AND 1=1) RETURNING "public"."active_sessions"."id", "public"."active_sessions"."user_id", "public"."active_sessions"."device_id", "public"."active_sessions"."ip_address", "public"."active_sessions"."user_agent", "public"."active_sessions"."last_activity"
+
+[90mstdout[2m | tests/library.integration.test.ts
+[22m[39mprisma:error 
+Invalid `prisma.activeSession.deleteMany()` invocation in
+/Users/julianbruinsma/Documents/Playground /streamer/server/src/modules/auth/session.service.ts:39:34
+
+  36 
+  37 // Cleanup stale sessions (older than 30 seconds)
+  38 const STALE_THRESHOLD = new Date(Date.now() - 30 * 1000);
+→ 39 await prisma.activeSession.deleteMany(
+Response from the Engine was empty
+
+ [31m×[39m tests/library.integration.test.ts[2m > [22mIntegration: Watch Progress[2m > [22mshould filter out completed items from continue watching[32m 258[2mms[22m[39m
+[31m   → expected [] to have a length of 1 but got +0[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould add an item to the library
+[31m[1mAssertionError[22m: expected 500 to be 201 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 201[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m94:24[22m[39m
+    [90m 92|[39m       })[33m;[39m
+    [90m 93|[39m
+    [90m 94|[39m     [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m201[39m)[33m;[39m
+    [90m   |[39m                        [31m^[39m
+    [90m 95|[39m     [34mexpect[39m(res[33m.[39mbody[33m.[39mitemId)[33m.[39m[34mtoBe[39m([32m"tt0111161"[39m)[33m;[39m
+    [90m 96|[39m     [34mexpect[39m(res[33m.[39mbody[33m.[39mtitle)[33m.[39m[34mtoBe[39m([32m"The Shawshank Redemption"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould reject duplicate library items
+[31m[1mAssertionError[22m: expected 500 to be 409 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 409[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m119:24[22m[39m
+    [90m117|[39m       })[33m;[39m
+    [90m118|[39m
+    [90m119|[39m     [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m409[39m)[33m;[39m
+    [90m   |[39m                        [31m^[39m
+    [90m120|[39m   })[33m;[39m
+    [90m121|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould list library items
+[31m[1mAssertionError[22m: expected [] to have a length of 2 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m138:28[22m[39m
+    [90m136|[39m
+    [90m137|[39m     [34mexpect[39m(res[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m138|[39m     [34mexpect[39m(res[33m.[39mbody[33m.[39mitems)[33m.[39m[34mtoHaveLength[39m([34m2[39m)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m139|[39m   })[33m;[39m
+    [90m140|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould remove an item from the library
+[31m[1mAssertionError[22m: expected 404 to be 204 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 204[39m
+[31m+ 404[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m152:27[22m[39m
+    [90m150|[39m       [33m.[39m[34msend[39m({ itemId[33m:[39m [32m"tt0111161"[39m })[33m;[39m
+    [90m151|[39m
+    [90m152|[39m     [34mexpect[39m(delRes[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m204[39m)[33m;[39m
+    [90m   |[39m                           [31m^[39m
+    [90m153|[39m
+    [90m154|[39m     [35mconst[39m listRes [33m=[39m [35mawait[39m [34mrequest[39m(app)
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Library Module[2m > [22mshould check if an item is in the library
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m171:35[22m[39m
+    [90m169|[39m       [33m.[39m[35mset[39m([32m"Authorization"[39m[33m,[39m [32m`Bearer [39m[36m${[39mtoken[36m}[39m[32m`[39m)[33m;[39m
+    [90m170|[39m
+    [90m171|[39m     [34mexpect[39m(yesRes[33m.[39mbody[33m.[39minLibrary)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   |[39m                                   [31m^[39m
+    [90m172|[39m
+    [90m173|[39m     [35mconst[39m noRes [33m=[39m [35mawait[39m [34mrequest[39m(app)
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Watch Progress[2m > [22mshould save and retrieve watch progress
+[31m[1mAssertionError[22m: expected 500 to be 200 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 200[39m
+[31m+ 500[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m200:32[22m[39m
+    [90m198|[39m       })[33m;[39m
+    [90m199|[39m
+    [90m200|[39m     [34mexpect[39m(progressRes[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m200[39m)[33m;[39m
+    [90m   |[39m                                [31m^[39m
+    [90m201|[39m     [34mexpect[39m(progressRes[33m.[39mbody[33m.[39mcurrentTime)[33m.[39m[34mtoBe[39m([34m3600[39m)[33m;[39m
+    [90m202|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Watch Progress[2m > [22mshould upsert progress (update existing entry)
+[31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m240:32[22m[39m
+    [90m238|[39m
+    [90m239|[39m     [90m// Should still only have 1 entry (upserted, not duplicated)[39m
+    [90m240|[39m     [34mexpect[39m(listRes[33m.[39mbody[33m.[39mitems)[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                                [31m^[39m
+    [90m241|[39m     [34mexpect[39m(listRes[33m.[39mbody[33m.[39mitems[[34m0[39m][33m.[39mcurrentTime)[33m.[39m[34mtoBe[39m([34m5000[39m)[33m;[39m
+    [90m242|[39m   })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/library.integration.test.ts[2m > [22mIntegration: Watch Progress[2m > [22mshould filter out completed items from continue watching
+[31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m tests/library.integration.test.ts:[2m274:28[22m[39m
+    [90m272|[39m
+    [90m273|[39m     [90m// Only the in-progress item should appear[39m
+    [90m274|[39m     [34mexpect[39m(res[33m.[39mbody[33m.[39mitems)[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+    [90m   |[39m                            [31m^[39m
+    [90m275|[39m     [34mexpect[39m(res[33m.[39mbody[33m.[39mitems[[34m0[39m][33m.[39mtitle)[33m.[39m[34mtoBe[39m([32m"In Progress Movie"[39m)[33m;[39m
+    [90m276|[39m   })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m8 failed[39m[22m[90m (8)[39m
+[2m   Start at [22m 08:18:09
+[2m   Duration [22m 6.46s[2m (transform 327ms, setup 0ms, import 161ms, tests 6.03s, environment 0ms)[22m
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/julianbruinsma/Documents/Playground /streamer/server
+npm error workspace @streamer/server@0.1.0
+npm error location /Users/julianbruinsma/Documents/Playground /streamer/server
+npm error command failed
+npm error command sh -c vitest run tests/library.integration.test.ts --reporter=verbose

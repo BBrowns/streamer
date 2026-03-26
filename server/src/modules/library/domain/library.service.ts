@@ -1,3 +1,4 @@
+import { ContentType } from "@prisma/client";
 import { logger } from "../../../config/logger.js";
 import { AppError } from "../../../middleware/error.middleware.js";
 import type {
@@ -8,10 +9,13 @@ import type {
 } from "../ports/library.ports.js";
 import type { LibraryItem, WatchProgress } from "@streamer/shared";
 
+import { TraktService } from "../../trakt/trakt.service.js";
+
 export class LibraryService {
   constructor(
     private readonly libraryRepo: ILibraryRepository,
     private readonly progressRepo: IWatchProgressRepository,
+    private readonly traktService: TraktService,
   ) {}
 
   /** Add an item to the user's library / watchlist */
@@ -29,7 +33,7 @@ export class LibraryService {
 
     const record = await this.libraryRepo.create({
       userId,
-      type: data.type,
+      type: data.type as ContentType,
       itemId: data.itemId,
       title: data.title,
       poster: data.poster ?? null,
@@ -78,7 +82,7 @@ export class LibraryService {
   ): Promise<WatchProgress> {
     const record = await this.progressRepo.upsert({
       userId,
-      type: data.type,
+      type: data.type as ContentType,
       itemId: data.itemId,
       season: data.season ?? null,
       episode: data.episode ?? null,
@@ -89,6 +93,20 @@ export class LibraryService {
     });
 
     logger.debug({ userId, itemId: data.itemId }, "Watch progress updated");
+
+    // Background sync to Trakt if connected
+    this.traktService
+      .syncWatchProgress(userId, {
+        type: data.type as "movie" | "series",
+        itemId: data.itemId,
+        season: data.season,
+        episode: data.episode,
+        title: data.title,
+      })
+      .catch((err) =>
+        logger.warn({ userId, err }, "Trakt sync failed in background"),
+      );
+
     return this.toWatchProgress(record);
   }
 

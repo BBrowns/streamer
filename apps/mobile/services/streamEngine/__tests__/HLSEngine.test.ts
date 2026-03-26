@@ -31,11 +31,10 @@ describe("HLSEngine", () => {
   });
 
   describe("getPlaybackUri", () => {
-    it("should return the url unchanged", () => {
+    it("should return the url unchanged", async () => {
       const stream: Stream = { url: "https://example.com/video.m3u8" };
-      expect(engine.getPlaybackUri(stream)).toBe(
-        "https://example.com/video.m3u8",
-      );
+      const uri = await engine.getPlaybackUri(stream);
+      expect(uri).toBe("https://example.com/video.m3u8");
     });
   });
 
