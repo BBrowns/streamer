@@ -5,10 +5,22 @@ import { PrismaLibraryRepository } from "./prisma-library.repository.js";
 import { PrismaWatchProgressRepository } from "./prisma-progress.repository.js";
 import { authMiddleware } from "../../../middleware/auth.middleware.js";
 
+import { PrismaTraktRepository } from "../../trakt/adapters/prisma-trakt.repository.js";
+import { TraktClient } from "../../trakt/adapters/trakt-client.js";
+import { TraktService } from "../../trakt/trakt.service.js";
+
 // Wire up Hexagonal Architecture: Ports → Adapters → Domain → Controller
 const libraryRepo = new PrismaLibraryRepository();
 const progressRepo = new PrismaWatchProgressRepository();
-const libraryService = new LibraryService(libraryRepo, progressRepo);
+const traktRepo = new PrismaTraktRepository();
+const traktClient = new TraktClient();
+const traktService = new TraktService(traktClient, traktRepo);
+
+const libraryService = new LibraryService(
+  libraryRepo,
+  progressRepo,
+  traktService,
+);
 const libraryController = new LibraryController(libraryService);
 
 export const libraryRouter = new Hono();

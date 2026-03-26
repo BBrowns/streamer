@@ -9,10 +9,13 @@ import type {
 } from "../ports/library.ports.js";
 import type { LibraryItem, WatchProgress } from "@streamer/shared";
 
+import { TraktService } from "../../trakt/trakt.service.js";
+
 export class LibraryService {
   constructor(
     private readonly libraryRepo: ILibraryRepository,
     private readonly progressRepo: IWatchProgressRepository,
+    private readonly traktService: TraktService,
   ) {}
 
   /** Add an item to the user's library / watchlist */
@@ -90,6 +93,20 @@ export class LibraryService {
     });
 
     logger.debug({ userId, itemId: data.itemId }, "Watch progress updated");
+
+    // Background sync to Trakt if connected
+    this.traktService
+      .syncWatchProgress(userId, {
+        type: data.type as "movie" | "series",
+        itemId: data.itemId,
+        season: data.season,
+        episode: data.episode,
+        title: data.title,
+      })
+      .catch((err) =>
+        logger.warn({ userId, err }, "Trakt sync failed in background"),
+      );
+
     return this.toWatchProgress(record);
   }
 
