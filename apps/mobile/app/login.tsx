@@ -27,7 +27,8 @@ export default function LoginScreen() {
       return;
     }
     try {
-      await login({ email, password });
+      const normalizedEmail = email.toLowerCase().trim();
+      await login({ email: normalizedEmail, password });
       router.replace("/(tabs)");
     } catch {}
   };

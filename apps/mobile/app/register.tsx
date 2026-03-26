@@ -21,8 +21,9 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     try {
+      const normalizedEmail = email.toLowerCase().trim();
       await register({
-        email,
+        email: normalizedEmail,
         password,
         displayName: displayName || undefined,
       });

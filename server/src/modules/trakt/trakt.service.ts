@@ -7,12 +7,13 @@ import type {
 } from "./ports/trakt.ports.js";
 
 export class TraktService {
+  private syncInterval: NodeJS.Timeout | null = null;
+  private isProcessing = false;
+
   constructor(
     private readonly traktClient: ITraktClient,
     private readonly traktRepo: ITraktRepository,
   ) {}
-
-  private syncInterval: NodeJS.Timeout | null = null;
 
   /** Start background queue processing */
   startBackgroundSync(intervalMs = 60 * 1000): void {
@@ -73,8 +74,6 @@ export class TraktService {
     const accessToken = await this.getValidToken(userId);
     if (!accessToken) return;
 
-    // Extract IMDB ID if present (assuming itemId might be "tt..." or similar)
-    // In our system, itemId is often the IMDB ID.
     const imdbId = data.itemId.startsWith("tt") ? data.itemId : undefined;
 
     try {
@@ -94,7 +93,6 @@ export class TraktService {
         { userId, error: err.message },
         "Trakt sync failed, adding to queue",
       );
-      // Add to queue for retry
       await this.traktRepo.addToQueue(userId, {
         type: data.type === "movie" ? "movie" : "episode",
         imdbId,
@@ -136,43 +134,50 @@ export class TraktService {
 
   /** Process pending sync items in queue */
   async processQueue(limit = 10): Promise<void> {
-    const queue = await this.traktRepo.getQueue(limit);
-    if (queue.length === 0) return;
+    if (this.isProcessing) return;
+    this.isProcessing = true;
 
-    logger.debug({ count: queue.length }, "Processing Trakt sync queue");
+    try {
+      const queue = await this.traktRepo.getQueue(limit);
+      if (queue.length === 0) return;
 
-    for (const item of queue) {
-      if (item.attempts >= 5) {
-        logger.error(
-          { itemId: item.id, userId: item.userId },
-          "Trakt sync item exceeded max attempts, removing",
-        );
-        await this.traktRepo.removeFromQueue(item.id);
-        continue;
+      logger.debug({ count: queue.length }, "Processing Trakt sync queue");
+
+      for (const item of queue) {
+        if (item.attempts >= 5) {
+          logger.error(
+            { itemId: item.id, userId: item.userId },
+            "Trakt sync item exceeded max attempts, removing",
+          );
+          await this.traktRepo.removeFromQueue(item.id);
+          continue;
+        }
+
+        const accessToken = await this.getValidToken(item.userId);
+        if (!accessToken) continue;
+
+        try {
+          await this.traktClient.syncWatchHistory(accessToken, [
+            {
+              type: item.type,
+              imdbId: item.imdbId,
+              title: item.title,
+              watchedAt: item.watchedAt.toISOString(),
+              season: item.season,
+              episode: item.episode,
+            },
+          ]);
+          await this.traktRepo.removeFromQueue(item.id);
+          logger.debug(
+            { itemId: item.id },
+            "Successfully synced item from queue",
+          );
+        } catch (err: any) {
+          await this.traktRepo.updateQueueAttempt(item.id, err.message);
+        }
       }
-
-      const accessToken = await this.getValidToken(item.userId);
-      if (!accessToken) continue;
-
-      try {
-        await this.traktClient.syncWatchHistory(accessToken, [
-          {
-            type: item.type,
-            imdbId: item.imdbId,
-            title: item.title,
-            watchedAt: item.watchedAt.toISOString(),
-            season: item.season,
-            episode: item.episode,
-          },
-        ]);
-        await this.traktRepo.removeFromQueue(item.id);
-        logger.debug(
-          { itemId: item.id },
-          "Successfully synced item from queue",
-        );
-      } catch (err: any) {
-        await this.traktRepo.updateQueueAttempt(item.id, err.message);
-      }
+    } finally {
+      this.isProcessing = false;
     }
   }
 

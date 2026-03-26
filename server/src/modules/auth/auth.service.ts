@@ -63,10 +63,11 @@ function generateTokens(userId: string, email: string): AuthTokens {
 
 export class AuthService {
   async register(
-    email: string,
+    emailInput: string,
     password: string,
     displayName?: string,
   ): Promise<{ user: UserProfile; tokens: AuthTokens }> {
+    const email = emailInput.toLowerCase().trim();
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new AppError(409, "Email already registered");
@@ -106,9 +107,10 @@ export class AuthService {
   }
 
   async login(
-    email: string,
+    emailInput: string,
     password: string,
   ): Promise<{ user: UserProfile; tokens: AuthTokens }> {
+    const email = emailInput.toLowerCase().trim();
     // Check if the account is locked out
     checkLoginAttempts(email);
 
@@ -197,7 +199,8 @@ export class AuthService {
    * In production, send this via email (SendGrid/Resend/SES).
    * For dev, the token is returned in the response and logged.
    */
-  async forgotPassword(email: string): Promise<{ resetToken: string }> {
+  async forgotPassword(emailInput: string): Promise<{ resetToken: string }> {
+    const email = emailInput.toLowerCase().trim();
     const user = await prisma.user.findUnique({ where: { email } });
 
     // Always return success to avoid email enumeration

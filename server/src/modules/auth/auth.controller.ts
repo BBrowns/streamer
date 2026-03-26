@@ -8,6 +8,7 @@ import {
   changePasswordSchema,
   updateProfileSchema,
 } from "@streamer/shared";
+import { env } from "../../config/env.js";
 import { authService } from "./auth.service.js";
 
 export class AuthController {
@@ -44,7 +45,7 @@ export class AuthController {
     return c.json({
       message:
         "If an account with that email exists, a reset token has been generated.",
-      ...(process.env.NODE_ENV !== "production" && result.resetToken
+      ...(env.nodeEnv !== "production" && result.resetToken
         ? { resetToken: result.resetToken }
         : {}),
     });
