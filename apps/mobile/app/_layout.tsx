@@ -148,6 +148,10 @@ function RootLayout() {
             options={{ title: "Create Account", presentation: "modal" }}
           />
           <Stack.Screen
+            name="notifications"
+            options={{ title: "Notifications", presentation: "modal" }}
+          />
+          <Stack.Screen
             name="forgot-password"
             options={{ title: "Forgot Password", presentation: "modal" }}
           />
