@@ -127,6 +127,7 @@ export function DesktopDetailLayout({
               seriesId={id}
               videos={meta.videos || []}
               onPlayStream={handlePlayStream}
+              onDownloadStream={handleDownloadStream}
             />
           ) : streamsLoading ? (
             <ActivityIndicator color="#00f2ff" />

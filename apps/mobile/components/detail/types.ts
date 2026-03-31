@@ -18,6 +18,11 @@ export interface DetailLayoutProps {
     season?: number,
     episode?: number,
   ) => void;
-  handleDownloadStream: (stream: Stream) => void;
+  handleDownloadStream: (
+    stream: Stream,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => void;
   onBack: () => void;
 }

@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { VideoEntry, Stream } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useEpisodeStreams } from "../../hooks/useEpisodeStreams";
+import { StreamItem } from "../detail/StreamItem";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
 
@@ -68,12 +69,14 @@ function EpisodeStreamList({
   episode,
   episodeTitle,
   onPlayStream,
+  onDownloadStream,
 }: {
   seriesId: string;
   season: number;
   episode: number;
   episodeTitle: string;
   onPlayStream: (stream: Stream, episodeTitle: string) => void;
+  onDownloadStream: (stream: Stream, episodeTitle: string) => void;
 }) {
   const { data: streams, isLoading } = useEpisodeStreams(
     seriesId,
@@ -105,38 +108,15 @@ function EpisodeStreamList({
         S{season} E{episode} — Streams
       </Text>
       {streams.map((stream, i) => {
-        // Use a combination of identifier and index to guarantee uniqueness
         const key = `${stream.infoHash || stream.url || "stream"}-${i}`;
         return (
-          <Pressable
+          <StreamItem
             key={key}
-            style={styles.streamCard}
-            onPress={() => {
-              hapticImpactLight();
-              onPlayStream(stream, episodeTitle);
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.streamTitle} numberOfLines={1}>
-                {stream.title || stream.name || `Stream ${i + 1}`}
-              </Text>
-              <View style={styles.streamMeta}>
-                {stream.resolution && (
-                  <View style={styles.resBadge}>
-                    <Text style={styles.resBadgeText}>
-                      {stream.resolution === "2160p"
-                        ? "4K"
-                        : stream.resolution.toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                {stream.seeders !== undefined && (
-                  <Text style={styles.seederText}>👥 {stream.seeders}</Text>
-                )}
-              </View>
-            </View>
-            <Ionicons name="play-circle" size={28} color="#00f2ff" />
-          </Pressable>
+            stream={stream}
+            index={i}
+            onPress={() => onPlayStream(stream, episodeTitle)}
+            onDownload={() => onDownloadStream(stream, episodeTitle)}
+          />
         );
       })}
     </View>
@@ -154,12 +134,19 @@ interface EpisodeSelectorProps {
     season: number,
     episode: number,
   ) => void;
+  onDownloadStream: (
+    stream: Stream,
+    episodeTitle: string,
+    season: number,
+    episode: number,
+  ) => void;
 }
 
 export const EpisodeSelector = memo(function EpisodeSelector({
   seriesId,
   videos,
   onPlayStream,
+  onDownloadStream,
 }: EpisodeSelectorProps) {
   // Group videos by season
   const seasons = useMemo(() => {
@@ -256,6 +243,14 @@ export const EpisodeSelector = memo(function EpisodeSelector({
           episodeTitle={selectedEpisode.title}
           onPlayStream={(stream, title) =>
             onPlayStream(
+              stream,
+              title,
+              selectedEpisode.season,
+              selectedEpisode.episode,
+            )
+          }
+          onDownloadStream={(stream, title) =>
+            onDownloadStream(
               stream,
               title,
               selectedEpisode.season,
@@ -382,41 +377,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 4,
     paddingLeft: 4,
-  },
-  streamCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
-    borderRadius: 12,
-    padding: 14,
-  },
-  streamTitle: {
-    color: "#e4e4e7",
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  streamMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  resBadge: {
-    backgroundColor: "rgba(0,242,255,0.12)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  resBadgeText: {
-    color: "#00f2ff",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  seederText: {
-    color: "#52525b",
-    fontSize: 11,
   },
 });
