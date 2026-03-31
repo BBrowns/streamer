@@ -62,7 +62,7 @@ export class AuthController {
   async changePassword(c: Context) {
     const body = await c.req.json();
     const data = changePasswordSchema.parse(body);
-    const user = c.get("user") as any;
+    const user = c.get("user");
     await authService.changePassword(
       user.userId,
       data.currentPassword,
@@ -74,19 +74,19 @@ export class AuthController {
   async updateProfile(c: Context) {
     const body = await c.req.json();
     const data = updateProfileSchema.parse(body);
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const updatedUser = await authService.updateProfile(user.userId, data);
     return c.json({ user: updatedUser });
   }
 
   async getSessions(c: Context) {
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const sessions = await SessionService.getActiveSessions(user.userId);
     return c.json({ sessions });
   }
 
   async revokeSession(c: Context) {
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const sessionId = c.req.param("id");
     if (!sessionId) return c.json({ error: "Session ID required" }, 400);
     await SessionService.revoke(user.userId, sessionId);
