@@ -14,5 +14,9 @@ export default defineConfig({
     // Increase timeout for DB-heavy integration tests
     testTimeout: 30000,
     hookTimeout: 30000,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "json-summary"],
+    },
   },
 });
