@@ -1,5 +1,6 @@
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
+import { AppError } from "../../middleware/error.middleware.js";
 
 export class SessionService {
   /**
@@ -63,5 +64,17 @@ export class SessionService {
       where: { userId },
       orderBy: { lastActivity: "desc" },
     });
+  }
+
+  /** Revoke a specific session. Throws 404 if the session doesn't belong to the user. */
+  static async revoke(userId: string, sessionId: string): Promise<void> {
+    const session = await prisma.activeSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session || session.userId !== userId) {
+      throw new AppError(404, "Session not found");
+    }
+    await prisma.activeSession.delete({ where: { id: sessionId } });
+    logger.info({ userId, sessionId }, "Session revoked");
   }
 }
