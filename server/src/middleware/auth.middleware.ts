@@ -24,7 +24,19 @@ export async function authMiddleware(c: Context, next: Next) {
   const token = authHeader.slice(7);
 
   try {
-    const payload = jwt.verify(token, env.jwtSecret) as AuthPayload;
+    let payload: AuthPayload;
+    try {
+      payload = jwt.verify(token, env.jwtSecret) as AuthPayload;
+    } catch (err: any) {
+      if (env.jwtSecretPrevious && err?.name === "JsonWebTokenError") {
+        logger.debug(
+          "JWT verification failed with primary secret — trying previous secret",
+        );
+        payload = jwt.verify(token, env.jwtSecretPrevious) as AuthPayload;
+      } else {
+        throw err;
+      }
+    }
 
     // Validate iat (issued-at) to prevent token replay with very old tokens
     if (payload.iat) {

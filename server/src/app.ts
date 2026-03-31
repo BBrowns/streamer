@@ -56,12 +56,23 @@ export function createApp() {
   });
 
   // Health check
-  app.get("/health", (c) => {
-    return c.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      features: featureFlags.getAll(),
-    });
+  app.get("/health", async (c) => {
+    try {
+      // Lightweight query to verify DB connectivity
+      await import("./prisma/client.js").then(
+        (m) => m.prisma.$queryRaw`SELECT 1`,
+      );
+      return c.json({
+        status: "ok",
+        db: "connected",
+        timestamp: new Date().toISOString(),
+        features: featureFlags.getAll(),
+        uptime: process.uptime(),
+      });
+    } catch (err) {
+      logger.error({ err }, "Health check failed: DB disconnected");
+      return c.json({ status: "error", db: "disconnected" }, 503);
+    }
   });
 
   // API routes

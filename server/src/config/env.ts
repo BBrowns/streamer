@@ -18,6 +18,7 @@ const envSchema = z.object({
 
   // JWT
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  JWT_SECRET_PREVIOUS: z.string().optional(),
   JWT_ACCESS_EXPIRY: z.string().default("15m"),
   JWT_REFRESH_EXPIRY: z.string().default("7d"),
 
@@ -26,6 +27,9 @@ const envSchema = z.object({
 
   // Sessions
   MAX_CONCURRENT_SESSIONS: z.string().default("2").transform(Number),
+
+  // Redis (Rate Limiting)
+  REDIS_URL: z.string().optional(),
 
   // Aggregator
   ADDON_TIMEOUT_MS: z.string().default("5000").transform(Number),
@@ -59,6 +63,7 @@ export const env = {
 
   // JWT
   jwtSecret: envData.JWT_SECRET,
+  jwtSecretPrevious: envData.JWT_SECRET_PREVIOUS,
   jwtAccessExpiry: envData.JWT_ACCESS_EXPIRY,
   jwtRefreshExpiry: envData.JWT_REFRESH_EXPIRY,
 
@@ -67,6 +72,9 @@ export const env = {
 
   // Sessions
   maxConcurrentSessions: envData.MAX_CONCURRENT_SESSIONS,
+
+  // Redis
+  redisUrl: envData.REDIS_URL,
 
   // Aggregator
   addonTimeoutMs: envData.ADDON_TIMEOUT_MS,
