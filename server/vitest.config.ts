@@ -9,6 +9,7 @@ export default defineConfig({
         singleThread: true,
       },
     },
+    globalSetup: ["./tests/global-setup.ts"],
     fileParallelism: false,
     environment: "node",
     // Increase timeout for DB-heavy integration tests
