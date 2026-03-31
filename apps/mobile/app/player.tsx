@@ -8,10 +8,15 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { usePlayerStore } from "../stores/playerStore";
+import { api } from "../services/api";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
-import { useUpdateProgress } from "../hooks/useContinueWatching";
+import {
+  useUpdateProgress,
+  useContinueWatching,
+} from "../hooks/useContinueWatching";
 import { useTraktScrobbler } from "../hooks/useTraktScrobbler";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useMeta } from "../hooks/useMeta";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type {
   AudioTrack,
   SubtitleTrack,
@@ -23,6 +28,7 @@ import {
   type CastDevice,
 } from "../components/DesktopCastModal";
 import { useVideoPlayer, VideoView } from "expo-video";
+import type { VideoViewProps } from "expo-video";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { useRemoteMediaClient } from "../components/player/castModules";
@@ -30,6 +36,9 @@ import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
+import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
+import { useRemoteControl } from "../hooks/useRemoteControl";
+import { DeviceEventEmitter } from "react-native";
 
 const SEEK_SECONDS = 10;
 const DOUBLE_TAP_DELAY = 300;
@@ -47,8 +56,13 @@ export default function PlayerScreen() {
     subscribeToStreamMetrics,
     setProgress,
     clearPlayer,
+    playbackRate,
+    setPlaybackRate,
+    autoPlayNext,
+    setStream,
   } = usePlayerStore();
 
+  const { updateStatus } = useRemoteControl();
   useTraktScrobbler();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -70,6 +84,8 @@ export default function PlayerScreen() {
 
   const updateProgress = useUpdateProgress();
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const videoViewRef = useRef<any>(null);
 
   const remoteMediaClient = useRemoteMediaClient
     ? (useRemoteMediaClient() as any)
@@ -101,10 +117,41 @@ export default function PlayerScreen() {
   const [showBrightnessFeedback, setShowBrightnessFeedback] = useState(false);
   const [showVolumeFeedback, setShowVolumeFeedback] = useState(false);
 
+  const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
+
+  const { data: meta } = useMeta(
+    mediaInfo?.type || "",
+    mediaInfo?.itemId || "",
+  );
+
+  const nextEpisode = useMemo(() => {
+    if (!meta || !mediaInfo || mediaInfo.type !== "series") return null;
+    const currentIndex = meta.videos?.findIndex(
+      (v) => v.season === mediaInfo.season && v.episode === mediaInfo.episode,
+    );
+    if (currentIndex === undefined || currentIndex === -1) return null;
+    return meta.videos?.[currentIndex + 1] || null;
+  }, [meta, mediaInfo]);
+
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const engine = currentStream
     ? streamEngineManager.resolveEngine(currentStream)
     : null;
+
+  const { data: cwItems } = useContinueWatching();
+  const previousProgress = useMemo(() => {
+    if (!mediaInfo || !cwItems) return null;
+    return cwItems.find(
+      (p) =>
+        p.itemId === mediaInfo.itemId &&
+        p.type === mediaInfo.type &&
+        p.season === mediaInfo.season &&
+        p.episode === mediaInfo.episode,
+    );
+  }, [mediaInfo, cwItems]);
+
+  const [hasPromptedResume, setHasPromptedResume] = useState(false);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -123,6 +170,33 @@ export default function PlayerScreen() {
   const player = useVideoPlayer(playbackUri || "", (p) => {
     p.play();
   });
+
+  useEffect(() => {
+    if (player && player.playbackRate !== playbackRate) {
+      player.playbackRate = playbackRate;
+    }
+  }, [player, playbackRate]);
+
+  useEffect(() => {
+    if (
+      player &&
+      previousProgress &&
+      previousProgress.currentTime > 15 &&
+      !hasPromptedResume
+    ) {
+      setHasPromptedResume(true);
+      setShowResumePrompt(true);
+      if (player.playing) player.pause();
+    }
+  }, [player, previousProgress, hasPromptedResume]);
+
+  const handleResume = (yes: boolean) => {
+    setShowResumePrompt(false);
+    if (yes && previousProgress && player) {
+      player.currentTime = previousProgress.currentTime;
+    }
+    player?.play();
+  };
 
   useEffect(() => {
     if (!remoteMediaClient || !playbackUri || !currentStream) return;
@@ -236,14 +310,15 @@ export default function PlayerScreen() {
   }, [player, showControls]);
 
   useEffect(() => {
-    if (!mediaInfo) return;
+    if (!mediaInfo || !player) return;
+
     progressTimerRef.current = setInterval(() => {
       let currentTime = 0;
       let duration = 0;
       try {
-        currentTime = player?.currentTime || 0;
-        duration = player?.duration || 0;
-      } catch {
+        currentTime = player.currentTime || 0;
+        duration = player.duration || 0;
+      } catch (e) {
         return;
       }
 
@@ -251,40 +326,113 @@ export default function PlayerScreen() {
 
       if (currentTime > 0 && duration > 0) {
         updateProgress.mutate({
-          type: mediaInfo.type,
           itemId: mediaInfo.itemId,
-          title: mediaInfo.title,
-          poster: mediaInfo.poster,
+          type: mediaInfo.type,
           season: mediaInfo.season,
           episode: mediaInfo.episode,
           currentTime,
           duration,
+          title: mediaInfo.title,
+          poster: mediaInfo.poster,
         });
+
+        // Auto-play next episode trigger (30s before end)
+        if (
+          autoPlayNext &&
+          nextEpisode &&
+          !showNextEpisodeOverlay &&
+          duration - currentTime < 30 &&
+          duration > 60
+        ) {
+          setShowNextEpisodeOverlay(true);
+        }
       }
     }, PROGRESS_REPORT_INTERVAL);
 
+    // Periodically update playback session for Remote Control discovery
+    const sessionTimer = setInterval(() => {
+      if (!player) return;
+      updateStatus({
+        status: player.playing ? "playing" : "paused",
+        itemId: mediaInfo.itemId,
+        itemTitle: mediaInfo.title,
+        position: player.currentTime,
+        duration: player.duration,
+      });
+    }, 5000); // More frequent session updates for smoother remote progress
+
     return () => {
-      let currentTime = 0,
-        duration = 0;
-      try {
-        currentTime = player?.currentTime || 0;
-        duration = player?.duration || 0;
-      } catch {}
-      if (currentTime > 0 && duration > 0) {
-        updateProgress.mutate({
-          type: mediaInfo.type,
-          itemId: mediaInfo.itemId,
-          title: mediaInfo.title,
-          poster: mediaInfo.poster,
-          season: mediaInfo.season,
-          episode: mediaInfo.episode,
-          currentTime,
-          duration,
-        });
-      }
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      clearInterval(sessionTimer);
+      // Mark session as idle on unmount
+      updateStatus({ status: "idle" });
     };
-  }, [mediaInfo, player]);
+  }, [
+    mediaInfo,
+    player,
+    setProgress,
+    updateProgress,
+    updateStatus,
+    autoPlayNext,
+    nextEpisode,
+    showNextEpisodeOverlay,
+  ]);
+
+  const handleClose = useCallback(() => {
+    router.back();
+    setTimeout(() => clearPlayer(), 100);
+  }, [router, clearPlayer]);
+
+  // Handle remote commands
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("REMOTE_COMMAND", (cmd) => {
+      if (!player) return;
+      console.log("[Player] Received remote command:", cmd);
+
+      switch (cmd.action) {
+        case "play":
+          player.play();
+          showControls();
+          break;
+        case "pause":
+          player.pause();
+          showControls();
+          break;
+        case "seek":
+          if (cmd.data?.position !== undefined) {
+            player.currentTime = cmd.data.position;
+          }
+          break;
+        case "stop":
+          handleClose();
+          break;
+      }
+    });
+
+    return () => sub.remove();
+  }, [player, handleClose, showControls]);
+
+  const handleNextEpisode = useCallback(async () => {
+    if (!nextEpisode || !mediaInfo) return;
+
+    try {
+      const episodeId = `${mediaInfo.itemId}:${nextEpisode.season}:${nextEpisode.episode}`;
+      const { data } = await api.get(`/api/stream/series/${episodeId}`);
+      if (data.streams && data.streams.length > 0) {
+        setStream(data.streams[0], {
+          ...mediaInfo,
+          season: nextEpisode.season,
+          episode: nextEpisode.episode,
+          title: `${mediaInfo.title} - ${nextEpisode.title}`,
+        });
+        setHasPromptedResume(false);
+        setShowNextEpisodeOverlay(false);
+        setPlaybackUri(null); // Reset to trigger loading new URI
+      }
+    } catch (e) {
+      console.error("Failed to auto-play next episode", e);
+    }
+  }, [nextEpisode, mediaInfo, setStream]);
 
   const stopCasting = async () => {
     if (!activeCastDevice) return;
@@ -334,10 +482,21 @@ export default function PlayerScreen() {
     [player, toggleControls],
   );
 
-  const handleClose = useCallback(() => {
-    router.back();
-    setTimeout(() => clearPlayer(), 100);
-  }, [router, clearPlayer]);
+  const handleTogglePiP = useCallback(() => {
+    try {
+      if (Platform.OS === "web") {
+        const videoElement = document.querySelector("video");
+        if (videoElement && (videoElement as any).requestPictureInPicture) {
+          (videoElement as any).requestPictureInPicture().catch(console.error);
+        }
+      } else {
+        videoViewRef.current?.startPictureInPicture?.() ||
+          videoViewRef.current?.enterPictureInPicture?.();
+      }
+    } catch (e) {
+      console.warn("PiP not supported or failed", e);
+    }
+  }, []);
 
   if (!currentStream || !playbackUri) {
     return (
@@ -361,6 +520,8 @@ export default function PlayerScreen() {
           onClose={handleClose}
           onSettings={() => setSettingsOpen(true)}
           onWebCast={() => setCastModalOpen(true)}
+          onTogglePiP={handleTogglePiP}
+          isPiPSupported={true}
         />
         <View style={styles.videoContainer}>
           {activeCastDevice ? (
@@ -425,6 +586,8 @@ export default function PlayerScreen() {
             engine?.setSubtitle(id);
             setSubtitles(engine?.getSubtitles() ?? []);
           }}
+          playbackRate={playbackRate}
+          onSelectPlaybackRate={setPlaybackRate}
         />
         <DesktopCastModal
           visible={castModalOpen}
@@ -447,6 +610,8 @@ export default function PlayerScreen() {
             stats={stats}
             onClose={handleClose}
             onSettings={() => setSettingsOpen(true)}
+            onTogglePiP={handleTogglePiP}
+            isPiPSupported={true}
           />
         )}
 
@@ -463,6 +628,35 @@ export default function PlayerScreen() {
                   ? `⏪ ${SEEK_SECONDS}s`
                   : `${SEEK_SECONDS}s ⏩`}
               </Text>
+            </View>
+          )}
+
+          {showResumePrompt && (
+            <View style={styles.resumeOverlay}>
+              <View style={styles.resumeBox}>
+                <Text style={styles.resumeTitle}>Resume Playback?</Text>
+                <Text style={styles.resumeSub}>
+                  You left off at{" "}
+                  {Math.floor((previousProgress?.currentTime || 0) / 60)}:
+                  {String(
+                    Math.floor((previousProgress?.currentTime || 0) % 60),
+                  ).padStart(2, "0")}
+                </Text>
+                <View style={styles.resumeBtns}>
+                  <Pressable
+                    style={styles.resumeBtnGhost}
+                    onPress={() => handleResume(false)}
+                  >
+                    <Text style={styles.resumeBtnGhostText}>Start Over</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.resumeBtnPrimary}
+                    onPress={() => handleResume(true)}
+                  >
+                    <Text style={styles.resumeBtnPrimaryText}>Resume</Text>
+                  </Pressable>
+                </View>
+              </View>
             </View>
           )}
 
@@ -499,10 +693,12 @@ export default function PlayerScreen() {
 
           {player && (
             <VideoView
+              ref={videoViewRef}
               player={player}
               style={{ width: "100%", height: "100%" }}
               nativeControls={false}
               contentFit="contain"
+              allowsPictureInPicture
             />
           )}
 
@@ -551,7 +747,51 @@ export default function PlayerScreen() {
             engine?.setSubtitle(id);
             setSubtitles(engine?.getSubtitles() ?? []);
           }}
+          playbackRate={playbackRate}
+          onSelectPlaybackRate={setPlaybackRate}
         />
+
+        {showResumePrompt && previousProgress && (
+          <View style={styles.resumeOverlay}>
+            <View style={styles.resumeBox}>
+              <Text style={styles.resumeTitle}>Resume Playback?</Text>
+              <Text style={styles.resumeSub}>
+                Continue from {Math.floor(previousProgress.currentTime / 60)}:
+                {String(Math.floor(previousProgress.currentTime % 60)).padStart(
+                  2,
+                  "0",
+                )}
+              </Text>
+              <View style={styles.resumeBtns}>
+                <Pressable
+                  style={styles.resumeBtnGhost}
+                  onPress={() => handleResume(false)}
+                >
+                  <Text style={styles.resumeBtnGhostText}>Start Over</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.resumeBtnPrimary}
+                  onPress={() => handleResume(true)}
+                >
+                  <Text style={styles.resumeBtnPrimaryText}>Resume</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {showNextEpisodeOverlay && nextEpisode && (
+          <NextEpisodeOverlay
+            isVisible={showNextEpisodeOverlay}
+            nextEpisode={{
+              title: nextEpisode.title,
+              season: nextEpisode.season,
+              episode: nextEpisode.episode,
+            }}
+            onWatchedNow={handleNextEpisode}
+            onCancel={() => setShowNextEpisodeOverlay(false)}
+          />
+        )}
       </View>
     </GestureHandlerRootView>
   );
@@ -660,4 +900,49 @@ const styles = StyleSheet.create({
     borderColor: "rgba(252,165,165,0.3)",
   },
   stopCastText: { color: "#fef2f2", fontWeight: "600", fontSize: 15 },
+  resumeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 50,
+  },
+  resumeBox: {
+    backgroundColor: "#1a1a24",
+    padding: 30,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    maxWidth: 340,
+  },
+  resumeTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  resumeSub: {
+    color: "#a1a1aa",
+    fontSize: 15,
+    marginBottom: 24,
+  },
+  resumeBtns: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  resumeBtnGhost: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  resumeBtnGhostText: { color: "#fff", fontWeight: "600" },
+  resumeBtnPrimary: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: "#00f2ff",
+  },
+  resumeBtnPrimaryText: { color: "#000", fontWeight: "bold" },
 });

@@ -11,6 +11,8 @@ interface PlayerOverlayProps {
   onClose: () => void;
   onSettings: () => void;
   onWebCast?: () => void;
+  onTogglePiP?: () => void;
+  isPiPSupported?: boolean;
 }
 
 export function PlayerOverlay({
@@ -20,6 +22,8 @@ export function PlayerOverlay({
   onClose,
   onSettings,
   onWebCast,
+  onTogglePiP,
+  isPiPSupported = false,
 }: PlayerOverlayProps) {
   return (
     <View style={styles.overlay} pointerEvents="none">
@@ -52,6 +56,20 @@ export function PlayerOverlay({
               accessibilityLabel="Cast to Device"
             >
               <MaterialIcons name="cast" size={20} color="#e0e0ff" />
+            </Pressable>
+          )}
+          {isPiPSupported && onTogglePiP && (
+            <Pressable
+              style={styles.iconButton}
+              onPress={onTogglePiP}
+              accessibilityRole="button"
+              accessibilityLabel="Picture in Picture"
+            >
+              <MaterialIcons
+                name="picture-in-picture-alt"
+                size={20}
+                color="#e0e0ff"
+              />
             </Pressable>
           )}
           <Pressable

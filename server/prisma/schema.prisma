@@ -15,15 +15,17 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  refreshTokens       RefreshToken[]
-  addons              InstalledAddon[]
-  passwordResetTokens PasswordResetToken[]
-  libraryItems        LibraryItem[]
-  watchProgress       WatchProgress[]
-  traktToken          TraktToken?
-  traktSyncQueue      TraktSyncQueue[]
-  sessions            ActiveSession[]
-  notifications       Notification[]
+  emailVerified        Boolean  @default(false) @map("email_verified")
+  refreshTokens        RefreshToken[]
+  addons               InstalledAddon[]
+  passwordResetTokens  PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  libraryItems         LibraryItem[]
+  watchProgress        WatchProgress[]
+  traktToken           TraktToken?
+  traktSyncQueue       TraktSyncQueue[]
+  sessions             ActiveSession[]
+  notifications        Notification[]
 
   @@map("users")
 }
@@ -67,6 +69,18 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
 }
 
 model RefreshToken {

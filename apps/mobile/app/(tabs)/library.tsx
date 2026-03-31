@@ -30,6 +30,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { EmptyState } from "../../components/ui/EmptyState";
 
 import { LibraryCard } from "../../components/library/LibraryCard";
+import {
+  SkeletonCardGrid,
+  SkeletonRow,
+} from "../../components/ui/SkeletonLoader";
+import { hapticSelection, hapticSuccess } from "../../lib/haptics";
+
 export default function LibraryScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const router = useRouter();
@@ -56,7 +62,7 @@ export default function LibraryScreen() {
         <Pressable
           style={{ marginRight: 16 }}
           onPress={() => {
-            Haptics.selectionAsync();
+            hapticSelection();
             if (isSelectionMode) {
               setIsSelectionMode(false);
               setSelectedIds(new Set());
@@ -85,13 +91,13 @@ export default function LibraryScreen() {
         }
       }
       removeFromLibrary.mutate(itemId);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticSuccess();
     },
     [removeFromLibrary, tasks],
   );
 
   const toggleSelect = useCallback((itemId: string) => {
-    Haptics.selectionAsync();
+    hapticSelection();
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) {
@@ -131,9 +137,7 @@ export default function LibraryScreen() {
 
             bulkRemoveFromLibrary.mutate(idsArray, {
               onSuccess: () => {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
+                hapticSuccess();
                 setIsSelectionMode(false);
                 setSelectedIds(new Set());
               },
@@ -186,7 +190,10 @@ export default function LibraryScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00f2ff" />
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <SkeletonRow />
+        </View>
+        <SkeletonCardGrid count={9} />
       </View>
     );
   }
@@ -216,7 +223,7 @@ export default function LibraryScreen() {
                   ]}
                   onPress={() => {
                     setActiveFilter("all");
-                    Haptics.selectionAsync();
+                    hapticSelection();
                   }}
                 >
                   <Text
@@ -235,7 +242,7 @@ export default function LibraryScreen() {
                   ]}
                   onPress={() => {
                     setActiveFilter("movie");
-                    Haptics.selectionAsync();
+                    hapticSelection();
                   }}
                 >
                   <Text
@@ -254,7 +261,7 @@ export default function LibraryScreen() {
                   ]}
                   onPress={() => {
                     setActiveFilter("show");
-                    Haptics.selectionAsync();
+                    hapticSelection();
                   }}
                 >
                   <Text
@@ -273,7 +280,7 @@ export default function LibraryScreen() {
                   ]}
                   onPress={() => {
                     setActiveFilter("offline");
-                    Haptics.selectionAsync();
+                    hapticSelection();
                   }}
                 >
                   <Text
@@ -305,6 +312,7 @@ export default function LibraryScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
+              hapticSelection();
               await queryClient.invalidateQueries({ queryKey: ["library"] });
               await queryClient.invalidateQueries({ queryKey: ["progress"] });
               setRefreshing(false);
@@ -392,9 +400,6 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: "#050510",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
   },
   columnWrapper: { paddingHorizontal: 12, gap: 10, marginBottom: 10 },
   listContent: { paddingBottom: 24 },

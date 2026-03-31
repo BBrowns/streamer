@@ -6,6 +6,7 @@ export class AppError extends Error {
   constructor(
     public statusCode: number,
     message: string,
+    public code?: string,
   ) {
     super(message);
     this.name = "AppError";
@@ -23,6 +24,7 @@ export function errorHandler(err: Error, c: Context) {
     return c.json(
       {
         error: err.message,
+        code: err.code,
         requestId,
       },
       err.statusCode as any,

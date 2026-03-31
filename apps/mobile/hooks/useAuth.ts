@@ -33,11 +33,13 @@ export function useAuth() {
   const registerMutation = useMutation({
     mutationFn: (data: RegisterRequest) => authService.register(data),
     onSuccess: (result) => {
-      setAuth(
-        result.user,
-        result.tokens.accessToken,
-        result.tokens.refreshToken,
-      );
+      if (result.tokens) {
+        setAuth(
+          result.user,
+          result.tokens.accessToken,
+          result.tokens.refreshToken,
+        );
+      }
     },
   });
 

@@ -22,12 +22,20 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     try {
       const normalizedEmail = email.toLowerCase().trim();
-      await register({
+      const result = await register({
         email: normalizedEmail,
         password,
         displayName: displayName || undefined,
       });
-      router.replace("/(tabs)");
+
+      if (result.verificationRequired) {
+        router.push({
+          pathname: "/verify-email",
+          params: { email: normalizedEmail },
+        });
+      } else {
+        router.replace("/(tabs)");
+      }
     } catch {}
   };
 

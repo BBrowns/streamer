@@ -16,6 +16,12 @@ authRouter.post("/forgot-password", authRateLimiter, (c) =>
 authRouter.post("/reset-password", authRateLimiter, (c) =>
   authController.resetPassword(c),
 );
+authRouter.post("/verify-email", authRateLimiter, (c) =>
+  authController.verifyEmail(c),
+);
+authRouter.post("/resend-verification", authRateLimiter, (c) =>
+  authController.resendVerification(c),
+);
 
 authRouter.use("/change-password", authMiddleware);
 authRouter.post("/change-password", (c) => authController.changePassword(c));
@@ -26,3 +32,7 @@ authRouter.patch("/profile", (c) => authController.updateProfile(c));
 authRouter.use("/sessions", authMiddleware);
 authRouter.get("/sessions", (c) => authController.getSessions(c));
 authRouter.delete("/sessions/:id", (c) => authController.revokeSession(c));
+
+authRouter.use("/account", authMiddleware);
+authRouter.delete("/account", (c) => authController.deleteAccount(c));
+authRouter.get("/export", authMiddleware, (c) => authController.exportData(c));

@@ -40,10 +40,13 @@ function HomeContent() {
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
   const [activeFilter, setActiveFilter] = useState<"movie" | "series">("movie");
+  const [refreshing, setRefreshing] = useState(false);
   const { data: movies, isLoading } = useCatalog(activeFilter);
 
   const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["catalog"] });
+    setRefreshing(false);
   }, [queryClient]);
 
   if (!isHydrated) {
@@ -101,7 +104,7 @@ function HomeContent() {
       }}
       refreshControl={
         <RefreshControl
-          refreshing={false}
+          refreshing={refreshing}
           onRefresh={handleRefresh}
           tintColor="#00f2ff"
           colors={["#00f2ff"]}

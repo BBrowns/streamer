@@ -5,7 +5,13 @@ import { prisma } from "../../prisma/client.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../config/logger.js";
 import { AppError } from "../../middleware/error.middleware.js";
-import type { AuthTokens, UserProfile } from "@streamer/shared";
+import { emailService } from "../../services/email.service.js";
+import type {
+  AuthTokens,
+  UserProfile,
+  RegisterResponse,
+  LoginResponse,
+} from "@streamer/shared";
 
 /** Maximum failed login attempts before lockout */
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -66,7 +72,7 @@ export class AuthService {
     emailInput: string,
     password: string,
     displayName?: string,
-  ): Promise<{ user: UserProfile; tokens: AuthTokens }> {
+  ): Promise<RegisterResponse> {
     const email = emailInput.toLowerCase().trim();
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -79,21 +85,25 @@ export class AuthService {
       data: { email, passwordHash, displayName },
     });
 
-    const tokens = generateTokens(user.id, user.email);
-
-    // Store refresh token
+    // Email verification
+    const verificationToken = uuidv4();
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setHours(expiresAt.getHours() + 24); // 24h to verify
 
-    await prisma.refreshToken.create({
+    await (prisma as any).emailVerificationToken.create({
       data: {
-        token: tokens.refreshToken,
+        token: verificationToken,
         userId: user.id,
         expiresAt,
       },
     });
 
-    logger.info({ userId: user.id }, "User registered");
+    await emailService.sendVerificationEmail(user.email, verificationToken);
+
+    logger.info(
+      { userId: user.id },
+      "User registered and verification email sent",
+    );
 
     return {
       user: {
@@ -102,7 +112,7 @@ export class AuthService {
         displayName: user.displayName ?? undefined,
         createdAt: user.createdAt.toISOString(),
       },
-      tokens,
+      verificationRequired: true,
     };
   }
 
@@ -128,6 +138,14 @@ export class AuthService {
         "Failed login attempt",
       );
       throw new AppError(401, "Invalid email or password");
+    }
+
+    if (!(user as any).emailVerified) {
+      throw new AppError(
+        403,
+        "Email not verified. Please check your inbox.",
+        "EMAIL_NOT_VERIFIED",
+      );
     }
 
     // Clear failed attempts on successful login
@@ -225,9 +243,11 @@ export class AuthService {
       },
     });
 
+    await emailService.sendPasswordResetEmail(user.email, resetToken);
+
     logger.info(
       { userId: user.id, resetToken },
-      "Password reset token generated",
+      "Password reset token generated and email sent",
     );
 
     return { resetToken };
@@ -307,6 +327,92 @@ export class AuthService {
       email: user.email,
       displayName: user.displayName ?? undefined,
       createdAt: user.createdAt.toISOString(),
+    };
+  }
+
+  async verifyEmail(token: string): Promise<void> {
+    const stored = await (prisma as any).emailVerificationToken.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (!stored) {
+      throw new AppError(400, "Invalid verification token");
+    }
+
+    if (stored.expiresAt < new Date()) {
+      await (prisma as any).emailVerificationToken.delete({
+        where: { id: stored.id },
+      });
+      throw new AppError(400, "Verification token has expired");
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: stored.userId },
+        data: { emailVerified: true } as any,
+      }),
+      (prisma as any).emailVerificationToken.delete({
+        where: { id: stored.id },
+      }),
+    ]);
+
+    logger.info({ userId: stored.userId }, "Email verified successfully");
+  }
+
+  async resendVerification(emailInput: string): Promise<void> {
+    const email = emailInput.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user || (user as any).emailVerified) return;
+
+    // Delete existing tokens
+    await (prisma as any).emailVerificationToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    const verificationToken = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    await (prisma as any).emailVerificationToken.create({
+      data: {
+        token: verificationToken,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    await emailService.sendVerificationEmail(user.email, verificationToken);
+    logger.info({ userId: user.id }, "Verification email resent");
+  }
+
+  async deleteAccount(userId: string): Promise<void> {
+    await prisma.user.delete({ where: { id: userId } });
+    logger.info({ userId }, "User account and all associated data deleted");
+  }
+
+  async exportData(userId: string): Promise<any> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        libraryItems: true,
+        watchProgress: true,
+        addons: true,
+        sessions: true,
+        notifications: true,
+        traktToken: true,
+      },
+    });
+
+    if (!user) throw new AppError(404, "User not found");
+
+    // Clean up sensitive data before export
+    const { passwordHash, ...safeUser } = user;
+
+    return {
+      exportedAt: new Date().toISOString(),
+      user: safeUser,
     };
   }
 }

@@ -7,7 +7,9 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { DeviceEventEmitter } from "react-native";
+import { SearchOverlay } from "../../components/search/SearchOverlay";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { SkeletonRow } from "../../components/ui/SkeletonLoader";
@@ -20,6 +22,7 @@ import { useAddons } from "../../hooks/useAddons";
 import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
 import { HeroBanner } from "../../components/catalog/HeroBanner";
 import { Ionicons } from "@expo/vector-icons";
+import { hapticImpactLight } from "../../lib/haptics";
 
 const FILTERS = [
   { label: "All", type: null },
@@ -37,6 +40,14 @@ function DiscoverContent() {
   const { data: addons, isLoading } = useAddons();
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
+  const [searchVisible, setSearchVisible] = useState(false);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("SHOW_SEARCH", () => {
+      setSearchVisible(true);
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -136,6 +147,14 @@ function DiscoverContent() {
     >
       <OfflineBanner />
 
+      <SearchOverlay
+        isVisible={searchVisible}
+        onClose={() => setSearchVisible(false)}
+        onSearch={(q) => {
+          router.push({ pathname: "/search/results", params: { q } });
+        }}
+      />
+
       {/* Quick Filters */}
       <View style={styles.filterSection}>
         <ScrollView
@@ -150,7 +169,10 @@ function DiscoverContent() {
                 styles.filterChip,
                 activeFilter === f.type && styles.filterChipActive,
               ]}
-              onPress={() => setActiveFilter(f.type)}
+              onPress={() => {
+                hapticImpactLight();
+                setActiveFilter(f.type);
+              }}
             >
               <Text
                 style={[

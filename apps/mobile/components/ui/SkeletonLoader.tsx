@@ -129,7 +129,7 @@ export function SkeletonRow() {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: "#000000", // Darkened for AMOLED
+    backgroundColor: "#1e293b", // Slate grey for better visibility on black
     overflow: "hidden",
   },
   card: {

@@ -13,6 +13,8 @@ import type { LibraryItem } from "@streamer/shared";
 import { useDownloadStore } from "../../stores/downloadStore";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import Animated from "react-native-reanimated";
+import { hapticImpactLight, hapticImpactHeavy } from "../../lib/haptics";
 
 export function LibraryCard({
   item,
@@ -38,6 +40,7 @@ export function LibraryCard({
   const progress = task?.progress || 0;
 
   const handlePress = () => {
+    hapticImpactLight();
     if (isSelectionMode) {
       onToggleSelect(itemId);
     } else {
@@ -46,7 +49,7 @@ export function LibraryCard({
   };
 
   const handleLongPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    hapticImpactHeavy();
     if (isSelectionMode) return;
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -94,12 +97,13 @@ export function LibraryCard({
       accessibilityHint="Opens detail page"
     >
       <View>
-        <Image
+        <Animated.Image
           source={{ uri: item.poster ?? undefined }}
           style={[
             styles.cardImage,
             isSelectionMode && isSelected && styles.cardImageSelected,
           ]}
+          sharedTransitionTag={`poster-${itemId}`}
           accessibilityLabel={`${item.title} poster`}
         />
         {isSelectionMode && (

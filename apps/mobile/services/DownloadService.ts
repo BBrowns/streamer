@@ -4,6 +4,7 @@ import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
 import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
+import { api } from "./api";
 
 class DownloadService {
   private downloadResumables: Record<string, FileSystem.DownloadResumable> = {};
@@ -93,6 +94,19 @@ class DownloadService {
       if (result) {
         setStatus(id, "Completed", result.uri);
         console.log("[DownloadService] Download completed:", result.uri);
+
+        // Notify backend of completion
+        api
+          .post("/api/notifications", {
+            title: "Download Complete",
+            message: `"${mediaInfo.title}" is ready to watch offline!`,
+          })
+          .catch((err) =>
+            console.warn(
+              "[DownloadService] Failed to notify backend of download completion",
+              err,
+            ),
+          );
       }
     } catch (e: any) {
       console.error("[DownloadService] Download failed:", e);

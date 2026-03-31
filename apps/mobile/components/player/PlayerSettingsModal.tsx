@@ -18,6 +18,8 @@ interface PlayerSettingsModalProps {
   subtitles: SubtitleTrack[];
   onSelectAudio: (id: string) => void;
   onSelectSubtitle: (id: string | null) => void;
+  playbackRate: number;
+  onSelectPlaybackRate: (rate: number) => void;
 }
 
 export function PlayerSettingsModal({
@@ -27,6 +29,8 @@ export function PlayerSettingsModal({
   subtitles,
   onSelectAudio,
   onSelectSubtitle,
+  playbackRate,
+  onSelectPlaybackRate,
 }: PlayerSettingsModalProps) {
   return (
     <Modal
@@ -48,8 +52,34 @@ export function PlayerSettingsModal({
             </Pressable>
           </View>
 
+          {/* Playback Speed */}
+          <Text style={styles.sectionTitle}>⏩ Playback Speed</Text>
+          <View style={styles.speedRow}>
+            {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
+              <Pressable
+                key={rate}
+                style={[
+                  styles.speedBtn,
+                  playbackRate === rate && styles.speedBtnActive,
+                ]}
+                onPress={() => onSelectPlaybackRate(rate)}
+              >
+                <Text
+                  style={[
+                    styles.speedBtnText,
+                    playbackRate === rate && styles.speedBtnTextActive,
+                  ]}
+                >
+                  {rate}x
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           {/* Audio Tracks */}
-          <Text style={styles.sectionTitle}>🔊 Audio Tracks</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+            🔊 Audio Tracks
+          </Text>
           {audioTracks.length === 0 ? (
             <Text style={styles.emptyText}>
               No selectable audio tracks — using default.
@@ -167,4 +197,27 @@ const styles = StyleSheet.create({
   trackLabel: { color: "#f8fafc", fontSize: 14, flex: 1 },
   trackLang: { color: "#a1a1aa", fontSize: 12, marginRight: 8 },
   checkIcon: { color: "#818cf8", fontWeight: "bold", fontSize: 16 },
+  speedRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+  },
+  speedBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  speedBtnActive: {
+    backgroundColor: "rgba(129,140,248,0.15)",
+  },
+  speedBtnText: {
+    color: "#a1a1aa",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  speedBtnTextActive: {
+    color: "#818cf8",
+    fontWeight: "bold",
+  },
 });

@@ -14,6 +14,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { api } from "../../services/api";
 import type { InstalledAddon } from "@streamer/shared";
 import { AxiosError } from "axios";
+import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 
 export default function AddonsScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -86,7 +87,10 @@ export default function AddonsScreen() {
               styles.installBtn,
               (!addonUrl || installMutation.isPending) && styles.disabledBtn,
             ]}
-            onPress={() => addonUrl && installMutation.mutate(addonUrl)}
+            onPress={() => {
+              hapticImpactLight();
+              addonUrl && installMutation.mutate(addonUrl);
+            }}
             disabled={!addonUrl || installMutation.isPending}
           >
             {installMutation.isPending ? (
@@ -130,7 +134,8 @@ export default function AddonsScreen() {
                 </View>
                 <Pressable
                   style={styles.removeBtn}
-                  onPress={() =>
+                  onPress={() => {
+                    hapticWarning();
                     Alert.alert(
                       "Uninstall",
                       `Remove "${item.manifest.name}"?`,
@@ -142,8 +147,8 @@ export default function AddonsScreen() {
                           onPress: () => uninstallMutation.mutate(item.id),
                         },
                       ],
-                    )
-                  }
+                    );
+                  }}
                 >
                   <Text style={styles.removeBtnText}>✕</Text>
                 </Pressable>

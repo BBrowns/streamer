@@ -9,3 +9,6 @@ notificationRouter.get("/", (c) => notificationController.getNotifications(c));
 notificationRouter.patch("/:id/read", (c) =>
   notificationController.markAsRead(c),
 );
+notificationRouter.post("/", (c) =>
+  notificationController.createNotification(c),
+);

@@ -2,7 +2,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   ScrollView,
   Pressable,
   ActivityIndicator,
@@ -28,6 +27,7 @@ import type { Stream } from "@streamer/shared";
 import type { MediaInfo } from "../../../stores/playerStore";
 import { useDownloadStore } from "../../../stores/downloadStore";
 import { downloadService } from "../../../services/DownloadService";
+import Animated from "react-native-reanimated";
 import { useCallback, useState, useEffect } from "react";
 import { useToastStore } from "../../../stores/toastStore";
 import { WatchProgressBar } from "../../../components/ui/WatchProgressBar";
@@ -348,9 +348,10 @@ export default function DetailScreen() {
             <Text style={styles.desktopBackText}>Back</Text>
           </Pressable>
           {!!meta.poster && (
-            <Image
+            <Animated.Image
               source={{ uri: meta.poster }}
               style={styles.desktopPoster}
+              sharedTransitionTag={`poster-${id}`}
               resizeMode="cover"
             />
           )}
@@ -381,7 +382,7 @@ export default function DetailScreen() {
         >
           {/* Background art subtle overlay */}
           {!!meta.background && (
-            <Image
+            <Animated.Image
               source={{ uri: meta.background }}
               style={styles.desktopBgArt}
               resizeMode="cover"
@@ -516,15 +517,16 @@ export default function DetailScreen() {
         {/* Full Bleed Backdrop with Gradient */}
         <View style={styles.heroContainer}>
           {!!meta.background ? (
-            <Image
+            <Animated.Image
               source={{ uri: meta.background }}
               style={styles.backdrop}
               resizeMode="cover"
             />
           ) : !!meta.poster ? (
-            <Image
+            <Animated.Image
               source={{ uri: meta.poster }}
               style={styles.backdrop}
+              sharedTransitionTag={`poster-${id}`}
               resizeMode="cover"
             />
           ) : (

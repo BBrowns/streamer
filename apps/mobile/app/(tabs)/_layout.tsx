@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../stores/authStore";
+import { useState } from "react";
+import { useRouter } from "expo-router";
 
 function NotificationBell() {
   const { unreadCount } = useNotifications();
@@ -20,7 +22,6 @@ function NotificationBell() {
   return (
     <Link href={"/notifications" as any} asChild>
       <Pressable
-        style={{ marginRight: 16 }}
         testID="btn-notifications"
         accessibilityRole="button"
         accessibilityLabel={`Notifications, ${unreadCount} unread`}
@@ -35,6 +36,34 @@ function NotificationBell() {
         )}
       </Pressable>
     </Link>
+  );
+}
+
+function HeaderRight() {
+  const router = useRouter();
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 16,
+        marginRight: 16,
+      }}
+    >
+      <Pressable
+        onPress={() => {
+          // Trigger search overlay via global event
+          const { DeviceEventEmitter } = require("react-native");
+          DeviceEventEmitter.emit("SHOW_SEARCH");
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Search"
+      >
+        <Ionicons name="search-outline" size={24} color="#ffffff" />
+      </Pressable>
+      <NotificationBell />
+    </View>
   );
 }
 
@@ -80,7 +109,7 @@ export default function TabLayout() {
         name="discover"
         options={{
           title: "Discover",
-          headerRight: () => <NotificationBell />,
+          headerRight: () => <HeaderRight />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "compass" : "compass-outline"}

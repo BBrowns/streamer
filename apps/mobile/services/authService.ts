@@ -43,4 +43,14 @@ export const authService = {
     const response = await api.patch("/api/auth/profile", data);
     return response.data;
   },
+
+  verifyEmail: async (data: { token: string }) => {
+    const response = await api.post("/api/auth/verify-email", data);
+    return response.data;
+  },
+
+  resendVerification: async (data: { email: string }) => {
+    const response = await api.post("/api/auth/resend-verification", data);
+    return response.data;
+  },
 };

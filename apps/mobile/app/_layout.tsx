@@ -1,5 +1,6 @@
 import { Stack, ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
@@ -22,6 +23,11 @@ import { DesktopLayout } from "../components/ui/DesktopLayout";
 import { useAuthStore } from "../stores/authStore";
 import { ToastContainer } from "../components/ui/ToastContainer";
 import { CommandPalette } from "../components/ui/CommandPalette";
+import { useAuth } from "../hooks/useAuth";
+import { useSync } from "../hooks/useSync";
+import { migrateTokensToSecureStorage } from "../services/secureStorage";
+import { BiometricLockOverlay } from "../components/ui/BiometricLockOverlay";
+import { RemoteControlBar } from "../components/player/RemoteControlBar";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -50,6 +56,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
+  useAuth();
+  useSync();
 
   return (
     <View style={styles.errorContainer}>
@@ -70,6 +78,9 @@ function RootLayout() {
   const { deviceId, setDeviceId } = useAuthStore();
   const [searchOpen, setSearchOpen] = useState(false);
 
+  useAuth();
+  useSync();
+
   useEffect(() => {
     if (!deviceId) {
       const newId =
@@ -80,12 +91,30 @@ function RootLayout() {
   }, [deviceId]);
 
   useEffect(() => {
-    // Restore offline cache then hide splash
-    restoreQueryCache(queryClient)
-      .catch(() => {
-        /* non-critical */
+    // 1. One-time migration from plain AsyncStorage to SecureStore (idempotent)
+    migrateTokensToSecureStorage()
+      .then(() => {
+        // 2. Load tokens into memory from SecureStore
+        return useAuthStore.getState().loadTokensFromSecureStore();
       })
-      .finally(() => SplashScreen.hideAsync().catch(() => {}));
+      .then(() => {
+        // 3. Restore offline cache
+        return restoreQueryCache(queryClient);
+      })
+      .then(async () => {
+        // 4. Check onboarding status
+        const hasSeenOnboarding = await AsyncStorage.getItem(
+          "HAS_SEEN_ONBOARDING",
+        );
+        if (!hasSeenOnboarding) {
+          const { router } = require("expo-router");
+          router.replace("/onboarding");
+        }
+      })
+      .finally(() => {
+        // 5. Hide splash screen once essentials are loaded
+        SplashScreen.hideAsync().catch(() => {});
+      });
 
     // Persist cache when app goes to background
     const sub = AppState.addEventListener("change", (next: AppStateStatus) => {
@@ -122,6 +151,7 @@ function RootLayout() {
         onClose={() => setSearchOpen(false)}
       />
       <ToastContainer />
+      <BiometricLockOverlay />
       <DesktopLayout onSearchOpen={() => setSearchOpen(true)}>
         <Stack
           screenOptions={{
@@ -138,6 +168,10 @@ function RootLayout() {
               title: "",
               headerBackTitle: "Back",
             }}
+          />
+          <Stack.Screen
+            name="onboarding"
+            options={{ headerShown: false, animation: "fade" }}
           />
           <Stack.Screen
             name="login"
@@ -171,6 +205,7 @@ function RootLayout() {
           />
         </Stack>
       </DesktopLayout>
+      <RemoteControlBar />
     </QueryClientProvider>
   );
 }

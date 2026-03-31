@@ -9,7 +9,9 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
+import Animated from "react-native-reanimated";
 import { WatchProgressBar } from "../ui/WatchProgressBar";
+import { hapticImpactLight } from "../../lib/haptics";
 
 function CatalogCardInner({ item }: { item: MetaPreview }) {
   const router = useRouter();
@@ -22,7 +24,10 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
         styles.cardContainer,
         isWeb && isHovered && styles.cardContainerHovered,
       ]}
-      onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
+      onPress={() => {
+        hapticImpactLight();
+        router.push(`/detail/${item.type}/${item.id}`);
+      }}
       onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
       onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
       accessibilityRole="button"
@@ -30,12 +35,13 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
       accessibilityHint="Opens details page"
     >
       <View style={{ position: "relative" }}>
-        <Image
+        <Animated.Image
           source={{ uri: item.poster }}
           style={[
             styles.cardImage,
             isWeb && isHovered && (styles.cardImageHovered as any),
           ]}
+          sharedTransitionTag={`poster-${item.id}`}
           accessibilityIgnoresInvertColors
         />
         <WatchProgressBar itemId={item.id} />
