@@ -146,6 +146,7 @@ export class AuthService {
       },
     });
 
+    // We shouldn't generate notifications in auth.service without device ID context. The `deviceId` is provided by the client when creating a session or logging in? Wait, `login` doesn't take deviceId. The deviceId is handled by the `auth.controller.ts`? Let me look at how session is handled.
     logger.info({ userId: user.id }, "User logged in");
 
     return {

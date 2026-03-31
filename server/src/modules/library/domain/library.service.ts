@@ -54,6 +54,19 @@ export class LibraryService {
     logger.info({ userId, itemId }, "Item removed from library");
   }
 
+  /** Bulk remove items from the library */
+  async removeBulkFromLibrary(
+    userId: string,
+    itemIds: string[],
+  ): Promise<void> {
+    if (!itemIds.length) return;
+    await this.libraryRepo.deleteMany(userId, itemIds);
+    logger.info(
+      { userId, deletedCount: itemIds.length },
+      "Bulk items removed from library",
+    );
+  }
+
   /** Get all library items for a user */
   async getLibrary(userId: string): Promise<LibraryItem[]> {
     const records = await this.libraryRepo.findByUser(userId);

@@ -131,3 +131,47 @@ export function useRemoveFromLibrary() {
     },
   });
 }
+
+/** Bulk remove items from library — with optimistic update */
+export function useRemoveBulkFromLibrary() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      await api.post("/api/library/bulk-remove", { itemIds });
+    },
+
+    onMutate: async (itemIds) => {
+      await queryClient.cancelQueries({ queryKey: libraryKeys.list() });
+
+      const previousItems = queryClient.getQueryData<LibraryItem[]>(
+        libraryKeys.list(),
+      );
+
+      queryClient.setQueryData<LibraryItem[]>(libraryKeys.list(), (old) =>
+        old ? old.filter((i) => !itemIds.includes(i.itemId)) : [],
+      );
+
+      itemIds.forEach((id) => {
+        queryClient.setQueryData(libraryKeys.check(id), false);
+      });
+
+      return { previousItems, itemIds };
+    },
+
+    onError: (_err, _itemIds, context) => {
+      if (context?.previousItems) {
+        queryClient.setQueryData(libraryKeys.list(), context.previousItems);
+      }
+      if (context?.itemIds) {
+        context.itemIds.forEach((id) => {
+          queryClient.setQueryData(libraryKeys.check(id), true);
+        });
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: libraryKeys.all });
+    },
+  });
+}

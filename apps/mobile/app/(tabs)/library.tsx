@@ -12,127 +12,32 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
-import { useLibrary, useRemoveFromLibrary } from "../../hooks/useLibrary";
+import {
+  useLibrary,
+  useRemoveFromLibrary,
+  useRemoveBulkFromLibrary,
+} from "../../hooks/useLibrary";
 import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import type { LibraryItem } from "@streamer/shared";
 import * as Haptics from "expo-haptics";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { Ionicons } from "@expo/vector-icons";
 import { EmptyState } from "../../components/ui/EmptyState";
 
-function LibraryCard({
-  item,
-  onRemove,
-}: {
-  item: LibraryItem;
-  onRemove: (id: string, isDownload?: boolean) => void;
-}) {
-  const router = useRouter();
-  const itemId = item.itemId || item.id;
-
-  // Check download status for this item
-  // Note: We might have multiple streams for one item, but the store usually tracks per-item as well if we simplify.
-  // For now, we'll just check if ANY task for this itemId exists if we were tracking by infoHash.
-  // Actually, for the library view, we'll try to find a task that matches this itemId.
-  const tasks = useDownloadStore((state) => state.tasks);
-  const task = Object.values(tasks).find((t) => t.mediaInfo.itemId === itemId);
-
-  const isDownloading = task?.status === "Downloading";
-  const isCompleted = task?.status === "Completed";
-  const progress = task?.progress || 0;
-
-  const handleLongPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["Cancel", "View Details", "Remove from Library"],
-          destructiveButtonIndex: 2,
-          cancelButtonIndex: 0,
-          title: item.title,
-          message: "What would you like to do?",
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 1) {
-            router.push(`/detail/${item.type}/${itemId}`);
-          } else if (buttonIndex === 2) {
-            onRemove(itemId, !!task);
-          }
-        },
-      );
-    } else {
-      Alert.alert(item.title, "What would you like to do?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "View Details",
-          onPress: () => router.push(`/detail/${item.type}/${itemId}`),
-        },
-        {
-          text: task ? "Remove Download" : "Remove",
-          style: "destructive",
-          onPress: () => onRemove(itemId, !!task),
-        },
-      ]);
-    }
-  };
-
-  return (
-    <Pressable
-      style={styles.cardContainer}
-      onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
-      onLongPress={handleLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.title}. Long press for options`}
-      accessibilityHint="Opens detail page"
-    >
-      <Image
-        source={{ uri: item.poster ?? undefined }}
-        style={styles.cardImage}
-        accessibilityLabel={`${item.title} poster`}
-      />
-      <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <View style={styles.cardTypeRow}>
-          <Ionicons
-            name={item.type === "movie" ? "film-outline" : "tv-outline"}
-            size={11}
-            color="#6b7280"
-          />
-          <Text style={styles.cardSubtitle}>
-            {item.type === "movie" ? "Movie" : "Series"}
-          </Text>
-        </View>
-        {isDownloading && (
-          <View style={styles.progressContainer}>
-            <View
-              style={[styles.progressBar, { width: `${progress * 100}%` }]}
-            />
-          </View>
-        )}
-        {isCompleted && (
-          <View style={styles.downloadBadge}>
-            <Ionicons name="arrow-down-circle" size={13} color="#4ade80" />
-            <Text style={styles.downloadBadgeText}>Offline</Text>
-          </View>
-        )}
-      </View>
-    </Pressable>
-  );
-}
-
+import { LibraryCard } from "../../components/library/LibraryCard";
 export default function LibraryScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const router = useRouter();
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { data: items, isLoading } = useLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
+  const bulkRemoveFromLibrary = useRemoveBulkFromLibrary();
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
   const numColumns = useResponsiveColumns();
@@ -140,10 +45,37 @@ export default function LibraryScreen() {
     "all" | "movie" | "show" | "offline"
   >("all");
 
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Setup header button
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          style={{ marginRight: 16 }}
+          onPress={() => {
+            Haptics.selectionAsync();
+            if (isSelectionMode) {
+              setIsSelectionMode(false);
+              setSelectedIds(new Set());
+            } else {
+              setIsSelectionMode(true);
+            }
+          }}
+        >
+          <Text style={{ color: "#00f2ff", fontSize: 16, fontWeight: "600" }}>
+            {isSelectionMode ? "Cancel" : "Select"}
+          </Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation, isSelectionMode, isAuthenticated]);
+
   const handleRemove = useCallback(
     (itemId: string, isDownload?: boolean) => {
       if (isDownload) {
-        // find task id (which might be infohash)
         const task = Object.values(tasks).find(
           (t) => t.mediaInfo.itemId === itemId,
         );
@@ -157,6 +89,60 @@ export default function LibraryScreen() {
     },
     [removeFromLibrary, tasks],
   );
+
+  const toggleSelect = useCallback((itemId: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    Alert.alert(
+      "Remove Items",
+      `Are you sure you want to remove ${selectedIds.size} items from your library?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => {
+            const idsArray = Array.from(selectedIds);
+
+            // Delete offline downloads if necessary
+            idsArray.forEach((id) => {
+              const task = Object.values(tasks).find(
+                (t) => t.mediaInfo.itemId === id,
+              );
+              if (task) {
+                const {
+                  downloadService,
+                } = require("../../services/DownloadService");
+                downloadService.deleteDownload(task.id);
+              }
+            });
+
+            bulkRemoveFromLibrary.mutate(idsArray, {
+              onSuccess: () => {
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success,
+                );
+                setIsSelectionMode(false);
+                setSelectedIds(new Set());
+              },
+            });
+          },
+        },
+      ],
+    );
+  }, [selectedIds, tasks, bulkRemoveFromLibrary]);
 
   const filteredItems = useMemo(() => {
     if (activeFilter === "offline") {
@@ -328,9 +314,43 @@ export default function LibraryScreen() {
           />
         }
         renderItem={({ item }) => (
-          <LibraryCard item={item} onRemove={handleRemove} />
+          <LibraryCard
+            item={item}
+            onRemove={handleRemove}
+            isSelectionMode={isSelectionMode}
+            isSelected={selectedIds.has(item.itemId || item.id)}
+            onToggleSelect={toggleSelect}
+          />
         )}
       />
+
+      {isSelectionMode && (
+        <View style={styles.floatingActionBar}>
+          <Text style={styles.fabText}>{selectedIds.size} Selected</Text>
+          <Pressable
+            style={[
+              styles.fabButton,
+              selectedIds.size === 0 && styles.fabButtonDisabled,
+            ]}
+            onPress={handleBulkDelete}
+            disabled={selectedIds.size === 0}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={20}
+              color={selectedIds.size === 0 ? "#6b7280" : "#ffffff"}
+            />
+            <Text
+              style={[
+                styles.fabButtonText,
+                selectedIds.size === 0 && styles.fabButtonTextDisabled,
+              ]}
+            >
+              Delete
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -411,50 +431,47 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-  cardTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
-  },
-  cardContainer: {
-    flex: 1,
-    maxWidth: 260,
+  floatingActionBar: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 24 : 16,
+    left: 16,
+    right: 16,
+    backgroundColor: "#ef4444",
     borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#080808",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    minHeight: 44,
-  },
-  cardImage: {
-    width: "100%",
-    aspectRatio: 2 / 3,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  cardInfo: { padding: 8 },
-  cardTitle: { color: "#f8fafc", fontSize: 13, fontWeight: "600" },
-  cardSubtitle: { color: "#94a3b8", fontSize: 11, marginTop: 4 },
-  progressContainer: {
-    height: 3,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 2,
-    marginTop: 8,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#00f2ff",
-  },
-  downloadBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 6,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    shadowColor: "#ef4444",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  downloadBadgeText: {
-    color: "#4ade80",
-    fontSize: 10,
+  fabText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  fabButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  fabButtonDisabled: {
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  fabButtonText: {
+    color: "#ffffff",
     fontWeight: "700",
+    fontSize: 14,
+  },
+  fabButtonTextDisabled: {
+    color: "#6b7280",
   },
 });

@@ -25,6 +25,17 @@ export class LibraryController {
     return new Response(null, { status: 204 });
   }
 
+  async bulkRemove(c: Context) {
+    const body = await c.req.json();
+    const { itemIds } = body as { itemIds: string[] };
+    if (!Array.isArray(itemIds))
+      return c.json({ error: "itemIds must be an array" }, 400);
+
+    const user = c.get("user");
+    await this.service.removeBulkFromLibrary(user.userId, itemIds);
+    return new Response(null, { status: 204 });
+  }
+
   async getLibrary(c: Context) {
     const user = c.get("user");
     const items = await this.service.getLibrary(user.userId);

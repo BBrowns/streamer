@@ -1,6 +1,42 @@
-import { Tabs } from "expo-router";
+import { Tabs, Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Platform, useWindowDimensions } from "react-native";
+import {
+  StyleSheet,
+  Platform,
+  useWindowDimensions,
+  View,
+  Text,
+  Pressable,
+} from "react-native";
+import { useNotifications } from "../../hooks/useNotifications";
+import { useAuthStore } from "../../stores/authStore";
+
+function NotificationBell() {
+  const { unreadCount } = useNotifications();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  if (!isAuthenticated) return null;
+
+  return (
+    <Link href={"/notifications" as any} asChild>
+      <Pressable
+        style={{ marginRight: 16 }}
+        testID="btn-notifications"
+        accessibilityRole="button"
+        accessibilityLabel={`Notifications, ${unreadCount} unread`}
+      >
+        <Ionicons name="notifications-outline" size={24} color="#ffffff" />
+        {unreadCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+    </Link>
+  );
+}
 
 export default function TabLayout() {
   const { width } = useWindowDimensions();
@@ -44,6 +80,7 @@ export default function TabLayout() {
         name="discover"
         options={{
           title: "Discover",
+          headerRight: () => <NotificationBell />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "compass" : "compass-outline"}
@@ -113,5 +150,24 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     height: Platform.OS === "ios" ? 88 : 64,
     paddingTop: 8,
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#010101",
+  },
+  badgeText: {
+    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });

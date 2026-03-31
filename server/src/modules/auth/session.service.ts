@@ -1,6 +1,7 @@
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
 import { AppError } from "../../middleware/error.middleware.js";
+import { NotificationService } from "../notification/notification.service.js";
 
 export class SessionService {
   /**
@@ -15,6 +16,24 @@ export class SessionService {
   ) {
     try {
       const now = new Date();
+
+      // Check for new login to send notification
+      const existingSession = await prisma.activeSession.findUnique({
+        where: { userId_deviceId: { userId, deviceId } },
+      });
+
+      if (!existingSession) {
+        await NotificationService.createNotification(
+          userId,
+          "New Device Login",
+          `A new device just signed into your account. IP: ${ip || "Unknown"}`,
+        ).catch((err) =>
+          logger.error(
+            { err: err.message },
+            "Failed to create new login notification",
+          ),
+        );
+      }
 
       // UPSERT the session
       await prisma.activeSession.upsert({
