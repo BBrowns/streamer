@@ -12,7 +12,7 @@ export class LibraryController {
   async addToLibrary(c: Context) {
     const body = await c.req.json();
     const data = addToLibrarySchema.parse(body);
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const item = await this.service.addToLibrary(user.userId, data);
     return c.json(item, 201);
   }
@@ -20,20 +20,20 @@ export class LibraryController {
   async removeFromLibrary(c: Context) {
     const body = await c.req.json();
     const { itemId } = body;
-    const user = c.get("user") as any;
+    const user = c.get("user");
     await this.service.removeFromLibrary(user.userId, itemId);
     return new Response(null, { status: 204 });
   }
 
   async getLibrary(c: Context) {
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const items = await this.service.getLibrary(user.userId);
     return c.json({ items });
   }
 
   async isInLibrary(c: Context) {
     const itemId = c.req.param("itemId")!;
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const inLibrary = await this.service.isInLibrary(user.userId, itemId);
     return c.json({ inLibrary });
   }
@@ -41,7 +41,7 @@ export class LibraryController {
   async updateProgress(c: Context) {
     const body = await c.req.json();
     const data = updateProgressSchema.parse(body);
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const progress = await this.service.updateProgress(user.userId, data);
     return c.json(progress);
   }
@@ -49,7 +49,7 @@ export class LibraryController {
   async getContinueWatching(c: Context) {
     const limitStr = c.req.query("limit");
     const limit = limitStr ? parseInt(limitStr, 10) : 20;
-    const user = c.get("user") as any;
+    const user = c.get("user");
     const items = await this.service.getContinueWatching(user.userId, limit);
     return c.json({ items });
   }

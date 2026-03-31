@@ -20,7 +20,8 @@ traktRouter.post("/connect", async (c) => {
     code: string;
     redirectUri?: string;
   };
-  const userId = c.get("userId" as any) as string;
+  const user = c.get("user");
+  const userId = user.userId;
 
   if (!code) return c.json({ error: "Code is required" }, 400);
 
@@ -30,14 +31,16 @@ traktRouter.post("/connect", async (c) => {
 
 /** DELETE /api/trakt/disconnect - Disconnect Trakt account */
 traktRouter.delete("/disconnect", async (c) => {
-  const userId = c.get("userId" as any) as string;
+  const user = c.get("user");
+  const userId = user.userId;
   await traktService.disconnectAccount(userId);
   return c.json({ status: "disconnected" });
 });
 
 /** GET /api/trakt/status - Check if Trakt account is connected */
 traktRouter.get("/status", async (c) => {
-  const userId = c.get("userId" as any) as string;
+  const user = c.get("user");
+  const userId = user.userId;
   const token = await traktService.getValidToken(userId);
   return c.json({ connected: !!token });
 });
@@ -46,7 +49,8 @@ traktRouter.get("/status", async (c) => {
 traktRouter.post("/scrobble/:action", async (c) => {
   const action = c.req.param("action") as "start" | "pause" | "stop";
   const data = await c.req.json();
-  const userId = c.get("userId" as any) as string;
+  const user = c.get("user");
+  const userId = user.userId;
 
   if (!["start", "pause", "stop"].includes(action)) {
     return c.json({ error: "Invalid action" }, 400);

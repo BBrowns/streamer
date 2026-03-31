@@ -18,6 +18,7 @@ import { AxiosError } from "axios";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { clearQueryCache } from "../../services/queryPersister";
 import { useTrakt } from "../../hooks/useTrakt";
+import { useSessions } from "../../hooks/useSessions";
 
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
@@ -31,6 +32,15 @@ function SettingsContent() {
     connect,
     disconnect,
   } = useTrakt();
+  const {
+    sessions,
+    isLoading: isSessionsLoading,
+    revokeSession,
+  } = useSessions();
+  const deviceId = useAuthStore((s) => s.deviceId);
+
+  // Active Sessions modal state
+  const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
 
   // Change Password state
   const [pwModalOpen, setPwModalOpen] = useState(false);
@@ -247,6 +257,39 @@ function SettingsContent() {
 
           <Pressable
             style={styles.menuItem}
+            onPress={() => setSessionsModalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="View active sessions"
+            accessibilityHint="Manage devices currently signed into your account"
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color="#34d399"
+                accessibilityElementsHidden
+              />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={styles.menuItemTitle}>Active Sessions</Text>
+              <Text style={styles.menuItemSubtitle}>
+                {isSessionsLoading
+                  ? "Loading…"
+                  : `${sessions.length} device${sessions.length !== 1 ? "s" : ""} signed in`}
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color="#6b7280"
+              accessibilityElementsHidden
+            />
+          </Pressable>
+
+          <View style={styles.spacer} />
+
+          <Pressable
+            style={styles.menuItem}
             onPress={() => {
               setCurrentPw("");
               setNewPw("");
@@ -400,6 +443,85 @@ function SettingsContent() {
           </View>
         </View>
       </Modal>
+
+      {/* Active Sessions Modal */}
+      <Modal
+        visible={sessionsModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSessionsModalOpen(false)}
+      >
+        <View style={styles.modalBg}>
+          <View style={[styles.modalContent, { maxHeight: "75%" }]}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={20}
+                  color="#34d399"
+                />
+                <Text style={styles.modalTitle}>Active Sessions</Text>
+              </View>
+              <Pressable onPress={() => setSessionsModalOpen(false)}>
+                <Text style={styles.modalCancel}>Done</Text>
+              </Pressable>
+            </View>
+            {isSessionsLoading ? (
+              <ActivityIndicator color="#00f2ff" style={{ marginTop: 24 }} />
+            ) : (
+              sessions.map((session) => {
+                const isCurrentDevice = session.deviceId === deviceId;
+                const lastSeen = new Date(session.lastActivity);
+                const diffMs = Date.now() - lastSeen.getTime();
+                const diffMin = Math.floor(diffMs / 60_000);
+                const lastSeenLabel =
+                  diffMin < 1
+                    ? "Just now"
+                    : diffMin < 60
+                      ? `${diffMin}m ago`
+                      : `${Math.floor(diffMin / 60)}h ago`;
+
+                return (
+                  <View key={session.id} style={styles.sessionRow}>
+                    <View style={styles.sessionIconWrap}>
+                      <Ionicons
+                        name="phone-portrait-outline"
+                        size={20}
+                        color={isCurrentDevice ? "#34d399" : "#94a3b8"}
+                      />
+                    </View>
+                    <View style={styles.sessionInfo}>
+                      <Text style={styles.sessionDevice} numberOfLines={1}>
+                        {isCurrentDevice
+                          ? "This device"
+                          : (session.userAgent?.slice(0, 40) ??
+                            "Unknown device")}
+                      </Text>
+                      <Text style={styles.sessionMeta}>
+                        {session.ipAddress ?? "Unknown IP"} · {lastSeenLabel}
+                      </Text>
+                    </View>
+                    {!isCurrentDevice && (
+                      <Pressable
+                        onPress={() => revokeSession(session.id)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Revoke this session"
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color="#ef4444"
+                        />
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -529,4 +651,23 @@ const styles = StyleSheet.create({
   },
   modalButtonText: { color: "#000000", fontWeight: "900", fontSize: 16 },
   opacity50: { opacity: 0.5 },
+  sessionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+    gap: 12,
+  },
+  sessionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "rgba(52, 211, 153, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sessionInfo: { flex: 1 },
+  sessionDevice: { color: "#f8fafc", fontWeight: "600", fontSize: 14 },
+  sessionMeta: { color: "#6b7280", fontSize: 12, marginTop: 2 },
 });

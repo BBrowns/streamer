@@ -9,8 +9,8 @@ export class AggregatorController {
     const search = c.req.query("search");
     const skipStr = c.req.query("skip");
     const skip = skipStr ? parseInt(skipStr, 10) : undefined;
-    const user = c.get("user") as any;
-    const requestId = c.get("requestId") as string;
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
 
     const metas = await aggregatorService.getCatalog(
       user.userId,
@@ -26,8 +26,8 @@ export class AggregatorController {
   async getMeta(c: Context) {
     const type = c.req.param("type") as string;
     const id = c.req.param("id") as string;
-    const user = c.get("user") as any;
-    const requestId = c.get("requestId") as string;
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
 
     const meta = await aggregatorService.getMeta(
       user.userId,
@@ -46,8 +46,8 @@ export class AggregatorController {
   async getStreams(c: Context) {
     const type = c.req.param("type") as string;
     const id = c.req.param("id") as string;
-    const user = c.get("user") as any;
-    const requestId = c.get("requestId") as string;
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
 
     const streams = await aggregatorService.getStreams(
       user.userId,
@@ -63,8 +63,8 @@ export class AggregatorController {
     const type = c.req.param("type")!;
     const id = c.req.param("id")!;
     const infoHash = c.req.param("infoHash")!;
-    const user = c.get("user") as any;
-    const requestId = c.get("requestId");
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
 
     const deviceId = c.req.header("X-Device-Id") || "unknown";
 
@@ -106,8 +106,8 @@ export class AggregatorController {
       return c.json({ error: "type and infoHashes[] are required" }, 400);
     }
 
-    const user = c.get("user") as any;
-    const requestId = c.get("requestId") as string;
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
 
     const deviceId = c.req.header("X-Device-Id") || "unknown";
 
@@ -145,8 +145,8 @@ export class AggregatorController {
     if (!query || query.trim().length === 0) {
       return c.json({ metas: [] });
     }
-    const user = c.get("user") as any;
-    const requestId = c.get("requestId") as string;
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
 
     const metas = await aggregatorService.search(
       user.userId,

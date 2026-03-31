@@ -22,3 +22,7 @@ authRouter.post("/change-password", (c) => authController.changePassword(c));
 
 authRouter.use("/profile", authMiddleware);
 authRouter.patch("/profile", (c) => authController.updateProfile(c));
+
+authRouter.use("/sessions", authMiddleware);
+authRouter.get("/sessions", (c) => authController.getSessions(c));
+authRouter.delete("/sessions/:id", (c) => authController.revokeSession(c));
