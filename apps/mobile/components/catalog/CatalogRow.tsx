@@ -15,34 +15,7 @@ import type {
   CatalogDefinition,
   InstalledAddon,
 } from "@streamer/shared";
-
-function CatalogCard({ item }: { item: MetaPreview }) {
-  const router = useRouter();
-
-  return (
-    <Pressable
-      style={styles.card}
-      onPress={() => router.push(`/detail/${item.type}/${item.id}`)}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
-    >
-      <Image
-        source={{ uri: item.poster }}
-        style={styles.poster}
-        accessibilityLabel={`${item.name} poster`}
-      />
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {item.name}
-      </Text>
-      {!!item.imdbRating && (
-        <Text style={styles.rating}>⭐ {item.imdbRating}</Text>
-      )}
-    </Pressable>
-  );
-}
-
-const MemoizedCard = memo(CatalogCard);
-
+import { CatalogItemCard } from "./CatalogItemCard";
 /** A single horizontal row for one catalog — extracted and memoized */
 function CatalogRowInner({
   catalog,
@@ -78,7 +51,7 @@ function CatalogRowInner({
         }
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.rowScroll}
-        renderItem={({ item }) => <MemoizedCard item={item} />}
+        renderItem={({ item }) => <CatalogItemCard item={item} />}
       />
     </View>
   );
@@ -110,34 +83,5 @@ const styles = StyleSheet.create({
   rowScroll: {
     paddingHorizontal: 16,
     gap: 12,
-  },
-  card: {
-    width: 140,
-    borderRadius: 16,
-    backgroundColor: "#080808",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-    overflow: "hidden",
-  },
-  poster: {
-    width: 140,
-    height: 210,
-    backgroundColor: "#121212",
-  },
-  cardTitle: {
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "800",
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 2,
-    letterSpacing: -0.2,
-  },
-  rating: {
-    color: "#ffd600",
-    fontSize: 11,
-    fontWeight: "800",
-    paddingHorizontal: 10,
-    paddingBottom: 10,
   },
 });

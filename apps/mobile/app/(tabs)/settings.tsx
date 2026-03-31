@@ -19,6 +19,9 @@ import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { clearQueryCache } from "../../services/queryPersister";
 import { useTrakt } from "../../hooks/useTrakt";
 import { useSessions } from "../../hooks/useSessions";
+import { ChangePasswordModal } from "../../components/settings/ChangePasswordModal";
+import { EditProfileModal } from "../../components/settings/EditProfileModal";
+import { ActiveSessionsModal } from "../../components/settings/ActiveSessionsModal";
 
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
@@ -44,73 +47,9 @@ function SettingsContent() {
 
   // Change Password state
   const [pwModalOpen, setPwModalOpen] = useState(false);
-  const [currentPw, setCurrentPw] = useState("");
-  const [newPw, setNewPw] = useState("");
-  const [pwLoading, setPwLoading] = useState(false);
 
   // Edit Profile state
   const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [profileLoading, setProfileLoading] = useState(false);
-
-  const handleChangePassword = async () => {
-    if (!currentPw || newPw.length < 8) {
-      Alert.alert("Error", "New password must be at least 8 characters");
-      return;
-    }
-    setPwLoading(true);
-    try {
-      await api.post("/api/auth/change-password", {
-        currentPassword: currentPw,
-        newPassword: newPw,
-      });
-      Alert.alert("Success", "Password changed successfully");
-      setPwModalOpen(false);
-      setCurrentPw("");
-      setNewPw("");
-    } catch (err: unknown) {
-      const errorMessage =
-        err instanceof AxiosError
-          ? err.response?.data?.error
-          : "Failed to change password";
-      Alert.alert(
-        "Error",
-        (errorMessage as string) || "Failed to change password",
-      );
-    } finally {
-      setPwLoading(false);
-    }
-  };
-
-  const handleUpdateProfile = async () => {
-    setProfileLoading(true);
-    try {
-      const { data } = await api.patch("/api/auth/profile", {
-        displayName: displayName || undefined,
-      });
-      // Update local state
-      if (user) {
-        setAuth(
-          { ...user, displayName: data.user.displayName },
-          useAuthStore.getState().accessToken!,
-          useAuthStore.getState().refreshToken!,
-        );
-      }
-      Alert.alert("Success", "Profile updated");
-      setProfileModalOpen(false);
-    } catch (err: unknown) {
-      const errorMessage =
-        err instanceof AxiosError
-          ? err.response?.data?.error
-          : "Failed to update profile";
-      Alert.alert(
-        "Error",
-        (errorMessage as string) || "Failed to update profile",
-      );
-    } finally {
-      setProfileLoading(false);
-    }
-  };
 
   if (!isAuthenticated) {
     return (
@@ -137,10 +76,7 @@ function SettingsContent() {
         <View style={styles.section}>
           <Pressable
             style={styles.menuItem}
-            onPress={() => {
-              setDisplayName(user?.displayName || "");
-              setProfileModalOpen(true);
-            }}
+            onPress={() => setProfileModalOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={`Edit profile for ${user?.displayName || user?.email}`}
             accessibilityHint="Opens profile editor"
@@ -258,6 +194,7 @@ function SettingsContent() {
           <Pressable
             style={styles.menuItem}
             onPress={() => setSessionsModalOpen(true)}
+            testID="btn-settings-sessions"
             accessibilityRole="button"
             accessibilityLabel="View active sessions"
             accessibilityHint="Manage devices currently signed into your account"
@@ -290,11 +227,7 @@ function SettingsContent() {
 
           <Pressable
             style={styles.menuItem}
-            onPress={() => {
-              setCurrentPw("");
-              setNewPw("");
-              setPwModalOpen(true);
-            }}
+            onPress={() => setPwModalOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="Change password"
             accessibilityHint="Opens password change form"
@@ -339,189 +272,24 @@ function SettingsContent() {
         </Pressable>
       </View>
 
-      {/* Change Password Modal */}
-      <Modal
+      <ChangePasswordModal
         visible={pwModalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPwModalOpen(false)}
-      >
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#818cf8"
-                />
-                <Text style={styles.modalTitle}>Change Password</Text>
-              </View>
-              <Pressable onPress={() => setPwModalOpen(false)}>
-                <Text style={styles.modalCancel}>Cancel</Text>
-              </Pressable>
-            </View>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Current password"
-              placeholderTextColor="#6b7280"
-              value={currentPw}
-              onChangeText={setCurrentPw}
-              secureTextEntry
-              accessibilityLabel="Current password"
-              autoComplete="current-password"
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="New password (min 8 chars)"
-              placeholderTextColor="#6b7280"
-              value={newPw}
-              onChangeText={setNewPw}
-              secureTextEntry
-              accessibilityLabel="New password, minimum 8 characters"
-              autoComplete="new-password"
-            />
-            <Pressable
-              style={[styles.modalButton, pwLoading && styles.opacity50]}
-              onPress={handleChangePassword}
-              disabled={pwLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Update password"
-              accessibilityState={{ disabled: pwLoading }}
-            >
-              {pwLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.modalButtonText}>Update Password</Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setPwModalOpen(false)}
+      />
 
-      {/* Edit Profile Modal */}
-      <Modal
+      <EditProfileModal
         visible={profileModalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setProfileModalOpen(false)}
-      >
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <Ionicons name="pencil-outline" size={20} color="#00f2ff" />
-                <Text style={styles.modalTitle}>Edit Profile</Text>
-              </View>
-              <Pressable onPress={() => setProfileModalOpen(false)}>
-                <Text style={styles.modalCancel}>Cancel</Text>
-              </Pressable>
-            </View>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Display name"
-              placeholderTextColor="#6b7280"
-              value={displayName}
-              onChangeText={setDisplayName}
-              accessibilityLabel="Display name"
-              autoComplete="name"
-            />
-            <Pressable
-              style={[styles.modalButton, profileLoading && styles.opacity50]}
-              onPress={handleUpdateProfile}
-              disabled={profileLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Save profile changes"
-              accessibilityState={{ disabled: profileLoading }}
-            >
-              {profileLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.modalButtonText}>Save</Text>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setProfileModalOpen(false)}
+      />
 
-      {/* Active Sessions Modal */}
-      <Modal
+      <ActiveSessionsModal
         visible={sessionsModalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setSessionsModalOpen(false)}
-      >
-        <View style={styles.modalBg}>
-          <View style={[styles.modalContent, { maxHeight: "75%" }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={20}
-                  color="#34d399"
-                />
-                <Text style={styles.modalTitle}>Active Sessions</Text>
-              </View>
-              <Pressable onPress={() => setSessionsModalOpen(false)}>
-                <Text style={styles.modalCancel}>Done</Text>
-              </Pressable>
-            </View>
-            {isSessionsLoading ? (
-              <ActivityIndicator color="#00f2ff" style={{ marginTop: 24 }} />
-            ) : (
-              sessions.map((session) => {
-                const isCurrentDevice = session.deviceId === deviceId;
-                const lastSeen = new Date(session.lastActivity);
-                const diffMs = Date.now() - lastSeen.getTime();
-                const diffMin = Math.floor(diffMs / 60_000);
-                const lastSeenLabel =
-                  diffMin < 1
-                    ? "Just now"
-                    : diffMin < 60
-                      ? `${diffMin}m ago`
-                      : `${Math.floor(diffMin / 60)}h ago`;
-
-                return (
-                  <View key={session.id} style={styles.sessionRow}>
-                    <View style={styles.sessionIconWrap}>
-                      <Ionicons
-                        name="phone-portrait-outline"
-                        size={20}
-                        color={isCurrentDevice ? "#34d399" : "#94a3b8"}
-                      />
-                    </View>
-                    <View style={styles.sessionInfo}>
-                      <Text style={styles.sessionDevice} numberOfLines={1}>
-                        {isCurrentDevice
-                          ? "This device"
-                          : (session.userAgent?.slice(0, 40) ??
-                            "Unknown device")}
-                      </Text>
-                      <Text style={styles.sessionMeta}>
-                        {session.ipAddress ?? "Unknown IP"} · {lastSeenLabel}
-                      </Text>
-                    </View>
-                    {!isCurrentDevice && (
-                      <Pressable
-                        onPress={() => revokeSession(session.id)}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Revoke this session"
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={18}
-                          color="#ef4444"
-                        />
-                      </Pressable>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setSessionsModalOpen(false)}
+        sessions={sessions as any}
+        isSessionsLoading={isSessionsLoading}
+        deviceId={deviceId}
+        revokeSession={revokeSession}
+      />
     </View>
   );
 }
@@ -603,71 +371,4 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   logoutText: { color: "#ef4444", fontWeight: "600" },
-  modalBg: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#0d0d0d",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 50,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalTitle: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
-  modalTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  modalCancel: { color: "#888888", fontWeight: "800", fontSize: 15 },
-  modalInput: {
-    backgroundColor: "#121212",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: "#ffffff",
-    fontSize: 15,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  modalButton: {
-    backgroundColor: "#00f2ff",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 12,
-    minHeight: 52,
-  },
-  modalButtonText: { color: "#000000", fontWeight: "900", fontSize: 16 },
-  opacity50: { opacity: 0.5 },
-  sessionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
-    gap: 12,
-  },
-  sessionIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: "rgba(52, 211, 153, 0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sessionInfo: { flex: 1 },
-  sessionDevice: { color: "#f8fafc", fontWeight: "600", fontSize: 14 },
-  sessionMeta: { color: "#6b7280", fontSize: 12, marginTop: 2 },
 });
