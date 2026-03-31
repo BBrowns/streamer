@@ -1,5 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { Platform } from "react-native";
+import { Platform, Alert } from "react-native";
 import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
 import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
@@ -17,6 +17,14 @@ class DownloadService {
     if (!downloadUrl) {
       console.error(
         "[DownloadService] Could not resolve playback URI for download",
+      );
+      return;
+    }
+
+    if (downloadUrl.includes(".m3u8") && Platform.OS !== "web") {
+      Alert.alert(
+        "Unsupported Format",
+        "HLS (.m3u8) streams cannot be downloaded natively for offline use. Please select a different playback source.",
       );
       return;
     }
@@ -63,7 +71,7 @@ class DownloadService {
     const localUri = `${downloadDir}${filename}`;
 
     addTask(id, { ...mediaInfo, downloadUrl });
-    setStatus(id, "Downloading");
+    setStatus(id, "Downloading", localUri);
 
     // 3. Setup callback
     const callback = (downloadProgress: FileSystem.DownloadProgressData) => {
@@ -107,9 +115,10 @@ class DownloadService {
     if (resumable) {
       try {
         const pauseResult = await resumable.pauseAsync();
-        // Save the pause result (resume data) if we want bit-perfect resumption later
-        // For now we just set status to Paused
-        useDownloadStore.getState().setStatus(id, "Paused");
+        const resumeData = pauseResult?.resumeData;
+        useDownloadStore
+          .getState()
+          .setStatus(id, "Paused", undefined, undefined, resumeData);
         console.log("[DownloadService] Download paused");
       } catch (e) {
         console.error("[DownloadService] Pause failed:", e);
@@ -118,20 +127,50 @@ class DownloadService {
   }
 
   async resumeDownload(id: string) {
-    const { tasks, setStatus } = useDownloadStore.getState();
+    const { tasks, setStatus, updateProgress } = useDownloadStore.getState();
     const task = tasks[id];
     if (task && task.status === "Paused") {
-      // Re-initialize resumable if needed or use existing
-      // Note: Full resumption requires storing the 'pauseResult.json()' string
-      // For this MVP, we'll just restart if the resumable object is gone,
-      // but ideally we'd store the resume data in the store.
-      const resumable = this.downloadResumables[id];
+      let resumable = this.downloadResumables[id];
+
+      if (!resumable && task.resumeData && task.localUri) {
+        const callback = (
+          downloadProgress: FileSystem.DownloadProgressData,
+        ) => {
+          const progress =
+            downloadProgress.totalBytesWritten /
+            downloadProgress.totalBytesExpectedToWrite;
+          updateProgress(
+            id,
+            progress,
+            downloadProgress.totalBytesWritten,
+            downloadProgress.totalBytesExpectedToWrite,
+          );
+        };
+        resumable = FileSystem.createDownloadResumable(
+          task.mediaInfo.downloadUrl,
+          task.localUri,
+          {},
+          callback,
+          task.resumeData,
+        );
+        this.downloadResumables[id] = resumable;
+      }
+
       if (resumable) {
         setStatus(id, "Downloading");
-        await resumable.resumeAsync();
+        try {
+          const result = await resumable.resumeAsync();
+          if (result) {
+            setStatus(id, "Completed", result.uri);
+            console.log("[DownloadService] Download completed:", result.uri);
+          }
+        } catch (e: any) {
+          console.error("[DownloadService] Resume failed:", e);
+          setStatus(id, "Error", undefined, e.message);
+        } finally {
+          delete this.downloadResumables[id];
+        }
       } else {
-        // If the object is gone (e.g. app restart), we restart for now.
-        // In a real app we'd load the resume data from storage.
         console.warn(
           "[DownloadService] Resumable object lost, restarting download",
         );
