@@ -16,6 +16,7 @@ export interface ILibraryRepository {
     poster?: string | null;
   }): Promise<LibraryItemRecord>;
   delete(userId: string, itemId: string): Promise<void>;
+  deleteMany(userId: string, itemIds: string[]): Promise<void>;
 }
 
 /** Port: Watch progress persistence */

@@ -79,4 +79,13 @@ export class PrismaLibraryRepository implements ILibraryRepository {
       where: { userId_itemId: { userId, itemId } },
     });
   }
+
+  async deleteMany(userId: string, itemIds: string[]): Promise<void> {
+    await prisma.libraryItem.deleteMany({
+      where: {
+        userId,
+        itemId: { in: itemIds },
+      },
+    });
+  }
 }
