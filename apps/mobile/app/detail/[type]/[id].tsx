@@ -181,14 +181,21 @@ export default function DetailScreen() {
     router.push("/player");
   };
 
-  const handleDownloadStream = async (stream: Stream) => {
+  const handleDownloadStream = async (
+    stream: Stream,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => {
     if (!meta) return;
     try {
       await downloadService.startDownload(stream, {
         itemId: id,
         type: castType,
-        title: meta.name,
+        title: episodeTitle ? `${meta.name} - ${episodeTitle}` : meta.name,
         poster: meta.poster,
+        season,
+        episode,
       });
     } catch (e) {
       Alert.alert("Download Error", "Failed to start download.");

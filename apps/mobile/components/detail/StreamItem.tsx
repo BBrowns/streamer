@@ -55,6 +55,15 @@ export function StreamItem({
           {stream.title || stream.name || `Stream ${index + 1}`}
         </Text>
         <View style={styles.streamBadgeRow}>
+          {stream.resolution && (
+            <View style={styles.resBadge}>
+              <Text style={styles.resBadgeText}>
+                {stream.resolution === "2160p"
+                  ? "4K"
+                  : stream.resolution.toUpperCase()}
+              </Text>
+            </View>
+          )}
           <Text style={styles.streamEngine}>
             {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
           </Text>
@@ -127,6 +136,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  resBadge: {
+    backgroundColor: "rgba(0,242,255,0.12)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  resBadgeText: {
+    color: "#00f2ff",
+    fontSize: 10,
+    fontWeight: "800",
   },
   streamEngine: {
     color: "#555555",
