@@ -8,30 +8,49 @@ import {
   ActionSheetIOS,
   Platform,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system";
 import { useDownloadStore, DownloadTask } from "../../stores/downloadStore";
 import { downloadService } from "../../services/DownloadService";
+import { usePlayerStore } from "../../stores/playerStore";
+import { useTranslation } from "react-i18next";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { useTheme } from "../../hooks/useTheme";
+import { useState } from "react";
 
 function DownloadCard({ task }: { task: DownloadTask }) {
   const router = useRouter();
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
   const { mediaInfo, progress, status, id, error } = task;
 
   const handleLongPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const title = mediaInfo.title || "Unknown Download";
+    const title =
+      mediaInfo.title ||
+      t("downloads.unknownTitle", { defaultValue: "Unknown Download" });
     const deleteAction = () => downloadService.deleteDownload(id);
 
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: ["Cancel", "View Details", "Delete Download"],
+          options: [
+            t("common.cancel", { defaultValue: "Cancel" }),
+            t("downloads.actions.viewDetails", {
+              defaultValue: "View Details",
+            }),
+            t("downloads.actions.delete", { defaultValue: "Delete Download" }),
+          ],
           destructiveButtonIndex: 2,
           cancelButtonIndex: 0,
           title,
-          message: "Manage your downloaded media",
+          message: t("downloads.actions.manage", {
+            defaultValue: "Manage your downloaded media",
+          }),
         },
         (buttonIndex) => {
           if (buttonIndex === 1) {
@@ -43,26 +62,69 @@ function DownloadCard({ task }: { task: DownloadTask }) {
         },
       );
     } else {
-      Alert.alert(title, "Manage your downloaded media", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "View Details",
-          onPress: () => {
-            if (mediaInfo.itemId)
-              router.push(`/detail/${mediaInfo.type}/${mediaInfo.itemId}`);
+      Alert.alert(
+        title,
+        t("downloads.actions.manage", {
+          defaultValue: "Manage your downloaded media",
+        }),
+        [
+          {
+            text: t("common.cancel", { defaultValue: "Cancel" }),
+            style: "cancel",
           },
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: deleteAction,
-        },
-      ]);
+          {
+            text: t("downloads.actions.viewDetails", {
+              defaultValue: "View Details",
+            }),
+            onPress: () => {
+              if (mediaInfo.itemId)
+                router.push(`/detail/${mediaInfo.type}/${mediaInfo.itemId}`);
+            },
+          },
+          {
+            text: t("downloads.actions.delete", { defaultValue: "Delete" }),
+            style: "destructive",
+            onPress: deleteAction,
+          },
+        ],
+      );
     }
   };
 
-  const handlePress = () => {
-    if (mediaInfo.itemId) {
+  const handlePress = async () => {
+    if (status === "Completed" && task.localUri) {
+      let fileExists = true;
+
+      if (Platform.OS === "web") {
+        const desktopBridge = (window as any).desktopBridge;
+        if (desktopBridge) {
+          try {
+            fileExists = await desktopBridge.checkFile(task.localUri);
+          } catch (e) {}
+        }
+      } else {
+        try {
+          const info = await FileSystem.getInfoAsync(task.localUri);
+          fileExists = info.exists;
+        } catch (e) {
+          // Ignore and let player fail if there's a problem
+        }
+      }
+
+      if (!fileExists) {
+        Alert.alert(
+          t("downloads.alerts.errorTitle", { defaultValue: "File Missing" }),
+          t("downloads.alerts.errorMessage", {
+            defaultValue: "The downloaded file could not be found.",
+          }),
+        );
+        useDownloadStore.getState().verifyAndClean();
+        return;
+      }
+      const { setStream } = usePlayerStore.getState();
+      setStream({ ...mediaInfo, url: task.localUri }, mediaInfo);
+      router.push("/player");
+    } else if (mediaInfo.itemId) {
       router.push(`/detail/${mediaInfo.type}/${mediaInfo.itemId}`);
     }
   };
@@ -74,18 +136,30 @@ function DownloadCard({ task }: { task: DownloadTask }) {
     } else if (status === "Paused") {
       downloadService.resumeDownload(id);
     } else if (status === "Completed") {
-      handlePress(); // Typically route to player/detail
+      handlePress();
     } else if (status === "Error") {
-      downloadService.resumeDownload(id); // try to restart
+      downloadService.resumeDownload(id);
     }
   };
 
   const progressPercent = (progress * 100).toFixed(0) + "%";
-  const isDownloading = status === "Downloading";
+
+  const statusColor =
+    status === "Completed"
+      ? "#4ade80"
+      : status === "Error"
+        ? (colors.error ?? "#ef4444")
+        : colors.textSecondary;
 
   return (
     <Pressable
-      style={styles.cardContainer}
+      style={[
+        styles.cardContainer,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+      ]}
       onPress={handlePress}
       onLongPress={handleLongPress}
     >
@@ -94,26 +168,42 @@ function DownloadCard({ task }: { task: DownloadTask }) {
         style={styles.cardImage}
       />
       <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {mediaInfo.title || "Video"}
+        <Text
+          style={[styles.cardTitle, { color: colors.text }]}
+          numberOfLines={2}
+        >
+          {mediaInfo.title ||
+            t("downloads.unknownTitle", { defaultValue: "Video" })}
         </Text>
-        <Text style={styles.cardSubtitle}>
+        <Text style={[styles.cardSubtitle, { color: statusColor }]}>
           {status} {status === "Downloading" && `• ${progressPercent}`}
         </Text>
 
         {(status === "Downloading" || status === "Paused") && (
-          <View style={styles.progressBarBg}>
+          <View
+            style={[
+              styles.progressBarBg,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(0,0,0,0.08)",
+              },
+            ]}
+          >
             <View
               style={[
                 styles.progressBarFill,
-                { width: progressPercent as any },
+                { width: progressPercent as any, backgroundColor: colors.tint },
               ]}
             />
           </View>
         )}
 
         {error && (
-          <Text style={styles.errorText} numberOfLines={1}>
+          <Text
+            style={[styles.errorText, { color: colors.error ?? "#ef4444" }]}
+            numberOfLines={1}
+          >
             {error}
           </Text>
         )}
@@ -121,13 +211,13 @@ function DownloadCard({ task }: { task: DownloadTask }) {
 
       <Pressable style={styles.actionBtn} onPress={handleActionablePress}>
         {status === "Downloading" && (
-          <Ionicons name="pause" size={24} color="#00f2ff" />
+          <Ionicons name="pause" size={24} color={colors.tint} />
         )}
         {(status === "Paused" || status === "Error") && (
-          <Ionicons name="play" size={24} color="#00f2ff" />
+          <Ionicons name="play" size={24} color={colors.tint} />
         )}
         {status === "Completed" && (
-          <Ionicons name="checkmark-circle" size={24} color="#00f2ff" />
+          <Ionicons name="checkmark-circle" size={24} color="#4ade80" />
         )}
       </Pressable>
     </Pressable>
@@ -135,15 +225,28 @@ function DownloadCard({ task }: { task: DownloadTask }) {
 }
 
 export default function DownloadsScreen() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
   const tasksDict = useDownloadStore((state) => state.tasks);
-  const tasks = Object.values(tasksDict).reverse(); // newest first
+  const tasks = Object.values(tasksDict).reverse();
   const { clearAll } = useDownloadStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Verify and clean stale download tasks
+    await useDownloadStore.getState().verifyAndClean?.();
+    setRefreshing(false);
+  };
 
   const confirmClearAll = () => {
     if (Platform.OS === "web") {
       if (
         window.confirm(
-          "Are you sure you want to clear your download history? Local browser files must be deleted manually.",
+          t("downloads.alerts.clearAllConfirm", {
+            defaultValue:
+              "Are you sure you want to clear your download history? Local browser files must be deleted manually.",
+          }),
         )
       ) {
         clearAll();
@@ -151,34 +254,57 @@ export default function DownloadsScreen() {
       return;
     }
     Alert.alert(
-      "Clear All Downloads",
-      "Are you sure? This will delete all downloaded files from your device.",
+      t("downloads.alerts.clearAllTitle", {
+        defaultValue: "Clear All Downloads",
+      }),
+      t("downloads.alerts.clearAllMessage", {
+        defaultValue:
+          "Are you sure? This will delete all downloaded files from your device.",
+      }),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear All", style: "destructive", onPress: () => clearAll() },
+        {
+          text: t("common.cancel", { defaultValue: "Cancel" }),
+          style: "cancel",
+        },
+        {
+          text: t("downloads.alerts.clearAllButton", {
+            defaultValue: "Clear All",
+          }),
+          style: "destructive",
+          onPress: () => clearAll(),
+        },
       ],
     );
   };
 
   if (tasks.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="cloud-download-outline" size={64} color="#374151" />
-        <Text style={styles.emptyTitle}>No Downloads</Text>
-        <Text style={styles.emptyText}>
-          Movies and shows you download will appear here.
-        </Text>
-      </View>
+      <EmptyState
+        size="large"
+        icon="cloud-download-outline"
+        title={t("downloads.empty.title", { defaultValue: "No Downloads" })}
+        description={t("downloads.empty.description", {
+          defaultValue: "Movies and shows you download will appear here.",
+        })}
+      />
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.contentWrapper}>
         <View style={styles.headerRow}>
-          <Text style={styles.headerSubtitle}>Manage your offline content</Text>
+          <Text
+            style={[styles.headerSubtitle, { color: colors.textSecondary }]}
+          >
+            {t("downloads.subtitle", {
+              defaultValue: "Manage your offline content",
+            })}
+          </Text>
           <Pressable onPress={confirmClearAll} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>Clear All</Text>
+            <Text style={styles.clearBtnText}>
+              {t("downloads.actions.clearAll", { defaultValue: "Clear All" })}
+            </Text>
           </Pressable>
         </View>
         <FlatList
@@ -186,6 +312,14 @@ export default function DownloadsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <DownloadCard task={item} />}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.tint}
+              colors={[colors.tint]}
+            />
+          }
         />
       </View>
     </View>
@@ -195,7 +329,6 @@ export default function DownloadsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#010101",
   },
   contentWrapper: {
     flex: 1,
@@ -212,7 +345,6 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   headerSubtitle: {
-    color: "#6b7280",
     fontSize: 14,
   },
   clearBtn: {
@@ -223,41 +355,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
   },
-  emptyContainer: {
-    flex: 1,
-    backgroundColor: "#010101",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-  },
-  emptyTitle: {
-    color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginTop: 16,
-  },
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 8,
-  },
   listContent: {
     padding: 16,
     gap: 16,
   },
   cardContainer: {
     flexDirection: "row",
-    backgroundColor: "#080808",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
   cardImage: {
     width: 90,
     height: 135,
-    backgroundColor: "#111",
   },
   cardInfo: {
     flex: 1,
@@ -265,29 +375,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cardTitle: {
-    color: "#ffffff",
     fontSize: 15,
     fontWeight: "600",
     marginBottom: 4,
   },
   cardSubtitle: {
-    color: "#9ca3af",
     fontSize: 13,
     marginBottom: 8,
   },
   progressBarBg: {
     height: 4,
-    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 2,
     marginTop: 4,
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    backgroundColor: "#00f2ff",
+    borderRadius: 2,
   },
   errorText: {
-    color: "#ef4444",
     fontSize: 12,
     marginTop: 4,
   },

@@ -11,10 +11,13 @@ import {
 import { useNotifications } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../stores/authStore";
 import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 function NotificationBell() {
   const { unreadCount } = useNotifications();
+  const { colors } = useTheme();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   if (!isAuthenticated) return null;
@@ -26,9 +29,9 @@ function NotificationBell() {
         accessibilityRole="button"
         accessibilityLabel={`Notifications, ${unreadCount} unread`}
       >
-        <Ionicons name="notifications-outline" size={24} color="#ffffff" />
+        <Ionicons name="notifications-outline" size={24} color={colors.text} />
         {unreadCount > 0 && (
-          <View style={styles.badge}>
+          <View style={[styles.badge, { backgroundColor: colors.error }]}>
             <Text style={styles.badgeText}>
               {unreadCount > 9 ? "9+" : unreadCount}
             </Text>
@@ -41,6 +44,7 @@ function NotificationBell() {
 
 function HeaderRight() {
   const router = useRouter();
+  const { colors } = useTheme();
 
   return (
     <View
@@ -60,7 +64,7 @@ function HeaderRight() {
         accessibilityRole="button"
         accessibilityLabel="Search"
       >
-        <Ionicons name="search-outline" size={24} color="#ffffff" />
+        <Ionicons name="search-outline" size={24} color={colors.text} />
       </Pressable>
       <NotificationBell />
     </View>
@@ -69,21 +73,35 @@ function HeaderRight() {
 
 export default function TabLayout() {
   const { width } = useWindowDimensions();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
-  return (
+  const tabsContent = (
     <Tabs
       screenOptions={{
-        headerStyle: styles.header,
-        headerTintColor: "#ffffff",
+        headerStyle: [
+          styles.header,
+          { backgroundColor: colors.header, borderBottomColor: colors.border },
+        ],
+        headerTintColor: colors.text,
         headerTitleStyle: {
           fontWeight: "800",
           fontSize: 24,
           letterSpacing: -0.5,
         },
-        tabBarStyle: [styles.tabBar, isDesktop && { display: "none" }],
-        tabBarActiveTintColor: "#00f2ff",
-        tabBarInactiveTintColor: "#555555",
+        // Hide header on desktop — the DesktopLayout sidebar handles navigation
+        headerShown: !isDesktop,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: colors.tabBar,
+            borderTopColor: colors.border,
+          },
+          isDesktop && { display: "none" },
+        ],
+        tabBarActiveTintColor: colors.tint,
+        tabBarInactiveTintColor: isDark ? "#555555" : "#94a3b8",
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: "800",
@@ -94,7 +112,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: t("tabs.home"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
@@ -102,13 +120,13 @@ export default function TabLayout() {
               color={color}
             />
           ),
-          tabBarAccessibilityLabel: "Home",
+          tabBarAccessibilityLabel: t("tabs.home"),
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
-          title: "Discover",
+          title: t("tabs.discover"),
           headerRight: () => <HeaderRight />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
@@ -117,13 +135,13 @@ export default function TabLayout() {
               color={color}
             />
           ),
-          tabBarAccessibilityLabel: "Discover",
+          tabBarAccessibilityLabel: t("tabs.discover"),
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
-          title: "Library",
+          title: t("tabs.library"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "bookmark" : "bookmark-outline"}
@@ -131,13 +149,13 @@ export default function TabLayout() {
               color={color}
             />
           ),
-          tabBarAccessibilityLabel: "Library",
+          tabBarAccessibilityLabel: t("tabs.library"),
         }}
       />
       <Tabs.Screen
         name="downloads"
         options={{
-          title: "Downloads",
+          title: t("tabs.downloads"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "cloud-download" : "cloud-download-outline"}
@@ -145,13 +163,13 @@ export default function TabLayout() {
               color={color}
             />
           ),
-          tabBarAccessibilityLabel: "Downloads",
+          tabBarAccessibilityLabel: t("tabs.downloads"),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: t("tabs.settings"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "settings" : "settings-outline"}
@@ -159,11 +177,13 @@ export default function TabLayout() {
               color={color}
             />
           ),
-          tabBarAccessibilityLabel: "Settings",
+          tabBarAccessibilityLabel: t("tabs.settings"),
         }}
       />
     </Tabs>
   );
+
+  return tabsContent;
 }
 
 const styles = StyleSheet.create({
@@ -184,19 +204,48 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -4,
     right: -4,
-    backgroundColor: "#ef4444",
     borderRadius: 10,
     minWidth: 18,
     height: 18,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: "#010101",
   },
   badgeText: {
     color: "#ffffff",
     fontSize: 10,
     fontWeight: "bold",
+  },
+  sidebar: {
+    width: 260,
+    borderRightWidth: 1,
+  },
+  sidebarHeader: {
+    padding: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  sidebarTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  sidebarNav: {
+    paddingHorizontal: 16,
+    gap: 4,
+  },
+  sidebarItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 16,
+    // @ts-ignore Web-only cursor
+    cursor: "pointer",
+  },
+  sidebarItemText: {
+    fontSize: 16,
   },
 });

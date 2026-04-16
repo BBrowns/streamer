@@ -9,15 +9,21 @@ import {
   StyleSheet,
   Switch,
   Platform,
+  ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
+import { useTheme } from "../../hooks/useTheme";
 import { api } from "../../services/api";
 import { Ionicons } from "@expo/vector-icons";
 import { AxiosError } from "axios";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { clearQueryCache } from "../../services/queryPersister";
 import { useTrakt } from "../../hooks/useTrakt";
@@ -31,9 +37,13 @@ import {
   hapticWarning,
   hapticSuccess,
 } from "../../lib/haptics";
+import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import { CollapsibleSection } from "../../components/ui/CollapsibleSection";
 
 function AdvancedSettingsSection() {
+  const { t } = useTranslation();
   const { backendUrl, streamServerUrl, setServerUrls } = useAuthStore();
+  const { colors, isDark } = useTheme();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [tempBackend, setTempBackend] = useState(backendUrl || "");
   const [tempStream, setTempStream] = useState(streamServerUrl || "");
@@ -41,7 +51,10 @@ function AdvancedSettingsSection() {
   const handleSave = () => {
     setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
     hapticSuccess();
-    Alert.alert("Settings Saved", "Your custom server URLs have been updated.");
+    Alert.alert(
+      t("settings.advanced.successTitle"),
+      t("settings.advanced.successMessage"),
+    );
   };
 
   const handleReset = () => {
@@ -54,7 +67,10 @@ function AdvancedSettingsSection() {
   if (!showAdvanced) {
     return (
       <Pressable
-        style={styles.menuItem}
+        style={[
+          styles.menuItem,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
         onPress={() => {
           setShowAdvanced(true);
           hapticSelection();
@@ -69,9 +85,13 @@ function AdvancedSettingsSection() {
           <Ionicons name="options-outline" size={20} color="#f59e0b" />
         </View>
         <View style={styles.menuItemTextContainer}>
-          <Text style={styles.menuItemTitle}>Configure Infrastructure</Text>
-          <Text style={styles.menuItemSubtitle}>
-            Custom backend and stream server URLs
+          <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+            {t("settings.advanced.configure")}
+          </Text>
+          <Text
+            style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+          >
+            {t("settings.advanced.subtitle")}
           </Text>
         </View>
         <Ionicons name="chevron-down" size={18} color="#6b7280" />
@@ -80,57 +100,172 @@ function AdvancedSettingsSection() {
   }
 
   return (
-    <View style={styles.advancedBox}>
+    <View
+      style={[
+        styles.advancedBox,
+        {
+          backgroundColor: colors.card,
+          borderColor: isDark
+            ? "rgba(245, 158, 11, 0.2)"
+            : "rgba(245, 158, 11, 0.4)",
+        },
+      ]}
+    >
       <View style={styles.advancedHeader}>
-        <Text style={styles.advancedTitle}>Infrastructure Overrides</Text>
+        <Text style={[styles.advancedTitle, { color: colors.text }]}>
+          {t("settings.advanced.title")}
+        </Text>
         <Pressable onPress={() => setShowAdvanced(false)}>
-          <Text style={styles.closeAdvanced}>Hide</Text>
+          <Text style={[styles.closeAdvanced, { color: colors.textSecondary }]}>
+            {t("settings.advanced.hide")}
+          </Text>
         </Pressable>
       </View>
 
-      <Text style={styles.inputLabel}>Backend API URL</Text>
+      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+        {t("settings.advanced.backendLabel")}
+      </Text>
       <TextInput
-        style={styles.textInput}
+        style={[
+          styles.textInput,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(0,0,0,0.05)",
+            color: colors.text,
+            borderColor: colors.border,
+          },
+        ]}
         value={tempBackend}
         onChangeText={setTempBackend}
         placeholder="e.g. http://192.168.1.50:3001"
-        placeholderTextColor="#4b5563"
+        placeholderTextColor={colors.textSecondary + "80"}
         autoCapitalize="none"
         autoCorrect={false}
       />
 
-      <Text style={styles.inputLabel}>Streaming Bridge URL</Text>
+      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+        {t("settings.advanced.streamLabel")}
+      </Text>
       <TextInput
-        style={styles.textInput}
+        style={[
+          styles.textInput,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(0,0,0,0.05)",
+            color: colors.text,
+            borderColor: colors.border,
+          },
+        ]}
         value={tempStream}
         onChangeText={setTempStream}
         placeholder="e.g. http://192.168.1.50:11470"
-        placeholderTextColor="#4b5563"
+        placeholderTextColor={colors.textSecondary + "80"}
         autoCapitalize="none"
         autoCorrect={false}
       />
 
       <View style={styles.warningBox}>
         <Ionicons name="warning-outline" size={16} color="#fbbf24" />
-        <Text style={styles.warningText}>
-          Incorrect values will break the app. Leave empty to use defaults.
-        </Text>
+        <Text style={styles.warningText}>{t("settings.advanced.warning")}</Text>
       </View>
 
       <View style={styles.advancedBtns}>
-        <Pressable style={styles.resetBtn} onPress={handleReset}>
-          <Text style={styles.resetBtnText}>Restore Defaults</Text>
+        <Pressable
+          style={[styles.resetBtn, { borderColor: colors.border }]}
+          onPress={handleReset}
+        >
+          <Text style={[styles.resetBtnText, { color: colors.textSecondary }]}>
+            {t("settings.advanced.restore")}
+          </Text>
         </Pressable>
-        <Pressable style={styles.saveBtn} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>Apply Changes</Text>
+        <Pressable
+          style={[styles.saveBtn, { backgroundColor: colors.tint }]}
+          onPress={handleSave}
+        >
+          <Text
+            style={[styles.saveBtnText, { color: isDark ? "#000" : "#fff" }]}
+          >
+            {t("settings.advanced.apply")}
+          </Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
+function AppearanceSection() {
+  const { theme, setTheme } = useAuthStore();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+
+  const options = [
+    {
+      label: t("settings.theme.light"),
+      value: "light" as const,
+      icon: "sunny-outline",
+    },
+    {
+      label: t("settings.theme.dark"),
+      value: "dark" as const,
+      icon: "moon-outline",
+    },
+    {
+      label: t("settings.theme.system"),
+      value: "system" as const,
+      icon: "contrast-outline",
+    },
+  ];
+
+  return (
+    <View style={styles.section}>
+      <SegmentedControl
+        options={options}
+        value={theme}
+        onChange={setTheme}
+        renderIcon={(name, active) => (
+          <Ionicons
+            name={name as any}
+            size={20}
+            color={active ? colors.tint : colors.textSecondary}
+          />
+        )}
+      />
+    </View>
+  );
+}
+
+function LanguageSection() {
+  const { t, i18n } = useTranslation();
+  const currentLang = i18n.language;
+
+  const languages = [
+    { label: "English", value: "en", emoji: "🇺🇸" },
+    { label: "Español", value: "es", emoji: "🇪🇸" },
+    { label: "Nederlands", value: "nl", emoji: "🇳🇱" },
+  ];
+
+  const handleLanguageChange = async (lang: string) => {
+    await i18n.changeLanguage(lang);
+    await AsyncStorage.setItem("user-language", lang);
+  };
+
+  return (
+    <View style={styles.section}>
+      <SegmentedControl
+        options={languages}
+        value={currentLang}
+        onChange={handleLanguageChange}
+      />
+    </View>
+  );
+}
+
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const logout = useAuthStore((s) => s.logout);
   const biometricEnabled = useAuthStore((s) => s.biometricEnabled);
   const setBiometricEnabled = useAuthStore((s) => s.setBiometricEnabled);
@@ -164,6 +299,13 @@ function SettingsContent() {
   const [biometrySupported, setBiometrySupported] = useState(false);
   const [hasCheckedBiometry, setHasCheckedBiometry] = useState(false);
 
+  // Desktop specific state
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const [activePane, setActivePane] = useState<
+    "profile" | "password" | "sessions" | null
+  >(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -196,22 +338,26 @@ function SettingsContent() {
   const handleDeleteAccount = () => {
     hapticWarning();
     Alert.alert(
-      "Delete Account",
-      "Are you absolutely sure? This action is permanent and will delete all your library items, watch history, and settings.",
+      t("settings.alerts.deleteAccountTitle"),
+      t("settings.alerts.deleteAccountMessage"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("library.header.cancel"), style: "cancel" },
         {
-          text: "Delete Everything",
+          text: t("settings.alerts.deleteAccountButton"),
           style: "destructive",
           onPress: () => {
-            Alert.alert("Final Confirmation", "Type 'DELETE' to confirm.", [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "DELETE",
-                style: "destructive",
-                onPress: () => deleteAccount.mutate(),
-              },
-            ]);
+            Alert.alert(
+              t("settings.alerts.deleteAccountConfirmTitle"),
+              t("settings.alerts.deleteAccountConfirmMessage"),
+              [
+                { text: t("library.header.cancel"), style: "cancel" },
+                {
+                  text: "DELETE",
+                  style: "destructive",
+                  onPress: () => deleteAccount.mutate(),
+                },
+              ],
+            );
           },
         },
       ],
@@ -220,30 +366,94 @@ function SettingsContent() {
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.unauthContainer}>
-        <Text style={styles.unauthText} accessibilityRole="text">
-          Sign in to manage settings
-        </Text>
-        <Pressable
-          style={styles.signInButton}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Sign in to your account"
-        >
-          <Text style={styles.signInText}>Sign In</Text>
-        </Pressable>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <EmptyState
+          size="large"
+          icon="settings-outline"
+          title={t("settings.auth.title", { defaultValue: "Settings" })}
+          description={t("settings.auth.manageSettings")}
+          actionLabel={t("settings.auth.signIn")}
+          onAction={() => router.push("/login")}
+        />
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.contentWrapper}>
-        {/* User Info */}
+  const handleProfilePress = () => {
+    if (isDesktop) setActivePane("profile");
+    else setProfileModalOpen(true);
+  };
+
+  const handleSessionsPress = () => {
+    if (isDesktop) setActivePane("sessions");
+    else setSessionsModalOpen(true);
+  };
+
+  const handlePasswordPress = () => {
+    if (isDesktop) setActivePane("password");
+    else setPwModalOpen(true);
+  };
+
+  const renderModals = () => (
+    <>
+      <ChangePasswordModal
+        visible={isDesktop ? activePane === "password" : pwModalOpen}
+        onClose={() =>
+          isDesktop ? setActivePane(null) : setPwModalOpen(false)
+        }
+        inline={isDesktop}
+      />
+      <EditProfileModal
+        visible={isDesktop ? activePane === "profile" : profileModalOpen}
+        onClose={() =>
+          isDesktop ? setActivePane(null) : setProfileModalOpen(false)
+        }
+        inline={isDesktop}
+      />
+      <ActiveSessionsModal
+        visible={isDesktop ? activePane === "sessions" : sessionsModalOpen}
+        onClose={() =>
+          isDesktop ? setActivePane(null) : setSessionsModalOpen(false)
+        }
+        sessions={sessions as any}
+        isSessionsLoading={isSessionsLoading}
+        deviceId={deviceId}
+        revokeSession={revokeSession}
+        inline={isDesktop}
+      />
+    </>
+  );
+
+  const MasterList = (
+    <ScrollView
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, flex: 1 },
+      ]}
+      contentContainerStyle={[styles.contentWrapper, { paddingBottom: 40 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Profile */}
+      <CollapsibleSection
+        title={t("settings.sections.account", { defaultValue: "Account" })}
+        icon="person-outline"
+        iconColor="#818cf8"
+        iconBg="rgba(129,140,248,0.15)"
+        defaultExpanded
+      >
         <View style={styles.section}>
           <Pressable
-            style={styles.menuItem}
-            onPress={() => setProfileModalOpen(true)}
+            style={[
+              styles.menuItem,
+              {
+                backgroundColor: colors.card,
+                borderColor:
+                  isDesktop && activePane === "profile"
+                    ? colors.tint
+                    : colors.border,
+              },
+            ]}
+            onPress={handleProfilePress}
             accessibilityRole="button"
           >
             <View style={styles.avatar}>
@@ -252,28 +462,77 @@ function SettingsContent() {
               </Text>
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
                 {user?.displayName || user?.email}
               </Text>
-              <Text style={styles.menuItemSubtitle}>{user?.email}</Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {user?.email}
+              </Text>
             </View>
             <Ionicons name="pencil" size={16} color="#6b7280" />
           </Pressable>
         </View>
+      </CollapsibleSection>
 
-        {/* Menu Items */}
+      {/* Appearance */}
+      <CollapsibleSection
+        title={t("settings.appearance")}
+        icon="color-palette-outline"
+        iconColor="#f472b6"
+        iconBg="rgba(244,114,182,0.15)"
+        defaultExpanded
+      >
+        <AppearanceSection />
+      </CollapsibleSection>
+
+      {/* Language */}
+      <CollapsibleSection
+        title={t("settings.language")}
+        icon="language-outline"
+        iconColor="#60a5fa"
+        iconBg="rgba(96,165,250,0.15)"
+        defaultExpanded={false}
+      >
+        <LanguageSection />
+      </CollapsibleSection>
+
+      {/* Integrations */}
+      <CollapsibleSection
+        title={t("settings.sections.integrations", {
+          defaultValue: "Integrations",
+        })}
+        icon="extension-puzzle-outline"
+        iconColor="#00f2ff"
+        iconBg="rgba(0,242,255,0.1)"
+        defaultExpanded={false}
+      >
         <View style={styles.section}>
           <Pressable
-            style={styles.menuItem}
+            style={[
+              styles.menuItem,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
             onPress={() => router.push("/addons")}
           >
             <View style={styles.iconContainer}>
               <Ionicons name="extension-puzzle" size={20} color="#00f2ff" />
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>Manage Add-ons</Text>
-              <Text style={styles.menuItemSubtitle}>
-                Install and remove content sources
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                {t("settings.items.manageAddons")}
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {t("settings.subtitles.manageAddons")}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#6b7280" />
@@ -282,17 +541,20 @@ function SettingsContent() {
           <View style={styles.spacer} />
 
           <Pressable
-            style={styles.menuItem}
+            style={[
+              styles.menuItem,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
             onPress={
               connected
                 ? () => {
                     Alert.alert(
-                      "Disconnect Trakt",
-                      "Are you sure you want to unlink your Trakt.tv account?",
+                      t("settings.alerts.traktDisconnectTitle"),
+                      t("settings.alerts.traktDisconnectMessage"),
                       [
-                        { text: "Cancel", style: "cancel" },
+                        { text: t("library.header.cancel"), style: "cancel" },
                         {
-                          text: "Disconnect",
+                          text: t("settings.alerts.traktDisconnectButton"),
                           style: "destructive",
                           onPress: () => disconnect(),
                         },
@@ -303,37 +565,78 @@ function SettingsContent() {
             }
             disabled={isTraktLoading}
           >
-            <View style={styles.iconContainer}>
+            <View
+              style={[
+                styles.iconContainer,
+                {
+                  backgroundColor: connected
+                    ? "rgba(237, 28, 36, 0.1)"
+                    : colors.border,
+                },
+              ]}
+            >
               <Ionicons
                 name="tv-outline"
                 size={20}
-                color={connected ? "#ed1c24" : "#94a3b8"}
+                color={connected ? "#ed1c24" : colors.textSecondary}
               />
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>Trakt.tv</Text>
-              <Text style={styles.menuItemSubtitle}>
-                {connected ? "Connected" : "Sync watch history across devices"}
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                {t("settings.items.trakt")}
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {connected
+                  ? t("settings.subtitles.traktConnected")
+                  : t("settings.subtitles.traktDisconnected")}
               </Text>
             </View>
             {isTraktLoading ? (
-              <ActivityIndicator size="small" color="#6b7280" />
+              <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
               <Ionicons
                 name={connected ? "checkmark-circle" : "chevron-forward"}
                 size={18}
-                color={connected ? "#10b981" : "#6b7280"}
+                color={connected ? "#10b981" : colors.textSecondary}
               />
             )}
           </Pressable>
+        </View>
+      </CollapsibleSection>
 
-          <View style={styles.spacer} />
-
+      {/* Security */}
+      <CollapsibleSection
+        title={t("settings.sections.security", { defaultValue: "Security" })}
+        icon="shield-outline"
+        iconColor="#34d399"
+        iconBg="rgba(52,211,153,0.1)"
+        defaultExpanded={false}
+      >
+        <View style={styles.section}>
           <Pressable
-            style={styles.menuItem}
-            onPress={() => setSessionsModalOpen(true)}
+            style={[
+              styles.menuItem,
+              {
+                backgroundColor: colors.card,
+                borderColor:
+                  isDesktop && activePane === "sessions"
+                    ? colors.tint
+                    : colors.border,
+              },
+            ]}
+            onPress={handleSessionsPress}
           >
-            <View style={styles.iconContainer}>
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: "rgba(52, 211, 153, 0.1)" },
+              ]}
+            >
               <Ionicons
                 name="shield-checkmark-outline"
                 size={20}
@@ -341,38 +644,81 @@ function SettingsContent() {
               />
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>Active Sessions</Text>
-              <Text style={styles.menuItemSubtitle}>
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                {t("settings.items.activeSessions")}
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
                 {isSessionsLoading
                   ? "Loading…"
-                  : `${sessions.length} device${sessions.length !== 1 ? "s" : ""} signed in`}
+                  : t("settings.subtitles.activeSessions", {
+                      count: sessions.length,
+                    })}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
           </Pressable>
 
           <View style={styles.spacer} />
 
           <Pressable
-            style={styles.menuItem}
-            onPress={() => setPwModalOpen(true)}
+            style={[
+              styles.menuItem,
+              {
+                backgroundColor: colors.card,
+                borderColor:
+                  isDesktop && activePane === "password"
+                    ? colors.tint
+                    : colors.border,
+              },
+            ]}
+            onPress={handlePasswordPress}
           >
-            <View style={styles.iconContainer}>
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: "rgba(129, 140, 248, 0.1)" },
+              ]}
+            >
               <Ionicons name="lock-closed" size={20} color="#818cf8" />
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>Change Password</Text>
-              <Text style={styles.menuItemSubtitle}>
-                Update your account password
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                {t("settings.items.changePassword")}
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {t("settings.subtitles.changePassword")}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
           </Pressable>
 
           {hasCheckedBiometry && biometrySupported && (
             <>
               <View style={styles.spacer} />
-              <View style={styles.menuItem}>
+              <View
+                style={[
+                  styles.menuItem,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
                 <View
                   style={[
                     styles.iconContainer,
@@ -386,27 +732,47 @@ function SettingsContent() {
                   />
                 </View>
                 <View style={styles.menuItemTextContainer}>
-                  <Text style={styles.menuItemTitle}>Biometric Unlock</Text>
-                  <Text style={styles.menuItemSubtitle}>
-                    Require Face ID / Touch ID to open the app
+                  <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                    {t("settings.items.biometricUnlock")}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {t("settings.subtitles.biometricUnlock")}
                   </Text>
                 </View>
                 <Switch
                   value={biometricEnabled}
                   onValueChange={handleToggleBiometrics}
-                  trackColor={{ false: "#374151", true: "#818cf8" }}
-                  thumbColor="#fbbf24"
+                  trackColor={{
+                    false: isDark ? "#374151" : "#e2e8f0",
+                    true: colors.tint,
+                  }}
+                  thumbColor={biometricEnabled ? "#fff" : "#f1f5f9"}
                 />
               </View>
             </>
           )}
         </View>
+      </CollapsibleSection>
 
-        {/* Privacy & Data */}
-        <Text style={styles.sectionHeader}>Privacy & Data</Text>
+      {/* Privacy */}
+      <CollapsibleSection
+        title={t("settings.sections.privacy")}
+        icon="lock-closed-outline"
+        iconColor="#fb923c"
+        iconBg="rgba(251,146,60,0.1)"
+        defaultExpanded={false}
+      >
         <View style={styles.section}>
           <Pressable
-            style={styles.menuItem}
+            style={[
+              styles.menuItem,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
             onPress={() => {
               hapticSelection();
               exportData.mutate();
@@ -416,91 +782,145 @@ function SettingsContent() {
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: "rgba(56, 189, 248, 0.15)" },
+                { backgroundColor: "rgba(56, 189, 248, 0.1)" },
               ]}
             >
               <Ionicons name="download-outline" size={20} color="#38bdf8" />
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>Export My Data</Text>
-              <Text style={styles.menuItemSubtitle}>
-                Download a copy of your library and settings
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                {t("settings.items.exportData")}
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {t("settings.subtitles.exportData")}
               </Text>
             </View>
             {exportData.isPending ? (
-              <ActivityIndicator size="small" color="#6b7280" />
+              <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
-              <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textSecondary}
+              />
             )}
           </Pressable>
 
           <View style={styles.spacer} />
 
           <Pressable
-            style={styles.menuItem}
+            style={[
+              styles.menuItem,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
             onPress={handleDeleteAccount}
             disabled={deleteAccount.isPending}
           >
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: "rgba(239, 68, 68, 0.15)" },
+                { backgroundColor: "rgba(239, 68, 68, 0.1)" },
               ]}
             >
               <Ionicons name="trash-outline" size={20} color="#f87171" />
             </View>
             <View style={styles.menuItemTextContainer}>
-              <Text style={styles.menuItemTitle}>Delete Account</Text>
-              <Text style={styles.menuItemSubtitle}>
-                Permanently remove your account and all data
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                {t("settings.items.deleteAccount")}
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {t("settings.subtitles.deleteAccount")}
               </Text>
             </View>
             {deleteAccount.isPending ? (
-              <ActivityIndicator size="small" color="#6b7280" />
+              <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
-              <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textSecondary}
+              />
             )}
           </Pressable>
         </View>
+      </CollapsibleSection>
 
-        {/* Advanced Settings */}
-        <Text style={styles.sectionHeader}>Advanced</Text>
+      {/* Advanced */}
+      <CollapsibleSection
+        title={t("settings.sections.advanced")}
+        icon="options-outline"
+        iconColor="#f59e0b"
+        iconBg="rgba(245,158,11,0.1)"
+        defaultExpanded={false}
+      >
         <AdvancedSettingsSection />
+      </CollapsibleSection>
 
-        {/* Logout */}
-        <View style={styles.flexSpacer} />
-        <Pressable
-          style={styles.logoutButton}
-          onPress={() => {
-            logout();
-            queryClient.clear();
-            clearQueryCache();
-          }}
-        >
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </Pressable>
-      </View>
+      {/* Logout */}
+      <Pressable
+        style={styles.logoutButton}
+        onPress={() => {
+          logout();
+          queryClient.clear();
+          clearQueryCache();
+        }}
+      >
+        <Text style={styles.logoutText}>{t("settings.auth.signOut")}</Text>
+      </Pressable>
 
-      <ChangePasswordModal
-        visible={pwModalOpen}
-        onClose={() => setPwModalOpen(false)}
-      />
-
-      <EditProfileModal
-        visible={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-      />
-
-      <ActiveSessionsModal
-        visible={sessionsModalOpen}
-        onClose={() => setSessionsModalOpen(false)}
-        sessions={sessions as any}
-        isSessionsLoading={isSessionsLoading}
-        deviceId={deviceId}
-        revokeSession={revokeSession}
-      />
-    </View>
+      {!isDesktop && renderModals()}
+    </ScrollView>
   );
+
+  if (isDesktop) {
+    return (
+      <View style={styles.desktopContainer}>
+        <View style={styles.desktopLeftPane}>{MasterList}</View>
+        <View
+          style={[
+            styles.desktopRightPane,
+            { backgroundColor: colors.card, borderLeftColor: colors.border },
+          ]}
+        >
+          {activePane ? (
+            <View style={styles.desktopRightPaneContent}>{renderModals()}</View>
+          ) : (
+            <View style={styles.desktopPlaceholder}>
+              <Ionicons
+                name="settings-outline"
+                size={48}
+                color={colors.textSecondary}
+                style={{ opacity: 0.3 }}
+              />
+              <Text
+                style={[
+                  styles.desktopPlaceholderText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {t(
+                  "settings.desktopPlaceholder",
+                  "Select a setting to view details",
+                )}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  return MasterList;
 }
 
 export default function SettingsScreen() {
@@ -512,59 +932,67 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  unauthContainer: {
-    flex: 1,
-    backgroundColor: "#050510",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  unauthText: { color: "#94a3b8", marginBottom: 16 },
-  signInButton: {
-    backgroundColor: "#818cf8",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  signInText: { color: "#ffffff", fontWeight: "bold" },
-  container: { flex: 1, backgroundColor: "#050510", padding: 16 },
+  container: { flex: 1, padding: 16 },
   contentWrapper: {
-    flex: 1,
+    flexGrow: 1,
     width: "100%",
     maxWidth: 600,
     alignSelf: "center",
+  },
+  desktopContainer: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  desktopLeftPane: {
+    width: 400,
+    maxWidth: "40%",
+    height: "100%",
+  },
+  desktopRightPane: {
+    flex: 1,
+    height: "100%",
+    borderLeftWidth: 1,
+  },
+  desktopRightPaneContent: {
+    flex: 1,
+    padding: 24,
+  },
+  desktopPlaceholder: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+  },
+  desktopPlaceholderText: {
+    fontSize: 16,
+    fontWeight: "500",
+    opacity: 0.8,
   },
   section: { marginBottom: 24 },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#080808",
     borderRadius: 16,
     padding: 16,
     minHeight: 64,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
   },
   avatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#00f2ff",
+    backgroundColor: "#6366f1",
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarText: { color: "#000000", fontSize: 24, fontWeight: "900" },
+  avatarText: { color: "#ffffff", fontSize: 24, fontWeight: "900" },
   menuItemTextContainer: { flex: 1, marginLeft: 12 },
-  menuItemTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 16 },
-  menuItemSubtitle: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
+  menuItemTitle: { fontWeight: "bold", fontSize: 16 },
+  menuItemSubtitle: { fontSize: 12, marginTop: 2 },
   iconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 8,
-    backgroundColor: "rgba(129, 140, 248, 0.15)",
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -574,25 +1002,28 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239, 68, 68, 0.1)",
     borderWidth: 1,
     borderColor: "rgba(239, 68, 68, 0.3)",
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: "center",
-    minHeight: 48,
+    minHeight: 56,
+    marginBottom: 20,
   },
-  logoutText: { color: "#ef4444", fontWeight: "600" },
+  logoutText: {
+    color: "#ef4444",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
   sectionHeader: {
-    color: "#ffffff",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
     marginTop: 8,
   },
   advancedBox: {
-    backgroundColor: "#080808",
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: "rgba(245, 158, 11, 0.2)",
     marginBottom: 24,
   },
   advancedHeader: {
@@ -601,7 +1032,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  advancedTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 16 },
+  advancedTitle: { fontWeight: "bold", fontSize: 16 },
   closeAdvanced: { color: "#94a3b8", fontSize: 13 },
   inputLabel: {
     color: "#94a3b8",
@@ -610,12 +1041,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   textInput: {
-    backgroundColor: "#111",
     borderRadius: 10,
     padding: 12,
-    color: "#fff",
     borderWidth: 1,
-    borderColor: "#222",
     marginBottom: 16,
     fontSize: 14,
   },
@@ -650,4 +1078,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveBtnText: { color: "#000", fontWeight: "bold", fontSize: 13 },
+  appearanceGrid: {
+    flexDirection: "row",
+    padding: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+  },
+  appearanceBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
+    gap: 4,
+  },
+  appearanceText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
 });

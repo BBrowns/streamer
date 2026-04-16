@@ -6,27 +6,50 @@ import {
   FlatList,
   Image,
   Pressable,
+  Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useContinueWatching } from "../../hooks/useContinueWatching";
 import { usePlayerStore } from "../../stores/playerStore";
+import { useTheme } from "../../hooks/useTheme";
 import type { WatchProgress } from "@streamer/shared";
 
 /** Progress bar showing how far through the content */
 function ProgressBar({ current, total }: { current: number; total: number }) {
   const pct = total > 0 ? Math.min((current / total) * 100, 100) : 0;
+  const { colors, isDark } = useTheme();
+
   return (
-    <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width: `${pct}%` }]} />
+    <View
+      style={[
+        styles.progressTrack,
+        {
+          backgroundColor: isDark
+            ? "rgba(255, 255, 255, 0.1)"
+            : "rgba(0, 0, 0, 0.05)",
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.progressFill,
+          { width: `${pct}%`, backgroundColor: colors.tint },
+        ]}
+      />
     </View>
   );
 }
 
 function ContinueWatchingCard({ item }: { item: WatchProgress }) {
   const router = useRouter();
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const cardWidth = isDesktop ? 300 : 220;
+  const posterHeight = isDesktop ? 170 : 124;
 
   const handlePress = () => {
-    // Navigate to the detail page for this item
     router.push(`/detail/${item.type}/${item.itemId}`);
   };
 
@@ -34,25 +57,48 @@ function ContinueWatchingCard({ item }: { item: WatchProgress }) {
 
   return (
     <Pressable
-      style={styles.card}
+      style={({ hovered }: any) => [
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          width: cardWidth,
+        },
+        Platform.OS === "web" &&
+          hovered && {
+            borderColor: colors.tint,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+          },
+      ]}
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`Continue watching ${item.title}, ${remainingMinutes} minutes remaining`}
       accessibilityHint="Opens the detail page to resume playback"
     >
-      <View style={styles.posterContainer}>
+      <View
+        style={[
+          styles.posterContainer,
+          { width: cardWidth, height: posterHeight },
+        ]}
+      >
         <Image
           source={{ uri: item.poster ?? undefined }}
-          style={styles.poster}
+          style={{ width: cardWidth, height: posterHeight }}
           accessibilityLabel={`${item.title} poster`}
         />
         <ProgressBar current={item.currentTime} total={item.duration} />
       </View>
       <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
+        <Text
+          style={[styles.cardTitle, { color: colors.text }]}
+          numberOfLines={1}
+        >
           {item.title}
         </Text>
-        <Text style={styles.cardSub}>
+        <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
           {remainingMinutes}m left
           {item.season != null && item.episode != null
             ? ` · S${item.season}E${item.episode}`
@@ -72,6 +118,7 @@ import { Ionicons } from "@expo/vector-icons";
 /** Continue Watching horizontal row for the Discover/Home screen */
 export function ContinueWatchingRow() {
   const { data: items, isLoading } = useContinueWatching();
+  const { colors } = useTheme();
 
   if (isLoading || !items || items.length === 0) return null;
 
@@ -79,12 +126,20 @@ export function ContinueWatchingRow() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleWithIcon}>
-          <Ionicons name="play-circle-outline" size={22} color="#00f2ff" />
-          <Text style={styles.sectionTitle}>Continue Watching</Text>
+          <Ionicons name="play-circle-outline" size={22} color={colors.tint} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Continue Watching
+          </Text>
         </View>
         <Pressable style={styles.seeAllBtn}>
-          <Text style={styles.seeAllText}>See All</Text>
-          <Ionicons name="chevron-forward" size={14} color="#6b7280" />
+          <Text style={[styles.seeAllText, { color: colors.textSecondary }]}>
+            See All
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={14}
+            color={colors.textSecondary}
+          />
         </Pressable>
       </View>
       <FlatList
@@ -118,7 +173,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: "#ffffff",
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.5,
@@ -129,7 +183,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   seeAllText: {
-    color: "#6b7280",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -138,22 +191,15 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   card: {
-    width: 240, // Increased width for desktop look
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#0a0a14",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-  },
+    // @ts-ignore web-only
+    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+    cursor: Platform.OS === "web" ? "pointer" : undefined,
+  } as any,
   posterContainer: {
-    width: 240,
-    height: 135, // 16:9 ratio
-    backgroundColor: "#121212",
     position: "relative",
-  },
-  poster: {
-    width: 240,
-    height: 135,
   },
   progressTrack: {
     position: "absolute",
@@ -161,23 +207,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   progressFill: {
     height: 3,
-    backgroundColor: "#00f2ff",
     borderRadius: 2,
   },
   cardInfo: {
     padding: 12,
   },
   cardTitle: {
-    color: "#e2e8f0",
     fontSize: 14,
     fontWeight: "700",
   },
   cardSub: {
-    color: "#94a3b8",
     fontSize: 12,
     fontWeight: "500",
     marginTop: 4,

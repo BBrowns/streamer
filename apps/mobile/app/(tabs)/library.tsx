@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useRouter, useNavigation } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
+import { useTranslation } from "react-i18next";
 import {
   useLibrary,
   useRemoveFromLibrary,
@@ -28,6 +29,7 @@ import * as Haptics from "expo-haptics";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { Ionicons } from "@expo/vector-icons";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { useTheme } from "../../hooks/useTheme";
 
 import { LibraryCard } from "../../components/library/LibraryCard";
 import {
@@ -35,15 +37,18 @@ import {
   SkeletonRow,
 } from "../../components/ui/SkeletonLoader";
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
+import { FilterChipBar } from "../../components/ui/FilterChipBar";
 
 export default function LibraryScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const router = useRouter();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
+  const { colors, isDark } = useTheme();
   const { data: items, isLoading } = useLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
   const bulkRemoveFromLibrary = useRemoveBulkFromLibrary();
+  const { t } = useTranslation();
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
   const numColumns = useResponsiveColumns();
@@ -71,8 +76,10 @@ export default function LibraryScreen() {
             }
           }}
         >
-          <Text style={{ color: "#00f2ff", fontSize: 16, fontWeight: "600" }}>
-            {isSelectionMode ? "Cancel" : "Select"}
+          <Text style={{ color: colors.tint, fontSize: 16, fontWeight: "600" }}>
+            {isSelectionMode
+              ? t("library.header.cancel")
+              : t("library.header.select")}
           </Text>
         </Pressable>
       ),
@@ -112,12 +119,12 @@ export default function LibraryScreen() {
   const handleBulkDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
     Alert.alert(
-      "Remove Items",
-      `Are you sure you want to remove ${selectedIds.size} items from your library?`,
+      t("library.alerts.bulkDeleteTitle"),
+      t("library.alerts.bulkDeleteMessage", { count: selectedIds.size }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("library.header.cancel"), style: "cancel" },
         {
-          text: "Remove",
+          text: t("library.fab.delete"),
           style: "destructive",
           onPress: () => {
             const idsArray = Array.from(selectedIds);
@@ -164,32 +171,32 @@ export default function LibraryScreen() {
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.authContainer}>
-        <Ionicons
-          name="bookmarks-outline"
-          size={56}
-          color="#374151"
-          style={{ marginBottom: 16 }}
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <EmptyState
+          size="large"
+          icon="bookmarks-outline"
+          title={t("library.auth.title")}
+          description={t("library.auth.subtitle")}
+          actionLabel={t("library.auth.button")}
+          onAction={() => router.push("/login")}
         />
-        <Text style={styles.authTitle}>Your Library</Text>
-        <Text style={styles.authSubtitle}>
-          Sign in to access your watchlist
-        </Text>
-        <Pressable
-          style={styles.signInButton}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Sign in"
-        >
-          <Text style={styles.signInButtonText}>Sign In</Text>
-        </Pressable>
       </View>
     );
   }
 
+  // Simple helper for button text contrast
+  function takesInverseColor(hex: string) {
+    return isDark ? "#000000" : "#ffffff";
+  }
+
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
           <SkeletonRow />
         </View>
@@ -199,7 +206,7 @@ export default function LibraryScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         key={numColumns} // Force remount cleanly when numColumns changes
         data={filteredItems as any[]}
@@ -210,100 +217,29 @@ export default function LibraryScreen() {
         ListHeaderComponent={
           <>
             <ContinueWatchingRow />
-            <View style={styles.filterContainer}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScroll}
-              >
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "all" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("all");
-                    hapticSelection();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "all" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    All
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "movie" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("movie");
-                    hapticSelection();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "movie" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Movies
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "show" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("show");
-                    hapticSelection();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "show" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Series
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "offline" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("offline");
-                    hapticSelection();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "offline" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Offline
-                  </Text>
-                </Pressable>
-              </ScrollView>
-            </View>
+            <FilterChipBar
+              options={[
+                { label: t("library.filters.all"), value: "all" },
+                { label: t("library.filters.movies"), value: "movie" },
+                { label: t("library.filters.series"), value: "show" },
+                { label: t("library.filters.offline"), value: "offline" },
+              ]}
+              value={activeFilter}
+              onChange={(v) => setActiveFilter(v as typeof activeFilter)}
+              containerStyle={{ marginTop: 12, marginBottom: 4 }}
+            />
           </>
         }
         ListEmptyComponent={
           <EmptyState
             icon="bookmarks-outline"
-            title="No Items Yet"
+            title={t("library.empty.title")}
             description={
               activeFilter === "all"
-                ? "Browse the Discover tab and add movies & shows to your library."
-                : `No saved ${activeFilter === "movie" ? "movies" : "series"} found.`
+                ? t("library.empty.description")
+                : activeFilter === "movie"
+                  ? t("library.empty.noMovies")
+                  : t("library.empty.noSeries")
             }
           />
         }
@@ -334,7 +270,9 @@ export default function LibraryScreen() {
 
       {isSelectionMode && (
         <View style={styles.floatingActionBar}>
-          <Text style={styles.fabText}>{selectedIds.size} Selected</Text>
+          <Text style={styles.fabText}>
+            {t("library.fab.selected", { count: selectedIds.size })}
+          </Text>
           <Pressable
             style={[
               styles.fabButton,
@@ -354,7 +292,7 @@ export default function LibraryScreen() {
                 selectedIds.size === 0 && styles.fabButtonTextDisabled,
               ]}
             >
-              Delete
+              {t("library.fab.delete")}
             </Text>
           </Pressable>
         </View>
@@ -364,46 +302,13 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050510" },
-  authContainer: {
-    flex: 1,
-    backgroundColor: "#050510",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
-  },
-  authIcon: { fontSize: 48, marginBottom: 12 },
-  authTitle: {
-    color: "#f8fafc",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  authSubtitle: {
-    color: "#94a3b8",
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  signInButton: {
-    backgroundColor: "#00f2ff",
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 14,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  signInButtonText: { color: "#000000", fontWeight: "900", fontSize: 15 },
+  container: { flex: 1 },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#050510",
   },
   columnWrapper: { paddingHorizontal: 12, gap: 10, marginBottom: 10 },
   listContent: { paddingBottom: 24 },
-  filterContainer: { marginBottom: 16 },
+  filterContainer: { marginTop: 12, marginBottom: 16 },
   filterScroll: { paddingHorizontal: 16, gap: 8 },
   filterChip: {
     backgroundColor: "rgba(0, 242, 255, 0.1)",
@@ -414,28 +319,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 242, 255, 0.2)",
   },
   filterChipActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
-  filterChipText: { color: "#888888", fontSize: 13, fontWeight: "800" },
+  filterChipText: { fontSize: 13, fontWeight: "800" },
   filterChipTextActive: { color: "#000000" },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 64,
-    paddingHorizontal: 32,
-  },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: {
-    color: "#f8fafc",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    color: "#94a3b8",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-  },
+
   floatingActionBar: {
     position: "absolute",
     bottom: Platform.OS === "ios" ? 24 : 16,
