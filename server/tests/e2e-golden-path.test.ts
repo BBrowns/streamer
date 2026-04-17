@@ -36,6 +36,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const { prisma } = await import("../src/prisma/client.js");
+  await new Promise((resolve) => setTimeout(resolve, 50));
   if (prisma) await prisma.$disconnect();
 });
 

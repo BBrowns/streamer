@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Hono } from "express";
+import { Hono } from "hono";
 import { request } from "./test-utils.js";
 import { createApp } from "../src/app.js";
 
@@ -15,6 +15,11 @@ vi.mock("../src/prisma/client.js", () => ({
       findUnique: vi.fn(),
       delete: vi.fn(),
     },
+    emailVerificationToken: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+    },
     installedAddon: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -24,6 +29,7 @@ vi.mock("../src/prisma/client.js", () => ({
     },
     $connect: vi.fn(),
     $disconnect: vi.fn(),
+    $queryRaw: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
   },
 }));
 
@@ -81,6 +87,7 @@ describe("Auth Module", () => {
         displayName: "Test User",
         createdAt: new Date(),
         updatedAt: new Date(),
+        emailVerified: true,
       };
 
       (prisma.user.findUnique as any).mockResolvedValue(null);
@@ -137,6 +144,7 @@ describe("Auth Module", () => {
         passwordHash,
         displayName: null,
         createdAt: new Date(),
+        emailVerified: true,
       });
       (prisma.refreshToken.create as any).mockResolvedValue({});
 
@@ -154,6 +162,7 @@ describe("Auth Module", () => {
         id: "user-1",
         email: "test@example.com",
         passwordHash,
+        emailVerified: true,
       });
 
       const res = await request(app)
