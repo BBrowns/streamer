@@ -20,6 +20,7 @@ export interface DownloadTask {
   id: string; // unique ID, e.g., the media stream URL or a UUID
   mediaInfo: DownloadMediaItem;
   localUri?: string; // final local file path
+  resumeData?: string;
   progress: number; // 0 to 1
   status: DownloadStatus;
   error?: string;
@@ -42,6 +43,7 @@ interface DownloadState {
     status: DownloadStatus,
     localUri?: string,
     error?: string,
+    resumeData?: string,
   ) => void;
   removeTask: (id: string) => void;
   isDownloaded: (id: string) => boolean;
@@ -89,7 +91,7 @@ export const useDownloadStore = create<DownloadState>()(
             },
           };
         }),
-      setStatus: (id, status, localUri, error) =>
+      setStatus: (id, status, localUri, error, resumeData) =>
         set((state) => {
           const task = state.tasks[id];
           if (!task) return state;
@@ -101,6 +103,7 @@ export const useDownloadStore = create<DownloadState>()(
                 status,
                 localUri: localUri ?? task.localUri,
                 error,
+                resumeData: resumeData ?? task.resumeData,
               },
             },
           };

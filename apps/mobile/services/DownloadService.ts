@@ -1,5 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { Platform } from "react-native";
+import { Platform, Alert } from "react-native";
 import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
 import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
@@ -20,6 +20,14 @@ class DownloadService {
         console.error(
           "[DownloadService] Could not resolve playback URI for download",
         );
+      return;
+    }
+
+    if (downloadUrl.includes(".m3u8") && Platform.OS !== "web") {
+      Alert.alert(
+        "Unsupported Format",
+        "HLS (.m3u8) streams cannot be downloaded natively for offline use. Please select a different playback source.",
+      );
       return;
     }
 
@@ -115,7 +123,7 @@ class DownloadService {
     const localUri = `${downloadDir}${filename}`;
 
     addTask(id, { ...mediaInfo, downloadUrl });
-    setStatus(id, "Downloading");
+    setStatus(id, "Downloading", localUri);
 
     // 3. Setup callback
     const callback = (downloadProgress: FileSystem.DownloadProgressData) => {
@@ -173,11 +181,11 @@ class DownloadService {
     if (resumable) {
       try {
         const pauseResult = await resumable.pauseAsync();
-        if (pauseResult.resumeData) {
-          useDownloadStore.getState().setResumeData(id, pauseResult.resumeData);
-        }
-        useDownloadStore.getState().setStatus(id, "Paused");
-        if (__DEV__) console.log("[DownloadService] Download paused");
+        const resumeData = pauseResult?.resumeData;
+        useDownloadStore
+          .getState()
+          .setStatus(id, "Paused", undefined, undefined, resumeData);
+        console.log("[DownloadService] Download paused");
       } catch (e) {
         if (__DEV__) console.error("[DownloadService] Pause failed:", e);
       }
@@ -188,20 +196,15 @@ class DownloadService {
     const { tasks, setStatus, updateProgress } = useDownloadStore.getState();
     const task = tasks[id];
     if (task && task.status === "Paused") {
-      const resumable = this.downloadResumables[id];
-      if (resumable) {
-        setStatus(id, "Downloading");
-        await resumable.resumeAsync();
-      } else if (task.resumeData && task.localUri) {
-        // Construct a new callback (same as in startDownload)
+      let resumable = this.downloadResumables[id];
+
+      if (!resumable && task.resumeData && task.localUri) {
         const callback = (
           downloadProgress: FileSystem.DownloadProgressData,
         ) => {
           const progress =
-            downloadProgress.totalBytesExpectedToWrite > 0
-              ? downloadProgress.totalBytesWritten /
-                downloadProgress.totalBytesExpectedToWrite
-              : 0;
+            downloadProgress.totalBytesWritten /
+            downloadProgress.totalBytesExpectedToWrite;
           updateProgress(
             id,
             progress,
@@ -209,24 +212,29 @@ class DownloadService {
             downloadProgress.totalBytesExpectedToWrite,
           );
         };
-        // Re-initialize resumable with stored data
-        const newResumable = FileSystem.createDownloadResumable(
+        resumable = FileSystem.createDownloadResumable(
           task.mediaInfo.downloadUrl,
           task.localUri,
           {},
           callback,
           task.resumeData,
         );
-        this.downloadResumables[id] = newResumable;
+        this.downloadResumables[id] = resumable;
+      }
+
+      if (resumable) {
         setStatus(id, "Downloading");
         try {
-          const result = await newResumable.resumeAsync();
+          const result = await resumable.resumeAsync();
           if (result) {
             setStatus(id, "Completed", result.uri);
+            console.log("[DownloadService] Download completed:", result.uri);
           }
         } catch (e: any) {
-          if (__DEV__) console.error("[DownloadService] Resume failed:", e);
+          console.error("[DownloadService] Resume failed:", e);
           setStatus(id, "Error", undefined, e.message);
+        } finally {
+          delete this.downloadResumables[id];
         }
       } else {
         if (__DEV__)

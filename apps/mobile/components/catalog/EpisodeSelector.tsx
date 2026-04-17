@@ -14,6 +14,7 @@ import { useEpisodeStreams } from "../../hooks/useEpisodeStreams";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
+import { StreamItem } from "../detail/StreamItem";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ function EpisodeStreamList({
   episode: number;
   episodeTitle: string;
   onPlayStream: (stream: Stream, episodeTitle: string) => void;
-  onDownloadStream: (stream: Stream) => void;
+  onDownloadStream: (stream: Stream, episodeTitle: string) => void;
 }) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
@@ -183,92 +184,13 @@ function EpisodeStreamList({
         const progress = task?.progress || 0;
 
         return (
-          <Pressable
+          <StreamItem
             key={key}
-            style={[
-              styles.streamCard,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.04)"
-                  : "rgba(0,0,0,0.03)",
-                borderColor: isDark
-                  ? "rgba(255,255,255,0.07)"
-                  : "rgba(0,0,0,0.07)",
-              },
-            ]}
-            onPress={() => {
-              hapticImpactLight();
-              onPlayStream(stream, episodeTitle);
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[styles.streamTitle, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {stream.title || stream.name || `Stream ${i + 1}`}
-              </Text>
-              <View style={styles.streamMeta}>
-                {stream.resolution && (
-                  <View
-                    style={[
-                      styles.resBadge,
-                      {
-                        backgroundColor: isDark
-                          ? "rgba(0,242,255,0.12)"
-                          : "rgba(99,102,241,0.12)",
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.resBadgeText, { color: colors.tint }]}>
-                      {stream.resolution === "2160p"
-                        ? "4K"
-                        : stream.resolution.toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                {stream.seeders !== undefined && (
-                  <Text
-                    style={[styles.seederText, { color: colors.textSecondary }]}
-                  >
-                    👥 {stream.seeders}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-            >
-              <Pressable
-                style={{ padding: 4 }}
-                onPress={() => {
-                  hapticImpactLight();
-                  onDownloadStream(stream);
-                }}
-                disabled={isCompleted}
-              >
-                {isDownloading || task?.status === "Paused" ? (
-                  <Text
-                    style={{
-                      color: colors.tint,
-                      fontSize: 12,
-                      fontWeight: "900",
-                    }}
-                  >
-                    {(progress * 100).toFixed(0)}%
-                  </Text>
-                ) : (
-                  <Ionicons
-                    name={isCompleted ? "cloud-offline" : "download-outline"}
-                    size={22}
-                    color={isCompleted ? "#4ade80" : colors.tint}
-                  />
-                )}
-              </Pressable>
-              <Ionicons name="play-circle" size={28} color={colors.tint} />
-            </View>
-          </Pressable>
+            stream={stream}
+            index={i}
+            onPress={() => onPlayStream(stream, episodeTitle)}
+            onDownload={() => onDownloadStream(stream, episodeTitle)}
+          />
         );
       })}
     </View>
@@ -425,10 +347,10 @@ export const EpisodeSelector = memo(function EpisodeSelector({
               selectedEpisode.episode,
             )
           }
-          onDownloadStream={(stream) =>
+          onDownloadStream={(stream, title) =>
             onDownloadStream(
               stream,
-              selectedEpisode.title,
+              title,
               selectedEpisode.season,
               selectedEpisode.episode,
             )
@@ -527,35 +449,5 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 4,
     paddingLeft: 4,
-  },
-  streamCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-  },
-  streamTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  streamMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  resBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  resBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  seederText: {
-    fontSize: 11,
   },
 });
