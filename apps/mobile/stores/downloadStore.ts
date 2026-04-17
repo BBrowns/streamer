@@ -26,7 +26,6 @@ export interface DownloadTask {
   error?: string;
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
-  resumeData?: string;
 }
 
 interface DownloadState {

@@ -46,7 +46,7 @@ export function PlayerOverlay({
         pointerEvents="auto"
       >
         <Pressable
-          style={({ hovered }) => [
+          style={({ hovered }: any) => [
             styles.closeButton,
             { backgroundColor: colors.tint + "15" },
             hovered && {
@@ -75,7 +75,7 @@ export function PlayerOverlay({
           )}
           {Platform.OS === "web" && onWebCast && (
             <Pressable
-              style={({ hovered }) => [
+              style={({ hovered }: any) => [
                 styles.iconButton,
                 { backgroundColor: colors.tint + "15" },
                 hovered && {
@@ -92,7 +92,7 @@ export function PlayerOverlay({
           )}
           {isPiPSupported && onTogglePiP && (
             <Pressable
-              style={({ hovered }) => [
+              style={({ hovered }: any) => [
                 styles.iconButton,
                 { backgroundColor: colors.tint + "15" },
                 hovered && {
@@ -112,7 +112,7 @@ export function PlayerOverlay({
             </Pressable>
           )}
           <Pressable
-            style={({ hovered }) => [
+            style={({ hovered }: any) => [
               styles.iconButton,
               { backgroundColor: colors.tint + "15" },
               hovered && {

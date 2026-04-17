@@ -111,7 +111,7 @@ export default function RegisterScreen() {
         />
 
         <Pressable
-          style={({ pressed, hovered }) => [
+          style={({ pressed, hovered }: any) => [
             styles.registerButton,
             { backgroundColor: colors.tint },
             isLoading && styles.registerButtonDisabled,
@@ -136,7 +136,7 @@ export default function RegisterScreen() {
         </Pressable>
 
         <Pressable
-          style={({ hovered }) => [hovered && { opacity: 0.7 }]}
+          style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
           onPress={() => router.replace("/login")}
         >
           <Text

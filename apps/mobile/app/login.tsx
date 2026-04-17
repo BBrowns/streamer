@@ -93,7 +93,7 @@ export default function LoginScreen() {
         />
 
         <Pressable
-          style={({ pressed, hovered }) => [
+          style={({ pressed, hovered }: any) => [
             styles.loginButton,
             { backgroundColor: colors.tint },
             isLoading && styles.loginButtonDisabled,
@@ -118,7 +118,7 @@ export default function LoginScreen() {
         </Pressable>
 
         <Pressable
-          style={({ hovered }) => [hovered && { opacity: 0.7 }]}
+          style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
           onPress={() => router.push("/forgot-password")}
         >
           <Text
@@ -133,7 +133,7 @@ export default function LoginScreen() {
         <View style={styles.spacer} />
 
         <Pressable
-          style={({ hovered }) => [hovered && { opacity: 0.7 }]}
+          style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
           onPress={() => router.replace("/register")}
         >
           <Text

@@ -143,7 +143,7 @@ export default function AddonsScreen() {
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
               <Pressable
-                style={({ hovered }) => [
+                style={({ hovered }: any) => [
                   styles.addonCard,
                   {
                     backgroundColor: colors.card,
@@ -194,7 +194,7 @@ export default function AddonsScreen() {
                   </Text>
                 </View>
                 <Pressable
-                  style={({ hovered }) => [
+                  style={({ hovered }: any) => [
                     styles.removeBtn,
                     { backgroundColor: "rgba(239, 68, 68, 0.1)" },
                     hovered && {

@@ -22,7 +22,7 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
   return (
     <Pressable
       // @ts-ignore web-only
-      dataSet={{ catalogCard: true }}
+      {...({ dataSet: { catalogCard: true } } as any)}
       style={({ hovered, pressed }: any) => [
         styles.cardContainer,
         { backgroundColor: colors.card, borderColor: colors.border },
@@ -48,7 +48,7 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
         {isWeb && (
           // @ts-ignore web-only
           <View
-            dataSet={{ hoverOverlay: true }}
+            {...({ dataSet: { hoverOverlay: true } } as any)}
             style={styles.hoverOverlayWrap}
           >
             <View style={styles.hoverOverlayContent}>
