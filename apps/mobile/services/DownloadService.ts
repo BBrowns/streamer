@@ -16,9 +16,10 @@ class DownloadService {
     // 1. Resolve playback URI
     const downloadUrl = await streamEngineManager.getPlaybackUri(stream);
     if (!downloadUrl) {
-      console.error(
-        "[DownloadService] Could not resolve playback URI for download",
-      );
+      if (__DEV__)
+        console.error(
+          "[DownloadService] Could not resolve playback URI for download",
+        );
       return;
     }
 
@@ -34,8 +35,57 @@ class DownloadService {
 
     const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
 
-    // WEB IMPLEMENTATION: Trigger browser native download popup
+    // WEB/DESKTOP IMPLEMENTATION
     if (Platform.OS === "web") {
+      const desktopBridge = (window as any).desktopBridge;
+
+      if (desktopBridge) {
+        addTask(id, { ...mediaInfo, downloadUrl });
+        setStatus(id, "Downloading");
+
+        const unsubscribe = desktopBridge.onDownloadProgress((data: any) => {
+          if (data.id === id) {
+            const progress =
+              data.totalBytesExpectedToWrite > 0
+                ? data.totalBytesWritten / data.totalBytesExpectedToWrite
+                : 0;
+            updateProgress(
+              id,
+              progress,
+              data.totalBytesWritten,
+              data.totalBytesExpectedToWrite,
+            );
+          }
+        });
+
+        try {
+          const localUri = await desktopBridge.downloadMedia(
+            id,
+            downloadUrl,
+            filename,
+          );
+          unsubscribe();
+          setStatus(id, "Completed", localUri);
+          if (__DEV__)
+            console.log(
+              "[DownloadService] Desktop download completed:",
+              localUri,
+            );
+
+          api
+            .post("/api/notifications", {
+              title: "Download Complete",
+              message: `"${mediaInfo.title}" is ready to watch offline!`,
+            })
+            .catch((err) => console.warn("Failed to ping completion", err));
+        } catch (e: any) {
+          unsubscribe();
+          setStatus(id, "Error", undefined, e.message);
+        }
+        return;
+      }
+
+      // Native Browser Fallback
       try {
         const link = document.createElement("a");
         link.href = downloadUrl;
@@ -46,7 +96,8 @@ class DownloadService {
 
         // We can't track perfect granular progress natively via link clicks, just mark it completed
         addTask(id, { ...mediaInfo, downloadUrl });
-        setStatus(id, "Completed", downloadUrl);
+        // Setting localUri to undefined since Web doesn't store a local file accessible to Expo FileSystem
+        setStatus(id, "Completed", undefined);
       } catch (e: any) {
         setStatus(id, "Error", undefined, e.message);
       }
@@ -93,7 +144,8 @@ class DownloadService {
       const result = await downloadResumable.downloadAsync();
       if (result) {
         setStatus(id, "Completed", result.uri);
-        console.log("[DownloadService] Download completed:", result.uri);
+        if (__DEV__)
+          console.log("[DownloadService] Download completed:", result.uri);
 
         // Notify backend of completion
         api
@@ -109,7 +161,7 @@ class DownloadService {
           );
       }
     } catch (e: any) {
-      console.error("[DownloadService] Download failed:", e);
+      if (__DEV__) console.error("[DownloadService] Download failed:", e);
       setStatus(id, "Error", undefined, e.message);
     } finally {
       delete this.downloadResumables[id];
@@ -121,34 +173,66 @@ class DownloadService {
     if (resumable) {
       try {
         const pauseResult = await resumable.pauseAsync();
-        // Save the pause result (resume data) if we want bit-perfect resumption later
-        // For now we just set status to Paused
+        if (pauseResult.resumeData) {
+          useDownloadStore.getState().setResumeData(id, pauseResult.resumeData);
+        }
         useDownloadStore.getState().setStatus(id, "Paused");
-        console.log("[DownloadService] Download paused");
+        if (__DEV__) console.log("[DownloadService] Download paused");
       } catch (e) {
-        console.error("[DownloadService] Pause failed:", e);
+        if (__DEV__) console.error("[DownloadService] Pause failed:", e);
       }
     }
   }
 
   async resumeDownload(id: string) {
-    const { tasks, setStatus } = useDownloadStore.getState();
+    const { tasks, setStatus, updateProgress } = useDownloadStore.getState();
     const task = tasks[id];
     if (task && task.status === "Paused") {
-      // Re-initialize resumable if needed or use existing
-      // Note: Full resumption requires storing the 'pauseResult.json()' string
-      // For this MVP, we'll just restart if the resumable object is gone,
-      // but ideally we'd store the resume data in the store.
       const resumable = this.downloadResumables[id];
       if (resumable) {
         setStatus(id, "Downloading");
         await resumable.resumeAsync();
-      } else {
-        // If the object is gone (e.g. app restart), we restart for now.
-        // In a real app we'd load the resume data from storage.
-        console.warn(
-          "[DownloadService] Resumable object lost, restarting download",
+      } else if (task.resumeData && task.localUri) {
+        // Construct a new callback (same as in startDownload)
+        const callback = (
+          downloadProgress: FileSystem.DownloadProgressData,
+        ) => {
+          const progress =
+            downloadProgress.totalBytesExpectedToWrite > 0
+              ? downloadProgress.totalBytesWritten /
+                downloadProgress.totalBytesExpectedToWrite
+              : 0;
+          updateProgress(
+            id,
+            progress,
+            downloadProgress.totalBytesWritten,
+            downloadProgress.totalBytesExpectedToWrite,
+          );
+        };
+        // Re-initialize resumable with stored data
+        const newResumable = FileSystem.createDownloadResumable(
+          task.mediaInfo.downloadUrl,
+          task.localUri,
+          {},
+          callback,
+          task.resumeData,
         );
+        this.downloadResumables[id] = newResumable;
+        setStatus(id, "Downloading");
+        try {
+          const result = await newResumable.resumeAsync();
+          if (result) {
+            setStatus(id, "Completed", result.uri);
+          }
+        } catch (e: any) {
+          if (__DEV__) console.error("[DownloadService] Resume failed:", e);
+          setStatus(id, "Error", undefined, e.message);
+        }
+      } else {
+        if (__DEV__)
+          console.warn(
+            "[DownloadService] Resumable object and resumeData lost, restarting download",
+          );
         this.startDownload(task.mediaInfo as any as Stream, task.mediaInfo);
       }
     }
@@ -159,6 +243,23 @@ class DownloadService {
     const task = tasks[id];
 
     if (Platform.OS === "web") {
+      const desktopBridge = (window as any).desktopBridge;
+      if (desktopBridge && task?.localUri) {
+        try {
+          await desktopBridge.deleteFile(task.localUri);
+          removeTask(id);
+          if (__DEV__)
+            console.log(
+              "[DownloadService] Deleted desktop local file and task",
+            );
+        } catch (e) {
+          if (__DEV__)
+            console.error("[DownloadService] Desktop deletion failed:", e);
+        }
+        return;
+      }
+
+      // Vanilla Browser Fallback
       // Browser files are stored externally by the user; we only clear our state
       removeTask(id);
       return;
@@ -168,9 +269,10 @@ class DownloadService {
       try {
         await FileSystem.deleteAsync(task.localUri, { idempotent: true });
         removeTask(id);
-        console.log("[DownloadService] Deleted local file and task");
+        if (__DEV__)
+          console.log("[DownloadService] Deleted local file and task");
       } catch (e) {
-        console.error("[DownloadService] Deletion failed:", e);
+        if (__DEV__) console.error("[DownloadService] Deletion failed:", e);
       }
     } else {
       removeTask(id);

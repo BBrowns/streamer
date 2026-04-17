@@ -10,11 +10,16 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
+import { useTheme } from "../hooks/useTheme";
+
 export default function RegisterScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { register, isLoading, error } = useAuth();
+  const { colors, isDark } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -41,12 +46,17 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      enabled={Platform.OS !== "web"}
     >
       <View style={styles.formContainer}>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join the streaming universe</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          {t("auth.register.title")}
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t("auth.register.subtitle")}
+        </Text>
 
         {!!error && (
           <View style={styles.errorContainer}>
@@ -55,49 +65,87 @@ export default function RegisterScreen() {
         )}
 
         <TextInput
-          style={styles.input}
-          placeholder="Display Name (optional)"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.register.name")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={displayName}
           onChangeText={setDisplayName}
         />
         <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.register.email")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
         />
         <TextInput
-          style={styles.input}
-          placeholder="Password (min 8 chars)"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.register.password")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
 
         <Pressable
-          style={[
+          style={({ pressed, hovered }) => [
             styles.registerButton,
+            { backgroundColor: colors.tint },
             isLoading && styles.registerButtonDisabled,
+            hovered && { opacity: 0.9, transform: [{ scale: 1.01 }] },
+            pressed && { transform: [{ scale: 0.98 }] },
           ]}
           onPress={handleRegister}
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={isDark ? "#000" : "#fff"} />
           ) : (
-            <Text style={styles.registerButtonText}>Create Account</Text>
+            <Text
+              style={[
+                styles.registerButtonText,
+                { color: isDark ? "#000" : "#fff" },
+              ]}
+            >
+              {t("auth.register.button")}
+            </Text>
           )}
         </Pressable>
 
-        <Pressable onPress={() => router.replace("/login")}>
-          <Text style={styles.linkTextCentered}>
-            Already have an account?{" "}
-            <Text style={styles.linkTextPrimary}>Sign In</Text>
+        <Pressable
+          style={({ hovered }) => [hovered && { opacity: 0.7 }]}
+          onPress={() => router.replace("/login")}
+        >
+          <Text
+            style={[styles.linkTextCentered, { color: colors.textSecondary }]}
+          >
+            {t("auth.register.haveAccount")}{" "}
+            <Text style={[styles.linkTextPrimary, { color: colors.tint }]}>
+              {t("auth.register.signIn")}
+            </Text>
           </Text>
         </Pressable>
       </View>

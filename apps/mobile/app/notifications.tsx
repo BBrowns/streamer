@@ -9,40 +9,58 @@ import {
 } from "react-native";
 import { useNotifications } from "../hooks/useNotifications";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTheme } from "../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 export default function NotificationsScreen() {
   const { notifications, isLoading, markAsRead } = useNotifications();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#818cf8" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }
 
   if (notifications.length === 0) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <MaterialCommunityIcons
           name="bell-off-outline"
           size={48}
-          color="#475569"
+          color={colors.textSecondary}
         />
-        <Text style={styles.emptyText}>No notifications</Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          {t("notifications.empty")}
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <Pressable
-            style={[styles.notificationCard, !item.read && styles.unreadCard]}
+            style={[
+              styles.notificationCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+              !item.read && {
+                backgroundColor: isDark
+                  ? "rgba(99, 102, 241, 0.1)"
+                  : colors.tint + "10",
+                borderColor: colors.tint,
+              },
+            ]}
             onPress={() => {
               if (!item.read) markAsRead.mutate(item.id);
             }}
@@ -51,19 +69,33 @@ export default function NotificationsScreen() {
               <MaterialCommunityIcons
                 name="bell-outline"
                 size={24}
-                color={item.read ? "#94a3b8" : "#818cf8"}
+                color={item.read ? colors.textSecondary : colors.tint}
               />
             </View>
             <View style={styles.textContainer}>
-              <Text style={[styles.title, !item.read && styles.unreadTitle]}>
+              <Text
+                style={[
+                  styles.title,
+                  { color: colors.text },
+                  !item.read && styles.unreadTitle,
+                ]}
+              >
                 {item.title}
               </Text>
-              <Text style={styles.message}>{item.message}</Text>
-              <Text style={styles.date}>
+              <Text style={[styles.message, { color: colors.textSecondary }]}>
+                {item.message}
+              </Text>
+              <Text
+                style={[styles.date, { color: colors.textSecondary + "90" }]}
+              >
                 {new Date(item.createdAt).toLocaleString()}
               </Text>
             </View>
-            {!item.read && <View style={styles.unreadDot} />}
+            {!item.read && (
+              <View
+                style={[styles.unreadDot, { backgroundColor: colors.tint }]}
+              />
+            )}
           </Pressable>
         )}
       />

@@ -163,10 +163,20 @@ export const usePlayerStore = create<PlayerState>()(
         });
 
         es.addEventListener("error", (err) => {
-          console.error("EventSource error:", err);
+          console.error("EventSource metrics error:", err);
+          // If it's a 404 or transient error, retry a few times instead of failing immediately
+          const currentRetries = (es as any)._retries || 0;
+          if (currentRetries < 5) {
+            (es as any)._retries = currentRetries + 1;
+            setTimeout(() => {
+              usePlayerStore.getState().subscribeToStreamMetrics(infoHash);
+            }, 3000);
+            return;
+          }
+
           set({
             streamState: "error",
-            errorMessage: "Failed to connect to streaming engine",
+            errorMessage: "Failed to connect to streaming engine metrics",
           });
           es.close();
         });

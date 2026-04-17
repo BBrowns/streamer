@@ -29,9 +29,9 @@ export const libraryRouter = new Hono();
 libraryRouter.use("*", authMiddleware);
 
 // Library / Watchlist
-libraryRouter.get("/", (c) => libraryController.getLibrary(c));
-libraryRouter.post("/", (c) => libraryController.addToLibrary(c));
-libraryRouter.delete("/", (c) => libraryController.removeFromLibrary(c));
+libraryRouter.get("", (c) => libraryController.getLibrary(c));
+libraryRouter.post("", (c) => libraryController.addToLibrary(c));
+libraryRouter.delete("", (c) => libraryController.removeFromLibrary(c));
 libraryRouter.post("/bulk-remove", (c) => libraryController.bulkRemove(c));
 libraryRouter.get("/check/:itemId", (c) => libraryController.isInLibrary(c));
 

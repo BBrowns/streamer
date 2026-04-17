@@ -57,12 +57,10 @@ describe("E2E Golden Path", () => {
       .expect(201);
 
     expect(res.body).toHaveProperty("user");
-    expect(res.body).toHaveProperty("tokens");
     expect(res.body.user.email).toBe(testUser.email);
     expect(res.body.user.displayName).toBe(testUser.displayName);
+    expect(res.body.verificationRequired).toBe(false); // false in test environment
 
-    accessToken = res.body.tokens.accessToken;
-    refreshToken = res.body.tokens.refreshToken;
     userId = res.body.user.id;
   });
 
@@ -255,7 +253,13 @@ describe("E2E Golden Path", () => {
       .post("/api/auth/register")
       .send(pwUser)
       .expect(201);
-    const token = regRes.body.tokens.accessToken;
+
+    // Login to get token
+    const loginRes = await request(app)
+      .post("/api/auth/login")
+      .send(pwUser)
+      .expect(200);
+    const token = loginRes.body.tokens.accessToken;
 
     // Change password
     const changeRes = await request(app)
@@ -269,12 +273,12 @@ describe("E2E Golden Path", () => {
     expect(changeRes.status).toBe(200);
 
     // Login with new password should work
-    const loginRes = await request(app)
+    const finalLoginRes = await request(app)
       .post("/api/auth/login")
       .send({ email: pwUser.email, password: "NewPassword1" });
 
-    expect(loginRes.status).toBe(200);
-    expect(loginRes.body.tokens.accessToken).toBeTruthy();
+    expect(finalLoginRes.status).toBe(200);
+    expect(finalLoginRes.body.tokens.accessToken).toBeTruthy();
   });
 
   // --- Addon → Catalog → Stream golden path ---

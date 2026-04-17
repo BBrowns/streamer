@@ -6,6 +6,8 @@ import {
   FlatList,
   StyleSheet,
 } from "react-native";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 import type {
   AudioTrack,
   SubtitleTrack,
@@ -32,6 +34,9 @@ export function PlayerSettingsModal({
   playbackRate,
   onSelectPlaybackRate,
 }: PlayerSettingsModalProps) {
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+
   return (
     <Modal
       visible={visible}
@@ -39,35 +44,66 @@ export function PlayerSettingsModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.modalBg}>
-        <View style={styles.sheetContent}>
+      <View
+        style={[
+          styles.modalBg,
+          { backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.3)" },
+        ]}
+      >
+        <View
+          style={[
+            styles.sheetContent,
+            {
+              backgroundColor: colors.card,
+              borderTopColor: colors.border,
+              borderTopWidth: 1,
+            },
+          ]}
+        >
           <View style={styles.header}>
-            <Text style={styles.title}>⚙️ Playback Settings</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              ⚙️ {t("player.settings.title")}
+            </Text>
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel="Close settings"
+              accessibilityLabel={t("player.settings.done")}
             >
-              <Text style={styles.doneText}>Done</Text>
+              <Text style={[styles.doneText, { color: colors.tint }]}>
+                {t("player.settings.done")}
+              </Text>
             </Pressable>
           </View>
 
           {/* Playback Speed */}
-          <Text style={styles.sectionTitle}>⏩ Playback Speed</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+            ⏩ {t("player.settings.speed")}
+          </Text>
           <View style={styles.speedRow}>
             {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
               <Pressable
                 key={rate}
                 style={[
                   styles.speedBtn,
-                  playbackRate === rate && styles.speedBtnActive,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(0,0,0,0.05)",
+                  },
+                  playbackRate === rate && {
+                    backgroundColor: colors.tint + "15",
+                  },
                 ]}
                 onPress={() => onSelectPlaybackRate(rate)}
               >
                 <Text
                   style={[
                     styles.speedBtnText,
-                    playbackRate === rate && styles.speedBtnTextActive,
+                    { color: colors.textSecondary },
+                    playbackRate === rate && {
+                      color: colors.tint,
+                      fontWeight: "bold",
+                    },
                   ]}
                 >
                   {rate}x
@@ -77,12 +113,17 @@ export function PlayerSettingsModal({
           </View>
 
           {/* Audio Tracks */}
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
-            🔊 Audio Tracks
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.textSecondary, marginTop: 20 },
+            ]}
+          >
+            🔊 {t("player.settings.audio")}
           </Text>
           {audioTracks.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No selectable audio tracks — using default.
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {t("player.settings.noAudio")}
             </Text>
           ) : (
             <FlatList
@@ -93,38 +134,59 @@ export function PlayerSettingsModal({
                 <Pressable
                   style={[
                     styles.trackRow,
-                    item.active && styles.trackRowActive,
+                    item.active && { backgroundColor: colors.tint + "15" },
                   ]}
                   onPress={() => onSelectAudio(item.id)}
                   accessibilityRole="button"
                   accessibilityLabel={`Audio: ${item.label}${item.active ? ", selected" : ""}`}
                 >
-                  <Text style={styles.trackLabel}>{item.label}</Text>
-                  <Text style={styles.trackLang}>{item.language}</Text>
-                  {item.active && <Text style={styles.checkIcon}>✓</Text>}
+                  <Text style={[styles.trackLabel, { color: colors.text }]}>
+                    {item.label}
+                  </Text>
+                  <Text
+                    style={[styles.trackLang, { color: colors.textSecondary }]}
+                  >
+                    {item.language}
+                  </Text>
+                  {item.active && (
+                    <Text style={[styles.checkIcon, { color: colors.tint }]}>
+                      ✓
+                    </Text>
+                  )}
                 </Pressable>
               )}
             />
           )}
 
           {/* Subtitles */}
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
-            💬 Subtitles
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.textSecondary, marginTop: 20 },
+            ]}
+          >
+            💬 {t("player.settings.subtitles")}
           </Text>
           {subtitles.length === 0 ? (
-            <Text style={styles.emptyText}>No subtitle tracks available.</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {t("player.settings.noSubtitles")}
+            </Text>
           ) : (
             <>
               <Pressable
                 style={[
                   styles.trackRow,
-                  subtitles.every((s) => !s.active) && styles.trackRowActive,
+                  subtitles.every((s) => !s.active) && {
+                    backgroundColor: colors.tint + "15",
+                  },
                 ]}
                 onPress={() => onSelectSubtitle(null)}
                 accessibilityRole="button"
-                accessibilityLabel="Subtitles off"
+                accessibilityLabel={t("player.settings.off")}
               >
-                <Text style={styles.trackLabel}>Off</Text>
+                <Text style={[styles.trackLabel, { color: colors.text }]}>
+                  {t("player.settings.off")}
+                </Text>
               </Pressable>
               <FlatList
                 data={subtitles}
@@ -134,15 +196,28 @@ export function PlayerSettingsModal({
                   <Pressable
                     style={[
                       styles.trackRow,
-                      item.active && styles.trackRowActive,
+                      item.active && { backgroundColor: colors.tint + "15" },
                     ]}
                     onPress={() => onSelectSubtitle(item.id)}
                     accessibilityRole="button"
                     accessibilityLabel={`Subtitle: ${item.label}${item.active ? ", selected" : ""}`}
                   >
-                    <Text style={styles.trackLabel}>{item.label}</Text>
-                    <Text style={styles.trackLang}>{item.language}</Text>
-                    {item.active && <Text style={styles.checkIcon}>✓</Text>}
+                    <Text style={[styles.trackLabel, { color: colors.text }]}>
+                      {item.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.trackLang,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {item.language}
+                    </Text>
+                    {item.active && (
+                      <Text style={[styles.checkIcon, { color: colors.tint }]}>
+                        ✓
+                      </Text>
+                    )}
                   </Pressable>
                 )}
               />

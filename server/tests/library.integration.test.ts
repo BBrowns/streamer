@@ -70,7 +70,17 @@ async function createTestUser(
       `Failed to register test user: ${res.status} ${JSON.stringify(res.body)}`,
     );
   }
-  return res.body.tokens.accessToken as string;
+
+  // Login to get tokens (since register no longer returns them due to verification)
+  const loginRes = await request(app)
+    .post("/api/auth/login")
+    .send({ email, password: "securePassword123!" });
+
+  if (loginRes.status !== 200) {
+    throw new Error(`Failed to login test user: ${loginRes.status}`);
+  }
+
+  return loginRes.body.tokens.accessToken as string;
 }
 
 describe("Integration: Library Module", () => {

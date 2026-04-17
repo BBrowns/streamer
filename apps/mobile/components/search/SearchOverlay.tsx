@@ -17,6 +17,8 @@ import { SearchService } from "../../services/SearchService";
 import { hapticImpactLight } from "../../lib/haptics";
 import Animated, { FadeIn, FadeOut, SlideInUp } from "react-native-reanimated";
 
+import { useTheme } from "../../hooks/useTheme";
+
 interface SearchOverlayProps {
   isVisible: boolean;
   onClose: () => void;
@@ -31,6 +33,7 @@ export function SearchOverlay({
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { width, height } = useWindowDimensions();
+  const { colors, isDark } = useTheme();
 
   useEffect(() => {
     if (isVisible) {
@@ -67,24 +70,38 @@ export function SearchOverlay({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
+      <BlurView
+        intensity={80}
+        tint={isDark ? "dark" : "light"}
+        style={StyleSheet.absoluteFill}
+      >
         <View style={styles.container}>
           <Animated.View
             entering={SlideInUp.duration(300).springify()}
             style={styles.header}
           >
-            <View style={styles.searchBar}>
+            <View
+              style={[
+                styles.searchBar,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.05)",
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <Ionicons
                 name="search"
                 size={20}
-                color="#94a3b8"
+                color={colors.textSecondary}
                 style={styles.searchIcon}
               />
               <TextInput
                 autoFocus
                 placeholder="Search movies, shows..."
-                placeholderTextColor="#64748b"
-                style={styles.input}
+                placeholderTextColor={colors.textSecondary + "90"}
+                style={[styles.input, { color: colors.text }]}
                 value={query}
                 onChangeText={setQuery}
                 onSubmitEditing={() => handleSearch(query)}
@@ -92,12 +109,18 @@ export function SearchOverlay({
               />
               {query.length > 0 && (
                 <Pressable onPress={() => setQuery("")}>
-                  <Ionicons name="close-circle" size={20} color="#94a3b8" />
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
                 </Pressable>
               )}
             </View>
             <Pressable onPress={onClose} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: colors.tint }]}>
+                Cancel
+              </Text>
             </Pressable>
           </Animated.View>
 
@@ -105,7 +128,14 @@ export function SearchOverlay({
             {recentSearches.length > 0 && query.length === 0 && (
               <Animated.View entering={FadeIn.delay(200)}>
                 <View style={styles.recentHeader}>
-                  <Text style={styles.recentTitle}>Recent Searches</Text>
+                  <Text
+                    style={[
+                      styles.recentTitle,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Recent Searches
+                  </Text>
                   <Pressable
                     onPress={() => {
                       SearchService.clearRecentSearches();
@@ -119,16 +149,36 @@ export function SearchOverlay({
                   {recentSearches.map((item, index) => (
                     <Pressable
                       key={index}
-                      style={styles.recentItem}
+                      style={[
+                        styles.recentItem,
+                        {
+                          backgroundColor: isDark
+                            ? "rgba(255,255,255,0.05)"
+                            : "rgba(0,0,0,0.03)",
+                          borderColor: colors.border,
+                        },
+                      ]}
                       onPress={() => handleSearch(item)}
                     >
-                      <Ionicons name="time-outline" size={16} color="#94a3b8" />
-                      <Text style={styles.recentItemText}>{item}</Text>
+                      <Ionicons
+                        name="time-outline"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text
+                        style={[styles.recentItemText, { color: colors.text }]}
+                      >
+                        {item}
+                      </Text>
                       <Pressable
                         onPress={() => handleRemoveRecent(item)}
                         style={styles.removeItem}
                       >
-                        <Ionicons name="close" size={14} color="#64748b" />
+                        <Ionicons
+                          name="close"
+                          size={14}
+                          color={colors.textSecondary}
+                        />
                       </Pressable>
                     </Pressable>
                   ))}
@@ -138,7 +188,9 @@ export function SearchOverlay({
 
             {query.length > 0 && (
               <View style={styles.hintContainer}>
-                <Text style={styles.hintText}>
+                <Text
+                  style={[styles.hintText, { color: colors.textSecondary }]}
+                >
                   Press search to find results for "{query}"
                 </Text>
               </View>
@@ -166,19 +218,16 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 48,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
   searchIcon: {
     marginRight: 8,
   },
   input: {
     flex: 1,
-    color: "#ffffff",
     fontSize: 16,
     fontWeight: "500",
   },
@@ -186,7 +235,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   cancelText: {
-    color: "#00f2ff",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -200,7 +248,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   recentTitle: {
-    color: "#94a3b8",
     fontSize: 14,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -219,17 +266,14 @@ const styles = StyleSheet.create({
   recentItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
     paddingLeft: 12,
     paddingRight: 8,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
   },
   recentItemText: {
-    color: "#e2e8f0",
     fontSize: 14,
     fontWeight: "500",
   },
@@ -241,7 +285,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   hintText: {
-    color: "#64748b",
     fontSize: 14,
     textAlign: "center",
   },

@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import * as FileSystem from "expo-file-system";
 import { LinearGradient } from "expo-linear-gradient"; // NEW
 import { Ionicons } from "@expo/vector-icons"; // NEW
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics"; // NEW
@@ -32,6 +33,8 @@ import { useCallback, useState, useEffect } from "react";
 import { useToastStore } from "../../../stores/toastStore";
 import { WatchProgressBar } from "../../../components/ui/WatchProgressBar";
 import { EpisodeSelector } from "../../../components/catalog/EpisodeSelector";
+import { useTranslation } from "react-i18next";
+import { useTheme } from "../../../hooks/useTheme";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -41,11 +44,17 @@ function StreamItem({
   index,
   onPress,
   onDownload,
+  colors,
+  t,
+  isDark,
 }: {
   stream: Stream;
   index: number;
   onPress: () => void;
   onDownload: () => void;
+  colors: any;
+  t: any;
+  isDark: boolean;
 }) {
   const [playable, setPlayable] = useState(false);
   const engine = streamEngineManager.resolveEngine(stream);
@@ -67,13 +76,32 @@ function StreamItem({
 
   return (
     <Pressable
-      style={[styles.streamCard, !playable && styles.streamCardDisabled]}
+      style={({ hovered, pressed }) => [
+        styles.streamCard,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+        !playable && styles.streamCardDisabled,
+        hovered &&
+          playable && {
+            borderColor: colors.tint,
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.03)"
+              : "rgba(0,0,0,0.02)",
+            transform: [{ scale: 1.005 }],
+          },
+        pressed &&
+          playable && {
+            transform: [{ scale: 0.995 }],
+          },
+      ]}
       onPress={() => {
         hapticImpactLight();
         onPress();
       }}
       accessibilityRole="button"
-      accessibilityLabel={`${playable ? "Play" : "Torrent"} stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
+      accessibilityLabel={`${playable ? t("detail.play") : t("detail.torrent")} stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
       accessibilityHint={
         playable
           ? "Opens the video player"
@@ -81,31 +109,45 @@ function StreamItem({
       }
     >
       <View style={{ flex: 1 }}>
-        <Text style={styles.streamTitle}>
+        <Text style={[styles.streamTitle, { color: colors.text }]}>
           {stream.title || stream.name || `Stream ${index + 1}`}
         </Text>
         <View style={styles.streamBadgeRow}>
-          <Text style={styles.streamEngine}>
+          <Text style={[styles.streamEngine, { color: colors.textSecondary }]}>
             {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
           </Text>
           {stream.seeders !== undefined && (
-            <Text style={styles.seederBadge}>👥 {stream.seeders}</Text>
+            <Text style={[styles.seederBadge, { color: colors.textSecondary }]}>
+              👥 {stream.seeders}
+            </Text>
           )}
           {!playable && (
             <View style={styles.torrentBadge}>
-              <Text style={styles.torrentBadgeText}>TORRENT</Text>
+              <Text style={styles.torrentBadgeText}>
+                {t("detail.torrent").toUpperCase()}
+              </Text>
             </View>
           )}
           {playable && (
-            <View style={styles.playableBadge}>
-              <Text style={styles.playableBadgeText}>PLAYABLE</Text>
+            <View
+              style={[
+                styles.playableBadge,
+                { backgroundColor: colors.tint + "15" },
+              ]}
+            >
+              <Text style={[styles.playableBadgeText, { color: colors.tint }]}>
+                {t("detail.playable")}
+              </Text>
             </View>
           )}
         </View>
       </View>
       <View style={styles.streamActions}>
         <Pressable
-          style={styles.downloadIconBtn}
+          style={({ hovered }) => [
+            styles.downloadIconBtn,
+            hovered && { transform: [{ scale: 1.1 }] },
+          ]}
           onPress={() => {
             hapticImpactLight();
             onDownload();
@@ -120,12 +162,24 @@ function StreamItem({
             <Ionicons
               name={isCompleted ? "cloud-offline" : "download-outline"}
               size={22}
-              color={isCompleted ? "#4ade80" : playable ? "#818cf8" : "#3f3f46"}
+              color={
+                isCompleted
+                  ? "#4ade80"
+                  : playable
+                    ? colors.tint
+                    : colors.textSecondary + "40"
+              }
             />
           )}
         </Pressable>
 
-        <Text style={[styles.playIcon, !playable && styles.playIconDisabled]}>
+        <Text
+          style={[
+            styles.playIcon,
+            { color: playable ? colors.tint : colors.textSecondary + "40" },
+            !playable && styles.playIconDisabled,
+          ]}
+        >
           {playable ? "▶" : "🔒"}
         </Text>
       </View>
@@ -137,6 +191,8 @@ export default function DetailScreen() {
   const { type, id } = useLocalSearchParams<{ type: string; id: string }>();
   const castType = type as "movie" | "series";
   const router = useRouter();
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
   const { data: meta, isLoading: metaLoading } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
@@ -175,7 +231,7 @@ export default function DetailScreen() {
     const { show } = useToastStore.getState();
     if (inLibrary) {
       removeFromLibrary.mutate(id, {
-        onSuccess: () => show("Removed from Library", "info"),
+        onSuccess: () => show(t("library.alerts.removed"), "info"),
       });
     } else {
       hapticSuccess();
@@ -186,7 +242,7 @@ export default function DetailScreen() {
           title: meta.name,
           poster: meta.poster,
         },
-        { onSuccess: () => show(`Added to Library`, "success") },
+        { onSuccess: () => show(t("library.alerts.added"), "success") },
       );
     }
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
@@ -221,8 +277,8 @@ export default function DetailScreen() {
 
   if (metaLoading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#00f2ff" />
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }
@@ -230,7 +286,7 @@ export default function DetailScreen() {
   if (!meta) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>Content not found</Text>
+        <Text style={styles.errorText}>{t("detail.errors.notFound")}</Text>
       </View>
     );
   }
@@ -250,22 +306,44 @@ export default function DetailScreen() {
       task.localUri &&
       task.localUri.length > 5
     ) {
-      setStream(
-        { ...stream, url: task.localUri },
-        {
-          type: castType,
-          itemId: id || "unknown",
-          title: episodeTitle
-            ? `${meta?.name} - ${episodeTitle}`
-            : (meta?.name ?? stream.title ?? "Unknown"),
-          poster: meta?.poster,
-          season,
-          episode,
-        },
-      );
+      let fileExists = true;
 
-      router.push("/player");
-      return;
+      if (Platform.OS === "web") {
+        const desktopBridge = (window as any).desktopBridge;
+        if (desktopBridge) {
+          try {
+            fileExists = await desktopBridge.checkFile(task.localUri);
+          } catch (e) {}
+        }
+      } else {
+        try {
+          const info = await FileSystem.getInfoAsync(task.localUri);
+          fileExists = info.exists;
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!fileExists) {
+        useDownloadStore.getState().verifyAndClean();
+      } else {
+        setStream(
+          { ...stream, url: task.localUri },
+          {
+            type: castType,
+            itemId: id || "unknown",
+            title: episodeTitle
+              ? `${meta?.name} - ${episodeTitle}`
+              : (meta?.name ?? stream.title ?? "Unknown"),
+            poster: meta?.poster,
+            season,
+            episode,
+          },
+        );
+
+        router.push("/player");
+        return;
+      }
     }
 
     const uri = await streamEngineManager.getPlaybackUri(stream);
@@ -296,11 +374,11 @@ export default function DetailScreen() {
 
     if (!playable) {
       const msg = stream.infoHash
-        ? "This is a torrent stream. Start the stream-server bridge first."
-        : "This stream is not playable.";
+        ? t("detail.errors.torrentBridge")
+        : t("detail.errors.notPlayable");
 
       if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Unsupported Stream", msg);
+      else Alert.alert(t("detail.errors.unsupported"), msg);
       return;
     }
 
@@ -318,17 +396,28 @@ export default function DetailScreen() {
     router.push("/player");
   };
 
-  const handleDownloadStream = async (stream: Stream) => {
+  const handleDownloadStream = async (
+    stream: Stream,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => {
     if (!meta) return;
     try {
+      const displayTitle = episodeTitle
+        ? `${meta.name} - ${episodeTitle}`
+        : meta.name;
+
       await downloadService.startDownload(stream, {
         itemId: id,
         type: castType,
-        title: meta.name,
+        title: displayTitle,
         poster: meta.poster,
+        season,
+        episode,
       });
     } catch (e) {
-      Alert.alert("Download Error", "Failed to start download.");
+      Alert.alert(t("common.error"), t("detail.errors.downloadFailed"));
     }
   };
 
@@ -345,7 +434,7 @@ export default function DetailScreen() {
             onPress={() => router.back()}
           >
             <Ionicons name="chevron-back" size={20} color="#888" />
-            <Text style={styles.desktopBackText}>Back</Text>
+            <Text style={styles.desktopBackText}>{t("detail.back")}</Text>
           </Pressable>
           {!!meta.poster && (
             <Animated.Image
@@ -357,10 +446,13 @@ export default function DetailScreen() {
           )}
           {/* Library action under poster */}
           <Pressable
-            style={[
+            style={({ hovered, pressed }) => [
               styles.libraryBtn,
               inLibrary && styles.libraryBtnActive,
               { marginTop: 16, alignSelf: "stretch" },
+              hovered && !inLibrary && { backgroundColor: colors.tint + "20" },
+              hovered && inLibrary && { opacity: 0.9 },
+              pressed && { transform: [{ scale: 0.98 }] },
             ]}
             onPress={handleToggleLibrary}
           >
@@ -370,14 +462,19 @@ export default function DetailScreen() {
                 inLibrary && styles.libraryBtnTextActive,
               ]}
             >
-              {inLibrary ? "✓ In Library" : "+ Add to Library"}
+              {inLibrary
+                ? t("detail.watchlist.remove")
+                : t("detail.watchlist.add")}
             </Text>
           </Pressable>
         </View>
 
         {/* Right: Scrollable info + streams */}
         <ScrollView
-          style={styles.desktopInfoPanel}
+          style={[
+            styles.desktopInfoPanel,
+            { backgroundColor: colors.background },
+          ]}
           contentContainerStyle={{ padding: 36, paddingBottom: 60 }}
         >
           {/* Background art subtle overlay */}
@@ -388,9 +485,16 @@ export default function DetailScreen() {
               resizeMode="cover"
             />
           )}
-          <View style={styles.desktopBgOverlay} />
+          <View
+            style={[
+              styles.desktopBgOverlay,
+              { backgroundColor: colors.background + "90" },
+            ]}
+          />
 
-          <Text style={styles.desktopTitle}>{meta.name}</Text>
+          <Text style={[styles.desktopTitle, { color: colors.text }]}>
+            {meta.name}
+          </Text>
 
           <View style={styles.metaRow}>
             {!!meta.releaseInfo && (
@@ -420,7 +524,7 @@ export default function DetailScreen() {
 
           {!!meta.cast && meta.cast.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Cast</Text>
+              <Text style={styles.sectionTitle}>{t("detail.cast")}</Text>
               <Text style={styles.sectionContent}>{meta.cast.join(", ")}</Text>
             </View>
           )}
@@ -431,10 +535,12 @@ export default function DetailScreen() {
               <Ionicons
                 name={castType === "series" ? "list" : "layers-outline"}
                 size={18}
-                color="#00f2ff"
+                color={colors.tint}
               />
-              <Text style={styles.sectionTitle}>
-                {castType === "series" ? "Episodes" : "Select Quality"}
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {castType === "series"
+                  ? t("detail.episodes")
+                  : t("detail.quality")}
               </Text>
             </View>
 
@@ -443,18 +549,32 @@ export default function DetailScreen() {
                 seriesId={id}
                 videos={meta.videos || []}
                 onPlayStream={handlePlayStream}
+                onDownloadStream={handleDownloadStream}
               />
             ) : streamsLoading ? (
-              <ActivityIndicator color="#00f2ff" />
+              <ActivityIndicator color={colors.tint} />
             ) : availableResolutions.length > 0 ? (
               <>
                 <View style={styles.resContainer}>
                   {availableResolutions.map((res) => (
                     <Pressable
                       key={res}
-                      style={[
+                      style={({ hovered, pressed }) => [
                         styles.resBubble,
-                        selectedResolution === res && styles.resBubbleActive,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                        selectedResolution === res && {
+                          backgroundColor: colors.tint,
+                          borderColor: colors.tint,
+                        },
+                        hovered &&
+                          selectedResolution !== res && {
+                            borderColor: colors.tint,
+                            backgroundColor: colors.tint + "10",
+                          },
+                        pressed && { transform: [{ scale: 0.95 }] },
                       ]}
                       onPress={() => {
                         hapticImpactLight();
@@ -464,7 +584,11 @@ export default function DetailScreen() {
                       <Text
                         style={[
                           styles.resText,
-                          selectedResolution === res && styles.resTextActive,
+                          { color: colors.textSecondary },
+                          selectedResolution === res && {
+                            color: isDark ? "#000" : "#fff",
+                            fontWeight: "bold",
+                          },
                         ]}
                       >
                         {res === "2160p" ? "4K" : res.toUpperCase()}
@@ -483,6 +607,9 @@ export default function DetailScreen() {
                         index={i}
                         onPress={() => handlePlayStream(stream)}
                         onDownload={() => handleDownloadStream(stream)}
+                        colors={colors}
+                        t={t}
+                        isDark={isDark}
                       />
                     );
                   })}
@@ -490,7 +617,7 @@ export default function DetailScreen() {
               </>
             ) : (
               <Text style={styles.emptyText}>
-                No streams available. Install more add-ons.
+                {t("home.empty.title")}. {t("home.empty.description")}
               </Text>
             )}
           </View>
@@ -501,7 +628,7 @@ export default function DetailScreen() {
 
   // ─── Mobile Layout (unchanged) ──────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Floating Back Button */}
@@ -510,7 +637,7 @@ export default function DetailScreen() {
       </Pressable>
 
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentInsetAdjustmentBehavior="never"
         bounces={false}
       >
@@ -534,14 +661,16 @@ export default function DetailScreen() {
           )}
 
           <LinearGradient
-            colors={["transparent", "rgba(1,1,1,0.6)", "#010101"]}
+            colors={["transparent", "rgba(1,1,1,0.6)", colors.background]}
             locations={[0.4, 0.8, 1]}
             style={styles.heroGradient}
           />
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.title}>{meta.name}</Text>
+          <Text style={[styles.title, { color: colors.text }]}>
+            {meta.name}
+          </Text>
 
           <View style={styles.metaRow}>
             {!!meta.releaseInfo && (
@@ -557,7 +686,14 @@ export default function DetailScreen() {
 
           {/* Library Button */}
           <Pressable
-            style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
+            style={[
+              styles.libraryBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              inLibrary && {
+                backgroundColor: colors.tint,
+                borderColor: colors.tint,
+              },
+            ]}
             onPress={handleToggleLibrary}
           >
             <Text
@@ -566,7 +702,9 @@ export default function DetailScreen() {
                 inLibrary && styles.libraryBtnTextActive,
               ]}
             >
-              {inLibrary ? "✓ In Library" : "+ Add to Library"}
+              {inLibrary
+                ? t("detail.watchlist.remove")
+                : t("detail.watchlist.add")}
             </Text>
           </Pressable>
 
@@ -586,7 +724,7 @@ export default function DetailScreen() {
 
           {!!meta.cast && meta.cast.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Cast</Text>
+              <Text style={styles.sectionTitle}>{t("detail.cast")}</Text>
               <Text style={styles.sectionContent}>{meta.cast.join(", ")}</Text>
             </View>
           )}
@@ -600,7 +738,9 @@ export default function DetailScreen() {
                 color="#00f2ff"
               />
               <Text style={styles.sectionTitle}>
-                {castType === "series" ? "Episodes" : "Select Quality"}
+                {castType === "series"
+                  ? t("detail.episodes")
+                  : t("detail.quality")}
               </Text>
             </View>
 
@@ -609,18 +749,32 @@ export default function DetailScreen() {
                 seriesId={id}
                 videos={meta.videos || []}
                 onPlayStream={handlePlayStream}
+                onDownloadStream={handleDownloadStream}
               />
             ) : streamsLoading ? (
-              <ActivityIndicator color="#00f2ff" />
+              <ActivityIndicator color={colors.tint} />
             ) : availableResolutions.length > 0 ? (
               <>
                 <View style={styles.resContainer}>
                   {availableResolutions.map((res) => (
                     <Pressable
                       key={res}
-                      style={[
+                      style={({ hovered, pressed }) => [
                         styles.resBubble,
-                        selectedResolution === res && styles.resBubbleActive,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                        selectedResolution === res && {
+                          backgroundColor: colors.tint,
+                          borderColor: colors.tint,
+                        },
+                        hovered &&
+                          selectedResolution !== res && {
+                            borderColor: colors.tint,
+                            backgroundColor: colors.tint + "10",
+                          },
+                        pressed && { transform: [{ scale: 0.95 }] },
                       ]}
                       onPress={() => {
                         hapticImpactLight();
@@ -630,7 +784,11 @@ export default function DetailScreen() {
                       <Text
                         style={[
                           styles.resText,
-                          selectedResolution === res && styles.resTextActive,
+                          { color: colors.textSecondary },
+                          selectedResolution === res && {
+                            color: isDark ? "#000" : "#fff",
+                            fontWeight: "bold",
+                          },
                         ]}
                       >
                         {res === "2160p" ? "4K" : res.toUpperCase()}
@@ -650,6 +808,9 @@ export default function DetailScreen() {
                         index={i}
                         onPress={() => handlePlayStream(stream)}
                         onDownload={() => handleDownloadStream(stream)}
+                        colors={colors}
+                        t={t}
+                        isDark={isDark}
                       />
                     );
                   })}
@@ -657,7 +818,7 @@ export default function DetailScreen() {
               </>
             ) : (
               <Text style={styles.emptyText}>
-                No streams available. Install more add-ons.
+                {t("home.empty.title")}. {t("home.empty.description")}
               </Text>
             )}
           </View>
@@ -670,18 +831,15 @@ export default function DetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#07070e",
   },
   containerDesktop: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#07070e",
   },
   desktopPosterPanel: {
     width: 280,
-    backgroundColor: "#0a0a14",
+    backgroundColor: "transparent",
     borderRightWidth: 1,
-    borderRightColor: "rgba(255,255,255,0.06)",
     padding: 24,
     paddingTop: 16,
   },
@@ -731,7 +889,6 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    backgroundColor: "#010101",
     justifyContent: "center",
     alignItems: "center",
   },

@@ -1,111 +1,155 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { DeviceEventEmitter } from "react-native";
 import SSE from "react-native-sse";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import { BASE_URL } from "../services/api";
 
+/** Retry delays in ms: 2s, 5s, 15s */
+const RETRY_DELAYS = [2_000, 5_000, 15_000];
+
+const log = (...args: unknown[]) => {
+  if (__DEV__) console.log("[Sync]", ...args);
+};
+const warn = (...args: unknown[]) => {
+  if (__DEV__) console.warn("[Sync]", ...args);
+};
+const err = (...args: unknown[]) => {
+  if (__DEV__) console.error("[Sync]", ...args);
+};
+
 /**
- * useSync hook establishes an SSE connection to the backend to receive
- * real-time updates for library changes and watch progress from other devices.
+ * useSync establishes an SSE connection to the backend for real-time
+ * library and progress updates. Reconnects automatically with
+ * exponential backoff (2s → 5s → 15s) on connection loss.
  */
 export function useSync() {
-  const { isAuthenticated, accessToken, deviceId } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const deviceId = useAuthStore((s) => s.deviceId);
   const queryClient = useQueryClient();
+
   const sseRef = useRef<SSE | null>(null);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a stable reference to the connect function for retries
+  const connectRef = useRef<(() => void) | null>(null);
+
+  const clearRetryTimer = () => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  };
+
+  const closeSSE = () => {
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) {
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-      }
+      clearRetryTimer();
+      closeSSE();
+      retryCountRef.current = 0;
       return;
     }
 
-    // Initialize SSE connection
-    const url = `${BASE_URL}/api/sync/events`;
-    const sse = new SSE(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "X-Device-Id": deviceId || "unknown",
-      },
-    });
+    const connect = () => {
+      closeSSE();
 
-    sseRef.current = sse;
+      const url = `${BASE_URL}/api/sync/events`;
+      const sse = new SSE(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "X-Device-Id": deviceId || "unknown",
+        },
+      });
 
-    // Listen for library updates
-    sse.addEventListener("LIBRARY_UPDATE" as any, (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("[Sync] Library update received:", data);
+      sseRef.current = sse;
 
-        // Invalidate relevant queries to fetch fresh data
-        queryClient.invalidateQueries({ queryKey: ["library"] });
+      sse.addEventListener("open", () => {
+        log("Connection opened");
+        retryCountRef.current = 0; // Reset backoff on successful connect
+      });
 
-        // If it's a specific item change, we could be more granular
-        if (data.itemId) {
-          queryClient.invalidateQueries({
-            queryKey: ["library", "check", data.itemId],
-          });
+      sse.addEventListener("error", (event: any) => {
+        warn("Connection error:", event?.message ?? event);
+        closeSSE();
+
+        const delay =
+          RETRY_DELAYS[
+            Math.min(retryCountRef.current, RETRY_DELAYS.length - 1)
+          ];
+        retryCountRef.current += 1;
+        log(
+          `Reconnecting in ${delay / 1000}s (attempt ${retryCountRef.current})…`,
+        );
+
+        retryTimerRef.current = setTimeout(() => {
+          if (connectRef.current) connectRef.current();
+        }, delay);
+      });
+
+      sse.addEventListener("LIBRARY_UPDATE" as any, (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          log("Library update:", data);
+          if (queryClient) {
+            queryClient.invalidateQueries({ queryKey: ["library"] });
+            const itemId = data.itemId || data.item?.itemId;
+            if (itemId) {
+              queryClient.invalidateQueries({
+                queryKey: ["library", "check", itemId],
+              });
+            }
+          }
+        } catch (e) {
+          err("Failed to parse LIBRARY_UPDATE:", e);
         }
-      } catch (err) {
-        console.error("[Sync] Failed to parse LIBRARY_UPDATE:", err);
-      }
-    });
+      });
 
-    // Listen for watch progress updates
-    sse.addEventListener("PROGRESS_UPDATE" as any, (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("[Sync] Progress update received:", data.itemId);
+      sse.addEventListener("PROGRESS_UPDATE" as any, (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          log("Progress update:", data.itemId);
+          if (queryClient) {
+            queryClient.invalidateQueries({ queryKey: ["continue-watching"] });
+          }
+        } catch (e) {
+          err("Failed to parse PROGRESS_UPDATE:", e);
+        }
+      });
 
-        // Invalidate continue watching list
-        queryClient.invalidateQueries({ queryKey: ["continue-watching"] });
+      sse.addEventListener("SESSION_UPDATE" as any, (event: any) => {
+        try {
+          DeviceEventEmitter.emit("SESSION_UPDATE", JSON.parse(event.data));
+        } catch (e) {
+          err("Failed to parse SESSION_UPDATE:", e);
+        }
+      });
 
-        // Invalidate specific item progress if needed
-        // but meistly we want the library/home screens to refresh
-      } catch (err) {
-        console.error("[Sync] Failed to parse PROGRESS_UPDATE:", err);
-      }
-    });
+      sse.addEventListener("REMOTE_COMMAND" as any, (event: any) => {
+        try {
+          DeviceEventEmitter.emit("REMOTE_COMMAND", JSON.parse(event.data));
+        } catch (e) {
+          err("Failed to parse REMOTE_COMMAND:", e);
+        }
+      });
+    };
 
-    // Listen for session updates (other devices status)
-    sse.addEventListener("SESSION_UPDATE" as any, (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
-        DeviceEventEmitter.emit("SESSION_UPDATE", data);
-      } catch (err) {
-        console.error("[Sync] Failed to parse SESSION_UPDATE:", err);
-      }
-    });
-
-    // Listen for remote commands (e.g. from another phone)
-    sse.addEventListener("REMOTE_COMMAND" as any, (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
-        DeviceEventEmitter.emit("REMOTE_COMMAND", data);
-      } catch (err) {
-        console.error("[Sync] Failed to parse REMOTE_COMMAND:", err);
-      }
-    });
-
-    sse.addEventListener("error", (event: any) => {
-      if (event.type === "error") {
-        console.warn("[Sync] SSE Connection Error:", event);
-      }
-    });
-
-    sse.addEventListener("open", () => {
-      console.log("[Sync] SSE Connection opened");
-    });
+    // Store the connect function in a ref so the error handler can call it
+    connectRef.current = connect;
+    connect();
 
     return () => {
-      if (sseRef.current) {
-        sseRef.current.close();
-        sseRef.current = null;
-        console.log("[Sync] SSE Connection closed");
-      }
+      clearRetryTimer();
+      closeSSE();
+      connectRef.current = null;
+      retryCountRef.current = 0;
+      log("Connection closed (cleanup)");
     };
   }, [isAuthenticated, accessToken, deviceId, queryClient]);
 }

@@ -38,7 +38,32 @@ import {
   hapticSuccess,
 } from "../../lib/haptics";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
-import { CollapsibleSection } from "../../components/ui/CollapsibleSection";
+
+function SectionGroup({
+  title,
+  children,
+  colors,
+}: {
+  title: string;
+  children: React.ReactNode;
+  colors: any;
+}) {
+  return (
+    <View style={styles.sectionGroup}>
+      <Text style={[styles.sectionGroupTitle, { color: colors.textSecondary }]}>
+        {title.toUpperCase()}
+      </Text>
+      <View
+        style={[
+          styles.sectionGroupContent,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
 
 function AdvancedSettingsSection() {
   const { t } = useTranslation();
@@ -434,437 +459,374 @@ function SettingsContent() {
       showsVerticalScrollIndicator={false}
     >
       {/* Profile */}
-      <CollapsibleSection
+      <SectionGroup
         title={t("settings.sections.account", { defaultValue: "Account" })}
-        icon="person-outline"
-        iconColor="#818cf8"
-        iconBg="rgba(129,140,248,0.15)"
-        defaultExpanded
+        colors={colors}
       >
-        <View style={styles.section}>
-          <Pressable
-            style={[
-              styles.menuItem,
-              {
-                backgroundColor: colors.card,
-                borderColor:
-                  isDesktop && activePane === "profile"
-                    ? colors.tint
-                    : colors.border,
+        <Pressable
+          style={[
+            styles.menuItem,
+            isDesktop &&
+              activePane === "profile" && {
+                backgroundColor: "rgba(255,255,255,0.05)",
               },
+          ]}
+          onPress={handleProfilePress}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(129,140,248,0.15)" },
             ]}
-            onPress={handleProfilePress}
-            accessibilityRole="button"
           >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.email?.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {user?.displayName || user?.email}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {user?.email}
-              </Text>
-            </View>
-            <Ionicons name="pencil" size={16} color="#6b7280" />
-          </Pressable>
-        </View>
-      </CollapsibleSection>
+            <Ionicons name="person-outline" size={20} color="#818cf8" />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {user?.displayName || user?.email}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {user?.email}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </SectionGroup>
 
       {/* Appearance */}
-      <CollapsibleSection
-        title={t("settings.appearance")}
-        icon="color-palette-outline"
-        iconColor="#f472b6"
-        iconBg="rgba(244,114,182,0.15)"
-        defaultExpanded
-      >
-        <AppearanceSection />
-      </CollapsibleSection>
+      <SectionGroup title={t("settings.appearance")} colors={colors}>
+        <View style={{ padding: 16 }}>
+          <AppearanceSection />
+        </View>
+      </SectionGroup>
 
       {/* Language */}
-      <CollapsibleSection
-        title={t("settings.language")}
-        icon="language-outline"
-        iconColor="#60a5fa"
-        iconBg="rgba(96,165,250,0.15)"
-        defaultExpanded={false}
-      >
-        <LanguageSection />
-      </CollapsibleSection>
+      <SectionGroup title={t("settings.language")} colors={colors}>
+        <View style={{ padding: 16, paddingTop: 4 }}>
+          <LanguageSection />
+        </View>
+      </SectionGroup>
 
       {/* Integrations */}
-      <CollapsibleSection
+      <SectionGroup
         title={t("settings.sections.integrations", {
           defaultValue: "Integrations",
         })}
-        icon="extension-puzzle-outline"
-        iconColor="#00f2ff"
-        iconBg="rgba(0,242,255,0.1)"
-        defaultExpanded={false}
+        colors={colors}
       >
-        <View style={styles.section}>
-          <Pressable
+        <Pressable
+          style={styles.menuItem}
+          onPress={() => router.push("/addons")}
+        >
+          <View
             style={[
-              styles.menuItem,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              styles.iconContainer,
+              { backgroundColor: "rgba(0,242,255,0.1)" },
             ]}
-            onPress={() => router.push("/addons")}
           >
-            <View style={styles.iconContainer}>
-              <Ionicons name="extension-puzzle" size={20} color="#00f2ff" />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {t("settings.items.manageAddons")}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {t("settings.subtitles.manageAddons")}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-          </Pressable>
-
-          <View style={styles.spacer} />
-
-          <Pressable
-            style={[
-              styles.menuItem,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-            onPress={
-              connected
-                ? () => {
-                    Alert.alert(
-                      t("settings.alerts.traktDisconnectTitle"),
-                      t("settings.alerts.traktDisconnectMessage"),
-                      [
-                        { text: t("library.header.cancel"), style: "cancel" },
-                        {
-                          text: t("settings.alerts.traktDisconnectButton"),
-                          style: "destructive",
-                          onPress: () => disconnect(),
-                        },
-                      ],
-                    );
-                  }
-                : connect
-            }
-            disabled={isTraktLoading}
-          >
-            <View
-              style={[
-                styles.iconContainer,
-                {
-                  backgroundColor: connected
-                    ? "rgba(237, 28, 36, 0.1)"
-                    : colors.border,
-                },
-              ]}
+            <Ionicons
+              name="extension-puzzle-outline"
+              size={20}
+              color="#00f2ff"
+            />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.manageAddons")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
             >
-              <Ionicons
-                name="tv-outline"
-                size={20}
-                color={connected ? "#ed1c24" : colors.textSecondary}
-              />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {t("settings.items.trakt")}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {connected
-                  ? t("settings.subtitles.traktConnected")
-                  : t("settings.subtitles.traktDisconnected")}
-              </Text>
-            </View>
-            {isTraktLoading ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <Ionicons
-                name={connected ? "checkmark-circle" : "chevron-forward"}
-                size={18}
-                color={connected ? "#10b981" : colors.textSecondary}
-              />
-            )}
-          </Pressable>
-        </View>
-      </CollapsibleSection>
+              {t("settings.subtitles.manageAddons")}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Pressable
+          style={styles.menuItem}
+          onPress={
+            connected
+              ? () => {
+                  Alert.alert(
+                    t("settings.alerts.traktDisconnectTitle"),
+                    t("settings.alerts.traktDisconnectMessage"),
+                    [
+                      { text: t("library.header.cancel"), style: "cancel" },
+                      {
+                        text: t("settings.alerts.traktDisconnectButton"),
+                        style: "destructive",
+                        onPress: () => disconnect(),
+                      },
+                    ],
+                  );
+                }
+              : connect
+          }
+          disabled={isTraktLoading}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              {
+                backgroundColor: connected
+                  ? "rgba(237, 28, 36, 0.1)"
+                  : "rgba(255,255,255,0.05)",
+              },
+            ]}
+          >
+            <Ionicons
+              name="tv-outline"
+              size={20}
+              color={connected ? "#ed1c24" : colors.textSecondary}
+            />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.trakt")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {connected
+                ? t("settings.subtitles.traktConnected")
+                : t("settings.subtitles.traktDisconnected")}
+            </Text>
+          </View>
+          {isTraktLoading ? (
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          ) : (
+            <Ionicons
+              name={connected ? "checkmark-circle" : "chevron-forward"}
+              size={18}
+              color={connected ? "#10b981" : colors.textSecondary}
+            />
+          )}
+        </Pressable>
+      </SectionGroup>
 
       {/* Security */}
-      <CollapsibleSection
+      <SectionGroup
         title={t("settings.sections.security", { defaultValue: "Security" })}
-        icon="shield-outline"
-        iconColor="#34d399"
-        iconBg="rgba(52,211,153,0.1)"
-        defaultExpanded={false}
+        colors={colors}
       >
-        <View style={styles.section}>
-          <Pressable
-            style={[
-              styles.menuItem,
-              {
-                backgroundColor: colors.card,
-                borderColor:
-                  isDesktop && activePane === "sessions"
-                    ? colors.tint
-                    : colors.border,
+        <Pressable
+          style={[
+            styles.menuItem,
+            isDesktop &&
+              activePane === "sessions" && {
+                backgroundColor: "rgba(255,255,255,0.05)",
               },
-            ]}
-            onPress={handleSessionsPress}
-          >
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: "rgba(52, 211, 153, 0.1)" },
-              ]}
-            >
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color="#34d399"
-              />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {t("settings.items.activeSessions")}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {isSessionsLoading
-                  ? "Loading…"
-                  : t("settings.subtitles.activeSessions", {
-                      count: sessions.length,
-                    })}
-              </Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-
-          <View style={styles.spacer} />
-
-          <Pressable
+          ]}
+          onPress={handleSessionsPress}
+        >
+          <View
             style={[
-              styles.menuItem,
-              {
-                backgroundColor: colors.card,
-                borderColor:
-                  isDesktop && activePane === "password"
-                    ? colors.tint
-                    : colors.border,
-              },
+              styles.iconContainer,
+              { backgroundColor: "rgba(52, 211, 153, 0.1)" },
             ]}
-            onPress={handlePasswordPress}
           >
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: "rgba(129, 140, 248, 0.1)" },
-              ]}
-            >
-              <Ionicons name="lock-closed" size={20} color="#818cf8" />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {t("settings.items.changePassword")}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {t("settings.subtitles.changePassword")}
-              </Text>
-            </View>
             <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.textSecondary}
+              name="shield-checkmark-outline"
+              size={20}
+              color="#34d399"
             />
-          </Pressable>
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.activeSessions")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {isSessionsLoading
+                ? "Loading…"
+                : t("settings.subtitles.activeSessions", {
+                    count: sessions.length,
+                  })}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
 
-          {hasCheckedBiometry && biometrySupported && (
-            <>
-              <View style={styles.spacer} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Pressable
+          style={[
+            styles.menuItem,
+            isDesktop &&
+              activePane === "password" && {
+                backgroundColor: "rgba(255,255,255,0.05)",
+              },
+          ]}
+          onPress={handlePasswordPress}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(129, 140, 248, 0.1)" },
+            ]}
+          >
+            <Ionicons name="lock-closed" size={20} color="#818cf8" />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.changePassword")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {t("settings.subtitles.changePassword")}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
+        {hasCheckedBiometry && biometrySupported && (
+          <>
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
+            <View style={styles.menuItem}>
               <View
                 style={[
-                  styles.menuItem,
-                  { backgroundColor: colors.card, borderColor: colors.border },
+                  styles.iconContainer,
+                  { backgroundColor: "rgba(168, 85, 247, 0.15)" },
                 ]}
               >
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: "rgba(168, 85, 247, 0.15)" },
-                  ]}
-                >
-                  <Ionicons
-                    name="finger-print-outline"
-                    size={20}
-                    color="#c084fc"
-                  />
-                </View>
-                <View style={styles.menuItemTextContainer}>
-                  <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                    {t("settings.items.biometricUnlock")}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.menuItemSubtitle,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {t("settings.subtitles.biometricUnlock")}
-                  </Text>
-                </View>
-                <Switch
-                  value={biometricEnabled}
-                  onValueChange={handleToggleBiometrics}
-                  trackColor={{
-                    false: isDark ? "#374151" : "#e2e8f0",
-                    true: colors.tint,
-                  }}
-                  thumbColor={biometricEnabled ? "#fff" : "#f1f5f9"}
+                <Ionicons
+                  name="finger-print-outline"
+                  size={20}
+                  color="#c084fc"
                 />
               </View>
-            </>
-          )}
-        </View>
-      </CollapsibleSection>
+              <View style={styles.menuItemTextContainer}>
+                <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                  {t("settings.items.biometricUnlock")}
+                </Text>
+                <Text
+                  style={[
+                    styles.menuItemSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {t("settings.subtitles.biometricUnlock")}
+                </Text>
+              </View>
+              <Switch
+                value={biometricEnabled}
+                onValueChange={handleToggleBiometrics}
+                trackColor={{
+                  false: isDark ? "#374151" : "#e2e8f0",
+                  true: colors.tint,
+                }}
+                thumbColor={biometricEnabled ? "#fff" : "#f1f5f9"}
+              />
+            </View>
+          </>
+        )}
+      </SectionGroup>
 
       {/* Privacy */}
-      <CollapsibleSection
-        title={t("settings.sections.privacy")}
-        icon="lock-closed-outline"
-        iconColor="#fb923c"
-        iconBg="rgba(251,146,60,0.1)"
-        defaultExpanded={false}
-      >
-        <View style={styles.section}>
-          <Pressable
+      <SectionGroup title={t("settings.sections.privacy")} colors={colors}>
+        <Pressable
+          style={styles.menuItem}
+          onPress={() => {
+            hapticSelection();
+            exportData.mutate();
+          }}
+          disabled={exportData.isPending}
+        >
+          <View
             style={[
-              styles.menuItem,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              styles.iconContainer,
+              { backgroundColor: "rgba(56, 189, 248, 0.1)" },
             ]}
-            onPress={() => {
-              hapticSelection();
-              exportData.mutate();
-            }}
-            disabled={exportData.isPending}
           >
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: "rgba(56, 189, 248, 0.1)" },
-              ]}
+            <Ionicons name="download-outline" size={20} color="#38bdf8" />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.exportData")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
             >
-              <Ionicons name="download-outline" size={20} color="#38bdf8" />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {t("settings.items.exportData")}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {t("settings.subtitles.exportData")}
-              </Text>
-            </View>
-            {exportData.isPending ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textSecondary}
-              />
-            )}
-          </Pressable>
+              {t("settings.subtitles.exportData")}
+            </Text>
+          </View>
+          {exportData.isPending ? (
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          ) : (
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          )}
+        </Pressable>
 
-          <View style={styles.spacer} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          <Pressable
+        <Pressable
+          style={styles.menuItem}
+          onPress={handleDeleteAccount}
+          disabled={deleteAccount.isPending}
+        >
+          <View
             style={[
-              styles.menuItem,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              styles.iconContainer,
+              { backgroundColor: "rgba(239, 68, 68, 0.1)" },
             ]}
-            onPress={handleDeleteAccount}
-            disabled={deleteAccount.isPending}
           >
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: "rgba(239, 68, 68, 0.1)" },
-              ]}
+            <Ionicons name="trash-outline" size={20} color="#f87171" />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.deleteAccount")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
             >
-              <Ionicons name="trash-outline" size={20} color="#f87171" />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                {t("settings.items.deleteAccount")}
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {t("settings.subtitles.deleteAccount")}
-              </Text>
-            </View>
-            {deleteAccount.isPending ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            ) : (
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textSecondary}
-              />
-            )}
-          </Pressable>
-        </View>
-      </CollapsibleSection>
+              {t("settings.subtitles.deleteAccount")}
+            </Text>
+          </View>
+          {deleteAccount.isPending ? (
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          ) : (
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          )}
+        </Pressable>
+      </SectionGroup>
 
       {/* Advanced */}
-      <CollapsibleSection
-        title={t("settings.sections.advanced")}
-        icon="options-outline"
-        iconColor="#f59e0b"
-        iconBg="rgba(245,158,11,0.1)"
-        defaultExpanded={false}
-      >
+      <SectionGroup title={t("settings.sections.advanced")} colors={colors}>
         <AdvancedSettingsSection />
-      </CollapsibleSection>
+      </SectionGroup>
 
       {/* Logout */}
       <Pressable
@@ -969,13 +931,28 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   section: { marginBottom: 24 },
+  sectionGroup: { marginBottom: 28 },
+  sectionGroupTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 8,
+  },
+  sectionGroupContent: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 16,
     padding: 16,
     minHeight: 64,
-    borderWidth: 1,
+  },
+  divider: {
+    height: 1,
+    marginLeft: 56, // Align with text
   },
   avatar: {
     width: 60,

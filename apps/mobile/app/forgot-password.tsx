@@ -10,12 +10,17 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
 
+import { useTheme } from "../hooks/useTheme";
+
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { forgotPassword } = useAuth();
+  const { colors, isDark } = useTheme();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -26,7 +31,7 @@ export default function ForgotPasswordScreen() {
     setSuccessMessage("");
 
     if (!email) {
-      setError("Please enter your email address");
+      setError(t("auth.errors.fillFields"));
       return;
     }
 
@@ -42,13 +47,11 @@ export default function ForgotPasswordScreen() {
           `Reset token generated (Dev Mode): ${res.resetToken}`,
         );
       } else {
-        setSuccessMessage(
-          res.message || "Check your email for reset instructions.",
-        );
+        setSuccessMessage(res.message || t("auth.forgot.success"));
       }
     } catch (err: unknown) {
       const errorMessage = extractErrorMessage(err);
-      setError(errorMessage || "Failed to request password reset");
+      setError(errorMessage || t("auth.forgot.error"));
     } finally {
       setIsLoading(false);
     }
@@ -56,13 +59,15 @@ export default function ForgotPasswordScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.form}>
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.subtitle}>
-          Enter your email to receive a reset link
+        <Text style={[styles.title, { color: colors.text }]}>
+          {t("auth.forgot.title")}
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t("auth.forgot.subtitle")}
         </Text>
 
         {error ? (
@@ -72,21 +77,49 @@ export default function ForgotPasswordScreen() {
         ) : null}
 
         {successMessage ? (
-          <View style={styles.successBox}>
-            <Text style={styles.successText}>{successMessage}</Text>
+          <View
+            style={[
+              styles.successBox,
+              {
+                backgroundColor: isDark
+                  ? "rgba(166, 227, 161, 0.1)"
+                  : "rgba(34, 197, 94, 0.1)",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.successText,
+                { color: isDark ? "#a6e3a1" : "#166534" },
+              ]}
+            >
+              {successMessage}
+            </Text>
             <Pressable
-              style={[styles.button, { marginTop: 16 }]}
+              style={[
+                styles.button,
+                { marginTop: 16, backgroundColor: colors.tint },
+              ]}
               onPress={() => router.push("/reset-password")}
             >
-              <Text style={styles.buttonText}>Enter token</Text>
+              <Text style={[styles.buttonText, { color: "#fff" }]}>
+                {t("auth.register.button")}
+              </Text>
             </Pressable>
           </View>
         ) : (
           <>
             <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#6b7280"
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  color: colors.text,
+                },
+              ]}
+              placeholder={t("auth.login.email")}
+              placeholderTextColor={colors.textSecondary + "80"}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -94,22 +127,30 @@ export default function ForgotPasswordScreen() {
             />
 
             <Pressable
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+              style={[
+                styles.button,
+                { backgroundColor: colors.tint },
+                isLoading && styles.buttonDisabled,
+              ]}
               onPress={handleForgot}
               disabled={isLoading}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Send Reset Link</Text>
+                <Text style={[styles.buttonText, { color: "#fff" }]}>
+                  {t("auth.forgot.button")}
+                </Text>
               )}
             </Pressable>
           </>
         )}
 
         <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
-          <Text style={styles.linkText}>
-            <Text style={styles.linkBold}>Back to Login</Text>
+          <Text style={[styles.linkText, { color: colors.textSecondary }]}>
+            <Text style={[styles.linkBold, { color: colors.tint }]}>
+              {t("auth.forgot.back")}
+            </Text>
           </Text>
         </Pressable>
       </View>

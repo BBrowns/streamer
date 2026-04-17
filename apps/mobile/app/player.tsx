@@ -39,6 +39,8 @@ import { PlayerControls } from "../components/player/PlayerControls";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { useRemoteControl } from "../hooks/useRemoteControl";
 import { DeviceEventEmitter } from "react-native";
+import { useTheme } from "../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 const SEEK_SECONDS = 10;
 const DOUBLE_TAP_DELAY = 300;
@@ -46,21 +48,23 @@ const PROGRESS_REPORT_INTERVAL = 15_000;
 
 export default function PlayerScreen() {
   const router = useRouter();
-  const {
-    currentStream,
-    mediaInfo,
-    isBuffering,
-    streamState,
-    streamMetrics,
-    errorMessage,
-    subscribeToStreamMetrics,
-    setProgress,
-    clearPlayer,
-    playbackRate,
-    setPlaybackRate,
-    autoPlayNext,
-    setStream,
-  } = usePlayerStore();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+  const currentStream = usePlayerStore((s) => s.currentStream);
+  const mediaInfo = usePlayerStore((s) => s.mediaInfo);
+  const isBuffering = usePlayerStore((s) => s.isBuffering);
+  const streamState = usePlayerStore((s) => s.streamState);
+  const streamMetrics = usePlayerStore((s) => s.streamMetrics);
+  const errorMessage = usePlayerStore((s) => s.errorMessage);
+  const subscribeToStreamMetrics = usePlayerStore(
+    (s) => s.subscribeToStreamMetrics,
+  );
+  const setProgress = usePlayerStore((s) => s.setProgress);
+  const clearPlayer = usePlayerStore((s) => s.clearPlayer);
+  const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
+  const autoPlayNext = usePlayerStore((s) => s.autoPlayNext);
+  const setStream = usePlayerStore((s) => s.setStream);
 
   const { updateStatus } = useRemoteControl();
   useTraktScrobbler();
@@ -82,7 +86,7 @@ export default function PlayerScreen() {
   );
   const seekFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updateProgress = useUpdateProgress();
+  const { mutate: updateProgress } = useUpdateProgress();
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const videoViewRef = useRef<any>(null);
@@ -118,6 +122,169 @@ export default function PlayerScreen() {
   const [showVolumeFeedback, setShowVolumeFeedback] = useState(false);
 
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: { flex: 1, backgroundColor: "#000" },
+        errorContainer: {
+          flex: 1,
+          backgroundColor: colors.background,
+          justifyContent: "center",
+          alignItems: "center",
+        },
+        errorText: { color: colors.error, fontSize: 16, marginBottom: 16 },
+        errorButton: {
+          backgroundColor: colors.tint,
+          paddingHorizontal: 20,
+          paddingVertical: 10,
+          borderRadius: 12,
+          minWidth: 44,
+          minHeight: 44,
+          justifyContent: "center",
+          alignItems: "center",
+        },
+        errorButtonText: { color: isDark ? "#000" : "#fff", fontWeight: "600" },
+        videoContainer: {
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#000",
+          overflow: "hidden",
+        },
+        webVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
+        seekOverlay: {
+          position: "absolute",
+          top: "40%",
+          paddingHorizontal: 20,
+          paddingVertical: 10,
+          backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.8)",
+          borderRadius: 24,
+          zIndex: 20,
+        },
+        seekText: { color: colors.text, fontSize: 16, fontWeight: "bold" },
+        feedbackOverlay: {
+          position: "absolute",
+          top: 40,
+          alignSelf: "center",
+          paddingHorizontal: 20,
+          paddingVertical: 10,
+          backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.8)",
+          borderRadius: 20,
+          zIndex: 20,
+        },
+        feedbackText: { color: colors.text, fontSize: 14, fontWeight: "bold" },
+        castContainer: {
+          flex: 1,
+          width: "100%",
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: colors.background,
+        },
+        castBg: {
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          opacity: isDark ? 0.3 : 0.1,
+        },
+        castCard: {
+          alignItems: "center",
+          backgroundColor: isDark
+            ? "rgba(20,20,35,0.6)"
+            : "rgba(255,255,255,0.9)",
+          padding: 40,
+          borderRadius: 32,
+          borderWidth: 1,
+          borderColor: colors.border,
+        },
+        castIconWrap: {
+          backgroundColor: colors.tint + "15",
+          padding: 24,
+          borderRadius: 40,
+          marginBottom: 24,
+        },
+        castTitle: {
+          color: colors.text,
+          fontSize: 22,
+          fontWeight: "bold",
+          marginBottom: 8,
+        },
+        castSubtitle: {
+          color: colors.textSecondary,
+          fontSize: 16,
+          marginBottom: 32,
+          textAlign: "center",
+          maxWidth: 300,
+        },
+        stopCastBtn: {
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          backgroundColor: colors.error + "15",
+          paddingHorizontal: 28,
+          paddingVertical: 14,
+          borderRadius: 30,
+          borderWidth: 1,
+          borderColor: colors.error + "30",
+        },
+        stopCastText: { color: colors.error, fontWeight: "600", fontSize: 15 },
+        resumeOverlay: {
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: isDark
+            ? "rgba(0,0,0,0.85)"
+            : "rgba(255,255,255,0.85)",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 50,
+        },
+        resumeBox: {
+          backgroundColor: colors.card,
+          padding: 30,
+          borderRadius: 24,
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: "center",
+          maxWidth: 340,
+        },
+        resumeTitle: {
+          color: colors.text,
+          fontSize: 20,
+          fontWeight: "bold",
+          marginBottom: 8,
+        },
+        resumeSub: {
+          color: colors.textSecondary,
+          fontSize: 15,
+          marginBottom: 24,
+        },
+        resumeBtns: {
+          flexDirection: "row",
+          gap: 12,
+        },
+        resumeBtnGhost: {
+          paddingVertical: 12,
+          paddingHorizontal: 20,
+          borderRadius: 12,
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.1)"
+            : "rgba(0,0,0,0.05)",
+        },
+        resumeBtnGhostText: { color: colors.text, fontWeight: "600" },
+        resumeBtnPrimary: {
+          paddingVertical: 12,
+          paddingHorizontal: 20,
+          borderRadius: 12,
+          backgroundColor: colors.tint,
+        },
+        resumeBtnPrimaryText: {
+          color: isDark ? "#000" : "#fff",
+          fontWeight: "bold",
+        },
+      }),
+    [colors, isDark],
+  );
 
   const { data: meta } = useMeta(
     mediaInfo?.type || "",
@@ -325,7 +492,7 @@ export default function PlayerScreen() {
       setProgress(currentTime, duration);
 
       if (currentTime > 0 && duration > 0) {
-        updateProgress.mutate({
+        updateProgress({
           itemId: mediaInfo.itemId,
           type: mediaInfo.type,
           season: mediaInfo.season,
@@ -368,7 +535,10 @@ export default function PlayerScreen() {
       updateStatus({ status: "idle" });
     };
   }, [
-    mediaInfo,
+    mediaInfo?.itemId,
+    mediaInfo?.type,
+    mediaInfo?.season,
+    mediaInfo?.episode,
     player,
     setProgress,
     updateProgress,
@@ -486,8 +656,14 @@ export default function PlayerScreen() {
     try {
       if (Platform.OS === "web") {
         const videoElement = document.querySelector("video");
-        if (videoElement && (videoElement as any).requestPictureInPicture) {
+        if (
+          videoElement &&
+          (videoElement as any).requestPictureInPicture &&
+          videoElement.readyState >= 1
+        ) {
           (videoElement as any).requestPictureInPicture().catch(console.error);
+        } else if (videoElement && videoElement.readyState < 1) {
+          console.warn("Video metadata not loaded yet, cannot enter PiP");
         }
       } else {
         videoViewRef.current?.startPictureInPicture?.() ||
@@ -501,9 +677,11 @@ export default function PlayerScreen() {
   if (!currentStream || !playbackUri) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No stream selected</Text>
+        <Text style={styles.errorText}>{t("player.errors.noStream")}</Text>
         <Pressable style={styles.errorButton} onPress={handleClose}>
-          <Text style={styles.errorButtonText}>Go Back</Text>
+          <Text style={styles.errorButtonText}>
+            {t("player.errors.goBack")}
+          </Text>
         </Pressable>
       </View>
     );
@@ -512,7 +690,7 @@ export default function PlayerScreen() {
   // Web fallback
   if (Platform.OS === "web") {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: "#000" }]}>
         <PlayerOverlay
           currentStream={currentStream}
           engineType={engine?.getEngineType() ?? "Unknown"}
@@ -538,18 +716,20 @@ export default function PlayerScreen() {
                   <MaterialIcons
                     name="cast-connected"
                     size={56}
-                    color="#818cf8"
+                    color={colors.tint}
                   />
                 </View>
                 <Text style={styles.castTitle}>
-                  Casting to {activeCastDevice.name}
+                  {t("player.cast.castingTo", { name: activeCastDevice.name })}
                 </Text>
                 <Text style={styles.castSubtitle}>
                   {currentStream.title || currentStream.name}
                 </Text>
                 <Pressable style={styles.stopCastBtn} onPress={stopCasting}>
-                  <MaterialIcons name="cancel" size={18} color="#fca5a5" />
-                  <Text style={styles.stopCastText}>Stop Casting</Text>
+                  <MaterialIcons name="cancel" size={18} color={colors.error} />
+                  <Text style={styles.stopCastText}>
+                    {t("player.cast.stop")}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -633,27 +813,56 @@ export default function PlayerScreen() {
 
           {showResumePrompt && (
             <View style={styles.resumeOverlay}>
-              <View style={styles.resumeBox}>
-                <Text style={styles.resumeTitle}>Resume Playback?</Text>
-                <Text style={styles.resumeSub}>
-                  You left off at{" "}
-                  {Math.floor((previousProgress?.currentTime || 0) / 60)}:
-                  {String(
-                    Math.floor((previousProgress?.currentTime || 0) % 60),
-                  ).padStart(2, "0")}
+              <View
+                style={[
+                  styles.resumeBox,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.resumeTitle, { color: colors.text }]}>
+                  {t("player.resume.title")}
+                </Text>
+                <Text
+                  style={[styles.resumeSub, { color: colors.textSecondary }]}
+                >
+                  {t("player.resume.subtitle", {
+                    time: `${Math.floor((previousProgress?.currentTime || 0) / 60)}:${String(
+                      Math.floor((previousProgress?.currentTime || 0) % 60),
+                    ).padStart(2, "0")}`,
+                  })}
                 </Text>
                 <View style={styles.resumeBtns}>
                   <Pressable
-                    style={styles.resumeBtnGhost}
+                    style={[
+                      styles.resumeBtnGhost,
+                      { backgroundColor: colors.border + "40" },
+                    ]}
                     onPress={() => handleResume(false)}
                   >
-                    <Text style={styles.resumeBtnGhostText}>Start Over</Text>
+                    <Text
+                      style={[
+                        styles.resumeBtnGhostText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {t("player.resume.startOver")}
+                    </Text>
                   </Pressable>
                   <Pressable
-                    style={styles.resumeBtnPrimary}
+                    style={[
+                      styles.resumeBtnPrimary,
+                      { backgroundColor: colors.tint },
+                    ]}
                     onPress={() => handleResume(true)}
                   >
-                    <Text style={styles.resumeBtnPrimaryText}>Resume</Text>
+                    <Text
+                      style={[
+                        styles.resumeBtnPrimaryText,
+                        { color: isDark ? "#000" : "#fff" },
+                      ]}
+                    >
+                      {t("player.resume.resume")}
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -663,7 +872,16 @@ export default function PlayerScreen() {
           {showBrightnessFeedback && (
             <View style={styles.feedbackOverlay}>
               <Text style={styles.feedbackText}>
-                ☀️ Brightness: {Math.round(fakeBrightness * 100)}%
+                ☀️ {t("player.controls.brightness")}:{" "}
+                {Math.round(fakeBrightness * 100)}%
+              </Text>
+            </View>
+          )}
+
+          {showVolumeFeedback && (
+            <View style={styles.feedbackOverlay}>
+              <Text style={styles.feedbackText}>
+                🔊 {t("player.controls.volume")}
               </Text>
             </View>
           )}
@@ -751,35 +969,6 @@ export default function PlayerScreen() {
           onSelectPlaybackRate={setPlaybackRate}
         />
 
-        {showResumePrompt && previousProgress && (
-          <View style={styles.resumeOverlay}>
-            <View style={styles.resumeBox}>
-              <Text style={styles.resumeTitle}>Resume Playback?</Text>
-              <Text style={styles.resumeSub}>
-                Continue from {Math.floor(previousProgress.currentTime / 60)}:
-                {String(Math.floor(previousProgress.currentTime % 60)).padStart(
-                  2,
-                  "0",
-                )}
-              </Text>
-              <View style={styles.resumeBtns}>
-                <Pressable
-                  style={styles.resumeBtnGhost}
-                  onPress={() => handleResume(false)}
-                >
-                  <Text style={styles.resumeBtnGhostText}>Start Over</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.resumeBtnPrimary}
-                  onPress={() => handleResume(true)}
-                >
-                  <Text style={styles.resumeBtnPrimaryText}>Resume</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        )}
-
         {showNextEpisodeOverlay && nextEpisode && (
           <NextEpisodeOverlay
             isVisible={showNextEpisodeOverlay}
@@ -796,153 +985,3 @@ export default function PlayerScreen() {
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  errorContainer: {
-    flex: 1,
-    backgroundColor: "#000",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorText: { color: "#fca5a5", fontSize: 16, marginBottom: 16 },
-  errorButton: {
-    backgroundColor: "#e50914",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorButtonText: { color: "#fff", fontWeight: "600" },
-  videoContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-    overflow: "hidden",
-  },
-  webVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
-  seekOverlay: {
-    position: "absolute",
-    top: "40%",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    borderRadius: 24,
-    zIndex: 20,
-  },
-  seekText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  feedbackOverlay: {
-    position: "absolute",
-    top: 40,
-    alignSelf: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    borderRadius: 20,
-    zIndex: 20,
-  },
-  feedbackText: { color: "#fff", fontSize: 14, fontWeight: "bold" },
-  castContainer: {
-    flex: 1,
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#050510",
-  },
-  castBg: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    opacity: 0.3,
-  },
-  castCard: {
-    alignItems: "center",
-    backgroundColor: "rgba(20,20,35,0.6)",
-    padding: 40,
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  castIconWrap: {
-    backgroundColor: "rgba(129,140,248,0.15)",
-    padding: 24,
-    borderRadius: 40,
-    marginBottom: 24,
-  },
-  castTitle: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  castSubtitle: {
-    color: "#a1a1aa",
-    fontSize: 16,
-    marginBottom: 32,
-    textAlign: "center",
-    maxWidth: 300,
-  },
-  stopCastBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(252,165,165,0.1)",
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(252,165,165,0.3)",
-  },
-  stopCastText: { color: "#fef2f2", fontWeight: "600", fontSize: 15 },
-  resumeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 50,
-  },
-  resumeBox: {
-    backgroundColor: "#1a1a24",
-    padding: 30,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    alignItems: "center",
-    maxWidth: 340,
-  },
-  resumeTitle: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  resumeSub: {
-    color: "#a1a1aa",
-    fontSize: 15,
-    marginBottom: 24,
-  },
-  resumeBtns: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  resumeBtnGhost: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.1)",
-  },
-  resumeBtnGhostText: { color: "#fff", fontWeight: "600" },
-  resumeBtnPrimary: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: "#00f2ff",
-  },
-  resumeBtnPrimaryText: { color: "#000", fontWeight: "bold" },
-});

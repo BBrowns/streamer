@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { View, Animated, StyleSheet, type ViewStyle } from "react-native";
+import { useTheme } from "../../hooks/useTheme";
 
 interface SkeletonProps {
   variant?: "card" | "row" | "text" | "circle";
@@ -29,6 +30,7 @@ export function SkeletonLoader({
   style,
 }: SkeletonProps) {
   const opacity = useRef(new Animated.Value(0.3)).current;
+  const { isDark } = useTheme();
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -58,10 +60,15 @@ export function SkeletonLoader({
       style={[
         styles.base,
         variantStyle,
-        { opacity },
-        width !== undefined && { width: width as any },
-        height !== undefined && { height: height as any },
-        borderRadius !== undefined && { borderRadius },
+        {
+          width: width as any,
+          height: height as any,
+          borderRadius,
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.05)"
+            : "rgba(0,0,0,0.08)",
+          opacity,
+        },
         style,
       ]}
     />
@@ -129,7 +136,6 @@ export function SkeletonRow() {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: "#1e293b", // Slate grey for better visibility on black
     overflow: "hidden",
   },
   card: {

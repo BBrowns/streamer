@@ -1,62 +1,69 @@
 import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
-import { Stack, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, Text, StyleSheet, View } from "react-native";
+import { Stack } from "expo-router";
+import { useTheme } from "../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 export default function PrivacyScreen() {
-  const router = useRouter();
-
+  const { colors } = useTheme();
+  const { t } = useTranslation();
   return (
-    <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: "Privacy Policy",
-          headerTitleStyle: { color: "#fff" },
-          headerStyle: { backgroundColor: "#050614" },
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={{ marginLeft: 8 }}>
-              <Ionicons name="chevron-back" size={24} color="#00f2ff" />
-            </Pressable>
-          ),
-        }}
-      />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Your Privacy Matters</Text>
-        <Text style={styles.date}>Last Updated: March 31, 2026</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.content}
+    >
+      <Stack.Screen options={{ title: t("legal.privacyTitle") }} />
+      <Text style={[styles.title, { color: colors.text }]}>
+        {t("legal.privacyTitle")}
+      </Text>
+      <Text style={[styles.date, { color: colors.textSecondary }]}>
+        {t("legal.lastUpdated", { date: "April 1, 2026" })}
+      </Text>
 
-        <Text style={styles.sectionTitle}>1. Data Collection</Text>
-        <Text style={styles.text}>
-          Streamer is a self-hosted ecosystem. We do not sell your personal
-          information. When you use our official backend, we store your email
-          (for account recovery), your encrypted library, and watch progress to
-          enable cross-device syncing.
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.privacy.1")}
         </Text>
-
-        <Text style={styles.sectionTitle}>2. Local Processing</Text>
-        <Text style={styles.text}>
-          Most processing, including torrent streaming and metadata fetching,
-          happens locally on your device or your personal stream-server bridge.
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          We collect only the most essential information to enable cross-device
+          synchronization. This includes your email (for account creation) and
+          metadata hashes for items in your library.
         </Text>
+      </View>
 
-        <Text style={styles.sectionTitle}>3. Your Rights (GDPR)</Text>
-        <Text style={styles.text}>
-          You have the right to access your data and the right to be forgotten.
-          Use the "Export My Data" and "Delete Account" buttons in Settings to
-          exercise these rights.
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.privacy.2")}
         </Text>
-
-        <Text style={styles.sectionTitle}>4. Security</Text>
-        <Text style={styles.text}>
-          We use industry-standard encryption for data at rest and in transit.
-          Biometric data used for unlocking the app never leaves your device's
-          Secure Enclave or Trusted Execution Environment.
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          We do NOT store or access any sensitive information, including payment
+          data, beyond what is necessary to authenticate your account. We do Not
+          track your specific viewing content; only the metadata required for
+          library syncing.
         </Text>
+      </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>© 2026 Streamer OSS Project</Text>
-        </View>
-      </ScrollView>
-    </View>
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.privacy.3")}
+        </Text>
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          We do not sell or share your personal information with third parties
+          for marketing purposes. Your data is used exclusively to provide the
+          Streamer service.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.privacy.4")}
+        </Text>
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          You can delete your account and all associated data at any time
+          through the application's settings screen.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -64,15 +71,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#050614" },
   content: { padding: 24, paddingBottom: 60 },
   title: { color: "#f8fafc", fontSize: 28, fontWeight: "900", marginBottom: 8 },
-  date: { color: "#64748b", fontSize: 13, marginBottom: 32 },
+  date: { color: "#64748b", fontSize: 14, marginBottom: 32 },
+  section: { marginBottom: 24 },
   sectionTitle: {
     color: "#00f2ff",
     fontSize: 18,
     fontWeight: "800",
-    marginTop: 24,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   text: { color: "#94a3b8", fontSize: 15, lineHeight: 24 },
-  footer: { marginTop: 48, alignItems: "center" },
-  footerText: { color: "#475569", fontSize: 12 },
 });

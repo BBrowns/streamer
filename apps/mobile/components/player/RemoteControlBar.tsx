@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRemoteControl } from "../../hooks/useRemoteControl";
+import { useTheme } from "../../hooks/useTheme";
 import { BlurView } from "expo-blur";
 import Animated, {
   SlideInDown,
@@ -21,6 +22,7 @@ import { hapticImpactLight } from "../../lib/haptics";
 
 export function RemoteControlBar() {
   const { otherActiveSessions, sendCommand } = useRemoteControl();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
 
@@ -57,16 +59,28 @@ export function RemoteControlBar() {
       exiting={SlideOutDown.duration(300)}
       style={[styles.wrapper, width > 600 && styles.wrapperWide]}
     >
-      <BlurView intensity={90} tint="dark" style={styles.container}>
+      <BlurView
+        intensity={90}
+        tint={isDark ? "dark" : "light"}
+        style={[styles.container, { borderColor: colors.border }]}
+      >
         <View style={styles.left}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="tv-outline" size={20} color="#00f2ff" />
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: colors.tint + "15" },
+            ]}
+          >
+            <Ionicons name="tv-outline" size={20} color={colors.tint} />
           </View>
           <View style={styles.info}>
-            <Text style={styles.deviceText}>
+            <Text style={[styles.deviceText, { color: colors.textSecondary }]}>
               Active on {session.deviceName || "Another Device"}
             </Text>
-            <Text style={styles.itemText} numberOfLines={1}>
+            <Text
+              style={[styles.itemText, { color: colors.text }]}
+              numberOfLines={1}
+            >
               {session.status === "playing" ? "Playing" : "Paused"}:{" "}
               {session.itemTitle || "Unknown Content"}
             </Text>
@@ -74,15 +88,25 @@ export function RemoteControlBar() {
         </View>
 
         <View style={styles.right}>
-          <Pressable onPress={handleTogglePlay} style={styles.controlBtn}>
+          <Pressable
+            onPress={handleTogglePlay}
+            style={[styles.controlBtn, { backgroundColor: colors.tint + "15" }]}
+          >
             <Ionicons
               name={session.status === "playing" ? "pause" : "play"}
               size={24}
-              color="#ffffff"
+              color={colors.text}
             />
           </Pressable>
-          <Pressable onPress={handleTakeOver} style={styles.takeOverBtn}>
-            <Text style={styles.takeOverText}>Take Over</Text>
+          <Pressable
+            onPress={handleTakeOver}
+            style={[styles.takeOverBtn, { backgroundColor: colors.tint }]}
+          >
+            <Text
+              style={[styles.takeOverText, { color: isDark ? "#000" : "#fff" }]}
+            >
+              Take Over
+            </Text>
           </Pressable>
         </View>
       </BlurView>

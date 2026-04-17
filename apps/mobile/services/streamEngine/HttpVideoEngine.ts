@@ -5,11 +5,15 @@ export class HttpVideoEngine implements IStreamEngine {
   private listeners = new Map<string, Set<Function>>();
 
   canPlay(stream: Stream): boolean {
-    // Fallback for ANY string url that looks like a web link
+    // Fallback for ANY string url that looks like a web link or local file
     if (!stream.url) return false;
 
     const url = stream.url.toLowerCase();
-    return url.startsWith("http://") || url.startsWith("https://");
+    return (
+      url.startsWith("http://") ||
+      url.startsWith("https://") ||
+      url.startsWith("file://")
+    );
   }
 
   async getPlaybackUri(stream: Stream): Promise<string> {

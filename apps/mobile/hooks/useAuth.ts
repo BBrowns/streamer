@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import { authService } from "../services/authService";
+import { api } from "../services/api";
 import type {
   LoginRequest,
   RegisterRequest,
@@ -11,13 +12,28 @@ import type {
 } from "@streamer/shared";
 
 export function useAuth() {
-  const {
-    user,
-    isAuthenticated,
-    setAuth,
-    logout: storeLogout,
-  } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const setAuth = useAuthStore((s) => s.setAuth);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const pendingAddonUrls = useAuthStore((s) => s.pendingAddonUrls);
+  const resetPendingAddons = useAuthStore((s) => s.resetPendingAddons);
+  const storeLogout = useAuthStore((s) => s.logout);
   const queryClient = useQueryClient();
+
+  const flushPendingAddons = async () => {
+    if (pendingAddonUrls.length === 0) return;
+    try {
+      for (const url of pendingAddonUrls) {
+        await api.post("/api/addons", { transportUrl: url });
+      }
+      resetPendingAddons();
+    } catch (e) {
+      if (__DEV__)
+        console.error("[useAuth] Failed to flush pending addons:", e);
+    }
+  };
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
@@ -27,6 +43,7 @@ export function useAuth() {
         result.tokens.accessToken,
         result.tokens.refreshToken,
       );
+      flushPendingAddons();
     },
   });
 
@@ -39,6 +56,7 @@ export function useAuth() {
           result.tokens.accessToken,
           result.tokens.refreshToken,
         );
+        flushPendingAddons();
       }
     },
   });
@@ -65,13 +83,9 @@ export function useAuth() {
   const updateProfileMutation = useMutation({
     mutationFn: (data: UpdateProfileRequest) => authService.updateProfile(data),
     onSuccess: (result) => {
-      if (user) {
-        // Keep the existing tokens, just update the user object
-        const accessToken = useAuthStore.getState().accessToken;
-        const refreshToken = useAuthStore.getState().refreshToken;
-        if (accessToken && refreshToken) {
-          setAuth(result.user, accessToken, refreshToken);
-        }
+      // Use tokens already in reactive state — no need for getState()
+      if (accessToken && refreshToken) {
+        setAuth(result.user, accessToken, refreshToken);
       }
     },
   });
@@ -87,6 +101,8 @@ export function useAuth() {
     updateProfile: updateProfileMutation.mutateAsync,
     logout,
     isLoading: loginMutation.isPending || registerMutation.isPending,
+    isUpdatePending: updateProfileMutation.isPending,
     error: loginMutation.error || registerMutation.error,
+    updateError: updateProfileMutation.error,
   };
 }

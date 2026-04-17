@@ -22,9 +22,11 @@ import "../global.css";
 import { DesktopLayout } from "../components/ui/DesktopLayout";
 import { useAuthStore } from "../stores/authStore";
 import { ToastContainer } from "../components/ui/ToastContainer";
+import "../lib/i18n";
 import { CommandPalette } from "../components/ui/CommandPalette";
 import { useAuth } from "../hooks/useAuth";
 import { useSync } from "../hooks/useSync";
+import { useTheme } from "../hooks/useTheme";
 import { migrateTokensToSecureStorage } from "../services/secureStorage";
 import { BiometricLockOverlay } from "../components/ui/BiometricLockOverlay";
 import { RemoteControlBar } from "../components/player/RemoteControlBar";
@@ -56,8 +58,6 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
     Sentry.captureException(error);
   }, [error]);
-  useAuth();
-  useSync();
 
   return (
     <View style={styles.errorContainer}>
@@ -73,22 +73,26 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   );
 }
 
-function RootLayout() {
+function RootLayoutNav() {
   const appState = useRef(AppState.currentState);
-  const { deviceId, setDeviceId } = useAuthStore();
+  const { isDark, colors: themeColors } = useTheme();
+  const deviceId = useAuthStore((s) => s.deviceId);
+  const setDeviceId = useAuthStore((s) => s.setDeviceId);
+  const isHydrated = useAuthStore((s) => s.isHydrated);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  // Global hooks MUST be inside QueryClientProvider
   useAuth();
   useSync();
 
   useEffect(() => {
-    if (!deviceId) {
+    if (isHydrated && !deviceId) {
       const newId =
         Math.random().toString(36).substring(2, 15) +
         Math.random().toString(36).substring(2, 15);
       setDeviceId(newId);
     }
-  }, [deviceId]);
+  }, [deviceId, isHydrated]);
 
   useEffect(() => {
     // 1. One-time migration from plain AsyncStorage to SecureStore (idempotent)
@@ -139,26 +143,36 @@ function RootLayout() {
       }
       if (e.key === "Escape") setSearchOpen(false);
     };
+
+    const { DeviceEventEmitter } = require("react-native");
+    const sub = DeviceEventEmitter.addListener("SHOW_SEARCH", () => {
+      setSearchOpen(true);
+    });
+
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      sub.remove();
+    };
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
-      <CommandPalette
-        visible={searchOpen}
-        onClose={() => setSearchOpen(false)}
-      />
-      <ToastContainer />
-      <BiometricLockOverlay />
+    <RootLayoutNavInner>
       <DesktopLayout onSearchOpen={() => setSearchOpen(true)}>
+        <CommandPalette
+          visible={searchOpen}
+          onClose={() => setSearchOpen(false)}
+        />
+        <ToastContainer />
+        <BiometricLockOverlay />
+        <StatusBar style={isDark ? "light" : "dark"} />
         <Stack
           screenOptions={{
-            headerStyle: { backgroundColor: "#010101" },
-            headerTintColor: "#ffffff",
+            headerStyle: { backgroundColor: themeColors.header },
+            headerTintColor: themeColors.text,
             headerTitleStyle: { fontWeight: "700" },
-            contentStyle: { backgroundColor: "#010101" },
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: themeColors.background },
           }}
         >
           <Stack.Screen
@@ -206,6 +220,19 @@ function RootLayout() {
         </Stack>
       </DesktopLayout>
       <RemoteControlBar />
+    </RootLayoutNavInner>
+  );
+}
+
+// Wrapper for layout elements that need to be inside providers but outside Navigation
+function RootLayoutNavInner({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+function RootLayout() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RootLayoutNav />
     </QueryClientProvider>
   );
 }

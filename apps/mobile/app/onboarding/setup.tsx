@@ -14,6 +14,8 @@ import { hapticSelection, hapticSuccess } from "../../lib/haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../../services/api";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 const STARTER_ADDONS = [
   {
@@ -30,8 +32,12 @@ const STARTER_ADDONS = [
 
 export default function OnboardingSetup() {
   const router = useRouter();
-  const { theme, setTheme } = useAuthStore();
-  const [installed, setInstalled] = useState<string[]>([]);
+  const theme = useAuthStore((s) => s.theme);
+  const setTheme = useAuthStore((s) => s.setTheme);
+  const setPendingAddons = useAuthStore((s) => s.setPendingAddons);
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+  const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [isInstalling, setIsInstalling] = useState(false);
 
   const handleToggleTheme = (t: "light" | "dark" | "system") => {
@@ -39,24 +45,20 @@ export default function OnboardingSetup() {
     hapticSelection();
   };
 
-  const handleInstallAddon = async (url: string, name: string) => {
-    try {
-      setIsInstalling(true);
-      // Note: This requires being logged in usually, but during onboarding
-      // we might want to just queue them or skip if not supported.
-      // For now, we'll just mark them as 'selected' to be installed after login
-      // or try to install if the user is already authenticated (unlikely here).
-      setInstalled((prev) => [...prev, name]);
-      hapticSuccess();
-    } finally {
-      setIsInstalling(false);
-    }
+  const handleInstallAddon = (url: string) => {
+    setSelectedUrls((prev) =>
+      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url],
+    );
+    hapticSelection();
   };
 
   const handleFinish = async () => {
     try {
+      // Save pending addons to global store before navigating
+      setPendingAddons(selectedUrls);
+
       await AsyncStorage.setItem("HAS_SEEN_ONBOARDING", "true");
-      hapticSelection();
+      hapticSuccess();
       router.replace("/login");
     } catch (e) {
       router.replace("/login");
@@ -64,45 +66,70 @@ export default function OnboardingSetup() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <Stack.Screen options={{ headerShown: false }} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.title}>Personalize</Text>
-          <Text style={styles.subtitle}>
-            Customize your experience before we begin.
+          <Text style={[styles.title, { color: colors.text }]}>
+            {t("onboarding.title")}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            {t("onboarding.subtitle")}
           </Text>
         </View>
 
         {/* Theme Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Appearance</Text>
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>
+            {t("onboarding.appearance")}
+          </Text>
           <View style={styles.themeRow}>
-            {(["dark", "light", "system"] as const).map((t) => (
+            {(["dark", "light", "system"] as const).map((themeOption) => (
               <Pressable
-                key={t}
+                key={themeOption}
                 style={[
                   styles.themeOption,
-                  theme === t && styles.themeOptionActive,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(0,0,0,0.04)",
+                    borderColor:
+                      theme === themeOption ? colors.tint : colors.border,
+                  },
+                  theme === themeOption && {
+                    backgroundColor: `${colors.tint}15`,
+                  },
                 ]}
-                onPress={() => handleToggleTheme(t)}
+                onPress={() => handleToggleTheme(themeOption)}
               >
                 <Ionicons
                   name={
-                    t === "dark" ? "moon" : t === "light" ? "sunny" : "contrast"
+                    themeOption === "dark"
+                      ? "moon"
+                      : themeOption === "light"
+                        ? "sunny"
+                        : "contrast"
                   }
                   size={20}
-                  color={theme === t ? "#000" : "#94a3b8"}
+                  color={
+                    theme === themeOption ? colors.tint : colors.textSecondary
+                  }
                 />
                 <Text
                   style={[
                     styles.themeText,
-                    theme === t && styles.themeTextActive,
+                    {
+                      color:
+                        theme === themeOption
+                          ? colors.text
+                          : colors.textSecondary,
+                    },
+                    theme === themeOption && styles.themeTextActive,
                   ]}
                 >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t(`common.themes.${themeOption}`)}
                 </Text>
               </Pressable>
             ))}
@@ -111,33 +138,56 @@ export default function OnboardingSetup() {
 
         {/* Recommended Add-ons */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Starter Add-ons</Text>
-          <Text style={styles.sectionDesc}>
-            Highly recommended for metadata and subtitles.
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>
+            {t("onboarding.addonsTitle")}
+          </Text>
+          <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
+            {t("onboarding.addonsSubtitle")}
           </Text>
           {STARTER_ADDONS.map((addon) => (
             <Pressable
               key={addon.name}
-              style={styles.addonCard}
-              onPress={() =>
-                !installed.includes(addon.name) &&
-                handleInstallAddon(addon.url, addon.name)
-              }
+              style={[
+                styles.addonCard,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.03)"
+                    : "rgba(0,0,0,0.02)",
+                  borderColor: selectedUrls.includes(addon.url)
+                    ? colors.tint
+                    : colors.border,
+                },
+              ]}
+              onPress={() => handleInstallAddon(addon.url)}
             >
               <View style={styles.addonInfo}>
-                <Text style={styles.addonName}>{addon.name}</Text>
-                <Text style={styles.addonDesc}>{addon.description}</Text>
+                <Text style={[styles.addonName, { color: colors.text }]}>
+                  {addon.name}
+                </Text>
+                <Text
+                  style={[styles.addonDesc, { color: colors.textSecondary }]}
+                >
+                  {addon.description}
+                </Text>
               </View>
               <View
                 style={[
                   styles.installBadge,
-                  installed.includes(addon.name) && styles.installBadgeActive,
+                  {
+                    backgroundColor: selectedUrls.includes(addon.url)
+                      ? colors.tint
+                      : isDark
+                        ? "rgba(255,255,255,0.06)"
+                        : "rgba(0,0,0,0.04)",
+                  },
                 ]}
               >
                 <Ionicons
-                  name={installed.includes(addon.name) ? "checkmark" : "add"}
+                  name={selectedUrls.includes(addon.url) ? "checkmark" : "add"}
                   size={16}
-                  color={installed.includes(addon.name) ? "#000" : "#00f2ff"}
+                  color={
+                    selectedUrls.includes(addon.url) ? "#fff" : colors.tint
+                  }
                 />
               </View>
             </Pressable>
@@ -146,20 +196,20 @@ export default function OnboardingSetup() {
 
         {/* Legal */}
         <View style={styles.legalSection}>
-          <Text style={styles.legalText}>
-            By continuing, you agree to our{" "}
+          <Text style={[styles.legalText, { color: colors.textSecondary }]}>
+            {t("onboarding.legalAgreement")}{" "}
             <Text
-              style={styles.legalLink}
+              style={[styles.legalLink, { color: colors.tint }]}
               onPress={() => router.push("/terms")}
             >
-              Terms
+              {t("onboarding.terms")}
             </Text>{" "}
-            and{" "}
+            {t("onboarding.and")}{" "}
             <Text
-              style={styles.legalLink}
+              style={[styles.legalLink, { color: colors.tint }]}
               onPress={() => router.push("/privacy")}
             >
-              Privacy Policy
+              {t("onboarding.privacy")}
             </Text>
             .
           </Text>
@@ -167,11 +217,24 @@ export default function OnboardingSetup() {
 
         <Pressable style={styles.finishBtn} onPress={handleFinish}>
           <LinearGradient
-            colors={["#00f2ff", "#00d1ff"]}
+            colors={isDark ? ["#00f2ff", "#00d1ff"] : ["#6366f1", "#4f46e5"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={styles.finishGradient}
           >
-            <Text style={styles.finishBtnText}>Finish & Sign In</Text>
-            <Ionicons name="arrow-forward" size={18} color="#000" />
+            <Text
+              style={[
+                styles.finishBtnText,
+                { color: isDark ? "#000" : "#fff" },
+              ]}
+            >
+              {t("onboarding.finish")}
+            </Text>
+            <Ionicons
+              name="arrow-forward"
+              size={18}
+              color={isDark ? "#000" : "#fff"}
+            />
           </LinearGradient>
         </Pressable>
       </ScrollView>
@@ -180,70 +243,60 @@ export default function OnboardingSetup() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050614" },
+  container: { flex: 1 },
   scrollContent: { padding: 32, paddingTop: 100, paddingBottom: 60 },
   header: { marginBottom: 40 },
   title: {
-    color: "#f8fafc",
     fontSize: 36,
     fontWeight: "900",
-    letterSpacing: -1,
+    letterSpacing: -1.5,
   },
-  subtitle: { color: "#94a3b8", fontSize: 16, marginTop: 8 },
+  subtitle: { fontSize: 16, marginTop: 8 },
   section: { marginBottom: 32 },
   sectionLabel: {
-    color: "#f8fafc",
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 12,
   },
-  sectionDesc: { color: "#64748b", fontSize: 13, marginBottom: 16 },
+  sectionDesc: { fontSize: 13, marginBottom: 16 },
   themeRow: { flexDirection: "row", gap: 12 },
   themeOption: {
     flex: 1,
-    height: 80,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 16,
+    height: 85,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
   },
-  themeOptionActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
-  themeText: { color: "#94a3b8", fontSize: 13, fontWeight: "700" },
-  themeTextActive: { color: "#000" },
+  themeText: { fontSize: 13, fontWeight: "700" },
+  themeTextActive: { fontWeight: "800" },
   addonCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.03)",
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1.5,
   },
   addonInfo: { flex: 1 },
-  addonName: { color: "#f8fafc", fontSize: 15, fontWeight: "700" },
-  addonDesc: { color: "#64748b", fontSize: 12, marginTop: 2 },
+  addonName: { fontSize: 16, fontWeight: "700" },
+  addonDesc: { fontSize: 13, marginTop: 2 },
   installBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(0, 242, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
   },
-  installBadgeActive: { backgroundColor: "#00f2ff" },
   legalSection: { marginTop: 20, marginBottom: 40 },
   legalText: {
-    color: "#475569",
     fontSize: 12,
     textAlign: "center",
     lineHeight: 18,
   },
-  legalLink: { color: "#00f2ff", fontWeight: "700" },
-  finishBtn: { height: 60, borderRadius: 20, overflow: "hidden" },
+  legalLink: { fontWeight: "700" },
+  finishBtn: { height: 64, borderRadius: 24, overflow: "hidden" },
   finishGradient: {
     flex: 1,
     flexDirection: "row",
@@ -252,9 +305,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   finishBtnText: {
-    color: "#000",
     fontSize: 17,
     fontWeight: "900",
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 });

@@ -6,6 +6,8 @@ import {
   StyleSheet,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 import type { StreamMetrics, StreamLoadState } from "../../stores/playerStore";
 
 interface PlayerStatusOverlayProps {
@@ -23,24 +25,36 @@ export function PlayerStatusOverlay({
   errorMessage,
   onBack,
 }: PlayerStatusOverlayProps) {
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+
   if (streamState === "loading_metrics") {
     return (
-      <View style={styles.metricsOverlay}>
+      <View
+        style={[
+          styles.metricsOverlay,
+          {
+            backgroundColor: isDark
+              ? "rgba(0,0,0,0.8)"
+              : "rgba(255,255,255,0.85)",
+          },
+        ]}
+      >
         <ActivityIndicator
           size="large"
-          color="#818cf8"
+          color={colors.tint}
           style={styles.spinner}
         />
-        <Text style={styles.titleText}>
+        <Text style={[styles.titleText, { color: colors.text }]}>
           {streamMetrics?.state === "finding_peers"
-            ? "Finding peers..."
+            ? t("player.status.findingPeers")
             : streamMetrics?.state === "connecting"
-              ? "Connecting to peers..."
-              : "Buffering..."}
+              ? t("player.status.connecting")
+              : t("player.status.buffering")}
         </Text>
         {streamMetrics && (
-          <Text style={styles.subtitleText}>
-            {streamMetrics.numPeers} peers •{" "}
+          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
+            {streamMetrics.numPeers} {t("player.controls.peers")} •{" "}
             {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
           </Text>
         )}
@@ -50,19 +64,38 @@ export function PlayerStatusOverlay({
 
   if (streamState === "error") {
     return (
-      <View style={styles.errorOverlay}>
+      <View
+        style={[
+          styles.errorOverlay,
+          {
+            backgroundColor: isDark
+              ? "rgba(0,0,0,0.95)"
+              : "rgba(255,255,255,0.95)",
+          },
+        ]}
+      >
         <MaterialIcons
           name="error-outline"
           size={48}
-          color="#fca5a5"
+          color={colors.error}
           style={styles.errorIcon}
         />
-        <Text style={styles.errorTitle}>Connection Failed</Text>
-        <Text style={styles.errorMessage}>
-          {errorMessage || "Unable to load stream"}
+        <Text style={[styles.errorTitle, { color: colors.error }]}>
+          {t("player.status.errorTitle")}
         </Text>
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
+          {errorMessage || t("player.status.errorSubtitle")}
+        </Text>
+        <Pressable
+          style={[
+            styles.backButton,
+            { backgroundColor: colors.tint + "15", borderColor: colors.border },
+          ]}
+          onPress={onBack}
+        >
+          <Text style={[styles.backButtonText, { color: colors.text }]}>
+            {t("player.errors.goBack")}
+          </Text>
         </Pressable>
       </View>
     );

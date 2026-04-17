@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Link, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -45,25 +46,43 @@ const NAV_ITEMS = [
 export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
   const pathname = usePathname();
   const { width } = Dimensions.get("window");
+  const { colors, isDark } = useTheme();
   const isDesktop = Platform.OS === "web" && width > 1024;
 
   if (!isDesktop) return <>{children}</>;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Persistent Sidebar */}
-      <View style={styles.sidebar}>
+      <View
+        style={[
+          styles.sidebar,
+          {
+            backgroundColor: colors.tabBar,
+            borderRightColor: colors.border,
+          },
+        ]}
+      >
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <View style={styles.logoIconWrap}>
-            <Ionicons name="play" size={18} color="#000" />
+          <View style={[styles.logoIconWrap, { backgroundColor: colors.tint }]}>
+            <Ionicons name="play" size={18} color={isDark ? "#000" : "#fff"} />
           </View>
-          <Text style={styles.logoText}>Streamer</Text>
+          <Text style={[styles.logoText, { color: colors.text }]}>
+            Streamer
+          </Text>
         </View>
 
         {/* Main nav */}
         <View style={styles.nav}>
-          <Text style={styles.navSectionLabel}>MENU</Text>
+          <Text
+            style={[
+              styles.navSectionLabel,
+              { color: colors.textSecondary + "90" },
+            ]}
+          >
+            MENU
+          </Text>
           {NAV_ITEMS.map((item) => {
             const active =
               item.href === "/"
@@ -98,17 +117,40 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
             <Pressable
               style={({ pressed }) => [
                 styles.navLink,
-                pressed && styles.navLinkPressed,
+                pressed && {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.05)",
+                },
               ]}
               onPress={onSearchOpen}
               accessibilityLabel="Search (⌘K)"
             >
               <View style={styles.navLinkInner}>
-                <Ionicons name="search-outline" size={20} color="#6b7280" />
-                <Text style={styles.navLabel}>Search</Text>
+                <Ionicons
+                  name="search-outline"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text
+                  style={[styles.navLabel, { color: colors.textSecondary }]}
+                >
+                  Search
+                </Text>
               </View>
-              <View style={styles.kbdHint}>
-                <Text style={styles.kbdText}>⌘K</Text>
+              <View
+                style={[
+                  styles.kbdHint,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(0,0,0,0.05)",
+                  },
+                ]}
+              >
+                <Text style={[styles.kbdText, { color: colors.textSecondary }]}>
+                  ⌘K
+                </Text>
               </View>
             </Pressable>
           )}
@@ -134,6 +176,7 @@ function NavLink({
   label: string;
   active: boolean;
 }) {
+  const { colors, isDark } = useTheme();
   const [isHovered, setIsHovered] = React.useState(false);
   const isWeb = Platform.OS === "web";
 
@@ -142,27 +185,40 @@ function NavLink({
       <Pressable
         style={({ pressed }) => [
           styles.navLink,
-          active && styles.navLinkActive,
-          isWeb && isHovered && !active && styles.navLinkHovered,
-          pressed && styles.navLinkPressed,
+          active && { backgroundColor: colors.tint + "15" },
+          isWeb &&
+            isHovered &&
+            !active && {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.04)"
+                : "rgba(0,0,0,0.03)",
+            },
+          pressed && {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.08)"
+              : "rgba(0,0,0,0.05)",
+          },
         ]}
         onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
         onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
         accessibilityRole="link"
         accessibilityLabel={label}
       >
-        {active && <View style={styles.activeBar} />}
+        {active && (
+          <View style={[styles.activeBar, { backgroundColor: colors.tint }]} />
+        )}
         <View style={styles.navLinkInner}>
           <Ionicons
             name={active ? activeIcon : icon}
             size={20}
-            color={active || (isWeb && isHovered) ? "#00f2ff" : "#6b7280"}
-            style={{ transition: "color 0.2s ease" } as any}
+            color={active ? colors.tint : colors.textSecondary}
           />
           <Text
             style={[
               styles.navLabel,
-              (active || (isWeb && isHovered)) && styles.navLabelActive,
+              { color: active ? colors.text : colors.textSecondary },
+              active && { fontWeight: "700" },
+              isWeb && isHovered && !active && { color: colors.text },
             ]}
           >
             {label}
@@ -177,13 +233,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#07070e",
   },
   sidebar: {
     width: 220,
-    backgroundColor: "#0a0a14",
     borderRightWidth: 1,
-    borderRightColor: "rgba(255,255,255,0.06)",
     paddingVertical: 28,
     paddingHorizontal: 12,
   },
@@ -198,18 +251,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: "#00f2ff",
     justifyContent: "center",
     alignItems: "center",
   },
   logoText: {
-    color: "#ffffff",
     fontSize: 18,
     fontWeight: "800",
     letterSpacing: -0.5,
   },
   navSectionLabel: {
-    color: "#374151",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.5,
@@ -225,16 +275,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
-    transition: "all 0.2s ease-in-out",
-  } as any,
-  navLinkActive: {
-    backgroundColor: "rgba(0, 242, 255, 0.08)",
-  },
-  navLinkHovered: {
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-  },
-  navLinkPressed: {
-    backgroundColor: "rgba(255,255,255,0.08)",
   },
   activeBar: {
     position: "absolute",
@@ -243,7 +283,6 @@ const styles = StyleSheet.create({
     bottom: 8,
     width: 3,
     borderRadius: 2,
-    backgroundColor: "#00f2ff",
   },
   navLinkInner: {
     flexDirection: "row",
@@ -253,32 +292,23 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   navLabel: {
-    color: "#6b7280",
     fontSize: 14,
     fontWeight: "600",
-    transition: "color 0.2s ease",
-  } as any,
-  navLabelActive: {
-    color: "#e2e8f0",
-    fontWeight: "700",
   },
   spacer: {
     flex: 1,
   },
   content: {
     flex: 1,
-    backgroundColor: "#07070e",
   },
   kbdHint: {
     marginLeft: "auto",
-    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginRight: 8,
   },
   kbdText: {
-    color: "#4b5563",
     fontSize: 10,
     fontWeight: "800",
   },

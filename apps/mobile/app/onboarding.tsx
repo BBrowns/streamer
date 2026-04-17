@@ -14,7 +14,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "Premium Experience",
     description:
       "Stream your favorite content in high definition with a modern, holographic interface designed for true cinephiles.",
-    image: require("../../../onboarding_streaming_1774973383574.png"),
+    image: require("../assets/images/onboarding_streaming.png"),
     colors: ["#1e1b4b", "#312e81"],
   },
   {
@@ -22,7 +22,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "Global Sync",
     description:
       "Your library and watch progress stay in perfect sync across all your devices in real-time. Start on your TV, finish on your phone.",
-    image: require("../../../onboarding_sync_1774973368915.png"),
+    image: require("../assets/images/onboarding_sync.png"),
     colors: ["#0f172a", "#1e293b"],
   },
   {
@@ -30,7 +30,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "Secure & Private",
     description:
       "Protect your account with mandatory email activation and biometric unlocking. Your data is your business, and we keep it that way.",
-    image: require("../../../onboarding_security_1774973398488.png"),
+    image: require("../assets/images/onboarding_security.png"),
     colors: ["#020617", "#0f172a"],
   },
 ];

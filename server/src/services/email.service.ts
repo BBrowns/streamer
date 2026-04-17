@@ -6,7 +6,7 @@ class EmailService {
   private transporter: nodemailer.Transporter | null = null;
 
   constructor() {
-    if (env.smtp.host && env.smtp.user && env.smtp.pass) {
+    if (env.smtp?.host && env.smtp?.user && env.smtp?.pass) {
       this.transporter = nodemailer.createTransport({
         host: env.smtp.host,
         port: env.smtp.port,

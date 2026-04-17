@@ -10,11 +10,16 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../services/authService";
 import { useAuth } from "../hooks/useAuth";
+import { useTranslation } from "react-i18next";
+
+import { useTheme } from "../hooks/useTheme";
 
 export default function VerifyEmailScreen() {
   const { email } = useLocalSearchParams<{ email: string }>();
   const router = useRouter();
   const { logout } = useAuth();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
 
   const [isResending, setIsResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<
@@ -42,57 +47,98 @@ export default function VerifyEmailScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="mail-open-outline" size={48} color="#89b4fa" />
+        <View
+          style={[
+            styles.iconContainer,
+            {
+              backgroundColor: isDark
+                ? "rgba(137, 180, 250, 0.1)"
+                : colors.tint + "15",
+            },
+          ]}
+        >
+          <Ionicons name="mail-open-outline" size={48} color={colors.tint} />
         </View>
-        <Text style={styles.title}>Verify your email</Text>
-        <Text style={styles.subtitle}>
-          We've sent a verification link to{"\n"}
-          <Text style={styles.emailText}>{email || "your email"}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          {t("auth.verifyEmail.title")}
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t("auth.verifyEmail.subtitle")}
+          {"\n"}
+          <Text style={[styles.emailText, { color: colors.tint }]}>
+            {email || t("auth.verifyEmail.yourEmail")}
+          </Text>
         </Text>
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.description}>
-          Please check your inbox and click the link to activate your account.
-          If you don't see the email, check your spam folder.
+        <Text style={[styles.description, { color: colors.textSecondary }]}>
+          {t("auth.verifyEmail.description")}
         </Text>
 
         {resendStatus === "success" && (
-          <View style={styles.successBox}>
-            <Ionicons name="checkmark-circle" size={20} color="#a6e3a1" />
-            <Text style={styles.successText}>New link sent successfully!</Text>
+          <View
+            style={[
+              styles.successBox,
+              {
+                backgroundColor: isDark
+                  ? "rgba(166, 227, 161, 0.1)"
+                  : "rgba(34, 197, 94, 0.1)",
+              },
+            ]}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={20}
+              color={isDark ? "#a6e3a1" : "#166534"}
+            />
+            <Text
+              style={[
+                styles.successText,
+                { color: isDark ? "#a6e3a1" : "#166534" },
+              ]}
+            >
+              {t("auth.verifyEmail.resendSuccess")}
+            </Text>
           </View>
         )}
 
         {resendStatus === "error" && (
           <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={20} color="#f38ba8" />
+            <Ionicons name="alert-circle" size={20} color="#ef4444" />
             <Text style={styles.errorText}>
-              Failed to send. Please try again.
+              {t("auth.verifyEmail.resendError")}
             </Text>
           </View>
         )}
 
         <Pressable
-          style={[styles.resendButton, isResending && styles.disabledButton]}
+          style={[
+            styles.resendButton,
+            { backgroundColor: colors.tint },
+            isResending && styles.disabledButton,
+          ]}
           onPress={handleResend}
           disabled={isResending}
         >
           {isResending ? (
-            <ActivityIndicator color="#11111b" />
+            <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="refresh" size={20} color="#11111b" />
-              <Text style={styles.resendText}>Resend Email</Text>
+              <Ionicons name="refresh" size={20} color="#fff" />
+              <Text style={[styles.resendText, { color: "#fff" }]}>
+                {t("auth.verifyEmail.resendButton")}
+              </Text>
             </>
           )}
         </Pressable>
 
         <Pressable style={styles.backButton} onPress={handleBackToLogin}>
-          <Text style={styles.backText}>Back to Login</Text>
+          <Text style={[styles.backText, { color: colors.textSecondary }]}>
+            {t("auth.verifyEmail.backToLogin")}
+          </Text>
         </Pressable>
       </View>
     </View>

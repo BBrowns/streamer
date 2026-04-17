@@ -14,6 +14,9 @@ export interface AuthPayload {
 /** Maximum allowed token age in seconds (prevent replay of very old tokens) */
 const MAX_TOKEN_AGE_SECONDS = 24 * 60 * 60; // 24 hours
 
+// Small memory cache to throttle heartbeat DB writes (prevent connection floods on burst N+1 requests)
+const heartbeatCache = new Map<string, number>();
+
 export async function authMiddleware(c: Context, next: Next) {
   const authHeader = c.req.header("authorization");
 
@@ -58,12 +61,20 @@ export async function authMiddleware(c: Context, next: Next) {
     const userAgent = c.req.header("user-agent");
 
     // Proactive heartbeart — don't await/block to keep API latency low
-    // In a real high-scale app, this would be in Redis.
-    const { SessionService } =
-      await import("../modules/auth/session.service.js");
-    SessionService.heartbeat(payload.userId, deviceId, ip, userAgent).catch(
-      () => {},
-    );
+    // Debounce to 10 seconds per device to prevent DB flood on simultaneous requests (e.g. N+1 UI fetches)
+    const cacheKey = `${payload.userId}:${deviceId}`;
+    const lastHeartbeat = heartbeatCache.get(cacheKey) || 0;
+    const now = Date.now();
+
+    if (now - lastHeartbeat > 10000) {
+      heartbeatCache.set(cacheKey, now);
+
+      const { SessionService } =
+        await import("../modules/auth/session.service.js");
+      SessionService.heartbeat(payload.userId, deviceId, ip, userAgent).catch(
+        () => {},
+      );
+    }
 
     c.set("deviceId", deviceId);
 

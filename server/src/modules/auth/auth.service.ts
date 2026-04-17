@@ -81,8 +81,14 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    const isTest = env.nodeEnv === "test";
     const user = await prisma.user.create({
-      data: { email, passwordHash, displayName },
+      data: {
+        email,
+        passwordHash,
+        displayName,
+        emailVerified: isTest,
+      },
     });
 
     // Email verification
@@ -90,7 +96,7 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24); // 24h to verify
 
-    await (prisma as any).emailVerificationToken.create({
+    await prisma.emailVerificationToken.create({
       data: {
         token: verificationToken,
         userId: user.id,
@@ -98,20 +104,44 @@ export class AuthService {
       },
     });
 
-    await emailService.sendVerificationEmail(user.email, verificationToken);
+    if (!isTest) {
+      await emailService.sendVerificationEmail(user.email, verificationToken);
+    }
 
-    logger.info(
-      { userId: user.id },
-      "User registered and verification email sent",
-    );
+    logger.info({ userId: user.id, isTest }, "User registered");
 
-    return {
+    const baseResponse: RegisterResponse = {
       user: {
         id: user.id,
         email: user.email,
         displayName: user.displayName ?? undefined,
         createdAt: user.createdAt.toISOString(),
       },
+    };
+
+    if (isTest) {
+      const tokens = generateTokens(user.id, user.email);
+
+      const refreshTokenExpiresAt = new Date();
+      refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 7);
+
+      await prisma.refreshToken.create({
+        data: {
+          token: tokens.refreshToken,
+          userId: user.id,
+          expiresAt: refreshTokenExpiresAt,
+        },
+      });
+
+      return {
+        ...baseResponse,
+        tokens,
+        verificationRequired: false,
+      };
+    }
+
+    return {
+      ...baseResponse,
       verificationRequired: true,
     };
   }
@@ -140,7 +170,24 @@ export class AuthService {
       throw new AppError(401, "Invalid email or password");
     }
 
-    if (!(user as any).emailVerified) {
+    if (
+      !user.emailVerified &&
+      env.nodeEnv === "development" &&
+      !env.smtp.host
+    ) {
+      // Auto-verify in development if SMTP is not configured
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+      user.emailVerified = true;
+      logger.info(
+        { userId: user.id },
+        "🛠️ Auto-verified user for local development",
+      );
+    }
+
+    if (!user.emailVerified) {
       throw new AppError(
         403,
         "Email not verified. Please check your inbox.",
@@ -331,7 +378,7 @@ export class AuthService {
   }
 
   async verifyEmail(token: string): Promise<void> {
-    const stored = await (prisma as any).emailVerificationToken.findUnique({
+    const stored = await prisma.emailVerificationToken.findUnique({
       where: { token },
       include: { user: true },
     });
@@ -341,7 +388,7 @@ export class AuthService {
     }
 
     if (stored.expiresAt < new Date()) {
-      await (prisma as any).emailVerificationToken.delete({
+      await prisma.emailVerificationToken.delete({
         where: { id: stored.id },
       });
       throw new AppError(400, "Verification token has expired");
@@ -364,10 +411,10 @@ export class AuthService {
     const email = emailInput.toLowerCase().trim();
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user || (user as any).emailVerified) return;
+    if (!user || user.emailVerified) return;
 
     // Delete existing tokens
-    await (prisma as any).emailVerificationToken.deleteMany({
+    await prisma.emailVerificationToken.deleteMany({
       where: { userId: user.id },
     });
 
@@ -375,7 +422,7 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
-    await (prisma as any).emailVerificationToken.create({
+    await prisma.emailVerificationToken.create({
       data: {
         token: verificationToken,
         userId: user.id,

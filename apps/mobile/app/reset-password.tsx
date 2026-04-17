@@ -12,10 +12,15 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
+import { useTranslation } from "react-i18next";
+
+import { useTheme } from "../hooks/useTheme";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const { resetPassword } = useAuth();
+  const { logout, resetPassword } = useAuth();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,18 +30,18 @@ export default function ResetPasswordScreen() {
     setError("");
 
     if (!token || !newPassword) {
-      setError("Please enter the token and a new password");
+      setError(t("auth.resetPassword.emptyError"));
       return;
     }
 
     try {
       setIsLoading(true);
       await resetPassword({ token, newPassword });
-      alert("Password reset successfully! Please log in.");
+      alert(t("auth.resetPassword.successAlert"));
       router.replace("/login");
     } catch (err: unknown) {
       const errorMessage = extractErrorMessage(err);
-      setError(errorMessage || "Failed to reset password");
+      setError(errorMessage || t("auth.resetPassword.failedError"));
     } finally {
       setIsLoading(false);
     }
@@ -44,13 +49,15 @@ export default function ResetPasswordScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.form}>
-        <Text style={styles.title}>New Password</Text>
-        <Text style={styles.subtitle}>
-          Enter the reset token and your new password
+        <Text style={[styles.title, { color: colors.text }]}>
+          {t("auth.resetPassword.title")}
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t("auth.resetPassword.subtitle")}
         </Text>
 
         {error ? (
@@ -60,32 +67,52 @@ export default function ResetPasswordScreen() {
         ) : null}
 
         <TextInput
-          style={styles.input}
-          placeholder="Reset Token"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.resetPassword.tokenPlaceholder")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={token}
           onChangeText={setToken}
           autoCapitalize="none"
           autoCorrect={false}
         />
         <TextInput
-          style={styles.input}
-          placeholder="New Password (min 8 chars)"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.resetPassword.passwordPlaceholder")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={newPassword}
           onChangeText={setNewPassword}
           secureTextEntry
         />
 
         <Pressable
-          style={[styles.button, isLoading && styles.buttonDisabled]}
+          style={[
+            styles.button,
+            { backgroundColor: colors.tint },
+            isLoading && styles.buttonDisabled,
+          ]}
           onPress={handleReset}
           disabled={isLoading}
         >
           {isLoading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Reset Password</Text>
+            <Text style={[styles.buttonText, { color: "#fff" }]}>
+              {t("auth.resetPassword.submit")}
+            </Text>
           )}
         </Pressable>
 
@@ -93,8 +120,10 @@ export default function ResetPasswordScreen() {
           onPress={() => router.replace("/login")}
           style={{ marginTop: 12 }}
         >
-          <Text style={styles.linkText}>
-            <Text style={styles.linkBold}>Back to Login</Text>
+          <Text style={[styles.linkText, { color: colors.textSecondary }]}>
+            <Text style={[styles.linkBold, { color: colors.tint }]}>
+              {t("auth.resetPassword.backToLogin")}
+            </Text>
           </Text>
         </Pressable>
       </View>

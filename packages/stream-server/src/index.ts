@@ -8,6 +8,11 @@ import { metricsHandler } from "./metrics.js";
 const app = express();
 const PORT = process.env.PORT || 11470;
 
+// Prevent EIO errors in background/headless environments by pausing stdin
+if (process.stdin.isTTY) {
+  process.stdin.pause();
+}
+
 app.use(cors());
 app.use(express.json());
 

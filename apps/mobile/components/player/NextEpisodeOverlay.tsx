@@ -1,6 +1,8 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 interface NextEpisodeOverlayProps {
   isVisible: boolean;
@@ -21,6 +23,8 @@ export function NextEpisodeOverlay({
   onCancel,
   countdownSeconds = 10,
 }: NextEpisodeOverlayProps) {
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(countdownSeconds);
 
   useEffect(() => {
@@ -45,29 +49,62 @@ export function NextEpisodeOverlay({
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.upNext}>UP NEXT</Text>
-        <Text style={styles.title}>{nextEpisode.title}</Text>
-        <Text style={styles.info}>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.upNext, { color: colors.tint }]}>
+          {t("player.upsell.upNext")}
+        </Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          {nextEpisode.title}
+        </Text>
+        <Text style={[styles.info, { color: colors.textSecondary }]}>
           S{nextEpisode.season} E{nextEpisode.episode}
         </Text>
 
-        <View style={styles.progressContainer}>
+        <View
+          style={[styles.progressContainer, { backgroundColor: colors.border }]}
+        >
           <View
             style={[
               styles.progressBar,
-              { width: `${(timeLeft / countdownSeconds) * 100}%` },
+              {
+                width: `${(timeLeft / countdownSeconds) * 100}%`,
+                backgroundColor: colors.tint,
+              },
             ]}
           />
         </View>
 
         <View style={styles.actions}>
-          <Pressable style={styles.cancelButton} onPress={onCancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
+          <Pressable
+            style={[
+              styles.cancelButton,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(0,0,0,0.05)",
+              },
+            ]}
+            onPress={onCancel}
+          >
+            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>
+              {t("player.upsell.cancel")}
+            </Text>
           </Pressable>
-          <Pressable style={styles.watchNowButton} onPress={onWatchedNow}>
-            <Ionicons name="play" size={20} color="#000" />
-            <Text style={styles.watchNowText}>Watch Now ({timeLeft}s)</Text>
+          <Pressable
+            style={[styles.watchNowButton, { backgroundColor: colors.tint }]}
+            onPress={onWatchedNow}
+          >
+            <Ionicons name="play" size={20} color={isDark ? "#000" : "#fff"} />
+            <Text
+              style={[styles.watchNowText, { color: isDark ? "#000" : "#fff" }]}
+            >
+              {t("player.upsell.watchNow", { timeLeft })}
+            </Text>
           </Pressable>
         </View>
       </View>

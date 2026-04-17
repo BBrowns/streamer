@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSearch } from "../../hooks/useSearch";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
+import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
 import { hapticImpactLight } from "../../lib/haptics";
@@ -18,6 +19,7 @@ import { hapticImpactLight } from "../../lib/haptics";
 export default function SearchResultsScreen() {
   const { q } = useLocalSearchParams<{ q: string }>();
   const router = useRouter();
+  const numColumns = useResponsiveColumns();
   const { data, isLoading } = useSearch(q || "");
 
   return (
@@ -51,14 +53,11 @@ export default function SearchResultsScreen() {
         <FlatList
           data={data}
           keyExtractor={(item) => item.id}
-          numColumns={3}
+          key={`search-grid-${numColumns}`}
+          numColumns={numColumns}
           contentContainerStyle={styles.listContent}
-          columnWrapperStyle={styles.columnWrapper}
-          renderItem={({ item }) => (
-            <View style={styles.cardWrapper}>
-              <CatalogItemCard item={item} />
-            </View>
-          )}
+          columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : undefined}
+          renderItem={({ item }) => <CatalogItemCard item={item} />}
         />
       ) : (
         <EmptyState
@@ -78,11 +77,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000000",
   },
-  centered: {
-    flex: 1,
+  installBtn: {
+    paddingHorizontal: 20,
+    borderRadius: 10,
     justifyContent: "center",
+    minWidth: 80,
     alignItems: "center",
-    gap: 16,
   },
   loadingText: {
     color: "#94a3b8",
@@ -95,11 +95,7 @@ const styles = StyleSheet.create({
   },
   columnWrapper: {
     justifyContent: "flex-start",
-    gap: 8,
-    marginBottom: 8,
-  },
-  cardWrapper: {
-    flex: 1 / 3,
-    maxWidth: "32%",
+    gap: 12,
+    marginBottom: 12,
   },
 });

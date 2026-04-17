@@ -1,60 +1,70 @@
 import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
-import { Stack, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, Text, StyleSheet, View } from "react-native";
+import { Stack } from "expo-router";
+import { useTheme } from "../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 export default function TermsScreen() {
-  const router = useRouter();
-
+  const { colors } = useTheme();
+  const { t } = useTranslation();
   return (
-    <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: "Terms of Service",
-          headerTitleStyle: { color: "#fff" },
-          headerStyle: { backgroundColor: "#050614" },
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={{ marginLeft: 8 }}>
-              <Ionicons name="chevron-back" size={24} color="#00f2ff" />
-            </Pressable>
-          ),
-        }}
-      />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Legal Terms</Text>
-        <Text style={styles.date}>Last Updated: March 31, 2026</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.content}
+    >
+      <Stack.Screen options={{ title: t("legal.termsTitle") }} />
+      <Text style={[styles.title, { color: colors.text }]}>
+        {t("legal.termsTitle")}
+      </Text>
+      <Text style={[styles.date, { color: colors.textSecondary }]}>
+        {t("legal.lastUpdated", { date: "April 1, 2026" })}
+      </Text>
 
-        <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
-        <Text style={styles.text}>
-          By using Streamer, you agree to these terms. Streamer is a tool for
-          content aggregation and does not host or store any media.
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.terms.1")}
         </Text>
-
-        <Text style={styles.sectionTitle}>2. User Responsibility</Text>
-        <Text style={styles.text}>
-          You are responsible for the add-ons you install and the content you
-          access. Use of copyrighted material must be authorized by the rights
-          holder. Streamer project contributors are not liable for user actions.
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          By accessing or using the Streamer application, you agree to be bound
+          by these Terms of Service. If you do not agree to these terms, please
+          do not use the application.
         </Text>
+      </View>
 
-        <Text style={styles.sectionTitle}>3. Open Source</Text>
-        <Text style={styles.text}>
-          Streamer is an open-source project. Modification and redistribution
-          are permitted under the project's license (e.g., MIT/GPL), but these
-          Terms of Service apply to the official builds and backend services.
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.terms.2")}
         </Text>
-
-        <Text style={styles.sectionTitle}>4. Termination</Text>
-        <Text style={styles.text}>
-          We reserve the right to block accounts found to be abusing the global
-          sync network (e.g., DDoS or data scraping).
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          Streamer is a media aggregation tool. You are responsible for the
+          content you access through the platform. We do not host or monitor
+          third-party add-ons or content.
         </Text>
+      </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>© 2026 Streamer OSS Project</Text>
-        </View>
-      </ScrollView>
-    </View>
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.terms.3")}
+        </Text>
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          You retain all rights to any content you provide to the service. By
+          providing content, you grant us a non-exclusive, royalty-free license
+          to use, display, and distribute that content within the scope of the
+          service.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          {t("legal.sections.terms.4")}
+        </Text>
+        <Text style={[styles.text, { color: colors.textSecondary }]}>
+          Streamer is provided "as is" without any warranties. We are not
+          responsible for any damage or loss resulting from your use of the
+          application or the content accessed through it.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -62,15 +72,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#050614" },
   content: { padding: 24, paddingBottom: 60 },
   title: { color: "#f8fafc", fontSize: 28, fontWeight: "900", marginBottom: 8 },
-  date: { color: "#64748b", fontSize: 13, marginBottom: 32 },
+  date: { color: "#64748b", fontSize: 14, marginBottom: 32 },
+  section: { marginBottom: 24 },
   sectionTitle: {
     color: "#00f2ff",
     fontSize: 18,
     fontWeight: "800",
-    marginTop: 24,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   text: { color: "#94a3b8", fontSize: 15, lineHeight: 24 },
-  footer: { marginTop: 48, alignItems: "center" },
-  footerText: { color: "#475569", fontSize: 12 },
 });

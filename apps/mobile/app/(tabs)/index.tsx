@@ -89,11 +89,15 @@ function HomeContent() {
       numColumns={numColumns}
       columnWrapperStyle={
         numColumns > 1
-          ? { backgroundColor: colors.background, gap: 8, paddingHorizontal: 8 }
+          ? {
+              backgroundColor: colors.background,
+              gap: 16,
+              paddingHorizontal: 16,
+            }
           : undefined
       }
       contentContainerStyle={{
-        paddingHorizontal: 8,
+        paddingHorizontal: 16,
         paddingBottom: 20,
         backgroundColor: colors.background,
       }}

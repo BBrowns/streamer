@@ -1,0 +1,367 @@
+{
+  "tabs": {
+    "home": "Inicio",
+    "discover": "Descubrir",
+    "library": "Biblioteca",
+    "downloads": "Descargas",
+    "settings": "Ajustes"
+  },
+  "home": {
+    "auth": {
+      "title": "Streamer",
+      "subtitle": "Tu universo de contenido, agregado de la web abierta.",
+      "button": "Empezar"
+    },
+    "sections": {
+      "popularMovies": "Películas populares",
+      "topTVShows": "Series destacadas"
+    },
+    "filters": {
+      "movies": "Películas",
+      "series": "Series"
+    },
+    "empty": {
+      "title": "No se encontró contenido",
+      "description": "Instala algunos complementos en Ajustes para empezar a explorar.",
+      "action": "Gestionar complementos"
+    }
+  },
+  "discover": {
+    "auth": {
+      "title": "Bienvenido a Streamer",
+      "subtitle": "Inicia sesión para descubrir películas y series de tus complementos.",
+      "button": "Iniciar Sesión"
+    },
+    "empty": {
+      "title": "Sin fuentes de contenido",
+      "description": "Instala un complemento en Ajustes para empezar a descubrir contenido.",
+      "action": "Gestionar complementos"
+    },
+    "filters": {
+      "all": "Todo",
+      "movies": "Películas",
+      "series": "Series"
+    }
+  },
+  "library": {
+    "auth": {
+      "title": "Tu biblioteca",
+      "subtitle": "Inicia sesión para acceder a tu lista de seguimiento",
+      "button": "Iniciar sesión"
+    },
+    "header": {
+      "select": "Seleccionar",
+      "cancel": "Cancelar"
+    },
+    "filters": {
+      "all": "Todo",
+      "movies": "Películas",
+      "series": "Series",
+      "offline": "Sin conexión"
+    },
+    "empty": {
+      "title": "Aún no hay elementos",
+      "description": "Explora la pestaña Descubrir y añade películas y series a tu biblioteca.",
+      "noMovies": "No se encontraron películas guardadas.",
+      "noSeries": "No se encontraron series guardadas."
+    },
+    "fab": {
+      "selected": "{{count}} seleccionados",
+      "delete": "Eliminar"
+    },
+    "alerts": {
+      "removeTitle": "Eliminar elementos",
+      "removeMessage": "¿Estás seguro de que quieres eliminar {{count}} elementos de tu biblioteca?"
+    }
+  },
+  "downloads": {
+    "title": "Descargas",
+    "header": {
+      "subtitle": "Gestiona tu contenido sin conexión",
+      "clearAll": "Borrar todo"
+    },
+    "alerts": {
+      "clearTitle": "Borrar todas las descargas",
+      "clearMessage": "¿Estás seguro? Esto eliminará todos los archivos descargados de tu dispositivo."
+    },
+    "card": {
+      "unknown": "Descarga desconocida",
+      "manage": "Gestiona tus medios descargados",
+      "viewDetails": "Ver detalles",
+      "delete": "Eliminar descarga"
+    },
+    "status": {
+      "downloading": "Descargando",
+      "paused": "Pausado",
+      "completed": "Completado",
+      "error": "Error"
+    },
+    "empty": {
+      "title": "Sin descargas",
+      "description": "Las películas y series que descargues aparecerán aquí.",
+      "action": "Ir a Descubrir"
+    }
+  },
+  "settings": {
+    "sections": {
+      "account": "Cuenta",
+      "appearance": "Apariencia",
+      "language": "Idioma",
+      "content": "Contenido",
+      "security": "Seguridad",
+      "privacy": "Privacidad y Datos",
+      "advanced": "Avanzado"
+    },
+    "items": {
+      "manageAddons": "Gestionar complementos",
+      "trakt": "Trakt.tv",
+      "activeSessions": "Sesiones activas",
+      "changePassword": "Cambiar contraseña",
+      "biometricUnlock": "Desbloqueo biométrico",
+      "exportData": "Exportar mis datos",
+      "deleteAccount": "Eliminar cuenta"
+    },
+    "subtitles": {
+      "manageAddons": "Instalar y eliminar fuentes de contenido",
+      "traktConnected": "Conectado",
+      "traktDisconnected": "Sincroniza el historial en tus dispositivos",
+      "activeSessions": "{{count}} dispositivo conectado",
+      "activeSessions_plural": "{{count}} dispositivos conectados",
+      "changePassword": "Actualizar la contraseña de tu cuenta",
+      "biometricUnlock": "Requerir Face ID / Touch ID para abrir la app",
+      "exportData": "Descargar una copia de tu biblioteca y ajustes",
+      "deleteAccount": "Eliminar permanentemente tu cuenta y todos los datos"
+    },
+    "advanced": {
+      "configure": "Configurar infraestructura",
+      "subtitle": "URLs personalizadas de backend y servidor de transmisión",
+      "title": "Anulaciones de infraestructura",
+      "hide": "Ocultar",
+      "backendLabel": "URL de la API del backend",
+      "streamLabel": "URL del puente de transmisión",
+      "warning": "Los valores incorrectos romperán la aplicación. Deja en blanco para usar los predeterminados.",
+      "restore": "Restaurar predeterminados",
+      "apply": "Aplicar cambios",
+      "successTitle": "Ajustes guardados",
+      "successMessage": "Tus URLs de servidor personalizadas han sido actualizadas."
+    },
+    "alerts": {
+      "deleteAccountTitle": "Eliminar cuenta",
+      "deleteAccountMessage": "¿Estás absolutamente seguro? Esta acción es permanente y eliminará todos tus elementos de la biblioteca, historial de visualización y ajustes.",
+      "deleteAccountConfirmTitle": "Confirmación final",
+      "deleteAccountConfirmMessage": "Escribe 'DELETE' para confirmar.",
+      "deleteAccountButton": "Eliminar todo",
+      "traktDisconnectTitle": "Desconectar Trakt",
+      "traktDisconnectMessage": "¿Estás seguro de que deseas desvincular tu cuenta de Trakt.tv?",
+      "traktDisconnectButton": "Desconectar"
+    },
+    "auth": {
+      "signOut": "Cerrar sesión",
+      "manageSettings": "Inicia sesión para gestionar los ajustes",
+      "signIn": "Iniciar sesión",
+      "accessibilitySignIn": "Inicia sesión en tu cuenta"
+    },
+    "theme": {
+      "light": "Claro",
+      "dark": "Oscuro",
+      "system": "Sistema"
+    },
+    "onboarding": {
+      "title": "Personalizar",
+      "subtitle": "Personaliza tu experiencia antes de empezar.",
+      "appearance": "Apariencia",
+      "addonsTitle": "Complementos iniciales",
+      "addonsSubtitle": "Muy recomendados para metadatos y subtítulos.",
+      "legalAgreement": "Al continuar, aceptas nuestros",
+      "terms": "Términos",
+      "and": "y",
+      "privacy": "Política de privacidad",
+      "finish": "Finalizar e Iniciar sesión"
+    }
+  },
+  "addons": {
+    "title": "Complementos",
+    "install": {
+      "title": "Instalar Complemento",
+      "hint": "Pega una URL de manifest.json para añadir una fuente de contenido.",
+      "placeholder": "https://addon-url.com/manifest.json",
+      "button": "Instalar",
+      "success": "¡Complemento instalado!",
+      "successDetail": "El nuevo contenido aparecerá en Descubrir.",
+      "error": "Error de instalación"
+    },
+    "installed": {
+      "title": "Instalados ({{count}})",
+      "uninstall": "Desinstalar",
+      "remove": "Eliminar",
+      "cancel": "Cancelar",
+      "confirmRemove": "¿Eliminar \"{{name}}\"?"
+    },
+    "empty": {
+      "title": "No hay complementos instalados",
+      "hint": "Prueba: https://v3-cinemeta.strem.io/manifest.json"
+    }
+  },
+  "detail": {
+    "play": "Reproducir",
+    "download": "Descargar",
+    "torrent": "Torrent",
+    "playable": "REPRODUCIBLE",
+    "episodes": "Episodios",
+    "episodesList": {
+      "loading": "Cargando flujos...",
+      "none": "No hay flujos para este episodio.",
+      "noneData": "No hay datos de episodios disponibles.",
+      "season": "Temporada {{season}}",
+      "streamsLabel": "T{{season}} E{{episode}} — Flujos"
+    },
+    "quality": "Seleccionar calidad",
+    "cast": "Reparto",
+    "watchlist": {
+      "add": "+ Añadir a la biblioteca",
+      "remove": "✓ En la biblioteca"
+    },
+    "errors": {
+      "notFound": "Contenido no encontrado",
+      "torrentBridge": "Este es un flujo de torrent. Inicia el puente stream-server primero.",
+      "notPlayable": "Este flujo no es reproducible.",
+      "unsupported": "Flujo no compatible",
+      "downloadFailed": "Error al iniciar la descarga."
+    },
+    "back": "Volver"
+  },
+  "auth": {
+    "login": {
+      "title": "Bienvenido de nuevo",
+      "subtitle": "Inicia sesión para continuar",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "button": "Iniciar sesión",
+      "forgot": "¿Olvidaste tu contraseña?",
+      "noAccount": "¿No tienes una cuenta?",
+      "signUp": "Regístrate"
+    },
+    "register": {
+      "title": "Crear cuenta",
+      "subtitle": "Únete a Streamer para sincronizar tu biblioteca",
+      "name": "Nombre completo",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "button": "Crear cuenta",
+      "haveAccount": "¿Ya tienes una cuenta?",
+      "signIn": "Iniciar sesión"
+    },
+    "forgot": {
+      "title": "Restablecer contraseña",
+      "subtitle": "Introduce tu correo para recibir un enlace de restablecimiento",
+      "button": "Enviar enlace",
+      "back": "Volver al inicio de sesión"
+    },
+    "resetPassword": {
+      "title": "Nueva Contraseña",
+      "subtitle": "Introduce el token de restablecimiento y tu nueva contraseña",
+      "tokenPlaceholder": "Token de Restablecimiento",
+      "passwordPlaceholder": "Nueva Contraseña (mín. 8 caracteres)",
+      "submit": "Restablecer Contraseña",
+      "backToLogin": "Volver al Inicio de Sesión",
+      "emptyError": "Por favor, introduce el token y una nueva contraseña",
+      "successAlert": "¡Contraseña restablecida con éxito! Por favor, inicia sesión.",
+      "failedError": "Error al restablecer la contraseña"
+    },
+    "verifyEmail": {
+      "title": "Verifica tu correo",
+      "subtitle": "Hemos enviado un enlace de verificación a",
+      "yourEmail": "tu correo",
+      "description": "Por favor, revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta. Si no ves el correo, revisa tu carpeta de spam.",
+      "resendSuccess": "¡Nuevo enlace enviado con éxito!",
+      "resendError": "Error al enviar. Por favor, inténtalo de nuevo.",
+      "resendButton": "Reenviar Correo",
+      "backToLogin": "Volver al Inicio de Sesión"
+    },
+    "errors": {
+      "fillFields": "Por favor, rellena todos los campos",
+      "alreadyHaveAccount": "El usuario ya existe",
+      "invalidCredentials": "Correo o contraseña inválidos",
+      "unexpected": "Ha ocurrido un error inesperado"
+    }
+  },
+  "player": {
+    "resume": {
+      "title": "¿Reanudar reproducción?",
+      "subtitle": "Te quedaste en {{time}}",
+      "resume": "Reanudar",
+      "startOver": "Empezar de nuevo"
+    },
+    "upsell": {
+      "upNext": "PRÓXIMAMENTE",
+      "cancel": "Cancelar",
+      "watchNow": "Ver ahora ({{timeLeft}}s)"
+    },
+    "controls": {
+      "brightness": "Brillo",
+      "volume": "Volumen",
+      "close": "Cerrar",
+      "nowPlaying": "Reproduciendo ahora",
+      "engine": "Engine",
+      "peers": "pares"
+    },
+    "settings": {
+      "title": "Ajustes de reproducción",
+      "done": "Listo",
+      "speed": "Velocidad de reproducción",
+      "audio": "Pistas de audio",
+      "subtitles": "Subtítulos",
+      "noAudio": "No hay pistas de audio seleccionables — usando predeterminado.",
+      "noSubtitles": "No hay pistas de subtítulos disponibles.",
+      "off": "Desactivado"
+    },
+    "status": {
+      "findingPeers": "Buscando pares...",
+      "connecting": "Conectando con pares...",
+      "buffering": "Cargando el búfer...",
+      "errorTitle": "Error de conexión",
+      "errorSubtitle": "No se pudo cargar el flujo"
+    },
+    "errors": {
+      "noStream": "No hay flujo seleccionado",
+      "goBack": "Volver"
+    },
+    "cast": {
+      "castingTo": "Transmitiendo a {{name}}",
+      "stop": "Detener transmisión"
+    }
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "retry": "Reintentar",
+    "themes": {
+      "dark": "Oscuro",
+      "light": "Claro",
+      "system": "Sistema"
+    }
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "empty": "No hay notificaciones"
+  },
+  "legal": {
+    "privacyTitle": "Política de Privacidad",
+    "termsTitle": "Términos de Servicio",
+    "lastUpdated": "Última actualización: {{date}}",
+    "sections": {
+      "privacy": {
+        "1": "1. Recopilación de Datos",
+        "2": "2. Información Sensible",
+        "3": "3. Terceros",
+        "4": "4. Eliminación de Datos"
+      },
+      "terms": {
+        "1": "1. Aceptación de Términos",
+        "2": "2. Uso del Servicio",
+        "3": "3. Contenido del Usuario",
+        "4": "4. Limitación de Responsabilidad"
+      }
+    }
+  }
+}

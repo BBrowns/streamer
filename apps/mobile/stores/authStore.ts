@@ -30,6 +30,7 @@ interface AuthState {
   backendUrl: string | null;
   streamServerUrl: string | null;
   theme: "light" | "dark" | "system";
+  pendingAddonUrls: string[]; // Add-ons selected during onboarding but not yet installed
 
   // ── Sensitive (SecureStore — NOT part of the Zustand persist blob) ────────
   // These are kept in component state only; SecureStore is the source of truth.
@@ -58,6 +59,8 @@ interface AuthState {
     streamServer?: string | null,
   ) => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
+  setPendingAddons: (urls: string[]) => void;
+  resetPendingAddons: () => void;
   logout: () => Promise<void>;
   isTokenExpired: () => boolean;
 }
@@ -76,6 +79,7 @@ export const useAuthStore = create<AuthState>()(
       backendUrl: null,
       streamServerUrl: null,
       theme: "system",
+      pendingAddonUrls: [],
       accessToken: null,
       refreshToken: null,
       tokenExpiresAt: null,
@@ -154,6 +158,12 @@ export const useAuthStore = create<AuthState>()(
       // ── setTheme ─────────────────────────────────────────────────────────
       setTheme: (theme) => set({ theme }),
 
+      // ── setPendingAddons ─────────────────────────────────────────────────
+      setPendingAddons: (urls) => set({ pendingAddonUrls: urls }),
+
+      // ── resetPendingAddons ───────────────────────────────────────────────
+      resetPendingAddons: () => set({ pendingAddonUrls: [] }),
+
       // ── logout ───────────────────────────────────────────────────────────
       logout: async () => {
         set({
@@ -190,6 +200,7 @@ export const useAuthStore = create<AuthState>()(
         backendUrl: state.backendUrl,
         streamServerUrl: state.streamServerUrl,
         theme: state.theme,
+        pendingAddonUrls: state.pendingAddonUrls,
       }),
     },
   ),
