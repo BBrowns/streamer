@@ -19,6 +19,8 @@ import { aggregatorRouter } from "./modules/aggregator/aggregator.routes.js";
 import { libraryRouter } from "./modules/library/adapters/library.routes.js";
 import { traktRouter } from "./modules/trakt/adapters/trakt.routes.js";
 import { notificationRouter } from "./modules/notification/notification.routes.js";
+import { syncRouter } from "./modules/sync/sync.routes.js";
+import { sessionRouter } from "./modules/sessions/session.routes.js";
 
 export function createApp() {
   const app = new Hono();
@@ -56,12 +58,23 @@ export function createApp() {
   });
 
   // Health check
-  app.get("/health", (c) => {
-    return c.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      features: featureFlags.getAll(),
-    });
+  app.get("/health", async (c) => {
+    try {
+      // Lightweight query to verify DB connectivity
+      await import("./prisma/client.js").then(
+        (m) => m.prisma.$queryRaw`SELECT 1`,
+      );
+      return c.json({
+        status: "ok",
+        db: "connected",
+        timestamp: new Date().toISOString(),
+        features: featureFlags.getAll(),
+        uptime: process.uptime(),
+      });
+    } catch (err) {
+      logger.error({ err }, "Health check failed: DB disconnected");
+      return c.json({ status: "error", db: "disconnected" }, 503);
+    }
   });
 
   // API routes
@@ -70,6 +83,8 @@ export function createApp() {
   app.route("/api/library", libraryRouter);
   app.route("/api/trakt", traktRouter);
   app.route("/api/notifications", notificationRouter);
+  app.route("/api/sync", syncRouter);
+  app.route("/api/sessions", sessionRouter);
   app.route("/api", aggregatorRouter);
 
   // Error handler

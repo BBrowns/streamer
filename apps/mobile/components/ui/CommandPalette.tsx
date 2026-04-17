@@ -24,6 +24,8 @@ interface Props {
   onClose: () => void;
 }
 
+import { useTheme } from "../../hooks/useTheme";
+
 export function CommandPalette({ visible, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -32,6 +34,7 @@ export function CommandPalette({ visible, onClose }: Props) {
   const { data: results, isFetching } = useGlobalSearch(query);
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const { colors, isDark } = useTheme();
 
   // Load recent searches on mount
   useEffect(() => {
@@ -109,11 +112,24 @@ export function CommandPalette({ visible, onClose }: Props) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable
+        style={[
+          styles.backdrop,
+          {
+            backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.4)",
+          },
+        ]}
+        onPress={onClose}
+      >
         <Animated.View
           style={[
             styles.palette,
-            { transform: [{ scale: scaleAnim }], opacity: opacityAnim },
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: opacityAnim,
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
           ]}
         >
           {/* Search Input */}
@@ -121,36 +137,48 @@ export function CommandPalette({ visible, onClose }: Props) {
             style={styles.inputRow}
             onPress={() => inputRef.current?.focus()}
           >
-            <Ionicons name="search" size={20} color="#6b7280" />
+            <Ionicons name="search" size={20} color={colors.textSecondary} />
             <TextInput
               ref={inputRef}
-              style={styles.input}
+              style={[styles.input, { color: colors.text }]}
               value={query}
               onChangeText={setQuery}
               placeholder="Search movies, shows..."
-              placeholderTextColor="#4b5563"
+              placeholderTextColor={colors.textSecondary}
               autoCorrect={false}
               autoCapitalize="none"
               returnKeyType="search"
             />
-            {isFetching && <ActivityIndicator size="small" color="#00f2ff" />}
+            {isFetching && (
+              <ActivityIndicator size="small" color={colors.tint} />
+            )}
             {query.length > 0 && !isFetching && (
               <Pressable onPress={() => setQuery("")} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color="#6b7280" />
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color={colors.textSecondary}
+                />
               </Pressable>
             )}
           </Pressable>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           {/* Results */}
           {query.length === 0 ? (
             <View style={styles.historyContainer}>
               <View style={styles.historyHeader}>
-                <Text style={styles.historyTitle}>RECENT SEARCHES</Text>
+                <Text
+                  style={[styles.historyTitle, { color: colors.textSecondary }]}
+                >
+                  RECENT SEARCHES
+                </Text>
                 {recentSearches.length > 0 && (
                   <Pressable onPress={clearHistory}>
-                    <Text style={styles.historyClear}>Clear</Text>
+                    <Text style={[styles.historyClear, { color: colors.tint }]}>
+                      Clear
+                    </Text>
                   </Pressable>
                 )}
               </View>
@@ -162,29 +190,58 @@ export function CommandPalette({ visible, onClose }: Props) {
                       style={styles.historyItem}
                       onPress={() => setQuery(s)}
                     >
-                      <Ionicons name="time-outline" size={16} color="#6b7280" />
-                      <Text style={styles.historyItemText}>{s}</Text>
+                      <Ionicons
+                        name="time-outline"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.historyItemText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {s}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
               ) : (
                 <View style={styles.hint}>
-                  <Ionicons name="search-outline" size={32} color="#374151" />
-                  <Text style={styles.hintText}>No recent searches</Text>
+                  <Ionicons
+                    name="search-outline"
+                    size={32}
+                    color={colors.textSecondary}
+                  />
+                  <Text
+                    style={[styles.hintText, { color: colors.textSecondary }]}
+                  >
+                    No recent searches
+                  </Text>
                 </View>
               )}
             </View>
           ) : query.length < 2 ? (
             <View style={styles.hint}>
-              <Ionicons name="search-outline" size={32} color="#374151" />
-              <Text style={styles.hintText}>
+              <Ionicons
+                name="search-outline"
+                size={32}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
                 Type at least 2 characters to search
               </Text>
             </View>
           ) : results && results.length === 0 && !isFetching ? (
             <View style={styles.hint}>
-              <Ionicons name="film-outline" size={32} color="#374151" />
-              <Text style={styles.hintText}>No results for "{query}"</Text>
+              <Ionicons
+                name="film-outline"
+                size={32}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+                No results for "{query}"
+              </Text>
             </View>
           ) : (
             <FlatList
@@ -196,17 +253,31 @@ export function CommandPalette({ visible, onClose }: Props) {
                 <Pressable
                   style={({ pressed }) => [
                     styles.resultRow,
-                    pressed && styles.resultRowPressed,
+                    pressed && {
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.04)"
+                        : "rgba(0,0,0,0.04)",
+                    },
                   ]}
                   onPress={() => handleSelect(item)}
                 >
                   <Image
                     source={{ uri: item.poster }}
-                    style={styles.poster}
+                    style={[
+                      styles.poster,
+                      {
+                        backgroundColor: isDark
+                          ? "#1a1a2e"
+                          : "rgba(0,0,0,0.05)",
+                      },
+                    ]}
                     resizeMode="cover"
                   />
                   <View style={styles.resultInfo}>
-                    <Text style={styles.resultTitle} numberOfLines={1}>
+                    <Text
+                      style={[styles.resultTitle, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
                       {item.name}
                     </Text>
                     <View style={styles.resultMeta}>
@@ -215,34 +286,73 @@ export function CommandPalette({ visible, onClose }: Props) {
                           item.type === "movie" ? "film-outline" : "tv-outline"
                         }
                         size={12}
-                        color="#6b7280"
+                        color={colors.textSecondary}
                       />
-                      <Text style={styles.resultType}>
+                      <Text
+                        style={[
+                          styles.resultType,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
                         {item.type === "movie" ? "Movie" : "Series"}
                       </Text>
                       {!!item.imdbRating && (
-                        <Text style={styles.resultRating}>
+                        <Text
+                          style={[styles.resultRating, { color: "#fbbf24" }]}
+                        >
                           ⭐ {item.imdbRating}
                         </Text>
                       )}
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#374151" />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
                 </Pressable>
               )}
             />
           )}
 
           {/* Footer hint */}
-          <View style={styles.footer}>
-            <View style={styles.footerBadge}>
-              <Text style={styles.footerKey}>↵</Text>
+          <View style={[styles.footer, { borderTopColor: colors.border }]}>
+            <View
+              style={[
+                styles.footerBadge,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.footerKey, { color: colors.textSecondary }]}>
+                ↵
+              </Text>
             </View>
-            <Text style={styles.footerLabel}>Open</Text>
-            <View style={styles.footerBadge}>
-              <Text style={styles.footerKey}>Esc</Text>
+            <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>
+              Open
+            </Text>
+            <View
+              style={[
+                styles.footerBadge,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.04)",
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.footerKey, { color: colors.textSecondary }]}>
+                Esc
+              </Text>
             </View>
-            <Text style={styles.footerLabel}>Close</Text>
+            <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>
+              Close
+            </Text>
           </View>
         </Animated.View>
       </Pressable>

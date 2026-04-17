@@ -18,6 +18,7 @@ const envSchema = z.object({
 
   // JWT
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  JWT_SECRET_PREVIOUS: z.string().optional(),
   JWT_ACCESS_EXPIRY: z.string().default("15m"),
   JWT_REFRESH_EXPIRY: z.string().default("7d"),
 
@@ -26,6 +27,9 @@ const envSchema = z.object({
 
   // Sessions
   MAX_CONCURRENT_SESSIONS: z.string().default("2").transform(Number),
+
+  // Redis (Rate Limiting)
+  REDIS_URL: z.string().optional(),
 
   // Aggregator
   ADDON_TIMEOUT_MS: z.string().default("5000").transform(Number),
@@ -37,6 +41,17 @@ const envSchema = z.object({
   // Trakt.tv (optional)
   TRAKT_CLIENT_ID: z.string().optional(),
   TRAKT_CLIENT_SECRET: z.string().optional(),
+
+  // Email (SMTP)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().default("587").transform(Number),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default("noreply@streamer.app"),
+
+  // App URLs
+  APP_URL_WEB: z.string().default("http://localhost:8081"),
+  APP_URL_DEEPLINK: z.string().default("streamer://"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -59,6 +74,7 @@ export const env = {
 
   // JWT
   jwtSecret: envData.JWT_SECRET,
+  jwtSecretPrevious: envData.JWT_SECRET_PREVIOUS,
   jwtAccessExpiry: envData.JWT_ACCESS_EXPIRY,
   jwtRefreshExpiry: envData.JWT_REFRESH_EXPIRY,
 
@@ -67,6 +83,9 @@ export const env = {
 
   // Sessions
   maxConcurrentSessions: envData.MAX_CONCURRENT_SESSIONS,
+
+  // Redis
+  redisUrl: envData.REDIS_URL,
 
   // Aggregator
   addonTimeoutMs: envData.ADDON_TIMEOUT_MS,
@@ -78,4 +97,17 @@ export const env = {
   // Trakt
   traktClientId: envData.TRAKT_CLIENT_ID,
   traktClientSecret: envData.TRAKT_CLIENT_SECRET,
+
+  // Email
+  smtp: {
+    host: envData.SMTP_HOST,
+    port: envData.SMTP_PORT,
+    user: envData.SMTP_USER,
+    pass: envData.SMTP_PASS,
+    from: envData.SMTP_FROM,
+  },
+
+  // URLs
+  appUrlWeb: envData.APP_URL_WEB,
+  appUrlDeepLink: envData.APP_URL_DEEPLINK,
 } as const;

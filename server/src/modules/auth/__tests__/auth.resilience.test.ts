@@ -20,6 +20,12 @@ vi.mock("../../../prisma/client.js", () => ({
       create: vi.fn(),
       deleteMany: vi.fn(),
     },
+    emailVerificationToken: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     $transaction: vi.fn((input) =>
       Array.isArray(input) ? Promise.all(input) : input(),
     ),

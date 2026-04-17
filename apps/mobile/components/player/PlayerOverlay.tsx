@@ -1,5 +1,7 @@
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 import { CastButton, AirPlayButton } from "./castModules";
 import type { StreamStats } from "../../services/streamEngine/IStreamEngine";
 import type { Stream } from "@streamer/shared";
@@ -11,6 +13,8 @@ interface PlayerOverlayProps {
   onClose: () => void;
   onSettings: () => void;
   onWebCast?: () => void;
+  onTogglePiP?: () => void;
+  isPiPSupported?: boolean;
 }
 
 export function PlayerOverlay({
@@ -20,61 +24,140 @@ export function PlayerOverlay({
   onClose,
   onSettings,
   onWebCast,
+  onTogglePiP,
+  isPiPSupported = false,
 }: PlayerOverlayProps) {
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+
   return (
     <View style={styles.overlay} pointerEvents="none">
       {/* Top Bar */}
-      <View style={styles.topBar} pointerEvents="auto">
+      <View
+        style={[
+          styles.topBar,
+          {
+            backgroundColor: isDark
+              ? "rgba(0,0,0,0.8)"
+              : "rgba(255,255,255,0.85)",
+            paddingTop: Platform.OS === "web" ? 20 : 60,
+          },
+        ]}
+        pointerEvents="auto"
+      >
         <Pressable
-          style={styles.closeButton}
+          style={({ hovered }: any) => [
+            styles.closeButton,
+            { backgroundColor: colors.tint + "15" },
+            hovered && {
+              backgroundColor: colors.tint + "25",
+              transform: [{ scale: 1.05 }],
+            },
+          ]}
           onPress={onClose}
           accessibilityRole="button"
-          accessibilityLabel="Close player"
+          accessibilityLabel={t("player.controls.close")}
         >
-          <Text style={styles.closeButtonText}>✕ Close</Text>
+          <Text style={[styles.closeButtonText, { color: colors.text }]}>
+            ✕ {t("player.controls.close")}
+          </Text>
         </Pressable>
         <View style={styles.topControls}>
           {CastButton && Platform.OS !== "web" && (
             <CastButton
-              style={{ width: 44, height: 44, tintColor: "#e0e0ff" }}
+              style={{ width: 44, height: 44, tintColor: colors.text }}
             />
           )}
           {AirPlayButton && Platform.OS === "ios" && (
             <AirPlayButton
-              style={{ width: 44, height: 44, tintColor: "#e0e0ff" }}
+              style={{ width: 44, height: 44, tintColor: colors.text }}
             />
           )}
           {Platform.OS === "web" && onWebCast && (
             <Pressable
-              style={styles.iconButton}
+              style={({ hovered }: any) => [
+                styles.iconButton,
+                { backgroundColor: colors.tint + "15" },
+                hovered && {
+                  backgroundColor: colors.tint + "25",
+                  transform: [{ scale: 1.1 }],
+                },
+              ]}
               onPress={onWebCast}
               accessibilityRole="button"
               accessibilityLabel="Cast to Device"
             >
-              <MaterialIcons name="cast" size={20} color="#e0e0ff" />
+              <MaterialIcons name="cast" size={20} color={colors.text} />
+            </Pressable>
+          )}
+          {isPiPSupported && onTogglePiP && (
+            <Pressable
+              style={({ hovered }: any) => [
+                styles.iconButton,
+                { backgroundColor: colors.tint + "15" },
+                hovered && {
+                  backgroundColor: colors.tint + "25",
+                  transform: [{ scale: 1.1 }],
+                },
+              ]}
+              onPress={onTogglePiP}
+              accessibilityRole="button"
+              accessibilityLabel="Picture in Picture"
+            >
+              <MaterialIcons
+                name="picture-in-picture-alt"
+                size={20}
+                color={colors.text}
+              />
             </Pressable>
           )}
           <Pressable
-            style={styles.iconButton}
+            style={({ hovered }: any) => [
+              styles.iconButton,
+              { backgroundColor: colors.tint + "15" },
+              hovered && {
+                backgroundColor: colors.tint + "25",
+                transform: [{ scale: 1.1 }],
+              },
+            ]}
             onPress={onSettings}
             accessibilityRole="button"
             accessibilityLabel="Playback settings"
           >
-            <Ionicons name="settings-sharp" size={20} color="#e0e0ff" />
+            <Ionicons name="settings-sharp" size={20} color={colors.text} />
           </Pressable>
         </View>
       </View>
 
       {/* Info Bar (Bottom) */}
-      <View style={styles.infoBar} pointerEvents="auto">
-        <Text style={styles.infoTitle}>
-          🎬 {currentStream.title || currentStream.name || "Now Playing"}
+      <View
+        style={[
+          styles.infoBar,
+          {
+            backgroundColor: isDark
+              ? "rgba(10,10,26,0.95)"
+              : "rgba(255,255,255,0.95)",
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            paddingBottom: Platform.OS === "web" ? 20 : 40,
+          },
+        ]}
+        pointerEvents="auto"
+      >
+        <Text style={[styles.infoTitle, { color: colors.text }]}>
+          🎬{" "}
+          {currentStream.title ||
+            currentStream.name ||
+            t("player.controls.nowPlaying")}
         </Text>
         <View style={styles.infoSubRow}>
-          <Text style={styles.engineText}>Engine: {engineType}</Text>
+          <Text style={[styles.engineText, { color: colors.textSecondary }]}>
+            {t("player.controls.engine")}: {engineType}
+          </Text>
           {stats.peers > 0 && (
-            <Text style={styles.speedText}>
-              ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers} peers
+            <Text style={[styles.speedText, { color: colors.tint }]}>
+              ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers}{" "}
+              {t("player.controls.peers")}
             </Text>
           )}
         </View>

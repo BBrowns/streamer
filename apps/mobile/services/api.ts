@@ -34,7 +34,7 @@ function resolveBaseUrl(): string {
   return process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
 }
 
-const BASE_URL = resolveBaseUrl();
+export const BASE_URL = resolveBaseUrl();
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -42,14 +42,17 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach access token and device ID to every request
+// Attach access token, device ID, and dynamic base URL to every request
 api.interceptors.request.use((config) => {
-  const { accessToken, deviceId } = useAuthStore.getState();
+  const { accessToken, deviceId, backendUrl } = useAuthStore.getState();
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   if (deviceId) {
     config.headers["X-Device-Id"] = deviceId;
+  }
+  if (backendUrl) {
+    config.baseURL = backendUrl;
   }
   return config;
 });
@@ -64,10 +67,11 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = useAuthStore.getState().refreshToken;
+        const { backendUrl, refreshToken } = useAuthStore.getState();
         if (!refreshToken) throw new Error("No refresh token");
 
-        const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, {
+        const targetUrl = backendUrl || BASE_URL;
+        const { data } = await axios.post(`${targetUrl}/api/auth/refresh`, {
           refreshToken,
         });
 

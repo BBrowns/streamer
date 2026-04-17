@@ -21,6 +21,12 @@ vi.mock("../src/prisma/client.js", () => ({
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
+    emailVerificationToken: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     passwordResetToken: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -44,6 +50,7 @@ vi.mock("../src/config/logger.js", () => ({
 // Mock env
 vi.mock("../src/config/env.js", () => ({
   env: {
+    nodeEnv: "test",
     jwtSecret: "test-secret-key-for-testing-only",
     jwtAccessExpiry: "15m",
   },
@@ -68,6 +75,7 @@ describe("AuthService", () => {
         passwordHash: "hashed",
         displayName: "Test User",
         createdAt: new Date(),
+        emailVerified: true,
       };
 
       (prisma.user.findUnique as Mock).mockResolvedValue(null);
@@ -108,6 +116,7 @@ describe("AuthService", () => {
       passwordHash: bcrypt.hashSync("Password1", 12),
       displayName: null,
       createdAt: new Date(),
+      emailVerified: true,
     };
 
     it("should login with valid credentials", async () => {
@@ -185,6 +194,7 @@ describe("AuthService", () => {
         passwordHash: bcrypt.hashSync("Password1", 12),
         displayName: null,
         createdAt: new Date(),
+        emailVerified: true,
       };
 
       (prisma.user.findUnique as Mock).mockResolvedValue(mockUser);
@@ -211,6 +221,7 @@ describe("AuthService", () => {
         id: "user-1",
         email: "test@example.com",
         passwordHash: bcrypt.hashSync("OldPassword1", 12),
+        emailVerified: true,
       };
 
       (prisma.user.findUnique as Mock).mockResolvedValue(mockUser);
@@ -225,6 +236,7 @@ describe("AuthService", () => {
       const mockUser = {
         id: "user-1",
         passwordHash: bcrypt.hashSync("OldPassword1", 12),
+        emailVerified: true,
       };
 
       (prisma.user.findUnique as Mock).mockResolvedValue(mockUser);

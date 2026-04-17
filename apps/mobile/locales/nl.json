@@ -1,0 +1,369 @@
+{
+  "tabs": {
+    "home": "Home",
+    "discover": "Ontdekken",
+    "library": "Bibliotheek",
+    "downloads": "Downloads",
+    "settings": "Instellingen"
+  },
+  "home": {
+    "auth": {
+      "title": "Streamer",
+      "subtitle": "Je universum aan content, verzameld van het open web.",
+      "button": "Aan de slag"
+    },
+    "sections": {
+      "popularMovies": "Populaire films",
+      "topTVShows": "Top TV-series"
+    },
+    "filters": {
+      "movies": "Films",
+      "series": "TV-series"
+    },
+    "empty": {
+      "title": "Geen content gevonden",
+      "description": "Installeer enkele add-ons in Instellingen om te beginnen met browsen.",
+      "action": "Beheer add-ons"
+    }
+  },
+  "discover": {
+    "auth": {
+      "title": "Welkom bij Streamer",
+      "subtitle": "Log in om films en series van je add-ons te ontdekken.",
+      "button": "Inloggen"
+    },
+    "empty": {
+      "title": "Geen contentbronnen",
+      "description": "Installeer een add-on in Instellingen om content te ontdekken.",
+      "action": "Beheer add-ons"
+    },
+    "filters": {
+      "all": "Alle",
+      "movies": "Films",
+      "series": "TV-series"
+    }
+  },
+  "library": {
+    "auth": {
+      "title": "Je bibliotheek",
+      "subtitle": "Log in om toegang te krijgen tot je kijklijst",
+      "button": "Inloggen"
+    },
+    "header": {
+      "select": "Selecteer",
+      "cancel": "Annuleren"
+    },
+    "filters": {
+      "all": "Alle",
+      "movies": "Films",
+      "series": "Series",
+      "offline": "Offline"
+    },
+    "empty": {
+      "title": "Nog geen items",
+      "description": "Blader door het tabblad Ontdekken en voeg films & series toe aan je bibliotheek.",
+      "noMovies": "Geen opgeslagen films gevonden.",
+      "noSeries": "Geen opgeslagen series gevonden."
+    },
+    "fab": {
+      "selected": "{{count}} geselecteerd",
+      "delete": "Verwijderen"
+    },
+    "alerts": {
+      "removeTitle": "Items verwijderen",
+      "removeMessage": "Weet je zeker dat je {{count}} items uit je bibliotheek wilt verwijderen?",
+      "bulkDeleteTitle": "Items verwijderen",
+      "bulkDeleteMessage": "Weet je zeker dat je {{count}} items wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
+    }
+  },
+  "downloads": {
+    "title": "Downloads",
+    "header": {
+      "subtitle": "Beheer je offline content",
+      "clearAll": "Alles wissen"
+    },
+    "alerts": {
+      "clearTitle": "Alle downloads wissen",
+      "clearMessage": "Weet je het zeker? Dit verwijdert alle gedownloade bestanden van je apparaat."
+    },
+    "card": {
+      "unknown": "Onbekende download",
+      "manage": "Beheer je gedownloade media",
+      "viewDetails": "Details bekijken",
+      "delete": "Download verwijderen"
+    },
+    "status": {
+      "downloading": "Downloaden",
+      "paused": "Gepauzeerd",
+      "completed": "Voltooid",
+      "error": "Fout"
+    },
+    "empty": {
+      "title": "Geen downloads",
+      "description": "Films en series die je downloadt verschijnen hier.",
+      "action": "Ga naar Ontdekken"
+    }
+  },
+  "settings": {
+    "sections": {
+      "account": "Account",
+      "appearance": "Uiterlijk",
+      "language": "Taal",
+      "content": "Inhoud",
+      "security": "Beveiliging",
+      "privacy": "Privacy & Gegevens",
+      "advanced": "Geavanceerd"
+    },
+    "items": {
+      "manageAddons": "Beheer add-ons",
+      "trakt": "Trakt.tv",
+      "activeSessions": "Actieve sessies",
+      "changePassword": "Wachtwoord wijzigen",
+      "biometricUnlock": "Biometrische ontgrendeling",
+      "exportData": "Exporteer mijn gegevens",
+      "deleteAccount": "Account verwijderen"
+    },
+    "subtitles": {
+      "manageAddons": "Installeer en verwijder contentbronnen",
+      "traktConnected": "Verbonden",
+      "traktDisconnected": "Synchroniseer kijkgeschiedenis over apparaten",
+      "activeSessions": "{{count}} apparaat ingelogd",
+      "activeSessions_plural": "{{count}} apparaten ingelogd",
+      "changePassword": "Werk je accountwachtwoord bij",
+      "biometricUnlock": "Vereis Face ID / Touch ID om de app te openen",
+      "exportData": "Download een kopie van je bibliotheek en instellingen",
+      "deleteAccount": "Verwijder permanent je account en alle gegevens"
+    },
+    "advanced": {
+      "configure": "Infrastructuur configureren",
+      "subtitle": "Aangepaste backend- en streamserver-URL's",
+      "title": "Infrastructuur overschrijvingen",
+      "hide": "Verbergen",
+      "backendLabel": "Backend API URL",
+      "streamLabel": "Streaming Bridge URL",
+      "warning": "Onjuiste waarden maken de app kapot. Laat leeg om standaardwaarden te gebruiken.",
+      "restore": "Standaardinstellingen herstellen",
+      "apply": "Wijzigingen toepassen",
+      "successTitle": "Instellingen opgeslagen",
+      "successMessage": "Je aangepaste server-URL's zijn bijgewerkt."
+    },
+    "alerts": {
+      "deleteAccountTitle": "Account verwijderen",
+      "deleteAccountMessage": "Weet je het heel zeker? Deze actie is permanent en verwijdert al je bibliotheekitems, kijkgeschiedenis en instellingen.",
+      "deleteAccountConfirmTitle": "Definitieve bevestiging",
+      "deleteAccountConfirmMessage": "Typ 'DELETE' om te bevestigen.",
+      "deleteAccountButton": "Alles verwijderen",
+      "traktDisconnectTitle": "Trakt ontkoppelen",
+      "traktDisconnectMessage": "Weet je zeker dat je je Trakt.tv-account wilt ontkoppelen?",
+      "traktDisconnectButton": "Ontkoppelen"
+    },
+    "auth": {
+      "signOut": "Afmelden",
+      "manageSettings": "Meld je aan om instellingen te beheren",
+      "signIn": "Aanmelden",
+      "accessibilitySignIn": "Meld je aan bij je account"
+    },
+    "theme": {
+      "light": "Licht",
+      "dark": "Donker",
+      "system": "Systeem"
+    },
+    "onboarding": {
+      "title": "Personaliseren",
+      "subtitle": "Pas je ervaring aan voordat we beginnen.",
+      "appearance": "Uiterlijk",
+      "addonsTitle": "Aanbevolen add-ons",
+      "addonsSubtitle": "Sterk aanbevolen voor metadata en ondertiteling.",
+      "legalAgreement": "Door verder te gaan, ga je akkoord met onze",
+      "terms": "Voorwaarden",
+      "and": "en",
+      "privacy": "Privacybeleid",
+      "finish": "Voltooien & Inloggen"
+    }
+  },
+  "addons": {
+    "title": "Add-ons",
+    "install": {
+      "title": "Add-on installeren",
+      "hint": "Plak een manifest.json URL om een bron toe te voegen.",
+      "placeholder": "https://addon-url.com/manifest.json",
+      "button": "Installeren",
+      "success": "Add-on geïnstalleerd!",
+      "successDetail": "Nieuwe inhoud verschijnt in Ontdekken.",
+      "error": "Installatie mislukt"
+    },
+    "installed": {
+      "title": "Geïnstalleerd ({{count}})",
+      "uninstall": "Verwijderen",
+      "remove": "Verwijder",
+      "cancel": "Annuleren",
+      "confirmRemove": "\"{{name}}\" verwijderen?"
+    },
+    "empty": {
+      "title": "Geen add-ons geïnstalleerd",
+      "hint": "Probeer: https://v3-cinemeta.strem.io/manifest.json"
+    }
+  },
+  "detail": {
+    "play": "Afspelen",
+    "download": "Downloaden",
+    "torrent": "Torrent",
+    "playable": "AFSPEELBAAR",
+    "episodes": "Afleveringen",
+    "episodesList": {
+      "loading": "Streams laden...",
+      "none": "Geen streams voor deze aflevering.",
+      "noneData": "Geen afleveringsgegevens beschikbaar.",
+      "season": "Seizoen {{season}}",
+      "streamsLabel": "S{{season}} A{{episode}} — Streams"
+    },
+    "quality": "Kwaliteit selecteren",
+    "cast": "Cast",
+    "watchlist": {
+      "add": "+ Toevoegen aan bibliotheek",
+      "remove": "✓ In bibliotheek"
+    },
+    "errors": {
+      "notFound": "Inhoud niet gevonden",
+      "torrentBridge": "Dit is een torrent-stream. Start eerst de stream-server bridge.",
+      "notPlayable": "Deze stream is niet afspeelbaar.",
+      "unsupported": "Niet ondersteunde stream",
+      "downloadFailed": "Downloaden starten mislukt."
+    },
+    "back": "Terug"
+  },
+  "auth": {
+    "login": {
+      "title": "Welkom terug",
+      "subtitle": "Log in om verder te gaan",
+      "email": "E-mail",
+      "password": "Wachtwoord",
+      "button": "Inloggen",
+      "forgot": "Wachtwoord vergeten?",
+      "noAccount": "Nog geen account?",
+      "signUp": "Registreren"
+    },
+    "register": {
+      "title": "Account aanmaken",
+      "subtitle": "Word lid van Streamer om je bibliotheek te synchroniseren",
+      "name": "Volledige naam",
+      "email": "E-mail",
+      "password": "Wachtwoord",
+      "button": "Account aanmaken",
+      "haveAccount": "Heb je al een account?",
+      "signIn": "Inloggen"
+    },
+    "forgot": {
+      "title": "Wachtwoord herstellen",
+      "subtitle": "Voer je e-mailadres in om een herstellink te ontvangen",
+      "button": "Link verzenden",
+      "back": "Terug naar inloggen"
+    },
+    "resetPassword": {
+      "title": "Nieuw Wachtwoord",
+      "subtitle": "Voer de reset-token en je nieuwe wachtwoord in",
+      "tokenPlaceholder": "Reset-token",
+      "passwordPlaceholder": "Nieuw Wachtwoord (min. 8 tekens)",
+      "submit": "Wachtwoord Resetten",
+      "backToLogin": "Terug naar Inloggen",
+      "emptyError": "Voer de token en een nieuw wachtwoord in",
+      "successAlert": "Wachtwoord succesvol gereset! Log in.",
+      "failedError": "Wachtwoord resetten mislukt"
+    },
+    "verifyEmail": {
+      "title": "Verifieer je e-mail",
+      "subtitle": "We hebben een verificatielink gestuurd naar",
+      "yourEmail": "je e-mailadres",
+      "description": "Controleer je inbox en klik op de link om je account te activeren. Als je de e-mail niet ziet, controleer dan de map met ongewenste e-mail.",
+      "resendSuccess": "Nieuwe link succesvol verzonden!",
+      "resendError": "Verzenden mislukt. Probeer het opnieuw.",
+      "resendButton": "E-mail opnieuw verzenden",
+      "backToLogin": "Terug naar Inloggen"
+    },
+    "errors": {
+      "fillFields": "Vul alle velden in alsjeblieft",
+      "alreadyHaveAccount": "Gebruiker bestaat al",
+      "invalidCredentials": "Ongeldig e-mailadres of wachtwoord",
+      "unexpected": "Er is een onverwachte fout opgetreden"
+    }
+  },
+  "player": {
+    "resume": {
+      "title": "Afspelen hervatten?",
+      "subtitle": "Je was gebleven bij {{time}}",
+      "resume": "Hervatten",
+      "startOver": "Opnieuw beginnen"
+    },
+    "upsell": {
+      "upNext": "VOLGENDE",
+      "cancel": "Annuleren",
+      "watchNow": "Nu kijken ({{timeLeft}}s)"
+    },
+    "controls": {
+      "brightness": "Helderheid",
+      "volume": "Volume",
+      "close": "Sluiten",
+      "nowPlaying": "Nu aan het afspelen",
+      "engine": "Engine",
+      "peers": "peers"
+    },
+    "settings": {
+      "title": "Afspeelinstellingen",
+      "done": "Gereed",
+      "speed": "Afspeelsnelheid",
+      "audio": "Audiofragmenten",
+      "subtitles": "Ondertiteling",
+      "noAudio": "Geen selecteerbare audiofragmenten — standaard wordt gebruikt.",
+      "noSubtitles": "Geen ondertiteling beschikbaar.",
+      "off": "Uit"
+    },
+    "status": {
+      "findingPeers": "Peers zoeken...",
+      "connecting": "Verbinden met peers...",
+      "buffering": "Bufferen...",
+      "errorTitle": "Verbinding mislukt",
+      "errorSubtitle": "Stream laden mislukt"
+    },
+    "errors": {
+      "noStream": "Geen stream geselecteerd",
+      "goBack": "Ga terug"
+    },
+    "cast": {
+      "castingTo": "Casten naar {{name}}",
+      "stop": "Stop met casten"
+    }
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Fout",
+    "retry": "Opnieuw proberen",
+    "themes": {
+      "dark": "Donker",
+      "light": "Licht",
+      "system": "Systeem"
+    }
+  },
+  "notifications": {
+    "title": "Notificaties",
+    "empty": "Geen notificaties"
+  },
+  "legal": {
+    "privacyTitle": "Privacybeleid",
+    "termsTitle": "Servicevoorwaarden",
+    "lastUpdated": "Laatst bijgewerkt: {{date}}",
+    "sections": {
+      "privacy": {
+        "1": "1. Gegevensverzameling",
+        "2": "2. Gevoelige Informatie",
+        "3": "3. Derden",
+        "4": "4. Gegevensverwijdering"
+      },
+      "terms": {
+        "1": "1. Acceptatie van Voorwaarden",
+        "2": "2. Gebruik van de Dienst",
+        "3": "3. Gebruikersinhoud",
+        "4": "4. Beperking van Aansprakelijkheid"
+      }
+    }
+  }
+}

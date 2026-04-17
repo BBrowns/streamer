@@ -12,12 +12,14 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, memo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { useCatalog } from "../../hooks/useCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { MetaPreview } from "@streamer/shared";
 import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
+import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
@@ -25,6 +27,7 @@ import { OfflineBanner } from "../../components/ui/OfflineBanner";
 import { Ionicons } from "@expo/vector-icons";
 import { WatchProgressBar } from "../../components/ui/WatchProgressBar";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
+import { useTheme } from "../../hooks/useTheme";
 
 import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
@@ -37,18 +40,23 @@ function HomeContent() {
   const queryClient = useQueryClient();
   const numColumns = useResponsiveColumns();
   const { width } = useWindowDimensions();
+  const { t } = useTranslation();
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
+  const { colors, isDark } = useTheme();
   const [activeFilter, setActiveFilter] = useState<"movie" | "series">("movie");
+  const [refreshing, setRefreshing] = useState(false);
   const { data: movies, isLoading } = useCatalog(activeFilter);
 
   const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: ["catalog"] });
+    setRefreshing(false);
   }, [queryClient]);
 
   if (!isHydrated) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <SkeletonCardGrid count={6} />
       </View>
     );
@@ -56,27 +64,15 @@ function HomeContent() {
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.authContainer}>
-        <Ionicons
-          name="film-outline"
-          size={64}
-          color="#00f2ff"
-          style={{ marginBottom: 16 }}
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <EmptyState
+          size="large"
+          icon="film-outline"
+          title={t("home.auth.title")}
+          description={t("home.auth.subtitle")}
+          actionLabel={t("home.auth.button")}
+          onAction={() => router.push("/login")}
         />
-        <Text style={styles.authTitle} accessibilityRole="header">
-          Streamer
-        </Text>
-        <Text style={styles.authSubtitle}>
-          Your universe of content, aggregated from the open web.
-        </Text>
-        <Pressable
-          style={styles.authButton}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Get started and sign in"
-        >
-          <Text style={styles.authButtonText}>Get Started</Text>
-        </Pressable>
       </View>
     );
   }
@@ -86,29 +82,37 @@ function HomeContent() {
   return (
     <FlatList
       testID="home-grid"
-      style={styles.flatList}
+      style={[styles.flatList, { backgroundColor: colors.background }]}
       data={movies?.slice(isDesktop && heroItem ? 1 : 0)}
       keyExtractor={(item) => item.id}
       key={`grid-${numColumns}`}
       numColumns={numColumns}
       columnWrapperStyle={
-        numColumns > 1 ? { backgroundColor: "#07070e" } : undefined
+        numColumns > 1
+          ? {
+              backgroundColor: colors.background,
+              gap: 16,
+              paddingHorizontal: 16,
+            }
+          : undefined
       }
       contentContainerStyle={{
-        paddingHorizontal: 8,
+        paddingHorizontal: 16,
         paddingBottom: 20,
-        backgroundColor: "#07070e",
+        backgroundColor: colors.background,
       }}
       refreshControl={
         <RefreshControl
-          refreshing={false}
+          refreshing={refreshing}
           onRefresh={handleRefresh}
-          tintColor="#00f2ff"
-          colors={["#00f2ff"]}
+          tintColor={colors.tint}
+          colors={[colors.tint]}
         />
       }
       ListHeaderComponent={
-        <View style={styles.container}>
+        <View
+          style={[styles.container, { backgroundColor: colors.background }]}
+        >
           <OfflineBanner />
           <ContinueWatchingRow />
 
@@ -118,60 +122,24 @@ function HomeContent() {
           {/* Section title */}
           {isDesktop && (
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                {activeFilter === "movie" ? "Popular Movies" : "Top TV Shows"}
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {activeFilter === "movie"
+                  ? t("home.sections.popularMovies")
+                  : t("home.sections.topTVShows")}
               </Text>
             </View>
           )}
 
           {/* Filter chips */}
           {isAuthenticated && isHydrated && (
-            <View style={styles.filterContainer}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScroll}
-              >
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "movie" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("movie");
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "movie" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    Movies
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.filterChip,
-                    activeFilter === "series" && styles.filterChipActive,
-                  ]}
-                  onPress={() => {
-                    setActiveFilter("series");
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeFilter === "series" && styles.filterChipTextActive,
-                    ]}
-                  >
-                    TV Shows
-                  </Text>
-                </Pressable>
-              </ScrollView>
-            </View>
+            <FilterChipBar
+              options={[
+                { label: t("home.filters.movies"), value: "movie" },
+                { label: t("home.filters.series"), value: "series" },
+              ]}
+              value={activeFilter}
+              onChange={(v) => setActiveFilter(v as "movie" | "series")}
+            />
           )}
 
           {isLoading && <SkeletonCardGrid count={numColumns * 3} />}
@@ -179,9 +147,9 @@ function HomeContent() {
           {!!movies && movies.length === 0 && !isLoading && (
             <EmptyState
               icon="cube-outline"
-              title="No Content Found"
-              description="Install some add-ons in Settings to start browsing."
-              actionLabel="Manage Add-ons"
+              title={t("home.empty.title")}
+              description={t("home.empty.description")}
+              actionLabel={t("home.empty.action")}
               onAction={() => router.push("/addons")}
             />
           )}
@@ -204,63 +172,16 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#07070e", flex: 1 },
-  flatList: { flex: 1, backgroundColor: "#07070e" },
+  container: { flex: 1 },
+  flatList: { flex: 1 },
   // Section header
   sectionHeader: {
     paddingHorizontal: 16,
     marginBottom: 12,
   },
   sectionTitle: {
-    color: "#f1f5f9",
     fontSize: 22,
     fontWeight: "800",
     letterSpacing: -0.5,
-  },
-  filterContainer: { marginBottom: 16, marginTop: 8 },
-  filterScroll: { paddingHorizontal: 16, gap: 8 },
-  filterChip: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  filterChipActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
-  filterChipText: { color: "#6b7280", fontSize: 13, fontWeight: "800" },
-  filterChipTextActive: { color: "#000000" },
-  authContainer: {
-    flex: 1,
-    backgroundColor: "#07070e",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-  },
-  authTitle: {
-    fontSize: 36,
-    fontWeight: "900",
-    color: "#f8fafc",
-    marginBottom: 12,
-  },
-  authSubtitle: {
-    fontSize: 16,
-    color: "#94a3b8",
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  authButton: {
-    backgroundColor: "#00f2ff",
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-    borderRadius: 16,
-  },
-  authButtonText: {
-    color: "#000000",
-    fontWeight: "900",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 1,
   },
 });

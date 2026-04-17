@@ -32,6 +32,7 @@ export function WatchProgressBar({
     },
     enabled: isAuthenticated && !!itemId,
     staleTime: 60 * 1000,
+    retry: false, // Prevents N+1 exponential retry bursts when progress is expectedly missing (404)
   });
 
   const progress =

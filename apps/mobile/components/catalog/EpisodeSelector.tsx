@@ -11,6 +11,9 @@ import { Ionicons } from "@expo/vector-icons";
 import type { VideoEntry, Stream } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useEpisodeStreams } from "../../hooks/useEpisodeStreams";
+import { useDownloadStore } from "../../stores/downloadStore";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 import { StreamItem } from "../detail/StreamItem";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
@@ -24,6 +27,8 @@ function EpisodeRow({
   isSelected: boolean;
   onPress: () => void;
 }) {
+  const { colors, isDark } = useTheme();
+
   const releasedDate = video.released
     ? new Date(video.released).toLocaleDateString(undefined, {
         year: "numeric",
@@ -34,28 +39,77 @@ function EpisodeRow({
 
   return (
     <Pressable
-      style={[styles.episodeRow, isSelected && styles.episodeRowActive]}
+      style={[
+        styles.episodeRow,
+        {
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.03)"
+            : "rgba(0,0,0,0.02)",
+          borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+        },
+        isSelected && {
+          backgroundColor: isDark
+            ? "rgba(0,242,255,0.07)"
+            : "rgba(99,102,241,0.07)",
+          borderColor: isDark
+            ? "rgba(0,242,255,0.25)"
+            : "rgba(99,102,241,0.25)",
+        },
+      ]}
       onPress={() => {
         hapticImpactLight();
         onPress();
       }}
     >
-      <View style={[styles.epNumBadge, isSelected && styles.epNumBadgeActive]}>
-        <Text style={[styles.epNum, isSelected && styles.epNumActive]}>
+      <View
+        style={[
+          styles.epNumBadge,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.06)"
+              : "rgba(0,0,0,0.04)",
+          },
+          isSelected && {
+            backgroundColor: isDark
+              ? "rgba(0,242,255,0.2)"
+              : "rgba(99,102,241,0.15)",
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.epNum,
+            { color: colors.textSecondary },
+            isSelected && { color: colors.tint },
+          ]}
+        >
           {video.episode}
         </Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text
-          style={[styles.epTitle, isSelected && styles.epTitleActive]}
+          style={[
+            styles.epTitle,
+            { color: colors.textSecondary },
+            isSelected && { color: colors.text },
+          ]}
           numberOfLines={2}
         >
           {video.title}
         </Text>
-        {releasedDate && <Text style={styles.epDate}>{releasedDate}</Text>}
+        {releasedDate && (
+          <Text
+            style={[
+              styles.epDate,
+              { color: colors.textSecondary, opacity: 0.7 },
+            ]}
+          >
+            {releasedDate}
+          </Text>
+        )}
       </View>
       {isSelected && (
-        <Ionicons name="chevron-forward" size={16} color="#00f2ff" />
+        <Ionicons name="chevron-forward" size={16} color={colors.tint} />
       )}
     </Pressable>
   );
@@ -78,6 +132,10 @@ function EpisodeStreamList({
   onPlayStream: (stream: Stream, episodeTitle: string) => void;
   onDownloadStream: (stream: Stream, episodeTitle: string) => void;
 }) {
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+  const { tasks } = useDownloadStore();
+
   const { data: streams, isLoading } = useEpisodeStreams(
     seriesId,
     season,
@@ -87,8 +145,12 @@ function EpisodeStreamList({
   if (isLoading) {
     return (
       <View style={styles.streamLoading}>
-        <ActivityIndicator color="#00f2ff" size="small" />
-        <Text style={styles.streamLoadingText}>Loading streams…</Text>
+        <ActivityIndicator color={colors.tint} size="small" />
+        <Text
+          style={[styles.streamLoadingText, { color: colors.textSecondary }]}
+        >
+          {t("detail.episodesList.loading")}
+        </Text>
       </View>
     );
   }
@@ -96,19 +158,31 @@ function EpisodeStreamList({
   if (!streams || streams.length === 0) {
     return (
       <View style={styles.noStreams}>
-        <Ionicons name="warning-outline" size={20} color="#52525b" />
-        <Text style={styles.noStreamsText}>No streams for this episode.</Text>
+        <Ionicons
+          name="warning-outline"
+          size={20}
+          color={colors.textSecondary}
+        />
+        <Text style={[styles.noStreamsText, { color: colors.textSecondary }]}>
+          {t("detail.episodesList.none")}
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={styles.streamPanel}>
-      <Text style={styles.streamPanelLabel}>
-        S{season} E{episode} — Streams
+      <Text style={[styles.streamPanelLabel, { color: colors.tint }]}>
+        {t("detail.episodesList.streamsLabel", { season, episode })}
       </Text>
       {streams.map((stream, i) => {
         const key = `${stream.infoHash || stream.url || "stream"}-${i}`;
+        const streamId = stream.infoHash || stream.url || key;
+        const task = tasks[streamId];
+        const isDownloading = task?.status === "Downloading";
+        const isCompleted = task?.status === "Completed";
+        const progress = task?.progress || 0;
+
         return (
           <StreamItem
             key={key}
@@ -148,6 +222,14 @@ export const EpisodeSelector = memo(function EpisodeSelector({
   onPlayStream,
   onDownloadStream,
 }: EpisodeSelectorProps) {
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+
+  // Simple helper for button text contrast
+  function takesInverseColor(hex: string) {
+    return isDark ? "#000000" : "#ffffff";
+  }
+
   // Group videos by season
   const seasons = useMemo(() => {
     const map = new Map<number, VideoEntry[]>();
@@ -184,7 +266,9 @@ export const EpisodeSelector = memo(function EpisodeSelector({
   if (seasons.length === 0) {
     return (
       <View style={styles.noStreams}>
-        <Text style={styles.noStreamsText}>No episode data available.</Text>
+        <Text style={[styles.noStreamsText, { color: colors.textSecondary }]}>
+          {t("detail.episodesList.noneData")}
+        </Text>
       </View>
     );
   }
@@ -202,17 +286,31 @@ export const EpisodeSelector = memo(function EpisodeSelector({
             key={season}
             style={[
               styles.seasonTab,
-              selectedSeason === season && styles.seasonTabActive,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(0,0,0,0.05)",
+                borderColor: isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.08)",
+              },
+              selectedSeason === season && {
+                backgroundColor: colors.tint,
+                borderColor: colors.tint,
+              },
             ]}
             onPress={() => handleSeasonChange(season)}
           >
             <Text
               style={[
                 styles.seasonTabText,
-                selectedSeason === season && styles.seasonTabTextActive,
+                { color: colors.textSecondary },
+                selectedSeason === season && {
+                  color: takesInverseColor(colors.tint),
+                },
               ]}
             >
-              Season {season}
+              {t("detail.episodesList.season", { season })}
             </Text>
           </Pressable>
         ))}
@@ -276,22 +374,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
   },
-  seasonTabActive: {
-    backgroundColor: "#00f2ff",
-    borderColor: "#00f2ff",
-  },
+  seasonTabActive: {},
   seasonTabText: {
-    color: "#71717a",
     fontSize: 13,
     fontWeight: "700",
   },
-  seasonTabTextActive: {
-    color: "#000000",
-  },
+  seasonTabTextActive: {},
   episodeList: {
     gap: 4,
   },
@@ -302,44 +392,29 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.03)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
   },
-  episodeRowActive: {
-    backgroundColor: "rgba(0,242,255,0.07)",
-    borderColor: "rgba(0,242,255,0.25)",
-  },
+  episodeRowActive: {},
   epNumBadge: {
     width: 36,
     height: 36,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.06)",
     justifyContent: "center",
     alignItems: "center",
   },
-  epNumBadgeActive: {
-    backgroundColor: "rgba(0,242,255,0.2)",
-  },
+  epNumBadgeActive: {},
   epNum: {
-    color: "#71717a",
     fontSize: 13,
     fontWeight: "800",
   },
-  epNumActive: {
-    color: "#00f2ff",
-  },
+  epNumActive: {},
   epTitle: {
-    color: "#d4d4d8",
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 19,
   },
-  epTitleActive: {
-    color: "#ffffff",
-  },
+  epTitleActive: {},
   epDate: {
-    color: "#52525b",
     fontSize: 11,
     marginTop: 2,
   },
@@ -351,7 +426,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   streamLoadingText: {
-    color: "#71717a",
     fontSize: 14,
   },
   noStreams: {
@@ -362,7 +436,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   noStreamsText: {
-    color: "#52525b",
     fontSize: 14,
   },
   streamPanel: {
@@ -370,7 +443,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   streamPanelLabel: {
-    color: "#00f2ff",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",

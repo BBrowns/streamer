@@ -7,17 +7,30 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
+  useWindowDimensions,
+  Platform,
 } from "react-native";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
+import { useSearch } from "../../hooks/useSearch";
+import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
+import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { api } from "../../services/api";
+import { useTranslation } from "react-i18next";
+import { useTheme } from "../../hooks/useTheme";
 import type { InstalledAddon } from "@streamer/shared";
 import { AxiosError } from "axios";
+import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 
 export default function AddonsScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
   const [addonUrl, setAddonUrl] = useState("");
 
   const { data: addons, isLoading } = useQuery<InstalledAddon[]>({
@@ -39,16 +52,16 @@ export default function AddonsScreen() {
       queryClient.invalidateQueries({ queryKey: ["catalog"] });
       setAddonUrl("");
       Alert.alert(
-        "Success",
-        "Add-on installed! New content will appear on Discover.",
+        t("addons.install.success"),
+        t("addons.install.successDetail"),
       );
     },
     onError: (err: unknown) => {
       const msg =
         err instanceof AxiosError
           ? err.response?.data?.error
-          : "Failed to install add-on";
-      Alert.alert("Installation Failed", msg || "Failed to install add-on");
+          : t("addons.install.error");
+      Alert.alert(t("addons.install.error"), msg || t("addons.install.error"));
     },
   });
 
@@ -63,18 +76,29 @@ export default function AddonsScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Install Input */}
-      <View style={styles.installSection}>
-        <Text style={styles.sectionTitle}>Install Add-on</Text>
-        <Text style={styles.hint}>
-          Paste a manifest.json URL to add a content source.
+      <View
+        style={[styles.installSection, { borderBottomColor: colors.border }]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          {t("addons.install.title")}
+        </Text>
+        <Text style={[styles.hint, { color: colors.textSecondary }]}>
+          {t("addons.install.hint")}
         </Text>
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.input}
-            placeholder="https://addon-url.com/manifest.json"
-            placeholderTextColor="#6b7280"
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                color: colors.text,
+              },
+            ]}
+            placeholder={t("addons.install.placeholder")}
+            placeholderTextColor={colors.textSecondary + "80"}
             value={addonUrl}
             onChangeText={setAddonUrl}
             autoCapitalize="none"
@@ -84,77 +108,139 @@ export default function AddonsScreen() {
           <Pressable
             style={[
               styles.installBtn,
+              { backgroundColor: colors.tint },
               (!addonUrl || installMutation.isPending) && styles.disabledBtn,
             ]}
-            onPress={() => addonUrl && installMutation.mutate(addonUrl)}
+            onPress={() => {
+              hapticImpactLight();
+              addonUrl && installMutation.mutate(addonUrl);
+            }}
             disabled={!addonUrl || installMutation.isPending}
           >
             {installMutation.isPending ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.installBtnText}>Install</Text>
+              <Text style={[styles.installBtnText, { color: "#fff" }]}>
+                {t("addons.install.button")}
+              </Text>
             )}
           </Pressable>
         </View>
       </View>
 
       {/* Installed Add-ons */}
-      <View style={styles.listSection}>
-        <Text style={styles.sectionTitle}>
-          Installed ({addons?.length ?? 0})
+      <View style={[styles.listSection, isDesktop && styles.desktopContent]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          {t("addons.installed.title", { count: addons?.length ?? 0 })}
         </Text>
 
         {isLoading ? (
-          <ActivityIndicator color="#818cf8" style={{ marginTop: 24 }} />
+          <ActivityIndicator color={colors.tint} style={{ marginTop: 24 }} />
         ) : (
           <FlatList
             data={addons}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
-              <View style={styles.addonCard}>
-                <View style={styles.addonIcon}>
-                  <Text style={styles.addonIconText}>
+              <Pressable
+                style={({ hovered }: any) => [
+                  styles.addonCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                  },
+                  hovered && {
+                    borderColor: colors.tint,
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.03)"
+                      : "rgba(0,0,0,0.02)",
+                    transform: [{ scale: 1.005 }],
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.addonIcon,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(99, 102, 241, 0.2)"
+                        : colors.tint + "15",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.addonIconText, { color: colors.tint }]}>
                     {item.manifest.name.charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.addonInfo}>
-                  <Text style={styles.addonName}>{item.manifest.name}</Text>
-                  <Text style={styles.addonDesc} numberOfLines={1}>
+                  <Text style={[styles.addonName, { color: colors.text }]}>
+                    {item.manifest.name}
+                  </Text>
+                  <Text
+                    style={[styles.addonDesc, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
                     {item.manifest.description}
                   </Text>
-                  <Text style={styles.addonMeta}>
+                  <Text
+                    style={[
+                      styles.addonMeta,
+                      { color: colors.textSecondary + "90" },
+                    ]}
+                  >
                     v{item.manifest.version} · {item.manifest.types.join(", ")}{" "}
                     · {item.manifest.catalogs.length} catalog(s)
                   </Text>
                 </View>
                 <Pressable
-                  style={styles.removeBtn}
-                  onPress={() =>
+                  style={({ hovered }: any) => [
+                    styles.removeBtn,
+                    { backgroundColor: "rgba(239, 68, 68, 0.1)" },
+                    hovered && {
+                      backgroundColor: "rgba(239, 68, 68, 0.2)",
+                      transform: [{ scale: 1.1 }],
+                    },
+                  ]}
+                  onPress={() => {
+                    hapticWarning();
                     Alert.alert(
-                      "Uninstall",
-                      `Remove "${item.manifest.name}"?`,
+                      t("addons.installed.uninstall"),
+                      t("addons.installed.confirmRemove", {
+                        name: item.manifest.name,
+                      }),
                       [
-                        { text: "Cancel", style: "cancel" },
+                        { text: t("addons.installed.cancel"), style: "cancel" },
                         {
-                          text: "Remove",
+                          text: t("addons.installed.remove"),
                           style: "destructive",
                           onPress: () => uninstallMutation.mutate(item.id),
                         },
                       ],
-                    )
-                  }
+                    );
+                  }}
                 >
-                  <Text style={styles.removeBtnText}>✕</Text>
+                  <Text style={[styles.removeBtnText, { color: "#ef4444" }]}>
+                    ✕
+                  </Text>
                 </Pressable>
-              </View>
+              </Pressable>
             )}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>📦</Text>
-                <Text style={styles.emptyText}>No add-ons installed</Text>
-                <Text style={styles.emptyHint}>
-                  Try: https://v3-cinemeta.strem.io/manifest.json
+                <Text
+                  style={[styles.emptyText, { color: colors.textSecondary }]}
+                >
+                  {t("addons.empty.title")}
+                </Text>
+                <Text
+                  style={[
+                    styles.emptyHint,
+                    { color: colors.textSecondary + "80" },
+                  ]}
+                >
+                  {t("addons.empty.hint")}
                 </Text>
               </View>
             }
@@ -168,7 +254,11 @@ export default function AddonsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a1a",
+  },
+  desktopContent: {
+    maxWidth: 800,
+    alignSelf: "center",
+    width: "100%",
   },
   installSection: {
     padding: 16,
@@ -202,7 +292,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(129, 140, 248, 0.2)",
   },
   installBtn: {
-    backgroundColor: "#818cf8",
     paddingHorizontal: 20,
     borderRadius: 10,
     justifyContent: "center",

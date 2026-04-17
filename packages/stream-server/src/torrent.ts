@@ -96,6 +96,7 @@ export async function getClient(): Promise<any> {
     const WebTorrent = (await import("webtorrent")).default;
     client = new WebTorrent({
       maxConns: MAX_CONNS,
+      utp: false, // Disable UTP to prevent "address not available" bind errors
       tracker: {
         announce: DEFAULT_TRACKERS,
       },

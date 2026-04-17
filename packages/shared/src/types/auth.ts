@@ -24,6 +24,18 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   createdAt: string;
+  emailVerified?: boolean;
+}
+
+export interface RegisterResponse {
+  user: UserProfile;
+  tokens?: AuthTokens;
+  verificationRequired?: boolean;
+}
+
+export interface LoginResponse {
+  user: UserProfile;
+  tokens: AuthTokens;
 }
 
 export interface ForgotPasswordRequest {

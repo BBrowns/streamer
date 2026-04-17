@@ -10,6 +10,8 @@ import type {
 import type { LibraryItem, WatchProgress } from "@streamer/shared";
 
 import { TraktService } from "../../trakt/trakt.service.js";
+import { syncService } from "../../sync/sync.service.js";
+import { NotificationService } from "../../notification/notification.service.js";
 
 export class LibraryService {
   constructor(
@@ -40,7 +42,22 @@ export class LibraryService {
     });
 
     logger.info({ userId, itemId: data.itemId }, "Item added to library");
-    return this.toLibraryItem(record);
+
+    // Create notification in background
+    NotificationService.createNotification(
+      userId,
+      "Added to Library",
+      `"${data.title}" has been added to your library.`,
+    ).catch((err) =>
+      logger.warn({ err }, "Failed to create library notification"),
+    );
+
+    const result = this.toLibraryItem(record);
+    syncService.broadcast(userId, "LIBRARY_UPDATE", {
+      action: "add",
+      item: result,
+    });
+    return result;
   }
 
   /** Remove an item from the library */
@@ -52,6 +69,10 @@ export class LibraryService {
 
     await this.libraryRepo.delete(userId, itemId);
     logger.info({ userId, itemId }, "Item removed from library");
+    syncService.broadcast(userId, "LIBRARY_UPDATE", {
+      action: "remove",
+      itemId,
+    });
   }
 
   /** Bulk remove items from the library */
@@ -65,6 +86,10 @@ export class LibraryService {
       { userId, deletedCount: itemIds.length },
       "Bulk items removed from library",
     );
+    syncService.broadcast(userId, "LIBRARY_UPDATE", {
+      action: "bulk-remove",
+      itemIds,
+    });
   }
 
   /** Get all library items for a user */
@@ -120,7 +145,9 @@ export class LibraryService {
         logger.warn({ userId, err }, "Trakt sync failed in background"),
       );
 
-    return this.toWatchProgress(record);
+    const result = this.toWatchProgress(record);
+    syncService.broadcast(userId, "PROGRESS_UPDATE", result);
+    return result;
   }
 
   /** Get continue-watching list (recently watched, not completed) */

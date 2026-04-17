@@ -16,11 +16,13 @@ import { AxiosError } from "axios";
 interface ChangePasswordModalProps {
   visible: boolean;
   onClose: () => void;
+  inline?: boolean;
 }
 
 export function ChangePasswordModal({
   visible,
   onClose,
+  inline,
 }: ChangePasswordModalProps) {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -61,6 +63,63 @@ export function ChangePasswordModal({
     onClose();
   };
 
+  const content = (
+    <View style={inline ? styles.inlineContent : styles.modalBg}>
+      <View style={inline ? styles.inlineCard : styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <View style={styles.modalTitleRow}>
+            <Ionicons name="lock-closed-outline" size={20} color="#818cf8" />
+            <Text style={styles.modalTitle}>Change Password</Text>
+          </View>
+          {!inline && (
+            <Pressable onPress={handleClose}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </Pressable>
+          )}
+        </View>
+        <TextInput
+          style={styles.modalInput}
+          placeholder="Current password"
+          placeholderTextColor="#6b7280"
+          value={currentPw}
+          onChangeText={setCurrentPw}
+          secureTextEntry
+          accessibilityLabel="Current password"
+          autoComplete="current-password"
+        />
+        <TextInput
+          style={styles.modalInput}
+          placeholder="New password (min 8 chars)"
+          placeholderTextColor="#6b7280"
+          value={newPw}
+          onChangeText={setNewPw}
+          secureTextEntry
+          accessibilityLabel="New password, minimum 8 characters"
+          autoComplete="new-password"
+        />
+        <Pressable
+          style={[styles.modalButton, pwLoading && styles.opacity50]}
+          onPress={handleChangePassword}
+          disabled={pwLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Update password"
+          accessibilityState={{ disabled: pwLoading }}
+        >
+          {pwLoading ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <Text style={styles.modalButtonText}>Update Password</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  if (inline) {
+    if (!visible) return null;
+    return content;
+  }
+
   return (
     <Modal
       visible={visible}
@@ -68,53 +127,7 @@ export function ChangePasswordModal({
       transparent
       onRequestClose={handleClose}
     >
-      <View style={styles.modalBg}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <View style={styles.modalTitleRow}>
-              <Ionicons name="lock-closed-outline" size={20} color="#818cf8" />
-              <Text style={styles.modalTitle}>Change Password</Text>
-            </View>
-            <Pressable onPress={handleClose}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </Pressable>
-          </View>
-          <TextInput
-            style={styles.modalInput}
-            placeholder="Current password"
-            placeholderTextColor="#6b7280"
-            value={currentPw}
-            onChangeText={setCurrentPw}
-            secureTextEntry
-            accessibilityLabel="Current password"
-            autoComplete="current-password"
-          />
-          <TextInput
-            style={styles.modalInput}
-            placeholder="New password (min 8 chars)"
-            placeholderTextColor="#6b7280"
-            value={newPw}
-            onChangeText={setNewPw}
-            secureTextEntry
-            accessibilityLabel="New password, minimum 8 characters"
-            autoComplete="new-password"
-          />
-          <Pressable
-            style={[styles.modalButton, pwLoading && styles.opacity50]}
-            onPress={handleChangePassword}
-            disabled={pwLoading}
-            accessibilityRole="button"
-            accessibilityLabel="Update password"
-            accessibilityState={{ disabled: pwLoading }}
-          >
-            {pwLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.modalButtonText}>Update Password</Text>
-            )}
-          </Pressable>
-        </View>
-      </View>
+      {content}
     </Modal>
   );
 }
@@ -133,6 +146,13 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.05)",
+  },
+  inlineContent: {
+    flex: 1,
+  },
+  inlineCard: {
+    backgroundColor: "transparent",
+    padding: 0,
   },
   modalHeader: {
     flexDirection: "row",

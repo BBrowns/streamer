@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet, Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
 import { VideoPlayer } from "expo-video";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
@@ -27,6 +28,7 @@ export function PlayerControls({
   onPlayPause,
   isPlaying,
 }: PlayerControlsProps) {
+  const { colors, isDark } = useTheme();
   if (!isVisible) return null;
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -39,31 +41,60 @@ export function PlayerControls({
       pointerEvents="box-none"
     >
       <View style={styles.centerControls} pointerEvents="box-none">
-        <Pressable style={styles.playPauseBtn} onPress={onPlayPause}>
+        <Pressable
+          style={[
+            styles.playPauseBtn,
+            {
+              backgroundColor: isDark
+                ? "rgba(0,0,0,0.6)"
+                : "rgba(255,255,255,0.7)",
+            },
+          ]}
+          onPress={onPlayPause}
+        >
           <Ionicons
             name={isPlaying ? "pause" : "play"}
             size={48}
-            color="#fff"
+            color={colors.tint}
             style={{ marginLeft: isPlaying ? 0 : 4 }}
           />
         </Pressable>
       </View>
 
       <View style={styles.bottomControls}>
-        <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+        <Text style={[styles.timeText, { color: colors.text }]}>
+          {formatTime(currentTime)}
+        </Text>
 
         <View style={styles.scrubberContainer}>
-          <View style={styles.scrubberTrack}>
+          <View
+            style={[
+              styles.scrubberTrack,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(0,0,0,0.1)",
+              },
+            ]}
+          >
             <View
-              style={[styles.scrubberFill, { width: `${progressPercent}%` }]}
+              style={[
+                styles.scrubberFill,
+                { width: `${progressPercent}%`, backgroundColor: colors.tint },
+              ]}
             />
             <View
-              style={[styles.scrubberThumb, { left: `${progressPercent}%` }]}
+              style={[
+                styles.scrubberThumb,
+                { left: `${progressPercent}%`, backgroundColor: colors.text },
+              ]}
             />
           </View>
         </View>
 
-        <Text style={styles.timeText}>{formatTime(duration)}</Text>
+        <Text style={[styles.timeText, { color: colors.text }]}>
+          {formatTime(duration)}
+        </Text>
       </View>
     </Animated.View>
   );

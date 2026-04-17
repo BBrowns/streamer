@@ -23,6 +23,7 @@ interface ActiveSessionsModalProps {
   isSessionsLoading: boolean;
   deviceId?: string | null;
   revokeSession: (id: string) => void;
+  inline?: boolean;
 }
 
 export function ActiveSessionsModal({
@@ -32,7 +33,89 @@ export function ActiveSessionsModal({
   isSessionsLoading,
   deviceId,
   revokeSession,
+  inline,
 }: ActiveSessionsModalProps) {
+  const content = (
+    <View style={inline ? styles.inlineContent : styles.modalBg}>
+      <View
+        style={[
+          inline ? styles.inlineCard : styles.modalContent,
+          { maxHeight: inline ? "100%" : "75%" },
+        ]}
+      >
+        <View style={styles.modalHeader}>
+          <View style={styles.modalTitleRow}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={20}
+              color="#34d399"
+            />
+            <Text style={styles.modalTitle}>Active Sessions</Text>
+          </View>
+          {!inline && (
+            <Pressable onPress={onClose}>
+              <Text style={styles.modalCancel}>Done</Text>
+            </Pressable>
+          )}
+        </View>
+        {isSessionsLoading ? (
+          <ActivityIndicator color="#00f2ff" style={{ marginTop: 24 }} />
+        ) : (
+          sessions.map((session) => {
+            const isCurrentDevice = session.deviceId === deviceId;
+            const lastSeen = new Date(session.lastActivity);
+            const diffMs = Date.now() - lastSeen.getTime();
+            const diffMin = Math.floor(diffMs / 60_000);
+            const lastSeenLabel =
+              diffMin < 1
+                ? "Just now"
+                : diffMin < 60
+                  ? `${diffMin}m ago`
+                  : `${Math.floor(diffMin / 60)}h ago`;
+
+            return (
+              <View key={session.id} style={styles.sessionRow}>
+                <View style={styles.sessionIconWrap}>
+                  <Ionicons
+                    name="phone-portrait-outline"
+                    size={20}
+                    color={isCurrentDevice ? "#34d399" : "#94a3b8"}
+                  />
+                </View>
+                <View style={styles.sessionInfo}>
+                  <Text style={styles.sessionDevice} numberOfLines={1}>
+                    {isCurrentDevice
+                      ? "This device"
+                      : (session.userAgent?.slice(0, 40) ?? "Unknown device")}
+                  </Text>
+                  <Text style={styles.sessionMeta}>
+                    {session.ipAddress ?? "Unknown IP"} · {lastSeenLabel}
+                  </Text>
+                </View>
+                {!isCurrentDevice && (
+                  <Pressable
+                    onPress={() => revokeSession(session.id)}
+                    hitSlop={8}
+                    testID={`btn-revoke-session-${session.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel="Revoke this session"
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                  </Pressable>
+                )}
+              </View>
+            );
+          })
+        )}
+      </View>
+    </View>
+  );
+
+  if (inline) {
+    if (!visible) return null;
+    return content;
+  }
+
   return (
     <Modal
       visible={visible}
@@ -40,76 +123,7 @@ export function ActiveSessionsModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.modalBg}>
-        <View style={[styles.modalContent, { maxHeight: "75%" }]}>
-          <View style={styles.modalHeader}>
-            <View style={styles.modalTitleRow}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color="#34d399"
-              />
-              <Text style={styles.modalTitle}>Active Sessions</Text>
-            </View>
-            <Pressable onPress={onClose}>
-              <Text style={styles.modalCancel}>Done</Text>
-            </Pressable>
-          </View>
-          {isSessionsLoading ? (
-            <ActivityIndicator color="#00f2ff" style={{ marginTop: 24 }} />
-          ) : (
-            sessions.map((session) => {
-              const isCurrentDevice = session.deviceId === deviceId;
-              const lastSeen = new Date(session.lastActivity);
-              const diffMs = Date.now() - lastSeen.getTime();
-              const diffMin = Math.floor(diffMs / 60_000);
-              const lastSeenLabel =
-                diffMin < 1
-                  ? "Just now"
-                  : diffMin < 60
-                    ? `${diffMin}m ago`
-                    : `${Math.floor(diffMin / 60)}h ago`;
-
-              return (
-                <View key={session.id} style={styles.sessionRow}>
-                  <View style={styles.sessionIconWrap}>
-                    <Ionicons
-                      name="phone-portrait-outline"
-                      size={20}
-                      color={isCurrentDevice ? "#34d399" : "#94a3b8"}
-                    />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionDevice} numberOfLines={1}>
-                      {isCurrentDevice
-                        ? "This device"
-                        : (session.userAgent?.slice(0, 40) ?? "Unknown device")}
-                    </Text>
-                    <Text style={styles.sessionMeta}>
-                      {session.ipAddress ?? "Unknown IP"} · {lastSeenLabel}
-                    </Text>
-                  </View>
-                  {!isCurrentDevice && (
-                    <Pressable
-                      onPress={() => revokeSession(session.id)}
-                      hitSlop={8}
-                      testID={`btn-revoke-session-${session.id}`}
-                      accessibilityRole="button"
-                      accessibilityLabel="Revoke this session"
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color="#ef4444"
-                      />
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })
-          )}
-        </View>
-      </View>
+      {content}
     </Modal>
   );
 }
@@ -128,6 +142,13 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.05)",
+  },
+  inlineContent: {
+    flex: 1,
+  },
+  inlineCard: {
+    backgroundColor: "transparent",
+    padding: 0,
   },
   modalHeader: {
     flexDirection: "row",

@@ -4,6 +4,7 @@ import { useDownloadStore, DownloadMediaItem } from "../stores/downloadStore";
 import { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
+import { api } from "./api";
 
 class DownloadService {
   private downloadResumables: Record<string, FileSystem.DownloadResumable> = {};
@@ -15,9 +16,10 @@ class DownloadService {
     // 1. Resolve playback URI
     const downloadUrl = await streamEngineManager.getPlaybackUri(stream);
     if (!downloadUrl) {
-      console.error(
-        "[DownloadService] Could not resolve playback URI for download",
-      );
+      if (__DEV__)
+        console.error(
+          "[DownloadService] Could not resolve playback URI for download",
+        );
       return;
     }
 
@@ -41,8 +43,57 @@ class DownloadService {
 
     const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
 
-    // WEB IMPLEMENTATION: Trigger browser native download popup
+    // WEB/DESKTOP IMPLEMENTATION
     if (Platform.OS === "web") {
+      const desktopBridge = (window as any).desktopBridge;
+
+      if (desktopBridge) {
+        addTask(id, { ...mediaInfo, downloadUrl });
+        setStatus(id, "Downloading");
+
+        const unsubscribe = desktopBridge.onDownloadProgress((data: any) => {
+          if (data.id === id) {
+            const progress =
+              data.totalBytesExpectedToWrite > 0
+                ? data.totalBytesWritten / data.totalBytesExpectedToWrite
+                : 0;
+            updateProgress(
+              id,
+              progress,
+              data.totalBytesWritten,
+              data.totalBytesExpectedToWrite,
+            );
+          }
+        });
+
+        try {
+          const localUri = await desktopBridge.downloadMedia(
+            id,
+            downloadUrl,
+            filename,
+          );
+          unsubscribe();
+          setStatus(id, "Completed", localUri);
+          if (__DEV__)
+            console.log(
+              "[DownloadService] Desktop download completed:",
+              localUri,
+            );
+
+          api
+            .post("/api/notifications", {
+              title: "Download Complete",
+              message: `"${mediaInfo.title}" is ready to watch offline!`,
+            })
+            .catch((err) => console.warn("Failed to ping completion", err));
+        } catch (e: any) {
+          unsubscribe();
+          setStatus(id, "Error", undefined, e.message);
+        }
+        return;
+      }
+
+      // Native Browser Fallback
       try {
         const link = document.createElement("a");
         link.href = downloadUrl;
@@ -53,7 +104,8 @@ class DownloadService {
 
         // We can't track perfect granular progress natively via link clicks, just mark it completed
         addTask(id, { ...mediaInfo, downloadUrl });
-        setStatus(id, "Completed", downloadUrl);
+        // Setting localUri to undefined since Web doesn't store a local file accessible to Expo FileSystem
+        setStatus(id, "Completed", undefined);
       } catch (e: any) {
         setStatus(id, "Error", undefined, e.message);
       }
@@ -100,10 +152,24 @@ class DownloadService {
       const result = await downloadResumable.downloadAsync();
       if (result) {
         setStatus(id, "Completed", result.uri);
-        console.log("[DownloadService] Download completed:", result.uri);
+        if (__DEV__)
+          console.log("[DownloadService] Download completed:", result.uri);
+
+        // Notify backend of completion
+        api
+          .post("/api/notifications", {
+            title: "Download Complete",
+            message: `"${mediaInfo.title}" is ready to watch offline!`,
+          })
+          .catch((err) =>
+            console.warn(
+              "[DownloadService] Failed to notify backend of download completion",
+              err,
+            ),
+          );
       }
     } catch (e: any) {
-      console.error("[DownloadService] Download failed:", e);
+      if (__DEV__) console.error("[DownloadService] Download failed:", e);
       setStatus(id, "Error", undefined, e.message);
     } finally {
       delete this.downloadResumables[id];
@@ -121,7 +187,7 @@ class DownloadService {
           .setStatus(id, "Paused", undefined, undefined, resumeData);
         console.log("[DownloadService] Download paused");
       } catch (e) {
-        console.error("[DownloadService] Pause failed:", e);
+        if (__DEV__) console.error("[DownloadService] Pause failed:", e);
       }
     }
   }
@@ -171,9 +237,10 @@ class DownloadService {
           delete this.downloadResumables[id];
         }
       } else {
-        console.warn(
-          "[DownloadService] Resumable object lost, restarting download",
-        );
+        if (__DEV__)
+          console.warn(
+            "[DownloadService] Resumable object and resumeData lost, restarting download",
+          );
         this.startDownload(task.mediaInfo as any as Stream, task.mediaInfo);
       }
     }
@@ -184,6 +251,23 @@ class DownloadService {
     const task = tasks[id];
 
     if (Platform.OS === "web") {
+      const desktopBridge = (window as any).desktopBridge;
+      if (desktopBridge && task?.localUri) {
+        try {
+          await desktopBridge.deleteFile(task.localUri);
+          removeTask(id);
+          if (__DEV__)
+            console.log(
+              "[DownloadService] Deleted desktop local file and task",
+            );
+        } catch (e) {
+          if (__DEV__)
+            console.error("[DownloadService] Desktop deletion failed:", e);
+        }
+        return;
+      }
+
+      // Vanilla Browser Fallback
       // Browser files are stored externally by the user; we only clear our state
       removeTask(id);
       return;
@@ -193,9 +277,10 @@ class DownloadService {
       try {
         await FileSystem.deleteAsync(task.localUri, { idempotent: true });
         removeTask(id);
-        console.log("[DownloadService] Deleted local file and task");
+        if (__DEV__)
+          console.log("[DownloadService] Deleted local file and task");
       } catch (e) {
-        console.error("[DownloadService] Deletion failed:", e);
+        if (__DEV__) console.error("[DownloadService] Deletion failed:", e);
       }
     } else {
       removeTask(id);

@@ -2,8 +2,19 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 
+const path = require("path");
+const fs = require("fs");
+const https = require("https");
+const http = require("http");
+
 let tray = null;
 let mainWindow = null;
+
+// Ensure download directory exists
+const downloadsPath = path.join(electron_1.app.getPath('userData'), 'offline_media');
+if (!fs.existsSync(downloadsPath)) {
+    fs.mkdirSync(downloadsPath, { recursive: true });
+}
 
 function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
@@ -13,6 +24,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         },
     });
     // Load the expo web app (assumes it is running on 8081 for dev)
@@ -49,6 +61,66 @@ function createTray() {
 }
 
 electron_1.app.whenReady().then(async () => {
+    // Register custom protocol to bypass security sandbox for local downloaded files
+    electron_1.protocol.registerFileProtocol('streamer', (request, callback) => {
+        const url = request.url.replace('streamer://', '');
+        try {
+            return callback(decodeURIComponent(url));
+        } catch (error) {
+            console.error('Protocol error:', error);
+        }
+    });
+
+    // Set up IPC Handlers
+    electron_1.ipcMain.handle('check-file', async (event, localUri) => {
+        if (!localUri.startsWith('streamer://')) return false;
+        const filePath = decodeURIComponent(localUri.replace('streamer://', ''));
+        return fs.existsSync(filePath);
+    });
+
+    electron_1.ipcMain.handle('delete-file', async (event, localUri) => {
+        if (!localUri.startsWith('streamer://')) return;
+        const filePath = decodeURIComponent(localUri.replace('streamer://', ''));
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    });
+
+    electron_1.ipcMain.handle('download-media', async (event, id, url, filename) => {
+        return new Promise((resolve, reject) => {
+            const filePath = path.join(downloadsPath, filename);
+            const req = (url.startsWith('https') ? https : http).get(url, (res) => {
+                const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+                let writtenBytes = 0;
+
+                const file = fs.createWriteStream(filePath);
+                res.pipe(file);
+
+                res.on('data', (chunk) => {
+                    writtenBytes += chunk.length;
+                    // Throttle updates or send every ~500kb to prevent IPC overload
+                    if (writtenBytes % (1024 * 512) < chunk.length) {
+                         if (mainWindow && !mainWindow.isDestroyed()) {
+                             mainWindow.webContents.send('download-progress', {
+                                 id,
+                                 totalBytesWritten: writtenBytes,
+                                 totalBytesExpectedToWrite: totalBytes
+                             });
+                         }
+                    }
+                });
+
+                file.on('finish', () => {
+                    file.close();
+                    resolve(`streamer://${filePath}`);
+                });
+            }).on('error', (err) => {
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                reject(err.message);
+            });
+        });
+    });
+
     // Start the background P2P stream server
     try {
         await import('@streamer/stream-server');

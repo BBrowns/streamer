@@ -7,7 +7,10 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { DeviceEventEmitter } from "react-native";
+import { SearchOverlay } from "../../components/search/SearchOverlay";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { SkeletonRow } from "../../components/ui/SkeletonLoader";
@@ -19,24 +22,43 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAddons } from "../../hooks/useAddons";
 import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
 import { HeroBanner } from "../../components/catalog/HeroBanner";
-import { Ionicons } from "@expo/vector-icons";
+import { hapticImpactLight } from "../../lib/haptics";
+import { useTheme } from "../../hooks/useTheme";
+import { FilterChipBar } from "../../components/ui/FilterChipBar";
 
-const FILTERS = [
-  { label: "All", type: null },
-  { label: "Movies", type: "movie" },
-  { label: "Series", type: "series" },
-] as const;
+const useFilters = () => {
+  const { t } = useTranslation();
+  return useMemo(
+    () => [
+      { label: t("discover.filters.all"), value: null as FilterType },
+      { label: t("discover.filters.movies"), value: "movie" as FilterType },
+      { label: t("discover.filters.series"), value: "series" as FilterType },
+    ],
+    [t],
+  );
+};
 
-type FilterType = (typeof FILTERS)[number]["type"];
+type FilterType = "movie" | "series" | null;
 
 function DiscoverContent() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const router = useRouter();
+  const { t } = useTranslation();
+  const filters = useFilters();
   const queryClient = useQueryClient();
   const { data: addons, isLoading } = useAddons();
+  const { colors, isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
+  const [searchVisible, setSearchVisible] = useState(false);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("SHOW_SEARCH", () => {
+      setSearchVisible(true);
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -74,7 +96,9 @@ function DiscoverContent() {
   // Wait for auth hydration
   if (!isHydrated) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: 16 }}>
+      <View
+        style={{ flex: 1, backgroundColor: colors.background, paddingTop: 16 }}
+      >
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
@@ -84,12 +108,13 @@ function DiscoverContent() {
 
   if (!isAuthenticated) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#000000" }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <EmptyState
+          size="large"
           icon="film-outline"
-          title="Welcome to Streamer"
-          description="Sign in to discover movies and shows from your add-ons."
-          actionLabel="Sign In"
+          title={t("discover.auth.title")}
+          description={t("discover.auth.subtitle")}
+          actionLabel={t("discover.auth.button")}
           onAction={() => router.push("/login")}
         />
       </View>
@@ -98,7 +123,9 @@ function DiscoverContent() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#000000", paddingTop: 16 }}>
+      <View
+        style={{ flex: 1, backgroundColor: colors.background, paddingTop: 16 }}
+      >
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
@@ -108,12 +135,13 @@ function DiscoverContent() {
 
   if (catalogRows.length === 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#000000" }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <EmptyState
+          size="large"
           icon="search"
-          title="No Content Sources"
-          description="Install an add-on in Settings to start discovering content."
-          actionLabel="Manage Add-ons"
+          title={t("discover.empty.title")}
+          description={t("discover.empty.description")}
+          actionLabel={t("discover.empty.action")}
           onAction={() => router.push("/addons")}
         />
       </View>
@@ -123,47 +151,40 @@ function DiscoverContent() {
   return (
     <ScrollView
       testID="discover-screen"
-      style={{ flex: 1, backgroundColor: "#000000" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       contentInsetAdjustmentBehavior="never"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={handleRefresh}
-          tintColor="#00f2ff"
-          colors={["#00f2ff"]}
+          tintColor={colors.tint}
+          colors={[colors.tint]}
         />
       }
     >
       <OfflineBanner />
 
+      <SearchOverlay
+        isVisible={searchVisible}
+        onClose={() => setSearchVisible(false)}
+        onSearch={(q) => {
+          router.push({ pathname: "/search/results", params: { q } });
+        }}
+      />
+
       {/* Quick Filters */}
-      <View style={styles.filterSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {FILTERS.map((f) => (
-            <Pressable
-              key={f.label}
-              style={[
-                styles.filterChip,
-                activeFilter === f.type && styles.filterChipActive,
-              ]}
-              onPress={() => setActiveFilter(f.type)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  activeFilter === f.type && styles.filterChipTextActive,
-                ]}
-              >
-                {f.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+      <FilterChipBar
+        options={filters}
+        value={activeFilter}
+        onChange={(v) => setActiveFilter(v as FilterType)}
+        containerStyle={{
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          paddingBottom: 12,
+          marginTop: 8,
+          marginBottom: 0,
+        }}
+      />
 
       {/* Hero Banner featuring first catalog's first item */}
       {catalogRows.length > 0 && (
@@ -193,35 +214,3 @@ export default function DiscoverScreen() {
     </ErrorBoundary>
   );
 }
-
-const styles = StyleSheet.create({
-  filterSection: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
-  },
-  filterScroll: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  filterChip: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  filterChipActive: {
-    backgroundColor: "#00f2ff",
-    borderColor: "#00f2ff",
-  },
-  filterChipText: {
-    color: "#94a3b8",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  filterChipTextActive: {
-    color: "#000000",
-  },
-});

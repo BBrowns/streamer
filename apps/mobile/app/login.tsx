@@ -10,12 +10,17 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
 
+import { useTheme } from "../hooks/useTheme";
+
 export default function LoginScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { login, isLoading, error } = useAuth();
+  const { colors, isDark } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
@@ -23,7 +28,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setLocalError("");
     if (!email || !password) {
-      setLocalError("Please fill in all fields");
+      setLocalError(t("auth.errors.fillFields"));
       return;
     }
     try {
@@ -35,12 +40,17 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      enabled={Platform.OS !== "web"}
     >
       <View style={styles.formContainer}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          {t("auth.login.title")}
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t("auth.login.subtitle")}
+        </Text>
 
         {!!(error || localError) && (
           <View style={styles.errorContainer}>
@@ -51,47 +61,88 @@ export default function LoginScreen() {
         )}
 
         <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.login.email")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
         />
         <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#6b7280"
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder={t("auth.login.password")}
+          placeholderTextColor={colors.textSecondary + "80"}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
 
         <Pressable
-          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+          style={({ pressed, hovered }: any) => [
+            styles.loginButton,
+            { backgroundColor: colors.tint },
+            isLoading && styles.loginButtonDisabled,
+            hovered && { opacity: 0.9, transform: [{ scale: 1.01 }] },
+            pressed && { transform: [{ scale: 0.98 }] },
+          ]}
           onPress={handleLogin}
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={isDark ? "#000" : "#fff"} />
           ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
+            <Text
+              style={[
+                styles.loginButtonText,
+                { color: isDark ? "#000" : "#fff" },
+              ]}
+            >
+              {t("auth.login.button")}
+            </Text>
           )}
         </Pressable>
 
-        <Pressable onPress={() => router.push("/forgot-password")}>
-          <Text style={styles.linkTextCentered}>
-            <Text style={styles.linkTextPrimary}>Forgot password?</Text>
+        <Pressable
+          style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
+          onPress={() => router.push("/forgot-password")}
+        >
+          <Text
+            style={[styles.linkTextCentered, { color: colors.textSecondary }]}
+          >
+            <Text style={[styles.linkTextPrimary, { color: colors.tint }]}>
+              {t("auth.login.forgot")}
+            </Text>
           </Text>
         </Pressable>
 
         <View style={styles.spacer} />
 
-        <Pressable onPress={() => router.replace("/register")}>
-          <Text style={styles.linkTextCentered}>
-            Don't have an account?{" "}
-            <Text style={styles.linkTextPrimary}>Sign Up</Text>
+        <Pressable
+          style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
+          onPress={() => router.replace("/register")}
+        >
+          <Text
+            style={[styles.linkTextCentered, { color: colors.textSecondary }]}
+          >
+            {t("auth.login.noAccount")}{" "}
+            <Text style={[styles.linkTextPrimary, { color: colors.tint }]}>
+              {t("auth.login.signUp")}
+            </Text>
           </Text>
         </Pressable>
       </View>

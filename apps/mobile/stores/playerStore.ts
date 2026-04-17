@@ -46,12 +46,14 @@ interface PlayerState {
   preferredQuality: "auto" | "1080p" | "720p" | "480p";
   preferredAudioLang: string | null;
   preferredSubtitleLang: string | null;
+  autoPlayNext: boolean;
 
   setStream: (stream: Stream, media?: MediaInfo) => void;
   setPlaying: (playing: boolean) => void;
   setBuffering: (buffering: boolean) => void;
   setProgress: (currentTime: number, duration: number) => void;
   setPlaybackRate: (rate: number) => void;
+  setAutoPlayNext: (enabled: boolean) => void;
   setPreferredQuality: (quality: PlayerState["preferredQuality"]) => void;
   setPreferredAudioLang: (lang: string | null) => void;
   setPreferredSubtitleLang: (lang: string | null) => void;
@@ -77,6 +79,7 @@ export const usePlayerStore = create<PlayerState>()(
       preferredQuality: "auto",
       preferredAudioLang: null,
       preferredSubtitleLang: null,
+      autoPlayNext: true,
 
       setStream: (stream, media) =>
         set({
@@ -93,6 +96,7 @@ export const usePlayerStore = create<PlayerState>()(
       setPreferredQuality: (quality) => set({ preferredQuality: quality }),
       setPreferredAudioLang: (lang) => set({ preferredAudioLang: lang }),
       setPreferredSubtitleLang: (lang) => set({ preferredSubtitleLang: lang }),
+      setAutoPlayNext: (enabled) => set({ autoPlayNext: enabled }),
 
       subscribeToStreamMetrics: (infoHash) => {
         const state = usePlayerStore.getState();
@@ -159,10 +163,20 @@ export const usePlayerStore = create<PlayerState>()(
         });
 
         es.addEventListener("error", (err) => {
-          console.error("EventSource error:", err);
+          console.error("EventSource metrics error:", err);
+          // If it's a 404 or transient error, retry a few times instead of failing immediately
+          const currentRetries = (es as any)._retries || 0;
+          if (currentRetries < 5) {
+            (es as any)._retries = currentRetries + 1;
+            setTimeout(() => {
+              usePlayerStore.getState().subscribeToStreamMetrics(infoHash);
+            }, 3000);
+            return;
+          }
+
           set({
             streamState: "error",
-            errorMessage: "Failed to connect to streaming engine",
+            errorMessage: "Failed to connect to streaming engine metrics",
           });
           es.close();
         });
@@ -206,6 +220,7 @@ export const usePlayerStore = create<PlayerState>()(
         preferredQuality: state.preferredQuality,
         preferredAudioLang: state.preferredAudioLang,
         preferredSubtitleLang: state.preferredSubtitleLang,
+        autoPlayNext: state.autoPlayNext,
       }),
     },
   ),

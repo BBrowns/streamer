@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import type { MediaInfo } from "./playerStore";
+import { useAuthStore } from "./authStore";
 
 export interface DownloadMediaItem extends MediaInfo {
   downloadUrl: string; // The URL that was downloaded (local stream engine or remote)
@@ -46,6 +47,8 @@ interface DownloadState {
   removeTask: (id: string) => void;
   isDownloaded: (id: string) => boolean;
   clearAll: () => void;
+  setResumeData: (id: string, data: string) => void;
+  verifyAndClean: () => Promise<void>;
 }
 
 export const useDownloadStore = create<DownloadState>()(
@@ -115,10 +118,51 @@ export const useDownloadStore = create<DownloadState>()(
         return task?.status === "Completed" && !!task?.localUri;
       },
       clearAll: () => set({ tasks: {} }),
+      setResumeData: (id, data) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task) return state;
+          return {
+            tasks: { ...state.tasks, [id]: { ...task, resumeData: data } },
+          };
+        }),
+      verifyAndClean: async () => {
+        const state = get();
+        const newTasks = { ...state.tasks };
+        let changed = false;
+        for (const [id, task] of Object.entries(newTasks)) {
+          if (task.status === "Completed" && task.localUri) {
+            try {
+              const info = await FileSystem.getInfoAsync(task.localUri);
+              if (!info.exists) {
+                delete newTasks[id];
+                changed = true;
+              }
+            } catch (e) {
+              if (__DEV__)
+                console.warn("[DownloadStore] Failed to verify file", e);
+            }
+          }
+        }
+        if (changed) set({ tasks: newTasks });
+      },
     }),
     {
       name: "download-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => ({
+        getItem: async (name) => {
+          const deviceId = useAuthStore.getState().deviceId || "default";
+          return AsyncStorage.getItem(`${name}-${deviceId}`);
+        },
+        setItem: async (name, value) => {
+          const deviceId = useAuthStore.getState().deviceId || "default";
+          return AsyncStorage.setItem(`${name}-${deviceId}`, value);
+        },
+        removeItem: async (name) => {
+          const deviceId = useAuthStore.getState().deviceId || "default";
+          return AsyncStorage.removeItem(`${name}-${deviceId}`);
+        },
+      })),
     },
   ),
 );

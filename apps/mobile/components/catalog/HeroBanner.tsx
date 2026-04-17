@@ -13,12 +13,14 @@ import { useAddonCatalog } from "../../hooks/useAddonCatalog";
 import type { MetaPreview, CatalogDefinition } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
 
 const { width, height } = Dimensions.get("window");
 const HERO_HEIGHT = height * 0.65; // Take up 65% of the screen height
 
 function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
   const { data } = useAddonCatalog(catalog?.type || "");
 
   if (!catalog || !data || data.length === 0) {
@@ -42,31 +44,56 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
           resizeMode="cover"
         />
         <LinearGradient
-          colors={["transparent", "rgba(1,1,1,0.4)", "#010101"]}
+          colors={[
+            "transparent",
+            isDark ? "rgba(1,1,1,0.4)" : "rgba(255,255,255,0.4)",
+            colors.background,
+          ]}
           locations={[0.2, 0.6, 1]}
           style={styles.gradient}
         >
           <View style={styles.content}>
-            <Text style={styles.title} numberOfLines={2}>
+            <Text
+              style={[styles.title, { color: colors.text }]}
+              numberOfLines={2}
+            >
               {featuredItem.name}
             </Text>
             {!!featuredItem.description && (
-              <Text style={styles.description} numberOfLines={3}>
+              <Text
+                style={[styles.description, { color: colors.textSecondary }]}
+                numberOfLines={3}
+              >
                 {featuredItem.description}
               </Text>
             )}
             <View style={styles.buttonRow}>
-              <View style={styles.playButton} pointerEvents="none">
+              <View
+                style={[styles.playButton, { backgroundColor: colors.tint }]}
+              >
                 <Ionicons name="play" size={18} color="#000" />
                 <Text style={styles.playButtonText}>Play</Text>
               </View>
-              <View style={styles.infoButton} pointerEvents="none">
+              <View
+                style={[
+                  styles.infoButton,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.12)"
+                      : "rgba(0,0,0,0.05)",
+                    borderColor: colors.border,
+                  },
+                ]}
+                pointerEvents="none"
+              >
                 <Ionicons
                   name="information-circle-outline"
                   size={18}
-                  color="#fff"
+                  color={colors.text}
                 />
-                <Text style={styles.infoButtonText}>Info</Text>
+                <Text style={[styles.infoButtonText, { color: colors.text }]}>
+                  Info
+                </Text>
               </View>
             </View>
           </View>
@@ -100,13 +127,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    color: "#ffffff",
     fontSize: 36,
     fontWeight: "900",
     textAlign: "center",
     marginBottom: 12,
-    textShadow: "0px 2px 4px rgba(0,0,0,0.5)",
-  } as any,
+  },
   description: {
     color: "#e5e5e5",
     fontSize: 14,

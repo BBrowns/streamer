@@ -5,6 +5,7 @@ import { HttpVideoEngine } from "./HttpVideoEngine";
 import { TorrentEngine } from "./TorrentEngine";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { useAuthStore } from "../../stores/authStore";
 
 /**
  * Resolve the stream-server bridge URL dynamically so it works on
@@ -50,10 +51,13 @@ export class StreamEngineManager {
   }
 
   async detectBridge(): Promise<boolean> {
+    const { streamServerUrl } = useAuthStore.getState();
+    const currentUrl = streamServerUrl || this.bridgeUrl;
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${this.bridgeUrl}/status`, {
+      const res = await fetch(`${currentUrl}/status`, {
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -91,7 +95,15 @@ export class StreamEngineManager {
 
   async getPlaybackUri(stream: Stream): Promise<string | null> {
     const engine = this.resolveEngine(stream);
-    return engine ? await engine.getPlaybackUri(stream) : null;
+    if (!engine) return null;
+
+    // Inject dynamic bridge URL into engines that need it (like TorrentEngine)
+    if ("bridgeUrl" in engine) {
+      const { streamServerUrl } = useAuthStore.getState();
+      (engine as any).bridgeUrl = streamServerUrl || this.bridgeUrl;
+    }
+
+    return await engine.getPlaybackUri(stream);
   }
 
   destroy(): void {

@@ -17,9 +17,14 @@ import { useAuthStore } from "../../stores/authStore";
 interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
+  inline?: boolean;
 }
 
-export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
+export function EditProfileModal({
+  visible,
+  onClose,
+  inline,
+}: EditProfileModalProps) {
   const { user, setAuth } = useAuthStore();
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [profileLoading, setProfileLoading] = useState(false);
@@ -60,6 +65,52 @@ export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
     }
   };
 
+  const content = (
+    <View style={inline ? styles.inlineContent : styles.modalBg}>
+      <View style={inline ? styles.inlineCard : styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <View style={styles.modalTitleRow}>
+            <Ionicons name="pencil-outline" size={20} color="#00f2ff" />
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+          </View>
+          {!inline && (
+            <Pressable onPress={onClose}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </Pressable>
+          )}
+        </View>
+        <TextInput
+          style={styles.modalInput}
+          placeholder="Display name"
+          placeholderTextColor="#6b7280"
+          value={displayName}
+          onChangeText={setDisplayName}
+          accessibilityLabel="Display name"
+          autoComplete="name"
+        />
+        <Pressable
+          style={[styles.modalButton, profileLoading && styles.opacity50]}
+          onPress={handleUpdateProfile}
+          disabled={profileLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Save profile changes"
+          accessibilityState={{ disabled: profileLoading }}
+        >
+          {profileLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.modalButtonText}>Save</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  if (inline) {
+    if (!visible) return null;
+    return content;
+  }
+
   return (
     <Modal
       visible={visible}
@@ -67,42 +118,7 @@ export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
       transparent
       onRequestClose={onClose}
     >
-      <View style={styles.modalBg}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <View style={styles.modalTitleRow}>
-              <Ionicons name="pencil-outline" size={20} color="#00f2ff" />
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-            </View>
-            <Pressable onPress={onClose}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </Pressable>
-          </View>
-          <TextInput
-            style={styles.modalInput}
-            placeholder="Display name"
-            placeholderTextColor="#6b7280"
-            value={displayName}
-            onChangeText={setDisplayName}
-            accessibilityLabel="Display name"
-            autoComplete="name"
-          />
-          <Pressable
-            style={[styles.modalButton, profileLoading && styles.opacity50]}
-            onPress={handleUpdateProfile}
-            disabled={profileLoading}
-            accessibilityRole="button"
-            accessibilityLabel="Save profile changes"
-            accessibilityState={{ disabled: profileLoading }}
-          >
-            {profileLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.modalButtonText}>Save</Text>
-            )}
-          </Pressable>
-        </View>
-      </View>
+      {content}
     </Modal>
   );
 }
@@ -121,6 +137,13 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.05)",
+  },
+  inlineContent: {
+    flex: 1,
+  },
+  inlineCard: {
+    backgroundColor: "transparent",
+    padding: 0,
   },
   modalHeader: {
     flexDirection: "row",

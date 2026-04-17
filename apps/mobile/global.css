@@ -16,3 +16,9 @@
         @apply bg-[#080808]/40 border border-white/5 backdrop-blur-[40px];
     }
 }
+
+/* ─── Desktop card hover overlays ─── */
+[data-catalog-card]:hover [data-hover-overlay] {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}

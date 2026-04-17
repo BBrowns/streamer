@@ -46,3 +46,11 @@ export const changePasswordSchema = z.object({
 export const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(50).optional(),
 });
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, "Verification token is required"),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});

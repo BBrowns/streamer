@@ -87,8 +87,11 @@ export class TorrentEngine implements IStreamEngine {
           const stats: StreamStats = await res.json();
           this.emit("stats", stats);
         }
-      } catch (e) {
-        console.warn("Failed to fetch torrent stats from bridge", e);
+      } catch (e: any) {
+        console.warn(
+          `[TorrentEngine] Bridge unreachable (${this.bridge.bridgeUrl}):`,
+          e?.message || e,
+        );
       }
     }, 2000); // poll every 2 seconds
   }

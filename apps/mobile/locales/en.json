@@ -1,0 +1,369 @@
+{
+  "tabs": {
+    "home": "Home",
+    "discover": "Discover",
+    "library": "Library",
+    "downloads": "Downloads",
+    "settings": "Settings"
+  },
+  "home": {
+    "auth": {
+      "title": "Streamer",
+      "subtitle": "Your universe of content, aggregated from the open web.",
+      "button": "Get Started"
+    },
+    "sections": {
+      "popularMovies": "Popular Movies",
+      "topTVShows": "Top TV Shows"
+    },
+    "filters": {
+      "movies": "Movies",
+      "series": "TV Shows"
+    },
+    "empty": {
+      "title": "No Content Found",
+      "description": "Install some add-ons in Settings to start browsing.",
+      "action": "Manage Add-ons"
+    }
+  },
+  "discover": {
+    "auth": {
+      "title": "Welcome to Streamer",
+      "subtitle": "Sign in to discover movies and shows from your add-ons.",
+      "button": "Sign In"
+    },
+    "empty": {
+      "title": "No Content Sources",
+      "description": "Install an add-on in Settings to start discovering content.",
+      "action": "Manage Add-ons"
+    },
+    "filters": {
+      "all": "All",
+      "movies": "Movies",
+      "series": "TV Shows"
+    }
+  },
+  "library": {
+    "auth": {
+      "title": "Your Library",
+      "subtitle": "Sign in to access your watchlist",
+      "button": "Sign In"
+    },
+    "header": {
+      "select": "Select",
+      "cancel": "Cancel"
+    },
+    "filters": {
+      "all": "All",
+      "movies": "Movies",
+      "series": "Series",
+      "offline": "Offline"
+    },
+    "empty": {
+      "title": "No Items Yet",
+      "description": "Browse the Discover tab and add movies & shows to your library.",
+      "noMovies": "No saved movies found.",
+      "noSeries": "No saved series found."
+    },
+    "fab": {
+      "selected": "{{count}} Selected",
+      "delete": "Delete"
+    },
+    "alerts": {
+      "removeTitle": "Remove Items",
+      "removeMessage": "Are you sure you want to remove {{count}} items from your library?",
+      "bulkDeleteTitle": "Remove Items",
+      "bulkDeleteMessage": "Are you sure you want to remove {{count}} items? This cannot be undone."
+    }
+  },
+  "downloads": {
+    "title": "Downloads",
+    "header": {
+      "subtitle": "Manage your offline content",
+      "clearAll": "Clear All"
+    },
+    "alerts": {
+      "clearTitle": "Clear All Downloads",
+      "clearMessage": "Are you sure? This will delete all downloaded files from your device."
+    },
+    "card": {
+      "unknown": "Unknown Download",
+      "manage": "Manage your downloaded media",
+      "viewDetails": "View Details",
+      "delete": "Delete Download"
+    },
+    "status": {
+      "downloading": "Downloading",
+      "paused": "Paused",
+      "completed": "Completed",
+      "error": "Error"
+    },
+    "empty": {
+      "title": "No Downloads",
+      "description": "Movies and shows you download will appear here.",
+      "action": "Go Discover"
+    }
+  },
+  "settings": {
+    "sections": {
+      "account": "Account",
+      "appearance": "Appearance",
+      "language": "Language",
+      "content": "Content",
+      "security": "Security",
+      "privacy": "Privacy & Data",
+      "advanced": "Advanced"
+    },
+    "items": {
+      "manageAddons": "Manage Add-ons",
+      "trakt": "Trakt.tv",
+      "activeSessions": "Active Sessions",
+      "changePassword": "Change Password",
+      "biometricUnlock": "Biometric Unlock",
+      "exportData": "Export My Data",
+      "deleteAccount": "Delete Account"
+    },
+    "subtitles": {
+      "manageAddons": "Install and remove content sources",
+      "traktConnected": "Connected",
+      "traktDisconnected": "Sync watch history across devices",
+      "activeSessions": "{{count}} device signed in",
+      "activeSessions_plural": "{{count}} devices signed in",
+      "changePassword": "Update your account password",
+      "biometricUnlock": "Require Face ID / Touch ID to open the app",
+      "exportData": "Download a copy of your library and settings",
+      "deleteAccount": "Permanently remove your account and all data"
+    },
+    "advanced": {
+      "configure": "Configure Infrastructure",
+      "subtitle": "Custom backend and stream server URLs",
+      "title": "Infrastructure Overrides",
+      "hide": "Hide",
+      "backendLabel": "Backend API URL",
+      "streamLabel": "Streaming Bridge URL",
+      "warning": "Incorrect values will break the app. Leave empty to use defaults.",
+      "restore": "Restore Defaults",
+      "apply": "Apply Changes",
+      "successTitle": "Settings Saved",
+      "successMessage": "Your custom server URLs have been updated."
+    },
+    "alerts": {
+      "deleteAccountTitle": "Delete Account",
+      "deleteAccountMessage": "Are you absolutely sure? This action is permanent and will delete all your library items, watch history, and settings.",
+      "deleteAccountConfirmTitle": "Final Confirmation",
+      "deleteAccountConfirmMessage": "Type 'DELETE' to confirm.",
+      "deleteAccountButton": "Delete Everything",
+      "traktDisconnectTitle": "Disconnect Trakt",
+      "traktDisconnectMessage": "Are you sure you want to unlink your Trakt.tv account?",
+      "traktDisconnectButton": "Disconnect"
+    },
+    "auth": {
+      "signOut": "Sign Out",
+      "manageSettings": "Sign in to manage settings",
+      "signIn": "Sign In",
+      "accessibilitySignIn": "Sign in to your account"
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "onboarding": {
+      "title": "Personalize",
+      "subtitle": "Customize your experience before we begin.",
+      "appearance": "Appearance",
+      "addonsTitle": "Starter Add-ons",
+      "addonsSubtitle": "Highly recommended for metadata and subtitles.",
+      "legalAgreement": "By continuing, you agree to our",
+      "terms": "Terms",
+      "and": "and",
+      "privacy": "Privacy Policy",
+      "finish": "Finish & Sign In"
+    }
+  },
+  "addons": {
+    "title": "Add-ons",
+    "install": {
+      "title": "Install Add-on",
+      "hint": "Paste a manifest.json URL to add a content source.",
+      "placeholder": "https://addon-url.com/manifest.json",
+      "button": "Install",
+      "success": "Add-on installed!",
+      "successDetail": "New content will appear on Discover.",
+      "error": "Installation Failed"
+    },
+    "installed": {
+      "title": "Installed ({{count}})",
+      "uninstall": "Uninstall",
+      "remove": "Remove",
+      "cancel": "Cancel",
+      "confirmRemove": "Remove \"{{name}}\"?"
+    },
+    "empty": {
+      "title": "No add-ons installed",
+      "hint": "Try: https://v3-cinemeta.strem.io/manifest.json"
+    }
+  },
+  "detail": {
+    "play": "Play",
+    "download": "Download",
+    "torrent": "Torrent",
+    "playable": "PLAYABLE",
+    "episodes": "Episodes",
+    "episodesList": {
+      "loading": "Loading streams...",
+      "none": "No streams for this episode.",
+      "noneData": "No episode data available.",
+      "season": "Season {{season}}",
+      "streamsLabel": "S{{season}} E{{episode}} — Streams"
+    },
+    "quality": "Select Quality",
+    "cast": "Cast",
+    "watchlist": {
+      "add": "+ Add to Library",
+      "remove": "✓ In Library"
+    },
+    "errors": {
+      "notFound": "Content not found",
+      "torrentBridge": "This is a torrent stream. Start the stream-server bridge first.",
+      "notPlayable": "This stream is not playable.",
+      "unsupported": "Unsupported Stream",
+      "downloadFailed": "Failed to start download."
+    },
+    "back": "Back"
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome Back",
+      "subtitle": "Sign in to continue",
+      "email": "Email",
+      "password": "Password",
+      "button": "Sign In",
+      "forgot": "Forgot password?",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign Up"
+    },
+    "register": {
+      "title": "Create Account",
+      "subtitle": "Join Streamer to sync your library",
+      "name": "Full Name",
+      "email": "Email",
+      "password": "Password",
+      "button": "Create Account",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign In"
+    },
+    "forgot": {
+      "title": "Reset Password",
+      "subtitle": "Enter your email to receive a reset link",
+      "button": "Send Link",
+      "back": "Back to Login"
+    },
+    "resetPassword": {
+      "title": "New Password",
+      "subtitle": "Enter the reset token and your new password",
+      "tokenPlaceholder": "Reset Token",
+      "passwordPlaceholder": "New Password (min 8 chars)",
+      "submit": "Reset Password",
+      "backToLogin": "Back to Login",
+      "emptyError": "Please enter the token and a new password",
+      "successAlert": "Password reset successfully! Please log in.",
+      "failedError": "Failed to reset password"
+    },
+    "verifyEmail": {
+      "title": "Verify your email",
+      "subtitle": "We've sent a verification link to",
+      "yourEmail": "your email",
+      "description": "Please check your inbox and click the link to activate your account. If you don't see the email, check your spam folder.",
+      "resendSuccess": "New link sent successfully!",
+      "resendError": "Failed to send. Please try again.",
+      "resendButton": "Resend Email",
+      "backToLogin": "Back to Login"
+    },
+    "errors": {
+      "fillFields": "Please fill in all fields",
+      "alreadyHaveAccount": "User already exists",
+      "invalidCredentials": "Invalid email or password",
+      "unexpected": "An unexpected error occurred"
+    }
+  },
+  "player": {
+    "resume": {
+      "title": "Resume Playback?",
+      "subtitle": "You left off at {{time}}",
+      "resume": "Resume",
+      "startOver": "Start Over"
+    },
+    "upsell": {
+      "upNext": "UP NEXT",
+      "cancel": "Cancel",
+      "watchNow": "Watch Now ({{timeLeft}}s)"
+    },
+    "controls": {
+      "brightness": "Brightness",
+      "volume": "Volume",
+      "close": "Close",
+      "nowPlaying": "Now Playing",
+      "engine": "Engine",
+      "peers": "peers"
+    },
+    "settings": {
+      "title": "Playback Settings",
+      "done": "Done",
+      "speed": "Playback Speed",
+      "audio": "Audio Tracks",
+      "subtitles": "Subtitles",
+      "noAudio": "No selectable audio tracks — using default.",
+      "noSubtitles": "No subtitle tracks available.",
+      "off": "Off"
+    },
+    "status": {
+      "findingPeers": "Finding peers...",
+      "connecting": "Connecting to peers...",
+      "buffering": "Buffering...",
+      "errorTitle": "Connection Failed",
+      "errorSubtitle": "Unable to load stream"
+    },
+    "errors": {
+      "noStream": "No stream selected",
+      "goBack": "Go Back"
+    },
+    "cast": {
+      "castingTo": "Casting to {{name}}",
+      "stop": "Stop Casting"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Retry",
+    "themes": {
+      "dark": "Dark",
+      "light": "Light",
+      "system": "System"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications"
+  },
+  "legal": {
+    "privacyTitle": "Privacy Policy",
+    "termsTitle": "Terms of Service",
+    "lastUpdated": "Last Updated: {{date}}",
+    "sections": {
+      "privacy": {
+        "1": "1. Data Collection",
+        "2": "2. Sensitive Information",
+        "3": "3. Third Parties",
+        "4": "4. Data Deletion"
+      },
+      "terms": {
+        "1": "1. Acceptance of Terms",
+        "2": "2. Use of Service",
+        "3": "3. User Content",
+        "4": "4. Limitation of Liability"
+      }
+    }
+  }
+}
