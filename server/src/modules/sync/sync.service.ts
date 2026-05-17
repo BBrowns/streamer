@@ -1,37 +1,33 @@
-import { streamSSE } from "hono/streaming";
 import { logger } from "../../config/logger.js";
+import type { WSContext } from "hono/ws";
 
-type SSEStream = {
+type WebSocketConnection = {
   id: string;
   deviceId?: string;
-  writeSSE: (data: {
-    data: string;
-    event: string;
-    id: string;
-  }) => Promise<void>;
+  ws: WSContext;
 };
 
 class SyncService {
-  private connections = new Map<string, Set<SSEStream>>();
+  private connections = new Map<string, Set<WebSocketConnection>>();
 
-  /** Register a new SSE connection for a user */
-  addConnection(userId: string, stream: SSEStream) {
+  /** Register a new WebSocket connection for a user */
+  addConnection(userId: string, conn: WebSocketConnection) {
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Set());
     }
-    this.connections.get(userId)!.add(stream);
+    this.connections.get(userId)!.add(conn);
     logger.debug(
-      { userId, streamId: stream.id, deviceId: stream.deviceId },
-      "SSE connection registered",
+      { userId, connId: conn.id, deviceId: conn.deviceId },
+      "WebSocket connection registered",
     );
   }
 
-  /** Remove an SSE connection */
-  removeConnection(userId: string, streamId: string) {
+  /** Remove a WebSocket connection */
+  removeConnection(userId: string, connId: string) {
     const userConns = this.connections.get(userId);
     if (userConns) {
       for (const conn of userConns) {
-        if (conn.id === streamId) {
+        if (conn.id === connId) {
           userConns.delete(conn);
           break;
         }
@@ -40,7 +36,7 @@ class SyncService {
         this.connections.delete(userId);
       }
     }
-    logger.debug({ userId, streamId }, "SSE connection removed");
+    logger.debug({ userId, connId }, "WebSocket connection removed");
   }
 
   /** Send an event to a specific device for a user */
@@ -48,46 +44,50 @@ class SyncService {
     const userConns = this.connections.get(userId);
     if (!userConns || userConns.size === 0) return;
 
-    const payload = JSON.stringify(data);
-    const eventId = Date.now().toString();
+    const payload = JSON.stringify({ event, data });
 
     userConns.forEach((conn) => {
       if (conn.deviceId === deviceId) {
-        conn.writeSSE({ data: payload, event, id: eventId }).catch((err) => {
+        try {
+          conn.ws.send(payload);
+        } catch (err) {
           logger.error(
-            { userId, deviceId, streamId: conn.id, err },
-            "Failed to send targeted SSE event",
+            { userId, deviceId, connId: conn.id, err },
+            "Failed to send targeted WebSocket message",
           );
-        });
+        }
       }
     });
 
     logger.debug(
       { userId, deviceId, event },
-      "SSE event sent to specific device",
+      "WebSocket message sent to specific device",
     );
   }
 
   /** Broadcast an event to all active connections for a user */
-  broadcast(userId: string, event: string, data: any) {
+  broadcast(userId: string, event: string, data: any, skipDeviceId?: string) {
     const userConns = this.connections.get(userId);
     if (!userConns || userConns.size === 0) return;
 
-    const payload = JSON.stringify(data);
-    const eventId = Date.now().toString();
+    const payload = JSON.stringify({ event, data });
 
     userConns.forEach((conn) => {
-      conn.writeSSE({ data: payload, event, id: eventId }).catch((err) => {
+      if (skipDeviceId && conn.deviceId === skipDeviceId) return;
+
+      try {
+        conn.ws.send(payload);
+      } catch (err) {
         logger.error(
-          { userId, streamId: conn.id, err },
-          "Failed to send SSE event",
+          { userId, connId: conn.id, err },
+          "Failed to send WebSocket message",
         );
-      });
+      }
     });
 
     logger.debug(
-      { userId, event, streamCount: userConns.size },
-      "SSE event broadcasted",
+      { userId, event, connCount: userConns.size },
+      "WebSocket message broadcasted",
     );
   }
 }

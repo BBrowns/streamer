@@ -1,10 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { useTheme } from "../../hooks/useTheme";
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  colors?: any; // Injected by wrapper
 }
 
 interface State {
@@ -18,7 +20,7 @@ interface State {
  * Renders a recoverable fallback UI instead of crashing the app.
  * Logs errors and optionally calls an onError callback (e.g. for Sentry).
  */
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryInner extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -55,21 +57,29 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const { colors } = this.props;
+      const bg = colors?.background || "#0a0a1a";
+      const text = colors?.text || "#e0e0ff";
+      const textSecondary = colors?.textSecondary || "#9ca3af";
+      const tint = colors?.tint || "#818cf8";
+
       return (
         <View
-          style={styles.container}
+          style={[styles.container, { backgroundColor: bg }]}
           accessibilityRole="alert"
           accessibilityLabel="An error occurred"
         >
           <View style={styles.iconContainer}>
             <Text style={styles.emoji}>⚠️</Text>
           </View>
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.description}>
+          <Text style={[styles.title, { color: text }]}>
+            Something went wrong
+          </Text>
+          <Text style={[styles.description, { color: textSecondary }]}>
             {this.state.error?.message || "An unexpected error occurred."}
           </Text>
           <Pressable
-            style={styles.retryButton}
+            style={[styles.retryButton, { backgroundColor: tint }]}
             onPress={this.handleRetry}
             accessibilityRole="button"
             accessibilityLabel="Retry"
@@ -85,12 +95,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
+export function ErrorBoundary(props: Omit<Props, "colors">) {
+  const { colors } = useTheme();
+  return <ErrorBoundaryInner {...props} colors={colors} />;
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0a0a1a",
     padding: 32,
   },
   iconContainer: {
@@ -106,14 +120,12 @@ const styles = StyleSheet.create({
     fontSize: 32,
   },
   title: {
-    color: "#e0e0ff",
     fontSize: 18,
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 8,
   },
   description: {
-    color: "#9ca3af",
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
@@ -121,7 +133,6 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   retryButton: {
-    backgroundColor: "#818cf8",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,

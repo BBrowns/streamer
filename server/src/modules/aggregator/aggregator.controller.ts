@@ -1,14 +1,13 @@
 import type { Context } from "hono";
 import { env } from "../../config/env.js";
 import { aggregatorService } from "./aggregator.service.js";
+import { resilienceRegistry } from "./resilience.js";
 import { SessionService } from "../auth/session.service.js";
 
 export class AggregatorController {
   async getCatalog(c: Context) {
-    const type = c.req.param("type") as string;
-    const search = c.req.query("search");
-    const skipStr = c.req.query("skip");
-    const skip = skipStr ? parseInt(skipStr, 10) : undefined;
+    const { type } = (c.req as any).valid("param");
+    const { search, skip } = (c.req as any).valid("query");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
@@ -24,8 +23,7 @@ export class AggregatorController {
   }
 
   async getMeta(c: Context) {
-    const type = c.req.param("type") as string;
-    const id = c.req.param("id") as string;
+    const { type, id } = (c.req as any).valid("param");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
@@ -44,8 +42,7 @@ export class AggregatorController {
   }
 
   async getStreams(c: Context) {
-    const type = c.req.param("type") as string;
-    const id = c.req.param("id") as string;
+    const { type, id } = (c.req as any).valid("param");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
@@ -60,9 +57,7 @@ export class AggregatorController {
   }
 
   async resolveStream(c: Context) {
-    const type = c.req.param("type")!;
-    const id = c.req.param("id")!;
-    const infoHash = c.req.param("infoHash")!;
+    const { type, id, infoHash } = (c.req as any).valid("param");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
@@ -99,13 +94,7 @@ export class AggregatorController {
   }
 
   async resolveStreamsBulk(c: Context) {
-    const body = await c.req.json<{ type: string; infoHashes: string[] }>();
-    const { type, infoHashes } = body;
-
-    if (!type || !Array.isArray(infoHashes) || infoHashes.length === 0) {
-      return c.json({ error: "type and infoHashes[] are required" }, 400);
-    }
-
+    const { type, infoHashes } = (c.req as any).valid("json");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
@@ -141,20 +130,22 @@ export class AggregatorController {
   }
 
   async search(c: Context) {
-    const query = c.req.query("q");
-    if (!query || query.trim().length === 0) {
-      return c.json({ metas: [] });
-    }
+    const { q } = (c.req as any).valid("query");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
     const metas = await aggregatorService.search(
       user.userId,
-      query.trim(),
+      q.trim(),
       requestId,
     );
 
     return c.json({ metas });
+  }
+
+  async getResilienceMetrics(c: Context) {
+    const requestId = c.get("requestId");
+    return c.json(resilienceRegistry.getAllMetrics());
   }
 }
 

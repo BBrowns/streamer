@@ -2,57 +2,47 @@ import axios from "axios";
 import https from "https";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
-import { createAddonPolicy } from "./resilience.js";
+import { resilienceRegistry } from "./resilience.js";
 import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver.js";
 import type { ResolvedStream } from "../debrid/ports/debrid.ports.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
-import type {
-  AddonManifest,
-  MetaPreview,
-  MetaDetail,
-  Stream,
+import { validateSafeUrl } from "../../utils/security.js";
+import {
+  catalogResponseSchema,
+  metaResponseSchema,
+  streamResponseSchema,
+  type AddonManifest,
+  type MetaPreview,
+  type MetaDetail,
+  type Stream,
 } from "@streamer/shared";
-import type { IPolicy } from "cockatiel";
+import { z } from "zod";
 import { StreamParser } from "./domain/stream-parser.js";
 
-// Per-addon policy cache to maintain circuit breaker state
-const policyCache = new Map<string, IPolicy>();
+// Per-addon policy registry is now handled by resilienceRegistry
 
 const secureAgent = new https.Agent({
   maxSockets: 50,
   keepAlive: true,
 });
 
-function getPolicy(addonId: string): IPolicy {
-  let policy = policyCache.get(addonId);
-  if (!policy) {
-    policy = createAddonPolicy(addonId);
-    policyCache.set(addonId, policy);
-  }
-  return policy;
-}
-
-/** Resilient fetch wrapper for add-on requests */
+/** Resilient fetch wrapper for add-on requests with strict Zod validation */
 async function resilientFetch<T>(
   transportUrl: string,
   addonId: string,
   resourcePath: string,
   requestId: string,
+  schema: z.ZodSchema<T>,
 ): Promise<T> {
-  const policy = getPolicy(addonId);
-
-  // SSRF Protection: Enforce HTTPS
-  const parsedUrl = new URL(transportUrl);
-  if (parsedUrl.protocol !== "https:") {
-    throw new Error(
-      `Insecure protocol: ${parsedUrl.protocol}. HTTPS required.`,
-    );
-  }
+  const policy = resilienceRegistry.getPolicy(addonId);
 
   const base = transportUrl
     .replace(/\/manifest\.json\/?$/, "")
     .replace(/\/$/, "");
   const url = `${base}/${resourcePath}`;
+
+  // SSRF Protection: Enforce HTTPS and IP restrictions
+  await validateSafeUrl(url);
 
   const start = Date.now();
 
@@ -60,18 +50,23 @@ async function resilientFetch<T>(
     const result = await policy.execute(async () => {
       logger.debug({ requestId, addonId, url }, "Fetching from add-on");
 
-      // TODO: Implement internal IP blocklist (SSRF filter)
-      const { data } = await axios.get<T>(url, {
+      const { data } = await axios.get(url, {
         timeout: 5000,
         httpsAgent: secureAgent,
+        maxContentLength: 1024 * 1024, // 1MB limit for sanitation
       });
 
-      // Basic Sanitization: Check for malformed or oversized responses
-      if (!data || typeof data !== "object") {
+      // Strict Sanitation: Validate against expected Zod schema
+      const parsed = schema.safeParse(data);
+      if (!parsed.success) {
+        logger.error(
+          { requestId, addonId, errors: parsed.error.format() },
+          "Add-on response failed validation",
+        );
         throw new Error("Invalid response format from add-on");
       }
 
-      return data;
+      return parsed.data;
     });
 
     logger.info(
@@ -113,11 +108,12 @@ export class AggregatorService {
           if (skip) extras.push(`skip=${skip}`);
           if (extras.length > 0) path += `?${extras.join("&")}`;
 
-          const data = await resilientFetch<{ metas: MetaPreview[] }>(
+          const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
             path,
             requestId,
+            catalogResponseSchema,
           );
           return data.metas || [];
         }),
@@ -144,11 +140,12 @@ export class AggregatorService {
       addons
         .filter((a) => this.addonSupportsResource(a.manifest, "meta", type))
         .map(async (addon) => {
-          const data = await resilientFetch<{ meta: MetaDetail }>(
+          const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
             `meta/${type}/${id}.json`,
             requestId,
+            metaResponseSchema,
           );
           return data.meta;
         }),
@@ -175,21 +172,20 @@ export class AggregatorService {
       addons
         .filter((a) => this.addonSupportsResource(a.manifest, "stream", type))
         .map(async (addon) => {
-          const data = await resilientFetch<{ streams: Stream[] }>(
+          const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
             `stream/${type}/${id}.json`,
             requestId,
+            streamResponseSchema,
           );
           return data.streams || [];
         }),
     );
 
     return results
-      .filter(
-        (r): r is PromiseFulfilledResult<Stream[]> => r.status === "fulfilled",
-      )
-      .flatMap((r) => r.value)
+      .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
+      .flatMap((r) => r.value as Stream[])
       .map((stream) => StreamParser.enrich(stream))
       .sort((a, b) => StreamParser.compare(a, b));
   }
@@ -273,11 +269,12 @@ export class AggregatorService {
           if (!catalogId) return [];
 
           const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
-          const data = await resilientFetch<{ metas: MetaPreview[] }>(
+          const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
             path,
             requestId,
+            catalogResponseSchema,
           );
           return data.metas || [];
         }),

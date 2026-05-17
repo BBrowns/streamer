@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { useCallback, memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
-import { useCatalog } from "../../hooks/useCatalog";
+import { useInfiniteCatalog } from "../../hooks/useInfiniteCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { MetaPreview } from "@streamer/shared";
@@ -46,7 +46,18 @@ function HomeContent() {
   const { colors, isDark } = useTheme();
   const [activeFilter, setActiveFilter] = useState<"movie" | "series">("movie");
   const [refreshing, setRefreshing] = useState(false);
-  const { data: movies, isLoading } = useCatalog(activeFilter);
+  const {
+    data: infiniteData,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteCatalog(activeFilter);
+
+  const flatData =
+    infiniteData?.pages.flatMap(
+      (page: { metas: MetaPreview[] }) => page.metas,
+    ) ?? [];
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -77,14 +88,14 @@ function HomeContent() {
     );
   }
 
-  const heroItem = movies?.[0];
+  const heroItem = flatData?.[0];
 
   return (
     <FlatList
       testID="home-grid"
       style={[styles.flatList, { backgroundColor: colors.background }]}
-      data={movies?.slice(isDesktop && heroItem ? 1 : 0)}
-      keyExtractor={(item) => item.id}
+      data={flatData.slice(isDesktop && heroItem ? 1 : 0)}
+      keyExtractor={(item, index) => `${item.id}-${index}`}
       key={`grid-${numColumns}`}
       numColumns={numColumns}
       columnWrapperStyle={
@@ -98,7 +109,7 @@ function HomeContent() {
       }
       contentContainerStyle={{
         paddingHorizontal: 16,
-        paddingBottom: 20,
+        paddingBottom: 40, // More padding for bottom spinner
         backgroundColor: colors.background,
       }}
       refreshControl={
@@ -144,7 +155,7 @@ function HomeContent() {
 
           {isLoading && <SkeletonCardGrid count={numColumns * 3} />}
 
-          {!!movies && movies.length === 0 && !isLoading && (
+          {flatData.length === 0 && !isLoading && (
             <EmptyState
               icon="cube-outline"
               title={t("home.empty.title")}
@@ -156,6 +167,19 @@ function HomeContent() {
         </View>
       }
       renderItem={({ item }) => <CatalogItemCard item={item} />}
+      onEndReached={() => {
+        if (hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      }}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={() =>
+        isFetchingNextPage ? (
+          <View style={{ paddingVertical: 20 }}>
+            <SkeletonCardGrid count={numColumns} />
+          </View>
+        ) : null
+      }
       initialNumToRender={numColumns * 3}
       maxToRenderPerBatch={numColumns * 2}
       windowSize={5}

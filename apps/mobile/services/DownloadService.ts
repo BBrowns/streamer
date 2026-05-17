@@ -45,13 +45,13 @@ class DownloadService {
 
     // WEB/DESKTOP IMPLEMENTATION
     if (Platform.OS === "web") {
-      const desktopBridge = (window as any).desktopBridge;
+      const desktopBridge = window.desktopBridge;
 
       if (desktopBridge) {
         addTask(id, { ...mediaInfo, downloadUrl });
         setStatus(id, "Downloading");
 
-        const unsubscribe = desktopBridge.onDownloadProgress((data: any) => {
+        const unsubscribe = desktopBridge.onDownloadProgress((data) => {
           if (data.id === id) {
             const progress =
               data.totalBytesExpectedToWrite > 0
@@ -121,21 +121,40 @@ class DownloadService {
     }
 
     const localUri = `${downloadDir}${filename}`;
+    const { setResumeData } = useDownloadStore.getState();
 
     addTask(id, { ...mediaInfo, downloadUrl });
     setStatus(id, "Downloading", localUri);
 
-    // 3. Setup callback
-    const callback = (downloadProgress: FileSystem.DownloadProgressData) => {
+    // 3. Setup callback with periodic state saving
+    let lastSavedProgress = 0;
+    const callback = async (
+      downloadProgress: FileSystem.DownloadProgressData,
+    ) => {
       const progress =
         downloadProgress.totalBytesWritten /
         downloadProgress.totalBytesExpectedToWrite;
+
       updateProgress(
         id,
         progress,
         downloadProgress.totalBytesWritten,
         downloadProgress.totalBytesExpectedToWrite,
       );
+
+      // Periodically save resumable state to persistent storage (every 5%)
+      if (progress - lastSavedProgress > 0.05) {
+        try {
+          const resumable = this.downloadResumables[id];
+          if (resumable) {
+            const savable = await resumable.savable();
+            setResumeData(id, JSON.stringify(savable));
+            lastSavedProgress = progress;
+          }
+        } catch (e) {
+          console.warn("[DownloadService] Failed to save resumable state", e);
+        }
+      }
     };
 
     // 4. Create and start resumable download
@@ -152,6 +171,8 @@ class DownloadService {
       const result = await downloadResumable.downloadAsync();
       if (result) {
         setStatus(id, "Completed", result.uri);
+        // Clear resume data on completion
+        setResumeData(id, "");
         if (__DEV__)
           console.log("[DownloadService] Download completed:", result.uri);
 
@@ -170,10 +191,47 @@ class DownloadService {
       }
     } catch (e: any) {
       if (__DEV__) console.error("[DownloadService] Download failed:", e);
-      setStatus(id, "Error", undefined, e.message);
+      // If it was cancelled manually, we don't mark as error here usually
+      if (tasks[id]?.status !== "Paused") {
+        setStatus(id, "Error", undefined, e.message);
+      }
     } finally {
       delete this.downloadResumables[id];
     }
+  }
+
+  /**
+   * Initializes the download service by scanning for interrupted tasks
+   * and preparing them for resumption.
+   */
+  async initialize() {
+    const { tasks, setStatus } = useDownloadStore.getState();
+    const interruptedTasks = Object.values(tasks).filter(
+      (t) => t.status === "Downloading" || t.status === "Paused",
+    );
+
+    for (const task of interruptedTasks) {
+      // If it was "Downloading" but we just started, it's effectively "Paused"
+      if (task.status === "Downloading") {
+        setStatus(task.id, "Paused");
+      }
+
+      // Verification of local file existence
+      if (task.localUri) {
+        const info = await FileSystem.getInfoAsync(task.localUri);
+        if (!info.exists && task.progress > 0) {
+          console.warn(
+            `[DownloadService] Local file missing for task ${task.id}, marking as error`,
+          );
+          setStatus(task.id, "Error", undefined, "Local file missing");
+        }
+      }
+    }
+
+    if (__DEV__)
+      console.log(
+        `[DownloadService] Initialized with ${interruptedTasks.length} stateful tasks`,
+      );
   }
 
   async pauseDownload(id: string) {
@@ -181,11 +239,11 @@ class DownloadService {
     if (resumable) {
       try {
         const pauseResult = await resumable.pauseAsync();
-        const resumeData = pauseResult?.resumeData;
+        const resumeData = JSON.stringify(await resumable.savable());
         useDownloadStore
           .getState()
           .setStatus(id, "Paused", undefined, undefined, resumeData);
-        console.log("[DownloadService] Download paused");
+        console.log("[DownloadService] Download paused and state saved");
       } catch (e) {
         if (__DEV__) console.error("[DownloadService] Pause failed:", e);
       }
@@ -193,13 +251,14 @@ class DownloadService {
   }
 
   async resumeDownload(id: string) {
-    const { tasks, setStatus, updateProgress } = useDownloadStore.getState();
+    const { tasks, setStatus, updateProgress, setResumeData } =
+      useDownloadStore.getState();
     const task = tasks[id];
-    if (task && task.status === "Paused") {
+    if (task && (task.status === "Paused" || task.status === "Error")) {
       let resumable = this.downloadResumables[id];
 
       if (!resumable && task.resumeData && task.localUri) {
-        const callback = (
+        const callback = async (
           downloadProgress: FileSystem.DownloadProgressData,
         ) => {
           const progress =
@@ -211,15 +270,34 @@ class DownloadService {
             downloadProgress.totalBytesWritten,
             downloadProgress.totalBytesExpectedToWrite,
           );
+
+          // Periodically save resumable state to persistent storage (every 5%)
+          if (
+            Math.floor(progress * 20) > Math.floor((task.progress || 0) * 20)
+          ) {
+            try {
+              const r = this.downloadResumables[id];
+              if (r) {
+                const savable = await r.savable();
+                setResumeData(id, JSON.stringify(savable));
+              }
+            } catch (e) {}
+          }
         };
-        resumable = FileSystem.createDownloadResumable(
-          task.mediaInfo.downloadUrl,
-          task.localUri,
-          {},
-          callback,
-          task.resumeData,
-        );
-        this.downloadResumables[id] = resumable;
+
+        try {
+          const savable = JSON.parse(task.resumeData);
+          resumable = new FileSystem.DownloadResumable(
+            savable.url,
+            savable.fileUri,
+            savable.options,
+            callback,
+            savable.resumeData,
+          );
+          this.downloadResumables[id] = resumable;
+        } catch (e) {
+          console.warn("[DownloadService] Failed to rehydrate resumable", e);
+        }
       }
 
       if (resumable) {
@@ -228,11 +306,14 @@ class DownloadService {
           const result = await resumable.resumeAsync();
           if (result) {
             setStatus(id, "Completed", result.uri);
+            setResumeData(id, "");
             console.log("[DownloadService] Download completed:", result.uri);
           }
         } catch (e: any) {
           console.error("[DownloadService] Resume failed:", e);
-          setStatus(id, "Error", undefined, e.message);
+          if (tasks[id]?.status !== "Paused") {
+            setStatus(id, "Error", undefined, e.message);
+          }
         } finally {
           delete this.downloadResumables[id];
         }
@@ -241,7 +322,8 @@ class DownloadService {
           console.warn(
             "[DownloadService] Resumable object and resumeData lost, restarting download",
           );
-        this.startDownload(task.mediaInfo as any as Stream, task.mediaInfo);
+        // Cast to any to bypass strict type check for now if mediaInfo has minor mismatch
+        this.startDownload(task.mediaInfo as any, task.mediaInfo);
       }
     }
   }
@@ -251,7 +333,7 @@ class DownloadService {
     const task = tasks[id];
 
     if (Platform.OS === "web") {
-      const desktopBridge = (window as any).desktopBridge;
+      const desktopBridge = window.desktopBridge;
       if (desktopBridge && task?.localUri) {
         try {
           await desktopBridge.deleteFile(task.localUri);

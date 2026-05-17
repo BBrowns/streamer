@@ -12,9 +12,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../stores/authStore";
 
 export function BiometricLockOverlay() {
-  const { biometricEnabled, isAuthenticated } = useAuthStore();
+  const { biometricEnabled, isAuthenticated, lastActiveAt, setLastActive } =
+    useAuthStore();
   const [isLocked, setIsLocked] = useState(false);
   const appState = useRef(AppState.currentState);
+
+  const BIOMETRIC_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
   // Challenge on mount and background->foreground
   useEffect(() => {
@@ -24,22 +27,37 @@ export function BiometricLockOverlay() {
     }
 
     const checkLock = () => {
-      setIsLocked(true);
-      triggerUnlock();
+      const now = Date.now();
+      const needsLock =
+        !lastActiveAt || now - lastActiveAt > BIOMETRIC_TIMEOUT_MS;
+
+      if (needsLock) {
+        setIsLocked(true);
+        triggerUnlock();
+      }
     };
 
-    // Initial check
+    // Initial check on mount
     checkLock();
 
     const sub = AppState.addEventListener("change", (next) => {
+      if (
+        appState.current.match(/active/) &&
+        next.match(/inactive|background/)
+      ) {
+        // App is being backgrounded - record time
+        setLastActive(Date.now());
+      }
+
       if (appState.current.match(/inactive|background/) && next === "active") {
+        // App is being foregrounded - check if timeout exceeded
         checkLock();
       }
       appState.current = next;
     });
 
     return () => sub.remove();
-  }, [biometricEnabled, isAuthenticated]);
+  }, [biometricEnabled, isAuthenticated, lastActiveAt]);
 
   const triggerUnlock = async () => {
     try {

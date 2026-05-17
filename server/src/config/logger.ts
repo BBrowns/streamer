@@ -1,5 +1,6 @@
 import pino from "pino";
 import { env } from "./env.js";
+import { getRequestId } from "../utils/request-context.js";
 
 export const logger = pino({
   level: env.logLevel,
@@ -9,4 +10,8 @@ export const logger = pino({
       : undefined,
   base: { service: "streamer-server" },
   timestamp: pino.stdTimeFunctions.isoTime,
+  mixin() {
+    const requestId = getRequestId();
+    return requestId ? { requestId } : {};
+  },
 });

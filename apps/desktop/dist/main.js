@@ -7,8 +7,33 @@ const fs = require("fs");
 const https = require("https");
 const http = require("http");
 
+const { autoUpdater } = require("electron-updater");
+
 let tray = null;
 let mainWindow = null;
+
+// Configure auto-updater
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function checkUpdates() {
+    autoUpdater.checkForUpdatesAndNotify();
+    
+    autoUpdater.on('update-available', () => {
+        console.log('[updater] Update available.');
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        console.log('[updater] Update downloaded; will install on quit');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('update-ready', info);
+        }
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('[updater] Error in auto-updater: ' + err);
+    });
+}
 
 // Ensure download directory exists
 const downloadsPath = path.join(electron_1.app.getPath('userData'), 'offline_media');
@@ -72,6 +97,19 @@ electron_1.app.whenReady().then(async () => {
     });
 
     // Set up IPC Handlers
+    electron_1.ipcMain.on('handoff-play', (event, data) => {
+        if (mainWindow) {
+            console.log(`[handoff] Directing UI to play: ${data.title || data.magnet}`);
+            
+            // Construct the player URL with parameters
+            const playerUrl = `http://localhost:8081/player?magnet=${encodeURIComponent(data.magnet)}&startTime=${data.position || 0}&title=${encodeURIComponent(data.title || '')}&itemId=${data.itemId || ''}`;
+            
+            mainWindow.loadURL(playerUrl);
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+
     electron_1.ipcMain.handle('check-file', async (event, localUri) => {
         if (!localUri.startsWith('streamer://')) return false;
         const filePath = decodeURIComponent(localUri.replace('streamer://', ''));
@@ -125,12 +163,38 @@ electron_1.app.whenReady().then(async () => {
     try {
         await import('@streamer/stream-server');
         console.log('Successfully started @streamer/stream-server background daemon');
+        
+        // Announce this desktop bridge on the local network via Bonjour
+        try {
+            const { Bonjour } = await import('bonjour-service');
+            const bonjour = new Bonjour();
+            const service = bonjour.publish({
+                name: `Streamer Desktop (${require('os').hostname()})`,
+                type: 'streamer-bridge',
+                protocol: 'tcp',
+                port: 11470,
+                txt: {
+                    version: '1.0.0',
+                    id: electron_1.app.getPath('userData')
+                }
+            });
+            console.log(`[discovery] Announcing desktop bridge: ${service.name}`);
+            
+            electron_1.app.on('will-quit', () => {
+                bonjour.unpublishAll(() => {
+                    bonjour.destroy();
+                });
+            });
+        } catch (discoveryError) {
+            console.warn('[discovery] Failed to announce via Bonjour:', discoveryError);
+        }
     }
     catch (error) {
         console.error('Failed to start stream server daemon:', error);
     }
     createWindow();
     createTray();
+    checkUpdates();
 
     electron_1.app.on('activate', function () {
         if (electron_1.BrowserWindow.getAllWindows().length === 0)

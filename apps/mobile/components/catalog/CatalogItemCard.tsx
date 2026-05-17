@@ -2,17 +2,20 @@ import React, { memo } from "react";
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
-import Animated from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { WatchProgressBar } from "../ui/WatchProgressBar";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 
 const isWeb = Platform.OS === "web";
+const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
 function CatalogCardInner({ item }: { item: MetaPreview }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const [imageError, setImageError] = React.useState(!item.poster);
 
   const handlePress = () => {
     hapticImpactLight();
@@ -32,16 +35,33 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
       ]}
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name}${item.imdbRating ? `, rated ${item.imdbRating}` : ""}`}
-      accessibilityHint="Opens details page"
+      accessibilityLabel={item.name}
+      accessibilityHint={
+        item.type === "movie"
+          ? "Read more about this movie"
+          : "View episodes of this series"
+      }
     >
       <View style={styles.imageWrapper}>
-        <Animated.Image
-          source={{ uri: item.poster }}
-          style={styles.cardImage}
-          sharedTransitionTag={`poster-${item.id}`}
-          accessibilityIgnoresInvertColors
-        />
+        {!imageError ? (
+          <AnimatedExpoImage
+            source={item.poster}
+            style={styles.cardImage}
+            transition={300}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            // @ts-ignore
+            sharedTransitionTag={`poster-${item.id}`}
+            entering={FadeIn.duration(300)}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <View style={[styles.cardImage, styles.imageFallback]}>
+            <Text style={styles.fallbackTitle} numberOfLines={3}>
+              {item.name}
+            </Text>
+          </View>
+        )}
         <WatchProgressBar itemId={item.id} />
 
         {/* CSS-only hover overlay — no React state, no layout shift */}
@@ -131,6 +151,18 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 2 / 3,
     backgroundColor: "rgba(0,0,0,0.05)",
+  },
+  imageFallback: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "rgba(129, 140, 248, 0.05)",
+  },
+  fallbackTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6b7280",
+    textAlign: "center",
   },
   // The overlay is always in DOM but hidden via CSS opacity
   hoverOverlayWrap: {

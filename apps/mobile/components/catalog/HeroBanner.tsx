@@ -22,13 +22,14 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { data } = useAddonCatalog(catalog?.type || "");
+  const flattenedData = data?.pages.flat() || [];
 
-  if (!catalog || !data || data.length === 0) {
+  if (!catalog || flattenedData.length === 0) {
     return null;
   }
 
   // Feature the very first item from this catalog
-  const featuredItem = data[0];
+  const featuredItem = flattenedData[0];
 
   const handlePress = () => {
     hapticImpactLight();

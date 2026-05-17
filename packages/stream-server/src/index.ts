@@ -4,6 +4,8 @@ import { streamRequest, getClient } from "./torrent.js";
 import { getStats } from "./stats.js";
 import { castRouter } from "./cast.js";
 import { metricsHandler } from "./metrics.js";
+import { getSubtitlesRequest, streamSubtitleRequest } from "./subtitles.js";
+import { handoffRouter } from "./handoff.js";
 
 const app = express();
 const PORT = process.env.PORT || 11470;
@@ -53,6 +55,11 @@ app.get("/stats", async (_req, res) => {
 });
 
 app.get("/api/torrent/:infoHash/metrics", metricsHandler);
+
+app.get("/api/subtitles", getSubtitlesRequest);
+app.get("/api/subtitles/:id/stream", streamSubtitleRequest);
+
+app.use("/api/handoff", handoffRouter);
 
 app.listen(PORT as number, "0.0.0.0", () => {
   console.log(`Stream server (Bridge) running on http://0.0.0.0:${PORT}`);

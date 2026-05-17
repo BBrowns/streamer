@@ -66,7 +66,27 @@ export function PlayerControls({
           {formatTime(currentTime)}
         </Text>
 
-        <View style={styles.scrubberContainer}>
+        <View
+          style={styles.scrubberContainer}
+          accessibilityRole="adjustable"
+          accessibilityLabel="Playback progress"
+          accessibilityValue={{
+            min: 0,
+            max: 100,
+            now: Math.round(progressPercent),
+            text: `${formatTime(currentTime)} of ${formatTime(duration)}`,
+          }}
+          onAccessibilityAction={(event) => {
+            switch (event.nativeEvent.actionName) {
+              case "increment":
+                player.seekBy(10);
+                break;
+              case "decrement":
+                player.seekBy(-10);
+                break;
+            }
+          }}
+        >
           <View
             style={[
               styles.scrubberTrack,

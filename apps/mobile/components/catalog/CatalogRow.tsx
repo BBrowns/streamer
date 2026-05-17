@@ -32,7 +32,8 @@ function CatalogRowInner({
   catalog: CatalogDefinition;
   addon: InstalledAddon;
 }) {
-  const { data, isLoading } = useAddonCatalog(catalog.type);
+  const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useAddonCatalog(catalog.type);
   const { colors, isDark } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
@@ -62,7 +63,9 @@ function CatalogRowInner({
     );
   }
 
-  if (!data || data.length === 0) return null;
+  const flattenedData = data?.pages.flat() || [];
+
+  if (flattenedData.length === 0) return null;
 
   return (
     <View style={styles.rowContainer}>
@@ -136,9 +139,9 @@ function CatalogRowInner({
       <FlatList
         ref={flatListRef}
         horizontal
-        data={data.slice(0, 20)}
-        keyExtractor={(item) =>
-          `${addon.id}-${catalog.type}-${catalog.id}-${item.id}`
+        data={flattenedData}
+        keyExtractor={(item, index) =>
+          `${addon.id}-${catalog.type}-${catalog.id}-${item.id}-${index}`
         }
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[
@@ -152,6 +155,17 @@ function CatalogRowInner({
         )}
         onScroll={(e) => setScrollOffset(e.nativeEvent.contentOffset.x)}
         scrollEventThrottle={16}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <ActivityIndicator color={colors.tint} style={{ marginLeft: 20 }} />
+          ) : null
+        }
       />
     </View>
   );

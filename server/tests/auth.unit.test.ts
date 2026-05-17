@@ -18,6 +18,7 @@ vi.mock("../src/prisma/client.js", () => ({
     refreshToken: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      update: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
     },
@@ -183,6 +184,61 @@ describe("AuthService", () => {
       // Should not be locked after clearing
       const result2 = await service.login("test@example.com", "Password1");
       expect(result2.tokens.accessToken).toBeDefined();
+    });
+  });
+
+  describe("refresh", () => {
+    const mockUser = {
+      id: "user-1",
+      email: "test@example.com",
+    };
+
+    it("should reject an expired or invalid refresh token", async () => {
+      (prisma.refreshToken.findUnique as Mock).mockResolvedValue(null);
+      await expect(service.refresh("invalid_token")).rejects.toThrow(AppError);
+    });
+
+    it("should successfully rotate a valid refresh token", async () => {
+      (prisma.refreshToken.findUnique as Mock).mockResolvedValue({
+        id: "token-1",
+        token: "valid_token",
+        userId: "user-1",
+        expiresAt: new Date(Date.now() + 100000),
+        revokedAt: null,
+        user: mockUser,
+      });
+
+      const result = await service.refresh("valid_token");
+      expect(result.accessToken).toBeDefined();
+      expect(result.refreshToken).toBeDefined();
+      expect(prisma.refreshToken.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "token-1" },
+          data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+        }),
+      );
+    });
+
+    it("should detect a replay attack when a revoked token is used", async () => {
+      // Setup the token as already revoked (consumed)
+      (prisma.refreshToken.findUnique as Mock).mockResolvedValue({
+        id: "token-consumed",
+        token: "old_token",
+        userId: "user-1",
+        expiresAt: new Date(Date.now() + 100000),
+        revokedAt: new Date(Date.now() - 5000), // revoked 5 seconds ago
+        user: mockUser,
+      });
+
+      // Attempt to refresh
+      await expect(service.refresh("old_token")).rejects.toThrow(
+        /Security violation/,
+      );
+
+      // Verify that deleteMany was called to nuke all user sessions
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: "user-1" },
+      });
     });
   });
 

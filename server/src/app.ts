@@ -12,6 +12,7 @@ import {
   catalogRateLimiter,
 } from "./middleware/rateLimiter.middleware.js";
 import { featureFlags } from "./modules/feature-flag/feature-flag.service.js";
+import { requestContextStorage } from "./utils/request-context.js";
 
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { addonRouter } from "./modules/addon/addon.routes.js";
@@ -21,9 +22,21 @@ import { traktRouter } from "./modules/trakt/adapters/trakt.routes.js";
 import { notificationRouter } from "./modules/notification/notification.routes.js";
 import { syncRouter } from "./modules/sync/sync.routes.js";
 import { sessionRouter } from "./modules/sessions/session.routes.js";
+import { docsRouter } from "./modules/docs/docs.routes.js";
+import { systemRouter } from "./modules/system/system.routes.js";
+
+import { initWebSockets } from "./config/websocket.js";
 
 export function createApp() {
   const app = new Hono();
+  initWebSockets(app);
+
+  // Request context middleware (Correlation ID)
+  app.use("*", async (c, next) => {
+    const requestId =
+      c.get("requestId") || c.req.header("X-Request-Id") || crypto.randomUUID();
+    return requestContextStorage.run({ requestId }, () => next());
+  });
 
   // Global middleware
   app.use("*", secureHeaders());
@@ -57,38 +70,23 @@ export function createApp() {
     );
   });
 
-  // Health check
-  app.get("/health", async (c) => {
-    try {
-      // Lightweight query to verify DB connectivity
-      await import("./prisma/client.js").then(
-        (m) => m.prisma.$queryRaw`SELECT 1`,
-      );
-      return c.json({
-        status: "ok",
-        db: "connected",
-        timestamp: new Date().toISOString(),
-        features: featureFlags.getAll(),
-        uptime: process.uptime(),
-      });
-    } catch (err) {
-      logger.error({ err }, "Health check failed: DB disconnected");
-      return c.json({ status: "error", db: "disconnected" }, 503);
-    }
-  });
-
-  // API routes
-  app.route("/api/auth", authRouter);
-  app.route("/api/addons", addonRouter);
-  app.route("/api/library", libraryRouter);
-  app.route("/api/trakt", traktRouter);
-  app.route("/api/notifications", notificationRouter);
-  app.route("/api/sync", syncRouter);
-  app.route("/api/sessions", sessionRouter);
-  app.route("/api", aggregatorRouter);
+  // API and System routes
+  const routes = app
+    .route("/", systemRouter)
+    .route("/api/auth", authRouter)
+    .route("/api/addons", addonRouter)
+    .route("/api/library", libraryRouter)
+    .route("/api/trakt", traktRouter)
+    .route("/api/notifications", notificationRouter)
+    .route("/api/sync", syncRouter)
+    .route("/api/sessions", sessionRouter)
+    .route("/api", aggregatorRouter)
+    .route("/api/docs", docsRouter);
 
   // Error handler
   app.onError(errorHandler);
 
-  return app;
+  return routes;
 }
+
+export type AppType = ReturnType<typeof createApp>;

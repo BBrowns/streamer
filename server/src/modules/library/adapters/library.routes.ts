@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HonoEnv } from "../../../types/hono.js";
 import { LibraryController } from "./library.controller.js";
 import { LibraryService } from "../domain/library.service.js";
 import { PrismaLibraryRepository } from "./prisma-library.repository.js";
@@ -23,7 +24,7 @@ const libraryService = new LibraryService(
 );
 const libraryController = new LibraryController(libraryService);
 
-export const libraryRouter = new Hono();
+export const libraryRouter = new Hono<HonoEnv>();
 
 // All library routes require authentication
 libraryRouter.use("*", authMiddleware);

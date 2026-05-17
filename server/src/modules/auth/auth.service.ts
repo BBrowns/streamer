@@ -239,8 +239,26 @@ export class AuthService {
       throw new AppError(401, "Invalid or expired refresh token");
     }
 
-    // Rotate: delete old token, issue new pair
-    await prisma.refreshToken.delete({ where: { id: stored.id } });
+    if (stored.revokedAt) {
+      // Replay attack detected! Old, consumed token used again.
+      logger.warn(
+        { userId: stored.user.id },
+        "🚨 Refresh token replay detected. Revoking all active tokens for user.",
+      );
+      await prisma.refreshToken.deleteMany({
+        where: { userId: stored.user.id },
+      });
+      throw new AppError(
+        401,
+        "Security violation: Invalid token usage detected. Please log in again.",
+      );
+    }
+
+    // Rotate: Mark old token as revoked instead of deleting it
+    await prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: new Date() },
+    });
 
     const tokens = generateTokens(stored.user.id, stored.user.email);
 

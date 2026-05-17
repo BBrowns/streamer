@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
 import { DeviceEventEmitter } from "react-native";
-import SSE from "react-native-sse";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import { BASE_URL } from "../services/api";
@@ -19,9 +18,9 @@ const err = (...args: unknown[]) => {
 };
 
 /**
- * useSync establishes an SSE connection to the backend for real-time
- * library and progress updates. Reconnects automatically with
- * exponential backoff (2s → 5s → 15s) on connection loss.
+ * useSync establishes a persistent WebSocket connection to the backend
+ * for real-time bi-directional synchronization.
+ * Handles state updates from server and provides an interface to send events.
  */
 export function useSync() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -29,10 +28,9 @@ export function useSync() {
   const deviceId = useAuthStore((s) => s.deviceId);
   const queryClient = useQueryClient();
 
-  const sseRef = useRef<SSE | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Keep a stable reference to the connect function for retries
   const connectRef = useRef<(() => void) | null>(null);
 
   const clearRetryTimer = () => {
@@ -42,114 +40,142 @@ export function useSync() {
     }
   };
 
-  const closeSSE = () => {
-    if (sseRef.current) {
-      sseRef.current.close();
-      sseRef.current = null;
+  const closeWS = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
   };
+
+  /** Send a message to the server */
+  const sendMessage = useCallback((event: string, data: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ event, data }));
+    } else {
+      warn("Cannot send message: WebSocket is not open", event);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) {
       clearRetryTimer();
-      closeSSE();
+      closeWS();
       retryCountRef.current = 0;
       return;
     }
 
     const connect = () => {
-      closeSSE();
+      closeWS();
 
-      const url = `${BASE_URL}/api/sync/events`;
-      const sse = new SSE(url, {
+      // Convert HTTP(S) to WS(S)
+      const wsUrl = BASE_URL.replace(/^http/, "ws") + "/api/sync/events";
+
+      log("Connecting to", wsUrl);
+
+      // Note: standard WebSocket API doesn't support custom headers in all environments,
+      // but React Native's WebSocket implementation DOES support them.
+      // @ts-ignore: React Native WebSocket supports a 3rd argument for headers
+      const ws = new WebSocket(wsUrl, undefined, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "X-Device-Id": deviceId || "unknown",
         },
       });
 
-      sseRef.current = sse;
+      wsRef.current = ws;
 
-      sse.addEventListener("open", () => {
+      ws.onopen = () => {
         log("Connection opened");
-        retryCountRef.current = 0; // Reset backoff on successful connect
-      });
+        retryCountRef.current = 0;
+      };
 
-      sse.addEventListener("error", (event: any) => {
-        warn("Connection error:", event?.message ?? event);
-        closeSSE();
-
-        const delay =
-          RETRY_DELAYS[
-            Math.min(retryCountRef.current, RETRY_DELAYS.length - 1)
-          ];
-        retryCountRef.current += 1;
-        log(
-          `Reconnecting in ${delay / 1000}s (attempt ${retryCountRef.current})…`,
-        );
-
-        retryTimerRef.current = setTimeout(() => {
-          if (connectRef.current) connectRef.current();
-        }, delay);
-      });
-
-      sse.addEventListener("LIBRARY_UPDATE" as any, (event: any) => {
+      ws.onmessage = (e) => {
         try {
-          const data = JSON.parse(event.data);
-          log("Library update:", data);
-          if (queryClient) {
-            queryClient.invalidateQueries({ queryKey: ["library"] });
-            const itemId = data.itemId || data.item?.itemId;
-            if (itemId) {
-              queryClient.invalidateQueries({
-                queryKey: ["library", "check", itemId],
-              });
-            }
+          const { event: type, data } = JSON.parse(e.data);
+          log("Event received:", type);
+
+          switch (type) {
+            case "ping":
+              // Connection confirm or heartbeat
+              break;
+
+            case "LIBRARY_UPDATE":
+              if (queryClient) {
+                queryClient.invalidateQueries({ queryKey: ["library"] });
+                const itemId = data.itemId || data.item?.itemId;
+                if (itemId) {
+                  queryClient.invalidateQueries({
+                    queryKey: ["library", "check", itemId],
+                  });
+                }
+              }
+              break;
+
+            case "PROGRESS_UPDATE":
+              if (queryClient) {
+                queryClient.invalidateQueries({
+                  queryKey: ["continue-watching"],
+                });
+              }
+              break;
+
+            case "SESSION_UPDATE":
+              DeviceEventEmitter.emit("SESSION_UPDATE", data);
+              break;
+
+            case "REMOTE_COMMAND":
+              DeviceEventEmitter.emit("REMOTE_COMMAND", data);
+              break;
+
+            case "playback_update":
+              // Remote control payload from another device
+              DeviceEventEmitter.emit("playback_update", data);
+              break;
+
+            default:
+              log("Unknown event type:", type);
           }
-        } catch (e) {
-          err("Failed to parse LIBRARY_UPDATE:", e);
+        } catch (error) {
+          err("Failed to parse WebSocket message:", error);
         }
-      });
+      };
 
-      sse.addEventListener("PROGRESS_UPDATE" as any, (event: any) => {
-        try {
-          const data = JSON.parse(event.data);
-          log("Progress update:", data.itemId);
-          if (queryClient) {
-            queryClient.invalidateQueries({ queryKey: ["continue-watching"] });
-          }
-        } catch (e) {
-          err("Failed to parse PROGRESS_UPDATE:", e);
-        }
-      });
+      ws.onerror = (e: any) => {
+        warn("Connection error:", e?.message || "Unknown error");
+      };
 
-      sse.addEventListener("SESSION_UPDATE" as any, (event: any) => {
-        try {
-          DeviceEventEmitter.emit("SESSION_UPDATE", JSON.parse(event.data));
-        } catch (e) {
-          err("Failed to parse SESSION_UPDATE:", e);
-        }
-      });
+      ws.onclose = (e) => {
+        log("Connection closed:", e.code, e.reason);
 
-      sse.addEventListener("REMOTE_COMMAND" as any, (event: any) => {
-        try {
-          DeviceEventEmitter.emit("REMOTE_COMMAND", JSON.parse(event.data));
-        } catch (e) {
-          err("Failed to parse REMOTE_COMMAND:", e);
+        // Reconnect logic
+        if (isAuthenticated && accessToken) {
+          const delay =
+            RETRY_DELAYS[
+              Math.min(retryCountRef.current, RETRY_DELAYS.length - 1)
+            ];
+          retryCountRef.current += 1;
+          log(
+            `Reconnecting in ${delay / 1000}s (attempt ${retryCountRef.current})…`,
+          );
+
+          retryTimerRef.current = setTimeout(() => {
+            if (connectRef.current) connectRef.current();
+          }, delay);
         }
-      });
+      };
     };
 
-    // Store the connect function in a ref so the error handler can call it
     connectRef.current = connect;
     connect();
 
     return () => {
       clearRetryTimer();
-      closeSSE();
+      closeWS();
       connectRef.current = null;
       retryCountRef.current = 0;
-      log("Connection closed (cleanup)");
+      log("Cleanup complete");
     };
   }, [isAuthenticated, accessToken, deviceId, queryClient]);
+
+  return { sendMessage };
 }

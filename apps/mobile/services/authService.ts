@@ -1,4 +1,4 @@
-import { api } from "../services/api";
+import { client } from "./api-client";
 import type {
   LoginRequest,
   RegisterRequest,
@@ -10,47 +10,56 @@ import type {
 
 export const authService = {
   register: async (data: RegisterRequest) => {
-    const response = await api.post("/api/auth/register", data);
-    return response.data;
+    const res = await client.api.auth.register.$post({ json: data });
+    if (!res.ok) throw new Error("Registration failed");
+    return res.json();
   },
 
   login: async (data: LoginRequest) => {
-    const response = await api.post("/api/auth/login", data);
-    return response.data;
+    const res = await client.api.auth.login.$post({ json: data });
+    if (!res.ok) throw new Error("Login failed");
+    return res.json();
   },
 
   refresh: async (refreshToken: string) => {
-    const response = await api.post("/api/auth/refresh", { refreshToken });
-    return response.data;
+    const res = await client.api.auth.refresh.$post({ json: { refreshToken } });
+    if (!res.ok) throw new Error("Refresh failed");
+    return res.json();
   },
 
   forgotPassword: async (data: ForgotPasswordRequest) => {
-    const response = await api.post("/api/auth/forgot-password", data);
-    return response.data;
+    const res = await client.api.auth.forgot_password.$post({ json: data });
+    if (!res.ok) throw new Error("Forgot password request failed");
+    return res.json();
   },
 
   resetPassword: async (data: ResetPasswordRequest) => {
-    const response = await api.post("/api/auth/reset-password", data);
-    return response.data;
+    const res = await client.api.auth.reset_password.$post({ json: data });
+    if (!res.ok) throw new Error("Reset password failed");
+    return res.json();
   },
 
   changePassword: async (data: ChangePasswordRequest) => {
-    const response = await api.post("/api/auth/change-password", data);
-    return response.data;
+    const res = await client.api.auth.change_password.$post({ json: data });
+    if (!res.ok) throw new Error("Change password failed");
+    return res.json();
   },
 
   updateProfile: async (data: UpdateProfileRequest) => {
-    const response = await api.patch("/api/auth/profile", data);
-    return response.data;
+    const res = await client.api.auth.profile.$patch({ json: data });
+    if (!res.ok) throw new Error("Profile update failed");
+    return res.json();
   },
 
   verifyEmail: async (data: { token: string }) => {
-    const response = await api.post("/api/auth/verify-email", data);
-    return response.data;
+    const res = await client.api.auth.verify_email.$post({ json: data });
+    if (!res.ok) throw new Error("Email verification failed");
+    return res.json();
   },
 
   resendVerification: async (data: { email: string }) => {
-    const response = await api.post("/api/auth/resend-verification", data);
-    return response.data;
+    const res = await client.api.auth.resend_verification.$post({ json: data });
+    if (!res.ok) throw new Error("Resend verification failed");
+    return res.json();
   },
 };

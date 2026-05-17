@@ -1,12 +1,24 @@
-import { prisma } from "../../prisma/client.js";
+import { redis } from "../../services/redis.js";
 import { logger } from "../../config/logger.js";
 import { AppError } from "../../middleware/error.middleware.js";
 import { NotificationService } from "../notification/notification.service.js";
 
+const SESSION_TTL = 60; // 60 seconds TTL for heartbeats
+const SESSION_PREFIX = "auth:session:";
+const USER_SESSIONS_PREFIX = "auth:user-sessions:";
+
+export interface ActiveSession {
+  id: string;
+  userId: string;
+  deviceId: string;
+  ipAddress?: string;
+  userAgent?: string;
+  lastActivity: Date;
+}
+
 export class SessionService {
   /**
-   * Register or update an active session for a user + device.
-   * Also returns the total number of active sessions for this user.
+   * Register or update an active session for a user + device in Redis.
    */
   static async heartbeat(
     userId: string,
@@ -16,14 +28,18 @@ export class SessionService {
   ) {
     try {
       const now = new Date();
+      const sessionKey = `${SESSION_PREFIX}${userId}:${deviceId}`;
+      const userSessionsKey = `${USER_SESSIONS_PREFIX}${userId}`;
 
-      // Check for new login to send notification
-      const existingSession = await prisma.activeSession.findUnique({
-        where: { userId_deviceId: { userId, deviceId } },
-      });
+      if (!redis) {
+        // Fallback or skip if Redis is missing (not ideal but avoids crash)
+        return 1;
+      }
 
-      if (!existingSession) {
-        await NotificationService.createNotification(
+      // Check if this is a new session for notification
+      const exists = await redis.exists(sessionKey);
+      if (!exists) {
+        NotificationService.createNotification(
           userId,
           "New Device Login",
           `A new device just signed into your account. IP: ${ip || "Unknown"}`,
@@ -35,65 +51,79 @@ export class SessionService {
         );
       }
 
-      // UPSERT the session
-      await prisma.activeSession.upsert({
-        where: {
-          userId_deviceId: { userId, deviceId },
-        },
-        update: {
-          lastActivity: now,
-          ipAddress: ip,
-          userAgent: userAgent,
-        },
-        create: {
-          userId,
-          deviceId,
-          ipAddress: ip,
-          userAgent: userAgent,
-          lastActivity: now,
-        },
-      });
+      const sessionData: ActiveSession = {
+        id: `${userId}:${deviceId}`,
+        userId,
+        deviceId,
+        ipAddress: ip,
+        userAgent: userAgent,
+        lastActivity: now,
+      };
 
-      // Cleanup stale sessions (older than 30 seconds)
-      const STALE_THRESHOLD = new Date(Date.now() - 30 * 1000);
-      await prisma.activeSession.deleteMany({
-        where: {
-          userId,
-          lastActivity: { lt: STALE_THRESHOLD },
-        },
-      });
+      // Atomic update: Set session data and add to user's device set
+      await redis
+        .multi()
+        .set(sessionKey, JSON.stringify(sessionData), "EX", SESSION_TTL)
+        .sadd(userSessionsKey, deviceId)
+        .expire(userSessionsKey, SESSION_TTL * 2) // User map expires if no heartbeats for a while
+        .exec();
 
-      // Count remaining active sessions
-      const sessionCount = await prisma.activeSession.count({
-        where: { userId },
-      });
+      // Get count of active sessions for this user
+      // We need to clean up the set if some sessions expired
+      const devices = await redis.smembers(userSessionsKey);
+      const activeDevices: string[] = [];
 
-      return sessionCount;
+      for (const dId of devices) {
+        const dExists = await redis.exists(`${SESSION_PREFIX}${userId}:${dId}`);
+        if (dExists) {
+          activeDevices.push(dId);
+        } else {
+          // Clean up individual expired session from the set
+          await redis.srem(userSessionsKey, dId);
+        }
+      }
+
+      return activeDevices.length;
     } catch (err: any) {
       logger.error(
         { userId, deviceId, err: err.message },
-        "Failed to update session heartbeat",
+        "Failed to update session heartbeat in Redis",
       );
-      return 1; // Fallback to 1 to avoid blocking user on DB failure
+      return 1;
     }
   }
 
-  static async getActiveSessions(userId: string) {
-    return prisma.activeSession.findMany({
-      where: { userId },
-      orderBy: { lastActivity: "desc" },
-    });
+  static async getActiveSessions(userId: string): Promise<ActiveSession[]> {
+    if (!redis) return [];
+
+    const userSessionsKey = `${USER_SESSIONS_PREFIX}${userId}`;
+    const devices = await redis.smembers(userSessionsKey);
+    const sessions: ActiveSession[] = [];
+
+    for (const dId of devices) {
+      const data = await redis.get(`${SESSION_PREFIX}${userId}:${dId}`);
+      if (data) {
+        sessions.push(JSON.parse(data));
+      } else {
+        await redis.srem(userSessionsKey, dId);
+      }
+    }
+
+    return sessions.sort(
+      (a, b) =>
+        new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime(),
+    );
   }
 
-  /** Revoke a specific session. Throws 404 if the session doesn't belong to the user. */
-  static async revoke(userId: string, sessionId: string): Promise<void> {
-    const session = await prisma.activeSession.findUnique({
-      where: { id: sessionId },
-    });
-    if (!session || session.userId !== userId) {
-      throw new AppError(404, "Session not found");
-    }
-    await prisma.activeSession.delete({ where: { id: sessionId } });
-    logger.info({ userId, sessionId }, "Session revoked");
+  /** Revoke a specific session from Redis. */
+  static async revoke(userId: string, deviceId: string): Promise<void> {
+    if (!redis) return;
+
+    const sessionKey = `${SESSION_PREFIX}${userId}:${deviceId}`;
+    const userSessionsKey = `${USER_SESSIONS_PREFIX}${userId}`;
+
+    await redis.multi().del(sessionKey).srem(userSessionsKey, deviceId).exec();
+
+    logger.info({ userId, deviceId }, "Session revoked from Redis");
   }
 }
