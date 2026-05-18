@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import Animated, {
   interpolate,
   Extrapolate,
   SharedValue,
-  withTiming,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -150,7 +149,7 @@ export function OnboardingCarousel({
   onComplete,
 }: OnboardingCarouselProps) {
   const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const scrollX = useSharedValue(0);
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -184,6 +183,20 @@ export function OnboardingCarousel({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Skip button */}
+      <Pressable
+        onPress={onComplete}
+        style={[
+          styles.skipButton,
+          { top: Platform.OS === "ios" ? 64 : 40 },
+        ]}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Text style={[styles.skipText, { color: colors.textSecondary }]}>
+          Skip
+        </Text>
+      </Pressable>
+
       <Animated.FlatList
         ref={flatListRef}
         data={steps}
@@ -260,11 +273,11 @@ export function OnboardingCarousel({
           }
         >
           <LinearGradient
-            colors={["#818cf8", "#6366f1"]}
+            colors={["#a78bfa", "#7c3aed"]}
             style={styles.gradient}
           >
             <Text style={styles.buttonText}>
-              {isLastStep ? "Get Started" : "Next Step"}
+              {isLastStep ? "Let's Go" : "Next"}
             </Text>
           </LinearGradient>
         </Pressable>
@@ -277,6 +290,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#050614",
+  },
+  skipButton: {
+    position: "absolute",
+    right: 24,
+    zIndex: 20,
+  },
+  skipText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   stepContainer: {
     flex: 1,
