@@ -36,6 +36,10 @@ export function LibraryCard({
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = React.useState(false);
+  const [contextMenu, setContextMenu] = React.useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const isWeb = Platform.OS === "web";
   const itemId = item.itemId || item.id;
 
@@ -54,6 +58,23 @@ export function LibraryCard({
       router.push(`/detail/${item.type}/${itemId}`);
     }
   };
+
+  const handleContextMenu = (e: any) => {
+    if (!isWeb || isSelectionMode) return;
+    e.preventDefault();
+    setContextMenu({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+  };
+
+  React.useEffect(() => {
+    if (!contextMenu) return;
+    const hideMenu = () => setContextMenu(null);
+    window.addEventListener("click", hideMenu);
+    window.addEventListener("contextmenu", hideMenu);
+    return () => {
+      window.removeEventListener("click", hideMenu);
+      window.removeEventListener("contextmenu", hideMenu);
+    };
+  }, [contextMenu]);
 
   const handleLongPress = () => {
     hapticImpactHeavy();
@@ -138,6 +159,8 @@ export function LibraryCard({
       onLongPress={handleLongPress}
       onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
       onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
+      // @ts-ignore
+      onContextMenu={isWeb ? handleContextMenu : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${item.title}. Long press for options`}
       accessibilityHint="Opens detail page"
@@ -230,6 +253,70 @@ export function LibraryCard({
           </View>
         )}
       </View>
+      {isWeb && contextMenu && (
+        <View
+          style={[
+            styles.contextMenu,
+            {
+              top: contextMenu?.y ?? 0,
+              left: contextMenu?.x ?? 0,
+              backgroundColor: isDark ? "#1f1f1f" : "#fff",
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Pressable
+            style={({ hovered }: any) => [
+              styles.contextMenuItem,
+              hovered && {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(0,0,0,0.05)",
+              },
+            ]}
+            onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color={colors.text}
+            />
+            <Text style={[styles.contextMenuText, { color: colors.text }]}>
+              {t("library.actions.viewDetails", {
+                defaultValue: "View Details",
+              })}
+            </Text>
+          </Pressable>
+          <View
+            style={[
+              styles.contextMenuSeparator,
+              { backgroundColor: colors.border },
+            ]}
+          />
+          <Pressable
+            style={({ hovered }: any) => [
+              styles.contextMenuItem,
+              hovered && {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(0,0,0,0.05)",
+              },
+            ]}
+            onPress={() => onRemove(itemId, !!task)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#ef4444" />
+            <Text style={[styles.contextMenuText, { color: "#ef4444" }]}>
+              {task
+                ? t("library.actions.removeDownload", {
+                    defaultValue: "Remove Download",
+                  })
+                : t("library.actions.remove", {
+                    defaultValue: "Remove From Library",
+                  })}
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -320,5 +407,36 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 16,
     padding: 2,
+  },
+  contextMenu: {
+    position: "absolute",
+    zIndex: 1000,
+    width: 200,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  contextMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  contextMenuText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  contextMenuSeparator: {
+    height: 1,
+    marginVertical: 4,
+    marginHorizontal: 8,
+    opacity: 0.5,
   },
 });

@@ -1,4 +1,4 @@
-import React, { memo, useRef, useState } from "react";
+import React, { memo, useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import type {
 import { CatalogItemCard } from "./CatalogItemCard";
 import { useTheme } from "../../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
+import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
 
 const CARD_WIDTH_MOBILE = 140;
 const CARD_WIDTH_DESKTOP = 200;
@@ -39,6 +40,7 @@ function CatalogRowInner({
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const flatListRef = useRef<FlatList>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
+  const router = useRouter();
   const cardWidth = isDesktop ? CARD_WIDTH_DESKTOP : CARD_WIDTH_MOBILE;
   const scrollAmount = cardWidth * 3 + CARD_GAP * 3; // scroll 3 cards at a time
 
@@ -64,6 +66,28 @@ function CatalogRowInner({
   }
 
   const flattenedData = data?.pages.flat() || [];
+
+  const { selectedIndex } = useKeyboardNavigation({
+    itemCount: flattenedData.length,
+    columns: 1,
+    onSelect: (index) => {
+      const item = flattenedData[index];
+      if (item) {
+        router.push(`/detail/${item.type}/${item.id}`);
+      }
+    },
+    isActive: isDesktop,
+  });
+
+  useEffect(() => {
+    if (selectedIndex >= 0 && flatListRef.current) {
+      flatListRef.current.scrollToIndex({
+        index: selectedIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }
+  }, [selectedIndex]);
 
   if (flattenedData.length === 0) return null;
 
@@ -148,9 +172,13 @@ function CatalogRowInner({
           styles.rowScroll,
           isDesktop && styles.rowScrollDesktop,
         ]}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <View style={{ width: cardWidth }}>
-            <CatalogItemCard item={item} />
+            <CatalogItemCard
+              item={item}
+              isFocused={selectedIndex === index}
+              onEnter={() => router.push(`/detail/${item.type}/${item.id}`)}
+            />
           </View>
         )}
         onScroll={(e) => setScrollOffset(e.nativeEvent.contentOffset.x)}

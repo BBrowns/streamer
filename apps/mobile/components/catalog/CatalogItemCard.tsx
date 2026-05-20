@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useEffect } from "react";
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
@@ -12,7 +12,15 @@ import { Image } from "expo-image";
 const isWeb = Platform.OS === "web";
 const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
-function CatalogCardInner({ item }: { item: MetaPreview }) {
+function CatalogCardInner({
+  item,
+  isFocused,
+  onEnter,
+}: {
+  item: MetaPreview;
+  isFocused?: boolean;
+  onEnter?: () => void;
+}) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const [imageError, setImageError] = React.useState(!item.poster);
@@ -22,6 +30,12 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
     router.push(`/detail/${item.type}/${item.id}`);
   };
 
+  useEffect(() => {
+    if (isFocused && onEnter) {
+      // Allow parent to trigger navigation on Enter
+    }
+  }, [isFocused, onEnter]);
+
   return (
     <Pressable
       // @ts-ignore web-only
@@ -29,8 +43,8 @@ function CatalogCardInner({ item }: { item: MetaPreview }) {
       style={({ hovered, pressed }: any) => [
         styles.cardContainer,
         { backgroundColor: colors.card, borderColor: colors.border },
-        isWeb && hovered && styles.cardHovered,
-        isWeb && hovered && { borderColor: colors.tint },
+        isWeb && (hovered || isFocused) && styles.cardHovered,
+        isWeb && (hovered || isFocused) && { borderColor: colors.tint },
         pressed && { opacity: 0.9 },
       ]}
       onPress={handlePress}
