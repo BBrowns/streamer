@@ -1,38 +1,83 @@
 import { Hono } from "hono";
+import { HonoEnv } from "../../types/hono.js";
+import { zValidator } from "@hono/zod-validator";
 import { authController } from "./auth.controller.js";
 import { authRateLimiter } from "../../middleware/rateLimiter.middleware.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import {
+  registerRequestSchema,
+  loginRequestSchema,
+  refreshRequestSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  updateProfileSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
+} from "@streamer/shared";
 
-export const authRouter = new Hono();
+export const authRouter = new Hono<HonoEnv>();
 
-authRouter.post("/register", authRateLimiter, (c) =>
-  authController.register(c),
-);
-authRouter.post("/login", authRateLimiter, (c) => authController.login(c));
-authRouter.post("/refresh", authRateLimiter, (c) => authController.refresh(c));
-authRouter.post("/forgot-password", authRateLimiter, (c) =>
-  authController.forgotPassword(c),
-);
-authRouter.post("/reset-password", authRateLimiter, (c) =>
-  authController.resetPassword(c),
-);
-authRouter.post("/verify-email", authRateLimiter, (c) =>
-  authController.verifyEmail(c),
-);
-authRouter.post("/resend-verification", authRateLimiter, (c) =>
-  authController.resendVerification(c),
-);
+const routes = authRouter
+  .post(
+    "/register",
+    authRateLimiter,
+    zValidator("json", registerRequestSchema),
+    (c) => authController.register(c),
+  )
+  .post(
+    "/login",
+    authRateLimiter,
+    zValidator("json", loginRequestSchema),
+    (c) => authController.login(c),
+  )
+  .post(
+    "/refresh",
+    authRateLimiter,
+    zValidator("json", refreshRequestSchema),
+    (c) => authController.refresh(c),
+  )
+  .post(
+    "/forgot-password",
+    authRateLimiter,
+    zValidator("json", forgotPasswordSchema),
+    (c) => authController.forgotPassword(c),
+  )
+  .post(
+    "/reset-password",
+    authRateLimiter,
+    zValidator("json", resetPasswordSchema),
+    (c) => authController.resetPassword(c),
+  )
+  .post(
+    "/verify-email",
+    authRateLimiter,
+    zValidator("json", verifyEmailSchema),
+    (c) => authController.verifyEmail(c),
+  )
+  .post(
+    "/resend-verification",
+    authRateLimiter,
+    zValidator("json", resendVerificationSchema),
+    (c) => authController.resendVerification(c),
+  )
+  .post(
+    "/change-password",
+    authMiddleware,
+    zValidator("json", changePasswordSchema),
+    (c) => authController.changePassword(c),
+  )
+  .patch(
+    "/profile",
+    authMiddleware,
+    zValidator("json", updateProfileSchema),
+    (c) => authController.updateProfile(c),
+  )
+  .get("/sessions", authMiddleware, (c) => authController.getSessions(c))
+  .delete("/sessions/:id", authMiddleware, (c) =>
+    authController.revokeSession(c),
+  )
+  .delete("/account", authMiddleware, (c) => authController.deleteAccount(c))
+  .get("/export", authMiddleware, (c) => authController.exportData(c));
 
-authRouter.use("/change-password", authMiddleware);
-authRouter.post("/change-password", (c) => authController.changePassword(c));
-
-authRouter.use("/profile", authMiddleware);
-authRouter.patch("/profile", (c) => authController.updateProfile(c));
-
-authRouter.use("/sessions", authMiddleware);
-authRouter.get("/sessions", (c) => authController.getSessions(c));
-authRouter.delete("/sessions/:id", (c) => authController.revokeSession(c));
-
-authRouter.use("/account", authMiddleware);
-authRouter.delete("/account", (c) => authController.deleteAccount(c));
-authRouter.get("/export", authMiddleware, (c) => authController.exportData(c));
+export type AuthRoutes = typeof routes;

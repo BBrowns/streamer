@@ -13,6 +13,8 @@ export * from "./schemas/meta.schema";
 export * from "./schemas/stream.schema";
 export * from "./schemas/auth.schema";
 export * from "./schemas/library.schema";
+export * from "./schemas/aggregator.schema";
+export * from "./schemas/addon.schema";
 export {
   catalogLayoutSchema,
   catalogManifestSchema,

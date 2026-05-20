@@ -1,24 +1,52 @@
 import { Hono } from "hono";
+import { HonoEnv } from "../../types/hono.js";
+import { zValidator } from "@hono/zod-validator";
 import { aggregatorController } from "./aggregator.controller.js";
+import { catalogRateLimiter } from "../../middleware/rateLimiter.middleware.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import {
+  aggregatorSearchSchema,
+  aggregatorCatalogSchema,
+  aggregatorMetaSchema,
+  aggregatorStreamSchema,
+  aggregatorResolveBulkSchema,
+} from "@streamer/shared";
 
-export const aggregatorRouter = new Hono();
+export const aggregatorRouter = new Hono<HonoEnv>();
 
-// All aggregator routes require authentication
-aggregatorRouter.use("*", authMiddleware);
+const routes = aggregatorRouter
+  .get(
+    "/search",
+    authMiddleware,
+    zValidator("query", aggregatorSearchSchema),
+    (c) => aggregatorController.search(c),
+  )
+  .get(
+    "/catalog/:type",
+    authMiddleware,
+    catalogRateLimiter,
+    zValidator("param", aggregatorCatalogSchema.pick({ type: true })),
+    zValidator("query", aggregatorCatalogSchema.omit({ type: true })),
+    (c) => aggregatorController.getCatalog(c),
+  )
+  .get(
+    "/meta/:type/:id",
+    authMiddleware,
+    zValidator("param", aggregatorMetaSchema),
+    (c) => aggregatorController.getMeta(c),
+  )
+  .get(
+    "/stream/:type/:id",
+    authMiddleware,
+    zValidator("param", aggregatorStreamSchema),
+    (c) => aggregatorController.getStreams(c),
+  )
+  .post(
+    "/stream/resolve-bulk",
+    authMiddleware,
+    zValidator("json", aggregatorResolveBulkSchema),
+    (c) => aggregatorController.resolveStreamsBulk(c),
+  )
+  .get("/resilience", (c) => aggregatorController.getResilienceMetrics(c));
 
-aggregatorRouter.get("/search", (c) => aggregatorController.search(c));
-aggregatorRouter.get("/catalog/:type", (c) =>
-  aggregatorController.getCatalog(c),
-);
-aggregatorRouter.get("/meta/:type/:id", (c) => aggregatorController.getMeta(c));
-aggregatorRouter.get("/stream/:type/:id", (c) =>
-  aggregatorController.getStreams(c),
-);
-aggregatorRouter.get("/stream/resolve/:type/:id/:infoHash", (c) =>
-  aggregatorController.resolveStream(c),
-);
-// Bulk resolve: POST /stream/resolve-bulk { type, infoHashes: string[] }
-aggregatorRouter.post("/stream/resolve-bulk", (c) =>
-  aggregatorController.resolveStreamsBulk(c),
-);
+export type AggregatorRoutes = typeof routes;

@@ -7,7 +7,7 @@ export const sessionController = {
   getSessions: async (c: Context) => {
     const userId = c.get("userId");
     try {
-      const activeSessions = sessionService.getSessions(userId);
+      const activeSessions = await sessionService.getSessions(userId);
       return c.json({ sessions: activeSessions });
     } catch (err) {
       logger.error({ userId, err }, "Failed to get sessions");
@@ -22,7 +22,7 @@ export const sessionController = {
     const body = await c.req.json();
 
     try {
-      sessionService.updateSession(userId, deviceId, {
+      await sessionService.updateSession(userId, deviceId, {
         ...body,
         deviceId,
       });
@@ -60,7 +60,7 @@ export const sessionController = {
     const deviceId = c.req.header("X-Device-Id") || "unknown";
 
     try {
-      sessionService.removeSession(userId, deviceId);
+      await sessionService.removeSession(userId, deviceId);
       return c.json({ success: true });
     } catch (err) {
       logger.error({ userId, deviceId, err }, "Failed to remove session");

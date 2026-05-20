@@ -161,6 +161,27 @@ describe("Aggregator: Sanitized Results", () => {
     expect(res.status).toBe(200);
     expect(res.body.streams).toEqual([]);
   });
+
+  it("should block SSRF attempts to internal IPs on add-on install", async () => {
+    const regRes = await request(mainApp)
+      .post("/api/auth/register")
+      .send({ email: "ssrf@test.com", password: "securePass123!" });
+
+    const token = regRes.body.tokens.accessToken;
+
+    // 169.254.169.254 is a typical AWS EC2 metadata service IP
+    const res = await request(mainApp)
+      .post("/api/addons")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transportUrl: "https://169.254.169.254/manifest.json" });
+
+    // Assuming the error mapper maps throwing Error to 500 or 502 with the message
+    // Actually, AddonService traps it in fetchManifest
+    expect(res.status).not.toBe(201); // should fail
+    // It throws an AppError(502, "Could not reach add-on at the provided URL") normally if fetch fails on axios
+    // If validateSafeUrl throws Error, AddonService `catch(err)` logs it and throws AppError(502)
+    expect(res.status).toBe(502);
+  });
 });
 
 describe("Feature Flags", () => {

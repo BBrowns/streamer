@@ -95,3 +95,4 @@ expo-env.d.ts
 
 # Stream server
 packages/stream-server/downloads/
+.aider*

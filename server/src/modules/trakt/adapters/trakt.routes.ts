@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { HonoEnv } from "../../../types/hono.js";
 import { authMiddleware } from "../../../middleware/auth.middleware.js";
 import { PrismaTraktRepository } from "./prisma-trakt.repository.js";
 import { TraktClient } from "./trakt-client.js";
@@ -9,7 +10,7 @@ const traktRepo = new PrismaTraktRepository();
 const traktClient = new TraktClient();
 export const traktService = new TraktService(traktClient, traktRepo);
 
-export const traktRouter = new Hono();
+export const traktRouter = new Hono<HonoEnv>();
 
 // All trakt routes require authentication
 traktRouter.use("*", authMiddleware);

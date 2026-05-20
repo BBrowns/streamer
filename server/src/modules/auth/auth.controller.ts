@@ -1,23 +1,11 @@
 import type { Context } from "hono";
-import {
-  registerRequestSchema,
-  loginRequestSchema,
-  refreshRequestSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
-  changePasswordSchema,
-  updateProfileSchema,
-  verifyEmailSchema,
-  resendVerificationSchema,
-} from "@streamer/shared";
 import { env } from "../../config/env.js";
 import { authService } from "./auth.service.js";
 import { SessionService } from "./session.service.js";
 
 export class AuthController {
   async register(c: Context) {
-    const body = await c.req.json();
-    const data = registerRequestSchema.parse(body);
+    const data = (c.req as any).valid("json");
     const result = await authService.register(
       data.email,
       data.password,
@@ -27,22 +15,19 @@ export class AuthController {
   }
 
   async login(c: Context) {
-    const body = await c.req.json();
-    const data = loginRequestSchema.parse(body);
+    const data = (c.req as any).valid("json");
     const result = await authService.login(data.email, data.password);
     return c.json(result);
   }
 
   async refresh(c: Context) {
-    const body = await c.req.json();
-    const data = refreshRequestSchema.parse(body);
+    const data = (c.req as any).valid("json");
     const tokens = await authService.refresh(data.refreshToken);
     return c.json(tokens);
   }
 
   async forgotPassword(c: Context) {
-    const body = await c.req.json();
-    const data = forgotPasswordSchema.parse(body);
+    const data = (c.req as any).valid("json");
     const result = await authService.forgotPassword(data.email);
 
     return c.json({
@@ -55,15 +40,13 @@ export class AuthController {
   }
 
   async resetPassword(c: Context) {
-    const body = await c.req.json();
-    const data = resetPasswordSchema.parse(body);
+    const data = (c.req as any).valid("json");
     await authService.resetPassword(data.token, data.newPassword);
     return c.json({ message: "Password reset successfully. Please log in." });
   }
 
   async changePassword(c: Context) {
-    const body = await c.req.json();
-    const data = changePasswordSchema.parse(body);
+    const data = (c.req as any).valid("json");
     const user = c.get("user");
     await authService.changePassword(
       user.userId,
@@ -74,8 +57,7 @@ export class AuthController {
   }
 
   async updateProfile(c: Context) {
-    const body = await c.req.json();
-    const data = updateProfileSchema.parse(body);
+    const data = (c.req as any).valid("json");
     const user = c.get("user");
     const updatedUser = await authService.updateProfile(user.userId, data);
     return c.json({ user: updatedUser });
@@ -96,18 +78,16 @@ export class AuthController {
   }
 
   async verifyEmail(c: Context) {
-    const body = await c.req.json();
-    const { token } = verifyEmailSchema.parse(body);
-    await authService.verifyEmail(token);
+    const data = (c.req as any).valid("json");
+    await authService.verifyEmail(data.token);
     return c.json({
       message: "Email verified successfully. You can now log in.",
     });
   }
 
   async resendVerification(c: Context) {
-    const body = await c.req.json();
-    const { email } = resendVerificationSchema.parse(body);
-    await authService.resendVerification(email);
+    const data = (c.req as any).valid("json");
+    await authService.resendVerification(data.email);
     return c.json({
       message: "If the email is unverified, a new link has been sent.",
     });

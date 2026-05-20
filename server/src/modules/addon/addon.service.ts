@@ -2,6 +2,7 @@ import axios from "axios";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
 import { AppError } from "../../middleware/error.middleware.js";
+import { validateSafeUrl } from "../../utils/security.js";
 import { addonManifestSchema } from "@streamer/shared";
 import type { AddonManifest, InstalledAddon } from "@streamer/shared";
 
@@ -14,6 +15,8 @@ export class AddonService {
       : `${base}/manifest.json`;
 
     try {
+      await validateSafeUrl(manifestUrl);
+
       const { data } = await axios.get(manifestUrl, { timeout: 5000 });
       const manifest = addonManifestSchema.parse(data);
       return manifest;
@@ -46,6 +49,7 @@ export class AddonService {
         userId,
         transportUrl,
         manifest: manifest as any,
+        lastValidatedAt: new Date(),
       },
     });
 
@@ -67,13 +71,67 @@ export class AddonService {
       orderBy: { installedAt: "desc" },
     });
 
-    return addons.map((a) => ({
-      id: a.id,
-      userId: a.userId,
-      transportUrl: a.transportUrl,
-      manifest: a.manifest as unknown as AddonManifest,
-      installedAt: a.installedAt.toISOString(),
-    }));
+    const STALE_THRESHOLD = 12 * 60 * 60 * 1000; // 12 hours
+    const now = Date.now();
+
+    const results = addons.map((a) => {
+      // Trigger background re-validation if stale
+      const lastValidated = a.lastValidatedAt?.getTime() || 0;
+      if (now - lastValidated > STALE_THRESHOLD) {
+        this.revalidate(a.id).catch((err) => {
+          logger.error(
+            { addonId: a.id, error: err.message },
+            "Background re-validation failed",
+          );
+        });
+      }
+
+      return {
+        id: a.id,
+        userId: a.userId,
+        transportUrl: a.transportUrl,
+        manifest: a.manifest as unknown as AddonManifest,
+        installedAt: a.installedAt.toISOString(),
+      };
+    });
+
+    return results;
+  }
+
+  /** Background re-validate a specific addon's manifest */
+  async revalidate(addonId: string): Promise<void> {
+    const addon = await prisma.installedAddon.findUnique({
+      where: { id: addonId },
+    });
+
+    if (!addon) return;
+
+    try {
+      const newManifest = await this.fetchManifest(addon.transportUrl);
+
+      // Compare versions or just update (Stremio manifests often have versions)
+      await prisma.installedAddon.update({
+        where: { id: addonId },
+        data: {
+          manifest: newManifest as any,
+          lastValidatedAt: new Date(),
+        },
+      });
+
+      logger.info(
+        { addonId, transportUrl: addon.transportUrl },
+        "Add-on manifest re-validated",
+      );
+    } catch (err: any) {
+      // If re-validation fails, update lastValidatedAt anyway to prevent constant retries
+      // but keep the old manifest. Or maybe wait less? Let's just update timestamp to "now"
+      // to avoid hammering a dead URL.
+      await prisma.installedAddon.update({
+        where: { id: addonId },
+        data: { lastValidatedAt: new Date() },
+      });
+      throw err;
+    }
   }
 
   /** Uninstall an add-on */

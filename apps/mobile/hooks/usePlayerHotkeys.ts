@@ -85,6 +85,22 @@ export function usePlayerHotkeys({
           );
           showControls();
           break;
+        case "1":
+        case "2":
+        case "3":
+        case "4":
+        case "5":
+        case "6":
+        case "7":
+        case "8":
+        case "9":
+          e.preventDefault();
+          if (player && player.duration) {
+            const percent = parseInt(e.key) * 10;
+            player.currentTime = (player.duration * percent) / 100;
+            showControls();
+          }
+          break;
       }
     };
 

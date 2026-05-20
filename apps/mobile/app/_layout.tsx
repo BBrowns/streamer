@@ -30,6 +30,7 @@ import { useTheme } from "../hooks/useTheme";
 import { migrateTokensToSecureStorage } from "../services/secureStorage";
 import { BiometricLockOverlay } from "../components/ui/BiometricLockOverlay";
 import { RemoteControlBar } from "../components/player/RemoteControlBar";
+import { downloadService } from "../services/DownloadService";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -105,8 +106,12 @@ function RootLayoutNav() {
         // 3. Restore offline cache
         return restoreQueryCache(queryClient);
       })
+      .then(() => {
+        // 4. Initialize Download Service (handle resumability)
+        return downloadService.initialize();
+      })
       .then(async () => {
-        // 4. Check onboarding status
+        // 5. Check onboarding status
         const hasSeenOnboarding = await AsyncStorage.getItem(
           "HAS_SEEN_ONBOARDING",
         );

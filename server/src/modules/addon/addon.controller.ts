@@ -2,14 +2,9 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { addonService } from "./addon.service.js";
 
-const installSchema = z.object({
-  transportUrl: z.string().url("Must be a valid URL"),
-});
-
 export class AddonController {
   async install(c: Context) {
-    const body = await c.req.json();
-    const { transportUrl } = installSchema.parse(body);
+    const { transportUrl } = (c.req as any).valid("json");
     const user = c.get("user");
     const addon = await addonService.install(user.userId, transportUrl);
     return c.json(addon, 201);

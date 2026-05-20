@@ -1,6 +1,14 @@
-import { useEffect, useRef } from "react";
-import { View, Animated, StyleSheet, type ViewStyle } from "react-native";
+import React, { useEffect } from "react";
+import { View, StyleSheet, type ViewStyle } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  interpolate,
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface SkeletonProps {
   variant?: "card" | "row" | "text" | "circle";
@@ -10,17 +18,10 @@ interface SkeletonProps {
   style?: ViewStyle;
 }
 
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+
 /**
- * Animated skeleton loader with shimmer effect.
- *
- * Uses a pulsing opacity animation via the native Animated API
- * (compatible with Reanimated but doesn't require it for this simple case).
- *
- * Variants:
- * - `card`: Full poster-sized card (2:3 aspect ratio)
- * - `row`: Horizontal bar (catalog row placeholder)
- * - `text`: Short text line
- * - `circle`: Avatar/icon placeholder
+ * Premium Skeleton Loader with Reanimated-based shimmer effect.
  */
 export function SkeletonLoader({
   variant = "text",
@@ -29,32 +30,32 @@ export function SkeletonLoader({
   borderRadius,
   style,
 }: SkeletonProps) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
   const { isDark } = useTheme();
+  const shimmerValue = useSharedValue(0);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
+    shimmerValue.value = withRepeat(
+      withTiming(1, { duration: 1500 }),
+      -1,
+      false,
     );
-    animation.start();
-    return () => animation.stop();
-  }, [opacity]);
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const translateX = interpolate(shimmerValue.value, [0, 1], [-150, 150]);
+    return {
+      transform: [{ translateX }],
+    };
+  });
 
   const variantStyle = getVariantStyle(variant);
+  const bgColor = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.08)";
+  const shimmerColors = isDark
+    ? (["transparent", "rgba(255,255,255,0.08)", "transparent"] as const)
+    : (["transparent", "rgba(255,255,255,0.3)", "transparent"] as const);
 
   return (
-    <Animated.View
+    <View
       accessibilityRole="progressbar"
       accessibilityLabel="Loading content"
       style={[
@@ -63,19 +64,23 @@ export function SkeletonLoader({
         {
           width: width as any,
           height: height as any,
-          borderRadius,
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.05)"
-            : "rgba(0,0,0,0.08)",
-          opacity,
+          borderRadius: borderRadius ?? (variantStyle?.borderRadius as number),
+          backgroundColor: bgColor,
         },
         style,
       ]}
-    />
+    >
+      <AnimatedLinearGradient
+        colors={shimmerColors}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={[StyleSheet.absoluteFill, animatedStyle]}
+      />
+    </View>
   );
 }
 
-function getVariantStyle(variant: SkeletonProps["variant"]) {
+function getVariantStyle(variant: SkeletonProps["variant"]): ViewStyle {
   switch (variant) {
     case "card":
       return styles.card;
