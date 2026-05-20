@@ -4,11 +4,7 @@ export default defineConfig({
   test: {
     // Disable multi-threading and parallel file execution to prevent
     // database contention on the shared PostgreSQL instance.
-    poolOptions: {
-      threads: {
-        singleThread: true,
-      },
-    },
+    maxWorkers: 1,
     globalSetup: ["./tests/global-setup.ts"],
     fileParallelism: false,
     environment: "node",
