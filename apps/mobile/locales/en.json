@@ -74,6 +74,12 @@
       "removeMessage": "Are you sure you want to remove {{count}} items from your library?",
       "bulkDeleteTitle": "Remove Items",
       "bulkDeleteMessage": "Are you sure you want to remove {{count}} items? This cannot be undone."
+    },
+    "actions": {
+      "prompt": "What would you like to do?",
+      "viewDetails": "View Details",
+      "remove": "Remove from Library",
+      "removeDownload": "Remove Download"
     }
   },
   "downloads": {
@@ -91,6 +97,12 @@
       "manage": "Manage your downloaded media",
       "viewDetails": "View Details",
       "delete": "Delete Download"
+    },
+    "actions": {
+      "manage": "Manage your downloaded media",
+      "viewDetails": "View Details",
+      "delete": "Delete Download",
+      "clearAll": "Clear All"
     },
     "status": {
       "downloading": "Downloading",
