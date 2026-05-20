@@ -20,7 +20,8 @@ import { usePlayerStore } from "../../stores/playerStore";
 import { useTranslation } from "react-i18next";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { useTheme } from "../../hooks/useTheme";
-import { useState } from "react";
+import { SkeletonLoader } from "../../components/ui/SkeletonLoader";
+import { useState, useEffect } from "react";
 
 function DownloadCard({ task }: { task: DownloadTask }) {
   const router = useRouter();
@@ -231,6 +232,13 @@ export default function DownloadsScreen() {
   const tasks = Object.values(tasksDict).reverse();
   const { clearAll } = useDownloadStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate initial load for skeleton polish
+    const timer = setTimeout(() => setIsLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -276,6 +284,33 @@ export default function DownloadsScreen() {
       ],
     );
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.listContent}>
+          {[1, 2, 3].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.cardContainer,
+                { height: 135, borderColor: colors.border, opacity: 0.5 },
+              ]}
+            >
+              <SkeletonLoader width={90} height={135} />
+              <View style={{ flex: 1, padding: 12, gap: 10 }}>
+                <SkeletonLoader width="80%" height={20} />
+                <SkeletonLoader width="40%" height={15} />
+                <View style={{ marginTop: 10 }}>
+                  <SkeletonLoader width="100%" height={4} />
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
 
   if (tasks.length === 0) {
     return (
