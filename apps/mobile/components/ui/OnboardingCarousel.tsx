@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,10 +16,14 @@ import Animated, {
   interpolate,
   Extrapolate,
   SharedValue,
+  withSpring,
+  withTiming,
+  useDerivedValue,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import * as Haptics from "expo-haptics";
 
 export interface OnboardingStep {
   id: string;
@@ -50,11 +54,18 @@ function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
     (index + 1) * STEP_WIDTH,
   ];
 
+  // Parallax background effect for the image container
   const animatedImageStyle = useAnimatedStyle(() => {
     const scale = interpolate(
       scrollX.value,
       inputRange,
-      [0.8, 1, 0.8],
+      [0.6, 1.1, 0.6],
+      Extrapolate.CLAMP,
+    );
+    const rotate = interpolate(
+      scrollX.value,
+      inputRange,
+      [-15, 0, 15],
       Extrapolate.CLAMP,
     );
     const opacity = interpolate(
@@ -63,8 +74,15 @@ function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
       [0, 1, 0],
       Extrapolate.CLAMP,
     );
+    const translateX = interpolate(
+      scrollX.value,
+      inputRange,
+      [width * 0.4, 0, -width * 0.4],
+      Extrapolate.CLAMP,
+    );
+
     return {
-      transform: [{ scale }],
+      transform: [{ scale }, { rotate: `${rotate}deg` }, { translateX }],
       opacity,
     };
   });
@@ -73,7 +91,7 @@ function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
     const translateY = interpolate(
       scrollX.value,
       inputRange,
-      [50, 0, 50],
+      [100, 0, 100],
       Extrapolate.CLAMP,
     );
     const opacity = interpolate(
@@ -93,7 +111,7 @@ function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
       <Animated.View
         style={[
           styles.imageContainer,
-          { height: width * 0.4, maxHeight: 400 },
+          { height: width * 0.6, maxHeight: 450 },
           animatedImageStyle,
         ]}
       >
@@ -122,17 +140,25 @@ function PaginationDot({ index, scrollX, width, onPress }: PaginationDotProps) {
     const opacity = interpolate(
       scrollX.value,
       [(index - 1) * width, index * width, (index + 1) * width],
-      [0.4, 1, 0.4],
+      [0.2, 1, 0.2],
+      Extrapolate.CLAMP,
+    );
+    const dotWidth = interpolate(
+      scrollX.value,
+      [(index - 1) * width, index * width, (index + 1) * width],
+      [8, 24, 8],
       Extrapolate.CLAMP,
     );
     const scale = interpolate(
       scrollX.value,
       [(index - 1) * width, index * width, (index + 1) * width],
-      [1, 1.3, 1],
+      [0.8, 1, 0.8],
       Extrapolate.CLAMP,
     );
+
     return {
       opacity,
+      width: dotWidth,
       transform: [{ scale }],
     };
   });
@@ -159,17 +185,15 @@ export function OnboardingCarousel({
     onScroll: (event) => {
       scrollX.value = event.contentOffset.x;
     },
-    onMomentumEnd: (event) => {
-      const index = Math.round(event.contentOffset.x / width);
-      // We can't call setState here directly, but we can verify it roughly
-    },
   });
 
-  // Track current index on JS thread for UI controls
   const handleScroll = (event: any) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / width);
     if (index !== currentIndex) {
       setCurrentIndex(index);
+      if (Platform.OS !== "web") {
+        Haptics.selectionAsync();
+      }
     }
   };
 
@@ -181,22 +205,23 @@ export function OnboardingCarousel({
 
   const isLastStep = currentIndex === steps.length - 1;
 
+  // Animated button style using withSpring
+  const buttonOpacity = useSharedValue(1);
+  const buttonScale = useSharedValue(1);
+
+  const animatedButtonStyle = useAnimatedStyle(() => {
+    return {
+      opacity: buttonOpacity.value,
+      transform: [{ scale: buttonScale.value }],
+    };
+  });
+
+  useEffect(() => {
+    buttonScale.value = withSpring(isLastStep ? 1.05 : 1);
+  }, [isLastStep]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Skip button */}
-      <Pressable
-        onPress={onComplete}
-        style={[
-          styles.skipButton,
-          { top: Platform.OS === "ios" ? 64 : 40 },
-        ]}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Text style={[styles.skipText, { color: colors.textSecondary }]}>
-          Skip
-        </Text>
-      </Pressable>
-
       <Animated.FlatList
         ref={flatListRef}
         data={steps}
@@ -263,24 +288,26 @@ export function OnboardingCarousel({
           ))}
         </View>
 
-        <Pressable
-          style={[
-            styles.button,
-            isDesktop && { maxWidth: 400, alignSelf: "center" },
-          ]}
-          onPress={
-            isLastStep ? onComplete : () => scrollToIndex(currentIndex + 1)
-          }
-        >
-          <LinearGradient
-            colors={["#a78bfa", "#7c3aed"]}
-            style={styles.gradient}
+        <Animated.View style={animatedButtonStyle}>
+          <Pressable
+            style={[
+              styles.button,
+              isDesktop && { maxWidth: 400, alignSelf: "center" },
+            ]}
+            onPress={
+              isLastStep ? onComplete : () => scrollToIndex(currentIndex + 1)
+            }
           >
-            <Text style={styles.buttonText}>
-              {isLastStep ? "Let's Go" : "Next"}
-            </Text>
-          </LinearGradient>
-        </Pressable>
+            <LinearGradient
+              colors={["#818cf8", "#6366f1"]}
+              style={styles.gradient}
+            >
+              <Text style={styles.buttonText}>
+                {isLastStep ? "Get Started" : "Next Step"}
+              </Text>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
       </View>
     </View>
   );
@@ -290,15 +317,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#050614",
-  },
-  skipButton: {
-    position: "absolute",
-    right: 24,
-    zIndex: 20,
-  },
-  skipText: {
-    fontSize: 16,
-    fontWeight: "600",
   },
   stepContainer: {
     flex: 1,
@@ -310,23 +328,24 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 40,
+    marginBottom: 60,
   },
   image: {
-    width: "100%",
-    height: "100%",
+    width: "85%",
+    height: "85%",
   },
   contentContainer: {
     alignItems: "center",
     maxWidth: 600,
   },
   title: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: "900",
     color: "#f8fafc",
     textAlign: "center",
-    marginBottom: 20,
-    letterSpacing: -1,
+    marginBottom: 24,
+    letterSpacing: -1.5,
+    lineHeight: 52,
   },
   description: {
     fontSize: 18,
@@ -334,6 +353,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 28,
     paddingHorizontal: 20,
+    opacity: 0.8,
   },
   footer: {
     paddingBottom: 60,
@@ -348,25 +368,24 @@ const styles = StyleSheet.create({
   pagination: {
     flexDirection: "row",
     justifyContent: "center",
-    marginBottom: 32,
+    marginBottom: 40,
   },
   dot: {
-    width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: "#6366f1",
-    marginHorizontal: 6,
+    marginHorizontal: 4,
   },
   button: {
     width: "100%",
-    height: 60,
-    borderRadius: 20,
+    height: 64,
+    borderRadius: 24,
     overflow: "hidden",
     elevation: 8,
     shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
   },
   gradient: {
     flex: 1,
@@ -375,24 +394,24 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
     letterSpacing: 0.5,
   },
   arrowBtn: {
     position: "absolute",
     top: "45%",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
     borderWidth: 1,
     borderColor: "rgba(99, 102, 241, 0.2)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
   },
 });
