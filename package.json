@@ -43,7 +43,15 @@
     "rimraf": "^6.0.1",
     "glob": "^11.0.1",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "protobufjs": "^7.2.4",
+    "ip": "^2.0.1",
+    "ws": "^8.17.1",
+    "vite": "^7.3.2",
+    "@tootallnate/once": "^3.0.1",
+    "webtorrent": "^2.8.5",
+    "castv2-client": "^1.2.0",
+    "brace-expansion": "^1.1.13"
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,json,md}": [
