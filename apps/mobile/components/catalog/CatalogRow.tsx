@@ -54,17 +54,6 @@ function CatalogRowInner({
     flatListRef.current?.scrollToOffset({ offset: newOffset, animated: true });
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.rowContainer}>
-        <Text style={[styles.rowTitle, { color: colors.text }]}>
-          {catalog.name}
-        </Text>
-        <ActivityIndicator color={colors.tint} style={{ marginVertical: 20 }} />
-      </View>
-    );
-  }
-
   const flattenedData = data?.pages.flat() || [];
 
   const { selectedIndex } = useKeyboardNavigation({
@@ -88,6 +77,17 @@ function CatalogRowInner({
       });
     }
   }, [selectedIndex]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.rowContainer}>
+        <Text style={[styles.rowTitle, { color: colors.text }]}>
+          {catalog.name}
+        </Text>
+        <ActivityIndicator color={colors.tint} style={{ marginVertical: 20 }} />
+      </View>
+    );
+  }
 
   if (flattenedData.length === 0) return null;
 
