@@ -48,10 +48,22 @@
     "ip": "^2.0.1",
     "ws": "^8.17.1",
     "vite": "^7.3.2",
-    "@tootallnate/once": "^3.0.1",
     "webtorrent": "^2.8.5",
     "castv2-client": "^1.2.0",
-    "brace-expansion": "^1.1.13"
+    "brace-expansion": "^1.1.13",
+    "castv2": {
+      "protobufjs": "^7.2.4"
+    },
+    "ip-set": {
+      "ip": "^2.0.1"
+    },
+    "bittorrent-tracker": {
+      "ip": "^2.0.1"
+    },
+    "http-proxy-agent": {
+      "@tootallnate/once": "3.0.1"
+    },
+    "@tootallnate/once": "3.0.1"
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,json,md}": [
