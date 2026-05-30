@@ -263,13 +263,19 @@
       "password": "Password",
       "button": "Create Account",
       "haveAccount": "Already have an account?",
-      "signIn": "Sign In"
+      "signIn": "Sign In",
+      "passwordMin": "Password must be at least 8 characters",
+      "passwordUpper": "Password must contain at least one uppercase letter",
+      "passwordLower": "Password must contain at least one lowercase letter",
+      "passwordDigit": "Password must contain at least one digit"
     },
     "forgot": {
       "title": "Reset Password",
       "subtitle": "Enter your email to receive a reset link",
       "button": "Send Link",
-      "back": "Back to Login"
+      "back": "Back to Login",
+      "success": "If an account exists, a reset link has been sent.",
+      "error": "Could not request a reset link"
     },
     "resetPassword": {
       "title": "New Password",
@@ -287,6 +293,9 @@
       "subtitle": "We've sent a verification link to",
       "yourEmail": "your email",
       "description": "Please check your inbox and click the link to activate your account. If you don't see the email, check your spam folder.",
+      "success": "Email verified successfully. You can now log in.",
+      "failed": "Email verification failed",
+      "verifyButton": "Verify Email",
       "resendSuccess": "New link sent successfully!",
       "resendError": "Failed to send. Please try again.",
       "resendButton": "Resend Email",

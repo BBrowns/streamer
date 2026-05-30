@@ -14,24 +14,29 @@ import { useAuthStore } from "../stores/authStore";
  * the EXPO_PUBLIC_API_URL env var (or localhost for web).
  */
 function resolveBaseUrl(): string {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
   if (Platform.OS === "web") {
-    return process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
+    return "http://localhost:3001";
   }
 
-  if (Platform.OS === "android") {
-    // Android emulator's special alias for the host machine
-    return process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3001";
-  }
-
-  // iOS: derive IP from the Metro bundler host Expo already knows about
+  // Native dev sessions: derive IP from the Metro bundler host Expo already
+  // knows about. This works for iPhone and physical Android devices on LAN.
   const metroHost = Constants.expoConfig?.hostUri; // e.g. "10.109.106.55:8081"
   if (metroHost) {
     const ip = metroHost.split(":")[0]; // strip the Metro port
     return `http://${ip}:3001`;
   }
 
+  if (Platform.OS === "android") {
+    // Android emulator's special alias for the host machine
+    return "http://10.0.2.2:3001";
+  }
+
   // Standalone build fallback (no Metro host)
-  return process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
+  return "http://localhost:3001";
 }
 
 export const BASE_URL = resolveBaseUrl();

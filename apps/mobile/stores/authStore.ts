@@ -153,10 +153,11 @@ export const useAuthStore = create<AuthState>()(
 
       // ── setServerUrls ────────────────────────────────────────────────────
       setServerUrls: (backend, streamServer) =>
-        set({
-          backendUrl: backend ?? null,
-          streamServerUrl: streamServer ?? null,
-        }),
+        set((state) => ({
+          backendUrl: backend === undefined ? state.backendUrl : backend,
+          streamServerUrl:
+            streamServer === undefined ? state.streamServerUrl : streamServer,
+        })),
 
       // ── setTheme ─────────────────────────────────────────────────────────
       setTheme: (theme) => set({ theme }),

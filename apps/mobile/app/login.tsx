@@ -4,8 +4,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -13,14 +11,16 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
-
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../hooks/useTheme";
+import { AuthScaffold } from "../components/auth/AuthScaffold";
+import { BackendUrlField } from "../components/auth/BackendUrlField";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { login, isLoading, error } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
@@ -39,21 +39,21 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      enabled={Platform.OS !== "web"}
+    <AuthScaffold
+      title={t("auth.login.title")}
+      subtitle={t("auth.login.subtitle")}
+      image={require("../assets/images/onboarding_streaming.png")}
+      icon="sparkles"
     >
-      <View style={styles.formContainer}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t("auth.login.title")}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {t("auth.login.subtitle")}
-        </Text>
-
+      <View>
         {!!(error || localError) && (
-          <View style={styles.errorContainer}>
+          <View
+            style={[
+              styles.messageBox,
+              { backgroundColor: colors.error + "18" },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>
               {localError || extractErrorMessage(error)}
             </Text>
@@ -94,9 +94,9 @@ export default function LoginScreen() {
 
         <Pressable
           style={({ pressed, hovered }: any) => [
-            styles.loginButton,
+            styles.primaryButton,
             { backgroundColor: colors.tint },
-            isLoading && styles.loginButtonDisabled,
+            isLoading && styles.disabledButton,
             hovered && { opacity: 0.9, transform: [{ scale: 1.01 }] },
             pressed && { transform: [{ scale: 0.98 }] },
           ]}
@@ -104,16 +104,14 @@ export default function LoginScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color={isDark ? "#000" : "#fff"} />
+            <ActivityIndicator color="#2c1738" />
           ) : (
-            <Text
-              style={[
-                styles.loginButtonText,
-                { color: isDark ? "#000" : "#fff" },
-              ]}
-            >
-              {t("auth.login.button")}
-            </Text>
+            <>
+              <Ionicons name="log-in-outline" size={19} color="#2c1738" />
+              <Text style={styles.primaryButtonText}>
+                {t("auth.login.button")}
+              </Text>
+            </>
           )}
         </Pressable>
 
@@ -145,72 +143,53 @@ export default function LoginScreen() {
             </Text>
           </Text>
         </Pressable>
+
+        <BackendUrlField />
       </View>
-    </KeyboardAvoidingView>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#11121c", justifyContent: "center" },
-  formContainer: {
-    paddingHorizontal: 32,
-    width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: "#ffffff",
-    marginBottom: 6,
-    letterSpacing: 0,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#888888",
-    marginBottom: 32,
-    fontWeight: "600",
-  },
-  errorContainer: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderRadius: 10,
+  messageBox: {
+    borderRadius: 16,
     padding: 12,
     marginBottom: 16,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
   },
-  errorText: { color: "#ef4444", fontSize: 14, fontWeight: "600" },
+  errorText: { color: "#ff9ba6", fontSize: 14, fontWeight: "700", flex: 1 },
   input: {
-    backgroundColor: "#080808",
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    color: "#ffffff",
     fontSize: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
   },
-  loginButton: {
-    backgroundColor: "#d8b4fe",
-    borderRadius: 14,
+  primaryButton: {
+    borderRadius: 18,
     paddingVertical: 16,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 9,
     marginTop: 12,
     marginBottom: 24,
   },
-  loginButtonDisabled: { opacity: 0.6 },
-  loginButtonText: {
-    color: "#000000",
+  disabledButton: { opacity: 0.6 },
+  primaryButtonText: {
+    color: "#2c1738",
     fontWeight: "900",
     fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   linkTextCentered: {
-    color: "#888888",
     textAlign: "center",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
   },
-  linkTextPrimary: { color: "#d8b4fe", fontWeight: "800" },
+  linkTextPrimary: { fontWeight: "900" },
   spacer: { height: 12 },
 });

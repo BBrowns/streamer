@@ -5,8 +5,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -15,6 +13,9 @@ import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
 
 import { useTheme } from "../hooks/useTheme";
+import { Ionicons } from "@expo/vector-icons";
+import { AuthScaffold } from "../components/auth/AuthScaffold";
+import { BackendUrlField } from "../components/auth/BackendUrlField";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -25,10 +26,12 @@ export default function ForgotPasswordScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [resetToken, setResetToken] = useState("");
 
   const handleForgot = async () => {
     setError("");
     setSuccessMessage("");
+    setResetToken("");
 
     if (!email) {
       setError(t("auth.errors.fillFields"));
@@ -43,6 +46,7 @@ export default function ForgotPasswordScreen() {
       // In a real app, you would send an email.
       // Here, the backend might return the token in dev mode.
       if (res.resetToken) {
+        setResetToken(res.resetToken);
         setSuccessMessage(
           `Reset token generated (Dev Mode): ${res.resetToken}`,
         );
@@ -58,20 +62,21 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <AuthScaffold
+      title={t("auth.forgot.title")}
+      subtitle={t("auth.forgot.subtitle")}
+      image={require("../assets/images/onboarding_security.png")}
+      icon="key-outline"
     >
-      <View style={styles.form}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t("auth.forgot.title")}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {t("auth.forgot.subtitle")}
-        </Text>
-
+      <View>
         {error ? (
-          <View style={styles.errorBox}>
+          <View
+            style={[
+              styles.messageBox,
+              { backgroundColor: colors.error + "18" },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -79,7 +84,7 @@ export default function ForgotPasswordScreen() {
         {successMessage ? (
           <View
             style={[
-              styles.successBox,
+              styles.messageBoxLarge,
               {
                 backgroundColor: isDark
                   ? "rgba(166, 227, 161, 0.1)"
@@ -97,13 +102,21 @@ export default function ForgotPasswordScreen() {
             </Text>
             <Pressable
               style={[
-                styles.button,
+                styles.primaryButton,
                 { marginTop: 16, backgroundColor: colors.tint },
               ]}
-              onPress={() => router.push("/reset-password")}
+              onPress={() =>
+                resetToken
+                  ? router.push({
+                      pathname: "/reset-password",
+                      params: { token: resetToken },
+                    })
+                  : router.push("/reset-password")
+              }
             >
-              <Text style={[styles.buttonText, { color: "#fff" }]}>
-                {t("auth.register.button")}
+              <Ionicons name="arrow-forward" size={18} color="#2c1738" />
+              <Text style={styles.primaryButtonText}>
+                {t("auth.resetPassword.submit")}
               </Text>
             </Pressable>
           </View>
@@ -128,19 +141,22 @@ export default function ForgotPasswordScreen() {
 
             <Pressable
               style={[
-                styles.button,
+                styles.primaryButton,
                 { backgroundColor: colors.tint },
-                isLoading && styles.buttonDisabled,
+                isLoading && styles.disabledButton,
               ]}
               onPress={handleForgot}
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#2c1738" />
               ) : (
-                <Text style={[styles.buttonText, { color: "#fff" }]}>
-                  {t("auth.forgot.button")}
-                </Text>
+                <>
+                  <Ionicons name="mail-outline" size={18} color="#2c1738" />
+                  <Text style={styles.primaryButtonText}>
+                    {t("auth.forgot.button")}
+                  </Text>
+                </>
               )}
             </Pressable>
           </>
@@ -153,49 +169,29 @@ export default function ForgotPasswordScreen() {
             </Text>
           </Text>
         </Pressable>
+        <BackendUrlField />
       </View>
-    </KeyboardAvoidingView>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#11111b",
-    justifyContent: "center",
-  },
-  form: {
-    paddingHorizontal: 32,
-    width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#cdd6f4",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#a6adc8",
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  errorBox: {
-    backgroundColor: "rgba(243, 139, 168, 0.1)",
-    borderRadius: 12,
+  messageBox: {
+    borderRadius: 16,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 16,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
   },
   errorText: {
-    color: "#f38ba8",
+    color: "#ff9ba6",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
+    flex: 1,
   },
-  successBox: {
-    backgroundColor: "rgba(166, 227, 161, 0.1)",
-    borderRadius: 12,
+  messageBoxLarge: {
+    borderRadius: 18,
     padding: 20,
     marginBottom: 20,
   },
@@ -206,39 +202,38 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   input: {
-    backgroundColor: "#1e1e2e",
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    color: "#cdd6f4",
     fontSize: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(137, 180, 250, 0.1)",
   },
-  button: {
-    backgroundColor: "#89b4fa",
-    borderRadius: 16,
+  primaryButton: {
+    borderRadius: 18,
     paddingVertical: 16,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 9,
     marginTop: 8,
     marginBottom: 24,
   },
-  buttonDisabled: {
+  disabledButton: {
     opacity: 0.6,
   },
-  buttonText: {
-    color: "#11111b",
-    fontWeight: "700",
+  primaryButtonText: {
+    color: "#2c1738",
+    fontWeight: "900",
     fontSize: 16,
+    letterSpacing: 0,
   },
   linkText: {
-    color: "#a6adc8",
     textAlign: "center",
     fontSize: 14,
+    fontWeight: "700",
   },
   linkBold: {
-    color: "#89b4fa",
-    fontWeight: "700",
+    fontWeight: "900",
   },
 });

@@ -251,13 +251,19 @@
       "password": "Wachtwoord",
       "button": "Account aanmaken",
       "haveAccount": "Heb je al een account?",
-      "signIn": "Inloggen"
+      "signIn": "Inloggen",
+      "passwordMin": "Je wachtwoord moet minimaal 8 tekens lang zijn",
+      "passwordUpper": "Je wachtwoord moet minimaal één hoofdletter bevatten",
+      "passwordLower": "Je wachtwoord moet minimaal één kleine letter bevatten",
+      "passwordDigit": "Je wachtwoord moet minimaal één cijfer bevatten"
     },
     "forgot": {
       "title": "Wachtwoord herstellen",
       "subtitle": "Voer je e-mailadres in om een herstellink te ontvangen",
       "button": "Link verzenden",
-      "back": "Terug naar inloggen"
+      "back": "Terug naar inloggen",
+      "success": "Als het account bestaat, is er een herstellink verzonden.",
+      "error": "Herstellink aanvragen mislukt"
     },
     "resetPassword": {
       "title": "Nieuw Wachtwoord",
@@ -275,6 +281,9 @@
       "subtitle": "We hebben een verificatielink gestuurd naar",
       "yourEmail": "je e-mailadres",
       "description": "Controleer je inbox en klik op de link om je account te activeren. Als je de e-mail niet ziet, controleer dan de map met ongewenste e-mail.",
+      "success": "E-mail succesvol geverifieerd. Je kunt nu inloggen.",
+      "failed": "E-mailverificatie mislukt",
+      "verifyButton": "E-mail verifiëren",
       "resendSuccess": "Nieuwe link succesvol verzonden!",
       "resendError": "Verzenden mislukt. Probeer het opnieuw.",
       "resendButton": "E-mail opnieuw verzenden",

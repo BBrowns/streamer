@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 import { request } from "./test-utils.js";
-import { createApp } from "../src/app.js";
+import { createApp, resolveCorsOrigin } from "../src/app.js";
 
 // Mock prisma
 vi.mock("../src/prisma/client.js", () => ({
@@ -67,8 +67,31 @@ vi.mock("pino-http", () => ({
 }));
 
 import { prisma } from "../src/prisma/client.js";
+import { env } from "../src/config/env.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+
+describe("CORS origin resolution", () => {
+  const originalNodeEnv = env.nodeEnv;
+
+  afterEach(() => {
+    (env as any).nodeEnv = originalNodeEnv;
+  });
+
+  it("allows Expo LAN origins in local development", () => {
+    (env as any).nodeEnv = "development";
+
+    expect(resolveCorsOrigin("http://192.168.1.20:8081")).toBe(
+      "http://192.168.1.20:8081",
+    );
+  });
+
+  it("does not allow arbitrary origins in production", () => {
+    (env as any).nodeEnv = "production";
+
+    expect(resolveCorsOrigin("http://192.168.1.20:8081")).toBeNull();
+  });
+});
 
 describe("Auth Module", () => {
   let app: any;
