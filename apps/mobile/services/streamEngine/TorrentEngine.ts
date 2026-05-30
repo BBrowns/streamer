@@ -11,6 +11,8 @@ interface BridgeConfig {
   activeStrategy: string;
   bridgeAvailable: boolean;
   bridgeUrl: string;
+  bridgeStatus: string;
+  getBridgeUrl?: () => string;
 }
 
 export class TorrentEngine implements IStreamEngine {
@@ -48,7 +50,12 @@ export class TorrentEngine implements IStreamEngine {
     }
 
     // 2. Fallback to Local Bridge (stream-server)
-    if (this.bridge.activeStrategy === "local" && this.bridge.bridgeAvailable) {
+    const bridgeUrl = this.bridge.getBridgeUrl?.() ?? this.bridge.bridgeUrl;
+    if (
+      this.bridge.activeStrategy === "local" &&
+      this.bridge.bridgeAvailable &&
+      this.bridge.bridgeStatus === "available"
+    ) {
       // Build the magnet link or infohash to send to the bridge
       let magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
 
@@ -68,7 +75,11 @@ export class TorrentEngine implements IStreamEngine {
       }
 
       this.startStatsPolling();
-      return `${this.bridge.bridgeUrl}/stream?magnet=${encodeURIComponent(magnet)}`;
+      const params = new URLSearchParams({ magnet });
+      if (typeof stream.fileIdx === "number") {
+        params.set("fileIdx", String(stream.fileIdx));
+      }
+      return `${bridgeUrl}/stream?${params.toString()}`;
     }
 
     return "";
@@ -82,14 +93,16 @@ export class TorrentEngine implements IStreamEngine {
     this.statsInterval = setInterval(async () => {
       if (!this.bridge.bridgeAvailable) return;
       try {
-        const res = await fetch(`${this.bridge.bridgeUrl}/stats`);
+        const bridgeUrl = this.bridge.getBridgeUrl?.() ?? this.bridge.bridgeUrl;
+        const res = await fetch(`${bridgeUrl}/stats`);
         if (res.ok) {
           const stats: StreamStats = await res.json();
           this.emit("stats", stats);
         }
       } catch (e: any) {
+        const bridgeUrl = this.bridge.getBridgeUrl?.() ?? this.bridge.bridgeUrl;
         console.warn(
-          `[TorrentEngine] Bridge unreachable (${this.bridge.bridgeUrl}):`,
+          `[TorrentEngine] Bridge unreachable (${bridgeUrl}):`,
           e?.message || e,
         );
       }

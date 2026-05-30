@@ -6,11 +6,14 @@ const path = require("path");
 const fs = require("fs");
 const https = require("https");
 const http = require("http");
+const os = require("os");
 
 const { autoUpdater } = require("electron-updater");
 
 let tray = null;
 let mainWindow = null;
+let bridgeServer = null;
+let bridgeLanUrl = 'http://localhost:11470';
 
 // Configure auto-updater
 autoUpdater.autoDownload = true;
@@ -39,6 +42,18 @@ function checkUpdates() {
 const downloadsPath = path.join(electron_1.app.getPath('userData'), 'offline_media');
 if (!fs.existsSync(downloadsPath)) {
     fs.mkdirSync(downloadsPath, { recursive: true });
+}
+
+function resolveLanBridgeUrl() {
+    const interfaces = os.networkInterfaces();
+    for (const entries of Object.values(interfaces)) {
+        for (const entry of entries || []) {
+            if (entry.family === 'IPv4' && !entry.internal) {
+                return `http://${entry.address}:11470`;
+            }
+        }
+    }
+    return 'http://localhost:11470';
 }
 
 function createWindow() {
@@ -124,6 +139,12 @@ electron_1.app.whenReady().then(async () => {
         }
     });
 
+    electron_1.ipcMain.handle('get-bridge-info', async () => ({
+        available: !!bridgeServer,
+        localUrl: 'http://localhost:11470',
+        lanUrl: bridgeLanUrl
+    }));
+
     electron_1.ipcMain.handle('download-media', async (event, id, url, filename) => {
         return new Promise((resolve, reject) => {
             const filePath = path.join(downloadsPath, filename);
@@ -161,8 +182,10 @@ electron_1.app.whenReady().then(async () => {
 
     // Start the background P2P stream server
     try {
-        await import('@streamer/stream-server');
-        console.log('Successfully started @streamer/stream-server background daemon');
+        const streamServer = await import('@streamer/stream-server');
+        bridgeServer = streamServer.startStreamServer(11470);
+        bridgeLanUrl = resolveLanBridgeUrl();
+        console.log(`Successfully started @streamer/stream-server background daemon at ${bridgeLanUrl}`);
         
         // Announce this desktop bridge on the local network via Bonjour
         try {
@@ -181,6 +204,7 @@ electron_1.app.whenReady().then(async () => {
             console.log(`[discovery] Announcing desktop bridge: ${service.name}`);
             
             electron_1.app.on('will-quit', () => {
+                bridgeServer?.close?.();
                 bonjour.unpublishAll(() => {
                     bonjour.destroy();
                 });
@@ -208,4 +232,3 @@ electron_1.app.on('window-all-closed', function () {
     if (process.platform !== 'darwin')
         electron_1.app.quit();
 });
-

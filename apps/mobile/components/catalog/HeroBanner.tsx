@@ -10,18 +10,24 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAddonCatalog } from "../../hooks/useAddonCatalog";
-import type { MetaPreview, CatalogDefinition } from "@streamer/shared";
+import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 
 const { width, height } = Dimensions.get("window");
-const HERO_HEIGHT = height * 0.65; // Take up 65% of the screen height
+const HERO_HEIGHT = height * 0.58;
 
-function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
+function HeroBannerInner({
+  catalog,
+  addon,
+}: {
+  catalog?: CatalogDefinition;
+  addon?: InstalledAddon;
+}) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { data } = useAddonCatalog(catalog?.type || "");
+  const { data } = useAddonCatalog(addon?.id, catalog);
   const flattenedData = data?.pages.flat() || [];
 
   if (!catalog || flattenedData.length === 0) {
@@ -69,10 +75,8 @@ function HeroBannerInner({ catalog }: { catalog?: CatalogDefinition }) {
               </Text>
             )}
             <View style={styles.buttonRow}>
-              <View
-                style={[styles.playButton, { backgroundColor: colors.tint }]}
-              >
-                <Ionicons name="play" size={18} color="#000" />
+              <View style={[styles.playButton, { backgroundColor: "#f2d7ff" }]}>
+                <Ionicons name="play" size={18} color="#2c1738" />
                 <Text style={styles.playButtonText}>Play</Text>
               </View>
               <View
@@ -110,7 +114,7 @@ const styles = StyleSheet.create({
   container: {
     width,
     height: HERO_HEIGHT,
-    backgroundColor: "#010101",
+    backgroundColor: "#15151f",
   },
   pressable: {
     flex: 1,
@@ -124,7 +128,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 36,
     alignItems: "center",
   },
   title: {
@@ -148,16 +152,15 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   playButton: {
-    backgroundColor: "#00f2ff",
     paddingVertical: 12,
     paddingHorizontal: 32,
-    borderRadius: 12,
+    borderRadius: 18,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   playButtonText: {
-    color: "#000000",
+    color: "#2c1738",
     fontWeight: "900",
     fontSize: 15,
   },
@@ -165,7 +168,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
     paddingVertical: 12,
     paddingHorizontal: 28,
-    borderRadius: 12,
+    borderRadius: 18,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,

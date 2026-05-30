@@ -38,6 +38,7 @@ import {
   hapticSuccess,
 } from "../../lib/haptics";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
+import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
 
 function SectionGroup({
   title,
@@ -72,6 +73,15 @@ function AdvancedSettingsSection() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [tempBackend, setTempBackend] = useState(backendUrl || "");
   const [tempStream, setTempStream] = useState(streamServerUrl || "");
+  const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) return;
+    window.desktopBridge
+      .getBridgeInfo()
+      .then(setBridgeInfo)
+      .catch(() => setBridgeInfo(null));
+  }, []);
 
   const handleSave = () => {
     setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
@@ -111,12 +121,18 @@ function AdvancedSettingsSection() {
         </View>
         <View style={styles.menuItemTextContainer}>
           <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-            {t("settings.advanced.configure")}
+            {t("settings.advanced.configure", {
+              defaultValue: "Sources & Devices",
+            })}
           </Text>
           <Text
             style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
           >
-            {t("settings.advanced.subtitle")}
+            {bridgeInfo?.lanUrl ||
+              streamServerUrl ||
+              t("settings.advanced.subtitle", {
+                defaultValue: "Add-ons, bridge URL, and optional services",
+              })}
           </Text>
         </View>
         <Ionicons name="chevron-down" size={18} color="#6b7280" />
@@ -138,13 +154,52 @@ function AdvancedSettingsSection() {
     >
       <View style={styles.advancedHeader}>
         <Text style={[styles.advancedTitle, { color: colors.text }]}>
-          {t("settings.advanced.title")}
+          {t("settings.advanced.title", {
+            defaultValue: "Sources & Devices",
+          })}
         </Text>
         <Pressable onPress={() => setShowAdvanced(false)}>
           <Text style={[styles.closeAdvanced, { color: colors.textSecondary }]}>
             {t("settings.advanced.hide")}
           </Text>
         </Pressable>
+      </View>
+
+      <View style={[styles.bridgeInfoCard, { borderColor: colors.border }]}>
+        <View style={styles.bridgeInfoHeader}>
+          <View
+            style={[
+              styles.bridgeStatusDot,
+              {
+                backgroundColor: bridgeInfo?.available
+                  ? colors.success
+                  : colors.warning,
+              },
+            ]}
+          />
+          <Text style={[styles.bridgeInfoTitle, { color: colors.text }]}>
+            Desktop bridge
+          </Text>
+        </View>
+        <Text style={[styles.bridgeInfoText, { color: colors.textSecondary }]}>
+          {bridgeInfo?.lanUrl ||
+            streamServerUrl ||
+            "Start the desktop app, then paste its LAN URL here on mobile."}
+        </Text>
+        {bridgeInfo?.lanUrl && (
+          <Pressable
+            style={[styles.inlineAction, { borderColor: colors.border }]}
+            onPress={() => {
+              setTempStream(bridgeInfo.lanUrl);
+              hapticSelection();
+            }}
+          >
+            <Ionicons name="copy-outline" size={16} color={colors.tint} />
+            <Text style={[styles.inlineActionText, { color: colors.tint }]}>
+              Use LAN URL
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
@@ -194,6 +249,21 @@ function AdvancedSettingsSection() {
       <View style={styles.warningBox}>
         <Ionicons name="warning-outline" size={16} color="#fbbf24" />
         <Text style={styles.warningText}>{t("settings.advanced.warning")}</Text>
+      </View>
+
+      <View
+        style={[styles.optionalServiceCard, { borderColor: colors.border }]}
+      >
+        <View style={styles.bridgeInfoHeader}>
+          <Ionicons name="diamond-outline" size={16} color={colors.tint} />
+          <Text style={[styles.bridgeInfoTitle, { color: colors.text }]}>
+            Real-Debrid
+          </Text>
+        </View>
+        <Text style={[styles.bridgeInfoText, { color: colors.textSecondary }]}>
+          Optional paid resolver. It is disabled by default and not needed for
+          first-run setup.
+        </Text>
       </View>
 
       <View style={styles.advancedBtns}>
@@ -527,13 +597,13 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(0,242,255,0.1)" },
+              { backgroundColor: "rgba(216,180,254,0.14)" },
             ]}
           >
             <Ionicons
               name="extension-puzzle-outline"
               size={20}
-              color="#00f2ff"
+              color="#d8b4fe"
             />
           </View>
           <View style={styles.menuItemTextContainer}>
@@ -823,8 +893,13 @@ function SettingsContent() {
         </Pressable>
       </SectionGroup>
 
-      {/* Advanced */}
-      <SectionGroup title={t("settings.sections.advanced")} colors={colors}>
+      {/* Sources & Devices */}
+      <SectionGroup
+        title={t("settings.sections.sourcesDevices", {
+          defaultValue: "Sources & Devices",
+        })}
+        colors={colors}
+      >
         <AdvancedSettingsSection />
       </SectionGroup>
 
@@ -1011,6 +1086,54 @@ const styles = StyleSheet.create({
   },
   advancedTitle: { fontWeight: "bold", fontSize: 16 },
   closeAdvanced: { color: "#94a3b8", fontSize: 13 },
+  bridgeInfoCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginBottom: 18,
+    gap: 8,
+  },
+  optionalServiceCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: "rgba(242,215,255,0.08)",
+    marginBottom: 20,
+    gap: 8,
+  },
+  bridgeInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  bridgeStatusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  bridgeInfoTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  bridgeInfoText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  inlineAction: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  inlineActionText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
   inputLabel: {
     color: "#94a3b8",
     fontSize: 12,

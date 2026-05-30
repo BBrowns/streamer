@@ -10,12 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-
-export interface CastDevice {
-  id: string;
-  name: string;
-  type: string;
-}
+import { castService, type CastDevice } from "../services/CastService";
 
 interface Props {
   visible: boolean;
@@ -39,14 +34,10 @@ export function DesktopCastModal({
   const fetchDevices = async () => {
     setLoading(true);
     try {
-      // Assumes stream-server is running alongside the desktop app
-      const res = await fetch("http://localhost:11470/api/cast/devices");
-      if (res.ok) {
-        const data = await res.json();
-        setDevices(data);
-      }
+      setDevices(await castService.getDevices());
     } catch (e) {
       console.error("Failed to fetch cast devices:", e);
+      setDevices([]);
     } finally {
       setLoading(false);
     }
@@ -62,21 +53,11 @@ export function DesktopCastModal({
   const handleCast = async (device: CastDevice) => {
     setCastingTo(device.id);
     try {
-      const res = await fetch("http://localhost:11470/api/cast/play", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId: device.id, url: playbackUri, title }),
-      });
-      if (res.ok) {
-        // Success, could show a toast or auto-close
-        if (onCastStart) {
-          onCastStart(device);
-        }
-        setTimeout(onClose, 1000);
-      } else {
-        console.error("Failed to cast:", await res.text());
-        setCastingTo(null);
+      await castService.play(device.id, playbackUri, title);
+      if (onCastStart) {
+        onCastStart(device);
       }
+      setTimeout(onClose, 1000);
     } catch (e) {
       console.error("Cast error:", e);
       setCastingTo(null);

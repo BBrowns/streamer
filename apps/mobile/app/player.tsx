@@ -12,6 +12,7 @@ import {
   Pressable,
   Platform,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -33,10 +34,8 @@ import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
-import {
-  DesktopCastModal,
-  type CastDevice,
-} from "../components/DesktopCastModal";
+import { DesktopCastModal } from "../components/DesktopCastModal";
+import { castService, type CastDevice } from "../services/CastService";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -62,6 +61,7 @@ export default function PlayerScreen() {
     null,
   );
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
+  const [isResolvingPlayback, setIsResolvingPlayback] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
@@ -101,11 +101,18 @@ export default function PlayerScreen() {
   useEffect(() => {
     let isMounted = true;
     if (currentStream) {
-      streamEngineManager.getPlaybackUri(currentStream).then((uri) => {
-        if (isMounted) setPlaybackUri(uri);
-      });
+      setIsResolvingPlayback(true);
+      streamEngineManager
+        .getPlaybackUri(currentStream)
+        .then((uri) => {
+          if (isMounted) setPlaybackUri(uri);
+        })
+        .finally(() => {
+          if (isMounted) setIsResolvingPlayback(false);
+        });
     } else {
       setPlaybackUri(null);
+      setIsResolvingPlayback(false);
     }
     return () => {
       isMounted = false;
@@ -153,11 +160,7 @@ export default function PlayerScreen() {
   const stopCasting = async () => {
     if (!activeCastDevice) return;
     try {
-      await fetch("http://localhost:11470/api/cast/control", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId: activeCastDevice.id, action: "stop" }),
-      });
+      await castService.control(activeCastDevice.id, "stop");
     } catch (e) {
       console.error("Failed to stop cast", e);
     }
@@ -217,6 +220,18 @@ export default function PlayerScreen() {
   }, []);
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
+  if (currentStream && isResolvingPlayback && !playbackUri) {
+    return (
+      <View style={styles.errorContainer}>
+        <StatusBar style="light" />
+        <ActivityIndicator color={colors.tint} />
+        <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+          Preparing stream...
+        </Text>
+      </View>
+    );
+  }
 
   if (!currentStream || !playbackUri) {
     return (

@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   date: { color: "#64748b", fontSize: 14, marginBottom: 32 },
   section: { marginBottom: 24 },
   sectionTitle: {
-    color: "#00f2ff",
+    color: "#d8b4fe",
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 10,

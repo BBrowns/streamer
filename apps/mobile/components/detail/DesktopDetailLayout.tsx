@@ -30,6 +30,7 @@ export function DesktopDetailLayout({
 }: DetailLayoutProps) {
   const streamsData =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
+  const bestStream = streamsData[0];
 
   const renderHeader = () => (
     <View>
@@ -68,6 +69,25 @@ export function DesktopDetailLayout({
         <Text style={styles.description}>{meta.description}</Text>
       )}
 
+      {castType !== "series" && bestStream && (
+        <View style={styles.primaryActionRow}>
+          <Pressable
+            style={styles.playBestBtn}
+            onPress={() => handlePlayStream(bestStream)}
+          >
+            <Ionicons name="play" size={18} color="#2c1738" />
+            <Text style={styles.playBestText}>Play Best</Text>
+          </Pressable>
+          <Pressable
+            style={styles.secondaryActionBtn}
+            onPress={() => handleDownloadStream(bestStream)}
+          >
+            <Ionicons name="download-outline" size={18} color="#f2d7ff" />
+            <Text style={styles.secondaryActionText}>Download</Text>
+          </Pressable>
+        </View>
+      )}
+
       {!!meta.cast && meta.cast.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Cast</Text>
@@ -81,10 +101,10 @@ export function DesktopDetailLayout({
           <Ionicons
             name={castType === "series" ? "list" : "layers-outline"}
             size={18}
-            color="#00f2ff"
+            color="#d8b4fe"
           />
           <Text style={styles.sectionTitle}>
-            {castType === "series" ? "Episodes" : "Select Quality"}
+            {castType === "series" ? "Episodes" : "More Sources"}
           </Text>
         </View>
 
@@ -96,7 +116,7 @@ export function DesktopDetailLayout({
             onDownloadStream={handleDownloadStream}
           />
         ) : streamsLoading ? (
-          <ActivityIndicator color="#00f2ff" />
+          <ActivityIndicator color="#d8b4fe" />
         ) : availableResolutions.length > 0 ? (
           <>
             <View style={styles.resContainer}>
@@ -195,13 +215,13 @@ const styles = StyleSheet.create({
   containerDesktop: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#07070e",
+    backgroundColor: "#11121c",
   },
   desktopPosterPanel: {
     width: 280,
-    backgroundColor: "#0a0a14",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderRightWidth: 1,
-    borderRightColor: "rgba(255,255,255,0.06)",
+    borderRightColor: "rgba(255,255,255,0.14)",
     padding: 24,
     paddingTop: 16,
   },
@@ -212,19 +232,19 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   desktopBackText: {
-    color: "#6b7280",
+    color: "#c6bfd2",
     fontSize: 14,
     fontWeight: "600",
   },
   desktopPoster: {
     width: "100%",
     aspectRatio: 2 / 3,
-    borderRadius: 12,
-    backgroundColor: "#111",
+    borderRadius: 18,
+    backgroundColor: "#151622",
   },
   desktopInfoPanel: {
     flex: 1,
-    backgroundColor: "#07070e",
+    backgroundColor: "#11121c",
   },
   desktopBgArt: {
     position: "absolute",
@@ -240,14 +260,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 300,
-    backgroundColor: "rgba(7,7,14,0.7)",
+    backgroundColor: "rgba(17,18,28,0.72)",
   },
   desktopTitle: {
     fontSize: 40,
     fontWeight: "900",
-    color: "#ffffff",
+    color: "#fff8ff",
     marginBottom: 12,
-    letterSpacing: -1,
+    letterSpacing: 0,
   },
   metaRow: {
     flexDirection: "row",
@@ -256,28 +276,28 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   metaTag: {
-    color: "#888888",
+    color: "#c6bfd2",
     fontSize: 13,
     fontWeight: "600",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 8,
   },
   ratingTag: {
-    color: "#ffd600",
+    color: "#ffd9a8",
     fontSize: 13,
     fontWeight: "700",
-    backgroundColor: "rgba(255,214,0,0.1)",
+    backgroundColor: "rgba(255,217,168,0.14)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 8,
   },
   libraryBtn: {
-    backgroundColor: "rgba(0, 242, 255, 0.1)",
+    backgroundColor: "rgba(216, 180, 254, 0.14)",
     borderWidth: 1,
-    borderColor: "rgba(0, 242, 255, 0.2)",
-    borderRadius: 12,
+    borderColor: "rgba(216, 180, 254, 0.28)",
+    borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 24,
     alignSelf: "flex-start",
@@ -285,19 +305,55 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: "center",
   },
+  primaryActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 28,
+    flexWrap: "wrap",
+  },
+  playBestBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f2d7ff",
+    borderRadius: 18,
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    minHeight: 48,
+  },
+  playBestText: {
+    color: "#2c1738",
+    fontWeight: "900",
+  },
+  secondaryActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  secondaryActionText: {
+    color: "#f2d7ff",
+    fontWeight: "800",
+  },
   libraryBtnActive: {
-    backgroundColor: "#00f2ff",
-    borderColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
+    borderColor: "#d8b4fe",
   },
   libraryBtnText: {
-    color: "#00f2ff",
+    color: "#f2d7ff",
     fontWeight: "800",
     fontSize: 14,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   libraryBtnTextActive: {
-    color: "#000000",
+    color: "#2c1738",
   },
   genreRow: {
     flexDirection: "row",
@@ -306,20 +362,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   genrePill: {
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-    borderRadius: 10,
+    borderColor: "rgba(255, 255, 255, 0.14)",
+    borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   genreText: {
-    color: "#bbbbbb",
+    color: "#e6dff0",
     fontSize: 12,
     fontWeight: "600",
   },
   description: {
-    color: "#cccccc",
+    color: "#d8d0df",
     fontSize: 15,
     lineHeight: 24,
     marginBottom: 32,
@@ -328,11 +384,11 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    color: "#ffffff",
+    color: "#fff8ff",
     fontWeight: "800",
     fontSize: 18,
     marginBottom: 20,
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -341,7 +397,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionContent: {
-    color: "#888888",
+    color: "#c6bfd2",
     fontSize: 14,
     lineHeight: 22,
   },
@@ -351,30 +407,30 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   resBubble: {
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(255,255,255,0.16)",
   },
   resBubbleActive: {
-    backgroundColor: "#00f2ff",
-    borderColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
+    borderColor: "#d8b4fe",
   },
   resText: {
-    color: "#888888",
+    color: "#c6bfd2",
     fontSize: 14,
     fontWeight: "800",
   },
   resTextActive: {
-    color: "#000000",
+    color: "#2c1738",
   },
   streamListWrapper: {
     paddingBottom: 12,
   },
   emptyText: {
-    color: "#555555",
+    color: "#a99fb6",
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 40,

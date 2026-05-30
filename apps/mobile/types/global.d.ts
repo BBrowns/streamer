@@ -6,6 +6,12 @@ interface DesktopDownloadProgressData {
   totalBytesExpectedToWrite: number;
 }
 
+interface DesktopBridgeInfo {
+  available: boolean;
+  localUrl: string;
+  lanUrl: string;
+}
+
 interface DesktopBridge {
   /**
    * Starts downloading a remote URL to the local disk.
@@ -26,9 +32,19 @@ interface DesktopBridge {
   ): () => void;
 
   /**
+   * Checks whether a downloaded desktop URI still exists.
+   */
+  checkFile(localUri: string): Promise<boolean>;
+
+  /**
    * Deletes a downloaded file from the user's local disk.
    */
   deleteFile(localUri: string): Promise<void>;
+
+  /**
+   * Returns the local and LAN bridge URLs exposed by the desktop shell.
+   */
+  getBridgeInfo(): Promise<DesktopBridgeInfo>;
 }
 
 declare global {

@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   },
   fill: {
     height: 3,
-    backgroundColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
     borderRadius: 2,
   },
 });

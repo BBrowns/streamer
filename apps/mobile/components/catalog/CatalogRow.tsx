@@ -34,7 +34,7 @@ function CatalogRowInner({
   addon: InstalledAddon;
 }) {
   const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useAddonCatalog(catalog.type);
+    useAddonCatalog(addon.id, catalog);
   const { colors, isDark } = useTheme();
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;

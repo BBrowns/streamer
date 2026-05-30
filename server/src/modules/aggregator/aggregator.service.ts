@@ -26,6 +26,20 @@ const secureAgent = new https.Agent({
   keepAlive: true,
 });
 
+export function buildCatalogPath(
+  type: string,
+  catalogId: string,
+  search?: string,
+  skip?: number,
+): string {
+  const extras: string[] = [];
+  if (search) extras.push(`search=${encodeURIComponent(search)}`);
+  if (skip && skip > 0) extras.push(`skip=${skip}`);
+
+  const extraPath = extras.length > 0 ? `/${extras.join("&")}` : "";
+  return `catalog/${type}/${catalogId}${extraPath}.json`;
+}
+
 /** Resilient fetch wrapper for add-on requests with strict Zod validation */
 async function resilientFetch<T>(
   transportUrl: string,
@@ -104,16 +118,10 @@ export class AggregatorService {
           const catalogId = this.findCatalogId(addon.manifest, type);
           if (!catalogId) return [];
 
-          let path = `catalog/${type}/${catalogId}.json`;
-          const extras: string[] = [];
-          if (search) extras.push(`search=${encodeURIComponent(search)}`);
-          if (skip) extras.push(`skip=${skip}`);
-          if (extras.length > 0) path += `?${extras.join("&")}`;
-
           const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
-            path,
+            buildCatalogPath(type, catalogId, search, skip),
             requestId,
             catalogResponseSchema,
           );
@@ -126,6 +134,43 @@ export class AggregatorService {
         (r: any): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
       )
       .flatMap((r: any) => r.value as MetaPreview[]);
+  }
+
+  /** Fetch one exact catalog from one installed add-on for Discover rows */
+  async getAddonCatalog(
+    userId: string,
+    addonId: string,
+    type: string,
+    catalogId: string,
+    requestId: string,
+    search?: string,
+    skip?: number,
+  ): Promise<MetaPreview[]> {
+    const addon = await this.getUserAddon(userId, addonId);
+    if (!addon) {
+      throw new Error("Add-on not installed");
+    }
+
+    if (!this.addonSupportsResource(addon.manifest, "catalog", type)) {
+      throw new Error("Add-on does not support this catalog type");
+    }
+
+    const catalog = addon.manifest.catalogs.find(
+      (c) => c.type === type && c.id === catalogId,
+    );
+    if (!catalog) {
+      throw new Error("Catalog not found for add-on");
+    }
+
+    const data = await resilientFetch(
+      addon.transportUrl,
+      addon.manifest.id,
+      buildCatalogPath(type, catalogId, search, skip),
+      requestId,
+      catalogResponseSchema,
+    );
+
+    return data.metas || [];
   }
 
   /** Fetch metadata from add-ons that support this type/id */
@@ -193,7 +238,7 @@ export class AggregatorService {
         (r: any): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
       )
       .flatMap((r: any) => r.value as Stream[])
-      .map((stream: any) => StreamParser.enrich(stream))
+      .map((stream: any) => StreamParser.enrich({ ...stream, type, id }))
       .sort((a: any, b: any) => StreamParser.compare(a, b));
   }
 
@@ -227,12 +272,13 @@ export class AggregatorService {
   async resolveStreamsBulk(
     userId: string,
     type: string,
+    id: string | undefined,
     infoHashes: string[],
     requestId: string,
   ): Promise<Record<string, ResolvedStream | { url: string; type: string }>> {
     const results = await Promise.allSettled(
       infoHashes.map((infoHash) =>
-        this.resolveStream(userId, type, infoHash, infoHash, requestId),
+        this.resolveStream(userId, type, id ?? infoHash, infoHash, requestId),
       ),
     );
 
@@ -314,9 +360,24 @@ export class AggregatorService {
     });
 
     return addons.map((a: any) => ({
+      id: a.id,
       transportUrl: a.transportUrl,
       manifest: a.manifest as unknown as AddonManifest,
     }));
+  }
+
+  private async getUserAddon(userId: string, addonId: string) {
+    const addon = await prisma.installedAddon.findFirst({
+      where: { id: addonId, userId },
+    });
+
+    if (!addon) return null;
+
+    return {
+      id: addon.id,
+      transportUrl: addon.transportUrl,
+      manifest: addon.manifest as unknown as AddonManifest,
+    };
   }
 
   /** Check if an add-on supports a given resource type */

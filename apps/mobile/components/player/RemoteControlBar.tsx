@@ -187,13 +187,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   takeOverBtn: {
-    backgroundColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 14,
   },
   takeOverText: {
-    color: "#010101",
+    color: "#2c1738",
     fontSize: 13,
     fontWeight: "800",
   },

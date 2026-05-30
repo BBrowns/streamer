@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   seeAllBtn: {
     flexDirection: "row",

@@ -43,9 +43,18 @@ interface OnboardingItemProps {
   index: number;
   scrollX: SharedValue<number>;
   width: number;
+  padding: number;
+  isDesktop: boolean;
 }
 
-function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
+function OnboardingItem({
+  item,
+  index,
+  scrollX,
+  width,
+  padding,
+  isDesktop,
+}: OnboardingItemProps) {
   const { colors } = useTheme();
   const STEP_WIDTH = width;
   const inputRange = [
@@ -107,11 +116,17 @@ function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
   });
 
   return (
-    <View style={[styles.stepContainer, { width: STEP_WIDTH }]}>
+    <View style={[styles.stepContainer, { width: STEP_WIDTH, padding }]}>
       <Animated.View
         style={[
           styles.imageContainer,
-          { height: width * 0.6, maxHeight: 450 },
+          {
+            height: isDesktop
+              ? Math.min(width * 0.46, 450)
+              : Math.min(width * 0.5, 280),
+            maxWidth: Math.min(width - padding * 2, isDesktop ? 720 : 340),
+            marginBottom: isDesktop ? 60 : 36,
+          },
           animatedImageStyle,
         ]}
       >
@@ -119,7 +134,19 @@ function OnboardingItem({ item, index, scrollX, width }: OnboardingItemProps) {
       </Animated.View>
 
       <Animated.View style={[styles.contentContainer, animatedTextStyle]}>
-        <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: colors.text,
+              fontSize: isDesktop ? 48 : 34,
+              lineHeight: isDesktop ? 54 : 40,
+              marginBottom: isDesktop ? 24 : 16,
+            },
+          ]}
+        >
+          {item.title}
+        </Text>
         <Text style={[styles.description, { color: colors.textSecondary }]}>
           {item.description}
         </Text>
@@ -180,6 +207,7 @@ export function OnboardingCarousel({
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const isDesktop = Platform.OS === "web" && width >= 1024;
+  const itemPadding = isDesktop ? 32 : 24;
 
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -231,6 +259,8 @@ export function OnboardingCarousel({
             index={index}
             scrollX={scrollX}
             width={width}
+            padding={itemPadding}
+            isDesktop={isDesktop}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -275,7 +305,13 @@ export function OnboardingCarousel({
         </>
       )}
 
-      <View style={[styles.footer, isDesktop && styles.desktopFooter]}>
+      <View
+        style={[
+          styles.footer,
+          { paddingHorizontal: itemPadding },
+          isDesktop && styles.desktopFooter,
+        ]}
+      >
         <View style={styles.pagination}>
           {steps.map((_, index) => (
             <PaginationDot
@@ -292,14 +328,16 @@ export function OnboardingCarousel({
           <Pressable
             style={[
               styles.button,
-              isDesktop && { maxWidth: 400, alignSelf: "center" },
+              isDesktop
+                ? { maxWidth: 400, alignSelf: "center" }
+                : { maxWidth: 420, alignSelf: "center" },
             ]}
             onPress={
               isLastStep ? onComplete : () => scrollToIndex(currentIndex + 1)
             }
           >
             <LinearGradient
-              colors={["#818cf8", "#6366f1"]}
+              colors={["#f2d7ff", "#c5e9d5"]}
               style={styles.gradient}
             >
               <Text style={styles.buttonText}>
@@ -322,13 +360,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 32,
   },
   imageContainer: {
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 60,
   },
   image: {
     width: "85%",
@@ -337,27 +373,26 @@ const styles = StyleSheet.create({
   contentContainer: {
     alignItems: "center",
     maxWidth: 600,
+    width: "100%",
+    alignSelf: "center",
   },
   title: {
-    fontSize: 48,
     fontWeight: "900",
     color: "#f8fafc",
     textAlign: "center",
-    marginBottom: 24,
-    letterSpacing: -1.5,
-    lineHeight: 52,
+    letterSpacing: 0,
   },
   description: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#94a3b8",
     textAlign: "center",
-    lineHeight: 28,
-    paddingHorizontal: 20,
+    lineHeight: 24,
     opacity: 0.8,
+    width: "100%",
   },
   footer: {
     paddingBottom: 60,
-    paddingHorizontal: 32,
+    width: "100%",
   },
   desktopFooter: {
     paddingBottom: 80,
@@ -373,7 +408,7 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#6366f1",
+    backgroundColor: "#d8b4fe",
     marginHorizontal: 4,
   },
   button: {
@@ -382,9 +417,9 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
     elevation: 8,
-    shadowColor: "#6366f1",
+    shadowColor: "#d8b4fe",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.32,
     shadowRadius: 16,
   },
   gradient: {
@@ -393,10 +428,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buttonText: {
-    color: "#ffffff",
+    color: "#2c1738",
     fontSize: 20,
     fontWeight: "800",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   arrowBtn: {
     position: "absolute",
@@ -408,10 +443,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 10,
     borderWidth: 1,
-    borderColor: "rgba(99, 102, 241, 0.2)",
-    shadowColor: "#000",
+    borderColor: "rgba(216, 180, 254, 0.35)",
+    shadowColor: "#d8b4fe",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.28,
     shadowRadius: 12,
   },
 });

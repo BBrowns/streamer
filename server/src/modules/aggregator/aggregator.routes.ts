@@ -9,6 +9,7 @@ import {
   aggregatorCatalogSchema,
   aggregatorMetaSchema,
   aggregatorStreamSchema,
+  aggregatorResolveSchema,
   aggregatorResolveBulkSchema,
 } from "@streamer/shared";
 
@@ -34,6 +35,12 @@ const routes = aggregatorRouter
     authMiddleware,
     zValidator("param", aggregatorMetaSchema),
     (c) => aggregatorController.getMeta(c),
+  )
+  .get(
+    "/stream/resolve/:type/:id/:infoHash",
+    authMiddleware,
+    zValidator("param", aggregatorResolveSchema),
+    (c) => aggregatorController.resolveStream(c),
   )
   .get(
     "/stream/:type/:id",

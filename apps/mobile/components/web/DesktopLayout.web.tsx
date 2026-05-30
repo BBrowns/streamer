@@ -62,7 +62,7 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
       <View style={styles.sidebar}>
         <View style={styles.logoContainer}>
           <View style={styles.logoGlow} />
-          <Ionicons name="play-circle" size={42} color="#00f2ff" />
+          <Ionicons name="play-circle" size={42} color="#d8b4fe" />
           <Text style={styles.logoText}>STREAMER</Text>
         </View>
 
@@ -175,7 +175,7 @@ function NavLink({ href, icon, activeIcon, label, active }: any) {
           <Ionicons
             name={active ? activeIcon : icon}
             size={22}
-            color={active ? "#00f2ff" : "#94a3b8"}
+            color={active ? "#f2d7ff" : "#c6bfd2"}
           />
           <Text
             style={[styles.navLinkLabel, active && styles.navLinkLabelActive]}
@@ -193,15 +193,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#010101",
+    backgroundColor: "#11121c",
   },
   sidebar: {
     width: 260,
-    backgroundColor: "rgba(10, 10, 10, 0.8)",
+    backgroundColor: "rgba(21, 22, 34, 0.82)",
     // @ts-ignore - Web only property for glassmorphism
     backdropFilter: "blur(20px)",
     borderRightWidth: 1,
-    borderRightColor: "rgba(255, 255, 255, 0.08)",
+    borderRightColor: "rgba(255, 255, 255, 0.14)",
     paddingVertical: 32,
     paddingHorizontal: 16,
     height: "100%",
@@ -239,17 +239,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
     opacity: 0.2,
     // @ts-ignore
     filter: "blur(15px)",
   },
   logoText: {
-    color: "#ffffff",
+    color: "#fff8ff",
     fontSize: 20,
     fontWeight: "900",
     marginLeft: 12,
-    letterSpacing: 2,
+    letterSpacing: 0,
   },
   navGroup: {
     marginBottom: 32,
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 1.5,
+    letterSpacing: 0,
     marginBottom: 16,
     paddingHorizontal: 12,
   },
@@ -268,22 +268,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 18,
     marginBottom: 4,
     backgroundColor: "transparent",
     position: "relative",
   },
   navLinkActive: {
-    backgroundColor: "rgba(0, 242, 255, 0.08)",
+    backgroundColor: "rgba(216, 180, 254, 0.12)",
   },
   navLinkLabel: {
-    color: "#94a3b8",
+    color: "#c6bfd2",
     fontSize: 15,
     fontWeight: "600",
     marginLeft: 14,
   },
   navLinkLabelActive: {
-    color: "#ffffff",
+    color: "#fff8ff",
     fontWeight: "700",
   },
   activeIndicator: {
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     left: -16,
     width: 4,
     height: 24,
-    backgroundColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
   },
@@ -318,17 +318,17 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   userName: {
-    color: "#ffffff",
+    color: "#fff8ff",
     fontSize: 14,
     fontWeight: "700",
   },
   userStatus: {
-    color: "#10b981",
+    color: "#a7e8bd",
     fontSize: 11,
     fontWeight: "600",
   },
   content: {
     flex: 1,
-    backgroundColor: "#010101",
+    backgroundColor: "#11121c",
   },
 });

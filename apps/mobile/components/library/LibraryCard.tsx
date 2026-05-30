@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   cardSelected: {
-    shadowColor: "#00f2ff",
+    shadowColor: "#d8b4fe",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
