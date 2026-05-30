@@ -116,6 +116,18 @@
       "action": "Go Discover"
     }
   },
+  "onboarding": {
+    "title": "Personalize",
+    "subtitle": "Customize your experience before we begin.",
+    "appearance": "Appearance",
+    "addonsTitle": "Starter Add-ons",
+    "addonsSubtitle": "Highly recommended for metadata and subtitles.",
+    "legalAgreement": "By continuing, you agree to our",
+    "terms": "Terms",
+    "and": "and",
+    "privacy": "Privacy Policy",
+    "finish": "Finish & Sign In"
+  },
   "settings": {
     "sections": {
       "account": "Account",
@@ -124,6 +136,7 @@
       "content": "Content",
       "security": "Security",
       "privacy": "Privacy & Data",
+      "sourcesDevices": "Sources & Devices",
       "advanced": "Advanced"
     },
     "items": {

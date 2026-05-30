@@ -104,6 +104,18 @@
       "action": "Ga naar Ontdekken"
     }
   },
+  "onboarding": {
+    "title": "Personaliseren",
+    "subtitle": "Pas je ervaring aan voordat we beginnen.",
+    "appearance": "Uiterlijk",
+    "addonsTitle": "Aanbevolen add-ons",
+    "addonsSubtitle": "Sterk aanbevolen voor metadata en ondertiteling.",
+    "legalAgreement": "Door verder te gaan, ga je akkoord met onze",
+    "terms": "Voorwaarden",
+    "and": "en",
+    "privacy": "Privacybeleid",
+    "finish": "Voltooien & Inloggen"
+  },
   "settings": {
     "sections": {
       "account": "Account",
@@ -112,6 +124,7 @@
       "content": "Inhoud",
       "security": "Beveiliging",
       "privacy": "Privacy & Gegevens",
+      "sourcesDevices": "Bronnen & apparaten",
       "advanced": "Geavanceerd"
     },
     "items": {
