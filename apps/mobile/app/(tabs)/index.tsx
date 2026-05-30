@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useCallback, memo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { useInfiniteCatalog } from "../../hooks/useInfiniteCatalog";
@@ -28,9 +28,80 @@ import { Ionicons } from "@expo/vector-icons";
 import { WatchProgressBar } from "../../components/ui/WatchProgressBar";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useTheme } from "../../hooks/useTheme";
+import { useAddons } from "../../hooks/useAddons";
+import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
 
 import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
+
+function SourceBridgeStatusCard() {
+  const { colors } = useTheme();
+  const streamServerUrl = useAuthStore((s) => s.streamServerUrl);
+  const { data: addons } = useAddons();
+  const [bridgeStatus, setBridgeStatus] = useState(
+    streamEngineManager.bridgeStatus,
+  );
+
+  useEffect(() => {
+    streamEngineManager.detectBridge().then(() => {
+      setBridgeStatus(streamEngineManager.bridgeStatus);
+    });
+    const timer = setInterval(
+      () => setBridgeStatus(streamEngineManager.bridgeStatus),
+      5000,
+    );
+    return () => clearInterval(timer);
+  }, []);
+
+  const bridgeReady = bridgeStatus === "available";
+
+  return (
+    <View
+      style={[
+        styles.sourceStatus,
+        { borderColor: colors.border, backgroundColor: colors.card },
+      ]}
+    >
+      <View style={styles.sourceStatusItem}>
+        <Ionicons
+          name="extension-puzzle-outline"
+          size={18}
+          color={colors.tint}
+        />
+        <View>
+          <Text style={[styles.sourceStatusTitle, { color: colors.text }]}>
+            {addons?.length ?? 0} add-ons
+          </Text>
+          <Text
+            style={[styles.sourceStatusText, { color: colors.textSecondary }]}
+          >
+            Content sources
+          </Text>
+        </View>
+      </View>
+      <View style={styles.sourceStatusDivider} />
+      <View style={styles.sourceStatusItem}>
+        <View
+          style={[
+            styles.bridgeDot,
+            { backgroundColor: bridgeReady ? colors.success : colors.warning },
+          ]}
+        />
+        <View>
+          <Text style={[styles.sourceStatusTitle, { color: colors.text }]}>
+            {bridgeReady ? "Bridge ready" : "Bridge needed"}
+          </Text>
+          <Text
+            style={[styles.sourceStatusText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {streamServerUrl || streamEngineManager.getBridgeUrl()}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 // ─── Home Content ─────────────────────────────────────────────────────────────
 function HomeContent() {
@@ -125,6 +196,7 @@ function HomeContent() {
           style={[styles.container, { backgroundColor: colors.background }]}
         >
           <OfflineBanner />
+          <SourceBridgeStatusCard />
           <ContinueWatchingRow />
 
           {/* Desktop hero banner */}
@@ -206,6 +278,42 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: 0,
+  },
+  sourceStatus: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  sourceStatusItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+  },
+  sourceStatusDivider: {
+    width: 1,
+    alignSelf: "stretch",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  sourceStatusTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  sourceStatusText: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  bridgeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });

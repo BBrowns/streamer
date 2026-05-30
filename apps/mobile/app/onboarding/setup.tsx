@@ -28,6 +28,11 @@ const STARTER_ADDONS = [
     description: "The world's largest subtitle database.",
     url: "https://opensubtitles-v3.strem.io/manifest.json",
   },
+  {
+    name: "Torrentio",
+    description: "Optional community stream source for playable results.",
+    url: "https://torrentio.strem.fun/manifest.json",
+  },
 ];
 
 export default function OnboardingSetup() {
@@ -217,7 +222,7 @@ export default function OnboardingSetup() {
 
         <Pressable style={styles.finishBtn} onPress={handleFinish}>
           <LinearGradient
-            colors={isDark ? ["#00f2ff", "#00d1ff"] : ["#6366f1", "#4f46e5"]}
+            colors={isDark ? ["#f2d7ff", "#c5e9d5"] : ["#d8b4fe", "#ffc8dd"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.finishGradient}
@@ -225,7 +230,7 @@ export default function OnboardingSetup() {
             <Text
               style={[
                 styles.finishBtnText,
-                { color: isDark ? "#000" : "#fff" },
+                { color: isDark ? "#2c1738" : "#fff" },
               ]}
             >
               {t("onboarding.finish")}
@@ -233,7 +238,7 @@ export default function OnboardingSetup() {
             <Ionicons
               name="arrow-forward"
               size={18}
-              color={isDark ? "#000" : "#fff"}
+              color={isDark ? "#2c1738" : "#fff"}
             />
           </LinearGradient>
         </Pressable>
@@ -249,7 +254,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: "900",
-    letterSpacing: -1.5,
+    letterSpacing: 0,
   },
   subtitle: { fontSize: 16, marginTop: 8 },
   section: { marginBottom: 32 },
