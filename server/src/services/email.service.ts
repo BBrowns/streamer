@@ -73,15 +73,19 @@ class EmailService {
 
   /** Send email verification email */
   async sendVerificationEmail(to: string, token: string) {
-    const verifyUrl = `${env.appUrlWeb}/api/auth/verify-email?token=${token}`;
+    const verifyUrl = `${env.appUrlWeb}/verify-email?token=${token}`;
+    const deepLinkVerifyUrl = `${env.appUrlDeepLink}verify-email?token=${token}`;
 
     const subject = "Verify Your Streamer Email";
-    const text = `Welcome to Streamer! Please verify your email by clicking: ${verifyUrl}`;
+    const text = `Welcome to Streamer! Please verify your email by clicking: ${verifyUrl} or ${deepLinkVerifyUrl}`;
     const html = `
       <div style="font-family: sans-serif; padding: 20px; color: #333;">
         <h2>Welcome to Streamer!</h2>
         <p>Thanks for signing up. Please verify your email address to get full access to the app.</p>
-        <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #00f2ff; color: black; text-decoration: none; border-radius: 8px; font-weight: bold;">Verify Email</a>
+        <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #d8b4fe; color: #2c1738; text-decoration: none; border-radius: 14px; font-weight: bold;">Verify Email</a>
+        <p style="margin-top: 20px; font-size: 12px; color: #666;">
+          If you're on mobile, <a href="${deepLinkVerifyUrl}">click here to open the app</a>.
+        </p>
         <p>If you didn't create an account, you can safely ignore this email.</p>
       </div>
     `;

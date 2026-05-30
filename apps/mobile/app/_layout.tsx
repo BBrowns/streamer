@@ -1,4 +1,4 @@
-import { Stack, ErrorBoundaryProps } from "expo-router";
+import { Stack, ErrorBoundaryProps, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -76,6 +76,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 function RootLayoutNav() {
   const appState = useRef(AppState.currentState);
+  const pathname = usePathname();
   const { isDark, colors: themeColors } = useTheme();
   const deviceId = useAuthStore((s) => s.deviceId);
   const setDeviceId = useAuthStore((s) => s.setDeviceId);
@@ -115,7 +116,15 @@ function RootLayoutNav() {
         const hasSeenOnboarding = await AsyncStorage.getItem(
           "HAS_SEEN_ONBOARDING",
         );
-        if (!hasSeenOnboarding) {
+        const canBypassOnboarding =
+          pathname.startsWith("/onboarding") ||
+          pathname.startsWith("/login") ||
+          pathname.startsWith("/register") ||
+          pathname.startsWith("/forgot-password") ||
+          pathname.startsWith("/reset-password") ||
+          pathname.startsWith("/verify-email");
+
+        if (!hasSeenOnboarding && !canBypassOnboarding) {
           const { router } = require("expo-router");
           router.replace("/onboarding");
         }
@@ -211,6 +220,10 @@ function RootLayoutNav() {
           <Stack.Screen
             name="reset-password"
             options={{ title: "Reset Password", presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="verify-email"
+            options={{ title: "Verify Email", presentation: "modal" }}
           />
           <Stack.Screen name="detail/[type]/[id]" options={{ title: "" }} />
           <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />

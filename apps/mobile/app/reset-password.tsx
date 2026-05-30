@@ -5,23 +5,25 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
 import { useTranslation } from "react-i18next";
 
 import { useTheme } from "../hooks/useTheme";
+import { Ionicons } from "@expo/vector-icons";
+import { AuthScaffold } from "../components/auth/AuthScaffold";
+import { BackendUrlField } from "../components/auth/BackendUrlField";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const { logout, resetPassword } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { token: tokenParam } = useLocalSearchParams<{ token?: string }>();
+  const { resetPassword } = useAuth();
+  const { colors } = useTheme();
   const { t } = useTranslation();
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(tokenParam || "");
   const [newPassword, setNewPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -48,20 +50,21 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <AuthScaffold
+      title={t("auth.resetPassword.title")}
+      subtitle={t("auth.resetPassword.subtitle")}
+      image={require("../assets/images/onboarding_security.png")}
+      icon="lock-open-outline"
     >
-      <View style={styles.form}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t("auth.resetPassword.title")}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {t("auth.resetPassword.subtitle")}
-        </Text>
-
+      <View>
         {error ? (
-          <View style={styles.errorBox}>
+          <View
+            style={[
+              styles.messageBox,
+              { backgroundColor: colors.error + "18" },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -100,19 +103,22 @@ export default function ResetPasswordScreen() {
 
         <Pressable
           style={[
-            styles.button,
+            styles.primaryButton,
             { backgroundColor: colors.tint },
-            isLoading && styles.buttonDisabled,
+            isLoading && styles.disabledButton,
           ]}
           onPress={handleReset}
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#2c1738" />
           ) : (
-            <Text style={[styles.buttonText, { color: "#fff" }]}>
-              {t("auth.resetPassword.submit")}
-            </Text>
+            <>
+              <Ionicons name="checkmark-circle" size={18} color="#2c1738" />
+              <Text style={styles.primaryButtonText}>
+                {t("auth.resetPassword.submit")}
+              </Text>
+            </>
           )}
         </Pressable>
 
@@ -126,80 +132,60 @@ export default function ResetPasswordScreen() {
             </Text>
           </Text>
         </Pressable>
+        <BackendUrlField />
       </View>
-    </KeyboardAvoidingView>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#11111b",
-    justifyContent: "center",
-  },
-  form: {
-    paddingHorizontal: 32,
-    width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#cdd6f4",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#a6adc8",
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  errorBox: {
-    backgroundColor: "rgba(243, 139, 168, 0.1)",
-    borderRadius: 12,
+  messageBox: {
+    borderRadius: 16,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 16,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
   },
   errorText: {
-    color: "#f38ba8",
+    color: "#ff9ba6",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
+    flex: 1,
   },
   input: {
-    backgroundColor: "#1e1e2e",
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    color: "#cdd6f4",
     fontSize: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(137, 180, 250, 0.1)",
   },
-  button: {
-    backgroundColor: "#89b4fa",
-    borderRadius: 16,
+  primaryButton: {
+    borderRadius: 18,
     paddingVertical: 16,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 9,
     marginTop: 8,
     marginBottom: 24,
   },
-  buttonDisabled: {
+  disabledButton: {
     opacity: 0.6,
   },
-  buttonText: {
-    color: "#11111b",
-    fontWeight: "700",
+  primaryButtonText: {
+    color: "#2c1738",
+    fontWeight: "900",
     fontSize: 16,
+    letterSpacing: 0,
   },
   linkText: {
-    color: "#a6adc8",
     textAlign: "center",
     fontSize: 14,
+    fontWeight: "700",
   },
   linkBold: {
-    color: "#89b4fa",
-    fontWeight: "700",
+    fontWeight: "900",
   },
 });

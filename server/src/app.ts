@@ -27,6 +27,21 @@ import { systemRouter } from "./modules/system/system.routes.js";
 
 import { initWebSockets } from "./config/websocket.js";
 
+const DEV_LAN_ORIGIN_PATTERN =
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+
+export function resolveCorsOrigin(origin: string) {
+  if (env.corsOrigins.includes("*") || env.corsOrigins.includes(origin)) {
+    return origin;
+  }
+
+  if (env.nodeEnv !== "production" && DEV_LAN_ORIGIN_PATTERN.test(origin)) {
+    return origin;
+  }
+
+  return null;
+}
+
 export function createApp() {
   const app = new Hono();
   initWebSockets(app);
@@ -44,7 +59,7 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: env.corsOrigins,
+      origin: resolveCorsOrigin,
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization", "X-Device-Id"],

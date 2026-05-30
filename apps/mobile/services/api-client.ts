@@ -32,7 +32,9 @@ export const getApiClient = (customUrl?: string) => {
   return hc<AppType>(url, {
     headers: () => {
       const { accessToken, deviceId } = useAuthStore.getState();
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
       }

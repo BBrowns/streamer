@@ -4,8 +4,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -14,17 +12,41 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { extractErrorMessage } from "../utils/error";
 import { useTheme } from "../hooks/useTheme";
+import { Ionicons } from "@expo/vector-icons";
+import { AuthScaffold } from "../components/auth/AuthScaffold";
+import { BackendUrlField } from "../components/auth/BackendUrlField";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { register, isLoading, error } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [localError, setLocalError] = useState("");
+
+  const validatePassword = () => {
+    if (password.length < 8) return t("auth.register.passwordMin");
+    if (!/[A-Z]/.test(password)) return t("auth.register.passwordUpper");
+    if (!/[a-z]/.test(password)) return t("auth.register.passwordLower");
+    if (!/[0-9]/.test(password)) return t("auth.register.passwordDigit");
+    return "";
+  };
 
   const handleRegister = async () => {
+    setLocalError("");
+    if (!email || !password) {
+      setLocalError(t("auth.errors.fillFields"));
+      return;
+    }
+
+    const passwordError = validatePassword();
+    if (passwordError) {
+      setLocalError(passwordError);
+      return;
+    }
+
     try {
       const normalizedEmail = email.toLowerCase().trim();
       const result = await register({
@@ -45,22 +67,24 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      enabled={Platform.OS !== "web"}
+    <AuthScaffold
+      title={t("auth.register.title")}
+      subtitle={t("auth.register.subtitle")}
+      image={require("../assets/images/onboarding_sync.png")}
+      icon="person-add-outline"
     >
-      <View style={styles.formContainer}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t("auth.register.title")}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {t("auth.register.subtitle")}
-        </Text>
-
-        {!!error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{extractErrorMessage(error)}</Text>
+      <View>
+        {!!(error || localError) && (
+          <View
+            style={[
+              styles.messageBox,
+              { backgroundColor: colors.error + "18" },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
+            <Text style={styles.errorText}>
+              {localError || extractErrorMessage(error)}
+            </Text>
           </View>
         )}
 
@@ -112,9 +136,9 @@ export default function RegisterScreen() {
 
         <Pressable
           style={({ pressed, hovered }: any) => [
-            styles.registerButton,
+            styles.primaryButton,
             { backgroundColor: colors.tint },
-            isLoading && styles.registerButtonDisabled,
+            isLoading && styles.disabledButton,
             hovered && { opacity: 0.9, transform: [{ scale: 1.01 }] },
             pressed && { transform: [{ scale: 0.98 }] },
           ]}
@@ -122,16 +146,14 @@ export default function RegisterScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color={isDark ? "#000" : "#fff"} />
+            <ActivityIndicator color="#2c1738" />
           ) : (
-            <Text
-              style={[
-                styles.registerButtonText,
-                { color: isDark ? "#000" : "#fff" },
-              ]}
-            >
-              {t("auth.register.button")}
-            </Text>
+            <>
+              <Ionicons name="sparkles" size={18} color="#2c1738" />
+              <Text style={styles.primaryButtonText}>
+                {t("auth.register.button")}
+              </Text>
+            </>
           )}
         </Pressable>
 
@@ -148,49 +170,48 @@ export default function RegisterScreen() {
             </Text>
           </Text>
         </Pressable>
+
+        <BackendUrlField />
       </View>
-    </KeyboardAvoidingView>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050510", justifyContent: "center" },
-  formContainer: {
-    paddingHorizontal: 32,
-    width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
-  },
-  title: { fontSize: 30, fontWeight: "900", color: "#f8fafc", marginBottom: 4 },
-  subtitle: { fontSize: 14, color: "#94a3b8", marginBottom: 28 },
-  errorContainer: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-    borderRadius: 8,
+  messageBox: {
+    borderRadius: 16,
     padding: 12,
     marginBottom: 16,
-  },
-  errorText: { color: "#ef4444", fontSize: 14 },
-  input: {
-    backgroundColor: "#141423",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: "#f8fafc",
-    fontSize: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(129, 140, 248, 0.2)",
-  },
-  registerButton: {
-    backgroundColor: "#818cf8",
-    borderRadius: 12,
-    paddingVertical: 14,
+    flexDirection: "row",
+    gap: 10,
     alignItems: "center",
-    marginTop: 8,
+  },
+  errorText: { color: "#ff9ba6", fontSize: 14, fontWeight: "700", flex: 1 },
+  input: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  primaryButton: {
+    borderRadius: 18,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 9,
+    marginTop: 12,
     marginBottom: 20,
   },
-  registerButtonDisabled: { opacity: 0.6 },
-  registerButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
-  linkTextCentered: { color: "#94a3b8", textAlign: "center", fontSize: 14 },
-  linkTextPrimary: { color: "#818cf8", fontWeight: "bold" },
+  disabledButton: { opacity: 0.6 },
+  primaryButtonText: {
+    color: "#2c1738",
+    fontWeight: "900",
+    fontSize: 16,
+    letterSpacing: 0,
+  },
+  linkTextCentered: { textAlign: "center", fontSize: 14, fontWeight: "700" },
+  linkTextPrimary: { fontWeight: "900" },
 });

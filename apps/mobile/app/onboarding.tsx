@@ -11,27 +11,27 @@ import { hapticSelection } from "../lib/haptics";
 const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: "streaming",
-    title: "Premium Experience",
+    title: "Soft Cinema",
     description:
-      "Stream your favorite content in high definition with a modern, holographic interface designed for true cinephiles.",
+      "Browse your add-ons, sources, and playback devices from one calm, cinematic space.",
     image: require("../assets/images/onboarding_streaming.png"),
-    colors: ["#1e1b4b", "#312e81"],
+    colors: ["#f2d7ff", "#c5e9d5"],
   },
   {
     id: "sync",
-    title: "Global Sync",
+    title: "Across Screens",
     description:
-      "Your library and watch progress stay in perfect sync across all your devices in real-time. Start on your TV, finish on your phone.",
+      "Start on desktop, continue on iPhone or Android, and keep your library close.",
     image: require("../assets/images/onboarding_sync.png"),
-    colors: ["#0f172a", "#1e293b"],
+    colors: ["#d9e7ff", "#ffd8e7"],
   },
   {
     id: "security",
-    title: "Secure & Private",
+    title: "Sources First",
     description:
-      "Protect your account with mandatory email activation and biometric unlocking. Your data is your business, and we keep it that way.",
+      "Set up Cinemeta now, add streaming sources next, and keep paid services optional.",
     image: require("../assets/images/onboarding_security.png"),
-    colors: ["#020617", "#0f172a"],
+    colors: ["#ffe4c7", "#d8f6e4"],
   },
 ];
 

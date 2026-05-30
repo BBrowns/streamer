@@ -20,7 +20,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 let _SecureStore: typeof import("expo-secure-store") | null = null;
 
 async function getSecureStore() {
-  if (Platform.OS === "web") return null;
+  if (Platform.OS === "web" || process.env.NODE_ENV === "test") return null;
   if (!_SecureStore) {
     _SecureStore = await import("expo-secure-store");
   }

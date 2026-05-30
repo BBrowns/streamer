@@ -42,68 +42,76 @@ export function StreamItem({
       : "Direct file";
 
   return (
-    <Pressable
-      style={styles.streamCard}
-      onPress={() => {
-        hapticImpactLight();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`Play stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
-      accessibilityHint={
-        isTorrent && bridgeStatus !== "available"
-          ? "Checks whether the stream-server bridge is available"
-          : "Opens the video player"
-      }
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.streamTitle}>
-          {stream.title || stream.name || `Stream ${index + 1}`}
-        </Text>
-        <View style={styles.streamBadgeRow}>
-          {stream.resolution && (
-            <View style={styles.resBadge}>
-              <Text style={styles.resBadgeText}>
-                {stream.resolution === "2160p"
-                  ? "4K"
-                  : stream.resolution.toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <Text style={styles.streamEngine}>
-            {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
+    <View style={styles.streamCard}>
+      <Pressable
+        style={styles.streamPressArea}
+        onPress={() => {
+          hapticImpactLight();
+          onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Play stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
+        accessibilityHint={
+          isTorrent && bridgeStatus !== "available"
+            ? "Checks whether the stream-server bridge is available"
+            : "Opens the video player"
+        }
+      >
+        <View style={styles.streamInfo}>
+          <Text style={styles.streamTitle}>
+            {stream.title || stream.name || `Stream ${index + 1}`}
           </Text>
-          {stream.seeders !== undefined && (
-            <Text style={styles.seederBadge}>{stream.seeders} peers</Text>
-          )}
-          <View
-            style={[
-              styles.sourceBadge,
-              isTorrent &&
-                bridgeStatus !== "available" &&
-                styles.sourceBadgeWarn,
-              !isTorrent && !isHls && styles.sourceBadgeReady,
-            ]}
-          >
-            <Text
+          <View style={styles.streamBadgeRow}>
+            {stream.resolution && (
+              <View style={styles.resBadge}>
+                <Text style={styles.resBadgeText}>
+                  {stream.resolution === "2160p"
+                    ? "4K"
+                    : stream.resolution.toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.streamEngine}>
+              {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
+            </Text>
+            {stream.seeders !== undefined && (
+              <Text style={styles.seederBadge}>{stream.seeders} peers</Text>
+            )}
+            <View
               style={[
-                styles.sourceBadgeText,
+                styles.sourceBadge,
                 isTorrent &&
                   bridgeStatus !== "available" &&
-                  styles.sourceBadgeWarnText,
-                !isTorrent && !isHls && styles.sourceBadgeReadyText,
+                  styles.sourceBadgeWarn,
+                !isTorrent && !isHls && styles.sourceBadgeReady,
               ]}
             >
-              {sourceStateLabel}
-            </Text>
-          </View>
-          {isCompleted && (
-            <View style={styles.downloadedBadge}>
-              <Text style={styles.downloadedBadgeText}>Offline</Text>
+              <Text
+                style={[
+                  styles.sourceBadgeText,
+                  isTorrent &&
+                    bridgeStatus !== "available" &&
+                    styles.sourceBadgeWarnText,
+                  !isTorrent && !isHls && styles.sourceBadgeReadyText,
+                ]}
+              >
+                {sourceStateLabel}
+              </Text>
             </View>
-          )}
+            {isCompleted && (
+              <View style={styles.downloadedBadge}>
+                <Text style={styles.downloadedBadgeText}>Offline</Text>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+        <Ionicons
+          name={playable ? "play-circle" : "alert-circle-outline"}
+          size={28}
+          color={playable ? "#f2d7ff" : "#c9a85f"}
+        />
+      </Pressable>
+
       <View style={styles.streamActions}>
         {canDownload || isDownloading || isCompleted ? (
           <Pressable
@@ -129,14 +137,8 @@ export function StreamItem({
             )}
           </Pressable>
         ) : null}
-
-        <Ionicons
-          name={playable ? "play-circle" : "alert-circle-outline"}
-          size={28}
-          color={playable ? "#f2d7ff" : "#c9a85f"}
-        />
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -151,6 +153,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.14)",
   },
+  streamPressArea: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  streamInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
   streamTitle: {
     color: "#ffffff",
     fontWeight: "700",
@@ -161,6 +174,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
   },
   resBadge: {
     backgroundColor: "rgba(242,215,255,0.16)",
@@ -222,6 +236,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 20,
+    marginLeft: 14,
   },
   downloadIconBtn: {
     padding: 4,

@@ -4,38 +4,75 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { authService } from "../services/authService";
 import { useAuth } from "../hooks/useAuth";
 import { useTranslation } from "react-i18next";
-
 import { useTheme } from "../hooks/useTheme";
+import { extractErrorMessage } from "../utils/error";
+import { AuthScaffold } from "../components/auth/AuthScaffold";
+import { BackendUrlField } from "../components/auth/BackendUrlField";
 
 export default function VerifyEmailScreen() {
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email, token: tokenParam } = useLocalSearchParams<{
+    email?: string;
+    token?: string;
+  }>();
   const router = useRouter();
   const { logout } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
+  const [token, setToken] = useState(tokenParam || "");
+  const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
-  const [resendStatus, setResendStatus] = useState<
-    "idle" | "success" | "error"
-  >("idle");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const handleVerify = async (verificationToken = token) => {
+    setError("");
+    setMessage("");
+
+    if (!verificationToken.trim()) {
+      setError("Verification token is required");
+      return;
+    }
+
+    try {
+      setIsVerifying(true);
+      const result = await authService.verifyEmail({
+        token: verificationToken.trim(),
+      });
+      setMessage(result.message || t("auth.verifyEmail.success"));
+    } catch (err) {
+      setError(extractErrorMessage(err) || t("auth.verifyEmail.failed"));
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tokenParam) {
+      setToken(tokenParam);
+      handleVerify(tokenParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenParam]);
 
   const handleResend = async () => {
     if (!email) return;
     setIsResending(true);
-    setResendStatus("idle");
+    setError("");
+    setMessage("");
     try {
-      await authService.resendVerification({ email });
-      setResendStatus("success");
+      const result = await authService.resendVerification({ email });
+      setMessage(result.message || t("auth.verifyEmail.resendSuccess"));
     } catch (err) {
-      console.error("Failed to resend verification", err);
-      setResendStatus("error");
+      setError(extractErrorMessage(err) || t("auth.verifyEmail.resendError"));
     } finally {
       setIsResending(false);
     }
@@ -47,203 +84,183 @@ export default function VerifyEmailScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <View
-          style={[
-            styles.iconContainer,
-            {
-              backgroundColor: isDark
-                ? "rgba(137, 180, 250, 0.1)"
-                : colors.tint + "15",
-            },
-          ]}
-        >
-          <Ionicons name="mail-open-outline" size={48} color={colors.tint} />
-        </View>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t("auth.verifyEmail.title")}
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {t("auth.verifyEmail.subtitle")}
-          {"\n"}
-          <Text style={[styles.emailText, { color: colors.tint }]}>
-            {email || t("auth.verifyEmail.yourEmail")}
-          </Text>
-        </Text>
-      </View>
-
-      <View style={styles.content}>
-        <Text style={[styles.description, { color: colors.textSecondary }]}>
-          {t("auth.verifyEmail.description")}
-        </Text>
-
-        {resendStatus === "success" && (
+    <AuthScaffold
+      title={t("auth.verifyEmail.title")}
+      subtitle={
+        email
+          ? `${t("auth.verifyEmail.subtitle")} ${email}`
+          : t("auth.verifyEmail.description")
+      }
+      image={require("../assets/images/onboarding_security.png")}
+      icon="mail-open-outline"
+    >
+      <View>
+        {message ? (
           <View
             style={[
-              styles.successBox,
-              {
-                backgroundColor: isDark
-                  ? "rgba(166, 227, 161, 0.1)"
-                  : "rgba(34, 197, 94, 0.1)",
-              },
+              styles.messageBox,
+              { backgroundColor: colors.success + "18" },
             ]}
           >
             <Ionicons
               name="checkmark-circle"
-              size={20}
-              color={isDark ? "#a6e3a1" : "#166534"}
+              size={18}
+              color={colors.success}
             />
-            <Text
-              style={[
-                styles.successText,
-                { color: isDark ? "#a6e3a1" : "#166534" },
-              ]}
-            >
-              {t("auth.verifyEmail.resendSuccess")}
+            <Text style={[styles.messageText, { color: colors.success }]}>
+              {message}
             </Text>
           </View>
-        )}
+        ) : null}
 
-        {resendStatus === "error" && (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={20} color="#ef4444" />
-            <Text style={styles.errorText}>
-              {t("auth.verifyEmail.resendError")}
+        {error ? (
+          <View
+            style={[
+              styles.messageBox,
+              { backgroundColor: colors.error + "18" },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.error} />
+            <Text style={[styles.messageText, { color: colors.error }]}>
+              {error}
             </Text>
           </View>
-        )}
+        ) : null}
+
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
+          placeholder="Verification token"
+          placeholderTextColor={colors.textSecondary + "80"}
+          value={token}
+          onChangeText={setToken}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
 
         <Pressable
           style={[
-            styles.resendButton,
+            styles.primaryButton,
             { backgroundColor: colors.tint },
-            isResending && styles.disabledButton,
+            isVerifying && styles.disabledButton,
           ]}
-          onPress={handleResend}
-          disabled={isResending}
+          onPress={() => handleVerify()}
+          disabled={isVerifying}
         >
-          {isResending ? (
-            <ActivityIndicator color="#fff" />
+          {isVerifying ? (
+            <ActivityIndicator color="#2c1738" />
           ) : (
             <>
-              <Ionicons name="refresh" size={20} color="#fff" />
-              <Text style={[styles.resendText, { color: "#fff" }]}>
-                {t("auth.verifyEmail.resendButton")}
+              <Ionicons name="checkmark-circle" size={18} color="#2c1738" />
+              <Text style={styles.primaryButtonText}>
+                {t("auth.verifyEmail.verifyButton")}
               </Text>
             </>
           )}
         </Pressable>
+
+        {!!email && (
+          <Pressable
+            style={[
+              styles.secondaryButton,
+              { borderColor: colors.border },
+              isResending && styles.disabledButton,
+            ]}
+            onPress={handleResend}
+            disabled={isResending}
+          >
+            {isResending ? (
+              <ActivityIndicator color={colors.tint} />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={18} color={colors.tint} />
+                <Text style={[styles.secondaryText, { color: colors.text }]}>
+                  {t("auth.verifyEmail.resendButton")}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        )}
 
         <Pressable style={styles.backButton} onPress={handleBackToLogin}>
           <Text style={[styles.backText, { color: colors.textSecondary }]}>
             {t("auth.verifyEmail.backToLogin")}
           </Text>
         </Pressable>
+
+        <BackendUrlField />
       </View>
-    </View>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  messageBox: {
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  messageText: {
     flex: 1,
-    backgroundColor: "#11111b",
-    padding: 24,
-    justifyContent: "center",
+    fontSize: 14,
+    fontWeight: "700",
   },
-  header: {
+  input: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+  },
+  primaryButton: {
+    borderRadius: 18,
+    paddingVertical: 16,
     alignItems: "center",
-    marginBottom: 40,
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "rgba(137, 180, 250, 0.1)",
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#cdd6f4",
+    flexDirection: "row",
+    gap: 9,
+    marginTop: 8,
     marginBottom: 12,
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#a6adc8",
-    textAlign: "center",
-    lineHeight: 24,
-  },
-  emailText: {
-    color: "#89b4fa",
-    fontWeight: "600",
-  },
-  content: {
-    width: "100%",
-  },
-  description: {
-    fontSize: 15,
-    color: "#9399b2",
-    textAlign: "center",
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  resendButton: {
-    backgroundColor: "#89b4fa",
-    paddingVertical: 16,
-    borderRadius: 16,
-    flexDirection: "row",
-    justifyContent: "center",
+  secondaryButton: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 9,
+    marginBottom: 12,
   },
   disabledButton: {
     opacity: 0.7,
   },
-  resendText: {
-    color: "#11111b",
+  primaryButtonText: {
+    color: "#2c1738",
+    fontWeight: "900",
     fontSize: 16,
-    fontWeight: "700",
+    letterSpacing: 0,
+  },
+  secondaryText: {
+    fontSize: 15,
+    fontWeight: "800",
   },
   backButton: {
     paddingVertical: 12,
     alignItems: "center",
   },
   backText: {
-    color: "#a6adc8",
     fontSize: 15,
-    fontWeight: "600",
-  },
-  successBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(166, 227, 161, 0.1)",
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 20,
-    gap: 8,
-  },
-  successText: {
-    color: "#a6e3a1",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(243, 139, 168, 0.1)",
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 20,
-    gap: 8,
-  },
-  errorText: {
-    color: "#f38ba8",
-    fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "800",
   },
 });

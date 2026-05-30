@@ -202,7 +202,7 @@ export function OnboardingCarousel({
   onComplete,
 }: OnboardingCarouselProps) {
   const { width } = useWindowDimensions();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const scrollX = useSharedValue(0);
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -249,7 +249,16 @@ export function OnboardingCarousel({
   }, [isLastStep]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <LinearGradient
+      colors={
+        isDark
+          ? ["#11121c", "#171423", "#231727"]
+          : ["#fff9f6", "#f7f0ff", "#ecfbf3"]
+      }
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
       <Animated.FlatList
         ref={flatListRef}
         data={steps}
@@ -347,7 +356,7 @@ export function OnboardingCarousel({
           </Pressable>
         </Animated.View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -365,10 +374,14 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 26,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
   },
   image: {
-    width: "85%",
-    height: "85%",
+    width: "100%",
+    height: "100%",
   },
   contentContainer: {
     alignItems: "center",
@@ -387,8 +400,9 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     textAlign: "center",
     lineHeight: 24,
-    opacity: 0.8,
+    opacity: 0.9,
     width: "100%",
+    fontWeight: "600",
   },
   footer: {
     paddingBottom: 60,
