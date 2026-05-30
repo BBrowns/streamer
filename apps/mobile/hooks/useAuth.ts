@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import { authService } from "../services/authService";
 import { api } from "../services/api";
+import { flushPendingAddonUrls } from "../services/pendingAddons";
 import type {
   LoginRequest,
   RegisterRequest,
@@ -18,20 +19,27 @@ export function useAuth() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const pendingAddonUrls = useAuthStore((s) => s.pendingAddonUrls);
+  const setPendingAddons = useAuthStore((s) => s.setPendingAddons);
   const resetPendingAddons = useAuthStore((s) => s.resetPendingAddons);
   const storeLogout = useAuthStore((s) => s.logout);
   const queryClient = useQueryClient();
 
   const flushPendingAddons = async () => {
     if (pendingAddonUrls.length === 0) return;
-    try {
-      for (const url of pendingAddonUrls) {
-        await api.post("/api/addons", { transportUrl: url });
-      }
+
+    const result = await flushPendingAddonUrls(pendingAddonUrls, (url) =>
+      api.post("/api/addons", { transportUrl: url }),
+    );
+
+    if (result.failed.length === 0) {
       resetPendingAddons();
-    } catch (e) {
-      if (__DEV__)
-        console.error("[useAuth] Failed to flush pending addons:", e);
+      return;
+    }
+
+    setPendingAddons(result.failed);
+
+    if (__DEV__) {
+      console.error("[useAuth] Failed to flush pending addons:", result.failed);
     }
   };
 
