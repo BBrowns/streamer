@@ -32,6 +32,7 @@
     "expo-linking": "~55.0.15",
     "expo-local-authentication": "~55.0.14",
     "expo-localization": "~55.0.15",
+    "expo-modules-core": "^55.0.25",
     "expo-network": "~55.0.14",
     "expo-router": "~55.0.16",
     "expo-secure-store": "~55.0.14",

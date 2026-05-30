@@ -17,15 +17,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
-      - name: Type Check Server
-        run: npx tsc --noEmit --project server/tsconfig.json
-      - name: Type Check Shared
-        run: npx tsc --noEmit --project packages/shared/tsconfig.json
+      - name: Type Check All Workspaces
+        run: npm run typecheck:all
 
   format-check:
     name: Format Check
@@ -34,8 +32,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Check formatting
         run: npm run format:check
@@ -47,8 +45,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
@@ -92,8 +90,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
@@ -128,27 +126,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Type Check Stream Server
         run: npx tsc --noEmit --project packages/stream-server/tsconfig.json
+      - name: Run Stream Server Tests
+        run: npm run test --workspace=@streamer/stream-server
 
   test-mobile:
-    name: Mobile Type Check
+    name: Mobile Tests
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Type Check Mobile
         run: npx tsc --noEmit --project apps/mobile/tsconfig.json
+      - name: Run Mobile Jest Tests
+        run: npm run test --workspace=apps/mobile -- --runInBand
 
   build-check:
     name: Build Check
@@ -158,8 +160,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
       - run: npm install --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma

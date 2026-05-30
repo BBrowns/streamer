@@ -1,0 +1,45 @@
+import { castService } from "../CastService";
+import { useAuthStore } from "../../stores/authStore";
+import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+
+describe("CastService", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { id: "living-room", name: "Living Room", type: "chromecast" },
+      ],
+    }) as jest.Mock;
+    useAuthStore.setState({ streamServerUrl: "http://192.168.1.25:11470" });
+    streamEngineManager.bridgeAvailable = true;
+    streamEngineManager.bridgeStatus = "available";
+  });
+
+  it("uses the configured stream bridge URL for device discovery", async () => {
+    await castService.getDevices();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.25:11470/api/cast/devices",
+    );
+  });
+
+  it("uses the configured stream bridge URL for playback", async () => {
+    await castService.play(
+      "living-room",
+      "https://example.test/movie.mp4",
+      "Movie",
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.25:11470/api/cast/play",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          deviceId: "living-room",
+          url: "https://example.test/movie.mp4",
+          title: "Movie",
+        }),
+      }),
+    );
+  });
+});
