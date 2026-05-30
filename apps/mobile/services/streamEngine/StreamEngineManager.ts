@@ -30,6 +30,13 @@ function resolveBridgeUrl(): string {
   return "http://localhost:11470";
 }
 
+export type BridgeStatus =
+  | "available"
+  | "unreachable"
+  | "wrong-url"
+  | "loading"
+  | "no-peers"
+  | "unsupported";
 export type StreamingStrategy = "debrid" | "local";
 
 export class StreamEngineManager {
@@ -37,6 +44,7 @@ export class StreamEngineManager {
   public activeStrategy: StreamingStrategy = "debrid";
   public bridgeUrl: string = resolveBridgeUrl();
   public bridgeAvailable: boolean = false;
+  public bridgeStatus: BridgeStatus = "loading";
   private retryTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -51,8 +59,21 @@ export class StreamEngineManager {
   }
 
   async detectBridge(): Promise<boolean> {
-    const { streamServerUrl } = useAuthStore.getState();
-    const currentUrl = streamServerUrl || this.bridgeUrl;
+    const currentUrl = this.getBridgeUrl();
+    this.bridgeStatus = "loading";
+
+    try {
+      const parsed = new URL(currentUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        this.bridgeAvailable = false;
+        this.bridgeStatus = "wrong-url";
+        return false;
+      }
+    } catch {
+      this.bridgeAvailable = false;
+      this.bridgeStatus = "wrong-url";
+      return false;
+    }
 
     try {
       const controller = new AbortController();
@@ -63,6 +84,7 @@ export class StreamEngineManager {
       clearTimeout(timeout);
       if (res.ok) {
         this.bridgeAvailable = true;
+        this.bridgeStatus = "available";
         this.activeStrategy = "local";
         // Stop retrying once connected
         if (this.retryTimer) {
@@ -71,8 +93,11 @@ export class StreamEngineManager {
         }
         return true;
       }
+      this.bridgeAvailable = false;
+      this.bridgeStatus = "unreachable";
     } catch {
       this.bridgeAvailable = false;
+      this.bridgeStatus = "unreachable";
     }
 
     // Schedule retries every 5s until bridge comes online
@@ -93,15 +118,17 @@ export class StreamEngineManager {
     return this.engines.find((e) => e.canPlay(stream)) ?? null;
   }
 
+  getBridgeUrl(): string {
+    const { streamServerUrl } = useAuthStore.getState();
+    this.bridgeUrl = streamServerUrl || resolveBridgeUrl();
+    return this.bridgeUrl;
+  }
+
   async getPlaybackUri(stream: Stream): Promise<string | null> {
     const engine = this.resolveEngine(stream);
     if (!engine) return null;
 
-    // Inject dynamic bridge URL into engines that need it (like TorrentEngine)
-    if ("bridgeUrl" in engine) {
-      const { streamServerUrl } = useAuthStore.getState();
-      (engine as any).bridgeUrl = streamServerUrl || this.bridgeUrl;
-    }
+    this.getBridgeUrl();
 
     return await engine.getPlaybackUri(stream);
   }

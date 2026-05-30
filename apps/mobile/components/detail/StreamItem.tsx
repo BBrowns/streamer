@@ -1,10 +1,13 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useState, useEffect } from "react";
 import type { Stream } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useDownloadStore } from "../../stores/downloadStore";
-import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
+import {
+  streamEngineManager,
+  type BridgeStatus,
+} from "../../services/streamEngine/StreamEngineManager";
+import { getDownloadEligibility } from "../../services/DownloadService";
 
 export function StreamItem({
   stream,
@@ -17,37 +20,40 @@ export function StreamItem({
   onPress: () => void;
   onDownload: () => void;
 }) {
-  const [playable, setPlayable] = useState(false);
   const engine = streamEngineManager.resolveEngine(stream);
   const id = stream.infoHash || stream.url || `stream_${index}`;
   const task = useDownloadStore((state) => state.tasks[id]);
   const isDownloading = task?.status === "Downloading";
   const isCompleted = task?.status === "Completed";
   const progress = task?.progress || 0;
+  const url = stream.url?.toLowerCase() ?? "";
+  const isHls = url.includes(".m3u8");
+  const isTorrent = !!stream.infoHash && !stream.url;
+  const bridgeStatus = streamEngineManager.bridgeStatus as BridgeStatus;
+  const playable = !!engine;
+  const canDownload = getDownloadEligibility(stream).canDownload;
 
-  useEffect(() => {
-    let isMounted = true;
-    streamEngineManager.getPlaybackUri(stream).then((uri) => {
-      if (isMounted) setPlayable(!!uri && uri.length > 0);
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, [stream]);
+  const sourceStateLabel = isTorrent
+    ? bridgeStatus === "available"
+      ? "Bridge ready"
+      : "Needs bridge"
+    : isHls
+      ? "Streaming only"
+      : "Direct file";
 
   return (
     <Pressable
-      style={[styles.streamCard, !playable && styles.streamCardDisabled]}
+      style={styles.streamCard}
       onPress={() => {
         hapticImpactLight();
         onPress();
       }}
       accessibilityRole="button"
-      accessibilityLabel={`${playable ? "Play" : "Torrent"} stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
+      accessibilityLabel={`Play stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
       accessibilityHint={
-        playable
-          ? "Opens the video player"
-          : "Requires the stream-server bridge"
+        isTorrent && bridgeStatus !== "available"
+          ? "Checks whether the stream-server bridge is available"
+          : "Opens the video player"
       }
     >
       <View style={{ flex: 1 }}>
@@ -68,45 +74,67 @@ export function StreamItem({
             {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
           </Text>
           {stream.seeders !== undefined && (
-            <Text style={styles.seederBadge}>👥 {stream.seeders}</Text>
+            <Text style={styles.seederBadge}>{stream.seeders} peers</Text>
           )}
-          {!playable && (
-            <View style={styles.torrentBadge}>
-              <Text style={styles.torrentBadgeText}>TORRENT</Text>
-            </View>
-          )}
-          {playable && (
-            <View style={styles.playableBadge}>
-              <Text style={styles.playableBadgeText}>PLAYABLE</Text>
+          <View
+            style={[
+              styles.sourceBadge,
+              isTorrent &&
+                bridgeStatus !== "available" &&
+                styles.sourceBadgeWarn,
+              !isTorrent && !isHls && styles.sourceBadgeReady,
+            ]}
+          >
+            <Text
+              style={[
+                styles.sourceBadgeText,
+                isTorrent &&
+                  bridgeStatus !== "available" &&
+                  styles.sourceBadgeWarnText,
+                !isTorrent && !isHls && styles.sourceBadgeReadyText,
+              ]}
+            >
+              {sourceStateLabel}
+            </Text>
+          </View>
+          {isCompleted && (
+            <View style={styles.downloadedBadge}>
+              <Text style={styles.downloadedBadgeText}>Offline</Text>
             </View>
           )}
         </View>
       </View>
       <View style={styles.streamActions}>
-        <Pressable
-          style={styles.downloadIconBtn}
-          onPress={() => {
-            hapticImpactLight();
-            onDownload();
-          }}
-          disabled={!playable || isCompleted}
-        >
-          {isDownloading || task?.status === "Paused" ? (
-            <Text style={{ color: "#818cf8", fontSize: 13, fontWeight: "900" }}>
-              {(progress * 100).toFixed(0)}%
-            </Text>
-          ) : (
-            <Ionicons
-              name={isCompleted ? "cloud-offline" : "download-outline"}
-              size={22}
-              color={isCompleted ? "#4ade80" : playable ? "#818cf8" : "#3f3f46"}
-            />
-          )}
-        </Pressable>
+        {canDownload || isDownloading || isCompleted ? (
+          <Pressable
+            style={styles.downloadIconBtn}
+            onPress={() => {
+              hapticImpactLight();
+              onDownload();
+            }}
+            disabled={isCompleted}
+            accessibilityRole="button"
+            accessibilityLabel="Download stream"
+          >
+            {isDownloading || task?.status === "Paused" ? (
+              <Text style={styles.progressText}>
+                {(progress * 100).toFixed(0)}%
+              </Text>
+            ) : (
+              <Ionicons
+                name={isCompleted ? "cloud-offline" : "download-outline"}
+                size={22}
+                color={isCompleted ? "#6bbf91" : "#a48ad4"}
+              />
+            )}
+          </Pressable>
+        ) : null}
 
-        <Text style={[styles.playIcon, !playable && styles.playIconDisabled]}>
-          {playable ? "▶" : "🔒"}
-        </Text>
+        <Ionicons
+          name={playable ? "play-circle" : "alert-circle-outline"}
+          size={28}
+          color={playable ? "#f2d7ff" : "#c9a85f"}
+        />
       </View>
     </Pressable>
   );
@@ -117,14 +145,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#080808",
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.05)",
-  },
-  streamCardDisabled: {
-    opacity: 0.4,
+    borderColor: "rgba(255, 255, 255, 0.14)",
   },
   streamTitle: {
     color: "#ffffff",
@@ -138,46 +163,58 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   resBadge: {
-    backgroundColor: "rgba(0,242,255,0.12)",
+    backgroundColor: "rgba(242,215,255,0.16)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   resBadgeText: {
-    color: "#00f2ff",
+    color: "#f2d7ff",
     fontSize: 10,
     fontWeight: "800",
   },
   streamEngine: {
-    color: "#555555",
+    color: "#b8adc8",
     fontSize: 11,
     fontWeight: "800",
   },
   seederBadge: {
-    color: "#00ff88",
+    color: "#9fd9b5",
     fontSize: 11,
     fontWeight: "700",
     marginLeft: 4,
   },
-  torrentBadge: {
-    backgroundColor: "rgba(255, 214, 0, 0.1)",
+  sourceBadge: {
+    backgroundColor: "rgba(242,215,255,0.12)",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 999,
   },
-  torrentBadgeText: {
-    color: "#ffd600",
+  sourceBadgeWarn: {
+    backgroundColor: "rgba(255, 219, 166, 0.18)",
+  },
+  sourceBadgeReady: {
+    backgroundColor: "rgba(197, 233, 213, 0.18)",
+  },
+  sourceBadgeText: {
+    color: "#f2d7ff",
     fontSize: 10,
     fontWeight: "900",
   },
-  playableBadge: {
-    backgroundColor: "rgba(0, 242, 255, 0.1)",
+  sourceBadgeWarnText: {
+    color: "#ffdba6",
+  },
+  sourceBadgeReadyText: {
+    color: "#c5e9d5",
+  },
+  downloadedBadge: {
+    backgroundColor: "rgba(197, 233, 213, 0.14)",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 999,
   },
-  playableBadgeText: {
-    color: "#00f2ff",
+  downloadedBadgeText: {
+    color: "#c5e9d5",
     fontSize: 10,
     fontWeight: "900",
   },
@@ -189,11 +226,9 @@ const styles = StyleSheet.create({
   downloadIconBtn: {
     padding: 4,
   },
-  playIcon: {
-    color: "#ffffff",
-    fontSize: 24,
-  },
-  playIconDisabled: {
-    color: "#333333",
+  progressText: {
+    color: "#f2d7ff",
+    fontSize: 13,
+    fontWeight: "900",
   },
 });

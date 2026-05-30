@@ -7,6 +7,7 @@ import { useAuthStore } from "./authStore";
 
 export interface DownloadMediaItem extends MediaInfo {
   downloadUrl: string; // The URL that was downloaded (local stream engine or remote)
+  sourceId?: string;
 }
 
 export type DownloadStatus =
