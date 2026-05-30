@@ -239,6 +239,15 @@ describe("Aggregator Module", () => {
       expect(res.body.streams).toEqual([]);
     });
   });
+
+  describe("GET /api/stream/resolve/:type/:id/:infoHash", () => {
+    it("should return 401 without auth token", async () => {
+      const res = await request(app).get(
+        "/api/stream/resolve/movie/tt1234567/abc123",
+      );
+      expect(res.status).toBe(401);
+    });
+  });
 });
 
 describe("Add-on Module", () => {
@@ -270,6 +279,25 @@ describe("Add-on Module", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.addons).toEqual([]);
+    });
+  });
+
+  describe("GET /api/addons/:addonId/catalog/:type/:catalogId", () => {
+    it("should return 401 without auth token", async () => {
+      const res = await request(app).get(
+        "/api/addons/addon-1/catalog/movie/top",
+      );
+      expect(res.status).toBe(401);
+    });
+
+    it("should return 404 when the exact add-on is not installed", async () => {
+      (prisma.installedAddon.findFirst as any).mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/addons/addon-1/catalog/movie/top")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
     });
   });
 

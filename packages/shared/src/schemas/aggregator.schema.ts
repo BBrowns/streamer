@@ -13,6 +13,11 @@ export const aggregatorCatalogSchema = z.object({
     .transform((val) => (val ? parseInt(val, 10) : 0)),
 });
 
+export const addonCatalogSchema = aggregatorCatalogSchema.extend({
+  addonId: z.string().min(1),
+  catalogId: z.string().min(1),
+});
+
 export const aggregatorMetaSchema = z.object({
   type: z.string().min(1),
   id: z.string().min(1),
@@ -23,7 +28,12 @@ export const aggregatorStreamSchema = z.object({
   id: z.string().min(1),
 });
 
+export const aggregatorResolveSchema = aggregatorStreamSchema.extend({
+  infoHash: z.string().min(1),
+});
+
 export const aggregatorResolveBulkSchema = z.object({
   type: z.string().min(1),
+  id: z.string().min(1).optional(),
   infoHashes: z.array(z.string()).min(1),
 });

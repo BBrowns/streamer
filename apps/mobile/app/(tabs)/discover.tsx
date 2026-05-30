@@ -188,7 +188,10 @@ function DiscoverContent() {
 
       {/* Hero Banner featuring first catalog's first item */}
       {catalogRows.length > 0 && (
-        <HeroBanner catalog={catalogRows[0].catalog} />
+        <HeroBanner
+          catalog={catalogRows[0].catalog}
+          addon={catalogRows[0].addon}
+        />
       )}
 
       {/* Continue Watching — always first if there are items */}

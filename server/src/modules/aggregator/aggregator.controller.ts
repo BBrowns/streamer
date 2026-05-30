@@ -94,7 +94,7 @@ export class AggregatorController {
   }
 
   async resolveStreamsBulk(c: Context) {
-    const { type, infoHashes } = (c.req as any).valid("json");
+    const { type, id, infoHashes } = (c.req as any).valid("json");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
@@ -122,6 +122,7 @@ export class AggregatorController {
     const resolved = await aggregatorService.resolveStreamsBulk(
       user.userId,
       type,
+      id,
       infoHashes,
       requestId,
     );

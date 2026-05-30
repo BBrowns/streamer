@@ -1,17 +1,21 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "../services/api";
-import type { MetaPreview } from "@streamer/shared";
+import type { CatalogDefinition, MetaPreview } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
 
 /**
- * Fetch a specific catalog type from the aggregator.
+ * Fetch one exact catalog from one installed add-on.
  * Used by the Discover screen to populate each catalog row.
  */
-export function useAddonCatalog(type: string, search?: string) {
+export function useAddonCatalog(
+  addonId?: string,
+  catalog?: CatalogDefinition,
+  search?: string,
+) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   return useInfiniteQuery<MetaPreview[]>({
-    queryKey: ["catalog", type, search],
+    queryKey: ["catalog", "addon", addonId, catalog?.type, catalog?.id, search],
     queryFn: async ({ pageParam }) => {
       const skip = pageParam as number;
       const params = new URLSearchParams();
@@ -20,7 +24,7 @@ export function useAddonCatalog(type: string, search?: string) {
 
       const qs = params.toString();
       const { data } = await api.get(
-        `/api/catalog/${type}${qs ? `?${qs}` : ""}`,
+        `/api/addons/${addonId}/catalog/${catalog?.type}/${catalog?.id}${qs ? `?${qs}` : ""}`,
       );
       return data.metas ?? [];
     },
@@ -31,7 +35,7 @@ export function useAddonCatalog(type: string, search?: string) {
       // The overall length of all items fetched so far dictates the next `skip` offset.
       return allPages.flat().length;
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!addonId && !!catalog?.type && !!catalog?.id,
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });
