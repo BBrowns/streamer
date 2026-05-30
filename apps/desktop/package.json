@@ -5,7 +5,9 @@
   "main": "dist/main.js",
   "private": true,
   "scripts": {
+    "predev": "npm run build --workspace=@streamer/stream-server",
     "dev": "electron dist/main.js",
+    "prestart": "npm run build --workspace=@streamer/stream-server",
     "start": "electron dist/main.js"
   },
   "devDependencies": {

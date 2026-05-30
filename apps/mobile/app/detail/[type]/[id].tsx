@@ -26,6 +26,7 @@ import { downloadService } from "../../../services/DownloadService";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../../stores/toastStore";
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
+import { goBackOrReplace } from "../../../lib/navigation";
 import type { Stream } from "@streamer/shared";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
@@ -109,7 +110,10 @@ export default function DetailScreen() {
   if (!meta) {
     return (
       <View style={styles.cinemaCentered}>
-        <Pressable style={styles.errorBackButton} onPress={() => router.back()}>
+        <Pressable
+          style={styles.errorBackButton}
+          onPress={() => goBackOrReplace(router)}
+        >
           <Ionicons name="chevron-back" size={20} color="#f2d7ff" />
           <Text style={styles.errorBackText}>Back</Text>
         </Pressable>
@@ -257,7 +261,7 @@ export default function DetailScreen() {
     handleToggleLibrary,
     handlePlayStream,
     handleDownloadStream,
-    onBack: () => router.back(),
+    onBack: () => goBackOrReplace(router),
   };
 
   return isDesktop ? (

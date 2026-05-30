@@ -16,6 +16,7 @@ import { useTheme } from "../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthScaffold } from "../components/auth/AuthScaffold";
 import { BackendUrlField } from "../components/auth/BackendUrlField";
+import { goBackOrReplace } from "../lib/navigation";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -162,7 +163,10 @@ export default function ForgotPasswordScreen() {
           </>
         )}
 
-        <Pressable onPress={() => router.back()} style={{ marginTop: 12 }}>
+        <Pressable
+          onPress={() => goBackOrReplace(router, "/login")}
+          style={{ marginTop: 12 }}
+        >
           <Text style={[styles.linkText, { color: colors.textSecondary }]}>
             <Text style={[styles.linkBold, { color: colors.tint }]}>
               {t("auth.forgot.back")}
