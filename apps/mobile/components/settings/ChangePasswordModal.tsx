@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
   },
   modalButton: {
-    backgroundColor: "#00f2ff",
+    backgroundColor: "#d8b4fe",
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",

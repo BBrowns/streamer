@@ -88,7 +88,7 @@ export default function TabLayout() {
         headerTitleStyle: {
           fontWeight: "800",
           fontSize: 24,
-          letterSpacing: -0.5,
+          letterSpacing: 0,
         },
         // Hide header on desktop — the DesktopLayout sidebar handles navigation
         headerShown: !isDesktop,
@@ -189,7 +189,7 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: "#010101",
+    backgroundColor: "#11121c",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.05)",
     elevation: 0,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   sidebarTitle: {
     fontSize: 24,
     fontWeight: "900",
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   sidebarNav: {
     paddingHorizontal: 16,

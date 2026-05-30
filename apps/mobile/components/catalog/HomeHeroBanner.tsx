@@ -67,21 +67,21 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
             styles.heroBadge,
             {
               backgroundColor: isDark
-                ? "rgba(0,242,255,0.15)"
-                : "rgba(99,102,241,0.1)",
+                ? "rgba(216,180,254,0.18)"
+                : "rgba(167,139,250,0.14)",
               borderColor: isDark
-                ? "rgba(0,242,255,0.3)"
-                : "rgba(99,102,241,0.3)",
+                ? "rgba(216,180,254,0.34)"
+                : "rgba(167,139,250,0.3)",
             },
           ]}
         >
           <Text
             style={[
               styles.heroBadgeText,
-              { color: isDark ? "#00f2ff" : "#6366f1" },
+              { color: isDark ? "#f2d7ff" : "#7c5bd6" },
             ]}
           >
-            {item.type === "movie" ? "🎬 MOVIE" : "📺 SERIES"}
+            {item.type === "movie" ? "MOVIE" : "SERIES"}
           </Text>
         </View>
 
@@ -98,7 +98,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
 
         {/* Rating */}
         {!!item.imdbRating && (
-          <Text style={styles.heroRating}>⭐ {item.imdbRating} IMDb</Text>
+          <Text style={styles.heroRating}>{item.imdbRating} IMDb</Text>
         )}
 
         {/* Description */}
@@ -120,7 +120,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
                 backgroundColor: playHovered
                   ? isDark
                     ? "#e6dbff"
-                    : "#4f46e5"
+                    : "#8f72e8"
                   : colors.tint,
                 transform: [{ scale: pressed ? 0.97 : 1 }],
               },
@@ -129,9 +129,16 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
             onPointerEnter={isWeb ? () => setPlayHovered(true) : undefined}
             onPointerLeave={isWeb ? () => setPlayHovered(false) : undefined}
           >
-            <Ionicons name="play" size={18} color={isDark ? "#000" : "#fff"} />
+            <Ionicons
+              name="play"
+              size={18}
+              color={isDark ? "#2c1738" : "#fff"}
+            />
             <Text
-              style={[styles.heroPlayText, { color: isDark ? "#000" : "#fff" }]}
+              style={[
+                styles.heroPlayText,
+                { color: isDark ? "#2c1738" : "#fff" },
+              ]}
             >
               Play
             </Text>
@@ -222,7 +229,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontWeight: "900",
-    letterSpacing: -1,
+    letterSpacing: 0,
     marginBottom: 6,
     textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 0, height: 2 },
@@ -230,7 +237,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   heroRating: {
-    color: "#ffd700",
+    color: "#ffd9a8",
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 8,
@@ -252,7 +259,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 28,
     paddingVertical: 13,
-    borderRadius: 10,
+    borderRadius: 18,
     // @ts-ignore web-only
     transition: "background-color 0.15s ease, transform 0.1s ease",
     cursor: Platform.OS === "web" ? "pointer" : undefined,
@@ -267,7 +274,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 22,
     paddingVertical: 13,
-    borderRadius: 10,
+    borderRadius: 18,
     borderWidth: 1,
     // @ts-ignore web-only
     transition:

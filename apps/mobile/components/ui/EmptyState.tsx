@@ -165,11 +165,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "center",
     marginBottom: 12,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   titleLarge: {
     fontSize: 36,
-    letterSpacing: -1,
+    letterSpacing: 0,
     marginBottom: 16,
   },
   titleSmall: {

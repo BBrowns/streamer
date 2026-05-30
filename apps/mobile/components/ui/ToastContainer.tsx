@@ -63,7 +63,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   const color: Record<ToastType, string> = {
     success: "#4ade80",
     error: "#f87171",
-    info: "#00f2ff",
+    info: "#d8b4fe",
   };
 
   return (

@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   Platform,
-  Dimensions,
   Pressable,
+  useWindowDimensions,
 } from "react-native";
 import { Link, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,7 +45,7 @@ const NAV_ITEMS = [
 
 export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
   const pathname = usePathname();
-  const { width } = Dimensions.get("window");
+  const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
   const isDesktop = Platform.OS === "web" && width > 1024;
 
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 18,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   navSectionLabel: {
     fontSize: 10,

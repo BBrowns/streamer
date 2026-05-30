@@ -28,7 +28,7 @@ export default function SearchResultsScreen() {
         options={{
           title: `Results for "${q}"`,
           headerShown: true,
-          headerStyle: { backgroundColor: "#010101" },
+          headerStyle: { backgroundColor: "#11121c" },
           headerTintColor: "#ffffff",
           headerTitleStyle: { fontWeight: "800" },
           headerLeft: () => (

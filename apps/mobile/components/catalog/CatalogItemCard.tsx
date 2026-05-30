@@ -93,7 +93,7 @@ function CatalogCardInner({
                 {item.name}
               </Text>
               {!!item.imdbRating && (
-                <Text style={styles.hoverRating}>⭐ {item.imdbRating}</Text>
+                <Text style={styles.hoverRating}>{item.imdbRating} IMDb</Text>
               )}
               <View
                 style={[styles.hoverPlayBtn, { backgroundColor: colors.tint }]}
@@ -101,12 +101,12 @@ function CatalogCardInner({
                 <Ionicons
                   name="play"
                   size={12}
-                  color={isDark ? "#000" : "#fff"}
+                  color={isDark ? "#2c1738" : "#fff"}
                 />
                 <Text
                   style={[
                     styles.hoverPlayText,
-                    { color: isDark ? "#000" : "#fff" },
+                    { color: isDark ? "#2c1738" : "#fff" },
                   ]}
                 >
                   Play
@@ -126,7 +126,7 @@ function CatalogCardInner({
         </Text>
         {!!item.imdbRating && (
           <Text style={[styles.ratingText, { color: "#fbbf24" }]}>
-            ⭐ {item.imdbRating}
+            {item.imdbRating} IMDb
           </Text>
         )}
       </View>
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   cardHovered: {
     transform: [{ scale: 1.03 }],
     zIndex: 10,
-    shadowColor: "#000",
+    shadowColor: "#a78bfa",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -170,12 +170,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
-    backgroundColor: "rgba(129, 140, 248, 0.05)",
+    backgroundColor: "rgba(216, 180, 254, 0.12)",
   },
   fallbackTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#6b7280",
+    color: "#7b6a88",
     textAlign: "center",
   },
   // The overlay is always in DOM but hidden via CSS opacity
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   } as any,
   hoverOverlayContent: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
+    backgroundColor: "rgba(17,18,28,0.78)",
     padding: 12,
     justifyContent: "flex-end",
     gap: 4,
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   hoverBadgeText: {
     fontSize: 9,
     fontWeight: "800",
-    letterSpacing: 1.5,
+    letterSpacing: 0,
     textTransform: "uppercase",
   },
   hoverTitle: {
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   hoverRating: {
-    color: "#fbbf24",
+    color: "#ffd9a8",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 999,
     alignSelf: "flex-start",
     marginTop: 4,
   },
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontWeight: "700",
     fontSize: 13,
-    letterSpacing: -0.2,
+    letterSpacing: 0,
   },
   ratingText: {
     fontSize: 11,

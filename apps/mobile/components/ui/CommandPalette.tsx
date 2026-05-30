@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   historyClear: {
-    color: "#00f2ff",
+    color: "#d8b4fe",
     fontSize: 11,
     fontWeight: "700",
   },

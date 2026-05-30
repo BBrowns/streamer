@@ -59,7 +59,7 @@ export function ActiveSessionsModal({
           )}
         </View>
         {isSessionsLoading ? (
-          <ActivityIndicator color="#00f2ff" style={{ marginTop: 24 }} />
+          <ActivityIndicator color="#d8b4fe" style={{ marginTop: 24 }} />
         ) : (
           sessions.map((session) => {
             const isCurrentDevice = session.deviceId === deviceId;

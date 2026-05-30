@@ -253,8 +253,8 @@ export default function LibraryScreen() {
               await queryClient.invalidateQueries({ queryKey: ["progress"] });
               setRefreshing(false);
             }}
-            tintColor="#00f2ff"
-            colors={["#00f2ff"]}
+            tintColor="#d8b4fe"
+            colors={["#d8b4fe"]}
           />
         }
         renderItem={({ item }) => (
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(0, 242, 255, 0.2)",
   },
-  filterChipActive: { backgroundColor: "#00f2ff", borderColor: "#00f2ff" },
+  filterChipActive: { backgroundColor: "#d8b4fe", borderColor: "#d8b4fe" },
   filterChipText: { fontSize: 13, fontWeight: "800" },
   filterChipTextActive: { color: "#000000" },
 
