@@ -74,7 +74,7 @@ export class AddonService {
     const STALE_THRESHOLD = 12 * 60 * 60 * 1000; // 12 hours
     const now = Date.now();
 
-    const results = addons.map((a) => {
+    const results = addons.map((a: any) => {
       // Trigger background re-validation if stale
       const lastValidated = a.lastValidatedAt?.getTime() || 0;
       if (now - lastValidated > STALE_THRESHOLD) {

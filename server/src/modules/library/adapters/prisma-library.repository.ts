@@ -14,7 +14,7 @@ export class PrismaLibraryRepository implements ILibraryRepository {
       orderBy: { addedAt: "desc" },
     });
 
-    return items.map((i) => ({
+    return items.map((i: any) => ({
       id: i.id,
       userId: i.userId,
       type: i.type,
