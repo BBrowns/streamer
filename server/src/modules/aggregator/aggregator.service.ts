@@ -97,8 +97,10 @@ export class AggregatorService {
 
     const results = await Promise.allSettled(
       addons
-        .filter((a) => this.addonSupportsResource(a.manifest, "catalog", type))
-        .map(async (addon) => {
+        .filter((a: any) =>
+          this.addonSupportsResource(a.manifest, "catalog", type),
+        )
+        .map(async (addon: any) => {
           const catalogId = this.findCatalogId(addon.manifest, type);
           if (!catalogId) return [];
 
@@ -120,8 +122,10 @@ export class AggregatorService {
     );
 
     return results
-      .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
-      .flatMap((r) => r.value as MetaPreview[]);
+      .filter(
+        (r: any): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
+      )
+      .flatMap((r: any) => r.value as MetaPreview[]);
   }
 
   /** Fetch metadata from add-ons that support this type/id */
@@ -135,8 +139,10 @@ export class AggregatorService {
 
     const results = await Promise.allSettled(
       addons
-        .filter((a) => this.addonSupportsResource(a.manifest, "meta", type))
-        .map(async (addon) => {
+        .filter((a: any) =>
+          this.addonSupportsResource(a.manifest, "meta", type),
+        )
+        .map(async (addon: any) => {
           const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
@@ -150,7 +156,7 @@ export class AggregatorService {
 
     // Return the first successful result
     const fulfilled = results.find(
-      (r): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
+      (r: any): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
     );
 
     return (fulfilled?.value as MetaDetail) ?? null;
@@ -167,8 +173,10 @@ export class AggregatorService {
 
     const results = await Promise.allSettled(
       addons
-        .filter((a) => this.addonSupportsResource(a.manifest, "stream", type))
-        .map(async (addon) => {
+        .filter((a: any) =>
+          this.addonSupportsResource(a.manifest, "stream", type),
+        )
+        .map(async (addon: any) => {
           const data = await resilientFetch(
             addon.transportUrl,
             addon.manifest.id,
@@ -181,10 +189,12 @@ export class AggregatorService {
     );
 
     return results
-      .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
-      .flatMap((r) => r.value as Stream[])
-      .map((stream) => StreamParser.enrich(stream))
-      .sort((a, b) => StreamParser.compare(a, b));
+      .filter(
+        (r: any): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
+      )
+      .flatMap((r: any) => r.value as Stream[])
+      .map((stream: any) => StreamParser.enrich(stream))
+      .sort((a: any, b: any) => StreamParser.compare(a, b));
   }
 
   /** Resolve a specific stream (torrent) via Debrid if enabled, otherwise return original */
@@ -256,7 +266,7 @@ export class AggregatorService {
     const contentTypes = ["movie", "series"];
 
     // Build all search tasks across all addons × all content types
-    const tasks = addons.flatMap((addon) =>
+    const tasks = addons.flatMap((addon: any) =>
       contentTypes
         .filter((type) =>
           this.addonSupportsResource(addon.manifest, "catalog", type),
@@ -303,7 +313,7 @@ export class AggregatorService {
       where: { userId },
     });
 
-    return addons.map((a) => ({
+    return addons.map((a: any) => ({
       transportUrl: a.transportUrl,
       manifest: a.manifest as unknown as AddonManifest,
     }));

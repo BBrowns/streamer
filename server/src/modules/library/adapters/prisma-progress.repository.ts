@@ -14,7 +14,7 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
       take: limit,
     });
 
-    return records.map((r) => ({
+    return records.map((r: any) => ({
       id: r.id,
       userId: r.userId,
       type: r.type,
