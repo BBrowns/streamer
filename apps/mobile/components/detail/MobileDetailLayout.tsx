@@ -101,13 +101,18 @@ export function MobileDetailLayout({
           style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
           onPress={handleToggleLibrary}
         >
+          <Ionicons
+            name={inLibrary ? "checkmark" : "add"}
+            size={18}
+            color={inLibrary ? "#2c1738" : "#f2d7ff"}
+          />
           <Text
             style={[
               styles.libraryBtnText,
               inLibrary && styles.libraryBtnTextActive,
             ]}
           >
-            {inLibrary ? "✓ In Library" : "+ Add to Library"}
+            {inLibrary ? "In Library" : "Add to Library"}
           </Text>
         </Pressable>
 
@@ -287,6 +292,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   libraryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     backgroundColor: "rgba(216, 180, 254, 0.14)",
     borderWidth: 1,
     borderColor: "rgba(216, 180, 254, 0.28)",

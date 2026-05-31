@@ -225,7 +225,10 @@ function RootLayoutNav() {
             name="verify-email"
             options={{ title: "Verify Email", presentation: "modal" }}
           />
-          <Stack.Screen name="detail/[type]/[id]" options={{ title: "" }} />
+          <Stack.Screen
+            name="detail/[type]/[id]"
+            options={{ headerShown: false, title: "" }}
+          />
           <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />
           <Stack.Screen
             name="player"

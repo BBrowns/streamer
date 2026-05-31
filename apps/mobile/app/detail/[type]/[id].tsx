@@ -4,9 +4,11 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Pressable,
   useWindowDimensions,
   StyleSheet,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as FileSystem from "expo-file-system";
 import { useState, useEffect, useCallback } from "react";
@@ -21,10 +23,10 @@ import {
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
 import { useDownloadStore } from "../../../stores/downloadStore";
 import { downloadService } from "../../../services/DownloadService";
-import { useTheme } from "../../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../../stores/toastStore";
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
+import { goBackOrReplace } from "../../../lib/navigation";
 import type { Stream } from "@streamer/shared";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
@@ -35,7 +37,6 @@ export default function DetailScreen() {
   const castType = type as "movie" | "series";
   const router = useRouter();
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
   const { data: meta, isLoading: metaLoading } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
@@ -100,15 +101,22 @@ export default function DetailScreen() {
 
   if (metaLoading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.tint} />
+      <View style={styles.cinemaCentered}>
+        <ActivityIndicator size="large" color="#d8b4fe" />
       </View>
     );
   }
 
   if (!meta) {
     return (
-      <View style={styles.centered}>
+      <View style={styles.cinemaCentered}>
+        <Pressable
+          style={styles.errorBackButton}
+          onPress={() => goBackOrReplace(router)}
+        >
+          <Ionicons name="chevron-back" size={20} color="#f2d7ff" />
+          <Text style={styles.errorBackText}>Back</Text>
+        </Pressable>
         <Text style={styles.errorText}>{t("detail.errors.notFound")}</Text>
       </View>
     );
@@ -253,7 +261,7 @@ export default function DetailScreen() {
     handleToggleLibrary,
     handlePlayStream,
     handleDownloadStream,
-    onBack: () => router.back(),
+    onBack: () => goBackOrReplace(router),
   };
 
   return isDesktop ? (
@@ -264,10 +272,29 @@ export default function DetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  centered: {
+  cinemaCentered: {
     flex: 1,
+    backgroundColor: "#11121c",
     justifyContent: "center",
     alignItems: "center",
   },
-  errorText: { color: "#ff3b3b" },
+  errorBackButton: {
+    position: "absolute",
+    top: 28,
+    left: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  errorBackText: {
+    color: "#f2d7ff",
+    fontWeight: "800",
+  },
+  errorText: { color: "#ff9ba6" },
 });

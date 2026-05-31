@@ -15,6 +15,7 @@ import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
 import { hapticImpactLight } from "../../lib/haptics";
+import { goBackOrReplace } from "../../lib/navigation";
 
 export default function SearchResultsScreen() {
   const { q } = useLocalSearchParams<{ q: string }>();
@@ -35,7 +36,7 @@ export default function SearchResultsScreen() {
             <Pressable
               onPress={() => {
                 hapticImpactLight();
-                router.back();
+                goBackOrReplace(router);
               }}
               style={{ marginLeft: 8 }}
             >
@@ -65,7 +66,7 @@ export default function SearchResultsScreen() {
           title="No Results Found"
           description={`We couldn't find anything matching "${q}". Try a different keyword or check your add-ons.`}
           actionLabel="Try Again"
-          onAction={() => router.back()}
+          onAction={() => goBackOrReplace(router)}
         />
       )}
     </View>

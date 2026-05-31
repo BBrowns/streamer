@@ -163,17 +163,49 @@ export const usePlayerStore = create<PlayerState>()(
         });
 
         es.addEventListener("error", (err) => {
-          console.error("EventSource metrics error:", err);
-          // If it's a 404 or transient error, retry a few times instead of failing immediately
+          // Extract error message if possible to identify "Torrent not found"
+          let isTorrentNotFound = false;
+          let errorMessage = "";
+          try {
+            const errObj = typeof err === "string" ? JSON.parse(err) : err;
+            errorMessage =
+              errObj?.message || (typeof err === "string" ? err : "");
+            if (errorMessage.includes("Torrent not found")) {
+              isTorrentNotFound = true;
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+
           const currentRetries = (es as any)._retries || 0;
-          if (currentRetries < 5) {
+          const maxRetries = isTorrentNotFound ? 24 : 5;
+
+          if (currentRetries < maxRetries) {
             (es as any)._retries = currentRetries + 1;
+            const delay = isTorrentNotFound ? 5000 : 3000;
+
+            // Only log as warning if it's not the "expected" initial race condition
+            // or if we've already retried a few times
+            if (!isTorrentNotFound || currentRetries > 2) {
+              console.warn(
+                `[playerStore] Metrics connection transient error (retry ${currentRetries + 1}/${maxRetries}):`,
+                errorMessage || err,
+              );
+            }
+
             setTimeout(() => {
-              usePlayerStore.getState().subscribeToStreamMetrics(infoHash);
-            }, 3000);
+              const currentState = usePlayerStore.getState();
+              if (
+                currentState.currentStream?.infoHash === infoHash &&
+                currentState.streamState !== "playing"
+              ) {
+                currentState.subscribeToStreamMetrics(infoHash);
+              }
+            }, delay);
             return;
           }
 
+          console.error("EventSource metrics fatal error:", err);
           set({
             streamState: "error",
             errorMessage: "Failed to connect to streaming engine metrics",

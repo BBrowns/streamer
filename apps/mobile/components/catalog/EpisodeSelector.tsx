@@ -11,7 +11,6 @@ import { Ionicons } from "@expo/vector-icons";
 import type { VideoEntry, Stream } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useEpisodeStreams } from "../../hooks/useEpisodeStreams";
-import { useDownloadStore } from "../../stores/downloadStore";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { StreamItem } from "../detail/StreamItem";
@@ -49,11 +48,11 @@ function EpisodeRow({
         },
         isSelected && {
           backgroundColor: isDark
-            ? "rgba(0,242,255,0.07)"
-            : "rgba(99,102,241,0.07)",
+            ? "rgba(216,180,254,0.12)"
+            : "rgba(167,139,250,0.12)",
           borderColor: isDark
-            ? "rgba(0,242,255,0.25)"
-            : "rgba(99,102,241,0.25)",
+            ? "rgba(216,180,254,0.32)"
+            : "rgba(167,139,250,0.32)",
         },
       ]}
       onPress={() => {
@@ -71,8 +70,8 @@ function EpisodeRow({
           },
           isSelected && {
             backgroundColor: isDark
-              ? "rgba(0,242,255,0.2)"
-              : "rgba(99,102,241,0.15)",
+              ? "rgba(216,180,254,0.2)"
+              : "rgba(167,139,250,0.16)",
           },
         ]}
       >
@@ -108,9 +107,21 @@ function EpisodeRow({
           </Text>
         )}
       </View>
-      {isSelected && (
-        <Ionicons name="chevron-forward" size={16} color={colors.tint} />
-      )}
+      <View style={styles.episodeAction}>
+        <Text
+          style={[
+            styles.episodeActionText,
+            { color: isSelected ? colors.tint : colors.textSecondary },
+          ]}
+        >
+          Sources
+        </Text>
+        <Ionicons
+          name={isSelected ? "chevron-down" : "chevron-forward"}
+          size={16}
+          color={isSelected ? colors.tint : colors.textSecondary}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -132,9 +143,8 @@ function EpisodeStreamList({
   onPlayStream: (stream: Stream, episodeTitle: string) => void;
   onDownloadStream: (stream: Stream, episodeTitle: string) => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
-  const { tasks } = useDownloadStore();
 
   const { data: streams, isLoading } = useEpisodeStreams(
     seriesId,
@@ -177,11 +187,6 @@ function EpisodeStreamList({
       </Text>
       {streams.map((stream, i) => {
         const key = `${stream.infoHash || stream.url || "stream"}-${i}`;
-        const streamId = stream.infoHash || stream.url || key;
-        const task = tasks[streamId];
-        const isDownloading = task?.status === "Downloading";
-        const isCompleted = task?.status === "Completed";
-        const progress = task?.progress || 0;
 
         return (
           <StreamItem
@@ -319,44 +324,33 @@ export const EpisodeSelector = memo(function EpisodeSelector({
       {/* Episode List */}
       <View style={styles.episodeList}>
         {episodesInSeason.map((video) => (
-          <EpisodeRow
-            key={video.id}
-            video={video}
-            isSelected={selectedEpisode?.id === video.id}
-            onPress={() =>
-              setSelectedEpisode(
-                selectedEpisode?.id === video.id ? null : video,
-              )
-            }
-          />
+          <View key={video.id} style={styles.episodeBlock}>
+            <EpisodeRow
+              video={video}
+              isSelected={selectedEpisode?.id === video.id}
+              onPress={() =>
+                setSelectedEpisode(
+                  selectedEpisode?.id === video.id ? null : video,
+                )
+              }
+            />
+            {selectedEpisode?.id === video.id && (
+              <EpisodeStreamList
+                seriesId={seriesId}
+                season={video.season}
+                episode={video.episode}
+                episodeTitle={video.title}
+                onPlayStream={(stream, title) =>
+                  onPlayStream(stream, title, video.season, video.episode)
+                }
+                onDownloadStream={(stream, title) =>
+                  onDownloadStream(stream, title, video.season, video.episode)
+                }
+              />
+            )}
+          </View>
         ))}
       </View>
-
-      {/* Stream panel expands below selected episode */}
-      {selectedEpisode && (
-        <EpisodeStreamList
-          seriesId={seriesId}
-          season={selectedEpisode.season}
-          episode={selectedEpisode.episode}
-          episodeTitle={selectedEpisode.title}
-          onPlayStream={(stream, title) =>
-            onPlayStream(
-              stream,
-              title,
-              selectedEpisode.season,
-              selectedEpisode.episode,
-            )
-          }
-          onDownloadStream={(stream, title) =>
-            onDownloadStream(
-              stream,
-              title,
-              selectedEpisode.season,
-              selectedEpisode.episode,
-            )
-          }
-        />
-      )}
     </View>
   );
 });
@@ -383,15 +377,18 @@ const styles = StyleSheet.create({
   },
   seasonTabTextActive: {},
   episodeList: {
-    gap: 4,
+    gap: 10,
+  },
+  episodeBlock: {
+    gap: 8,
   },
   episodeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
   episodeRowActive: {},
@@ -418,6 +415,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  episodeAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  episodeActionText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
   streamLoading: {
     flexDirection: "row",
     alignItems: "center",
@@ -439,14 +445,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   streamPanel: {
-    marginTop: 12,
+    marginTop: 0,
+    marginLeft: 48,
     gap: 8,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   streamPanelLabel: {
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0,
     marginBottom: 4,
     paddingLeft: 4,
   },

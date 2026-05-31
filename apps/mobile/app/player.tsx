@@ -36,6 +36,7 @@ import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
 import { DesktopCastModal } from "../components/DesktopCastModal";
 import { castService, type CastDevice } from "../services/CastService";
+import { goBackOrReplace } from "../lib/navigation";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -93,7 +94,7 @@ export default function PlayerScreen() {
   }, [controlsVisible, showControls]);
 
   const handleClose = useCallback(() => {
-    router.back();
+    goBackOrReplace(router);
     setTimeout(() => clearPlayer(), 100);
   }, [router, clearPlayer]);
 

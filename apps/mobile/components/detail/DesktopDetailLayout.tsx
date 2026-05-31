@@ -17,6 +17,7 @@ export function DesktopDetailLayout({
   id,
   castType,
   meta,
+  streams,
   streamsLoading,
   groupedStreams,
   availableResolutions,
@@ -31,17 +32,28 @@ export function DesktopDetailLayout({
   const streamsData =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
   const bestStream = streamsData[0];
+  const sourceCount =
+    castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
 
   const renderHeader = () => (
-    <View>
-      {!!meta.background && (
-        <Image
-          source={{ uri: meta.background }}
-          style={styles.desktopBgArt}
-          resizeMode="cover"
-        />
-      )}
-      <View style={styles.desktopBgOverlay} />
+    <View style={styles.headerShell}>
+      <View style={styles.eyebrowRow}>
+        <View style={styles.eyebrowPill}>
+          <Ionicons
+            name={castType === "series" ? "albums-outline" : "film-outline"}
+            size={15}
+            color="#2c1738"
+          />
+          <Text style={styles.eyebrowText}>
+            {castType === "series" ? "Series" : "Movie"}
+          </Text>
+        </View>
+        <Text style={styles.sourceCountText}>
+          {castType === "series"
+            ? `${sourceCount} episodes`
+            : `${sourceCount} sources`}
+        </Text>
+      </View>
 
       <Text style={styles.desktopTitle}>{meta.name}</Text>
 
@@ -69,18 +81,23 @@ export function DesktopDetailLayout({
         <Text style={styles.description}>{meta.description}</Text>
       )}
 
-      {castType !== "series" && bestStream && (
+      {castType !== "series" && (
         <View style={styles.primaryActionRow}>
           <Pressable
-            style={styles.playBestBtn}
-            onPress={() => handlePlayStream(bestStream)}
+            style={[styles.playBestBtn, !bestStream && styles.actionDisabled]}
+            disabled={!bestStream}
+            onPress={() => bestStream && handlePlayStream(bestStream)}
           >
             <Ionicons name="play" size={18} color="#2c1738" />
             <Text style={styles.playBestText}>Play Best</Text>
           </Pressable>
           <Pressable
-            style={styles.secondaryActionBtn}
-            onPress={() => handleDownloadStream(bestStream)}
+            style={[
+              styles.secondaryActionBtn,
+              !bestStream && styles.actionDisabled,
+            ]}
+            disabled={!bestStream}
+            onPress={() => bestStream && handleDownloadStream(bestStream)}
           >
             <Ionicons name="download-outline" size={18} color="#f2d7ff" />
             <Text style={styles.secondaryActionText}>Download</Text>
@@ -95,8 +112,7 @@ export function DesktopDetailLayout({
         </View>
       )}
 
-      {/* Streams Section */}
-      <View style={styles.section}>
+      <View style={styles.sectionSurface}>
         <View style={styles.sectionTitleRow}>
           <Ionicons
             name={castType === "series" ? "list" : "layers-outline"}
@@ -155,39 +171,62 @@ export function DesktopDetailLayout({
 
   return (
     <View style={styles.containerDesktop}>
-      {/* Left: Poster panel */}
+      {!!meta.background && (
+        <Image
+          source={{ uri: meta.background }}
+          style={styles.ambientBackdrop}
+          resizeMode="cover"
+        />
+      )}
+      <View style={styles.ambientOverlay} />
+
       <View style={styles.desktopPosterPanel}>
         <Pressable style={styles.desktopBackBtn} onPress={onBack}>
-          <Ionicons name="chevron-back" size={20} color="#888" />
+          <Ionicons name="chevron-back" size={20} color="#d9cfe4" />
           <Text style={styles.desktopBackText}>Back</Text>
         </Pressable>
-        {!!meta.poster && (
-          <Image
-            source={{ uri: meta.poster }}
-            style={styles.desktopPoster}
-            resizeMode="cover"
-          />
-        )}
+        <View style={styles.posterFrame}>
+          {!!meta.poster ? (
+            <Image
+              source={{ uri: meta.poster }}
+              style={styles.desktopPoster}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.posterFallback}>
+              <Ionicons name="film-outline" size={44} color="#d8b4fe" />
+            </View>
+          )}
+        </View>
         <Pressable
-          style={[
-            styles.libraryBtn,
-            inLibrary && styles.libraryBtnActive,
-            { marginTop: 16, alignSelf: "stretch" },
-          ]}
+          style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
           onPress={handleToggleLibrary}
         >
+          <Ionicons
+            name={inLibrary ? "checkmark" : "add"}
+            size={18}
+            color={inLibrary ? "#2c1738" : "#f2d7ff"}
+          />
           <Text
             style={[
               styles.libraryBtnText,
               inLibrary && styles.libraryBtnTextActive,
             ]}
           >
-            {inLibrary ? "✓ In Library" : "+ Add to Library"}
+            {inLibrary ? "In Library" : "Add to Library"}
           </Text>
         </Pressable>
+        <View style={styles.deviceHintCard}>
+          <Ionicons name="sparkles-outline" size={18} color="#ffd9a8" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.deviceHintTitle}>Cinema mode</Text>
+            <Text style={styles.deviceHintText}>
+              Sources stay quiet until you choose play, download, or cast.
+            </Text>
+          </View>
+        </View>
       </View>
 
-      {/* Right: Scrollable info + streams */}
       <View style={styles.desktopInfoPanel}>
         <FlashList
           data={streamsData}
@@ -202,7 +241,7 @@ export function DesktopDetailLayout({
               />
             </View>
           )}
-          contentContainerStyle={{ padding: 36, paddingBottom: 60 }}
+          contentContainerStyle={styles.desktopScrollContent}
           showsVerticalScrollIndicator={false}
           bounces={false}
         />
@@ -216,58 +255,114 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     backgroundColor: "#11121c",
+    overflow: "hidden",
+    position: "relative",
+  },
+  ambientBackdrop: {
+    position: "absolute",
+    top: -90,
+    right: -80,
+    width: "72%",
+    height: "78%",
+    opacity: 0.18,
+  },
+  ambientOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(17,18,28,0.82)",
   },
   desktopPosterPanel: {
-    width: 280,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    width: 340,
+    backgroundColor: "rgba(255,255,255,0.075)",
     borderRightWidth: 1,
     borderRightColor: "rgba(255,255,255,0.14)",
-    padding: 24,
-    paddingTop: 16,
+    padding: 28,
+    paddingTop: 24,
+    zIndex: 2,
   },
   desktopBackBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginBottom: 20,
+    gap: 6,
+    marginBottom: 28,
+    alignSelf: "flex-start",
   },
   desktopBackText: {
-    color: "#c6bfd2",
+    color: "#d9cfe4",
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "800",
+  },
+  posterFrame: {
+    width: "100%",
+    aspectRatio: 2 / 3,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 20 },
   },
   desktopPoster: {
     width: "100%",
-    aspectRatio: 2 / 3,
-    borderRadius: 18,
+    height: "100%",
     backgroundColor: "#151622",
+  },
+  posterFallback: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   desktopInfoPanel: {
     flex: 1,
-    backgroundColor: "#11121c",
+    backgroundColor: "transparent",
+    zIndex: 1,
   },
-  desktopBgArt: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 300,
-    opacity: 0.08,
+  desktopScrollContent: {
+    paddingHorizontal: 44,
+    paddingTop: 48,
+    paddingBottom: 72,
   },
-  desktopBgOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 300,
-    backgroundColor: "rgba(17,18,28,0.72)",
+  headerShell: {
+    maxWidth: 1140,
+    alignSelf: "stretch",
+    paddingBottom: 8,
+  },
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+    flexWrap: "wrap",
+  },
+  eyebrowPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    alignSelf: "flex-start",
+    backgroundColor: "#f2d7ff",
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  eyebrowText: {
+    color: "#2c1738",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  sourceCountText: {
+    color: "#bfb3ca",
+    fontSize: 13,
+    fontWeight: "700",
   },
   desktopTitle: {
-    fontSize: 40,
+    fontSize: 48,
     fontWeight: "900",
     color: "#fff8ff",
-    marginBottom: 12,
+    marginBottom: 14,
     letterSpacing: 0,
+    maxWidth: 1050,
   },
   metaRow: {
     flexDirection: "row",
@@ -294,16 +389,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   libraryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     backgroundColor: "rgba(216, 180, 254, 0.14)",
     borderWidth: 1,
     borderColor: "rgba(216, 180, 254, 0.28)",
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    alignSelf: "flex-start",
-    marginBottom: 24,
+    alignSelf: "stretch",
+    marginTop: 18,
+    marginBottom: 16,
     minHeight: 48,
-    justifyContent: "center",
   },
   primaryActionRow: {
     flexDirection: "row",
@@ -320,6 +419,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 13,
     minHeight: 48,
+  },
+  actionDisabled: {
+    opacity: 0.45,
   },
   playBestText: {
     color: "#2c1738",
@@ -383,6 +485,14 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 32,
   },
+  sectionSurface: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 32,
+  },
   sectionTitle: {
     color: "#fff8ff",
     fontWeight: "800",
@@ -427,6 +537,7 @@ const styles = StyleSheet.create({
     color: "#2c1738",
   },
   streamListWrapper: {
+    maxWidth: 1140,
     paddingBottom: 12,
   },
   emptyText: {
@@ -434,5 +545,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 40,
+  },
+  deviceHintCard: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,217,168,0.18)",
+    backgroundColor: "rgba(255,217,168,0.08)",
+    padding: 14,
+  },
+  deviceHintTitle: {
+    color: "#fff8ff",
+    fontSize: 13,
+    fontWeight: "900",
+    marginBottom: 3,
+  },
+  deviceHintText: {
+    color: "#c6bfd2",
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

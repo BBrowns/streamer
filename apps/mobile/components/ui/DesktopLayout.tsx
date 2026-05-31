@@ -48,8 +48,14 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
   const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
   const isDesktop = Platform.OS === "web" && width > 1024;
+  const isImmersiveRoute =
+    pathname.startsWith("/detail/") || pathname.startsWith("/player");
 
   if (!isDesktop) return <>{children}</>;
+
+  if (isImmersiveRoute) {
+    return <View style={styles.immersiveContainer}>{children}</View>;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -233,6 +239,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: "row",
+  },
+  immersiveContainer: {
+    flex: 1,
+    backgroundColor: "#11121c",
   },
   sidebar: {
     width: 220,

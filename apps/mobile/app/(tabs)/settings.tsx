@@ -66,11 +66,11 @@ function SectionGroup({
   );
 }
 
-function AdvancedSettingsSection() {
+function SourcesDevicesPanel() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { backendUrl, streamServerUrl, setServerUrls } = useAuthStore();
   const { colors, isDark } = useTheme();
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [tempBackend, setTempBackend] = useState(backendUrl || "");
   const [tempStream, setTempStream] = useState(streamServerUrl || "");
   const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
@@ -99,47 +99,6 @@ function AdvancedSettingsSection() {
     hapticSelection();
   };
 
-  if (!showAdvanced) {
-    return (
-      <Pressable
-        style={[
-          styles.menuItem,
-          { backgroundColor: colors.card, borderColor: colors.border },
-        ]}
-        onPress={() => {
-          setShowAdvanced(true);
-          hapticSelection();
-        }}
-      >
-        <View
-          style={[
-            styles.iconContainer,
-            { backgroundColor: "rgba(245, 158, 11, 0.15)" },
-          ]}
-        >
-          <Ionicons name="options-outline" size={20} color="#f59e0b" />
-        </View>
-        <View style={styles.menuItemTextContainer}>
-          <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-            {t("settings.advanced.configure", {
-              defaultValue: "Sources & Devices",
-            })}
-          </Text>
-          <Text
-            style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
-          >
-            {bridgeInfo?.lanUrl ||
-              streamServerUrl ||
-              t("settings.advanced.subtitle", {
-                defaultValue: "Add-ons, bridge URL, and optional services",
-              })}
-          </Text>
-        </View>
-        <Ionicons name="chevron-down" size={18} color="#6b7280" />
-      </Pressable>
-    );
-  }
-
   return (
     <View
       style={[
@@ -153,17 +112,51 @@ function AdvancedSettingsSection() {
       ]}
     >
       <View style={styles.advancedHeader}>
-        <Text style={[styles.advancedTitle, { color: colors.text }]}>
-          {t("settings.advanced.title", {
-            defaultValue: "Sources & Devices",
-          })}
-        </Text>
-        <Pressable onPress={() => setShowAdvanced(false)}>
-          <Text style={[styles.closeAdvanced, { color: colors.textSecondary }]}>
-            {t("settings.advanced.hide")}
+        <View>
+          <Text style={[styles.advancedTitle, { color: colors.text }]}>
+            {t("settings.advanced.title", {
+              defaultValue: "Sources & Devices",
+            })}
           </Text>
-        </Pressable>
+          <Text
+            style={[styles.advancedSubtitle, { color: colors.textSecondary }]}
+          >
+            Add-ons, bridge URLs, casting, and optional resolvers
+          </Text>
+        </View>
       </View>
+
+      <Pressable
+        style={[styles.manageAddonsCard, { borderColor: colors.border }]}
+        onPress={() => {
+          hapticSelection();
+          router.push("/addons");
+        }}
+      >
+        <View
+          style={[
+            styles.iconContainer,
+            { backgroundColor: "rgba(216,180,254,0.14)" },
+          ]}
+        >
+          <Ionicons name="extension-puzzle-outline" size={20} color="#d8b4fe" />
+        </View>
+        <View style={styles.menuItemTextContainer}>
+          <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+            {t("settings.items.manageAddons")}
+          </Text>
+          <Text
+            style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+          >
+            {t("settings.subtitles.manageAddons")}
+          </Text>
+        </View>
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={colors.textSecondary}
+        />
+      </Pressable>
 
       <View style={[styles.bridgeInfoCard, { borderColor: colors.border }]}>
         <View style={styles.bridgeInfoHeader}>
@@ -398,8 +391,8 @@ function SettingsContent() {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const [activePane, setActivePane] = useState<
-    "profile" | "password" | "sessions" | null
-  >(null);
+    "sources" | "profile" | "password" | "sessions" | null
+  >("sources");
 
   useEffect(() => {
     (async () => {
@@ -492,32 +485,92 @@ function SettingsContent() {
   const renderModals = () => (
     <>
       <ChangePasswordModal
-        visible={isDesktop ? activePane === "password" : pwModalOpen}
-        onClose={() =>
-          isDesktop ? setActivePane(null) : setPwModalOpen(false)
-        }
-        inline={isDesktop}
+        visible={pwModalOpen}
+        onClose={() => setPwModalOpen(false)}
       />
       <EditProfileModal
-        visible={isDesktop ? activePane === "profile" : profileModalOpen}
-        onClose={() =>
-          isDesktop ? setActivePane(null) : setProfileModalOpen(false)
-        }
-        inline={isDesktop}
+        visible={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
       />
       <ActiveSessionsModal
-        visible={isDesktop ? activePane === "sessions" : sessionsModalOpen}
-        onClose={() =>
-          isDesktop ? setActivePane(null) : setSessionsModalOpen(false)
-        }
+        visible={sessionsModalOpen}
+        onClose={() => setSessionsModalOpen(false)}
         sessions={sessions as any}
         isSessionsLoading={isSessionsLoading}
         deviceId={deviceId}
         revokeSession={revokeSession}
-        inline={isDesktop}
       />
     </>
   );
+
+  const renderDesktopPane = () => {
+    if (activePane === "sources") {
+      return (
+        <View style={styles.desktopRightPaneContent}>
+          <SourcesDevicesPanel />
+        </View>
+      );
+    }
+
+    if (activePane === "password") {
+      return (
+        <View style={styles.desktopRightPaneContent}>
+          <ChangePasswordModal
+            visible
+            onClose={() => setActivePane("sources")}
+            inline
+          />
+        </View>
+      );
+    }
+
+    if (activePane === "profile") {
+      return (
+        <View style={styles.desktopRightPaneContent}>
+          <EditProfileModal
+            visible
+            onClose={() => setActivePane("sources")}
+            inline
+          />
+        </View>
+      );
+    }
+
+    if (activePane === "sessions") {
+      return (
+        <View style={styles.desktopRightPaneContent}>
+          <ActiveSessionsModal
+            visible
+            onClose={() => setActivePane("sources")}
+            sessions={sessions as any}
+            isSessionsLoading={isSessionsLoading}
+            deviceId={deviceId}
+            revokeSession={revokeSession}
+            inline
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.desktopPlaceholder}>
+        <Ionicons
+          name="settings-outline"
+          size={48}
+          color={colors.textSecondary}
+          style={{ opacity: 0.3 }}
+        />
+        <Text
+          style={[
+            styles.desktopPlaceholderText,
+            { color: colors.textSecondary },
+          ]}
+        >
+          {t("settings.desktopPlaceholder", "Select a setting to view details")}
+        </Text>
+      </View>
+    );
+  };
 
   const MasterList = (
     <ScrollView
@@ -536,10 +589,7 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop &&
-              activePane === "profile" && {
-                backgroundColor: "rgba(255,255,255,0.05)",
-              },
+            isDesktop && activePane === "profile" && styles.menuItemActive,
           ]}
           onPress={handleProfilePress}
         >
@@ -567,6 +617,52 @@ function SettingsContent() {
             color={colors.textSecondary}
           />
         </Pressable>
+      </SectionGroup>
+
+      <SectionGroup
+        title={t("settings.sections.sourcesDevices", {
+          defaultValue: "Sources & Devices",
+        })}
+        colors={colors}
+      >
+        {isDesktop ? (
+          <Pressable
+            style={[
+              styles.menuItem,
+              activePane === "sources" && styles.menuItemActive,
+            ]}
+            onPress={() => setActivePane("sources")}
+          >
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+              ]}
+            >
+              <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                Sources & Devices
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Bridge, server URLs, add-ons, and optional resolvers
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        ) : (
+          <SourcesDevicesPanel />
+        )}
       </SectionGroup>
 
       {/* Appearance */}
@@ -695,10 +791,7 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop &&
-              activePane === "sessions" && {
-                backgroundColor: "rgba(255,255,255,0.05)",
-              },
+            isDesktop && activePane === "sessions" && styles.menuItemActive,
           ]}
           onPress={handleSessionsPress}
         >
@@ -740,10 +833,7 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop &&
-              activePane === "password" && {
-                backgroundColor: "rgba(255,255,255,0.05)",
-              },
+            isDesktop && activePane === "password" && styles.menuItemActive,
           ]}
           onPress={handlePasswordPress}
         >
@@ -893,16 +983,6 @@ function SettingsContent() {
         </Pressable>
       </SectionGroup>
 
-      {/* Sources & Devices */}
-      <SectionGroup
-        title={t("settings.sections.sourcesDevices", {
-          defaultValue: "Sources & Devices",
-        })}
-        colors={colors}
-      >
-        <AdvancedSettingsSection />
-      </SectionGroup>
-
       {/* Logout */}
       <Pressable
         style={styles.logoutButton}
@@ -926,32 +1006,13 @@ function SettingsContent() {
         <View
           style={[
             styles.desktopRightPane,
-            { backgroundColor: colors.card, borderLeftColor: colors.border },
+            {
+              backgroundColor: colors.background,
+              borderLeftColor: colors.border,
+            },
           ]}
         >
-          {activePane ? (
-            <View style={styles.desktopRightPaneContent}>{renderModals()}</View>
-          ) : (
-            <View style={styles.desktopPlaceholder}>
-              <Ionicons
-                name="settings-outline"
-                size={48}
-                color={colors.textSecondary}
-                style={{ opacity: 0.3 }}
-              />
-              <Text
-                style={[
-                  styles.desktopPlaceholderText,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {t(
-                  "settings.desktopPlaceholder",
-                  "Select a setting to view details",
-                )}
-              </Text>
-            </View>
-          )}
+          {renderDesktopPane()}
         </View>
       </View>
     );
@@ -993,6 +1054,8 @@ const styles = StyleSheet.create({
   desktopRightPaneContent: {
     flex: 1,
     padding: 24,
+    maxWidth: 760,
+    width: "100%",
   },
   desktopPlaceholder: {
     flex: 1,
@@ -1024,6 +1087,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     minHeight: 64,
+  },
+  menuItemActive: {
+    backgroundColor: "rgba(216,180,254,0.14)",
   },
   divider: {
     height: 1,
@@ -1085,7 +1151,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   advancedTitle: { fontWeight: "bold", fontSize: 16 },
-  closeAdvanced: { color: "#94a3b8", fontSize: 13 },
+  advancedSubtitle: {
+    fontSize: 12,
+    marginTop: 3,
+    lineHeight: 17,
+  },
+  manageAddonsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: "rgba(216,180,254,0.08)",
+    padding: 14,
+    marginBottom: 14,
+  },
   bridgeInfoCard: {
     padding: 14,
     borderRadius: 14,
