@@ -376,13 +376,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 24 },
-    shadowOpacity: 0.6,
-    shadowRadius: 48,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 24px 48px rgba(0, 0, 0, 0.6)" }
+      : {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 24 },
+          shadowOpacity: 0.6,
+          shadowRadius: 48,
+        }),
     elevation: 24,
     maxHeight: 520,
-  },
+  } as any,
   inputRow: {
     flexDirection: "row",
     alignItems: "center",

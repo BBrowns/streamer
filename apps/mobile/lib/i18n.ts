@@ -15,7 +15,17 @@ const resources = {
 
 const LANGUAGE_KEY = "user-language";
 
-const initI18n = async () => {
+void i18n.use(initReactI18next).init({
+  resources,
+  lng: "en",
+  fallbackLng: "en",
+  interpolation: {
+    escapeValue: false,
+  },
+  initAsync: false,
+});
+
+const hydrateSavedLanguage = async () => {
   let savedLanguage = null;
 
   // Guard: AsyncStorage on Web requires 'window' (browser environment).
@@ -36,19 +46,13 @@ const initI18n = async () => {
     savedLanguage = locale?.languageCode || "en";
   }
 
-  await i18n.use(initReactI18next).init({
-    resources,
-    lng: savedLanguage || "en",
-    fallbackLng: "en",
-    interpolation: {
-      escapeValue: false,
-    },
-  });
+  if (savedLanguage && savedLanguage !== i18n.language) {
+    await i18n.changeLanguage(savedLanguage);
+  }
 };
 
-// Only run top-level initialization if NOT in a server-side context for web
 if (Platform.OS !== "web" || typeof window !== "undefined") {
-  initI18n();
+  hydrateSavedLanguage();
 }
 
 export default i18n;

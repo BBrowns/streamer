@@ -67,10 +67,7 @@ function ContinueWatchingCard({ item }: { item: WatchProgress }) {
         Platform.OS === "web" &&
           hovered && {
             borderColor: colors.tint,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
+            boxShadow: "0 4px 8px rgba(0,0,0,0.2)",
           },
       ]}
       onPress={handlePress}

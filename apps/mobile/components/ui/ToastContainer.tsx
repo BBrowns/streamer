@@ -114,12 +114,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)" }
+      : {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 12,
+        }),
     elevation: 10,
-  },
+  } as any,
   message: {
     flex: 1,
     color: "#e2e8f0",

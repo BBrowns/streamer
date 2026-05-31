@@ -5,6 +5,7 @@ import {
   Image,
   Pressable,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { hapticImpactLight } from "../../lib/haptics";
@@ -299,11 +300,15 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
     overflow: "hidden",
     backgroundColor: "rgba(255,255,255,0.06)",
-    shadowColor: "#000",
-    shadowOpacity: 0.32,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 20 },
-  },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 20px 28px rgba(0, 0, 0, 0.32)" }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.32,
+          shadowRadius: 28,
+          shadowOffset: { width: 0, height: 20 },
+        }),
+  } as any,
   desktopPoster: {
     width: "100%",
     height: "100%",

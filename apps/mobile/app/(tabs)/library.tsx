@@ -334,12 +334,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 14,
-    shadowColor: "#ef4444",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 4px 8px rgba(239, 68, 68, 0.3)" }
+      : {
+          shadowColor: "#ef4444",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+        }),
     elevation: 8,
-  },
+  } as any,
   fabText: {
     color: "#ffffff",
     fontSize: 16,

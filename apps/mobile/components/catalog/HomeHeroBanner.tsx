@@ -13,6 +13,8 @@ import type { MetaPreview } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 
+const isWeb = Platform.OS === "web";
+
 function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -21,7 +23,6 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
   const heroHeight = isDesktop ? 520 : 380;
   const [playHovered, setPlayHovered] = useState(false);
   const [infoHovered, setInfoHovered] = useState(false);
-  const isWeb = Platform.OS === "web";
 
   const handleNavigate = () => router.push(`/detail/${item.type}/${item.id}`);
 
@@ -231,11 +232,15 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0,
     marginBottom: 6,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    ...(isWeb
+      ? { textShadow: "0 2px 8px rgba(0,0,0,0.5)" }
+      : {
+          textShadowColor: "rgba(0,0,0,0.5)",
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 8,
+        }),
     color: "#fff",
-  },
+  } as any,
   heroRating: {
     color: "#ffd9a8",
     fontSize: 14,
