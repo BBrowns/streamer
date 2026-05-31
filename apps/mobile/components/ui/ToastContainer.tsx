@@ -87,7 +87,10 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <View
+      style={[styles.container, Platform.OS === "web" && styles.webPassThrough]}
+      pointerEvents={Platform.OS === "web" ? undefined : "box-none"}
+    >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} />
       ))}
@@ -123,7 +126,11 @@ const styles = StyleSheet.create({
           shadowRadius: 12,
         }),
     elevation: 10,
+    pointerEvents: "auto",
   } as any,
+  webPassThrough: {
+    pointerEvents: "none",
+  },
   message: {
     flex: 1,
     color: "#e2e8f0",

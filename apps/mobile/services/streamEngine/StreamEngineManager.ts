@@ -78,11 +78,16 @@ export class StreamEngineManager {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${currentUrl}/status`, {
+      const res = await fetch(`${currentUrl}/api/health`, {
         signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      }).finally(() => clearTimeout(timeout));
       if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.torrentEngine?.available === false) {
+          this.bridgeAvailable = false;
+          this.bridgeStatus = "unsupported";
+          return false;
+        }
         this.bridgeAvailable = true;
         this.bridgeStatus = "available";
         this.activeStrategy = "local";
@@ -96,6 +101,30 @@ export class StreamEngineManager {
       this.bridgeAvailable = false;
       this.bridgeStatus = "unreachable";
     } catch {
+      try {
+        const fallbackController = new AbortController();
+        const fallbackTimeout = setTimeout(
+          () => fallbackController.abort(),
+          2000,
+        );
+        const fallbackRes = await fetch(`${currentUrl}/status`, {
+          signal: fallbackController.signal,
+        }).finally(() => clearTimeout(fallbackTimeout));
+
+        if (fallbackRes.ok) {
+          this.bridgeAvailable = true;
+          this.bridgeStatus = "available";
+          this.activeStrategy = "local";
+          if (this.retryTimer) {
+            clearInterval(this.retryTimer);
+            this.retryTimer = null;
+          }
+          return true;
+        }
+      } catch {
+        // fall through to unreachable state
+      }
+
       this.bridgeAvailable = false;
       this.bridgeStatus = "unreachable";
     }

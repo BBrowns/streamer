@@ -106,7 +106,7 @@ export function PlayerStatusOverlay({
   // to satisfy the compiler to avoid "condition always false" lints.
   if (isBuffering) {
     return (
-      <View style={styles.bufferingOverlay} pointerEvents="none">
+      <View style={styles.bufferingOverlay}>
         <ActivityIndicator size="large" color="#818cf8" />
       </View>
     );
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
+    zIndex: 30,
     padding: 24,
     backgroundColor: "rgba(0,0,0,0.8)",
   },
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
+    zIndex: 30,
     padding: 24,
     backgroundColor: "rgba(0,0,0,0.95)",
   },
@@ -174,6 +174,7 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
+    zIndex: 30,
+    pointerEvents: "none",
   },
 });

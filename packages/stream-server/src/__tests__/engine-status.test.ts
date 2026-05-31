@@ -3,6 +3,7 @@ import {
   __resetTorrentEngineForTests,
   __setWebTorrentImporterForTests,
   getClient,
+  getTorrent,
   getTorrentEngineStatus,
   isTorrentEngineUnavailableError,
   streamRequest,
@@ -73,5 +74,36 @@ describe("torrent engine native load failures", () => {
       }),
     );
     expect(res.json.mock.calls[0][0].error).not.toContain("dlopen");
+  });
+});
+
+describe("torrent lookup", () => {
+  beforeEach(() => {
+    __resetTorrentEngineForTests();
+  });
+
+  it("matches info hashes case-insensitively for metrics lookups", async () => {
+    class FakeWebTorrent {
+      torrents = [{ infoHash: "abcdef123456" }];
+      on = vi.fn();
+      destroy = (cb: (err: Error | null) => void) => cb(null);
+      createServer = () => ({
+        server: {
+          listen: (_port: number, _host: string, cb: () => void) => cb(),
+          address: () => ({ port: 3210 }),
+          on: vi.fn(),
+        },
+      });
+    }
+
+    __setWebTorrentImporterForTests(async () => ({
+      default: FakeWebTorrent as any,
+    }));
+
+    await getClient();
+
+    expect(getTorrent("ABCDEF123456")).toEqual(
+      expect.objectContaining({ infoHash: "abcdef123456" }),
+    );
   });
 });

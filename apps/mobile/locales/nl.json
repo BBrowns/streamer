@@ -348,6 +348,10 @@
     },
     "errors": {
       "noStream": "Geen stream geselecteerd",
+      "bridgeUnavailable": "De desktop streaming bridge is niet beschikbaar of de torrent-engine werkt niet. Controleer Bronnen & Apparaten en houd de desktop bridge actief.",
+      "playbackFailed": "Afspelen is mislukt voordat het eerste videoframe geladen kon worden.",
+      "playbackTimeout": "De stream leverde binnen 60 seconden geen afspeelbare video. De torrent kan traag, vastgelopen of niet compatibel zijn met deze speler.",
+      "unsupportedCodec": "Deze bron lijkt HEVC/H.265 of Dolby Vision te gebruiken. Deze desktop/web-speler kan dat niet betrouwbaar decoderen. Kies een H.264/x264-bron of een lagere MP4-kwaliteit.",
       "goBack": "Ga terug"
     },
     "cast": {

@@ -174,8 +174,11 @@ export function __resetTorrentEngineForTests() {
 }
 
 export function getTorrent(infoHash: string): any {
+  const normalizedInfoHash = infoHash.toLowerCase();
   if (client) {
-    const t = client.torrents?.find((t: any) => t.infoHash === infoHash);
+    const t = client.torrents?.find(
+      (t: any) => String(t.infoHash || "").toLowerCase() === normalizedInfoHash,
+    );
     if (t) lastAccessMap.set(infoHash, Date.now());
     return t;
   }
