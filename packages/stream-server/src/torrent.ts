@@ -16,12 +16,44 @@ import { waitForReady } from "./torrent-helpers.js";
 // Re-export pure helpers for stats.ts and tests
 export { handleTorrent, waitForReady, mimeFromExt } from "./torrent-helpers.js";
 
+type WebTorrentModule = {
+  default: new (options: Record<string, unknown>) => any;
+};
+
 // Lazily initialized webtorrent client
 let client: any = null;
+let clientInitError: TorrentEngineError | null = null;
+let importWebTorrent = () => import("webtorrent") as Promise<WebTorrentModule>;
 
 // Shared HTTP server instance (created once via client.createServer())
 let serverInstance: any = null;
 let serverPort: number = 0;
+
+export interface TorrentEngineStatus {
+  available: boolean;
+  state: "ready" | "uninitialized" | "unavailable";
+  reason?: "native-architecture-mismatch" | "native-load-failed";
+  message?: string;
+  processArch: NodeJS.Architecture;
+  platform: NodeJS.Platform;
+}
+
+class TorrentEngineError extends Error {
+  code = "TORRENT_ENGINE_UNAVAILABLE";
+  reason: TorrentEngineStatus["reason"];
+  cause?: unknown;
+
+  constructor(
+    message: string,
+    reason: TorrentEngineStatus["reason"],
+    cause?: unknown,
+  ) {
+    super(message);
+    this.name = "TorrentEngineError";
+    this.reason = reason;
+    this.cause = cause;
+  }
+}
 
 /** Maximum concurrent connections per torrent peer */
 const MAX_CONNS = parseInt(process.env.WT_MAX_CONNS || "55", 10);
@@ -54,6 +86,92 @@ const MAX_ACTIVE_TORRENTS = parseInt(
 
 /** Track last access time per infoHash for pruning */
 const lastAccessMap = new Map<string, number>();
+
+function isNodeDataChannelLoadError(err: unknown) {
+  const message = String((err as Error | undefined)?.message ?? err);
+  return (
+    message.includes("node-datachannel") ||
+    message.includes("node_datachannel.node")
+  );
+}
+
+function normalizeTorrentEngineError(err: unknown) {
+  const message = String((err as Error | undefined)?.message ?? err);
+  const isArchitectureMismatch =
+    isNodeDataChannelLoadError(err) &&
+    (message.includes("incompatible architecture") ||
+      message.includes("wrong architecture"));
+
+  if (!isNodeDataChannelLoadError(err)) {
+    return err instanceof Error ? err : new Error(message);
+  }
+
+  return new TorrentEngineError(
+    isArchitectureMismatch
+      ? "Torrent engine unavailable: node-datachannel was installed for a different CPU architecture than the current Node/Electron runtime. Reinstall dependencies under the same architecture or run the desktop bridge with STREAMER_BRIDGE_NODE pointing at the matching Node binary."
+      : "Torrent engine unavailable: node-datachannel native bindings failed to load. Reinstall dependencies or rebuild node-datachannel for the current runtime.",
+    isArchitectureMismatch
+      ? "native-architecture-mismatch"
+      : "native-load-failed",
+    err,
+  );
+}
+
+export function isTorrentEngineUnavailableError(err: unknown) {
+  return (
+    (err as { code?: string } | undefined)?.code ===
+    "TORRENT_ENGINE_UNAVAILABLE"
+  );
+}
+
+export function getTorrentEngineStatus(): TorrentEngineStatus {
+  if (client) {
+    return {
+      available: true,
+      state: "ready",
+      processArch: process.arch,
+      platform: process.platform,
+    };
+  }
+
+  if (clientInitError) {
+    return {
+      available: false,
+      state: "unavailable",
+      reason: clientInitError.reason,
+      message: clientInitError.message,
+      processArch: process.arch,
+      platform: process.platform,
+    };
+  }
+
+  return {
+    available: true,
+    state: "uninitialized",
+    processArch: process.arch,
+    platform: process.platform,
+  };
+}
+
+export function __setWebTorrentImporterForTests(
+  importer: typeof importWebTorrent,
+) {
+  importWebTorrent = importer;
+  client = null;
+  clientInitError = null;
+  serverInstance = null;
+  serverPort = 0;
+  lastAccessMap.clear();
+}
+
+export function __resetTorrentEngineForTests() {
+  importWebTorrent = () => import("webtorrent") as Promise<WebTorrentModule>;
+  client = null;
+  clientInitError = null;
+  serverInstance = null;
+  serverPort = 0;
+  lastAccessMap.clear();
+}
 
 export function getTorrent(infoHash: string): any {
   if (client) {
@@ -92,35 +210,55 @@ export async function pruneTorrents(client: any) {
 }
 
 export async function getClient(): Promise<any> {
+  if (clientInitError) {
+    throw clientInitError;
+  }
+
   if (!client) {
-    const WebTorrent = (await import("webtorrent")).default;
-    client = new WebTorrent({
-      maxConns: MAX_CONNS,
-      utp: false, // Disable UTP to prevent "address not available" bind errors
-      tracker: {
-        announce: DEFAULT_TRACKERS,
-      },
-    });
-
-    client.on("error", (err: Error) => {
-      console.error("[stream-server] WebTorrent client error:", err.message);
-    });
-
-    // Create the shared HTTP server (webtorrent v2 API)
-    serverInstance = client.createServer();
-    await new Promise<void>((resolve, reject) => {
-      serverInstance.server.listen(0, "0.0.0.0", () => {
-        const addr = serverInstance.server.address();
-        if (addr && typeof addr !== "string") {
-          serverPort = addr.port;
-          console.log(
-            `[stream-server] WebTorrent HTTP server on port ${serverPort}`,
-          );
-        }
-        resolve();
+    try {
+      const WebTorrent = (await importWebTorrent()).default;
+      client = new WebTorrent({
+        maxConns: MAX_CONNS,
+        utp: false, // Disable UTP to prevent "address not available" bind errors
+        tracker: {
+          announce: DEFAULT_TRACKERS,
+        },
       });
-      serverInstance.server.on("error", reject);
-    });
+
+      client.on("error", (err: Error) => {
+        console.error("[stream-server] WebTorrent client error:", err.message);
+      });
+
+      if (typeof client.createServer !== "function") {
+        throw new Error("WebTorrent HTTP server API is unavailable");
+      }
+
+      // Create the shared HTTP server (webtorrent v2 API)
+      serverInstance = client.createServer();
+      await new Promise<void>((resolve, reject) => {
+        serverInstance.server.listen(0, "0.0.0.0", () => {
+          const addr = serverInstance.server.address();
+          if (addr && typeof addr !== "string") {
+            serverPort = addr.port;
+            console.log(
+              `[stream-server] WebTorrent HTTP server on port ${serverPort}`,
+            );
+          }
+          resolve();
+        });
+        serverInstance.server.on("error", reject);
+      });
+    } catch (err) {
+      client = null;
+      serverInstance = null;
+      serverPort = 0;
+
+      const normalized = normalizeTorrentEngineError(err);
+      if (isTorrentEngineUnavailableError(normalized)) {
+        clientInitError = normalized as TorrentEngineError;
+      }
+      throw normalized;
+    }
   }
   return client;
 }

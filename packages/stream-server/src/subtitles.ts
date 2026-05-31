@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import { spawn } from "child_process";
-import { getClient, waitForReady, validateTorrentFiles } from "./torrent.js";
+import {
+  getClient,
+  isTorrentEngineUnavailableError,
+  waitForReady,
+  validateTorrentFiles,
+} from "./torrent.js";
 import path from "path";
 
 export interface SubtitleTrack {
@@ -92,7 +97,9 @@ export async function getSubtitlesRequest(req: Request, res: Response) {
 
     res.json({ tracks });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res
+      .status(isTorrentEngineUnavailableError(err) ? 503 : 500)
+      .json({ error: err.message });
   }
 }
 
@@ -171,6 +178,8 @@ export async function streamSubtitleRequest(req: Request, res: Response) {
 
     res.status(400).json({ error: "Invalid track type" });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res
+      .status(isTorrentEngineUnavailableError(err) ? 503 : 500)
+      .json({ error: err.message });
   }
 }
