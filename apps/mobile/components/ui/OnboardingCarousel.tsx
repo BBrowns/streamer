@@ -431,11 +431,15 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
     elevation: 8,
-    shadowColor: "#d8b4fe",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.32,
-    shadowRadius: 16,
-  },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 6px 16px rgba(216, 180, 254, 0.32)" }
+      : {
+          shadowColor: "#d8b4fe",
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.32,
+          shadowRadius: 16,
+        }),
+  } as any,
   gradient: {
     flex: 1,
     alignItems: "center",
@@ -458,9 +462,13 @@ const styles = StyleSheet.create({
     zIndex: 10,
     borderWidth: 1,
     borderColor: "rgba(216, 180, 254, 0.35)",
-    shadowColor: "#d8b4fe",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-  },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 8px 12px rgba(216, 180, 254, 0.28)" }
+      : {
+          shadowColor: "#d8b4fe",
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.28,
+          shadowRadius: 12,
+        }),
+  } as any,
 });

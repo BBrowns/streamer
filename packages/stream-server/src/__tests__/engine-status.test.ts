@@ -1,0 +1,77 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  __resetTorrentEngineForTests,
+  __setWebTorrentImporterForTests,
+  getClient,
+  getTorrentEngineStatus,
+  isTorrentEngineUnavailableError,
+  streamRequest,
+} from "../torrent.js";
+
+function makeRes() {
+  return {
+    headersSent: false,
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
+  };
+}
+
+describe("torrent engine native load failures", () => {
+  beforeEach(() => {
+    __resetTorrentEngineForTests();
+    vi.restoreAllMocks();
+  });
+
+  it("normalizes node-datachannel architecture errors", async () => {
+    const nativeError = new Error(
+      "dlopen(node_datachannel.node): mach-o file, but is an incompatible architecture (have 'arm64', need 'x86_64')",
+    );
+    __setWebTorrentImporterForTests(async () => {
+      throw nativeError;
+    });
+
+    await expect(getClient()).rejects.toMatchObject({
+      code: "TORRENT_ENGINE_UNAVAILABLE",
+      reason: "native-architecture-mismatch",
+    });
+
+    try {
+      await getClient();
+      throw new Error("expected getClient to reject");
+    } catch (err) {
+      expect(isTorrentEngineUnavailableError(err)).toBe(true);
+    }
+    expect(getTorrentEngineStatus()).toMatchObject({
+      available: false,
+      state: "unavailable",
+      reason: "native-architecture-mismatch",
+    });
+  });
+
+  it("returns a sanitized 503 instead of leaking the dlopen stack", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    __setWebTorrentImporterForTests(async () => {
+      throw new Error(
+        "dlopen(/node_modules/node-datachannel/build/Release/node_datachannel.node): incompatible architecture",
+      );
+    });
+
+    const res = makeRes();
+    await streamRequest(
+      {
+        query: { magnet: "magnet:?xt=urn:btih:123" },
+        hostname: "127.0.0.1",
+      } as any,
+      res as any,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining("Torrent engine unavailable"),
+        retryable: false,
+      }),
+    );
+    expect(res.json.mock.calls[0][0].error).not.toContain("dlopen");
+  });
+});

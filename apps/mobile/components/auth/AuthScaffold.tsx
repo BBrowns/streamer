@@ -203,11 +203,15 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1,
     padding: 24,
-    shadowColor: "#d8b4fe",
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.18,
-    shadowRadius: 30,
-  },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 18px 30px rgba(216, 180, 254, 0.18)" }
+      : {
+          shadowColor: "#d8b4fe",
+          shadowOffset: { width: 0, height: 18 },
+          shadowOpacity: 0.18,
+          shadowRadius: 30,
+        }),
+  } as any,
   title: {
     fontSize: 34,
     lineHeight: 40,

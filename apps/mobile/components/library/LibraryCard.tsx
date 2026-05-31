@@ -395,11 +395,15 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   cardSelected: {
-    shadowColor: "#d8b4fe",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 0 8px rgba(216, 180, 254, 0.3)" }
+      : {
+          shadowColor: "#d8b4fe",
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+        }),
+  } as any,
   checkboxOverlay: {
     position: "absolute",
     top: 8,
@@ -415,12 +419,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     padding: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 8px 16px rgba(0, 0, 0, 0.2)" }
+      : {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2,
+          shadowRadius: 16,
+        }),
     elevation: 10,
-  },
+  } as any,
   contextMenuItem: {
     flexDirection: "row",
     alignItems: "center",

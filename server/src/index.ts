@@ -38,6 +38,27 @@ async function main() {
     },
   );
 
+  server.on("connection", (socket) => {
+    socket.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ECONNRESET" || err.code === "EPIPE") {
+        logger.debug({ err }, "Client socket closed unexpectedly");
+        return;
+      }
+
+      logger.warn({ err }, "Client socket error");
+    });
+  });
+
+  server.on("clientError", (err: NodeJS.ErrnoException, socket) => {
+    if (err.code !== "ECONNRESET" && err.code !== "EPIPE") {
+      logger.warn({ err }, "HTTP client error");
+    }
+
+    if (!socket.destroyed) {
+      socket.destroy();
+    }
+  });
+
   injectWebSocket(server);
 
   // Graceful shutdown

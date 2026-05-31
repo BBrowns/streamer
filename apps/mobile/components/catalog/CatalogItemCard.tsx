@@ -152,11 +152,15 @@ const styles = StyleSheet.create({
   cardHovered: {
     transform: [{ scale: 1.03 }],
     zIndex: 10,
-    shadowColor: "#a78bfa",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
+    ...(isWeb
+      ? { boxShadow: "0 6px 12px rgba(167, 139, 250, 0.3)" }
+      : {
+          shadowColor: "#a78bfa",
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+        }),
+  } as any,
   imageWrapper: {
     position: "relative",
     overflow: "hidden",

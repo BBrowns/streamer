@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { pathToFileURL } from "url";
-import { streamRequest, getClient } from "./torrent.js";
+import { streamRequest, getClient, getTorrentEngineStatus } from "./torrent.js";
 import { getStats } from "./stats.js";
 import { castRouter } from "./cast.js";
 import { metricsHandler } from "./metrics.js";
@@ -35,6 +35,7 @@ export function createStreamServerApp() {
 
     res.json({
       status: "active",
+      torrentEngine: getTorrentEngineStatus(),
       version: "1.0.0",
       uptime: Math.floor(process.uptime()),
       memory: {

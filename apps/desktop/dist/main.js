@@ -7,6 +7,7 @@ const fs = require("fs");
 const https = require("https");
 const http = require("http");
 const os = require("os");
+const { spawn } = require("child_process");
 
 const { autoUpdater } = require("electron-updater");
 
@@ -54,6 +55,66 @@ function resolveLanBridgeUrl() {
         }
     }
     return 'http://localhost:11470';
+}
+
+function resolveBridgeEntrypoint() {
+    const candidates = [
+        path.resolve(__dirname, '../../../packages/stream-server/dist/index.js'),
+        path.resolve(__dirname, '../../packages/stream-server/dist/index.js')
+    ];
+    return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
+}
+
+function resolveNodeExecutable() {
+    return process.env.STREAMER_BRIDGE_NODE || process.env.npm_node_execpath || 'node';
+}
+
+async function startBridgeDaemon() {
+    if (process.env.STREAMER_BRIDGE_IN_PROCESS === '1') {
+        const streamServer = await import('@streamer/stream-server');
+        return streamServer.startStreamServer(11470);
+    }
+
+    const entrypoint = resolveBridgeEntrypoint();
+    if (!fs.existsSync(entrypoint)) {
+        throw new Error(`Stream server entrypoint not found: ${entrypoint}. Run npm run build --workspace=@streamer/stream-server first.`);
+    }
+
+    const nodeExecutable = resolveNodeExecutable();
+    const child = spawn(nodeExecutable, [entrypoint], {
+        cwd: path.resolve(__dirname, '../../..'),
+        env: {
+            ...process.env,
+            PORT: '11470'
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    child.stdout?.on('data', (chunk) => {
+        process.stdout.write(`[stream-server] ${chunk}`);
+    });
+    child.stderr?.on('data', (chunk) => {
+        process.stderr.write(`[stream-server] ${chunk}`);
+    });
+    child.on('error', (error) => {
+        console.error('[stream-server] Failed to start bridge child process:', error);
+        bridgeServer = null;
+    });
+    child.on('exit', (code, signal) => {
+        if (code !== 0 && signal !== 'SIGTERM') {
+            console.warn(`[stream-server] Bridge child process exited with code ${code ?? 'null'} signal ${signal ?? 'null'}`);
+        }
+        bridgeServer = null;
+    });
+
+    return {
+        close: () => {
+            if (!child.killed) {
+                child.kill('SIGTERM');
+            }
+        },
+        process: child
+    };
 }
 
 function createWindow() {
@@ -180,12 +241,15 @@ electron_1.app.whenReady().then(async () => {
         });
     });
 
-    // Start the background P2P stream server
+    // Start the background P2P stream server outside Electron main so native
+    // Node add-ons load against the same Node architecture used by npm install.
     try {
-        const streamServer = await import('@streamer/stream-server');
-        bridgeServer = streamServer.startStreamServer(11470);
+        bridgeServer = await startBridgeDaemon();
         bridgeLanUrl = resolveLanBridgeUrl();
         console.log(`Successfully started @streamer/stream-server background daemon at ${bridgeLanUrl}`);
+        electron_1.app.on('will-quit', () => {
+            bridgeServer?.close?.();
+        });
         
         // Announce this desktop bridge on the local network via Bonjour
         try {
@@ -204,7 +268,6 @@ electron_1.app.whenReady().then(async () => {
             console.log(`[discovery] Announcing desktop bridge: ${service.name}`);
             
             electron_1.app.on('will-quit', () => {
-                bridgeServer?.close?.();
                 bonjour.unpublishAll(() => {
                     bonjour.destroy();
                 });
