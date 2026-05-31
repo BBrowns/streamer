@@ -102,10 +102,10 @@ export function usePlayerController({
 
   // 2. Metrics subscription
   useEffect(() => {
-    if (currentStream?.infoHash) {
+    if (currentStream?.infoHash && playbackUri) {
       subscribeToStreamMetrics(currentStream.infoHash);
     }
-  }, [currentStream?.infoHash, subscribeToStreamMetrics]);
+  }, [currentStream?.infoHash, playbackUri, subscribeToStreamMetrics]);
 
   // 3. Resume prompt logic
   useEffect(() => {

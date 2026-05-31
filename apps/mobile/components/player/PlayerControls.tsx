@@ -1,4 +1,11 @@
-import { View, Text, Pressable, StyleSheet, Dimensions } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Dimensions,
+  Platform,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { VideoPlayer } from "expo-video";
@@ -32,18 +39,27 @@ export function PlayerControls({
   if (!isVisible) return null;
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const nativePassthrough =
+    Platform.OS === "web" ? {} : ({ pointerEvents: "box-none" } as const);
 
   return (
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(200)}
-      style={styles.container}
-      pointerEvents="box-none"
+      style={[styles.container, Platform.OS === "web" && styles.webPassThrough]}
+      {...nativePassthrough}
     >
-      <View style={styles.centerControls} pointerEvents="box-none">
+      <View
+        style={[
+          styles.centerControls,
+          Platform.OS === "web" && styles.webPassThrough,
+        ]}
+        {...nativePassthrough}
+      >
         <Pressable
           style={[
             styles.playPauseBtn,
+            Platform.OS === "web" && styles.webInteractive,
             {
               backgroundColor: isDark
                 ? "rgba(0,0,0,0.6)"
@@ -61,7 +77,12 @@ export function PlayerControls({
         </Pressable>
       </View>
 
-      <View style={styles.bottomControls}>
+      <View
+        style={[
+          styles.bottomControls,
+          Platform.OS === "web" && styles.webInteractive,
+        ]}
+      >
         <Text style={[styles.timeText, { color: colors.text }]}>
           {formatTime(currentTime)}
         </Text>
@@ -125,6 +146,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 15,
     justifyContent: "space-between",
+  },
+  webPassThrough: {
+    pointerEvents: "none",
+  },
+  webInteractive: {
+    pointerEvents: "auto",
   },
   centerControls: {
     flex: 1,

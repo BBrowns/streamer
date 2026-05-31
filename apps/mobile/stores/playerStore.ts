@@ -5,6 +5,7 @@ import EventSource from "react-native-sse";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import type { Stream } from "@streamer/shared";
+import { useAuthStore } from "./authStore";
 
 export interface MediaInfo {
   type: "movie" | "series";
@@ -51,6 +52,10 @@ interface PlayerState {
   setStream: (stream: Stream, media?: MediaInfo) => void;
   setPlaying: (playing: boolean) => void;
   setBuffering: (buffering: boolean) => void;
+  setStreamStatus: (
+    state: StreamLoadState,
+    errorMessage?: string | null,
+  ) => void;
   setProgress: (currentTime: number, duration: number) => void;
   setPlaybackRate: (rate: number) => void;
   setAutoPlayNext: (enabled: boolean) => void;
@@ -63,7 +68,7 @@ interface PlayerState {
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentStream: null,
       mediaInfo: null,
       isPlaying: false,
@@ -81,16 +86,34 @@ export const usePlayerStore = create<PlayerState>()(
       preferredSubtitleLang: null,
       autoPlayNext: true,
 
-      setStream: (stream, media) =>
+      setStream: (stream, media) => {
+        const state = get();
+        if (state._eventSource) {
+          state._eventSource.removeAllEventListeners();
+          state._eventSource.close();
+        }
+        if (state._peerTimeout) clearTimeout(state._peerTimeout);
+
         set({
           currentStream: stream,
           mediaInfo: media ?? null,
-          isPlaying: true,
+          isPlaying: false,
+          isBuffering: true,
           streamState: "loading_metrics",
+          streamMetrics: null,
           errorMessage: null,
-        }),
+          _eventSource: null,
+          _peerTimeout: null,
+        });
+      },
       setPlaying: (playing) => set({ isPlaying: playing }),
       setBuffering: (buffering) => set({ isBuffering: buffering }),
+      setStreamStatus: (streamState, errorMessage = null) =>
+        set({
+          streamState,
+          errorMessage,
+          isBuffering: streamState === "loading_metrics",
+        }),
       setProgress: (currentTime, duration) => set({ currentTime, duration }),
       setPlaybackRate: (rate) => set({ playbackRate: rate }),
       setPreferredQuality: (quality) => set({ preferredQuality: quality }),
@@ -99,7 +122,8 @@ export const usePlayerStore = create<PlayerState>()(
       setAutoPlayNext: (enabled) => set({ autoPlayNext: enabled }),
 
       subscribeToStreamMetrics: (infoHash) => {
-        const state = usePlayerStore.getState();
+        const normalizedInfoHash = infoHash.toLowerCase();
+        const state = get();
         // Clean up previous if exists
         if (state._eventSource) {
           state._eventSource.removeAllEventListeners();
@@ -109,9 +133,12 @@ export const usePlayerStore = create<PlayerState>()(
           clearTimeout(state._peerTimeout);
         }
 
-        // Derive bridge URL dynamically from Metro host
+        // Derive bridge URL dynamically from settings, then fall back to platform defaults.
         let bridgeUrl: string;
-        if (Platform.OS === "web") {
+        const configuredBridgeUrl = useAuthStore.getState().streamServerUrl;
+        if (configuredBridgeUrl) {
+          bridgeUrl = configuredBridgeUrl;
+        } else if (Platform.OS === "web") {
           bridgeUrl = "http://localhost:11470";
         } else if (Platform.OS === "android") {
           bridgeUrl = "http://10.0.2.2:11470";
@@ -121,16 +148,27 @@ export const usePlayerStore = create<PlayerState>()(
           bridgeUrl = `http://${ip}:11470`;
         }
         const es = new EventSource(
-          `${bridgeUrl}/api/torrent/${infoHash}/metrics`,
+          `${bridgeUrl}/api/torrent/${encodeURIComponent(infoHash)}/metrics`,
         );
 
         const timeout = setTimeout(() => {
-          const currentMetrics = usePlayerStore.getState().streamMetrics;
+          const currentState = get();
+          const currentStreamInfoHash =
+            currentState.currentStream?.infoHash?.toLowerCase();
+          if (
+            currentStreamInfoHash !== normalizedInfoHash ||
+            currentState.streamState === "error"
+          ) {
+            return;
+          }
+
+          const currentMetrics = currentState.streamMetrics;
           if (!currentMetrics || currentMetrics.numPeers === 0) {
             es.removeAllEventListeners();
             es.close();
             set({
               streamState: "error",
+              isBuffering: false,
               errorMessage:
                 "No peers found after 45 seconds. The torrent may be inactive or the stream-server may not be reachable.",
               _eventSource: null,
@@ -146,16 +184,34 @@ export const usePlayerStore = create<PlayerState>()(
 
             // If we've found peers, we can safely clear the 15s timeout
             if (metrics.numPeers > 0) {
-              const currentTimeout = usePlayerStore.getState()._peerTimeout;
+              const currentTimeout = get()._peerTimeout;
               if (currentTimeout) clearTimeout(currentTimeout);
             }
+
+            const currentState = get();
+            const currentStreamInfoHash =
+              currentState.currentStream?.infoHash?.toLowerCase();
+            if (
+              currentStreamInfoHash !== normalizedInfoHash ||
+              currentState.streamState === "error"
+            ) {
+              return;
+            }
+
+            const nextStreamState =
+              metrics.state === "ready" || metrics.state === "downloading"
+                ? "playing"
+                : "loading_metrics";
 
             set({
               streamMetrics: metrics,
               streamState:
-                metrics.state === "ready" || metrics.state === "downloading"
+                currentState.streamState === "playing"
                   ? "playing"
-                  : "loading_metrics",
+                  : nextStreamState,
+              isBuffering:
+                nextStreamState === "loading_metrics" &&
+                currentState.streamState !== "playing",
             });
           } catch (e) {
             console.error("Failed to parse stream metric:", e);
@@ -194,9 +250,12 @@ export const usePlayerStore = create<PlayerState>()(
             }
 
             setTimeout(() => {
-              const currentState = usePlayerStore.getState();
+              const currentState = get();
+              const currentStreamInfoHash =
+                currentState.currentStream?.infoHash?.toLowerCase();
               if (
-                currentState.currentStream?.infoHash === infoHash &&
+                currentStreamInfoHash === normalizedInfoHash &&
+                currentState.streamState !== "error" &&
                 currentState.streamState !== "playing"
               ) {
                 currentState.subscribeToStreamMetrics(infoHash);
@@ -206,12 +265,36 @@ export const usePlayerStore = create<PlayerState>()(
           }
 
           console.error("EventSource metrics fatal error:", err);
+          const currentState = get();
+          const currentStreamInfoHash =
+            currentState.currentStream?.infoHash?.toLowerCase();
+          if (currentStreamInfoHash !== normalizedInfoHash) {
+            es.close();
+            return;
+          }
+
           set({
             streamState: "error",
+            isBuffering: false,
             errorMessage: "Failed to connect to streaming engine metrics",
+            _eventSource: null,
+            _peerTimeout: null,
           });
           es.close();
         });
+
+        const currentState = get();
+        const currentStreamInfoHash =
+          currentState.currentStream?.infoHash?.toLowerCase();
+        if (
+          currentStreamInfoHash !== normalizedInfoHash ||
+          currentState.streamState === "error"
+        ) {
+          es.removeAllEventListeners();
+          es.close();
+          clearTimeout(timeout);
+          return;
+        }
 
         set({
           _eventSource: es,

@@ -360,6 +360,10 @@
     },
     "errors": {
       "noStream": "No stream selected",
+      "bridgeUnavailable": "The desktop streaming bridge is not available or its torrent engine is unavailable. Check Sources & Devices and keep the desktop bridge running.",
+      "playbackFailed": "Playback failed before the first frame could load.",
+      "playbackTimeout": "The stream did not produce playable video within 60 seconds. The torrent may be slow, stalled, or incompatible with this player.",
+      "unsupportedCodec": "This source appears to use HEVC/H.265 or Dolby Vision, which this desktop/web player cannot decode reliably. Pick an H.264/x264 source or a lower-quality MP4 instead.",
       "goBack": "Go Back"
     },
     "cast": {

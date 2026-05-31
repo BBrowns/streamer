@@ -31,7 +31,7 @@ export function PlayerOverlay({
   const { t } = useTranslation();
 
   return (
-    <View style={styles.overlay} pointerEvents="none">
+    <View style={styles.overlay}>
       {/* Top Bar */}
       <View
         style={[
@@ -43,7 +43,6 @@ export function PlayerOverlay({
             paddingTop: Platform.OS === "web" ? 20 : 60,
           },
         ]}
-        pointerEvents="auto"
       >
         <Pressable
           style={({ hovered }: any) => [
@@ -142,7 +141,6 @@ export function PlayerOverlay({
             paddingBottom: Platform.OS === "web" ? 20 : 40,
           },
         ]}
-        pointerEvents="auto"
       >
         <Text style={[styles.infoTitle, { color: colors.text }]}>
           🎬{" "}
@@ -175,6 +173,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 20,
     justifyContent: "space-between",
+    pointerEvents: "none",
   },
   topBar: {
     flexDirection: "row",
@@ -184,6 +183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
     backgroundColor: "rgba(0,0,0,0.8)",
+    pointerEvents: "auto",
   },
   closeButton: {
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -210,6 +210,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 40,
+    pointerEvents: "auto",
   },
   infoTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 15 },
   infoSubRow: {

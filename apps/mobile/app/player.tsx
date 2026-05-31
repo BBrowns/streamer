@@ -37,9 +37,11 @@ import { ResumePrompt } from "../components/player/ResumePrompt";
 import { DesktopCastModal } from "../components/DesktopCastModal";
 import { castService, type CastDevice } from "../services/CastService";
 import { goBackOrReplace } from "../lib/navigation";
+import { getUnsupportedWebCodecReason } from "../services/streamEngine/codecSupport";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
+const PLAYBACK_START_TIMEOUT_MS = 60_000;
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -55,6 +57,9 @@ export default function PlayerScreen() {
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
+  const setPlaying = usePlayerStore((s) => s.setPlaying);
+  const setBuffering = usePlayerStore((s) => s.setBuffering);
+  const setStreamStatus = usePlayerStore((s) => s.setStreamStatus);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [castModalOpen, setCastModalOpen] = useState(false);
@@ -102,11 +107,44 @@ export default function PlayerScreen() {
   useEffect(() => {
     let isMounted = true;
     if (currentStream) {
+      const unsupportedCodecReason =
+        getUnsupportedWebCodecReason(currentStream);
+      if (unsupportedCodecReason) {
+        setPlaybackUri(null);
+        setIsResolvingPlayback(false);
+        setStreamStatus("error", t("player.errors.unsupportedCodec"));
+        return () => {
+          isMounted = false;
+        };
+      }
+
       setIsResolvingPlayback(true);
+      setStreamStatus("loading_metrics");
       streamEngineManager
         .getPlaybackUri(currentStream)
         .then((uri) => {
-          if (isMounted) setPlaybackUri(uri);
+          if (!isMounted) return;
+
+          if (uri && uri.length > 0) {
+            setPlaybackUri(uri);
+            return;
+          }
+
+          setPlaybackUri(null);
+          setStreamStatus(
+            "error",
+            currentStream.infoHash
+              ? t("player.errors.bridgeUnavailable")
+              : t("player.errors.noStream"),
+          );
+        })
+        .catch((err) => {
+          if (!isMounted) return;
+          setPlaybackUri(null);
+          setStreamStatus(
+            "error",
+            err?.message || t("player.errors.playbackFailed"),
+          );
         })
         .finally(() => {
           if (isMounted) setIsResolvingPlayback(false);
@@ -118,11 +156,117 @@ export default function PlayerScreen() {
     return () => {
       isMounted = false;
     };
-  }, [currentStream]);
+  }, [currentStream, setStreamStatus, t]);
 
   const player = useVideoPlayer(playbackUri || "", (p) => {
     p.play();
   });
+
+  useEffect(() => {
+    if (!player || !playbackUri || !currentStream) return;
+
+    player.timeUpdateEventInterval = 1;
+    setBuffering(true);
+
+    const markLoading = () => {
+      const state = usePlayerStore.getState();
+      if (state.streamState === "playing") {
+        setBuffering(true);
+      } else if (state.streamState !== "error") {
+        setStreamStatus("loading_metrics");
+      }
+    };
+
+    const markPlaying = () => {
+      setBuffering(false);
+      setPlaying(true);
+      setStreamStatus("playing");
+    };
+
+    const formatPlaybackError = (fallback?: string) => {
+      const unsupportedCodecReason =
+        getUnsupportedWebCodecReason(currentStream);
+      if (unsupportedCodecReason) {
+        return t("player.errors.unsupportedCodec");
+      }
+      return fallback || t("player.errors.playbackFailed");
+    };
+
+    const statusSub = player.addListener(
+      "statusChange",
+      ({ status, error }: any) => {
+        if (status === "loading") {
+          markLoading();
+          return;
+        }
+
+        if (status === "readyToPlay") {
+          markPlaying();
+          return;
+        }
+
+        if (status === "error") {
+          setBuffering(false);
+          setPlaying(false);
+          setStreamStatus("error", formatPlaybackError(error?.message));
+        }
+      },
+    );
+
+    const playingSub = player.addListener(
+      "playingChange",
+      ({ isPlaying }: any) => {
+        setPlaying(isPlaying);
+        if (isPlaying) markPlaying();
+      },
+    );
+
+    const timeSub = player.addListener("timeUpdate", ({ currentTime }: any) => {
+      if (currentTime > 0 || player.bufferedPosition > 0) {
+        markPlaying();
+      }
+    });
+
+    const sourceSub = player.addListener("sourceLoad", () => {
+      if (player.status === "readyToPlay") {
+        markPlaying();
+      }
+    });
+
+    const watchdog = setTimeout(() => {
+      const state = usePlayerStore.getState();
+      if (
+        state.currentStream !== currentStream ||
+        state.streamState === "playing" ||
+        state.streamState === "error"
+      ) {
+        return;
+      }
+
+      setBuffering(false);
+      setPlaying(false);
+      setStreamStatus(
+        "error",
+        formatPlaybackError(t("player.errors.playbackTimeout")),
+      );
+    }, PLAYBACK_START_TIMEOUT_MS);
+
+    return () => {
+      statusSub.remove();
+      playingSub.remove();
+      timeSub.remove();
+      sourceSub.remove();
+      clearTimeout(watchdog);
+    };
+  }, [
+    currentStream,
+    playbackUri,
+    player,
+    setBuffering,
+    setPlaying,
+    setStreamStatus,
+    t,
+  ]);
 
   const {
     audioTracks,
@@ -238,7 +382,11 @@ export default function PlayerScreen() {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
-        <Text style={styles.errorText}>{t("player.errors.noStream")}</Text>
+        <Text style={styles.errorText}>
+          {currentStream
+            ? errorMessage || t("player.errors.playbackFailed")
+            : t("player.errors.noStream")}
+        </Text>
         <Pressable style={styles.errorButton} onPress={handleClose}>
           <Text style={styles.errorButtonText}>
             {t("player.errors.goBack")}
