@@ -25,5 +25,6 @@ export interface DetailLayoutProps {
     episode?: number,
   ) => void;
   handleCastStream?: (stream?: Stream) => void;
+  planningAction?: "play" | "download" | "cast" | null;
   onBack: () => void;
 }
