@@ -28,11 +28,12 @@ export function DesktopDetailLayout({
   handleToggleLibrary,
   handlePlayStream,
   handleDownloadStream,
+  handleCastStream,
   onBack,
 }: DetailLayoutProps) {
   const streamsData =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
-  const bestStream = streamsData[0];
+  const hasMovieSources = castType !== "series" && (streams?.length ?? 0) > 0;
   const sourceCount =
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
 
@@ -85,24 +86,40 @@ export function DesktopDetailLayout({
       {castType !== "series" && (
         <View style={styles.primaryActionRow}>
           <Pressable
-            style={[styles.playBestBtn, !bestStream && styles.actionDisabled]}
-            disabled={!bestStream}
-            onPress={() => bestStream && handlePlayStream(bestStream)}
+            style={[
+              styles.playBestBtn,
+              !hasMovieSources && styles.actionDisabled,
+            ]}
+            disabled={!hasMovieSources}
+            onPress={() => handlePlayStream()}
           >
             <Ionicons name="play" size={18} color="#2c1738" />
-            <Text style={styles.playBestText}>Play Best</Text>
+            <Text style={styles.playBestText}>Play</Text>
           </Pressable>
           <Pressable
             style={[
               styles.secondaryActionBtn,
-              !bestStream && styles.actionDisabled,
+              !hasMovieSources && styles.actionDisabled,
             ]}
-            disabled={!bestStream}
-            onPress={() => bestStream && handleDownloadStream(bestStream)}
+            disabled={!hasMovieSources}
+            onPress={() => handleDownloadStream()}
           >
             <Ionicons name="download-outline" size={18} color="#f2d7ff" />
             <Text style={styles.secondaryActionText}>Download</Text>
           </Pressable>
+          {handleCastStream && (
+            <Pressable
+              style={[
+                styles.secondaryActionBtn,
+                !hasMovieSources && styles.actionDisabled,
+              ]}
+              disabled={!hasMovieSources}
+              onPress={() => handleCastStream()}
+            >
+              <Ionicons name="tv-outline" size={18} color="#f2d7ff" />
+              <Text style={styles.secondaryActionText}>Cast</Text>
+            </Pressable>
+          )}
         </View>
       )}
 

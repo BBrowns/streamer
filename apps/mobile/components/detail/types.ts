@@ -13,16 +13,17 @@ export interface DetailLayoutProps {
   inLibrary: boolean;
   handleToggleLibrary: () => void;
   handlePlayStream: (
-    stream: Stream,
+    stream?: Stream,
     episodeTitle?: string,
     season?: number,
     episode?: number,
   ) => void;
   handleDownloadStream: (
-    stream: Stream,
+    stream?: Stream,
     episodeTitle?: string,
     season?: number,
     episode?: number,
   ) => void;
+  handleCastStream?: (stream?: Stream) => void;
   onBack: () => void;
 }

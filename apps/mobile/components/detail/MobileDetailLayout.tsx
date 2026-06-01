@@ -33,11 +33,13 @@ export function MobileDetailLayout({
   handleToggleLibrary,
   handlePlayStream,
   handleDownloadStream,
+  handleCastStream,
   onBack,
 }: DetailLayoutProps) {
   const streamsData =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
-  const bestStream = streamsData[0];
+  const hasMovieSources =
+    castType !== "series" && availableResolutions.length > 0;
 
   const renderHeader = () => (
     <View>
@@ -78,22 +80,31 @@ export function MobileDetailLayout({
           )}
         </View>
 
-        {castType !== "series" && bestStream && (
+        {castType !== "series" && hasMovieSources && (
           <View style={styles.primaryActionRow}>
             <Pressable
               style={styles.playBestBtn}
-              onPress={() => handlePlayStream(bestStream)}
+              onPress={() => handlePlayStream()}
             >
               <Ionicons name="play" size={18} color="#2c1738" />
-              <Text style={styles.playBestText}>Play Best</Text>
+              <Text style={styles.playBestText}>Play</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryActionBtn}
-              onPress={() => handleDownloadStream(bestStream)}
+              onPress={() => handleDownloadStream()}
             >
               <Ionicons name="download-outline" size={18} color="#f2d7ff" />
               <Text style={styles.secondaryActionText}>Download</Text>
             </Pressable>
+            {handleCastStream && (
+              <Pressable
+                style={styles.secondaryActionBtn}
+                onPress={() => handleCastStream()}
+              >
+                <Ionicons name="tv-outline" size={18} color="#f2d7ff" />
+                <Text style={styles.secondaryActionText}>Cast</Text>
+              </Pressable>
+            )}
           </View>
         )}
 

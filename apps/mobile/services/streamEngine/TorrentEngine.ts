@@ -79,6 +79,9 @@ export class TorrentEngine implements IStreamEngine {
       if (typeof stream.fileIdx === "number") {
         params.set("fileIdx", String(stream.fileIdx));
       }
+      if (stream.behaviorHints?.remuxToMp4) {
+        params.set("remux", "mp4");
+      }
       return `${bridgeUrl}/stream?${params.toString()}`;
     }
 
