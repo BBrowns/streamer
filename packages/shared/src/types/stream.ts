@@ -14,6 +14,7 @@ export interface Stream {
   behaviorHints?: {
     notWebReady?: boolean;
     bingeGroup?: string;
+    remuxToMp4?: boolean;
   };
 }
 

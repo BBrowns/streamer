@@ -28,6 +28,9 @@ import { useToastStore } from "../../../stores/toastStore";
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
 import type { Stream } from "@streamer/shared";
+import type { PlaybackPlan } from "@streamer/shared";
+import { createPlaybackPlanWithBridgeRetry } from "../../../services/playback/PlaybackPlanService";
+import { DesktopCastModal } from "../../../components/DesktopCastModal";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -46,6 +49,8 @@ export default function DetailScreen() {
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
     null,
   );
+  const [castModalOpen, setCastModalOpen] = useState(false);
+  const [plannedCastUri, setPlannedCastUri] = useState<string | null>(null);
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
@@ -123,11 +128,39 @@ export default function DetailScreen() {
   }
 
   const handlePlayStream = async (
-    stream: Stream,
+    stream?: Stream,
     episodeTitle?: string,
     season?: number,
     episode?: number,
   ) => {
+    if (!stream) {
+      const plan = await createPlaybackPlanWithBridgeRetry({
+        type: castType,
+        id: id || "unknown",
+        season,
+        episode,
+        action: "play",
+      });
+      const plannedStream = getReadyPlannedStream(plan);
+      if (!plannedStream) {
+        showPlanMessage(plan, t("detail.errors.notPlayable"));
+        return;
+      }
+
+      setStream(plannedStream, {
+        type: castType,
+        itemId: id || "unknown",
+        title: episodeTitle
+          ? `${meta?.name} - ${episodeTitle}`
+          : (meta?.name ?? plannedStream.title ?? "Unknown"),
+        poster: meta?.poster,
+        season,
+        episode,
+      });
+      router.push("/player");
+      return;
+    }
+
     const streamId = stream.infoHash || stream.url;
     const task = useDownloadStore.getState().tasks[streamId || ""];
 
@@ -229,18 +262,35 @@ export default function DetailScreen() {
   };
 
   const handleDownloadStream = async (
-    stream: Stream,
+    stream?: Stream,
     episodeTitle?: string,
     season?: number,
     episode?: number,
   ) => {
     if (!meta) return;
     try {
+      let streamToDownload: Stream | undefined = stream;
+      if (!streamToDownload) {
+        const plan = await createPlaybackPlanWithBridgeRetry({
+          type: castType,
+          id: id || "unknown",
+          season,
+          episode,
+          action: "download",
+        });
+        const plannedStream = getReadyPlannedStream(plan);
+        if (!plannedStream) {
+          showPlanMessage(plan, t("detail.errors.downloadFailed"));
+          return;
+        }
+        streamToDownload = plannedStream;
+      }
+
       const displayTitle = episodeTitle
         ? `${meta.name} - ${episodeTitle}`
         : meta.name;
 
-      await downloadService.startDownload(stream, {
+      await downloadService.startDownload(streamToDownload, {
         itemId: id,
         type: castType,
         title: displayTitle,
@@ -252,6 +302,51 @@ export default function DetailScreen() {
       Alert.alert(t("common.error"), t("detail.errors.downloadFailed"));
     }
   };
+
+  const handleCastStream = async (stream?: Stream) => {
+    if (!meta) return;
+    try {
+      let streamToCast: Stream | undefined = stream;
+      if (!streamToCast) {
+        const plan = await createPlaybackPlanWithBridgeRetry({
+          type: castType,
+          id: id || "unknown",
+          action: "cast",
+        });
+        const plannedStream = getReadyPlannedStream(plan);
+        if (!plannedStream) {
+          showPlanMessage(plan, t("detail.errors.notPlayable"));
+          return;
+        }
+        streamToCast = plannedStream;
+      }
+
+      const uri = await streamEngineManager.getPlaybackUri(streamToCast);
+      if (!uri) {
+        showPlanMessage(null, t("detail.errors.notPlayable"));
+        return;
+      }
+
+      setPlannedCastUri(uri);
+      setCastModalOpen(true);
+    } catch {
+      showPlanMessage(null, t("detail.errors.notPlayable"));
+    }
+  };
+
+  function getReadyPlannedStream(plan: PlaybackPlan): Stream | null {
+    if (plan.state !== "ready" || !plan.plan?.selectedCandidate) return null;
+    const plannedStream = plan.plan.selectedCandidate.stream;
+    return plan.plan.playbackUrl
+      ? { ...plannedStream, url: plan.plan.playbackUrl }
+      : plannedStream;
+  }
+
+  function showPlanMessage(plan: PlaybackPlan | null, fallback: string) {
+    const msg = plan?.userMessage || fallback;
+    if (Platform.OS === "web") window.alert(msg);
+    else Alert.alert(t("detail.errors.unsupported"), msg);
+  }
 
   const layoutProps = {
     id,
@@ -267,13 +362,27 @@ export default function DetailScreen() {
     handleToggleLibrary,
     handlePlayStream,
     handleDownloadStream,
+    handleCastStream,
     onBack: () => goBackOrReplace(router),
   };
 
-  return isDesktop ? (
-    <DesktopDetailLayout {...layoutProps} />
-  ) : (
-    <MobileDetailLayout {...layoutProps} />
+  return (
+    <>
+      {isDesktop ? (
+        <DesktopDetailLayout {...layoutProps} />
+      ) : (
+        <MobileDetailLayout {...layoutProps} />
+      )}
+      {plannedCastUri && (
+        <DesktopCastModal
+          visible={castModalOpen}
+          playbackUri={plannedCastUri}
+          title={meta.name}
+          onClose={() => setCastModalOpen(false)}
+          onCastStart={() => setCastModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 

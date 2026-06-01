@@ -24,6 +24,7 @@ import { syncRouter } from "./modules/sync/sync.routes.js";
 import { sessionRouter } from "./modules/sessions/session.routes.js";
 import { docsRouter } from "./modules/docs/docs.routes.js";
 import { systemRouter } from "./modules/system/system.routes.js";
+import { playbackRouter } from "./modules/playback/playback.routes.js";
 
 import { initWebSockets } from "./config/websocket.js";
 
@@ -95,6 +96,7 @@ export function createApp() {
     .route("/api/notifications", notificationRouter)
     .route("/api/sync", syncRouter)
     .route("/api/sessions", sessionRouter)
+    .route("/api/playback", playbackRouter)
     .route("/api", aggregatorRouter)
     .route("/api/docs", docsRouter);
 
