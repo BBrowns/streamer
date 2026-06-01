@@ -14,7 +14,7 @@ export interface DesktopBridgeInfo {
 export interface DesktopBridge {
   /**
    * Starts downloading a remote URL to the local disk.
-   * Returns a promise that resolves with the absolute `file://` local URI.
+   * Returns a promise that resolves with the desktop `streamer://` local URI.
    */
   downloadMedia(
     id: string,

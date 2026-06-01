@@ -29,7 +29,10 @@ import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
 import type { Stream } from "@streamer/shared";
 import type { PlaybackPlan } from "@streamer/shared";
-import { createPlaybackPlanWithBridgeRetry } from "../../../services/playback/PlaybackPlanService";
+import {
+  createPlaybackPlanWithBridgeRetry,
+  resolveFirstPlayablePlanStream,
+} from "../../../services/playback/PlaybackPlanService";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
@@ -146,18 +149,18 @@ export default function DetailScreen() {
           episode,
           action: "play",
         });
-        const plannedStream = getReadyPlannedStream(plan);
-        if (!plannedStream) {
+        const resolved = await resolveFirstPlayablePlanStream(plan);
+        if (!resolved) {
           showPlanMessage(plan, t("detail.errors.notPlayable"));
           return;
         }
 
-        setStream(plannedStream, {
+        setStream(resolved.stream, {
           type: castType,
           itemId: id || "unknown",
           title: episodeTitle
             ? `${meta?.name} - ${episodeTitle}`
-            : (meta?.name ?? plannedStream.title ?? "Unknown"),
+            : (meta?.name ?? resolved.stream.title ?? "Unknown"),
           poster: meta?.poster,
           season,
           episode,
@@ -288,12 +291,12 @@ export default function DetailScreen() {
             episode,
             action: "download",
           });
-          const plannedStream = getReadyPlannedStream(plan);
-          if (!plannedStream) {
+          const resolved = await resolveFirstPlayablePlanStream(plan);
+          if (!resolved) {
             showPlanMessage(plan, t("detail.errors.downloadFailed"));
             return;
           }
-          streamToDownload = plannedStream;
+          streamToDownload = resolved.stream;
         } finally {
           setPlanningAction(null);
         }
@@ -320,6 +323,7 @@ export default function DetailScreen() {
     if (!meta) return;
     try {
       let streamToCast: Stream | undefined = stream;
+      let uri: string | null = null;
       if (!streamToCast) {
         setPlanningAction("cast");
         try {
@@ -328,18 +332,24 @@ export default function DetailScreen() {
             id: id || "unknown",
             action: "cast",
           });
-          const plannedStream = getReadyPlannedStream(plan);
-          if (!plannedStream) {
+          const resolved = await resolveFirstPlayablePlanStream(plan);
+          if (!resolved) {
             showPlanMessage(plan, t("detail.errors.notPlayable"));
             return;
           }
-          streamToCast = plannedStream;
+          streamToCast = resolved.stream;
+          uri = resolved.uri;
         } finally {
           setPlanningAction(null);
         }
       }
 
-      const uri = await streamEngineManager.getPlaybackUri(streamToCast);
+      if (!streamToCast) {
+        showPlanMessage(null, t("detail.errors.notPlayable"));
+        return;
+      }
+
+      uri = uri || (await streamEngineManager.getPlaybackUri(streamToCast));
       if (!uri) {
         showPlanMessage(null, t("detail.errors.notPlayable"));
         return;
@@ -351,14 +361,6 @@ export default function DetailScreen() {
       showPlanMessage(null, t("detail.errors.notPlayable"));
     }
   };
-
-  function getReadyPlannedStream(plan: PlaybackPlan): Stream | null {
-    if (plan.state !== "ready" || !plan.plan?.selectedCandidate) return null;
-    const plannedStream = plan.plan.selectedCandidate.stream;
-    return plan.plan.playbackUrl
-      ? { ...plannedStream, url: plan.plan.playbackUrl }
-      : plannedStream;
-  }
 
   function showPlanMessage(plan: PlaybackPlan | null, fallback: string) {
     const msg = plan?.userMessage || fallback;
