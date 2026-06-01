@@ -3,11 +3,16 @@ import { Platform, Alert } from "react-native";
 import {
   useDownloadStore,
   type DownloadMediaItem,
+  type DownloadStatus,
 } from "../stores/downloadStore";
 import type { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
 import { api } from "./api";
+import type {
+  DesktopDownloadJob,
+  DesktopDownloadJobStatus,
+} from "./desktop-bridge";
 
 export type DownloadEligibilityMode =
   | "direct-file"
@@ -75,8 +80,110 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
   };
 }
 
+export function mapDesktopDownloadStatus(
+  status?: DesktopDownloadJobStatus,
+): DownloadStatus {
+  switch (status) {
+    case "Completed":
+      return "Completed";
+    case "Paused":
+      return "Paused";
+    case "Error":
+    case "Canceled":
+      return "Error";
+    case "Pending":
+    case "Downloading":
+    default:
+      return "Downloading";
+  }
+}
+
 class DownloadService {
   private downloadResumables: Record<string, FileSystem.DownloadResumable> = {};
+  private desktopProgressUnsubscribe: (() => void) | null = null;
+
+  private ensureDesktopDownloadSubscription() {
+    if (Platform.OS !== "web" || this.desktopProgressUnsubscribe) return;
+
+    const desktopBridge = window.desktopBridge;
+    if (!desktopBridge) return;
+
+    this.desktopProgressUnsubscribe = desktopBridge.onDownloadProgress(
+      (data) => {
+        const { tasks, updateProgress, setStatus } =
+          useDownloadStore.getState();
+        const task = tasks[data.id];
+        if (!task) return;
+
+        const totalBytesExpectedToWrite =
+          data.totalBytesExpectedToWrite || task.totalBytesExpectedToWrite || 0;
+        const totalBytesWritten =
+          data.totalBytesWritten || task.totalBytesWritten || 0;
+        const progress =
+          totalBytesExpectedToWrite > 0
+            ? Math.min(totalBytesWritten / totalBytesExpectedToWrite, 1)
+            : task.progress;
+
+        updateProgress(
+          data.id,
+          data.status === "Completed" ? 1 : progress,
+          totalBytesWritten,
+          totalBytesExpectedToWrite,
+        );
+
+        if (data.status) {
+          setStatus(
+            data.id,
+            mapDesktopDownloadStatus(data.status),
+            data.localUri,
+            data.error,
+          );
+        }
+
+        if (data.status === "Completed" && task.status !== "Completed") {
+          this.notifyDownloadComplete(task.mediaInfo.title);
+        }
+      },
+    );
+  }
+
+  private applyDesktopJobSnapshot(job: DesktopDownloadJob | null) {
+    if (!job) return;
+
+    const { tasks, updateProgress, setStatus } = useDownloadStore.getState();
+    if (!tasks[job.id]) return;
+
+    const progress =
+      job.totalBytesExpectedToWrite > 0
+        ? Math.min(job.totalBytesWritten / job.totalBytesExpectedToWrite, 1)
+        : tasks[job.id].progress;
+
+    updateProgress(
+      job.id,
+      job.status === "Completed" ? 1 : progress,
+      job.totalBytesWritten,
+      job.totalBytesExpectedToWrite,
+    );
+    setStatus(
+      job.id,
+      mapDesktopDownloadStatus(job.status),
+      job.localUri,
+      job.error,
+    );
+
+    if (job.status === "Completed" && tasks[job.id].status !== "Completed") {
+      this.notifyDownloadComplete(tasks[job.id].mediaInfo.title);
+    }
+  }
+
+  private notifyDownloadComplete(title: string) {
+    api
+      .post("/api/notifications", {
+        title: "Download Complete",
+        message: `"${title}" is ready to watch offline!`,
+      })
+      .catch((err) => console.warn("Failed to ping completion", err));
+  }
 
   async startDownload(stream: Stream, mediaInfo: MediaInfo) {
     const { addTask, updateProgress, setStatus, tasks } =
@@ -159,6 +266,21 @@ class DownloadService {
       if (desktopBridge) {
         addTask(id, { ...mediaInfo, downloadUrl, sourceId: id });
         setStatus(id, "Downloading");
+        this.ensureDesktopDownloadSubscription();
+
+        if (desktopBridge.startDownloadJob) {
+          try {
+            const job = await desktopBridge.startDownloadJob(
+              id,
+              downloadUrl,
+              filename,
+            );
+            this.applyDesktopJobSnapshot(job);
+          } catch (e: any) {
+            setStatus(id, "Error", undefined, e.message);
+          }
+          return;
+        }
 
         const unsubscribe = desktopBridge.onDownloadProgress((data) => {
           if (data.id === id) {
@@ -321,6 +443,27 @@ class DownloadService {
       (t) => t.status === "Downloading" || t.status === "Paused",
     );
 
+    if (Platform.OS === "web") {
+      this.ensureDesktopDownloadSubscription();
+      const desktopBridge = window.desktopBridge;
+
+      for (const task of interruptedTasks) {
+        if (desktopBridge?.getDownloadJob) {
+          const job = await desktopBridge.getDownloadJob(task.id);
+          if (job) {
+            this.applyDesktopJobSnapshot(job);
+            continue;
+          }
+        }
+
+        if (task.status === "Downloading") {
+          setStatus(task.id, "Paused");
+        }
+      }
+
+      return;
+    }
+
     for (const task of interruptedTasks) {
       // If it was "Downloading" but we just started, it's effectively "Paused"
       if (task.status === "Downloading") {
@@ -346,6 +489,14 @@ class DownloadService {
   }
 
   async pauseDownload(id: string) {
+    if (Platform.OS === "web") {
+      const desktopBridge = window.desktopBridge;
+      if (desktopBridge?.pauseDownloadJob) {
+        this.applyDesktopJobSnapshot(await desktopBridge.pauseDownloadJob(id));
+      }
+      return;
+    }
+
     const resumable = this.downloadResumables[id];
     if (resumable) {
       try {
@@ -362,6 +513,15 @@ class DownloadService {
   }
 
   async resumeDownload(id: string) {
+    if (Platform.OS === "web") {
+      const desktopBridge = window.desktopBridge;
+      if (desktopBridge?.resumeDownloadJob) {
+        this.ensureDesktopDownloadSubscription();
+        this.applyDesktopJobSnapshot(await desktopBridge.resumeDownloadJob(id));
+        return;
+      }
+    }
+
     const { tasks, setStatus, updateProgress, setResumeData } =
       useDownloadStore.getState();
     const task = tasks[id];
@@ -451,6 +611,10 @@ class DownloadService {
 
     if (Platform.OS === "web") {
       const desktopBridge = window.desktopBridge;
+      if (desktopBridge?.cancelDownloadJob) {
+        await desktopBridge.cancelDownloadJob(id).catch(() => null);
+      }
+
       if (desktopBridge && task?.localUri) {
         try {
           await desktopBridge.deleteFile(task.localUri);

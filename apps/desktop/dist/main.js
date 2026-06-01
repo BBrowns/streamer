@@ -17,6 +17,7 @@ let mainWindow = null;
 let bridgeServer = null;
 let bridgeLanUrl = 'http://localhost:11470';
 let bridgePairingToken = '';
+const downloadJobs = new Map();
 
 // Configure auto-updater
 autoUpdater.autoDownload = true;
@@ -54,113 +55,281 @@ function sanitizeDownloadFilename(filename) {
     return sanitized || fallback;
 }
 
-function emitDownloadProgress(id, totalBytesWritten, totalBytesExpectedToWrite) {
+function snapshotDownloadJob(job) {
+    return {
+        id: job.id,
+        status: job.status,
+        downloadUrl: job.downloadUrl,
+        filename: job.filename,
+        totalBytesWritten: job.totalBytesWritten,
+        totalBytesExpectedToWrite: job.totalBytesExpectedToWrite,
+        localUri: job.localUri || undefined,
+        error: job.error || undefined
+    };
+}
+
+function emitDownloadJob(job) {
+    const snapshot = snapshotDownloadJob(job);
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('download-progress', {
-            id,
-            totalBytesWritten,
-            totalBytesExpectedToWrite
-        });
+        mainWindow.webContents.send('download-progress', snapshot);
+        mainWindow.webContents.send('download-job-updated', snapshot);
     }
 }
 
-function downloadMediaFile(id, rawUrl, filename, redirectCount = 0) {
-    return new Promise((resolve, reject) => {
-        let parsedUrl;
-        try {
-            parsedUrl = new URL(rawUrl);
-        } catch {
-            reject(new Error('Download URL is invalid'));
+function settleDownloadJob(job) {
+    if (!job.waiters?.length) return;
+    const waiters = job.waiters.splice(0);
+    for (const waiter of waiters) {
+        if (job.status === 'Completed' && job.localUri) {
+            waiter.resolve(job.localUri);
+        } else {
+            waiter.reject(new Error(job.error || `Download ${job.status.toLowerCase()}`));
+        }
+    }
+}
+
+function failDownloadJob(job, error) {
+    job.status = 'Error';
+    job.error = error?.message || String(error);
+    job.req = null;
+    job.file = null;
+    emitDownloadJob(job);
+    settleDownloadJob(job);
+}
+
+function completeDownloadJob(job) {
+    job.status = 'Completed';
+    job.localUri = `streamer://${job.filePath}`;
+    job.error = null;
+    job.req = null;
+    job.file = null;
+    emitDownloadJob(job);
+    settleDownloadJob(job);
+}
+
+function parseContentRangeTotal(contentRange) {
+    if (!contentRange) return 0;
+    const match = String(contentRange).match(/\/(\d+)$/);
+    return match ? Number(match[1]) : 0;
+}
+
+function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(job.downloadUrl);
+    } catch {
+        failDownloadJob(job, new Error('Download URL is invalid'));
+        return;
+    }
+
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        failDownloadJob(job, new Error('Download URL must use HTTP or HTTPS'));
+        return;
+    }
+
+    let startByte = Math.max(0, resumeAt);
+    if (startByte > 0 && fs.existsSync(job.tempPath)) {
+        startByte = fs.statSync(job.tempPath).size;
+    } else if (startByte > 0) {
+        startByte = 0;
+    }
+
+    job.status = 'Downloading';
+    job.error = null;
+    job.pauseRequested = false;
+    job.cancelRequested = false;
+    job.totalBytesWritten = startByte;
+    emitDownloadJob(job);
+
+    const client = parsedUrl.protocol === 'https:' ? https : http;
+    const options = startByte > 0 ? { headers: { Range: `bytes=${startByte}-` } } : {};
+    const req = client.get(parsedUrl, options, (res) => {
+        const statusCode = res.statusCode || 0;
+        const location = res.headers.location;
+
+        if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
+            res.resume();
+            if (redirectCount >= 5) {
+                failDownloadJob(job, new Error('Too many download redirects'));
+                return;
+            }
+            job.downloadUrl = new URL(location, parsedUrl).toString();
+            startDownloadRequest(job, startByte, redirectCount + 1);
             return;
         }
 
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-            reject(new Error('Download URL must use HTTP or HTTPS'));
+        if (startByte > 0 && statusCode === 200) {
+            startByte = 0;
+            job.totalBytesWritten = 0;
+        }
+
+        if (statusCode === 416) {
+            res.resume();
+            try {
+                fs.rmSync(job.tempPath, { force: true });
+            } catch { }
+            startDownloadRequest(job, 0, redirectCount);
             return;
         }
 
-        const safeFilename = sanitizeDownloadFilename(filename);
-        const filePath = path.join(downloadsPath, safeFilename);
-        const tempPath = `${filePath}.part`;
-        const client = parsedUrl.protocol === 'https:' ? https : http;
-        const req = client.get(parsedUrl, (res) => {
-            const statusCode = res.statusCode || 0;
-            const location = res.headers.location;
+        if (statusCode < 200 || statusCode >= 300) {
+            res.resume();
+            failDownloadJob(job, new Error(`Download failed with HTTP ${statusCode}`));
+            return;
+        }
 
-            if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
-                res.resume();
-                if (redirectCount >= 5) {
-                    reject(new Error('Too many download redirects'));
+        const contentLength = parseInt(res.headers['content-length'] || '0', 10);
+        const rangeTotal = parseContentRangeTotal(res.headers['content-range']);
+        job.totalBytesExpectedToWrite = rangeTotal || (contentLength ? contentLength + startByte : 0);
+
+        const file = fs.createWriteStream(job.tempPath, {
+            flags: startByte > 0 ? 'a' : 'w'
+        });
+        job.file = file;
+
+        const fail = (error) => {
+            if (job.pauseRequested || job.cancelRequested) return;
+            failDownloadJob(job, error instanceof Error ? error : new Error(String(error)));
+        };
+
+        res.on('data', (chunk) => {
+            job.totalBytesWritten += chunk.length;
+            if (job.totalBytesWritten % (1024 * 512) < chunk.length) {
+                emitDownloadJob(job);
+            }
+        });
+
+        res.on('error', fail);
+        file.on('error', fail);
+        file.on('finish', () => {
+            if (job.pauseRequested || job.cancelRequested || job.status !== 'Downloading') {
+                return;
+            }
+
+            file.close((closeError) => {
+                if (closeError) {
+                    failDownloadJob(job, closeError);
                     return;
                 }
-                const nextUrl = new URL(location, parsedUrl).toString();
-                downloadMediaFile(id, nextUrl, safeFilename, redirectCount + 1)
-                    .then(resolve)
-                    .catch(reject);
-                return;
-            }
-
-            if (statusCode < 200 || statusCode >= 300) {
-                res.resume();
-                reject(new Error(`Download failed with HTTP ${statusCode}`));
-                return;
-            }
-
-            const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-            let writtenBytes = 0;
-            const file = fs.createWriteStream(tempPath);
-            let settled = false;
-
-            const fail = (error) => {
-                if (settled) return;
-                settled = true;
-                file.destroy();
-                fs.rm(tempPath, { force: true }, () => {});
-                reject(error instanceof Error ? error : new Error(String(error)));
-            };
-
-            res.on('data', (chunk) => {
-                writtenBytes += chunk.length;
-                if (writtenBytes % (1024 * 512) < chunk.length) {
-                    emitDownloadProgress(id, writtenBytes, totalBytes);
-                }
-            });
-
-            res.on('error', fail);
-            file.on('error', fail);
-            file.on('finish', () => {
-                if (settled) return;
-                settled = true;
-                file.close((closeError) => {
-                    if (closeError) {
-                        fs.rm(tempPath, { force: true }, () => {});
-                        reject(closeError);
+                fs.rename(job.tempPath, job.filePath, (error) => {
+                    if (error) {
+                        failDownloadJob(job, error);
                         return;
                     }
-                    fs.rename(tempPath, filePath, (error) => {
-                        if (error) {
-                            fs.rm(tempPath, { force: true }, () => {});
-                            reject(error);
-                            return;
-                        }
-                        emitDownloadProgress(id, writtenBytes, totalBytes || writtenBytes);
-                        resolve(`streamer://${filePath}`);
-                    });
+                    job.totalBytesExpectedToWrite = job.totalBytesExpectedToWrite || job.totalBytesWritten;
+                    completeDownloadJob(job);
                 });
             });
-
-            res.pipe(file);
         });
 
-        req.setTimeout(30_000, () => {
-            req.destroy(new Error('Download timed out'));
-        });
-
-        req.on('error', (err) => {
-            fs.rm(`${path.join(downloadsPath, sanitizeDownloadFilename(filename))}.part`, { force: true }, () => {});
-            reject(err instanceof Error ? err : new Error(String(err)));
-        });
+        res.pipe(file);
     });
+
+    job.req = req;
+    req.setTimeout(30_000, () => {
+        req.destroy(new Error('Download timed out'));
+    });
+
+    req.on('error', (err) => {
+        if (job.pauseRequested || job.cancelRequested) return;
+        failDownloadJob(job, err instanceof Error ? err : new Error(String(err)));
+    });
+}
+
+function startDownloadJob(id, rawUrl, filename) {
+    const existingJob = downloadJobs.get(id);
+    if (existingJob && ['Pending', 'Downloading', 'Paused', 'Completed'].includes(existingJob.status)) {
+        return snapshotDownloadJob(existingJob);
+    }
+
+    const safeFilename = sanitizeDownloadFilename(filename);
+    const filePath = path.join(downloadsPath, safeFilename);
+    const tempPath = `${filePath}.part`;
+    const job = {
+        id,
+        downloadUrl: rawUrl,
+        filename: safeFilename,
+        filePath,
+        tempPath,
+        status: 'Pending',
+        totalBytesWritten: 0,
+        totalBytesExpectedToWrite: 0,
+        localUri: null,
+        error: null,
+        req: null,
+        file: null,
+        pauseRequested: false,
+        cancelRequested: false,
+        waiters: []
+    };
+
+    downloadJobs.set(id, job);
+    startDownloadRequest(job, 0);
+    return snapshotDownloadJob(job);
+}
+
+function pauseDownloadJob(id) {
+    const job = downloadJobs.get(id);
+    if (!job) return null;
+
+    if (job.status === 'Downloading' || job.status === 'Pending') {
+        job.pauseRequested = true;
+        job.status = 'Paused';
+        job.req?.destroy();
+        job.file?.destroy();
+        if (fs.existsSync(job.tempPath)) {
+            job.totalBytesWritten = fs.statSync(job.tempPath).size;
+        }
+        emitDownloadJob(job);
+    }
+
+    return snapshotDownloadJob(job);
+}
+
+function resumeDownloadJob(id) {
+    const job = downloadJobs.get(id);
+    if (!job) return null;
+
+    if (job.status === 'Paused' || job.status === 'Error') {
+        const resumeAt = fs.existsSync(job.tempPath) ? fs.statSync(job.tempPath).size : 0;
+        startDownloadRequest(job, resumeAt);
+    }
+
+    return snapshotDownloadJob(job);
+}
+
+function cancelDownloadJob(id) {
+    const job = downloadJobs.get(id);
+    if (!job) return null;
+
+    job.cancelRequested = true;
+    job.status = 'Canceled';
+    job.req?.destroy();
+    job.file?.destroy();
+    try {
+        fs.rmSync(job.tempPath, { force: true });
+    } catch { }
+    emitDownloadJob(job);
+    settleDownloadJob(job);
+    downloadJobs.delete(id);
+    return snapshotDownloadJob(job);
+}
+
+function waitForDownloadJobCompletion(id) {
+    const job = downloadJobs.get(id);
+    if (!job) return Promise.reject(new Error('Download job not found'));
+    if (job.status === 'Completed' && job.localUri) return Promise.resolve(job.localUri);
+    if (job.status === 'Error' || job.status === 'Canceled') {
+        return Promise.reject(new Error(job.error || `Download ${job.status.toLowerCase()}`));
+    }
+    return new Promise((resolve, reject) => {
+        job.waiters.push({ resolve, reject });
+    });
+}
+
+function downloadMediaFile(id, rawUrl, filename) {
+    startDownloadJob(id, rawUrl, filename);
+    return waitForDownloadJobCompletion(id);
 }
 
 function resolveLanBridgeUrl() {
@@ -445,6 +614,27 @@ electron_1.app.whenReady().then(async () => {
 
     electron_1.ipcMain.handle('download-media', async (event, id, url, filename) => {
         return downloadMediaFile(id, url, filename);
+    });
+
+    electron_1.ipcMain.handle('download-job-start', async (event, id, url, filename) => {
+        return startDownloadJob(id, url, filename);
+    });
+
+    electron_1.ipcMain.handle('download-job-get', async (event, id) => {
+        const job = downloadJobs.get(id);
+        return job ? snapshotDownloadJob(job) : null;
+    });
+
+    electron_1.ipcMain.handle('download-job-pause', async (event, id) => {
+        return pauseDownloadJob(id);
+    });
+
+    electron_1.ipcMain.handle('download-job-resume', async (event, id) => {
+        return resumeDownloadJob(id);
+    });
+
+    electron_1.ipcMain.handle('download-job-cancel', async (event, id) => {
+        return cancelDownloadJob(id);
     });
 
     // Start the background P2P stream server outside Electron main so native
