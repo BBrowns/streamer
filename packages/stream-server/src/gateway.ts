@@ -19,11 +19,15 @@ interface GatewayJob {
   mode: GatewayJobMode;
   state: GatewayJobState;
   error?: string;
+  peerCount?: number;
+  retryable?: boolean;
+  progressTimer?: ReturnType<typeof setInterval>;
   createdAt: number;
   updatedAt: number;
 }
 
 const JOB_TTL_MS = 6 * 60 * 60 * 1000;
+const GATEWAY_READY_TIMEOUT_MS = 120_000;
 const jobs = new Map<string, GatewayJob>();
 
 function parseInfoHash(magnet: string) {
@@ -40,16 +44,27 @@ function sanitizeGatewayError(err: unknown) {
   return message || "Gateway job failed";
 }
 
+function isRetryableGatewayError(error: unknown) {
+  const message = sanitizeGatewayError(error).toLowerCase();
+  return (
+    message.includes("peer") ||
+    message.includes("timeout") ||
+    message.includes("metadata")
+  );
+}
+
 function pruneJobs() {
   const now = Date.now();
   for (const [id, job] of jobs) {
     if (now - job.updatedAt > JOB_TTL_MS) {
+      if (job.progressTimer) clearInterval(job.progressTimer);
       jobs.delete(id);
     }
   }
 }
 
 function serializeJob(job: GatewayJob) {
+  const elapsedMs = Math.max(0, Date.now() - job.createdAt);
   return {
     id: job.id,
     state: job.state,
@@ -57,6 +72,10 @@ function serializeJob(job: GatewayJob) {
     infoHash: job.infoHash,
     fileIdx: job.fileIdx,
     error: job.error,
+    retryable: job.retryable ?? job.state === "preparing",
+    peerCount: job.peerCount ?? null,
+    elapsedMs,
+    readyTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
     playbackUrl: `/api/gateway/jobs/${job.id}/stream`,
     metricsUrl: job.infoHash
       ? `/api/torrent/${encodeURIComponent(job.infoHash)}/metrics`
@@ -66,20 +85,40 @@ function serializeJob(job: GatewayJob) {
   };
 }
 
+function trackGatewayJobProgress(job: GatewayJob, torrent: any) {
+  job.peerCount = torrent?.numPeers ?? 0;
+  job.progressTimer = setInterval(() => {
+    job.peerCount = torrent?.numPeers ?? job.peerCount ?? 0;
+    job.updatedAt = Date.now();
+  }, 1_000);
+
+  return () => {
+    if (job.progressTimer) clearInterval(job.progressTimer);
+    job.progressTimer = undefined;
+  };
+}
+
 async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
+  let stopProgressTracking: (() => void) | null = null;
   try {
     const torrent = preparedTorrent ?? (await prepareTorrent(job.magnet));
     job.infoHash = torrent.infoHash || job.infoHash;
+    stopProgressTracking = trackGatewayJobProgress(job, torrent);
     job.updatedAt = Date.now();
 
-    await ensureTorrentReady(torrent, 120_000);
+    await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
     job.infoHash = torrent.infoHash || job.infoHash;
+    job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
     job.state = "ready";
+    job.retryable = false;
     job.updatedAt = Date.now();
   } catch (err) {
     job.state = "error";
     job.error = sanitizeGatewayError(err);
+    job.retryable = isRetryableGatewayError(err);
     job.updatedAt = Date.now();
+  } finally {
+    stopProgressTracking?.();
   }
 }
 
@@ -127,6 +166,7 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
   try {
     const torrent = await prepareTorrent(job.magnet);
     job.infoHash = torrent.infoHash || job.infoHash;
+    job.peerCount = torrent.numPeers ?? 0;
     job.updatedAt = Date.now();
     void warmGatewayJob(job, torrent);
 
@@ -161,11 +201,14 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
   try {
     const torrent = await prepareTorrent(job.magnet);
     job.infoHash = torrent.infoHash || job.infoHash;
+    job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
     job.updatedAt = Date.now();
 
-    await ensureTorrentReady(torrent, 120_000);
+    await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
     job.state = "ready";
     job.infoHash = torrent.infoHash || job.infoHash;
+    job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
+    job.retryable = false;
     job.updatedAt = Date.now();
 
     return serveTorrentFile(req, res, torrent, {
@@ -176,6 +219,7 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
     const error = sanitizeGatewayError(err);
     job.state = "error";
     job.error = error;
+    job.retryable = isRetryableGatewayError(err);
     job.updatedAt = Date.now();
     if (!res.headersSent) {
       return res.status(503).json({ error, retryable: true });
@@ -184,5 +228,8 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
 });
 
 export function __resetGatewayJobsForTests() {
+  for (const job of jobs.values()) {
+    if (job.progressTimer) clearInterval(job.progressTimer);
+  }
   jobs.clear();
 }

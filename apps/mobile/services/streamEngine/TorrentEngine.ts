@@ -15,9 +15,10 @@ interface GatewayJobResponse {
   state?: GatewayJobState;
   playbackUrl?: string;
   error?: string;
+  readyTimeoutMs?: number;
 }
 
-const GATEWAY_JOB_READY_TIMEOUT_MS = 45_000;
+const DEFAULT_GATEWAY_JOB_READY_TIMEOUT_MS = 45_000;
 const GATEWAY_JOB_POLL_INTERVAL_MS = 1_000;
 
 interface BridgeConfig {
@@ -147,7 +148,11 @@ export class TorrentEngine implements IStreamEngine {
       bridgeUrl,
       `/api/gateway/jobs/${encodeURIComponent(initialJob.id)}`,
     );
-    const deadline = Date.now() + GATEWAY_JOB_READY_TIMEOUT_MS;
+    const timeoutMs =
+      typeof initialJob.readyTimeoutMs === "number"
+        ? initialJob.readyTimeoutMs + GATEWAY_JOB_POLL_INTERVAL_MS
+        : DEFAULT_GATEWAY_JOB_READY_TIMEOUT_MS;
+    const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
       const statusRes = await fetch(statusUrl, {
