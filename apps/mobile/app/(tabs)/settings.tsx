@@ -39,6 +39,11 @@ import {
 } from "../../lib/haptics";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
+import {
+  streamEngineManager,
+  type BridgeStatus,
+} from "../../services/streamEngine/StreamEngineManager";
+import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
 
 function SectionGroup({
   title,
@@ -74,17 +79,50 @@ function SourcesDevicesPanel() {
   const [tempBackend, setTempBackend] = useState(backendUrl || "");
   const [tempStream, setTempStream] = useState(streamServerUrl || "");
   const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
+  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(
+    streamEngineManager.bridgeStatus,
+  );
 
   useEffect(() => {
-    if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) return;
-    window.desktopBridge
-      .getBridgeInfo()
-      .then(setBridgeInfo)
-      .catch(() => setBridgeInfo(null));
+    let cancelled = false;
+
+    const refreshBridge = async () => {
+      if (Platform.OS === "web" && window.desktopBridge?.getBridgeInfo) {
+        window.desktopBridge
+          .getBridgeInfo()
+          .then((info) => {
+            if (!cancelled) setBridgeInfo(info);
+          })
+          .catch(() => {
+            if (!cancelled) setBridgeInfo(null);
+          });
+      }
+
+      await streamEngineManager.detectBridge();
+      if (!cancelled) setBridgeStatus(streamEngineManager.bridgeStatus);
+    };
+
+    refreshBridge().catch(() => {
+      if (!cancelled) setBridgeStatus(streamEngineManager.bridgeStatus);
+    });
+    const timer = setInterval(() => {
+      refreshBridge().catch(() => {
+        if (!cancelled) setBridgeStatus(streamEngineManager.bridgeStatus);
+      });
+    }, 8000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
 
   const handleSave = () => {
     setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
+    streamEngineManager
+      .detectBridge()
+      .then(() => setBridgeStatus(streamEngineManager.bridgeStatus))
+      .catch(() => setBridgeStatus(streamEngineManager.bridgeStatus));
     hapticSuccess();
     Alert.alert(
       t("settings.advanced.successTitle"),
@@ -96,8 +134,28 @@ function SourcesDevicesPanel() {
     setTempBackend("");
     setTempStream("");
     setServerUrls(null, null);
+    streamEngineManager
+      .detectBridge()
+      .then(() => setBridgeStatus(streamEngineManager.bridgeStatus))
+      .catch(() => setBridgeStatus(streamEngineManager.bridgeStatus));
     hapticSelection();
   };
+
+  const handleCheckBridge = async () => {
+    hapticSelection();
+    await streamEngineManager.detectBridge();
+    setBridgeStatus(streamEngineManager.bridgeStatus);
+  };
+
+  const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
+  const bridgeColor =
+    bridgePresentation.tone === "success"
+      ? colors.success
+      : bridgePresentation.tone === "error"
+        ? colors.error
+        : colors.warning;
+  const bridgeUrl =
+    bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
 
   return (
     <View
@@ -161,38 +219,43 @@ function SourcesDevicesPanel() {
       <View style={[styles.bridgeInfoCard, { borderColor: colors.border }]}>
         <View style={styles.bridgeInfoHeader}>
           <View
-            style={[
-              styles.bridgeStatusDot,
-              {
-                backgroundColor: bridgeInfo?.available
-                  ? colors.success
-                  : colors.warning,
-              },
-            ]}
+            style={[styles.bridgeStatusDot, { backgroundColor: bridgeColor }]}
           />
           <Text style={[styles.bridgeInfoTitle, { color: colors.text }]}>
-            Desktop bridge
+            {bridgePresentation.title}
           </Text>
         </View>
         <Text style={[styles.bridgeInfoText, { color: colors.textSecondary }]}>
-          {bridgeInfo?.lanUrl ||
-            streamServerUrl ||
-            "Start the desktop app, then paste its LAN URL here on mobile."}
+          {bridgePresentation.detail}
         </Text>
-        {bridgeInfo?.lanUrl && (
+        <Text style={[styles.bridgeUrlText, { color: colors.textSecondary }]}>
+          {bridgeUrl}
+        </Text>
+        <View style={styles.inlineActionRow}>
           <Pressable
             style={[styles.inlineAction, { borderColor: colors.border }]}
-            onPress={() => {
-              setTempStream(bridgeInfo.lanUrl);
-              hapticSelection();
-            }}
+            onPress={handleCheckBridge}
           >
-            <Ionicons name="copy-outline" size={16} color={colors.tint} />
+            <Ionicons name="refresh-outline" size={16} color={colors.tint} />
             <Text style={[styles.inlineActionText, { color: colors.tint }]}>
-              Use LAN URL
+              Check again
             </Text>
           </Pressable>
-        )}
+          {bridgeInfo?.lanUrl && (
+            <Pressable
+              style={[styles.inlineAction, { borderColor: colors.border }]}
+              onPress={() => {
+                setTempStream(bridgeInfo.lanUrl);
+                hapticSelection();
+              }}
+            >
+              <Ionicons name="copy-outline" size={16} color={colors.tint} />
+              <Text style={[styles.inlineActionText, { color: colors.tint }]}>
+                Use LAN URL
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
@@ -1198,6 +1261,17 @@ const styles = StyleSheet.create({
   bridgeInfoText: {
     fontSize: 12,
     lineHeight: 17,
+  },
+  bridgeUrlText: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  inlineActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
   },
   inlineAction: {
     alignSelf: "flex-start",

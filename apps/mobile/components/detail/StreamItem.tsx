@@ -7,6 +7,7 @@ import {
   streamEngineManager,
   type BridgeStatus,
 } from "../../services/streamEngine/StreamEngineManager";
+import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
 import { getDownloadEligibility } from "../../services/DownloadService";
 
 export function StreamItem({
@@ -32,13 +33,12 @@ export function StreamItem({
   const bridgeStatus = streamEngineManager.bridgeStatus as BridgeStatus;
   const playable = !!engine;
   const canDownload = getDownloadEligibility(stream).canDownload;
+  const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
 
   const sourceStateLabel = isTorrent
     ? bridgeStatus === "available"
       ? "Bridge ready"
-      : bridgeStatus === "unsupported"
-        ? "CPU mismatch"
-        : "Needs bridge"
+      : bridgePresentation.badge
     : isHls
       ? "Streaming only"
       : "Direct file";
