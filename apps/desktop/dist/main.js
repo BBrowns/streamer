@@ -47,6 +47,122 @@ if (!fs.existsSync(downloadsPath)) {
     fs.mkdirSync(downloadsPath, { recursive: true });
 }
 
+function sanitizeDownloadFilename(filename) {
+    const fallback = `download-${Date.now()}.mp4`;
+    const baseName = path.basename(String(filename || fallback));
+    const sanitized = baseName.replace(/[^a-z0-9._-]/gi, '_').slice(0, 180);
+    return sanitized || fallback;
+}
+
+function emitDownloadProgress(id, totalBytesWritten, totalBytesExpectedToWrite) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-progress', {
+            id,
+            totalBytesWritten,
+            totalBytesExpectedToWrite
+        });
+    }
+}
+
+function downloadMediaFile(id, rawUrl, filename, redirectCount = 0) {
+    return new Promise((resolve, reject) => {
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(rawUrl);
+        } catch {
+            reject(new Error('Download URL is invalid'));
+            return;
+        }
+
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            reject(new Error('Download URL must use HTTP or HTTPS'));
+            return;
+        }
+
+        const safeFilename = sanitizeDownloadFilename(filename);
+        const filePath = path.join(downloadsPath, safeFilename);
+        const tempPath = `${filePath}.part`;
+        const client = parsedUrl.protocol === 'https:' ? https : http;
+        const req = client.get(parsedUrl, (res) => {
+            const statusCode = res.statusCode || 0;
+            const location = res.headers.location;
+
+            if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
+                res.resume();
+                if (redirectCount >= 5) {
+                    reject(new Error('Too many download redirects'));
+                    return;
+                }
+                const nextUrl = new URL(location, parsedUrl).toString();
+                downloadMediaFile(id, nextUrl, safeFilename, redirectCount + 1)
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+
+            if (statusCode < 200 || statusCode >= 300) {
+                res.resume();
+                reject(new Error(`Download failed with HTTP ${statusCode}`));
+                return;
+            }
+
+            const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+            let writtenBytes = 0;
+            const file = fs.createWriteStream(tempPath);
+            let settled = false;
+
+            const fail = (error) => {
+                if (settled) return;
+                settled = true;
+                file.destroy();
+                fs.rm(tempPath, { force: true }, () => {});
+                reject(error instanceof Error ? error : new Error(String(error)));
+            };
+
+            res.on('data', (chunk) => {
+                writtenBytes += chunk.length;
+                if (writtenBytes % (1024 * 512) < chunk.length) {
+                    emitDownloadProgress(id, writtenBytes, totalBytes);
+                }
+            });
+
+            res.on('error', fail);
+            file.on('error', fail);
+            file.on('finish', () => {
+                if (settled) return;
+                settled = true;
+                file.close((closeError) => {
+                    if (closeError) {
+                        fs.rm(tempPath, { force: true }, () => {});
+                        reject(closeError);
+                        return;
+                    }
+                    fs.rename(tempPath, filePath, (error) => {
+                        if (error) {
+                            fs.rm(tempPath, { force: true }, () => {});
+                            reject(error);
+                            return;
+                        }
+                        emitDownloadProgress(id, writtenBytes, totalBytes || writtenBytes);
+                        resolve(`streamer://${filePath}`);
+                    });
+                });
+            });
+
+            res.pipe(file);
+        });
+
+        req.setTimeout(30_000, () => {
+            req.destroy(new Error('Download timed out'));
+        });
+
+        req.on('error', (err) => {
+            fs.rm(`${path.join(downloadsPath, sanitizeDownloadFilename(filename))}.part`, { force: true }, () => {});
+            reject(err instanceof Error ? err : new Error(String(err)));
+        });
+    });
+}
+
 function resolveLanBridgeUrl() {
     const interfaces = os.networkInterfaces();
     for (const entries of Object.values(interfaces)) {
@@ -328,38 +444,7 @@ electron_1.app.whenReady().then(async () => {
     }));
 
     electron_1.ipcMain.handle('download-media', async (event, id, url, filename) => {
-        return new Promise((resolve, reject) => {
-            const filePath = path.join(downloadsPath, filename);
-            const req = (url.startsWith('https') ? https : http).get(url, (res) => {
-                const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-                let writtenBytes = 0;
-
-                const file = fs.createWriteStream(filePath);
-                res.pipe(file);
-
-                res.on('data', (chunk) => {
-                    writtenBytes += chunk.length;
-                    // Throttle updates or send every ~500kb to prevent IPC overload
-                    if (writtenBytes % (1024 * 512) < chunk.length) {
-                         if (mainWindow && !mainWindow.isDestroyed()) {
-                             mainWindow.webContents.send('download-progress', {
-                                 id,
-                                 totalBytesWritten: writtenBytes,
-                                 totalBytesExpectedToWrite: totalBytes
-                             });
-                         }
-                    }
-                });
-
-                file.on('finish', () => {
-                    file.close();
-                    resolve(`streamer://${filePath}`);
-                });
-            }).on('error', (err) => {
-                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-                reject(err.message);
-            });
-        });
+        return downloadMediaFile(id, url, filename);
     });
 
     // Start the background P2P stream server outside Electron main so native
