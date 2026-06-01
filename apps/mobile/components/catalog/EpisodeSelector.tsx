@@ -21,10 +21,14 @@ function EpisodeRow({
   video,
   isSelected,
   onPress,
+  onDownload,
+  onToggleSources,
 }: {
   video: VideoEntry;
   isSelected: boolean;
   onPress: () => void;
+  onDownload: () => void;
+  onToggleSources: () => void;
 }) {
   const { colors, isDark } = useTheme();
 
@@ -37,7 +41,7 @@ function EpisodeRow({
     : null;
 
   return (
-    <Pressable
+    <View
       style={[
         styles.episodeRow,
         {
@@ -55,74 +59,104 @@ function EpisodeRow({
             : "rgba(167,139,250,0.32)",
         },
       ]}
-      onPress={() => {
-        hapticImpactLight();
-        onPress();
-      }}
     >
-      <View
-        style={[
-          styles.epNumBadge,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.06)"
-              : "rgba(0,0,0,0.04)",
-          },
-          isSelected && {
-            backgroundColor: isDark
-              ? "rgba(216,180,254,0.2)"
-              : "rgba(167,139,250,0.16)",
-          },
-        ]}
+      <Pressable
+        style={styles.episodePlayArea}
+        onPress={() => {
+          hapticImpactLight();
+          onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Play episode ${video.episode}: ${video.title}`}
       >
-        <Text
+        <View
           style={[
-            styles.epNum,
-            { color: colors.textSecondary },
-            isSelected && { color: colors.tint },
+            styles.epNumBadge,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+            },
+            isSelected && {
+              backgroundColor: isDark
+                ? "rgba(216,180,254,0.2)"
+                : "rgba(167,139,250,0.16)",
+            },
           ]}
         >
-          {video.episode}
-        </Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text
-          style={[
-            styles.epTitle,
-            { color: colors.textSecondary },
-            isSelected && { color: colors.text },
-          ]}
-          numberOfLines={2}
-        >
-          {video.title}
-        </Text>
-        {releasedDate && (
           <Text
             style={[
-              styles.epDate,
-              { color: colors.textSecondary, opacity: 0.7 },
+              styles.epNum,
+              { color: colors.textSecondary },
+              isSelected && { color: colors.tint },
             ]}
           >
-            {releasedDate}
+            {video.episode}
           </Text>
-        )}
-      </View>
-      <View style={styles.episodeAction}>
-        <Text
-          style={[
-            styles.episodeActionText,
-            { color: isSelected ? colors.tint : colors.textSecondary },
-          ]}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[
+              styles.epTitle,
+              { color: colors.textSecondary },
+              isSelected && { color: colors.text },
+            ]}
+            numberOfLines={2}
+          >
+            {video.title}
+          </Text>
+          {releasedDate && (
+            <Text
+              style={[
+                styles.epDate,
+                { color: colors.textSecondary, opacity: 0.7 },
+              ]}
+            >
+              {releasedDate}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+      <View style={styles.episodeActions}>
+        <Pressable
+          style={styles.episodeIconButton}
+          onPress={() => {
+            hapticImpactLight();
+            onDownload();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Download episode ${video.episode}: ${video.title}`}
         >
-          Sources
-        </Text>
-        <Ionicons
-          name={isSelected ? "chevron-down" : "chevron-forward"}
-          size={16}
-          color={isSelected ? colors.tint : colors.textSecondary}
-        />
+          <Ionicons
+            name="download-outline"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+        <Pressable
+          style={[
+            styles.episodeIconButton,
+            isSelected && {
+              backgroundColor: isDark
+                ? "rgba(216,180,254,0.2)"
+                : "rgba(167,139,250,0.16)",
+            },
+          ]}
+          onPress={() => {
+            hapticImpactLight();
+            onToggleSources();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Advanced sources for episode ${video.episode}: ${video.title}`}
+        >
+          <Ionicons
+            name={isSelected ? "chevron-up" : "ellipsis-horizontal"}
+            size={18}
+            color={isSelected ? colors.tint : colors.textSecondary}
+          />
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -183,6 +217,7 @@ function EpisodeStreamList({
   return (
     <View style={styles.streamPanel}>
       <Text style={[styles.streamPanelLabel, { color: colors.tint }]}>
+        Advanced sources ·{" "}
         {t("detail.episodesList.streamsLabel", { season, episode })}
       </Text>
       {streams.map((stream, i) => {
@@ -208,13 +243,13 @@ interface EpisodeSelectorProps {
   seriesId: string;
   videos: VideoEntry[];
   onPlayStream: (
-    stream: Stream,
+    stream: Stream | undefined,
     episodeTitle: string,
     season: number,
     episode: number,
   ) => void;
   onDownloadStream: (
-    stream: Stream,
+    stream: Stream | undefined,
     episodeTitle: string,
     season: number,
     episode: number,
@@ -329,6 +364,22 @@ export const EpisodeSelector = memo(function EpisodeSelector({
               video={video}
               isSelected={selectedEpisode?.id === video.id}
               onPress={() =>
+                onPlayStream(
+                  undefined,
+                  video.title,
+                  video.season,
+                  video.episode,
+                )
+              }
+              onDownload={() =>
+                onDownloadStream(
+                  undefined,
+                  video.title,
+                  video.season,
+                  video.episode,
+                )
+              }
+              onToggleSources={() =>
                 setSelectedEpisode(
                   selectedEpisode?.id === video.id ? null : video,
                 )
@@ -385,13 +436,20 @@ const styles = StyleSheet.create({
   episodeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 16,
     borderWidth: 1,
   },
   episodeRowActive: {},
+  episodePlayArea: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   epNumBadge: {
     width: 36,
     height: 36,
@@ -418,7 +476,20 @@ const styles = StyleSheet.create({
   episodeAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+  },
+  episodeActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  episodeIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   episodeActionText: {
     fontSize: 11,

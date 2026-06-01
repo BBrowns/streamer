@@ -239,6 +239,7 @@
     "errors": {
       "notFound": "Inhoud niet gevonden",
       "torrentBridge": "Dit is een torrent-stream. Start eerst de stream-server bridge.",
+      "bridgeBroken": "De desktop bridge is bereikbaar, maar de torrent-engine moet gerepareerd worden. Open Bronnen & apparaten, bouw de desktop dependencies opnieuw voor deze Mac en start de app opnieuw.",
       "notPlayable": "Deze stream is niet afspeelbaar.",
       "unsupported": "Niet ondersteunde stream",
       "downloadFailed": "Downloaden starten mislukt."
@@ -348,10 +349,11 @@
     },
     "errors": {
       "noStream": "Geen stream geselecteerd",
-      "bridgeUnavailable": "De desktop streaming bridge is niet beschikbaar of de torrent-engine werkt niet. Controleer Bronnen & Apparaten en houd de desktop bridge actief.",
+      "bridgeUnavailable": "De desktop bridge is nog niet klaar. Open Bronnen & apparaten om de URL te controleren of de streaming-engine te repareren en probeer het daarna opnieuw.",
       "playbackFailed": "Afspelen is mislukt voordat het eerste videoframe geladen kon worden.",
       "playbackTimeout": "De stream leverde binnen 60 seconden geen afspeelbare video. De torrent kan traag, vastgelopen of niet compatibel zijn met deze speler.",
       "unsupportedCodec": "Deze bron lijkt HEVC/H.265 of Dolby Vision te gebruiken. Deze desktop/web-speler kan dat niet betrouwbaar decoderen. Kies een H.264/x264-bron of een lagere MP4-kwaliteit.",
+      "openSourcesDevices": "Bronnen & apparaten",
       "goBack": "Ga terug"
     },
     "cast": {

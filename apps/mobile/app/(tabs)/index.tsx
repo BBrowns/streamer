@@ -30,12 +30,14 @@ import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRo
 import { useTheme } from "../../hooks/useTheme";
 import { useAddons } from "../../hooks/useAddons";
 import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
+import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
 
 import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 
 function SourceBridgeStatusCard() {
   const { colors } = useTheme();
+  const router = useRouter();
   const streamServerUrl = useAuthStore((s) => s.streamServerUrl);
   const { data: addons } = useAddons();
   const [bridgeStatus, setBridgeStatus] = useState(
@@ -54,13 +56,23 @@ function SourceBridgeStatusCard() {
   }, []);
 
   const bridgeReady = bridgeStatus === "available";
+  const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
+  const bridgeColor =
+    bridgePresentation.tone === "success"
+      ? colors.success
+      : bridgePresentation.tone === "error"
+        ? colors.error
+        : colors.warning;
 
   return (
-    <View
+    <Pressable
       style={[
         styles.sourceStatus,
         { borderColor: colors.border, backgroundColor: colors.card },
       ]}
+      onPress={() => router.push("/settings")}
+      accessibilityRole="button"
+      accessibilityLabel="Open Sources & Devices settings"
     >
       <View style={styles.sourceStatusItem}>
         <Ionicons
@@ -81,25 +93,22 @@ function SourceBridgeStatusCard() {
       </View>
       <View style={styles.sourceStatusDivider} />
       <View style={styles.sourceStatusItem}>
-        <View
-          style={[
-            styles.bridgeDot,
-            { backgroundColor: bridgeReady ? colors.success : colors.warning },
-          ]}
-        />
+        <View style={[styles.bridgeDot, { backgroundColor: bridgeColor }]} />
         <View>
           <Text style={[styles.sourceStatusTitle, { color: colors.text }]}>
-            {bridgeReady ? "Bridge ready" : "Bridge needed"}
+            {bridgePresentation.title}
           </Text>
           <Text
             style={[styles.sourceStatusText, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
-            {streamServerUrl || streamEngineManager.getBridgeUrl()}
+            {bridgeReady
+              ? streamServerUrl || streamEngineManager.getBridgeUrl()
+              : bridgePresentation.detail}
           </Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

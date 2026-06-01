@@ -34,6 +34,7 @@ export function MobileDetailLayout({
   handlePlayStream,
   handleDownloadStream,
   handleCastStream,
+  planningAction,
   onBack,
 }: DetailLayoutProps) {
   const streamsData =
@@ -83,26 +84,44 @@ export function MobileDetailLayout({
         {castType !== "series" && hasMovieSources && (
           <View style={styles.primaryActionRow}>
             <Pressable
-              style={styles.playBestBtn}
+              style={[
+                styles.playBestBtn,
+                planningAction && styles.actionDisabled,
+              ]}
+              disabled={!!planningAction}
               onPress={() => handlePlayStream()}
             >
               <Ionicons name="play" size={18} color="#2c1738" />
-              <Text style={styles.playBestText}>Play</Text>
+              <Text style={styles.playBestText}>
+                {planningAction === "play" ? "Preparing..." : "Play"}
+              </Text>
             </Pressable>
             <Pressable
-              style={styles.secondaryActionBtn}
+              style={[
+                styles.secondaryActionBtn,
+                planningAction && styles.actionDisabled,
+              ]}
+              disabled={!!planningAction}
               onPress={() => handleDownloadStream()}
             >
               <Ionicons name="download-outline" size={18} color="#f2d7ff" />
-              <Text style={styles.secondaryActionText}>Download</Text>
+              <Text style={styles.secondaryActionText}>
+                {planningAction === "download" ? "Preparing..." : "Download"}
+              </Text>
             </Pressable>
             {handleCastStream && (
               <Pressable
-                style={styles.secondaryActionBtn}
+                style={[
+                  styles.secondaryActionBtn,
+                  planningAction && styles.actionDisabled,
+                ]}
+                disabled={!!planningAction}
                 onPress={() => handleCastStream()}
               >
                 <Ionicons name="tv-outline" size={18} color="#f2d7ff" />
-                <Text style={styles.secondaryActionText}>Cast</Text>
+                <Text style={styles.secondaryActionText}>
+                  {planningAction === "cast" ? "Preparing..." : "Cast"}
+                </Text>
               </Pressable>
             )}
           </View>
@@ -352,6 +371,9 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     color: "#f2d7ff",
     fontWeight: "800",
+  },
+  actionDisabled: {
+    opacity: 0.55,
   },
   libraryBtnActive: {
     backgroundColor: "#d8b4fe",
