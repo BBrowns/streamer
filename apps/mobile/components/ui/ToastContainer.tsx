@@ -86,10 +86,13 @@ export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts);
   if (toasts.length === 0) return null;
 
+  const containerProps =
+    Platform.OS === "web" ? {} : ({ pointerEvents: "box-none" } as const);
+
   return (
     <View
+      {...containerProps}
       style={[styles.container, Platform.OS === "web" && styles.webPassThrough]}
-      pointerEvents={Platform.OS === "web" ? undefined : "box-none"}
     >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} />

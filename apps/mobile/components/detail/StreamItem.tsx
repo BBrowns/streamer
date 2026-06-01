@@ -9,6 +9,7 @@ import {
 } from "../../services/streamEngine/StreamEngineManager";
 import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
 import { getDownloadEligibility } from "../../services/DownloadService";
+import { useTheme } from "../../hooks/useTheme";
 
 export function StreamItem({
   stream,
@@ -21,6 +22,7 @@ export function StreamItem({
   onPress: () => void;
   onDownload: () => void;
 }) {
+  const { colors, isDark } = useTheme();
   const engine = streamEngineManager.resolveEngine(stream);
   const id = stream.infoHash || stream.url || `stream_${index}`;
   const task = useDownloadStore((state) => state.tasks[id]);
@@ -34,6 +36,10 @@ export function StreamItem({
   const playable = !!engine;
   const canDownload = getDownloadEligibility(stream).canDownload;
   const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
+  const surfaceColor = isDark ? "rgba(255,255,255,0.08)" : colors.card;
+  const badgeSurface = isDark ? "rgba(242,215,255,0.12)" : "#f3edf8";
+  const readySurface = isDark ? "rgba(197,233,213,0.18)" : "#e7f6ee";
+  const warnSurface = isDark ? "rgba(255,219,166,0.18)" : "#fff3df";
 
   const sourceStateLabel = isTorrent
     ? bridgeStatus === "available"
@@ -44,7 +50,15 @@ export function StreamItem({
       : "Direct file";
 
   return (
-    <View style={styles.streamCard}>
+    <View
+      style={[
+        styles.streamCard,
+        {
+          backgroundColor: surfaceColor,
+          borderColor: colors.border,
+        },
+      ]}
+    >
       <Pressable
         style={styles.streamPressArea}
         onPress={() => {
@@ -60,20 +74,27 @@ export function StreamItem({
         }
       >
         <View style={styles.streamInfo}>
-          <Text style={styles.streamTitle}>
+          <Text style={[styles.streamTitle, { color: colors.text }]}>
             {stream.title || stream.name || `Stream ${index + 1}`}
           </Text>
           <View style={styles.streamBadgeRow}>
             {stream.resolution && (
-              <View style={styles.resBadge}>
-                <Text style={styles.resBadgeText}>
+              <View
+                style={[
+                  styles.resBadge,
+                  { backgroundColor: colors.tint + (isDark ? "29" : "1f") },
+                ]}
+              >
+                <Text style={[styles.resBadgeText, { color: colors.tint }]}>
                   {stream.resolution === "2160p"
                     ? "4K"
                     : stream.resolution.toUpperCase()}
                 </Text>
               </View>
             )}
-            <Text style={styles.streamEngine}>
+            <Text
+              style={[styles.streamEngine, { color: colors.textSecondary }]}
+            >
               {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
             </Text>
             {stream.seeders !== undefined && (
@@ -82,19 +103,24 @@ export function StreamItem({
             <View
               style={[
                 styles.sourceBadge,
+                { backgroundColor: badgeSurface },
                 isTorrent &&
-                  bridgeStatus !== "available" &&
-                  styles.sourceBadgeWarn,
-                !isTorrent && !isHls && styles.sourceBadgeReady,
+                  bridgeStatus !== "available" && {
+                    backgroundColor: warnSurface,
+                  },
+                !isTorrent &&
+                  !isHls && {
+                    backgroundColor: readySurface,
+                  },
               ]}
             >
               <Text
                 style={[
                   styles.sourceBadgeText,
+                  { color: colors.tint },
                   isTorrent &&
-                    bridgeStatus !== "available" &&
-                    styles.sourceBadgeWarnText,
-                  !isTorrent && !isHls && styles.sourceBadgeReadyText,
+                    bridgeStatus !== "available" && { color: colors.warning },
+                  !isTorrent && !isHls && { color: colors.success },
                 ]}
               >
                 {sourceStateLabel}
@@ -110,7 +136,7 @@ export function StreamItem({
         <Ionicons
           name={playable ? "play-circle" : "alert-circle-outline"}
           size={28}
-          color={playable ? "#f2d7ff" : "#c9a85f"}
+          color={playable ? colors.tint : colors.warning}
         />
       </Pressable>
 
@@ -127,14 +153,14 @@ export function StreamItem({
             accessibilityLabel="Download stream"
           >
             {isDownloading || task?.status === "Paused" ? (
-              <Text style={styles.progressText}>
+              <Text style={[styles.progressText, { color: colors.tint }]}>
                 {(progress * 100).toFixed(0)}%
               </Text>
             ) : (
               <Ionicons
                 name={isCompleted ? "cloud-offline" : "download-outline"}
                 size={22}
-                color={isCompleted ? "#6bbf91" : "#a48ad4"}
+                color={isCompleted ? colors.success : colors.tint}
               />
             )}
           </Pressable>
