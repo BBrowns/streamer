@@ -15,6 +15,7 @@ export async function createPlaybackPlan(
 ): Promise<PlaybackPlan> {
   const deviceProfile =
     input.action === "cast" ? getChromecastDeviceProfile() : getDeviceProfile();
+  const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
 
   const { data } = await api.post<PlaybackPlan>("/api/playback/plan", {
     ...input,
@@ -22,6 +23,7 @@ export async function createPlaybackPlan(
     bridge: {
       status: streamEngineManager.bridgeStatus,
       url: streamEngineManager.getBridgeUrl(),
+      reason: bridgeDiagnostics.reason || bridgeDiagnostics.message,
     },
   });
 

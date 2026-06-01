@@ -41,6 +41,7 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
 import {
   streamEngineManager,
+  type BridgeDiagnostics,
   type BridgeStatus,
 } from "../../services/streamEngine/StreamEngineManager";
 import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
@@ -77,6 +78,19 @@ function SectionGroup({
   );
 }
 
+function formatBridgeReason(reason: string) {
+  switch (reason) {
+    case "native-architecture-mismatch":
+      return "Native module architecture mismatch";
+    case "native-load-failed":
+      return "Native torrent module failed to load";
+    case "invalid-url":
+      return "Invalid bridge URL";
+    default:
+      return reason.replace(/-/g, " ");
+  }
+}
+
 function SourcesDevicesPanel() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -96,6 +110,9 @@ function SourcesDevicesPanel() {
   const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(
     streamEngineManager.bridgeStatus,
+  );
+  const [bridgeDiagnostics, setBridgeDiagnostics] = useState<BridgeDiagnostics>(
+    streamEngineManager.getBridgeDiagnostics(),
   );
 
   useEffect(() => {
@@ -119,15 +136,24 @@ function SourcesDevicesPanel() {
       }
 
       await streamEngineManager.detectBridge();
-      if (!cancelled) setBridgeStatus(streamEngineManager.bridgeStatus);
+      if (!cancelled) {
+        setBridgeStatus(streamEngineManager.bridgeStatus);
+        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      }
     };
 
     refreshBridge().catch(() => {
-      if (!cancelled) setBridgeStatus(streamEngineManager.bridgeStatus);
+      if (!cancelled) {
+        setBridgeStatus(streamEngineManager.bridgeStatus);
+        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      }
     });
     const timer = setInterval(() => {
       refreshBridge().catch(() => {
-        if (!cancelled) setBridgeStatus(streamEngineManager.bridgeStatus);
+        if (!cancelled) {
+          setBridgeStatus(streamEngineManager.bridgeStatus);
+          setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+        }
       });
     }, 8000);
 
@@ -142,8 +168,14 @@ function SourcesDevicesPanel() {
     await setStreamServerToken(tempStreamToken.trim() || null);
     streamEngineManager
       .detectBridge()
-      .then(() => setBridgeStatus(streamEngineManager.bridgeStatus))
-      .catch(() => setBridgeStatus(streamEngineManager.bridgeStatus));
+      .then(() => {
+        setBridgeStatus(streamEngineManager.bridgeStatus);
+        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      })
+      .catch(() => {
+        setBridgeStatus(streamEngineManager.bridgeStatus);
+        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      });
     hapticSuccess();
     Alert.alert(
       t("settings.advanced.successTitle"),
@@ -159,8 +191,14 @@ function SourcesDevicesPanel() {
     void setStreamServerToken(null);
     streamEngineManager
       .detectBridge()
-      .then(() => setBridgeStatus(streamEngineManager.bridgeStatus))
-      .catch(() => setBridgeStatus(streamEngineManager.bridgeStatus));
+      .then(() => {
+        setBridgeStatus(streamEngineManager.bridgeStatus);
+        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      })
+      .catch(() => {
+        setBridgeStatus(streamEngineManager.bridgeStatus);
+        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      });
     hapticSelection();
   };
 
@@ -168,9 +206,13 @@ function SourcesDevicesPanel() {
     hapticSelection();
     await streamEngineManager.detectBridge();
     setBridgeStatus(streamEngineManager.bridgeStatus);
+    setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
   };
 
-  const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
+  const bridgePresentation = getBridgeStatusPresentation(
+    bridgeStatus,
+    bridgeDiagnostics,
+  );
   const bridgeColor =
     bridgePresentation.tone === "success"
       ? colors.success
@@ -179,6 +221,10 @@ function SourcesDevicesPanel() {
         : colors.warning;
   const bridgeUrl =
     bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
+  const bridgeRuntimeLabel =
+    bridgeDiagnostics.platform && bridgeDiagnostics.processArch
+      ? `${bridgeDiagnostics.platform}/${bridgeDiagnostics.processArch}`
+      : null;
 
   return (
     <View
@@ -254,6 +300,40 @@ function SourcesDevicesPanel() {
         <Text style={[styles.bridgeUrlText, { color: colors.textSecondary }]}>
           {bridgeUrl}
         </Text>
+        {(bridgeDiagnostics.reason || bridgeRuntimeLabel) && (
+          <View
+            style={[
+              styles.bridgeDiagnosticsBox,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(255,255,255,0.62)",
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            {!!bridgeDiagnostics.reason && (
+              <Text
+                style={[
+                  styles.bridgeDiagnosticsText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Reason: {formatBridgeReason(bridgeDiagnostics.reason)}
+              </Text>
+            )}
+            {!!bridgeRuntimeLabel && (
+              <Text
+                style={[
+                  styles.bridgeDiagnosticsText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Runtime: {bridgeRuntimeLabel}
+              </Text>
+            )}
+          </View>
+        )}
         <View style={styles.inlineActionRow}>
           <Pressable
             style={[styles.inlineAction, { borderColor: colors.border }]}
@@ -1279,6 +1359,18 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   bridgeUrlText: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  bridgeDiagnosticsBox: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  bridgeDiagnosticsText: {
     fontSize: 11,
     lineHeight: 16,
     fontWeight: "700",
