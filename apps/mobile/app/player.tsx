@@ -68,6 +68,7 @@ export default function PlayerScreen() {
   );
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [isResolvingPlayback, setIsResolvingPlayback] = useState(false);
+  const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
@@ -102,6 +103,22 @@ export default function PlayerScreen() {
     goBackOrReplace(router);
     setTimeout(() => clearPlayer(), 100);
   }, [router, clearPlayer]);
+
+  const handleOpenSourcesDevices = useCallback(() => {
+    clearPlayer();
+    router.replace("/settings");
+  }, [clearPlayer, router]);
+
+  const handleRetryPlayback = useCallback(async () => {
+    if (!currentStream) return;
+    setPlaybackUri(null);
+    setIsResolvingPlayback(true);
+    setStreamStatus("loading_metrics");
+    if (currentStream.infoHash) {
+      await streamEngineManager.detectBridge();
+    }
+    setResolveAttempt((attempt) => attempt + 1);
+  }, [currentStream, setStreamStatus]);
 
   // Effect to resolve playback URI
   useEffect(() => {
@@ -156,7 +173,7 @@ export default function PlayerScreen() {
     return () => {
       isMounted = false;
     };
-  }, [currentStream, setStreamStatus, t]);
+  }, [currentStream, resolveAttempt, setStreamStatus, t]);
 
   const player = useVideoPlayer(playbackUri || "", (p) => {
     p.play();
@@ -387,11 +404,38 @@ export default function PlayerScreen() {
             ? errorMessage || t("player.errors.playbackFailed")
             : t("player.errors.noStream")}
         </Text>
-        <Pressable style={styles.errorButton} onPress={handleClose}>
-          <Text style={styles.errorButtonText}>
-            {t("player.errors.goBack")}
-          </Text>
-        </Pressable>
+        <View style={styles.errorActions}>
+          {!!currentStream && (
+            <Pressable
+              style={styles.errorPrimaryButton}
+              onPress={handleRetryPlayback}
+            >
+              <Text
+                style={[
+                  styles.errorPrimaryButtonText,
+                  { color: isDark ? "#000" : "#fff" },
+                ]}
+              >
+                {t("common.retry")}
+              </Text>
+            </Pressable>
+          )}
+          {!!currentStream?.infoHash && (
+            <Pressable
+              style={styles.errorButton}
+              onPress={handleOpenSourcesDevices}
+            >
+              <Text style={styles.errorButtonText}>
+                {t("player.errors.openSourcesDevices")}
+              </Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.errorButton} onPress={handleClose}>
+            <Text style={styles.errorButtonText}>
+              {t("player.errors.goBack")}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -479,6 +523,10 @@ export default function PlayerScreen() {
             isBuffering={isBuffering}
             errorMessage={errorMessage}
             onBack={handleClose}
+            onRetry={handleRetryPlayback}
+            onOpenSourcesDevices={
+              currentStream.infoHash ? handleOpenSourcesDevices : undefined
+            }
           />
 
           {controlsVisible && !activeCastDevice && (
@@ -573,7 +621,15 @@ const createStyles = (colors: any, isDark: boolean) =>
       alignItems: "center",
     },
     errorText: { color: colors.error, fontSize: 16, marginBottom: 16 },
-    errorButton: {
+    errorActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: 10,
+      maxWidth: 540,
+      paddingHorizontal: 20,
+    },
+    errorPrimaryButton: {
       backgroundColor: colors.tint,
       paddingHorizontal: 20,
       paddingVertical: 10,
@@ -583,7 +639,23 @@ const createStyles = (colors: any, isDark: boolean) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    errorButtonText: { color: isDark ? "#000" : "#fff", fontWeight: "600" },
+    errorPrimaryButtonText: {
+      color: "#fff",
+      fontWeight: "800",
+    },
+    errorButton: {
+      backgroundColor: colors.tint + "15",
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 12,
+      minWidth: 44,
+      minHeight: 44,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    errorButtonText: { color: colors.text, fontWeight: "600" },
     videoContainer: {
       flex: 1,
       justifyContent: "center",

@@ -16,6 +16,8 @@ interface PlayerStatusOverlayProps {
   isBuffering: boolean;
   errorMessage: string | null;
   onBack: () => void;
+  onRetry?: () => void;
+  onOpenSourcesDevices?: () => void;
 }
 
 export function PlayerStatusOverlay({
@@ -24,6 +26,8 @@ export function PlayerStatusOverlay({
   isBuffering,
   errorMessage,
   onBack,
+  onRetry,
+  onOpenSourcesDevices,
 }: PlayerStatusOverlayProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
@@ -86,17 +90,56 @@ export function PlayerStatusOverlay({
         <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
           {errorMessage || t("player.status.errorSubtitle")}
         </Text>
-        <Pressable
-          style={[
-            styles.backButton,
-            { backgroundColor: colors.tint + "15", borderColor: colors.border },
-          ]}
-          onPress={onBack}
-        >
-          <Text style={[styles.backButtonText, { color: colors.text }]}>
-            {t("player.errors.goBack")}
-          </Text>
-        </Pressable>
+        <View style={styles.errorActions}>
+          {!!onRetry && (
+            <Pressable
+              style={[
+                styles.primaryButton,
+                { backgroundColor: colors.tint, borderColor: colors.tint },
+              ]}
+              onPress={onRetry}
+            >
+              <Text
+                style={[
+                  styles.primaryButtonText,
+                  { color: isDark ? "#000" : "#fff" },
+                ]}
+              >
+                {t("common.retry")}
+              </Text>
+            </Pressable>
+          )}
+          {!!onOpenSourcesDevices && (
+            <Pressable
+              style={[
+                styles.backButton,
+                {
+                  backgroundColor: colors.tint + "15",
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={onOpenSourcesDevices}
+            >
+              <Text style={[styles.backButtonText, { color: colors.text }]}>
+                {t("player.errors.openSourcesDevices")}
+              </Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={[
+              styles.backButton,
+              {
+                backgroundColor: colors.tint + "15",
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={onBack}
+          >
+            <Text style={[styles.backButtonText, { color: colors.text }]}>
+              {t("player.errors.goBack")}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -157,6 +200,23 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     marginBottom: 24,
   },
+  errorActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+    maxWidth: 520,
+  },
+  primaryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  primaryButtonText: { color: "#fff", fontWeight: "800" },
   backButton: {
     backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 24,
@@ -164,6 +224,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   backButtonText: { color: "#fff", fontWeight: "600" },
   bufferingOverlay: {

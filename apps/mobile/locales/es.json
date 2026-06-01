@@ -338,6 +338,7 @@
     },
     "errors": {
       "noStream": "No hay flujo seleccionado",
+      "openSourcesDevices": "Fuentes y dispositivos",
       "goBack": "Volver"
     },
     "cast": {
