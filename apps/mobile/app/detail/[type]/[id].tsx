@@ -51,6 +51,9 @@ export default function DetailScreen() {
   );
   const [castModalOpen, setCastModalOpen] = useState(false);
   const [plannedCastUri, setPlannedCastUri] = useState<string | null>(null);
+  const [planningAction, setPlanningAction] = useState<
+    "play" | "download" | "cast" | null
+  >(null);
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
@@ -134,30 +137,35 @@ export default function DetailScreen() {
     episode?: number,
   ) => {
     if (!stream) {
-      const plan = await createPlaybackPlanWithBridgeRetry({
-        type: castType,
-        id: id || "unknown",
-        season,
-        episode,
-        action: "play",
-      });
-      const plannedStream = getReadyPlannedStream(plan);
-      if (!plannedStream) {
-        showPlanMessage(plan, t("detail.errors.notPlayable"));
-        return;
-      }
+      setPlanningAction("play");
+      try {
+        const plan = await createPlaybackPlanWithBridgeRetry({
+          type: castType,
+          id: id || "unknown",
+          season,
+          episode,
+          action: "play",
+        });
+        const plannedStream = getReadyPlannedStream(plan);
+        if (!plannedStream) {
+          showPlanMessage(plan, t("detail.errors.notPlayable"));
+          return;
+        }
 
-      setStream(plannedStream, {
-        type: castType,
-        itemId: id || "unknown",
-        title: episodeTitle
-          ? `${meta?.name} - ${episodeTitle}`
-          : (meta?.name ?? plannedStream.title ?? "Unknown"),
-        poster: meta?.poster,
-        season,
-        episode,
-      });
-      router.push("/player");
+        setStream(plannedStream, {
+          type: castType,
+          itemId: id || "unknown",
+          title: episodeTitle
+            ? `${meta?.name} - ${episodeTitle}`
+            : (meta?.name ?? plannedStream.title ?? "Unknown"),
+          poster: meta?.poster,
+          season,
+          episode,
+        });
+        router.push("/player");
+      } finally {
+        setPlanningAction(null);
+      }
       return;
     }
 
@@ -271,19 +279,24 @@ export default function DetailScreen() {
     try {
       let streamToDownload: Stream | undefined = stream;
       if (!streamToDownload) {
-        const plan = await createPlaybackPlanWithBridgeRetry({
-          type: castType,
-          id: id || "unknown",
-          season,
-          episode,
-          action: "download",
-        });
-        const plannedStream = getReadyPlannedStream(plan);
-        if (!plannedStream) {
-          showPlanMessage(plan, t("detail.errors.downloadFailed"));
-          return;
+        setPlanningAction("download");
+        try {
+          const plan = await createPlaybackPlanWithBridgeRetry({
+            type: castType,
+            id: id || "unknown",
+            season,
+            episode,
+            action: "download",
+          });
+          const plannedStream = getReadyPlannedStream(plan);
+          if (!plannedStream) {
+            showPlanMessage(plan, t("detail.errors.downloadFailed"));
+            return;
+          }
+          streamToDownload = plannedStream;
+        } finally {
+          setPlanningAction(null);
         }
-        streamToDownload = plannedStream;
       }
 
       const displayTitle = episodeTitle
@@ -308,17 +321,22 @@ export default function DetailScreen() {
     try {
       let streamToCast: Stream | undefined = stream;
       if (!streamToCast) {
-        const plan = await createPlaybackPlanWithBridgeRetry({
-          type: castType,
-          id: id || "unknown",
-          action: "cast",
-        });
-        const plannedStream = getReadyPlannedStream(plan);
-        if (!plannedStream) {
-          showPlanMessage(plan, t("detail.errors.notPlayable"));
-          return;
+        setPlanningAction("cast");
+        try {
+          const plan = await createPlaybackPlanWithBridgeRetry({
+            type: castType,
+            id: id || "unknown",
+            action: "cast",
+          });
+          const plannedStream = getReadyPlannedStream(plan);
+          if (!plannedStream) {
+            showPlanMessage(plan, t("detail.errors.notPlayable"));
+            return;
+          }
+          streamToCast = plannedStream;
+        } finally {
+          setPlanningAction(null);
         }
-        streamToCast = plannedStream;
       }
 
       const uri = await streamEngineManager.getPlaybackUri(streamToCast);
@@ -363,6 +381,7 @@ export default function DetailScreen() {
     handlePlayStream,
     handleDownloadStream,
     handleCastStream,
+    planningAction,
     onBack: () => goBackOrReplace(router),
   };
 
