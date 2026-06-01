@@ -45,12 +45,28 @@ export type BridgeStatus =
   | "unsupported";
 export type StreamingStrategy = "debrid" | "local";
 
+export interface BridgeDiagnostics {
+  status: BridgeStatus;
+  url?: string;
+  reason?: string;
+  message?: string;
+  processArch?: string;
+  platform?: string;
+  checkedAt?: number;
+}
+
+interface BridgeProbeResult extends BridgeDiagnostics {}
+
 export class StreamEngineManager {
   private engines: IStreamEngine[] = [];
   public activeStrategy: StreamingStrategy = "debrid";
   public bridgeUrl: string = resolveBridgeUrl();
   public bridgeAvailable: boolean = false;
   public bridgeStatus: BridgeStatus = "loading";
+  public bridgeDiagnostics: BridgeDiagnostics = {
+    status: "loading",
+    url: this.bridgeUrl,
+  };
   private retryTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -82,15 +98,29 @@ export class StreamEngineManager {
       Array.from(urlsToTry),
     );
     this.bridgeStatus = "loading";
+    this.bridgeDiagnostics = {
+      status: "loading",
+      url: defaultUrl,
+      checkedAt: Date.now(),
+    };
+    let unsupportedProbe: BridgeProbeResult | null = null;
+    let wrongUrlProbe: BridgeProbeResult | null = null;
 
     for (const url of urlsToTry) {
-      const { status } = await this.probeBridge(url);
+      const probe = await this.probeBridge(url);
+      const { status } = probe;
       console.log(`[StreamEngineManager] Probe ${url}: ${status}`);
 
       if (status === "available") {
         this.bridgeUrl = url;
         this.bridgeAvailable = true;
         this.bridgeStatus = "available";
+        this.bridgeDiagnostics = {
+          ...probe,
+          status,
+          url,
+          checkedAt: Date.now(),
+        };
         this.activeStrategy = "local";
 
         if (this.retryTimer) {
@@ -102,15 +132,30 @@ export class StreamEngineManager {
 
       if (status === "unsupported") {
         this.bridgeStatus = "unsupported";
+        unsupportedProbe = { ...probe, url };
+      }
+
+      if (status === "wrong-url") {
+        wrongUrlProbe = { ...probe, url };
       }
     }
 
     this.bridgeAvailable = false;
-    if (this.bridgeStatus !== "unsupported") {
-      this.bridgeStatus = "unreachable";
-    }
+    const finalProbe = unsupportedProbe || wrongUrlProbe;
+    this.bridgeStatus = finalProbe?.status || "unreachable";
+    this.bridgeDiagnostics = {
+      status: this.bridgeStatus,
+      url: finalProbe?.url || defaultUrl,
+      reason: finalProbe?.reason,
+      message: finalProbe?.message,
+      processArch: finalProbe?.processArch,
+      platform: finalProbe?.platform,
+      checkedAt: Date.now(),
+    };
     console.warn(
-      "[StreamEngineManager] Bridge unreachable after trying all fallbacks.",
+      this.bridgeStatus === "unsupported"
+        ? "[StreamEngineManager] Bridge is reachable but unsupported."
+        : "[StreamEngineManager] Bridge unreachable after trying all fallbacks.",
     );
 
     // Schedule retries if not already scheduled
@@ -123,11 +168,15 @@ export class StreamEngineManager {
     return false;
   }
 
-  private async probeBridge(url: string): Promise<{ status: BridgeStatus }> {
+  private async probeBridge(url: string): Promise<BridgeProbeResult> {
     try {
       new URL(url);
     } catch {
-      return { status: "wrong-url" };
+      return {
+        status: "wrong-url",
+        reason: "invalid-url",
+        message: "Bridge URL is not a valid URL.",
+      };
     }
 
     try {
@@ -140,9 +189,19 @@ export class StreamEngineManager {
       if (res.ok) {
         const data = await res.json().catch(() => null);
         if (data?.torrentEngine?.available === false) {
-          return { status: "unsupported" };
+          return {
+            status: "unsupported",
+            reason: data.torrentEngine.reason,
+            message: data.torrentEngine.message,
+            processArch: data.torrentEngine.processArch,
+            platform: data.torrentEngine.platform,
+          };
         }
-        return { status: "available" };
+        return {
+          status: "available",
+          processArch: data?.torrentEngine?.processArch,
+          platform: data?.torrentEngine?.platform,
+        };
       }
     } catch {
       // Fallback to legacy status check
@@ -172,6 +231,14 @@ export class StreamEngineManager {
     const { streamServerUrl } = useAuthStore.getState();
     this.bridgeUrl = streamServerUrl || resolveBridgeUrl();
     return this.bridgeUrl;
+  }
+
+  getBridgeDiagnostics(): BridgeDiagnostics {
+    return {
+      ...this.bridgeDiagnostics,
+      status: this.bridgeStatus,
+      url: this.bridgeDiagnostics.url || this.getBridgeUrl(),
+    };
   }
 
   async getPlaybackUri(stream: Stream): Promise<string | null> {

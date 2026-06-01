@@ -1,12 +1,26 @@
 import type { PlaybackPlan } from "@streamer/shared";
+import { api } from "../../api";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
 import {
+  createPlaybackPlan,
   getReadyPlanStreams,
   resolveFirstPlayablePlanStream,
 } from "../PlaybackPlanService";
 
+jest.mock("../../api", () => ({
+  api: {
+    post: jest.fn(),
+  },
+}));
+
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
+    bridgeStatus: "available",
+    getBridgeUrl: jest.fn(() => "http://bridge.test"),
+    getBridgeDiagnostics: jest.fn(() => ({
+      status: "available",
+      url: "http://bridge.test",
+    })),
     getPlaybackUri: jest.fn(),
   },
 }));
@@ -19,6 +33,50 @@ describe("PlaybackPlanService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (streamEngineManager as any).bridgeStatus = "available";
+    (
+      streamEngineManager.getBridgeUrl as jest.MockedFunction<
+        typeof streamEngineManager.getBridgeUrl
+      >
+    ).mockReturnValue("http://bridge.test");
+    (
+      streamEngineManager.getBridgeDiagnostics as jest.MockedFunction<
+        typeof streamEngineManager.getBridgeDiagnostics
+      >
+    ).mockReturnValue({
+      status: "available",
+      url: "http://bridge.test",
+    });
+  });
+
+  it("includes bridge diagnostics when requesting a playback plan", async () => {
+    (streamEngineManager as any).bridgeStatus = "unsupported";
+    (
+      streamEngineManager.getBridgeDiagnostics as jest.MockedFunction<
+        typeof streamEngineManager.getBridgeDiagnostics
+      >
+    ).mockReturnValue({
+      status: "unsupported",
+      url: "http://bridge.test",
+      reason: "native-architecture-mismatch",
+      message: "node-datachannel was installed for another arch",
+    });
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: { state: "bridgeUnavailable" },
+    });
+
+    await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/playback/plan",
+      expect.objectContaining({
+        bridge: expect.objectContaining({
+          status: "unsupported",
+          url: "http://bridge.test",
+          reason: "native-architecture-mismatch",
+        }),
+      }),
+    );
   });
 
   it("returns selected and fallback streams in planner order", () => {

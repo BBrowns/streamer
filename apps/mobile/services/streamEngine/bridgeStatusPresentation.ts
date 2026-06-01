@@ -2,6 +2,13 @@ import type { BridgeStatus } from "./StreamEngineManager";
 
 export type BridgeStatusTone = "success" | "warning" | "error" | "neutral";
 
+export interface BridgeStatusContext {
+  reason?: string;
+  message?: string;
+  processArch?: string;
+  platform?: string;
+}
+
 export interface BridgeStatusPresentation {
   title: string;
   detail: string;
@@ -11,6 +18,7 @@ export interface BridgeStatusPresentation {
 
 export function getBridgeStatusPresentation(
   status: BridgeStatus,
+  context: BridgeStatusContext = {},
 ): BridgeStatusPresentation {
   switch (status) {
     case "available":
@@ -24,7 +32,9 @@ export function getBridgeStatusPresentation(
       return {
         title: "Bridge needs repair",
         detail:
-          "The desktop bridge is reachable, but its torrent engine cannot start. Reinstall the desktop dependencies for this Mac, then restart the app.",
+          context.reason === "native-architecture-mismatch"
+            ? "The desktop bridge is running, but the torrent engine was installed for a different processor architecture. Reinstall dependencies with the same Node/Electron architecture, then restart the desktop app."
+            : "The desktop bridge is reachable, but its torrent engine cannot start. Reinstall the desktop dependencies for this machine, then restart the app.",
         badge: "Repair needed",
         tone: "error",
       };

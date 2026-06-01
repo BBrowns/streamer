@@ -79,6 +79,35 @@ describe("StreamEngineManager", () => {
     });
   });
 
+  describe("detectBridge", () => {
+    it("captures torrent engine diagnostics when the bridge runtime is unsupported", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          torrentEngine: {
+            available: false,
+            reason: "native-architecture-mismatch",
+            message: "node-datachannel was installed for another arch",
+            processArch: "x64",
+            platform: "darwin",
+          },
+        }),
+      }) as any;
+
+      const available = await manager.detectBridge();
+
+      expect(available).toBe(false);
+      expect(manager.bridgeStatus).toBe("unsupported");
+      expect(manager.getBridgeDiagnostics()).toMatchObject({
+        status: "unsupported",
+        reason: "native-architecture-mismatch",
+        message: "node-datachannel was installed for another arch",
+        processArch: "x64",
+        platform: "darwin",
+      });
+    });
+  });
+
   describe("engine priority", () => {
     it("should prefer HLS over HTTP for http(s) URLs", () => {
       const stream: Stream = { url: "https://cdn.example.com/stream.m3u8" };
