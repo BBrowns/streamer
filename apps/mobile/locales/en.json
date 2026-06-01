@@ -251,7 +251,7 @@
     "errors": {
       "notFound": "Content not found",
       "torrentBridge": "This is a torrent stream. Start the stream-server bridge first.",
-      "bridgeBroken": "Bridge is running but the streaming engine is unavailable (CPU mismatch).",
+      "bridgeBroken": "The desktop bridge is reachable, but its torrent engine needs repair. Open Sources & Devices, rebuild the desktop dependencies for this Mac, then restart the app.",
       "notPlayable": "This stream is not playable.",
       "unsupported": "Unsupported Stream",
       "downloadFailed": "Failed to start download."
@@ -361,7 +361,7 @@
     },
     "errors": {
       "noStream": "No stream selected",
-      "bridgeUnavailable": "The desktop streaming bridge is not available or its torrent engine is unavailable. Check Sources & Devices and keep the desktop bridge running.",
+      "bridgeUnavailable": "The desktop bridge is not ready. Open Sources & Devices to check the URL or repair the streaming engine, then try again.",
       "playbackFailed": "Playback failed before the first frame could load.",
       "playbackTimeout": "The stream did not produce playable video within 60 seconds. The torrent may be slow, stalled, or incompatible with this player.",
       "unsupportedCodec": "This source appears to use HEVC/H.265 or Dolby Vision, which this desktop/web player cannot decode reliably. Pick an H.264/x264 source or a lower-quality MP4 instead.",

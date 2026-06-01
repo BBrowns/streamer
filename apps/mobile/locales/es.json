@@ -237,6 +237,7 @@
     "errors": {
       "notFound": "Contenido no encontrado",
       "torrentBridge": "Este es un flujo de torrent. Inicia el puente stream-server primero.",
+      "bridgeBroken": "El puente de escritorio está accesible, pero el motor de torrents necesita reparación. Abre Fuentes y dispositivos, recompila las dependencias de escritorio para este Mac y reinicia la app.",
       "notPlayable": "Este flujo no es reproducible.",
       "unsupported": "Flujo no compatible",
       "downloadFailed": "Error al iniciar la descarga."
