@@ -44,8 +44,33 @@ describe("gateway jobs", () => {
       mode: "remux",
       infoHash: "abcdef123456",
       fileIdx: 0,
+      retryable: true,
+      peerCount: 1,
+      readyTimeoutMs: 120000,
+      elapsedMs: expect.any(Number),
       playbackUrl: expect.stringMatching(/^\/api\/gateway\/jobs\/.+\/stream$/),
       metricsUrl: "/api/torrent/abcdef123456/metrics",
+    });
+  });
+
+  it("reports preparing status with readiness metadata while peers warm up", async () => {
+    (ensureTorrentReady as any).mockReturnValueOnce(new Promise(() => {}));
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    const status = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+
+    expect(status.status).toBe(200);
+    expect(status.body).toMatchObject({
+      id: created.body.id,
+      state: "preparing",
+      retryable: true,
+      peerCount: 1,
+      readyTimeoutMs: 120000,
+      elapsedMs: expect.any(Number),
     });
   });
 
