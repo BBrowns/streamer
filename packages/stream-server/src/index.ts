@@ -7,6 +7,7 @@ import { castRouter } from "./cast.js";
 import { metricsHandler } from "./metrics.js";
 import { getSubtitlesRequest, streamSubtitleRequest } from "./subtitles.js";
 import { handoffRouter } from "./handoff.js";
+import { gatewayRouter } from "./gateway.js";
 
 const PORT = process.env.PORT || 11470;
 
@@ -22,6 +23,7 @@ export function createStreamServerApp() {
   app.use(express.json());
 
   app.use("/api/cast", castRouter);
+  app.use("/api/gateway", gatewayRouter);
 
   app.get("/api/health", async (_req, res) => {
     const memUsage = process.memoryUsage();

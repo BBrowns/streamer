@@ -15,6 +15,11 @@ interface BridgeConfig {
   getBridgeUrl?: () => string;
 }
 
+function toAbsoluteBridgeUrl(bridgeUrl: string, path: string) {
+  return new URL(path, bridgeUrl.endsWith("/") ? bridgeUrl : `${bridgeUrl}/`)
+    .href;
+}
+
 export class TorrentEngine implements IStreamEngine {
   private listeners = new Map<string, Set<Function>>();
   private statsInterval: ReturnType<typeof setInterval> | null = null;
@@ -75,14 +80,29 @@ export class TorrentEngine implements IStreamEngine {
       }
 
       this.startStatsPolling();
-      const params = new URLSearchParams({ magnet });
-      if (typeof stream.fileIdx === "number") {
-        params.set("fileIdx", String(stream.fileIdx));
+      const gatewayRes = await fetch(`${bridgeUrl}/api/gateway/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          magnet,
+          fileIdx: stream.fileIdx,
+          remux: stream.behaviorHints?.remuxToMp4 ? "mp4" : undefined,
+        }),
+      });
+
+      if (!gatewayRes.ok) {
+        const body = await gatewayRes.json().catch(() => null);
+        throw new Error(
+          body?.error || `Stream gateway unavailable (${gatewayRes.status})`,
+        );
       }
-      if (stream.behaviorHints?.remuxToMp4) {
-        params.set("remux", "mp4");
+
+      const job = await gatewayRes.json();
+      if (!job?.playbackUrl) {
+        throw new Error("Stream gateway did not return a playback URL");
       }
-      return `${bridgeUrl}/stream?${params.toString()}`;
+
+      return toAbsoluteBridgeUrl(bridgeUrl, job.playbackUrl);
     }
 
     return "";

@@ -3,6 +3,13 @@ import { HLSEngine } from "../HLSEngine";
 import { HttpVideoEngine } from "../HttpVideoEngine";
 import { TorrentEngine } from "../TorrentEngine";
 import type { Stream } from "@streamer/shared";
+import { api } from "../../api";
+
+jest.mock("../../api", () => ({
+  api: {
+    get: jest.fn(),
+  },
+}));
 
 describe("StreamEngineManager", () => {
   let manager: StreamEngineManager;
@@ -84,6 +91,8 @@ describe("TorrentEngine", () => {
   let engine: TorrentEngine;
 
   beforeEach(() => {
+    (api.get as jest.Mock).mockRejectedValue(new Error("No debrid"));
+    global.fetch = jest.fn() as any;
     engine = new TorrentEngine({} as any);
   });
 
@@ -105,6 +114,39 @@ describe("TorrentEngine", () => {
     const stream: Stream = { url: "", infoHash: "deadbeef" };
     const uri = await engine.getPlaybackUri(stream);
     expect(uri).toBe("");
+  });
+
+  it("creates a gateway job for local bridge torrent playback", async () => {
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        playbackUrl: "/api/gateway/jobs/job-1/stream",
+      }),
+    });
+
+    const uri = await engine.getPlaybackUri({
+      infoHash: "deadbeef",
+      fileIdx: 2,
+      behaviorHints: { remuxToMp4: true },
+    });
+
+    expect(uri).toBe("http://bridge.test/api/gateway/jobs/job-1/stream");
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://bridge.test/api/gateway/jobs",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"remux":"mp4"'),
+      }),
+    );
+    expect((global.fetch as jest.Mock).mock.calls[0][1].body).toContain(
+      '"fileIdx":2',
+    );
   });
 
   it("should identify itself as torrent engine", () => {
