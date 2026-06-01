@@ -119,7 +119,14 @@ function EpisodeRow({
       </Pressable>
       <View style={styles.episodeActions}>
         <Pressable
-          style={styles.episodeIconButton}
+          style={[
+            styles.episodeIconButton,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+            },
+          ]}
           onPress={() => {
             hapticImpactLight();
             onDownload();
@@ -135,7 +142,12 @@ function EpisodeRow({
         </Pressable>
         <Pressable
           style={[
-            styles.episodeIconButton,
+            styles.episodeSourceButton,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+            },
             isSelected && {
               backgroundColor: isDark
                 ? "rgba(216,180,254,0.2)"
@@ -154,6 +166,14 @@ function EpisodeRow({
             size={18}
             color={isSelected ? colors.tint : colors.textSecondary}
           />
+          <Text
+            style={[
+              styles.episodeSourceText,
+              { color: isSelected ? colors.tint : colors.textSecondary },
+            ]}
+          >
+            Sources
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -177,7 +197,7 @@ function EpisodeStreamList({
   onPlayStream: (stream: Stream, episodeTitle: string) => void;
   onDownloadStream: (stream: Stream, episodeTitle: string) => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { t } = useTranslation();
 
   const { data: streams, isLoading } = useEpisodeStreams(
@@ -215,9 +235,19 @@ function EpisodeStreamList({
   }
 
   return (
-    <View style={styles.streamPanel}>
+    <View
+      style={[
+        styles.streamPanel,
+        {
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.055)"
+            : "rgba(255,255,255,0.58)",
+          borderColor: colors.border,
+        },
+      ]}
+    >
       <Text style={[styles.streamPanelLabel, { color: colors.tint }]}>
-        Advanced sources ·{" "}
+        More sources ·{" "}
         {t("detail.episodesList.streamsLabel", { season, episode })}
       </Text>
       {streams.map((stream, i) => {
@@ -266,7 +296,7 @@ export const EpisodeSelector = memo(function EpisodeSelector({
   const { t } = useTranslation();
 
   // Simple helper for button text contrast
-  function takesInverseColor(hex: string) {
+  function takesInverseColor() {
     return isDark ? "#000000" : "#ffffff";
   }
 
@@ -346,7 +376,7 @@ export const EpisodeSelector = memo(function EpisodeSelector({
                 styles.seasonTabText,
                 { color: colors.textSecondary },
                 selectedSeason === season && {
-                  color: takesInverseColor(colors.tint),
+                  color: takesInverseColor(),
                 },
               ]}
             >
@@ -489,11 +519,24 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  episodeSourceButton: {
+    minWidth: 92,
+    height: 36,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
   },
   episodeActionText: {
     fontSize: 11,
     fontWeight: "900",
+  },
+  episodeSourceText: {
+    fontSize: 12,
+    fontWeight: "800",
   },
   streamLoading: {
     flexDirection: "row",
@@ -521,9 +564,7 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.055)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
   streamPanelLabel: {
     fontSize: 12,

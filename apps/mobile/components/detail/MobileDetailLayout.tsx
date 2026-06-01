@@ -16,6 +16,7 @@ import type { DetailLayoutProps } from "./types";
 import { StreamItem } from "./StreamItem";
 import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { FlashList } from "@shopify/flash-list";
+import { useTheme } from "../../hooks/useTheme";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -37,10 +38,19 @@ export function MobileDetailLayout({
   planningAction,
   onBack,
 }: DetailLayoutProps) {
+  const { colors, isDark } = useTheme();
   const streamsData =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
   const hasMovieSources =
     castType !== "series" && availableResolutions.length > 0;
+  const primaryTextColor = isDark ? "#2c1738" : "#ffffff";
+  const surfaceColor = isDark ? "rgba(255,255,255,0.08)" : colors.card;
+  const softSurfaceColor = isDark
+    ? "rgba(255,255,255,0.08)"
+    : "rgba(255,255,255,0.62)";
+  const heroGradientColors = isDark
+    ? (["transparent", "rgba(17,18,28,0.58)", colors.background] as const)
+    : (["transparent", "rgba(251,246,244,0.5)", colors.background] as const);
 
   const renderHeader = () => (
     <View>
@@ -62,20 +72,42 @@ export function MobileDetailLayout({
         )}
 
         <LinearGradient
-          colors={["transparent", "rgba(17,18,28,0.58)", "#11121c"]}
+          colors={heroGradientColors}
           locations={[0.4, 0.8, 1]}
           style={styles.heroGradient}
         />
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>{meta.name}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{meta.name}</Text>
 
         <View style={styles.metaRow}>
           {!!meta.releaseInfo && (
-            <Text style={styles.metaTag}>{meta.releaseInfo}</Text>
+            <Text
+              style={[
+                styles.metaTag,
+                {
+                  color: colors.textSecondary,
+                  backgroundColor: softSurfaceColor,
+                },
+              ]}
+            >
+              {meta.releaseInfo}
+            </Text>
           )}
-          {!!meta.runtime && <Text style={styles.metaTag}>{meta.runtime}</Text>}
+          {!!meta.runtime && (
+            <Text
+              style={[
+                styles.metaTag,
+                {
+                  color: colors.textSecondary,
+                  backgroundColor: softSurfaceColor,
+                },
+              ]}
+            >
+              {meta.runtime}
+            </Text>
+          )}
           {!!meta.imdbRating && (
             <Text style={styles.ratingTag}>⭐ {meta.imdbRating}</Text>
           )}
@@ -86,26 +118,30 @@ export function MobileDetailLayout({
             <Pressable
               style={[
                 styles.playBestBtn,
+                { backgroundColor: colors.tint },
                 planningAction && styles.actionDisabled,
               ]}
               disabled={!!planningAction}
               onPress={() => handlePlayStream()}
             >
-              <Ionicons name="play" size={18} color="#2c1738" />
-              <Text style={styles.playBestText}>
+              <Ionicons name="play" size={18} color={primaryTextColor} />
+              <Text style={[styles.playBestText, { color: primaryTextColor }]}>
                 {planningAction === "play" ? "Preparing..." : "Play"}
               </Text>
             </Pressable>
             <Pressable
               style={[
                 styles.secondaryActionBtn,
+                { backgroundColor: surfaceColor, borderColor: colors.border },
                 planningAction && styles.actionDisabled,
               ]}
               disabled={!!planningAction}
               onPress={() => handleDownloadStream()}
             >
-              <Ionicons name="download-outline" size={18} color="#f2d7ff" />
-              <Text style={styles.secondaryActionText}>
+              <Ionicons name="download-outline" size={18} color={colors.tint} />
+              <Text
+                style={[styles.secondaryActionText, { color: colors.tint }]}
+              >
                 {planningAction === "download" ? "Preparing..." : "Download"}
               </Text>
             </Pressable>
@@ -113,13 +149,16 @@ export function MobileDetailLayout({
               <Pressable
                 style={[
                   styles.secondaryActionBtn,
+                  { backgroundColor: surfaceColor, borderColor: colors.border },
                   planningAction && styles.actionDisabled,
                 ]}
                 disabled={!!planningAction}
                 onPress={() => handleCastStream()}
               >
-                <Ionicons name="tv-outline" size={18} color="#f2d7ff" />
-                <Text style={styles.secondaryActionText}>
+                <Ionicons name="tv-outline" size={18} color={colors.tint} />
+                <Text
+                  style={[styles.secondaryActionText, { color: colors.tint }]}
+                >
                   {planningAction === "cast" ? "Preparing..." : "Cast"}
                 </Text>
               </Pressable>
@@ -128,18 +167,25 @@ export function MobileDetailLayout({
         )}
 
         <Pressable
-          style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
+          style={[
+            styles.libraryBtn,
+            { backgroundColor: surfaceColor, borderColor: colors.border },
+            inLibrary && {
+              backgroundColor: colors.tint,
+              borderColor: colors.tint,
+            },
+          ]}
           onPress={handleToggleLibrary}
         >
           <Ionicons
             name={inLibrary ? "checkmark" : "add"}
             size={18}
-            color={inLibrary ? "#2c1738" : "#f2d7ff"}
+            color={inLibrary ? primaryTextColor : colors.tint}
           />
           <Text
             style={[
               styles.libraryBtnText,
-              inLibrary && styles.libraryBtnTextActive,
+              { color: inLibrary ? primaryTextColor : colors.tint },
             ]}
           >
             {inLibrary ? "In Library" : "Add to Library"}
@@ -149,21 +195,42 @@ export function MobileDetailLayout({
         {!!meta.genres && meta.genres.length > 0 && (
           <View style={styles.genreRow}>
             {meta.genres.map((g: string, idx: number) => (
-              <View key={`${g}-${idx}`} style={styles.genrePill}>
-                <Text style={styles.genreText}>{g}</Text>
+              <View
+                key={`${g}-${idx}`}
+                style={[
+                  styles.genrePill,
+                  {
+                    backgroundColor: softSurfaceColor,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.genreText, { color: colors.textSecondary }]}
+                >
+                  {g}
+                </Text>
               </View>
             ))}
           </View>
         )}
 
         {!!meta.description && (
-          <Text style={styles.description}>{meta.description}</Text>
+          <Text style={[styles.description, { color: colors.textSecondary }]}>
+            {meta.description}
+          </Text>
         )}
 
         {!!meta.cast && meta.cast.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Cast</Text>
-            <Text style={styles.sectionContent}>{meta.cast.join(", ")}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Cast
+            </Text>
+            <Text
+              style={[styles.sectionContent, { color: colors.textSecondary }]}
+            >
+              {meta.cast.join(", ")}
+            </Text>
           </View>
         )}
 
@@ -173,9 +240,9 @@ export function MobileDetailLayout({
             <Ionicons
               name={castType === "series" ? "list" : "layers-outline"}
               size={18}
-              color="#d8b4fe"
+              color={colors.tint}
             />
-            <Text style={styles.sectionTitle}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
               {castType === "series" ? "Episodes" : "More Sources"}
             </Text>
           </View>
@@ -188,7 +255,7 @@ export function MobileDetailLayout({
               onDownloadStream={handleDownloadStream}
             />
           ) : streamsLoading ? (
-            <ActivityIndicator color="#d8b4fe" />
+            <ActivityIndicator color={colors.tint} />
           ) : availableResolutions.length > 0 ? (
             <>
               <View style={styles.resContainer}>
@@ -197,7 +264,14 @@ export function MobileDetailLayout({
                     key={res}
                     style={[
                       styles.resBubble,
-                      selectedResolution === res && styles.resBubbleActive,
+                      {
+                        backgroundColor: softSurfaceColor,
+                        borderColor: colors.border,
+                      },
+                      selectedResolution === res && {
+                        backgroundColor: colors.tint,
+                        borderColor: colors.tint,
+                      },
                     ]}
                     onPress={() => {
                       hapticImpactLight();
@@ -207,7 +281,10 @@ export function MobileDetailLayout({
                     <Text
                       style={[
                         styles.resText,
-                        selectedResolution === res && styles.resTextActive,
+                        { color: colors.textSecondary },
+                        selectedResolution === res && {
+                          color: primaryTextColor,
+                        },
                       ]}
                     >
                       {res === "2160p" ? "4K" : res.toUpperCase()}
@@ -217,7 +294,7 @@ export function MobileDetailLayout({
               </View>
             </>
           ) : (
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               No streams available. Install more add-ons.
             </Text>
           )}
@@ -227,11 +304,26 @@ export function MobileDetailLayout({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <Pressable style={styles.floatingBack} onPress={onBack}>
-        <Ionicons name="chevron-back" size={28} color="#ffffff" />
+      <Pressable
+        style={[
+          styles.floatingBack,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.12)"
+              : "rgba(255,255,255,0.74)",
+            borderColor: colors.border,
+          },
+        ]}
+        onPress={onBack}
+      >
+        <Ionicons
+          name="chevron-back"
+          size={28}
+          color={isDark ? "#ffffff" : colors.text}
+        />
       </Pressable>
 
       <FlashList
@@ -269,6 +361,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },

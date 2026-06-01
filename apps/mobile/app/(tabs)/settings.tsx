@@ -49,24 +49,30 @@ function SectionGroup({
   title,
   children,
   colors,
+  framed = true,
 }: {
   title: string;
   children: React.ReactNode;
   colors: any;
+  framed?: boolean;
 }) {
   return (
     <View style={styles.sectionGroup}>
       <Text style={[styles.sectionGroupTitle, { color: colors.textSecondary }]}>
         {title.toUpperCase()}
       </Text>
-      <View
-        style={[
-          styles.sectionGroupContent,
-          { backgroundColor: colors.card, borderColor: colors.border },
-        ]}
-      >
-        {children}
-      </View>
+      {framed ? (
+        <View
+          style={[
+            styles.sectionGroupContent,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          {children}
+        </View>
+      ) : (
+        <View style={styles.sectionGroupPlain}>{children}</View>
+      )}
     </View>
   );
 }
@@ -730,6 +736,7 @@ function SettingsContent() {
           defaultValue: "Sources & Devices",
         })}
         colors={colors}
+        framed={isDesktop}
       >
         {isDesktop ? (
           <Pressable
@@ -792,41 +799,6 @@ function SettingsContent() {
         })}
         colors={colors}
       >
-        <Pressable
-          style={styles.menuItem}
-          onPress={() => router.push("/addons")}
-        >
-          <View
-            style={[
-              styles.iconContainer,
-              { backgroundColor: "rgba(216,180,254,0.14)" },
-            ]}
-          >
-            <Ionicons
-              name="extension-puzzle-outline"
-              size={20}
-              color="#d8b4fe"
-            />
-          </View>
-          <View style={styles.menuItemTextContainer}>
-            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-              {t("settings.items.manageAddons")}
-            </Text>
-            <Text
-              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
-            >
-              {t("settings.subtitles.manageAddons")}
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
         <Pressable
           style={styles.menuItem}
           onPress={
@@ -1188,6 +1160,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
+  sectionGroupPlain: {},
   menuItem: {
     flexDirection: "row",
     alignItems: "center",

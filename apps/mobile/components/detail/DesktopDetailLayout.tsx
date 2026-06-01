@@ -13,6 +13,7 @@ import type { DetailLayoutProps } from "./types";
 import { StreamItem } from "./StreamItem";
 import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { FlashList } from "@shopify/flash-list";
+import { useTheme } from "../../hooks/useTheme";
 
 export function DesktopDetailLayout({
   id,
@@ -32,39 +33,72 @@ export function DesktopDetailLayout({
   planningAction,
   onBack,
 }: DetailLayoutProps) {
+  const { colors, isDark } = useTheme();
   const streamsData =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
   const hasMovieSources = castType !== "series" && (streams?.length ?? 0) > 0;
   const sourceCount =
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
+  const primaryTextColor = isDark ? "#2c1738" : "#ffffff";
+  const surfaceColor = isDark ? "rgba(255,255,255,0.07)" : colors.card;
+  const softSurfaceColor = isDark
+    ? "rgba(255,255,255,0.08)"
+    : "rgba(255,255,255,0.58)";
+  const warningSurface = isDark
+    ? "rgba(255,217,168,0.08)"
+    : "rgba(255,217,168,0.22)";
 
   const renderHeader = () => (
     <View style={styles.headerShell}>
       <View style={styles.eyebrowRow}>
-        <View style={styles.eyebrowPill}>
+        <View style={[styles.eyebrowPill, { backgroundColor: colors.tint }]}>
           <Ionicons
             name={castType === "series" ? "albums-outline" : "film-outline"}
             size={15}
-            color="#2c1738"
+            color={primaryTextColor}
           />
-          <Text style={styles.eyebrowText}>
+          <Text style={[styles.eyebrowText, { color: primaryTextColor }]}>
             {castType === "series" ? "Series" : "Movie"}
           </Text>
         </View>
-        <Text style={styles.sourceCountText}>
+        <Text style={[styles.sourceCountText, { color: colors.textSecondary }]}>
           {castType === "series"
             ? `${sourceCount} episodes`
             : `${sourceCount} sources`}
         </Text>
       </View>
 
-      <Text style={styles.desktopTitle}>{meta.name}</Text>
+      <Text style={[styles.desktopTitle, { color: colors.text }]}>
+        {meta.name}
+      </Text>
 
       <View style={styles.metaRow}>
         {!!meta.releaseInfo && (
-          <Text style={styles.metaTag}>{meta.releaseInfo}</Text>
+          <Text
+            style={[
+              styles.metaTag,
+              {
+                color: colors.textSecondary,
+                backgroundColor: softSurfaceColor,
+              },
+            ]}
+          >
+            {meta.releaseInfo}
+          </Text>
         )}
-        {!!meta.runtime && <Text style={styles.metaTag}>{meta.runtime}</Text>}
+        {!!meta.runtime && (
+          <Text
+            style={[
+              styles.metaTag,
+              {
+                color: colors.textSecondary,
+                backgroundColor: softSurfaceColor,
+              },
+            ]}
+          >
+            {meta.runtime}
+          </Text>
+        )}
         {!!meta.imdbRating && (
           <Text style={styles.ratingTag}>⭐ {meta.imdbRating}</Text>
         )}
@@ -73,15 +107,28 @@ export function DesktopDetailLayout({
       {!!meta.genres && meta.genres.length > 0 && (
         <View style={styles.genreRow}>
           {meta.genres.map((g: string, idx: number) => (
-            <View key={`${g}-${idx}`} style={styles.genrePill}>
-              <Text style={styles.genreText}>{g}</Text>
+            <View
+              key={`${g}-${idx}`}
+              style={[
+                styles.genrePill,
+                {
+                  backgroundColor: softSurfaceColor,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={[styles.genreText, { color: colors.textSecondary }]}>
+                {g}
+              </Text>
             </View>
           ))}
         </View>
       )}
 
       {!!meta.description && (
-        <Text style={styles.description}>{meta.description}</Text>
+        <Text style={[styles.description, { color: colors.textSecondary }]}>
+          {meta.description}
+        </Text>
       )}
 
       {castType !== "series" && (
@@ -89,26 +136,28 @@ export function DesktopDetailLayout({
           <Pressable
             style={[
               styles.playBestBtn,
+              { backgroundColor: colors.tint },
               (!hasMovieSources || planningAction) && styles.actionDisabled,
             ]}
             disabled={!hasMovieSources || !!planningAction}
             onPress={() => handlePlayStream()}
           >
-            <Ionicons name="play" size={18} color="#2c1738" />
-            <Text style={styles.playBestText}>
+            <Ionicons name="play" size={18} color={primaryTextColor} />
+            <Text style={[styles.playBestText, { color: primaryTextColor }]}>
               {planningAction === "play" ? "Preparing..." : "Play"}
             </Text>
           </Pressable>
           <Pressable
             style={[
               styles.secondaryActionBtn,
+              { backgroundColor: surfaceColor, borderColor: colors.border },
               (!hasMovieSources || planningAction) && styles.actionDisabled,
             ]}
             disabled={!hasMovieSources || !!planningAction}
             onPress={() => handleDownloadStream()}
           >
-            <Ionicons name="download-outline" size={18} color="#f2d7ff" />
-            <Text style={styles.secondaryActionText}>
+            <Ionicons name="download-outline" size={18} color={colors.tint} />
+            <Text style={[styles.secondaryActionText, { color: colors.tint }]}>
               {planningAction === "download" ? "Preparing..." : "Download"}
             </Text>
           </Pressable>
@@ -116,13 +165,16 @@ export function DesktopDetailLayout({
             <Pressable
               style={[
                 styles.secondaryActionBtn,
+                { backgroundColor: surfaceColor, borderColor: colors.border },
                 (!hasMovieSources || planningAction) && styles.actionDisabled,
               ]}
               disabled={!hasMovieSources || !!planningAction}
               onPress={() => handleCastStream()}
             >
-              <Ionicons name="tv-outline" size={18} color="#f2d7ff" />
-              <Text style={styles.secondaryActionText}>
+              <Ionicons name="tv-outline" size={18} color={colors.tint} />
+              <Text
+                style={[styles.secondaryActionText, { color: colors.tint }]}
+              >
                 {planningAction === "cast" ? "Preparing..." : "Cast"}
               </Text>
             </Pressable>
@@ -132,19 +184,30 @@ export function DesktopDetailLayout({
 
       {!!meta.cast && meta.cast.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cast</Text>
-          <Text style={styles.sectionContent}>{meta.cast.join(", ")}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Cast
+          </Text>
+          <Text
+            style={[styles.sectionContent, { color: colors.textSecondary }]}
+          >
+            {meta.cast.join(", ")}
+          </Text>
         </View>
       )}
 
-      <View style={styles.sectionSurface}>
+      <View
+        style={[
+          styles.sectionSurface,
+          { backgroundColor: surfaceColor, borderColor: colors.border },
+        ]}
+      >
         <View style={styles.sectionTitleRow}>
           <Ionicons
             name={castType === "series" ? "list" : "layers-outline"}
             size={18}
-            color="#d8b4fe"
+            color={colors.tint}
           />
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {castType === "series" ? "Episodes" : "More Sources"}
           </Text>
         </View>
@@ -166,7 +229,14 @@ export function DesktopDetailLayout({
                   key={res}
                   style={[
                     styles.resBubble,
-                    selectedResolution === res && styles.resBubbleActive,
+                    {
+                      backgroundColor: softSurfaceColor,
+                      borderColor: colors.border,
+                    },
+                    selectedResolution === res && {
+                      backgroundColor: colors.tint,
+                      borderColor: colors.tint,
+                    },
                   ]}
                   onPress={() => {
                     hapticImpactLight();
@@ -176,7 +246,8 @@ export function DesktopDetailLayout({
                   <Text
                     style={[
                       styles.resText,
-                      selectedResolution === res && styles.resTextActive,
+                      { color: colors.textSecondary },
+                      selectedResolution === res && { color: primaryTextColor },
                     ]}
                   >
                     {res === "2160p" ? "4K" : res.toUpperCase()}
@@ -186,7 +257,7 @@ export function DesktopDetailLayout({
             </View>
           </>
         ) : (
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No streams available. Install more add-ons.
           </Text>
         )}
@@ -195,7 +266,9 @@ export function DesktopDetailLayout({
   );
 
   return (
-    <View style={styles.containerDesktop}>
+    <View
+      style={[styles.containerDesktop, { backgroundColor: colors.background }]}
+    >
       {!!meta.background && (
         <Image
           source={{ uri: meta.background }}
@@ -203,14 +276,36 @@ export function DesktopDetailLayout({
           resizeMode="cover"
         />
       )}
-      <View style={styles.ambientOverlay} />
+      <View
+        style={[
+          styles.ambientOverlay,
+          {
+            backgroundColor: isDark
+              ? "rgba(17,18,28,0.82)"
+              : "rgba(251,246,244,0.88)",
+          },
+        ]}
+      />
 
-      <View style={styles.desktopPosterPanel}>
+      <View
+        style={[
+          styles.desktopPosterPanel,
+          { backgroundColor: colors.tabBar, borderRightColor: colors.border },
+        ]}
+      >
         <Pressable style={styles.desktopBackBtn} onPress={onBack}>
-          <Ionicons name="chevron-back" size={20} color="#d9cfe4" />
-          <Text style={styles.desktopBackText}>Back</Text>
+          <Ionicons
+            name="chevron-back"
+            size={20}
+            color={colors.textSecondary}
+          />
+          <Text
+            style={[styles.desktopBackText, { color: colors.textSecondary }]}
+          >
+            Back
+          </Text>
         </Pressable>
-        <View style={styles.posterFrame}>
+        <View style={[styles.posterFrame, { borderColor: colors.border }]}>
           {!!meta.poster ? (
             <Image
               source={{ uri: meta.poster }}
@@ -219,33 +314,52 @@ export function DesktopDetailLayout({
             />
           ) : (
             <View style={styles.posterFallback}>
-              <Ionicons name="film-outline" size={44} color="#d8b4fe" />
+              <Ionicons name="film-outline" size={44} color={colors.tint} />
             </View>
           )}
         </View>
         <Pressable
-          style={[styles.libraryBtn, inLibrary && styles.libraryBtnActive]}
+          style={[
+            styles.libraryBtn,
+            { borderColor: colors.border, backgroundColor: surfaceColor },
+            inLibrary && {
+              backgroundColor: colors.tint,
+              borderColor: colors.tint,
+            },
+          ]}
           onPress={handleToggleLibrary}
         >
           <Ionicons
             name={inLibrary ? "checkmark" : "add"}
             size={18}
-            color={inLibrary ? "#2c1738" : "#f2d7ff"}
+            color={inLibrary ? primaryTextColor : colors.tint}
           />
           <Text
             style={[
               styles.libraryBtnText,
-              inLibrary && styles.libraryBtnTextActive,
+              { color: inLibrary ? primaryTextColor : colors.tint },
             ]}
           >
             {inLibrary ? "In Library" : "Add to Library"}
           </Text>
         </Pressable>
-        <View style={styles.deviceHintCard}>
-          <Ionicons name="sparkles-outline" size={18} color="#ffd9a8" />
+        <View
+          style={[
+            styles.deviceHintCard,
+            {
+              borderColor: colors.warning + "55",
+              backgroundColor: warningSurface,
+            },
+          ]}
+        >
+          <Ionicons name="sparkles-outline" size={18} color={colors.warning} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.deviceHintTitle}>Cinema mode</Text>
-            <Text style={styles.deviceHintText}>
+            <Text style={[styles.deviceHintTitle, { color: colors.text }]}>
+              Cinema mode
+            </Text>
+            <Text
+              style={[styles.deviceHintText, { color: colors.textSecondary }]}
+            >
               Sources stay quiet until you choose play, download, or cast.
             </Text>
           </View>
