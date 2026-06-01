@@ -1,5 +1,8 @@
 import type { Stream } from "@streamer/shared";
-import { getDownloadEligibility } from "../DownloadService";
+import {
+  getDownloadEligibility,
+  mapDesktopDownloadStatus,
+} from "../DownloadService";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 
 describe("getDownloadEligibility", () => {
@@ -44,5 +47,14 @@ describe("getDownloadEligibility", () => {
       mode: "browser-external",
       offlinePlayable: false,
     });
+  });
+
+  it("maps desktop download job statuses to mobile queue statuses", () => {
+    expect(mapDesktopDownloadStatus("Pending")).toBe("Downloading");
+    expect(mapDesktopDownloadStatus("Downloading")).toBe("Downloading");
+    expect(mapDesktopDownloadStatus("Paused")).toBe("Paused");
+    expect(mapDesktopDownloadStatus("Completed")).toBe("Completed");
+    expect(mapDesktopDownloadStatus("Error")).toBe("Error");
+    expect(mapDesktopDownloadStatus("Canceled")).toBe("Error");
   });
 });
