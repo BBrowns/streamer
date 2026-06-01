@@ -201,9 +201,15 @@ export default function DetailScreen() {
     }
 
     if (!playable) {
-      const msg = stream.infoHash
-        ? t("detail.errors.torrentBridge")
-        : t("detail.errors.notPlayable");
+      let msg = t("detail.errors.notPlayable");
+      if (stream.infoHash) {
+        if (streamEngineManager.bridgeStatus === "unsupported") {
+          msg = t("detail.errors.bridgeBroken");
+        } else {
+          msg = t("detail.errors.torrentBridge");
+        }
+      }
+
       if (Platform.OS === "web") window.alert(msg);
       else Alert.alert(t("detail.errors.unsupported"), msg);
       return;

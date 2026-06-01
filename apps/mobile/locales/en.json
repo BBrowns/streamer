@@ -251,6 +251,7 @@
     "errors": {
       "notFound": "Content not found",
       "torrentBridge": "This is a torrent stream. Start the stream-server bridge first.",
+      "bridgeBroken": "Bridge is running but the streaming engine is unavailable (CPU mismatch).",
       "notPlayable": "This stream is not playable.",
       "unsupported": "Unsupported Stream",
       "downloadFailed": "Failed to start download."

@@ -36,7 +36,9 @@ export function StreamItem({
   const sourceStateLabel = isTorrent
     ? bridgeStatus === "available"
       ? "Bridge ready"
-      : "Needs bridge"
+      : bridgeStatus === "unsupported"
+        ? "CPU mismatch"
+        : "Needs bridge"
     : isHls
       ? "Streaming only"
       : "Direct file";

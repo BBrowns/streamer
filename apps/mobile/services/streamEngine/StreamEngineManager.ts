@@ -17,13 +17,19 @@ function resolveBridgeUrl(): string {
   }
 
   if (Platform.OS === "android") {
+    // Android emulator's special alias for host loopback
     return "http://10.0.2.2:11470";
   }
 
-  // iOS: derive IP from the Metro bundler host Expo already knows about
+  // iOS: check if we're on a simulator. If so, localhost is usually preferred.
+  // We can detect simulator by checking if hostUri includes "localhost" or "127.0.0.1"
+  // or by checking for the absence of a real LAN IP.
   const metroHost = Constants.expoConfig?.hostUri;
   if (metroHost) {
     const ip = metroHost.split(":")[0];
+    if (ip === "localhost" || ip === "127.0.0.1") {
+      return "http://localhost:11470";
+    }
     return `http://${ip}:11470`;
   }
 
@@ -59,77 +65,55 @@ export class StreamEngineManager {
   }
 
   async detectBridge(): Promise<boolean> {
-    const currentUrl = this.getBridgeUrl();
-    this.bridgeStatus = "loading";
+    const urlsToTry = new Set<string>();
+    const defaultUrl = this.getBridgeUrl();
+    urlsToTry.add(defaultUrl);
 
-    try {
-      const parsed = new URL(currentUrl);
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        this.bridgeAvailable = false;
-        this.bridgeStatus = "wrong-url";
-        return false;
-      }
-    } catch {
-      this.bridgeAvailable = false;
-      this.bridgeStatus = "wrong-url";
-      return false;
+    // Fallbacks for simulators/local usage
+    if (Platform.OS === "web" || Platform.OS === "ios") {
+      urlsToTry.add("http://localhost:11470");
+      urlsToTry.add("http://127.0.0.1:11470");
+    } else if (Platform.OS === "android") {
+      urlsToTry.add("http://10.0.2.2:11470");
     }
 
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${currentUrl}/api/health`, {
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeout));
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data?.torrentEngine?.available === false) {
-          this.bridgeAvailable = false;
-          this.bridgeStatus = "unsupported";
-          return false;
-        }
+    console.log(
+      "[StreamEngineManager] Detecting bridge. Trying URLs:",
+      Array.from(urlsToTry),
+    );
+    this.bridgeStatus = "loading";
+
+    for (const url of urlsToTry) {
+      const { status } = await this.probeBridge(url);
+      console.log(`[StreamEngineManager] Probe ${url}: ${status}`);
+
+      if (status === "available") {
+        this.bridgeUrl = url;
         this.bridgeAvailable = true;
         this.bridgeStatus = "available";
         this.activeStrategy = "local";
-        // Stop retrying once connected
+
         if (this.retryTimer) {
           clearInterval(this.retryTimer);
           this.retryTimer = null;
         }
         return true;
       }
-      this.bridgeAvailable = false;
-      this.bridgeStatus = "unreachable";
-    } catch {
-      try {
-        const fallbackController = new AbortController();
-        const fallbackTimeout = setTimeout(
-          () => fallbackController.abort(),
-          2000,
-        );
-        const fallbackRes = await fetch(`${currentUrl}/status`, {
-          signal: fallbackController.signal,
-        }).finally(() => clearTimeout(fallbackTimeout));
 
-        if (fallbackRes.ok) {
-          this.bridgeAvailable = true;
-          this.bridgeStatus = "available";
-          this.activeStrategy = "local";
-          if (this.retryTimer) {
-            clearInterval(this.retryTimer);
-            this.retryTimer = null;
-          }
-          return true;
-        }
-      } catch {
-        // fall through to unreachable state
+      if (status === "unsupported") {
+        this.bridgeStatus = "unsupported";
       }
-
-      this.bridgeAvailable = false;
-      this.bridgeStatus = "unreachable";
     }
 
-    // Schedule retries every 5s until bridge comes online
+    this.bridgeAvailable = false;
+    if (this.bridgeStatus !== "unsupported") {
+      this.bridgeStatus = "unreachable";
+    }
+    console.warn(
+      "[StreamEngineManager] Bridge unreachable after trying all fallbacks.",
+    );
+
+    // Schedule retries if not already scheduled
     if (!this.retryTimer) {
       this.retryTimer = setInterval(() => {
         this.detectBridge();
@@ -137,6 +121,43 @@ export class StreamEngineManager {
     }
 
     return false;
+  }
+
+  private async probeBridge(url: string): Promise<{ status: BridgeStatus }> {
+    try {
+      new URL(url);
+    } catch {
+      return { status: "wrong-url" };
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch(`${url}/api/health`, {
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.torrentEngine?.available === false) {
+          return { status: "unsupported" };
+        }
+        return { status: "available" };
+      }
+    } catch {
+      // Fallback to legacy status check
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch(`${url}/status`, {
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
+        return { status: res.ok ? "available" : "unreachable" };
+      } catch {
+        return { status: "unreachable" };
+      }
+    }
+    return { status: "unreachable" };
   }
 
   registerEngine(engine: IStreamEngine): void {
