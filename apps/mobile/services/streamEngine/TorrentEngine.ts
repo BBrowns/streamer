@@ -6,6 +6,7 @@ import type {
   StreamStats,
 } from "./IStreamEngine";
 import { api } from "../api";
+import { withBridgeJsonHeaders } from "../bridgeAuth";
 
 interface BridgeConfig {
   activeStrategy: string;
@@ -82,7 +83,7 @@ export class TorrentEngine implements IStreamEngine {
       this.startStatsPolling();
       const gatewayRes = await fetch(`${bridgeUrl}/api/gateway/jobs`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withBridgeJsonHeaders(),
         body: JSON.stringify({
           magnet,
           fileIdx: stream.fileIdx,

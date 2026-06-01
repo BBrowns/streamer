@@ -10,7 +10,10 @@ describe("CastService", () => {
         { id: "living-room", name: "Living Room", type: "chromecast" },
       ],
     }) as jest.Mock;
-    useAuthStore.setState({ streamServerUrl: "http://192.168.1.25:11470" });
+    useAuthStore.setState({
+      streamServerUrl: "http://192.168.1.25:11470",
+      streamServerToken: null,
+    });
     streamEngineManager.bridgeAvailable = true;
     streamEngineManager.bridgeStatus = "available";
   });
@@ -38,6 +41,25 @@ describe("CastService", () => {
           deviceId: "living-room",
           url: "https://example.test/movie.mp4",
           title: "Movie",
+        }),
+      }),
+    );
+  });
+
+  it("sends the optional bridge auth token to protected bridge endpoints", async () => {
+    useAuthStore.setState({ streamServerToken: "pairing-token" });
+
+    await castService.play(
+      "living-room",
+      "https://example.test/movie.mp4",
+      "Movie",
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.25:11470/api/cast/play",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer pairing-token",
         }),
       }),
     );

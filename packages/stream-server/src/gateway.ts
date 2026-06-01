@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { Router, type Request, type Response } from "express";
+import { requireBridgeAuth } from "./security.js";
 import {
   ensureTorrentReady,
   isTorrentEngineUnavailableError,
@@ -103,7 +104,7 @@ function parseJobRequest(req: Request) {
 
 export const gatewayRouter = Router();
 
-gatewayRouter.post("/jobs", async (req, res) => {
+gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
   pruneJobs();
 
   const parsed = parseJobRequest(req);
@@ -139,7 +140,7 @@ gatewayRouter.post("/jobs", async (req, res) => {
   }
 });
 
-gatewayRouter.get("/jobs/:id", (req, res) => {
+gatewayRouter.get("/jobs/:id", requireBridgeAuth, (req, res) => {
   pruneJobs();
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: "Gateway job not found" });

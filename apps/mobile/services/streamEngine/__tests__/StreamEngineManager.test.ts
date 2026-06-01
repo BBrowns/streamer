@@ -4,6 +4,7 @@ import { HttpVideoEngine } from "../HttpVideoEngine";
 import { TorrentEngine } from "../TorrentEngine";
 import type { Stream } from "@streamer/shared";
 import { api } from "../../api";
+import { useAuthStore } from "../../../stores/authStore";
 
 jest.mock("../../api", () => ({
   api: {
@@ -93,6 +94,7 @@ describe("TorrentEngine", () => {
   beforeEach(() => {
     (api.get as jest.Mock).mockRejectedValue(new Error("No debrid"));
     global.fetch = jest.fn() as any;
+    useAuthStore.setState({ streamServerToken: null });
     engine = new TorrentEngine({} as any);
   });
 
@@ -146,6 +148,33 @@ describe("TorrentEngine", () => {
     );
     expect((global.fetch as jest.Mock).mock.calls[0][1].body).toContain(
       '"fileIdx":2',
+    );
+  });
+
+  it("sends the optional bridge auth token when creating gateway jobs", async () => {
+    useAuthStore.setState({ streamServerToken: "pairing-token" });
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        playbackUrl: "/api/gateway/jobs/job-1/stream",
+      }),
+    });
+
+    await engine.getPlaybackUri({ infoHash: "deadbeef" });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://bridge.test/api/gateway/jobs",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer pairing-token",
+        }),
+      }),
     );
   });
 

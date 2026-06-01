@@ -7,8 +7,10 @@
  */
 import { Router, Request, Response } from "express";
 import type { Client as CastClientType } from "castv2-client";
+import { requireBridgeAuth, validateCastPlaybackUrl } from "./security.js";
 
 const router = Router();
+router.use(requireBridgeAuth);
 
 interface CastDevice {
   id: string;
@@ -65,9 +67,18 @@ router.post("/play", async (req: Request, res: Response) => {
     title?: string;
   };
   const device = devices.find((d) => d.id === deviceId);
+  const safeUrl = validateCastPlaybackUrl(url, {
+    allowedHosts: [req.hostname, req.get("host")].filter(
+      (host): host is string => Boolean(host),
+    ),
+  });
 
   if (!device) {
     return res.status(404).json({ error: "Device not found" });
+  }
+
+  if (!safeUrl.ok) {
+    return res.status(400).json({ error: safeUrl.reason });
   }
 
   try {
@@ -91,7 +102,7 @@ router.post("/play", async (req: Request, res: Response) => {
     await new Promise<void>((resolve, reject) => {
       player.load(
         {
-          contentId: url,
+          contentId: safeUrl.url!,
           contentType: "video/mp4",
           streamType: "BUFFERED",
           metadata: {

@@ -1,6 +1,8 @@
 import { Router, Request, Response } from "express";
+import { requireBridgeAuth } from "./security.js";
 
 const router = Router();
+router.use(requireBridgeAuth);
 
 /**
  * Handoff API

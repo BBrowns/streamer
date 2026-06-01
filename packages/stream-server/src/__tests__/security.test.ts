@@ -1,5 +1,18 @@
-import { describe, it, expect, vi } from "vitest";
-import { validateTorrentFiles, pruneTorrents } from "../torrent.js";
+import express from "express";
+import request from "supertest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { requireBridgeAuth, validateCastPlaybackUrl } from "../security.js";
+import { pruneTorrents, validateTorrentFiles } from "../torrent.js";
+
+const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
+
+function protectedApp() {
+  const app = express();
+  app.get("/protected", requireBridgeAuth, (_req, res) => {
+    res.json({ ok: true });
+  });
+  return app;
+}
 
 describe("MalwareShield (validateTorrentFiles)", () => {
   it("should allow safe media files", () => {
@@ -87,5 +100,90 @@ describe("Torrent Engine Memory Management (pruneTorrents)", () => {
       (t) => t.destroy.mock.calls.length > 0,
     ).length;
     expect(destroyedCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("Bridge auth", () => {
+  afterEach(() => {
+    if (previousBridgeToken === undefined) {
+      delete process.env.STREAMER_BRIDGE_TOKEN;
+    } else {
+      process.env.STREAMER_BRIDGE_TOKEN = previousBridgeToken;
+    }
+  });
+
+  it("keeps bridge auth disabled by default for local development", async () => {
+    delete process.env.STREAMER_BRIDGE_TOKEN;
+
+    const res = await request(protectedApp()).get("/protected");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+
+  it("requires a bearer token when bridge auth is configured", async () => {
+    process.env.STREAMER_BRIDGE_TOKEN = "pairing-token";
+
+    const missing = await request(protectedApp()).get("/protected");
+    const present = await request(protectedApp())
+      .get("/protected")
+      .set("Authorization", "Bearer pairing-token");
+
+    expect(missing.status).toBe(401);
+    expect(present.status).toBe(200);
+  });
+
+  it("accepts the bridge token header for clients that cannot set bearer auth", async () => {
+    process.env.STREAMER_BRIDGE_TOKEN = "pairing-token";
+
+    const res = await request(protectedApp())
+      .get("/protected")
+      .set("x-streamer-bridge-token", "pairing-token");
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("Cast playback URL validation", () => {
+  it("allows public http(s) media URLs", () => {
+    expect(
+      validateCastPlaybackUrl("https://cdn.example.test/movie.mp4"),
+    ).toMatchObject({
+      ok: true,
+      url: "https://cdn.example.test/movie.mp4",
+    });
+  });
+
+  it("allows private LAN URLs only when they point back to this bridge", () => {
+    expect(
+      validateCastPlaybackUrl(
+        "http://192.168.1.25:11470/api/gateway/jobs/job-1/stream",
+        { allowedHosts: ["192.168.1.25"] },
+      ),
+    ).toMatchObject({ ok: true });
+
+    expect(
+      validateCastPlaybackUrl("http://192.168.1.50/private.mp4", {
+        allowedHosts: ["192.168.1.25"],
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
+  it("blocks local-only or credentialed playback URLs", () => {
+    expect(validateCastPlaybackUrl("file:///Users/me/movie.mp4")).toMatchObject(
+      {
+        ok: false,
+      },
+    );
+    expect(
+      validateCastPlaybackUrl("http://localhost:11470/movie.mp4"),
+    ).toMatchObject({
+      ok: false,
+    });
+    expect(
+      validateCastPlaybackUrl("http://user:pass@example.test/movie.mp4"),
+    ).toMatchObject({
+      ok: false,
+    });
   });
 });
