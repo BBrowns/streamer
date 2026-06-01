@@ -132,7 +132,7 @@ export const rateLimiter = createSlidingWindowLimiter({
 
 export const authRateLimiter = createSlidingWindowLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: process.env.NODE_ENV === "development" ? 100 : 20,
   message: "Too many auth attempts, please try again later",
   keyPrefix: "auth",
 });
