@@ -100,7 +100,12 @@ function SourcesDevicesPanel() {
         window.desktopBridge
           .getBridgeInfo()
           .then((info) => {
-            if (!cancelled) setBridgeInfo(info);
+            if (!cancelled) {
+              setBridgeInfo(info);
+              if (info.pairingToken) {
+                setTempStreamToken(info.pairingToken);
+              }
+            }
           })
           .catch(() => {
             if (!cancelled) setBridgeInfo(null);
@@ -258,6 +263,9 @@ function SourcesDevicesPanel() {
               style={[styles.inlineAction, { borderColor: colors.border }]}
               onPress={() => {
                 setTempStream(bridgeInfo.lanUrl);
+                if (bridgeInfo.pairingToken) {
+                  setTempStreamToken(bridgeInfo.pairingToken);
+                }
                 hapticSelection();
               }}
             >

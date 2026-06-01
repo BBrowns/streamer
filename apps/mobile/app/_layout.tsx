@@ -55,6 +55,27 @@ const queryClient = new QueryClient({
   },
 });
 
+async function hydrateDesktopBridgeSettings() {
+  if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) return;
+
+  try {
+    const info = await window.desktopBridge.getBridgeInfo();
+    const store = useAuthStore.getState();
+    const bridgeUrl = info.localUrl || info.lanUrl || null;
+
+    if (bridgeUrl && store.streamServerUrl !== bridgeUrl) {
+      store.setServerUrls(undefined, bridgeUrl);
+    }
+
+    if (info.pairingToken && store.streamServerToken !== info.pairingToken) {
+      await store.setStreamServerToken(info.pairingToken);
+    }
+  } catch {
+    // Desktop bridge hydration is opportunistic; manual Sources & Devices
+    // settings still work when the shell is unavailable.
+  }
+}
+
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
     Sentry.captureException(error);
@@ -104,15 +125,20 @@ function RootLayoutNav() {
         return useAuthStore.getState().loadTokensFromSecureStore();
       })
       .then(() => {
-        // 3. Restore offline cache
+        // 3. Desktop shell injects bridge URL/token so playback and cast work
+        // without asking desktop users to copy pairing details manually.
+        return hydrateDesktopBridgeSettings();
+      })
+      .then(() => {
+        // 4. Restore offline cache
         return restoreQueryCache(queryClient);
       })
       .then(() => {
-        // 4. Initialize Download Service (handle resumability)
+        // 5. Initialize Download Service (handle resumability)
         return downloadService.initialize();
       })
       .then(async () => {
-        // 5. Check onboarding status
+        // 6. Check onboarding status
         const hasSeenOnboarding = await AsyncStorage.getItem(
           "HAS_SEEN_ONBOARDING",
         );

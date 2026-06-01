@@ -8,6 +8,7 @@ export interface DesktopBridgeInfo {
   available: boolean;
   localUrl: string;
   lanUrl: string;
+  pairingToken?: string;
 }
 
 export interface DesktopBridge {

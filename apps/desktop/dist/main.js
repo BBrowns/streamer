@@ -7,6 +7,7 @@ const fs = require("fs");
 const https = require("https");
 const http = require("http");
 const os = require("os");
+const crypto = require("crypto");
 const { spawn, execFileSync } = require("child_process");
 
 const { autoUpdater } = require("electron-updater");
@@ -15,6 +16,7 @@ let tray = null;
 let mainWindow = null;
 let bridgeServer = null;
 let bridgeLanUrl = 'http://localhost:11470';
+let bridgePairingToken = '';
 
 // Configure auto-updater
 autoUpdater.autoDownload = true;
@@ -55,6 +57,34 @@ function resolveLanBridgeUrl() {
         }
     }
     return 'http://localhost:11470';
+}
+
+function readOrCreateBridgePairingToken() {
+    const envToken = process.env.STREAMER_BRIDGE_TOKEN?.trim();
+    if (envToken) return envToken;
+
+    const tokenPath = path.join(electron_1.app.getPath('userData'), 'bridge-pairing-token');
+    try {
+        if (fs.existsSync(tokenPath)) {
+            const storedToken = fs.readFileSync(tokenPath, 'utf8').trim();
+            if (storedToken.length >= 32) return storedToken;
+        }
+
+        const token = crypto.randomBytes(32).toString('base64url');
+        fs.writeFileSync(tokenPath, token, { mode: 0o600 });
+        return token;
+    }
+    catch (error) {
+        console.warn('[stream-server] Could not persist bridge pairing token:', error?.message || error);
+        return crypto.randomBytes(32).toString('base64url');
+    }
+}
+
+function getBridgePairingToken() {
+    if (!bridgePairingToken) {
+        bridgePairingToken = readOrCreateBridgePairingToken();
+    }
+    return bridgePairingToken;
 }
 
 function resolveBridgeEntrypoint() {
@@ -157,7 +187,9 @@ function resolveNodeExecutable() {
 }
 
 async function startBridgeDaemon() {
+    const pairingToken = getBridgePairingToken();
     if (process.env.STREAMER_BRIDGE_IN_PROCESS === '1') {
+        process.env.STREAMER_BRIDGE_TOKEN = pairingToken;
         const streamServer = await import('@streamer/stream-server');
         return streamServer.startStreamServer(11470);
     }
@@ -172,7 +204,8 @@ async function startBridgeDaemon() {
         cwd: path.resolve(__dirname, '../../..'),
         env: {
             ...process.env,
-            PORT: '11470'
+            PORT: '11470',
+            STREAMER_BRIDGE_TOKEN: pairingToken
         },
         stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -290,7 +323,8 @@ electron_1.app.whenReady().then(async () => {
     electron_1.ipcMain.handle('get-bridge-info', async () => ({
         available: !!bridgeServer,
         localUrl: 'http://localhost:11470',
-        lanUrl: bridgeLanUrl
+        lanUrl: bridgeLanUrl,
+        pairingToken: getBridgePairingToken()
     }));
 
     electron_1.ipcMain.handle('download-media', async (event, id, url, filename) => {
