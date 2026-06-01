@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "events";
 import type { Request, Response } from "express";
 import { handleTorrent, waitForReady } from "../torrent-helpers.js";
+import { getSelectedFile } from "../torrent.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,25 @@ describe("handleTorrent", () => {
       const callArgs = (res.writeHead as any).mock.calls.at(-1);
       expect(callArgs[1]["Content-Type"]).toBe(expectedMime);
     }
+  });
+});
+
+describe("getSelectedFile", () => {
+  it("uses an explicit file index when one is provided", () => {
+    const torrent = makeTorrent([
+      makeFakeFile("sample.txt", 100),
+      makeFakeFile("episode.mp4", 1_000),
+    ]);
+
+    expect(getSelectedFile(torrent, 1).name).toBe("episode.mp4");
+  });
+
+  it("throws for a missing explicit file index", () => {
+    const torrent = makeTorrent([makeFakeFile("movie.mp4", 1_000)]);
+
+    expect(() => getSelectedFile(torrent, 3)).toThrow(
+      "Requested file index 3 is not available",
+    );
   });
 });
 
