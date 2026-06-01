@@ -119,6 +119,35 @@ describe("PlaybackPlannerService", () => {
     expect(plan.plan?.selectedCandidate.stream.infoHash).toBe("abc123");
   });
 
+  it("marks MKV torrent sources for remux when the device needs MP4", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "abc123",
+        title: "Movie.2026.1080p.H264.AAC.mkv",
+        resolution: "1080p",
+        seeders: 100,
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: webProfile,
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.plan?.mode).toBe("remux");
+    expect(plan.plan?.selectedCandidate.stream.behaviorHints?.remuxToMp4).toBe(
+      true,
+    );
+  });
+
   it("rejects HLS for download and chooses a direct offline-playable source", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {

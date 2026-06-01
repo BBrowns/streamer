@@ -8,6 +8,7 @@ import { metricsHandler } from "./metrics.js";
 import { getSubtitlesRequest, streamSubtitleRequest } from "./subtitles.js";
 import { handoffRouter } from "./handoff.js";
 import { gatewayRouter } from "./gateway.js";
+import { requireBridgeAuth } from "./security.js";
 
 const PORT = process.env.PORT || 11470;
 
@@ -54,7 +55,7 @@ export function createStreamServerApp() {
     res.json({ status: "active", version: "1.0.0" });
   });
 
-  app.get("/stream", streamRequest);
+  app.get("/stream", requireBridgeAuth, streamRequest);
 
   app.get("/stats", async (_req, res) => {
     res.json(await getStats());
@@ -62,7 +63,7 @@ export function createStreamServerApp() {
 
   app.get("/api/torrent/:infoHash/metrics", metricsHandler);
 
-  app.get("/api/subtitles", getSubtitlesRequest);
+  app.get("/api/subtitles", requireBridgeAuth, getSubtitlesRequest);
   app.get("/api/subtitles/:id/stream", streamSubtitleRequest);
 
   app.use("/api/handoff", handoffRouter);

@@ -74,10 +74,19 @@ function SectionGroup({
 function SourcesDevicesPanel() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { backendUrl, streamServerUrl, setServerUrls } = useAuthStore();
+  const {
+    backendUrl,
+    streamServerUrl,
+    streamServerToken,
+    setServerUrls,
+    setStreamServerToken,
+  } = useAuthStore();
   const { colors, isDark } = useTheme();
   const [tempBackend, setTempBackend] = useState(backendUrl || "");
   const [tempStream, setTempStream] = useState(streamServerUrl || "");
+  const [tempStreamToken, setTempStreamToken] = useState(
+    streamServerToken || "",
+  );
   const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(
     streamEngineManager.bridgeStatus,
@@ -117,8 +126,9 @@ function SourcesDevicesPanel() {
     };
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
+    await setStreamServerToken(tempStreamToken.trim() || null);
     streamEngineManager
       .detectBridge()
       .then(() => setBridgeStatus(streamEngineManager.bridgeStatus))
@@ -133,7 +143,9 @@ function SourcesDevicesPanel() {
   const handleReset = () => {
     setTempBackend("");
     setTempStream("");
+    setTempStreamToken("");
     setServerUrls(null, null);
+    void setStreamServerToken(null);
     streamEngineManager
       .detectBridge()
       .then(() => setBridgeStatus(streamEngineManager.bridgeStatus))
@@ -300,6 +312,29 @@ function SourcesDevicesPanel() {
         placeholderTextColor={colors.textSecondary + "80"}
         autoCapitalize="none"
         autoCorrect={false}
+      />
+
+      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+        Bridge pairing token (optional)
+      </Text>
+      <TextInput
+        style={[
+          styles.textInput,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(0,0,0,0.05)",
+            color: colors.text,
+            borderColor: colors.border,
+          },
+        ]}
+        value={tempStreamToken}
+        onChangeText={setTempStreamToken}
+        placeholder="Only needed when your bridge requires a token"
+        placeholderTextColor={colors.textSecondary + "80"}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
       />
 
       <View style={styles.warningBox}>

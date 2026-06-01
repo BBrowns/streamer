@@ -35,6 +35,7 @@ export const SECURE_KEYS = {
   ACCESS_TOKEN: "streamer.accessToken",
   REFRESH_TOKEN: "streamer.refreshToken",
   TOKEN_EXPIRES_AT: "streamer.tokenExpiresAt",
+  STREAM_SERVER_TOKEN: "streamer.streamServerToken",
 } as const;
 
 type SecureKey = (typeof SECURE_KEYS)[keyof typeof SECURE_KEYS];

@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
+import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "./bridgeAuth";
 
 export interface CastDevice {
   id: string;
@@ -19,7 +20,13 @@ class CastService {
       await streamEngineManager.detectBridge();
     }
 
-    const res = await fetch(`${this.getBridgeUrl()}/api/cast/devices`);
+    const authHeaders = getBridgeAuthHeaders();
+    const res =
+      Object.keys(authHeaders).length > 0
+        ? await fetch(`${this.getBridgeUrl()}/api/cast/devices`, {
+            headers: authHeaders,
+          })
+        : await fetch(`${this.getBridgeUrl()}/api/cast/devices`);
     if (!res.ok) {
       throw new Error(`Could not fetch cast devices (${res.status})`);
     }
@@ -31,7 +38,7 @@ class CastService {
   async play(deviceId: string, url: string, title: string): Promise<void> {
     const res = await fetch(`${this.getBridgeUrl()}/api/cast/play`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withBridgeJsonHeaders(),
       body: JSON.stringify({ deviceId, url, title }),
     });
 
@@ -43,7 +50,7 @@ class CastService {
   async control(deviceId: string, action: CastControlAction): Promise<void> {
     const res = await fetch(`${this.getBridgeUrl()}/api/cast/control`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withBridgeJsonHeaders(),
       body: JSON.stringify({ deviceId, action }),
     });
 

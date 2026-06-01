@@ -4,7 +4,7 @@
  * Zustand store for authentication state with a two-tier persistence strategy:
  *
  *  TIER 1 — SecureStore (sensitive, hardware-backed on iOS/Android):
- *    accessToken, refreshToken, tokenExpiresAt
+ *    accessToken, refreshToken, tokenExpiresAt, streamServerToken
  *
  *  TIER 2 — AsyncStorage (non-sensitive, Zustand `persist` middleware):
  *    user profile, deviceId, isAuthenticated
@@ -38,6 +38,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   tokenExpiresAt: number | null;
+  streamServerToken: string | null;
 
   // ── Actions ───────────────────────────────────────────────────────────────
   setAuth: (
@@ -59,6 +60,7 @@ interface AuthState {
     backend?: string | null,
     streamServer?: string | null,
   ) => void;
+  setStreamServerToken: (token: string | null) => Promise<void>;
   setTheme: (theme: "light" | "dark" | "system") => void;
   setPendingAddons: (urls: string[]) => void;
   resetPendingAddons: () => void;
@@ -85,6 +87,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       tokenExpiresAt: null,
+      streamServerToken: null,
       lastActiveAt: null,
 
       // ── setAuth — called after login / register ──────────────────────────
@@ -131,15 +134,17 @@ export const useAuthStore = create<AuthState>()(
       // Hydrates the in-memory token values from SecureStore after persisted
       // non-sensitive state (user, isAuthenticated) has been rehydrated.
       loadTokensFromSecureStore: async () => {
-        const [accessToken, refreshToken, expiresAtStr] = await Promise.all([
-          secureStorage.getItem(SECURE_KEYS.ACCESS_TOKEN),
-          secureStorage.getItem(SECURE_KEYS.REFRESH_TOKEN),
-          secureStorage.getItem(SECURE_KEYS.TOKEN_EXPIRES_AT),
-        ]);
+        const [accessToken, refreshToken, expiresAtStr, streamServerToken] =
+          await Promise.all([
+            secureStorage.getItem(SECURE_KEYS.ACCESS_TOKEN),
+            secureStorage.getItem(SECURE_KEYS.REFRESH_TOKEN),
+            secureStorage.getItem(SECURE_KEYS.TOKEN_EXPIRES_AT),
+            secureStorage.getItem(SECURE_KEYS.STREAM_SERVER_TOKEN),
+          ]);
 
         const tokenExpiresAt = expiresAtStr ? Number(expiresAtStr) : null;
 
-        set({ accessToken, refreshToken, tokenExpiresAt });
+        set({ accessToken, refreshToken, tokenExpiresAt, streamServerToken });
       },
 
       // ── setDeviceId ──────────────────────────────────────────────────────
@@ -158,6 +163,21 @@ export const useAuthStore = create<AuthState>()(
           streamServerUrl:
             streamServer === undefined ? state.streamServerUrl : streamServer,
         })),
+
+      // ── setStreamServerToken ─────────────────────────────────────────────
+      setStreamServerToken: async (token) => {
+        const normalizedToken = token?.trim() || null;
+        set({ streamServerToken: normalizedToken });
+        if (normalizedToken) {
+          await secureStorage.setItem(
+            SECURE_KEYS.STREAM_SERVER_TOKEN,
+            normalizedToken,
+          );
+          return;
+        }
+
+        await secureStorage.removeItem(SECURE_KEYS.STREAM_SERVER_TOKEN);
+      },
 
       // ── setTheme ─────────────────────────────────────────────────────────
       setTheme: (theme) => set({ theme }),
