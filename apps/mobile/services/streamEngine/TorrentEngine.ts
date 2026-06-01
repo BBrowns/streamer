@@ -6,7 +6,19 @@ import type {
   StreamStats,
 } from "./IStreamEngine";
 import { api } from "../api";
-import { withBridgeJsonHeaders } from "../bridgeAuth";
+import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "../bridgeAuth";
+
+type GatewayJobState = "preparing" | "ready" | "error";
+
+interface GatewayJobResponse {
+  id?: string;
+  state?: GatewayJobState;
+  playbackUrl?: string;
+  error?: string;
+}
+
+const GATEWAY_JOB_READY_TIMEOUT_MS = 45_000;
+const GATEWAY_JOB_POLL_INTERVAL_MS = 1_000;
 
 interface BridgeConfig {
   activeStrategy: string;
@@ -19,6 +31,10 @@ interface BridgeConfig {
 function toAbsoluteBridgeUrl(bridgeUrl: string, path: string) {
   return new URL(path, bridgeUrl.endsWith("/") ? bridgeUrl : `${bridgeUrl}/`)
     .href;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export class TorrentEngine implements IStreamEngine {
@@ -98,15 +114,76 @@ export class TorrentEngine implements IStreamEngine {
         );
       }
 
-      const job = await gatewayRes.json();
+      const job = (await gatewayRes.json()) as GatewayJobResponse;
       if (!job?.playbackUrl) {
         throw new Error("Stream gateway did not return a playback URL");
       }
 
-      return toAbsoluteBridgeUrl(bridgeUrl, job.playbackUrl);
+      const readyJob = await this.waitForGatewayJobReady(bridgeUrl, job);
+      return toAbsoluteBridgeUrl(bridgeUrl, readyJob.playbackUrl!);
     }
 
     return "";
+  }
+
+  private async waitForGatewayJobReady(
+    bridgeUrl: string,
+    initialJob: GatewayJobResponse,
+  ): Promise<GatewayJobResponse> {
+    if (initialJob.state === "ready" || !initialJob.state) {
+      return initialJob;
+    }
+
+    if (initialJob.state === "error") {
+      this.markBridgeNoPeersIfRelevant(initialJob.error);
+      throw new Error(initialJob.error || "Stream gateway could not prepare");
+    }
+
+    if (!initialJob.id) {
+      return initialJob;
+    }
+
+    const statusUrl = toAbsoluteBridgeUrl(
+      bridgeUrl,
+      `/api/gateway/jobs/${encodeURIComponent(initialJob.id)}`,
+    );
+    const deadline = Date.now() + GATEWAY_JOB_READY_TIMEOUT_MS;
+
+    while (Date.now() < deadline) {
+      const statusRes = await fetch(statusUrl, {
+        headers: getBridgeAuthHeaders(),
+      });
+
+      if (!statusRes.ok) {
+        throw new Error(
+          `Stream gateway status unavailable (${statusRes.status})`,
+        );
+      }
+
+      const job = (await statusRes.json()) as GatewayJobResponse;
+      if (job.state === "ready" && job.playbackUrl) {
+        return job;
+      }
+
+      if (job.state === "error") {
+        this.markBridgeNoPeersIfRelevant(job.error);
+        throw new Error(job.error || "Stream gateway could not prepare");
+      }
+
+      await sleep(GATEWAY_JOB_POLL_INTERVAL_MS);
+    }
+
+    this.bridge.bridgeStatus = "no-peers";
+    throw new Error(
+      "Still waiting for torrent peers. Try again shortly or choose another source.",
+    );
+  }
+
+  private markBridgeNoPeersIfRelevant(message?: string) {
+    if (!message) return;
+    if (/peer|timeout|metadata/i.test(message)) {
+      this.bridge.bridgeStatus = "no-peers";
+    }
   }
 
   private startStatsPolling() {
