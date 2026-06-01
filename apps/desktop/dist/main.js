@@ -7,7 +7,7 @@ const fs = require("fs");
 const https = require("https");
 const http = require("http");
 const os = require("os");
-const { spawn } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
 
 const { autoUpdater } = require("electron-updater");
 
@@ -65,8 +65,95 @@ function resolveBridgeEntrypoint() {
     return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 
+function uniqueTruthy(values) {
+    return [...new Set(values.filter(Boolean))];
+}
+
+function resolveNodeBinaryCandidates() {
+    const pathCandidates = [];
+    for (const searchPath of (process.env.PATH || '').split(path.delimiter)) {
+        if (!searchPath) continue;
+        pathCandidates.push(path.join(searchPath, process.platform === 'win32' ? 'node.exe' : 'node'));
+    }
+
+    return uniqueTruthy([
+        process.env.STREAMER_BRIDGE_NODE,
+        process.env.npm_node_execpath,
+        process.platform === 'darwin' ? '/opt/homebrew/bin/node' : null,
+        process.platform === 'darwin' ? '/usr/local/bin/node' : null,
+        ...pathCandidates,
+        'node'
+    ]);
+}
+
+function resolveNodeDataChannelBinary() {
+    const candidates = [
+        path.resolve(__dirname, '../../../node_modules/node-datachannel/build/Release/node_datachannel.node'),
+        path.resolve(__dirname, '../../node_modules/node-datachannel/build/Release/node_datachannel.node')
+    ];
+    return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function detectNativeNodeArch(nativeBinary) {
+    if (!nativeBinary || !fs.existsSync(nativeBinary)) return null;
+
+    try {
+        if (process.platform === 'darwin') {
+            const output = execFileSync('file', [nativeBinary], { encoding: 'utf8' });
+            const hasArm64 = output.includes('arm64');
+            const hasX64 = output.includes('x86_64');
+            if (hasArm64 && hasX64) return null;
+            if (hasArm64) return 'arm64';
+            if (hasX64) return 'x64';
+        }
+
+        if (process.platform === 'linux') {
+            const output = execFileSync('file', [nativeBinary], { encoding: 'utf8' }).toLowerCase();
+            if (output.includes('aarch64') || output.includes('arm64')) return 'arm64';
+            if (output.includes('x86-64') || output.includes('x86_64')) return 'x64';
+        }
+    } catch (error) {
+        console.warn('[stream-server] Could not inspect node-datachannel native binary:', error?.message || error);
+    }
+
+    return null;
+}
+
+function getNodeArch(nodeExecutable) {
+    try {
+        return execFileSync(nodeExecutable, ['-p', 'process.arch'], {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore']
+        }).trim();
+    } catch {
+        return null;
+    }
+}
+
 function resolveNodeExecutable() {
-    return process.env.STREAMER_BRIDGE_NODE || process.env.npm_node_execpath || 'node';
+    const nativeArch = detectNativeNodeArch(resolveNodeDataChannelBinary());
+    const candidates = resolveNodeBinaryCandidates();
+
+    if (!nativeArch) {
+        return candidates[0] || 'node';
+    }
+
+    for (const candidate of candidates) {
+        const nodeArch = getNodeArch(candidate);
+        if (nodeArch === nativeArch) {
+            if (candidate !== candidates[0]) {
+                console.log(`[stream-server] Selected ${candidate} for bridge runtime because it matches native module arch ${nativeArch}.`);
+            }
+            return candidate;
+        }
+    }
+
+    const checked = candidates
+        .map((candidate) => `${candidate} (${getNodeArch(candidate) || 'unavailable'})`)
+        .join(', ');
+    throw new Error(
+        `No Node.js runtime matches node-datachannel architecture "${nativeArch}". Checked: ${checked}. Reinstall dependencies under your current Node architecture or set STREAMER_BRIDGE_NODE to a matching Node binary.`
+    );
 }
 
 async function startBridgeDaemon() {
