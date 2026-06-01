@@ -47,6 +47,28 @@ function titleOf(candidate: MediaCandidate) {
   );
 }
 
+function withRemuxHint(candidate: MediaCandidate): MediaCandidate {
+  return {
+    ...candidate,
+    stream: {
+      ...candidate.stream,
+      behaviorHints: {
+        ...candidate.stream.behaviorHints,
+        remuxToMp4: true,
+      },
+    },
+  };
+}
+
+function fallbackCandidates(
+  selected: MediaCandidate,
+  candidates: MediaCandidate[],
+) {
+  return candidates
+    .filter((candidate) => candidate.id !== selected.id)
+    .slice(0, 4);
+}
+
 export class PlaybackPlannerService {
   async createPlan(
     userId: string,
@@ -144,7 +166,12 @@ export class PlaybackPlannerService {
         bridgeAvailable(request.bridge),
       );
 
-    const bestPlayable = playableCandidates.sort(sortByScore)[0];
+    const sortedPlayableCandidates = [...playableCandidates].sort(sortByScore);
+    const sortedRemuxCandidates = [...remuxCandidates]
+      .sort(sortByScore)
+      .map(withRemuxHint);
+
+    const bestPlayable = sortedPlayableCandidates[0];
     if (bestPlayable) {
       return {
         state: "ready",
@@ -160,27 +187,26 @@ export class PlaybackPlannerService {
             bestPlayable.kind === "direct" || bestPlayable.kind === "hls"
               ? bestPlayable.stream.url
               : undefined,
+          fallbackCandidates: fallbackCandidates(bestPlayable, [
+            ...sortedPlayableCandidates,
+            ...sortedRemuxCandidates,
+          ]),
         },
         debug: { rejectedCandidates: rejected },
       };
     }
 
-    const bestRemux = remuxCandidates.sort(sortByScore)[0];
+    const bestRemux = sortedRemuxCandidates[0];
     if (bestRemux) {
       return {
         state: "ready",
         plan: {
           mode: "remux",
-          selectedCandidate: {
-            ...bestRemux,
-            stream: {
-              ...bestRemux.stream,
-              behaviorHints: {
-                ...bestRemux.stream.behaviorHints,
-                remuxToMp4: true,
-              },
-            },
-          },
+          selectedCandidate: bestRemux,
+          fallbackCandidates: fallbackCandidates(
+            bestRemux,
+            sortedRemuxCandidates,
+          ),
         },
         userMessage: "Preparing this source for your device.",
         debug: { rejectedCandidates: rejected },

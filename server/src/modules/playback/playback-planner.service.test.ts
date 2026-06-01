@@ -119,6 +119,47 @@ describe("PlaybackPlannerService", () => {
     expect(plan.plan?.selectedCandidate.stream.infoHash).toBe("abc123");
   });
 
+  it("includes ordered fallback candidates for automatic client retry", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie.1080p.h264.aac.mp4",
+        title: "Movie.2026.1080p.H264.AAC.mp4",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie.720p.h264.aac.mp4",
+        title: "Movie.2026.720p.H264.AAC.mp4",
+        resolution: "720p",
+      },
+      {
+        infoHash: "mkv123",
+        title: "Movie.2026.1080p.H264.AAC.mkv",
+        resolution: "1080p",
+        seeders: 200,
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: webProfile,
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.plan?.selectedCandidate.stream.url).toContain("1080p");
+    expect(plan.plan?.fallbackCandidates).toHaveLength(2);
+    expect(plan.plan?.fallbackCandidates?.[0].stream.url).toContain("720p");
+    expect(
+      plan.plan?.fallbackCandidates?.[1].stream.behaviorHints?.remuxToMp4,
+    ).toBe(true);
+  });
+
   it("marks MKV torrent sources for remux when the device needs MP4", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {

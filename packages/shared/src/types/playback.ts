@@ -92,6 +92,7 @@ export interface PlaybackPlan {
   plan?: {
     mode: PlaybackPlanMode;
     selectedCandidate: MediaCandidate;
+    fallbackCandidates?: MediaCandidate[];
     playbackUrl?: string;
   };
   userMessage?: string;
