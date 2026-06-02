@@ -22,20 +22,39 @@ All REST routes are mounted under `/api` and return JSON. Unless specified, all 
 | `GET`    | `/export`          | ✅       | Exports all user data (library, progress, addons) as JSON. |
 | `DELETE` | `/account`         | ✅       | Irreversibly deletes user and cascading records.           |
 
-### 1.2 Aggregator (`/api/aggregator`)
+### 1.2 Aggregator (`/api`)
 
 This is the core content fan-out router. It queries all installed add-ons in parallel.
 
-| Method | Route                                 | Description                                                                |
-| ------ | ------------------------------------- | -------------------------------------------------------------------------- |
-| `GET`  | `/catalog/:type`                      | Fetches aggregated catalog grids (e.g. `movie`, `series`).                 |
-| `GET`  | `/search?q={query}`                   | Global search across catalogs.                                             |
-| `GET`  | `/meta/:type/:id`                     | Aggregated metadata. Priority: Trakt > TMDB/Cinemeta > Others.             |
-| `GET`  | `/stream/:type/:id`                   | Returns list of all playable streams from all add-ons.                     |
-| `GET`  | `/stream/resolve/:type/:id/:infoHash` | Unlocks/un-hides Debrid/cached torrent URLs prior to playback.             |
-| `POST` | `/stream/resolve-bulk`                | Bulk resolution for episode lists. Body: `{ type, infoHashes: string[] }`. |
+| Method | Route                                 | Description                                                                                                                                                                            |
+| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/catalog/:type`                      | Fetches the aggregated Home catalog grid for `movie` or `series`. Supports catalog extras such as `skip` where add-ons support them.                                                   |
+| `GET`  | `/search?q={query}`                   | Global search across installed add-ons.                                                                                                                                                |
+| `GET`  | `/meta/:type/:id`                     | Aggregated metadata. Priority: Trakt > TMDB/Cinemeta > Others.                                                                                                                         |
+| `GET`  | `/stream/:type/:id`                   | Returns source metadata from all stream add-ons. Returned streams include `type` and `id` context so client-side resolution can call exact resolve routes later.                       |
+| `GET`  | `/stream/resolve/:type/:id/:infoHash` | Resolves one torrent/infoHash stream for playback. Real-Debrid can upgrade to direct HTTP when enabled; otherwise the client/bridge handles the torrent path.                          |
+| `POST` | `/stream/resolve-bulk`                | Bulk resolution for multiple stream hashes. Body: `{ type, id?, infoHashes: string[] }`. Keep request sizes bounded; current schemas cap this to prevent accidental N+1 amplification. |
 
-### 1.3 Library & Watch Progress (`/api/library`)
+### 1.3 Playback Planner (`/api/playback`)
+
+The playback planner is the current central contract for `Play Best`, bridge readiness, and future download/cast orchestration. The client sends the desired action, device capabilities, and bridge health; the server returns a ranked source plan or a typed user-facing plan state.
+
+| Method | Route   | Description                                                                                                                                            |
+| ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST` | `/plan` | Body: `PlaybackPlanRequest`. Returns `PlaybackPlan` with `state`, selected candidate, fallback candidates, optional gateway playback URL, and rejects. |
+
+Important plan states:
+
+| State               | Meaning                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `ready`             | A selected candidate is playable for the requested action/device.                          |
+| `needsBridge`       | The best source requires the desktop/local bridge and no usable bridge is currently ready. |
+| `bridgeUnavailable` | The bridge is reachable but cannot serve streams, for example a native runtime mismatch.   |
+| `needsTranscode`    | The source needs conversion before this device can play it.                                |
+| `unsupported`       | Available sources do not match the device/action.                                          |
+| `notFound`          | No suitable source was returned.                                                           |
+
+### 1.4 Library & Watch Progress (`/api/library`)
 
 | Method   | Route       | Description                                                                  |
 | -------- | ----------- | ---------------------------------------------------------------------------- |
@@ -45,15 +64,16 @@ This is the core content fan-out router. It queries all installed add-ons in par
 | `GET`    | `/progress` | Fetches `ContinueWatchingRow` data (progress > 0 && < 100).                  |
 | `POST`   | `/progress` | Updates progress. Body: `{ itemId, progress: float, duration: number, ...}`. |
 
-### 1.4 Add-ons (`/api/addons`)
+### 1.5 Add-ons (`/api/addons`)
 
-| Method   | Route  | Description                                          |
-| -------- | ------ | ---------------------------------------------------- |
-| `GET`    | `/`    | Lists all installed add-on manifests for the user.   |
-| `POST`   | `/`    | Installs an add-on. Body: `{ manifestUrl: string }`. |
-| `DELETE` | `/:id` | Uninstalls an add-on by its ID.                      |
+| Method   | Route                                | Description                                                                                                         |
+| -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/`                                  | Lists all installed add-on manifests for the user.                                                                  |
+| `POST`   | `/`                                  | Installs an add-on. Body: `{ transportUrl: string }`. The URL may be the add-on base URL or direct `manifest.json`. |
+| `GET`    | `/:addonId/catalog/:type/:catalogId` | Fetches one exact catalog from one installed add-on. Used by Discover provider/catalog rails.                       |
+| `DELETE` | `/:id`                               | Uninstalls an add-on by its ID.                                                                                     |
 
-### 1.5 Trakt & Sync (`/api/trakt` & `/api/sync`)
+### 1.6 Trakt & Sync (`/api/trakt` & `/api/sync`)
 
 | Method | Route                     | Description                                                                                  |
 | ------ | ------------------------- | -------------------------------------------------------------------------------------------- |
@@ -68,29 +88,70 @@ This is the core content fan-out router. It queries all installed add-ons in par
 
 The stream-server runs locally on the device (or on the local network via Docker) on port `:11470`.
 
+Most control routes support bridge authentication. When `STREAMER_BRIDGE_TOKEN` is configured, clients must send either `Authorization: Bearer <token>` or `x-streamer-bridge-token: <token>`.
+
 ### 2.1 Playback
 
-| Method | Route     | Description                                                                                                                                                                 |
-| ------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/stream` | **The Bridge Endpoint.** Converts a magnet link to HTTP.<br>Query params: `?torrent={infoHash_or_magnet}&fileIndex={number}`. Returns HTTP 206 Partial Content byte ranges. |
+The legacy bridge endpoint still exists:
+
+| Method | Route     | Auth Req | Description                                                                                                                                               |
+| ------ | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/stream` | ✅       | Legacy direct bridge endpoint. Query params include `?magnet={magnet}` and `fileIndex={number}`. Returns HTTP byte-range stream responses where possible. |
+
+The current preferred torrent playback path is the gateway job API:
+
+| Method   | Route                          | Auth Req            | Description                                                                                                                |
+| -------- | ------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/api/gateway/jobs`            | ✅                  | Creates a gateway job. Body: `{ magnet, fileIdx?, remux?, remuxFormat? }`. Returns `202` with job status and playback URL. |
+| `GET`    | `/api/gateway/jobs/:id`        | ✅                  | Polls job status while the bridge prepares torrent metadata/peers.                                                         |
+| `DELETE` | `/api/gateway/jobs/:id`        | ✅                  | Cancels a preparing/ready job. Returns `202` with `state: "cancelled"` and `playbackUrl: null`.                            |
+| `GET`    | `/api/gateway/jobs/:id/stream` | ❌ currently public | Streams the prepared job. Returns `410` for cancelled jobs and `503` for failed jobs.                                      |
+
+Gateway job response shape:
+
+```typescript
+interface GatewayJobResponse {
+  id: string;
+  state: "preparing" | "ready" | "error" | "cancelled";
+  phase:
+    | "finding_peers"
+    | "preparing_metadata"
+    | "ready"
+    | "error"
+    | "cancelled";
+  mode: "bridge" | "remux";
+  infoHash?: string;
+  fileIdx?: number;
+  error?: string;
+  retryable: boolean;
+  peerCount: number | null;
+  progress: number | null; // 0..1 while preparing, 1 when ready, null for terminal failures/cancel
+  elapsedMs: number;
+  readyTimeoutMs: number;
+  playbackUrl: string | null;
+  metricsUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
 
 ### 2.2 Metrics & Health
 
-| Method | Route                            | Description                                             |
-| ------ | -------------------------------- | ------------------------------------------------------- |
-| `GET`  | `/api/health`                    | Returns memory usage, uptime, and active torrent count. |
-| `GET`  | `/api/torrent/:infoHash/metrics` | Returns live download speed, peers, ratio, and swarms.  |
-| `GET`  | `/stats`                         | (Legacy) Aggregated daemon stats.                       |
+| Method | Route                            | Auth Req | Description                                                                                          |
+| ------ | -------------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`                    | ❌       | Returns daemon health, memory, uptime, active torrent count, and torrent engine availability status. |
+| `GET`  | `/api/torrent/:infoHash/metrics` | ✅       | Returns live download speed, peers, ratio, and swarm state for player readiness UI.                  |
+| `GET`  | `/stats`                         | ✅       | Legacy aggregated daemon stats.                                                                      |
 
 ### 2.3 Casting (`/api/cast`)
 
 Google Cast protocol bridging so WebTorrent streams can be dispatched to local Chromecasts.
 
-| Method | Route               | Description                                                  |
-| ------ | ------------------- | ------------------------------------------------------------ |
-| `GET`  | `/api/cast/devices` | Discovers Chromecasts on the local network via Bonjour/mDNS. |
-| `POST` | `/api/cast/play`    | Instructs a discovered device to stream from the bridge.     |
-| `POST` | `/api/cast/stop`    | Stops current casting session.                               |
+| Method | Route               | Auth Req | Description                                                  |
+| ------ | ------------------- | -------- | ------------------------------------------------------------ |
+| `GET`  | `/api/cast/devices` | ✅       | Discovers Chromecasts on the local network via Bonjour/mDNS. |
+| `POST` | `/api/cast/play`    | ✅       | Instructs a discovered device to stream from the bridge.     |
+| `POST` | `/api/cast/stop`    | ✅       | Stops current casting session.                               |
 
 ---
 
@@ -164,7 +225,7 @@ Mobile clients often make parallel requests on startup (e.g., querying `catalog/
 
 ### 5.3 Aggregator Bulk Resolution
 
-Add-ons often return multiple encoded streams (e.g., Debrid hashes). Resolving them individually (`GET /api/aggregator/stream/resolve/:type/:id/:infoHash`) when displaying a 20-episode TV season causes massive connection overhead. The `/resolve-bulk` endpoint consolidates this, but strictly limits the array to 50 hashes to prevent DoS.
+Add-ons often return multiple encoded streams (e.g., Debrid hashes). Resolving them individually (`GET /api/stream/resolve/:type/:id/:infoHash`) when displaying a 20-episode TV season causes massive connection overhead. The `/api/stream/resolve-bulk` endpoint consolidates this and keeps request sizes bounded to prevent accidental DoS.
 
 ---
 
@@ -196,4 +257,4 @@ While `server/src/modules/addon` validates add-on manifests via Zod on installat
 
 #### 5. Local Network Stream Handoff
 
-When casting to a local display, the torrent bridges via the stream-server (`http://0.0.0.0:11470/stream`). Currently, any device on the local network can access `11470` to watch the stream if they guess the port. Implement a basic symmetric or token-based authentication mechanism between the native mobile app and the local stream-server daemon to lock down local access.
+Most bridge control routes now support token auth through `STREAMER_BRIDGE_TOKEN`, bearer auth, or `x-streamer-bridge-token`. Continue tightening the local handoff surface: gateway stream URLs are intentionally easy for `expo-video` and cast devices to consume, so future hardening should use short-lived signed stream URLs rather than requiring native video elements to set custom headers.

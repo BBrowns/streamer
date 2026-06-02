@@ -61,7 +61,7 @@ streamer/
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
 │  │  /auth   │ │ /addons  │ │ /library │ │ /api/catalog │  │
 │  │  /trakt  │ │ /sessions│ │ /sync    │ │ /api/meta    │  │
-│  │ /notifs  │ │          │ │          │ │ /api/streams │  │
+│  │ /notifs  │ │          │ │          │ │ /api/stream  │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │
 │                                                             │
 │  Prisma ORM ──► PostgreSQL (prod) / SQLite (dev)           │
@@ -184,16 +184,22 @@ A bulk-resolve endpoint (`POST /api/resolve-streams-bulk`) eliminates N+1 resolu
 
 This is a **separate Node.js process** running on `:11470`. Its sole job is to bridge the gap between the BitTorrent protocol and HTTP — crucially, this makes torrent streams playable on iOS (which has no native BitTorrent stack).
 
-**How it works:**
+**How torrent playback works now:**
 
-1. Mobile client requests `/stream?magnet=<encoded>&fileIndex=0`
-2. `WebTorrent` begins downloading/seeding the torrent (peer discovery via DHT/trackers).
-3. The server pipes the torrent file bytes directly into the HTTP response, supporting byte-range requests (essential for video scrubbing).
-4. The server streams as it downloads — it does not wait for the full file.
+1. The mobile client asks the server playback planner for a `PlaybackPlan`.
+2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`.
+3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `phase`, `progress`, `peerCount`, elapsed time, and timeout metadata through `GET /api/gateway/jobs/:id`.
+4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, and `preparing_metadata`.
+5. Once ready, the player receives `/api/gateway/jobs/:id/stream`, an HTTP byte-range stream suitable for `expo-video`.
+6. If the player stops or the job becomes stale, the mobile engine calls `DELETE /api/gateway/jobs/:id` so warmup work is cancelled instead of leaking.
+
+The legacy `/stream?magnet=<encoded>&fileIndex=0` endpoint still exists for compatibility, but new torrent playback should prefer gateway jobs because they provide readiness state, cancellation, progress, and future remux/transcode hooks.
 
 **Chromecast:** The `castv2-client` library (running inside the daemon) communicates directly with Chromecast devices discovered via `bonjour-service` (mDNS). The `/api/cast` router handles device discovery and playback control. This avoids requiring the mobile client to implement the Chromecast protocol natively.
 
-**Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served.
+**Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served. Gateway jobs expose coarser preparation progress before the media URL is ready.
+
+**Bridge auth:** Control routes use `requireBridgeAuth` when `STREAMER_BRIDGE_TOKEN` is configured. Clients can send either bearer auth or `x-streamer-bridge-token`. Stream URLs intended for native video/cast consumption remain a separate hardening topic because many video elements cannot attach custom headers.
 
 > **Critical:** The stream-server must be running locally on the same machine as the client (or reachable on the local network) for torrent playback to work. It is not a cloud service.
 
@@ -256,9 +262,9 @@ StreamEngineManager
 │
 ├── HLSEngine        — For .m3u8 HLS streams (direct URL to expo-video)
 ├── MP4Engine        — For direct .mp4 / HTTP progressive streams
-├── TorrentEngine    — For magnet: links → routes through stream-server daemon
-│                      and optionally FFmpeg remux (MKV → fMP4 for iOS compat)
-└── DebridEngine     — For Real-Debrid resolved direct links
+├── TorrentEngine    — For infoHash/magnet streams → optional Debrid resolve,
+│                      then local gateway jobs on the stream-server bridge
+└── Real-Debrid path — Optional paid resolver, disabled by default
 ```
 
 `IStreamEngine` defines the interface:
@@ -266,12 +272,38 @@ StreamEngineManager
 - `getPlaybackUri(stream)` → `Promise<string | null>`
 - audio/subtitle track enumeration
 - stream statistics (speed, peers)
+- gateway job progress events (`creating_gateway_job`, `finding_peers`, `preparing_metadata`, `ready`, `cancelled`)
 
 The player (`app/player.tsx`) calls `streamEngineManager.resolveEngine(currentStream)` and gets back the appropriate engine. This means adding a new stream type only requires implementing `IStreamEngine` and registering it — the player is oblivious to the delivery mechanism.
 
 **FFmpeg remuxing:** On desktop (Electron) and when receiving MKV container torrents, the stream-server can pipe the torrent stream through an FFmpeg process to produce fragmented MP4 (`fMP4`) on the fly. This is necessary because iOS's `AVPlayer` (underlying `expo-video`) does not support MKV containers natively.
 
-### 6.4 Download Service
+### 6.4 Playback Planning And Runtime State
+
+Playback is no longer a direct "user picks source, source resolves immediately" flow. The current architecture is:
+
+```
+Detail Play Best
+  → PlaybackOrchestrator.playBest()
+  → POST /api/playback/plan
+  → resolve selected source only when needed
+  → playerStore.setStream(primary, mediaInfo, fallbackStreams)
+  → player runtime state/error handling
+```
+
+Important client modules:
+
+| Module                                      | Responsibility                                                                                        |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `services/playback/PlaybackPlanService.ts`  | Calls `/api/playback/plan`, includes device profile and bridge diagnostics, resolves planned streams. |
+| `services/playback/PlaybackOrchestrator.ts` | Central Play Best entry point; returns a prepared stream or typed runtime error.                      |
+| `services/playback/PlaybackErrors.ts`       | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                  |
+| `stores/playerStore.ts`                     | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.             |
+| `components/player/PlayerStatusOverlay.tsx` | Displays typed readiness/error states instead of an endless generic buffering state.                  |
+
+Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
+
+### 6.5 Download Service
 
 `services/DownloadService.ts` implements resumable offline downloads across three platform surfaces:
 
@@ -285,15 +317,15 @@ The player (`app/player.tsx`) calls `streamEngineManager.resolveEngine(currentSt
 
 After completion, the service fires a `POST /api/notifications` to create a server-side notification, which can then sync to other devices.
 
-### 6.5 Key Zustand Stores
+### 6.6 Key Zustand Stores
 
-| Store           | Contents                                                                          |
-| --------------- | --------------------------------------------------------------------------------- |
-| `authStore`     | `isAuthenticated`, `user`, JWT token; hydrates from `expo-secure-store`           |
-| `playerStore`   | `currentStream`, `mediaInfo`, `playbackRate`, `streamState`, `streamMetrics`      |
-| `downloadStore` | `tasks` map (id → progress/status/localUri/resumeData); persisted to AsyncStorage |
+| Store           | Contents                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| `authStore`     | `isAuthenticated`, `user`, JWT token, bridge URL/token, theme preference; hydrates from secure storage |
+| `playerStore`   | `currentStream`, `mediaInfo`, fallback queue, `runtimeState`, `runtimeError`, stream state, metrics    |
+| `downloadStore` | `tasks` map (id → progress/status/localUri/resumeData); persisted to AsyncStorage                      |
 
-### 6.6 Trakt Scrobbling
+### 6.7 Trakt Scrobbling
 
 The `useTraktScrobbler` hook in the player automatically reports watch events to Trakt.tv:
 
@@ -303,7 +335,7 @@ The `useTraktScrobbler` hook in the player automatically reports watch events to
 
 The server maintains a `TraktSyncQueue` for failed scrobble attempts and retries them via a background scheduler (`traktService.startBackgroundSync()`).
 
-### 6.7 Chromecast
+### 6.8 Chromecast
 
 - **iOS/Android:** Uses `react-native-google-cast` (Google Cast SDK native module).
 - **Desktop/Web:** The stream-server daemon's Bonjour discovery + `castv2-client` is used. The Electron bridge exposes cast device control to the web client. A `DesktopCastModal` component handles device selection and playback control.
@@ -320,6 +352,7 @@ shared/src/
 │   ├── manifest.ts     # AddonManifest, catalog/resource/extra definitions
 │   ├── meta.ts         # MetaPreview, MetaDetail, Video (episode metadata)
 │   ├── stream.ts       # Stream (url, infoHash, title, resolution, seeders…)
+│   ├── playback.ts     # Playback plans, device profiles, bridge hints, runtime states/errors
 │   ├── auth.ts         # LoginRequest, RegisterRequest, TokenResponse…
 │   ├── library.ts      # LibraryItem, WatchProgress
 │   └── feature-flag.ts # FeatureFlag map
@@ -427,7 +460,7 @@ Add-ons are **HTTPS-only JSON REST APIs**. The manifest (`/manifest.json`) decla
 
 ### iOS Torrent Playback
 
-iOS's `AVPlayer` cannot handle raw magnet links or MKV containers. The fix is the stream-server daemon: it runs locally, accepts the magnet, streams via WebTorrent as HTTP, and optionally pipes through FFmpeg to remux MKV → fMP4. The mobile app always points `expo-video` at an `http://localhost:11470/stream?magnet=...` URL, never directly at a magnet.
+iOS's `AVPlayer` cannot handle raw magnet links or MKV containers. The fix is the stream-server daemon: it runs locally, accepts a magnet through a gateway job, warms up WebTorrent metadata/peers, then returns an HTTP stream URL for `expo-video`. The mobile app should never point `expo-video` directly at a magnet. Prefer `/api/gateway/jobs/:id/stream` over the legacy `/stream?magnet=...` path because gateway jobs expose readiness, cancellation, progress, and remux hooks.
 
 ### HLS on Non-Web Platforms
 
@@ -511,10 +544,12 @@ Hono's `requestId` middleware generates per-request IDs stored in context, but t
 
 #### 10. Stream-Server Process Supervision
 
-The stream-server daemon is started independently (`npm run dev:stream-server`) with no supervisor. If it crashes, the mobile app silently loses torrent playback with no user-facing indication. Consider:
+The desktop app and server-side supervisor have improved bridge startup/diagnostics, and the mobile app can surface bridge health states. Continue hardening this path:
 
-- Running it as a child process managed by the main server with auto-restart.
-- Or: exposing the `GET /api/health` endpoint on the stream-server and having the mobile app poll it; display an `OfflineBanner`-style warning when the daemon is unreachable.
+- Keep desktop sidecar startup explicit and logged.
+- Make "bridge available" depend on torrent engine availability, not only process reachability.
+- Surface `/api/health` and gateway job failures consistently in Sources & Devices.
+- Add repair guidance for native CPU/runtime mismatches.
 
 #### 11. Testcontainers Parallelism
 
