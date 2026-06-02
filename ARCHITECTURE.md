@@ -2,6 +2,7 @@
 
 > **Audience:** Engineers (human or AI agent) who need to understand, extend, or debug this system.
 > This document is the canonical technical reference. Keep it up-to-date whenever the architecture changes.
+> For the current playback, bridge, download, casting, and UI roadmap, see [AGENT_HANDOFF.md](./AGENT_HANDOFF.md).
 
 ---
 

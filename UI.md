@@ -3,6 +3,7 @@
 > **Audience:** Engineers (human or AI agent) working on the mobile/web/desktop client.
 > This document covers design decisions, component architecture, cross-platform patterns, and concrete improvement suggestions.
 > See [ARCHITECTURE.md](./ARCHITECTURE.md) for the backend and system-level reference.
+> See [AGENT_HANDOFF.md](./AGENT_HANDOFF.md) for the current product direction and next UI/UX priorities.
 
 ---
 
