@@ -1,6 +1,10 @@
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { PlaybackAction, PlaybackPlan } from "@streamer/shared";
+import type {
+  PlaybackAction,
+  PlaybackPlan,
+  PlaybackRuntimeError,
+} from "@streamer/shared";
 import { useTheme } from "../../hooks/useTheme";
 
 export type PlaybackReadinessTone = "info" | "warning" | "error";
@@ -109,6 +113,109 @@ export function getPlaybackReadinessCopy(
           ? "Casting unavailable"
           : "Playback unavailable",
     message,
+    detail: attemptedDetail,
+    tone: "warning",
+    icon: "alert-circle-outline",
+  };
+}
+
+export function getPlaybackReadinessCopyFromError(
+  error: PlaybackRuntimeError,
+  action: PlaybackAction,
+  errors: string[] = [],
+): PlaybackReadinessNoticeCopy {
+  const attemptedDetail =
+    errors.length > 0
+      ? `Tried ${errors.length} source${errors.length === 1 ? "" : "s"}. ${errors[0]}`
+      : undefined;
+
+  if (error.code === "BRIDGE_UNAVAILABLE") {
+    return {
+      title: "Desktop bridge required",
+      message: error.message,
+      detail:
+        "Open Sources & Devices to connect this device to your desktop bridge.",
+      tone: "warning",
+      icon: "desktop-outline",
+      primaryActionLabel: "Sources & Devices",
+    };
+  }
+
+  if (error.code === "BRIDGE_UNSUPPORTED") {
+    return {
+      title: "Bridge needs repair",
+      message: error.message,
+      detail:
+        "The app can see the bridge, but the torrent engine is not ready for playback.",
+      tone: "error",
+      icon: "construct-outline",
+      primaryActionLabel: "Sources & Devices",
+    };
+  }
+
+  if (error.code === "NO_SOURCES") {
+    return {
+      title: "No sources yet",
+      message: error.message,
+      detail: "Try a different title or add another source provider.",
+      tone: "info",
+      icon: "search-outline",
+      primaryActionLabel: "Sources & Devices",
+    };
+  }
+
+  if (error.code === "NO_PEERS") {
+    return {
+      title: "Source has no peers",
+      message: error.message,
+      detail: attemptedDetail || "Try again later or choose More Sources.",
+      tone: "warning",
+      icon: "people-outline",
+    };
+  }
+
+  if (error.code === "UNSUPPORTED_CODEC") {
+    return {
+      title: "No compatible source",
+      message: error.message,
+      detail:
+        "The selected source cannot play on this device without conversion.",
+      tone: "warning",
+      icon: "alert-circle-outline",
+      primaryActionLabel: "Sources & Devices",
+    };
+  }
+
+  if (error.code === "PLAYBACK_TIMEOUT" || error.code === "GATEWAY_TIMEOUT") {
+    return {
+      title: "Playback timed out",
+      message: error.message,
+      detail:
+        attemptedDetail ||
+        "The app can try another source when one is available.",
+      tone: "warning",
+      icon: "timer-outline",
+    };
+  }
+
+  if (error.code === "NETWORK_OFFLINE") {
+    return {
+      title: "Network problem",
+      message: error.message,
+      detail: attemptedDetail,
+      tone: "warning",
+      icon: "cloud-offline-outline",
+    };
+  }
+
+  return {
+    title:
+      action === "download"
+        ? "Download unavailable"
+        : action === "cast"
+          ? "Casting unavailable"
+          : "Playback unavailable",
+    message: error.message,
     detail: attemptedDetail,
     tone: "warning",
     icon: "alert-circle-outline",

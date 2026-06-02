@@ -1,5 +1,8 @@
 import type { PlaybackPlan } from "@streamer/shared";
-import { getPlaybackReadinessCopy } from "../PlaybackReadinessNotice";
+import {
+  getPlaybackReadinessCopy,
+  getPlaybackReadinessCopyFromError,
+} from "../PlaybackReadinessNotice";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: {
@@ -46,6 +49,44 @@ describe("PlaybackReadinessNotice", () => {
     ).toMatchObject({
       title: "Playback source failed",
       message: "This stream is not playable.",
+      detail: "Tried 1 source. No peers found",
+      tone: "warning",
+    });
+  });
+
+  it("turns typed bridge runtime errors into repair guidance", () => {
+    expect(
+      getPlaybackReadinessCopyFromError(
+        {
+          code: "BRIDGE_UNSUPPORTED",
+          message: "Bridge is running but the streaming engine is unavailable.",
+          retryable: false,
+          shouldFallback: false,
+        },
+        "play",
+      ),
+    ).toMatchObject({
+      title: "Bridge needs repair",
+      message: "Bridge is running but the streaming engine is unavailable.",
+      tone: "error",
+      primaryActionLabel: "Sources & Devices",
+    });
+  });
+
+  it("turns typed peer runtime errors into source guidance", () => {
+    expect(
+      getPlaybackReadinessCopyFromError(
+        {
+          code: "NO_PEERS",
+          message: "This source did not find enough peers to start playback.",
+          retryable: true,
+          shouldFallback: true,
+        },
+        "play",
+        ["No peers found"],
+      ),
+    ).toMatchObject({
+      title: "Source has no peers",
       detail: "Tried 1 source. No peers found",
       tone: "warning",
     });

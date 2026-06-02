@@ -17,6 +17,47 @@ export type PlaybackPlanMode =
   | "remux"
   | "transcode";
 
+export type PlaybackRuntimeState =
+  | "idle"
+  | "planning"
+  | "selecting_source"
+  | "checking_bridge"
+  | "creating_gateway_job"
+  | "preparing_metadata"
+  | "finding_peers"
+  | "buffering"
+  | "playing"
+  | "trying_fallback"
+  | "failed_no_sources"
+  | "failed_no_peers"
+  | "failed_bridge_unavailable"
+  | "failed_bridge_unsupported"
+  | "failed_unsupported_codec"
+  | "failed_timeout"
+  | "failed_network"
+  | "failed_unknown"
+  | "cancelled";
+
+export type PlaybackErrorCode =
+  | "NO_SOURCES"
+  | "NO_PEERS"
+  | "BRIDGE_UNAVAILABLE"
+  | "BRIDGE_UNSUPPORTED"
+  | "UNSUPPORTED_CODEC"
+  | "GATEWAY_TIMEOUT"
+  | "SOURCE_UNAVAILABLE"
+  | "NETWORK_OFFLINE"
+  | "PLAYBACK_TIMEOUT"
+  | "UNKNOWN";
+
+export interface PlaybackRuntimeError {
+  code: PlaybackErrorCode;
+  message: string;
+  retryable: boolean;
+  shouldFallback: boolean;
+  debugMessage?: string;
+}
+
 export type DevicePlatform =
   | "ios"
   | "android"

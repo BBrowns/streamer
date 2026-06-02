@@ -31,12 +31,14 @@ import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
 } from "../../../services/playback/PlaybackPlanService";
+import { playBest } from "../../../services/playback/PlaybackOrchestrator";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
 import {
   getPlaybackReadinessCopy,
+  getPlaybackReadinessCopyFromError,
   type PlaybackReadinessNoticeCopy,
 } from "../../../components/detail/PlaybackReadinessNotice";
 
@@ -156,39 +158,28 @@ export default function DetailScreen() {
     if (!stream) {
       setPlanningAction("play");
       try {
-        const plan = await createPlaybackPlanWithBridgeRetry({
+        const result = await playBest({
           type: castType,
           id: id || "unknown",
           season,
           episode,
-          action: "play",
+          title: meta?.name,
+          poster: meta?.poster,
+          episodeTitle,
         });
-        const result = await resolvePlaybackPlan(plan);
-        const resolved = result.resolved;
-        if (!resolved) {
-          showPlanMessage(
-            plan,
-            t("detail.errors.notPlayable"),
-            "play",
-            result.errors,
+
+        if (!result.ok) {
+          setPlaybackNotice(
+            getPlaybackReadinessCopyFromError(
+              result.error,
+              "play",
+              result.resolveErrors,
+            ),
           );
           return;
         }
 
-        setStream(
-          resolved.stream,
-          {
-            type: castType,
-            itemId: id || "unknown",
-            title: episodeTitle
-              ? `${meta?.name} - ${episodeTitle}`
-              : (meta?.name ?? resolved.stream.title ?? "Unknown"),
-            poster: meta?.poster,
-            season,
-            episode,
-          },
-          result.remainingStreams,
-        );
+        setStream(result.stream, result.mediaInfo, result.fallbackStreams);
         router.push("/player");
       } finally {
         setPlanningAction(null);
@@ -253,16 +244,19 @@ export default function DetailScreen() {
       if (bridgeUp) {
         const retryUri = await streamEngineManager.getPlaybackUri(stream);
         if (retryUri && retryUri.length > 0) {
-          setStream(stream, {
-            type: castType,
-            itemId: id || "unknown",
-            title: episodeTitle
-              ? `${meta?.name} - ${episodeTitle}`
-              : (meta?.name ?? stream.title ?? "Unknown"),
-            poster: meta?.poster,
-            season,
-            episode,
-          });
+          setStream(
+            { ...stream, url: retryUri },
+            {
+              type: castType,
+              itemId: id || "unknown",
+              title: episodeTitle
+                ? `${meta?.name} - ${episodeTitle}`
+                : (meta?.name ?? stream.title ?? "Unknown"),
+              poster: meta?.poster,
+              season,
+              episode,
+            },
+          );
           router.push("/player");
           return;
         }
@@ -284,7 +278,7 @@ export default function DetailScreen() {
     }
 
     setPlaybackNotice(null);
-    setStream(stream, {
+    setStream(uri && stream.url !== uri ? { ...stream, url: uri } : stream, {
       type: castType,
       itemId: id || "unknown",
       title: episodeTitle
