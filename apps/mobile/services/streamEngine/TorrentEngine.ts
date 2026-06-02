@@ -1,6 +1,7 @@
 import type { Stream } from "@streamer/shared";
 import type {
   AudioTrack,
+  GatewayJobProgress,
   IStreamEngine,
   SubtitleTrack,
   StreamStats,
@@ -8,9 +9,9 @@ import type {
 import { api } from "../api";
 import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "../bridgeAuth";
 
-type GatewayJobState = "preparing" | "ready" | "error";
+type GatewayJobState = "preparing" | "ready" | "error" | "cancelled";
 
-interface GatewayJobResponse {
+interface GatewayJobResponse extends GatewayJobProgress {
   id?: string;
   state?: GatewayJobState;
   playbackUrl?: string;
@@ -41,6 +42,7 @@ function sleep(ms: number) {
 export class TorrentEngine implements IStreamEngine {
   private listeners = new Map<string, Set<Function>>();
   private statsInterval: ReturnType<typeof setInterval> | null = null;
+  private activeGatewayJob: { bridgeUrl: string; id: string } | null = null;
   private bridge: BridgeConfig;
 
   constructor(bridge: BridgeConfig) {
@@ -98,6 +100,13 @@ export class TorrentEngine implements IStreamEngine {
       }
 
       this.startStatsPolling();
+      await this.cancelActiveGatewayJob();
+      this.emit("gateway", {
+        state: "preparing",
+        phase: "creating_gateway_job",
+        progress: 0,
+        peerCount: null,
+      } satisfies GatewayJobProgress);
       const gatewayRes = await fetch(`${bridgeUrl}/api/gateway/jobs`, {
         method: "POST",
         headers: withBridgeJsonHeaders(),
@@ -119,8 +128,13 @@ export class TorrentEngine implements IStreamEngine {
       if (!job?.playbackUrl) {
         throw new Error("Stream gateway did not return a playback URL");
       }
+      if (job.id) {
+        this.activeGatewayJob = { bridgeUrl, id: job.id };
+      }
+      this.emit("gateway", job);
 
       const readyJob = await this.waitForGatewayJobReady(bridgeUrl, job);
+      this.emit("gateway", readyJob);
       return toAbsoluteBridgeUrl(bridgeUrl, readyJob.playbackUrl!);
     }
 
@@ -138,6 +152,10 @@ export class TorrentEngine implements IStreamEngine {
     if (initialJob.state === "error") {
       this.markBridgeNoPeersIfRelevant(initialJob.error);
       throw new Error(initialJob.error || "Stream gateway could not prepare");
+    }
+
+    if (initialJob.state === "cancelled") {
+      throw new Error(initialJob.error || "Stream gateway job was cancelled");
     }
 
     if (!initialJob.id) {
@@ -166,6 +184,7 @@ export class TorrentEngine implements IStreamEngine {
       }
 
       const job = (await statusRes.json()) as GatewayJobResponse;
+      this.emit("gateway", job);
       if (job.state === "ready" && job.playbackUrl) {
         return job;
       }
@@ -175,10 +194,15 @@ export class TorrentEngine implements IStreamEngine {
         throw new Error(job.error || "Stream gateway could not prepare");
       }
 
+      if (job.state === "cancelled") {
+        throw new Error(job.error || "Stream gateway job was cancelled");
+      }
+
       await sleep(GATEWAY_JOB_POLL_INTERVAL_MS);
     }
 
     this.bridge.bridgeStatus = "no-peers";
+    await this.cancelActiveGatewayJob();
     throw new Error(
       "Still waiting for torrent peers. Try again shortly or choose another source.",
     );
@@ -213,6 +237,36 @@ export class TorrentEngine implements IStreamEngine {
         );
       }
     }, 2000); // poll every 2 seconds
+  }
+
+  private async cancelActiveGatewayJob() {
+    const activeJob = this.activeGatewayJob;
+    if (!activeJob) return;
+
+    this.activeGatewayJob = null;
+    try {
+      await fetch(
+        toAbsoluteBridgeUrl(
+          activeJob.bridgeUrl,
+          `/api/gateway/jobs/${encodeURIComponent(activeJob.id)}`,
+        ),
+        {
+          method: "DELETE",
+          headers: getBridgeAuthHeaders(),
+        },
+      );
+      this.emit("gateway", {
+        id: activeJob.id,
+        state: "cancelled",
+        phase: "cancelled",
+        progress: null,
+      } satisfies GatewayJobProgress);
+    } catch (error: any) {
+      console.warn(
+        "[TorrentEngine] Failed to cancel gateway job:",
+        error?.message || error,
+      );
+    }
   }
 
   private emit(event: string, data: any) {
@@ -255,6 +309,7 @@ export class TorrentEngine implements IStreamEngine {
       clearInterval(this.statsInterval);
       this.statsInterval = null;
     }
+    void this.cancelActiveGatewayJob();
     this.listeners.clear();
   }
 }

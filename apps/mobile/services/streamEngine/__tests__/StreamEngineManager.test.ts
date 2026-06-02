@@ -199,6 +199,80 @@ describe("TorrentEngine", () => {
     );
   });
 
+  it("emits gateway progress and cancels the active gateway job on stop", async () => {
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    const onGateway = jest.fn();
+    engine.on("gateway", onGateway);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          phase: "preparing_metadata",
+          progress: 0.25,
+          peerCount: 2,
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "ready",
+          phase: "ready",
+          progress: 1,
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "cancelled",
+        }),
+      });
+
+    const uri = await engine.getPlaybackUri({ infoHash: "deadbeef" });
+    engine.stop();
+
+    expect(uri).toBe("http://bridge.test/api/gateway/jobs/job-1/stream");
+    expect(onGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: "preparing",
+        phase: "creating_gateway_job",
+        progress: 0,
+      }),
+    );
+    expect(onGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: "preparing",
+        phase: "preparing_metadata",
+        progress: 0.25,
+      }),
+    );
+    expect(onGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: "ready",
+        phase: "ready",
+        progress: 1,
+      }),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      "http://bridge.test/api/gateway/jobs/job-1",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: {},
+      }),
+    );
+  });
+
   it("returns gateway playback immediately for legacy ready responses", async () => {
     engine = new TorrentEngine({
       activeStrategy: "local",

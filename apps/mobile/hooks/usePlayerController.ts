@@ -10,9 +10,11 @@ import { useMeta } from "./useMeta";
 import { api } from "../services/api";
 import type {
   AudioTrack,
+  GatewayJobProgress,
   SubtitleTrack,
   StreamStats,
 } from "../services/streamEngine/IStreamEngine";
+import { mapPlaybackMessageToRuntimeFailure } from "../services/playback/PlaybackErrors";
 
 interface UsePlayerControllerProps {
   player: any; // Expo Video Player instance
@@ -36,6 +38,8 @@ export function usePlayerController({
   );
   const setProgress = usePlayerStore((s) => s.setProgress);
   const setStream = usePlayerStore((s) => s.setStream);
+  const setRuntimeState = usePlayerStore((s) => s.setRuntimeState);
+  const setRuntimeFailure = usePlayerStore((s) => s.setRuntimeFailure);
   const autoPlayNext = usePlayerStore((s) => s.autoPlayNext);
 
   const { updateStatus } = useRemoteControl();
@@ -92,13 +96,49 @@ export function usePlayerController({
     setSubtitles(engine.getSubtitles());
 
     const onStats = (data: StreamStats) => setStats(data);
+    const onGateway = (data: GatewayJobProgress) => {
+      if (data.state === "error") {
+        setRuntimeFailure(
+          mapPlaybackMessageToRuntimeFailure(
+            data.error || "Stream gateway could not prepare this source.",
+            "GATEWAY_TIMEOUT",
+            { retryable: data.retryable ?? true, shouldFallback: true },
+          ).error,
+        );
+        return;
+      }
+
+      if (data.state === "cancelled") {
+        setRuntimeState("cancelled");
+        return;
+      }
+
+      if (data.state === "ready" || data.phase === "ready") {
+        setRuntimeState("buffering");
+        return;
+      }
+
+      if (data.phase === "creating_gateway_job") {
+        setRuntimeState("creating_gateway_job");
+        return;
+      }
+
+      if (data.phase === "preparing_metadata") {
+        setRuntimeState("preparing_metadata");
+        return;
+      }
+
+      setRuntimeState("finding_peers");
+    };
     engine.on("stats", onStats);
+    engine.on("gateway", onGateway);
 
     return () => {
       engine.off("stats", onStats);
+      engine.off("gateway", onGateway);
       engine.stop?.();
     };
-  }, [engine]);
+  }, [engine, setRuntimeFailure, setRuntimeState]);
 
   // 2. Metrics subscription
   useEffect(() => {

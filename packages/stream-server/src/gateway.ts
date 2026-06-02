@@ -8,8 +8,14 @@ import {
   serveTorrentFile,
 } from "./torrent.js";
 
-type GatewayJobState = "preparing" | "ready" | "error";
+type GatewayJobState = "preparing" | "ready" | "error" | "cancelled";
 type GatewayJobMode = "bridge" | "remux";
+type GatewayJobPhase =
+  | "finding_peers"
+  | "preparing_metadata"
+  | "ready"
+  | "error"
+  | "cancelled";
 
 interface GatewayJob {
   id: string;
@@ -27,6 +33,7 @@ interface GatewayJob {
 }
 
 const JOB_TTL_MS = 6 * 60 * 60 * 1000;
+const TERMINAL_JOB_TTL_MS = 15 * 60 * 1000;
 const GATEWAY_READY_TIMEOUT_MS = 120_000;
 const jobs = new Map<string, GatewayJob>();
 
@@ -56,11 +63,32 @@ function isRetryableGatewayError(error: unknown) {
 function pruneJobs() {
   const now = Date.now();
   for (const [id, job] of jobs) {
-    if (now - job.updatedAt > JOB_TTL_MS) {
+    const terminalTtl =
+      job.state === "ready" ||
+      job.state === "error" ||
+      job.state === "cancelled"
+        ? TERMINAL_JOB_TTL_MS
+        : JOB_TTL_MS;
+    if (now - job.updatedAt > terminalTtl) {
       if (job.progressTimer) clearInterval(job.progressTimer);
       jobs.delete(id);
     }
   }
+}
+
+function getJobPhase(job: GatewayJob): GatewayJobPhase {
+  if (job.state === "ready") return "ready";
+  if (job.state === "error") return "error";
+  if (job.state === "cancelled") return "cancelled";
+  return (job.peerCount ?? 0) > 0 ? "preparing_metadata" : "finding_peers";
+}
+
+function getJobProgress(job: GatewayJob, elapsedMs: number) {
+  if (job.state === "ready") return 1;
+  if (job.state === "error" || job.state === "cancelled") return null;
+  const elapsedProgress = elapsedMs / GATEWAY_READY_TIMEOUT_MS;
+  const peerProgress = (job.peerCount ?? 0) > 0 ? 0.2 : 0;
+  return Math.min(0.95, Math.max(peerProgress, elapsedProgress));
 }
 
 function serializeJob(job: GatewayJob) {
@@ -68,15 +96,19 @@ function serializeJob(job: GatewayJob) {
   return {
     id: job.id,
     state: job.state,
+    phase: getJobPhase(job),
     mode: job.mode,
     infoHash: job.infoHash,
     fileIdx: job.fileIdx,
     error: job.error,
-    retryable: job.retryable ?? job.state === "preparing",
+    retryable:
+      job.retryable ?? (job.state === "preparing" || job.state === "error"),
     peerCount: job.peerCount ?? null,
+    progress: getJobProgress(job, elapsedMs),
     elapsedMs,
     readyTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
-    playbackUrl: `/api/gateway/jobs/${job.id}/stream`,
+    playbackUrl:
+      job.state === "cancelled" ? null : `/api/gateway/jobs/${job.id}/stream`,
     metricsUrl: job.infoHash
       ? `/api/torrent/${encodeURIComponent(job.infoHash)}/metrics`
       : null,
@@ -85,9 +117,29 @@ function serializeJob(job: GatewayJob) {
   };
 }
 
+function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
+  if (job.progressTimer) {
+    clearInterval(job.progressTimer);
+    job.progressTimer = undefined;
+  }
+  job.state = "cancelled";
+  job.error = error;
+  job.retryable = false;
+  job.updatedAt = Date.now();
+}
+
+function isGatewayJobCancelled(job: GatewayJob) {
+  return job.state === "cancelled";
+}
+
 function trackGatewayJobProgress(job: GatewayJob, torrent: any) {
   job.peerCount = torrent?.numPeers ?? 0;
   job.progressTimer = setInterval(() => {
+    if (job.state === "cancelled") {
+      if (job.progressTimer) clearInterval(job.progressTimer);
+      job.progressTimer = undefined;
+      return;
+    }
     job.peerCount = torrent?.numPeers ?? job.peerCount ?? 0;
     job.updatedAt = Date.now();
   }, 1_000);
@@ -102,17 +154,22 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
   let stopProgressTracking: (() => void) | null = null;
   try {
     const torrent = preparedTorrent ?? (await prepareTorrent(job.magnet));
+    if (isGatewayJobCancelled(job)) return;
+
     job.infoHash = torrent.infoHash || job.infoHash;
     stopProgressTracking = trackGatewayJobProgress(job, torrent);
     job.updatedAt = Date.now();
 
     await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
+    if (isGatewayJobCancelled(job)) return;
+
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
     job.state = "ready";
     job.retryable = false;
     job.updatedAt = Date.now();
   } catch (err) {
+    if (isGatewayJobCancelled(job)) return;
     job.state = "error";
     job.error = sanitizeGatewayError(err);
     job.retryable = isRetryableGatewayError(err);
@@ -187,10 +244,25 @@ gatewayRouter.get("/jobs/:id", requireBridgeAuth, (req, res) => {
   return res.json(serializeJob(job));
 });
 
+gatewayRouter.delete("/jobs/:id", requireBridgeAuth, (req, res) => {
+  pruneJobs();
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Gateway job not found" });
+
+  cancelGatewayJob(job);
+  return res.status(202).json(serializeJob(job));
+});
+
 gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
   pruneJobs();
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: "Gateway job not found" });
+  if (isGatewayJobCancelled(job)) {
+    return res.status(410).json({
+      error: job.error || "Gateway job cancelled",
+      retryable: false,
+    });
+  }
   if (job.state === "error") {
     return res.status(503).json({
       error: job.error || "Gateway job failed",
@@ -200,11 +272,23 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
 
   try {
     const torrent = await prepareTorrent(job.magnet);
+    if (isGatewayJobCancelled(job)) {
+      return res.status(410).json({
+        error: job.error || "Gateway job cancelled",
+        retryable: false,
+      });
+    }
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
     job.updatedAt = Date.now();
 
     await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
+    if (isGatewayJobCancelled(job)) {
+      return res.status(410).json({
+        error: job.error || "Gateway job cancelled",
+        retryable: false,
+      });
+    }
     job.state = "ready";
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;

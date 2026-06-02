@@ -22,9 +22,28 @@ export interface StreamStats {
   peers: number; // number of connected peers
 }
 
+export interface GatewayJobProgress {
+  id?: string;
+  state?: "preparing" | "ready" | "error" | "cancelled";
+  phase?:
+    | "creating_gateway_job"
+    | "finding_peers"
+    | "preparing_metadata"
+    | "ready"
+    | "error"
+    | "cancelled";
+  progress?: number | null;
+  peerCount?: number | null;
+  error?: string;
+  retryable?: boolean;
+  elapsedMs?: number;
+  readyTimeoutMs?: number;
+}
+
 /** Event map for stream engine events */
 export interface StreamEngineEventMap {
   stats: StreamStats;
+  gateway: GatewayJobProgress;
 }
 
 /**
