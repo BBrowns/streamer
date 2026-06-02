@@ -91,6 +91,28 @@ function formatBridgeReason(reason: string) {
   }
 }
 
+function diagnosticsFromDesktopBridge(
+  info: DesktopBridgeInfo | null,
+): BridgeDiagnostics | null {
+  const diagnostics = info?.diagnostics;
+  if (!diagnostics) return null;
+
+  return {
+    status:
+      diagnostics.status === "error"
+        ? "unsupported"
+        : diagnostics.status === "starting"
+          ? "loading"
+          : "unreachable",
+    url: info?.localUrl || info?.lanUrl,
+    reason: diagnostics.reason || undefined,
+    message: diagnostics.message || diagnostics.error || undefined,
+    processArch: diagnostics.processArch || diagnostics.nodeArch || undefined,
+    platform: diagnostics.platform,
+    checkedAt: diagnostics.updatedAt,
+  };
+}
+
 function SourcesDevicesPanel() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -114,6 +136,7 @@ function SourcesDevicesPanel() {
   const [bridgeDiagnostics, setBridgeDiagnostics] = useState<BridgeDiagnostics>(
     streamEngineManager.getBridgeDiagnostics(),
   );
+  const [isRestartingBridge, setIsRestartingBridge] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,9 +232,43 @@ function SourcesDevicesPanel() {
     setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
   };
 
+  const handleRestartBridge = async () => {
+    if (!window.desktopBridge?.restartBridge) return;
+
+    hapticSelection();
+    setIsRestartingBridge(true);
+    try {
+      const info = await window.desktopBridge.restartBridge();
+      setBridgeInfo(info);
+      if (info.localUrl) {
+        setTempStream(info.localUrl);
+      }
+      if (info.pairingToken) {
+        setTempStreamToken(info.pairingToken);
+      }
+      await streamEngineManager.detectBridge();
+      setBridgeStatus(streamEngineManager.bridgeStatus);
+      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+    } catch {
+      setBridgeStatus(streamEngineManager.bridgeStatus);
+      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+    } finally {
+      setIsRestartingBridge(false);
+    }
+  };
+
+  const desktopDiagnostics = diagnosticsFromDesktopBridge(bridgeInfo);
+  const effectiveBridgeDiagnostics =
+    bridgeStatus === "unreachable" && desktopDiagnostics
+      ? desktopDiagnostics
+      : bridgeDiagnostics;
+  const effectiveBridgeStatus =
+    bridgeStatus === "unreachable" && desktopDiagnostics
+      ? desktopDiagnostics.status
+      : bridgeStatus;
   const bridgePresentation = getBridgeStatusPresentation(
-    bridgeStatus,
-    bridgeDiagnostics,
+    effectiveBridgeStatus,
+    effectiveBridgeDiagnostics,
   );
   const bridgeColor =
     bridgePresentation.tone === "success"
@@ -222,8 +279,9 @@ function SourcesDevicesPanel() {
   const bridgeUrl =
     bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
   const bridgeRuntimeLabel =
-    bridgeDiagnostics.platform && bridgeDiagnostics.processArch
-      ? `${bridgeDiagnostics.platform}/${bridgeDiagnostics.processArch}`
+    effectiveBridgeDiagnostics.platform &&
+    effectiveBridgeDiagnostics.processArch
+      ? `${effectiveBridgeDiagnostics.platform}/${effectiveBridgeDiagnostics.processArch}`
       : null;
 
   return (
@@ -300,7 +358,7 @@ function SourcesDevicesPanel() {
         <Text style={[styles.bridgeUrlText, { color: colors.textSecondary }]}>
           {bridgeUrl}
         </Text>
-        {(bridgeDiagnostics.reason || bridgeRuntimeLabel) && (
+        {(effectiveBridgeDiagnostics.reason || bridgeRuntimeLabel) && (
           <View
             style={[
               styles.bridgeDiagnosticsBox,
@@ -312,14 +370,14 @@ function SourcesDevicesPanel() {
               },
             ]}
           >
-            {!!bridgeDiagnostics.reason && (
+            {!!effectiveBridgeDiagnostics.reason && (
               <Text
                 style={[
                   styles.bridgeDiagnosticsText,
                   { color: colors.textSecondary },
                 ]}
               >
-                Reason: {formatBridgeReason(bridgeDiagnostics.reason)}
+                Reason: {formatBridgeReason(effectiveBridgeDiagnostics.reason)}
               </Text>
             )}
             {!!bridgeRuntimeLabel && (
@@ -358,6 +416,18 @@ function SourcesDevicesPanel() {
               <Ionicons name="copy-outline" size={16} color={colors.tint} />
               <Text style={[styles.inlineActionText, { color: colors.tint }]}>
                 Use LAN URL
+              </Text>
+            </Pressable>
+          )}
+          {Platform.OS === "web" && window.desktopBridge?.restartBridge && (
+            <Pressable
+              style={[styles.inlineAction, { borderColor: colors.border }]}
+              onPress={handleRestartBridge}
+              disabled={isRestartingBridge}
+            >
+              <Ionicons name="reload-outline" size={16} color={colors.tint} />
+              <Text style={[styles.inlineActionText, { color: colors.tint }]}>
+                {isRestartingBridge ? "Restarting..." : "Restart bridge"}
               </Text>
             </Pressable>
           )}
