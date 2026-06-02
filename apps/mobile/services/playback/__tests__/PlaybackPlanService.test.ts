@@ -4,6 +4,7 @@ import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
 import {
   createPlaybackPlan,
   getReadyPlanStreams,
+  resolvePlaybackPlan,
   resolveFirstPlayablePlanStream,
 } from "../PlaybackPlanService";
 
@@ -168,6 +169,44 @@ describe("PlaybackPlanService", () => {
       uri: "https://cdn.example.test/fallback.mp4",
       attemptedStreams: 2,
       errors: ["No peers found"],
+    });
+  });
+
+  it("returns resolve diagnostics when every planned source fails", async () => {
+    const plan: PlaybackPlan = {
+      state: "ready",
+      plan: {
+        mode: "bridge",
+        selectedCandidate: {
+          id: "dead-torrent",
+          kind: "torrent",
+          stream: { infoHash: "dead-torrent", title: "Dead torrent" },
+          riskFlags: [],
+        },
+        fallbackCandidates: [
+          {
+            id: "empty-direct",
+            kind: "direct",
+            stream: {
+              url: "https://cdn.example.test/empty.mp4",
+              title: "Empty direct",
+            },
+            riskFlags: [],
+          },
+        ],
+      },
+    };
+
+    getPlaybackUri
+      .mockRejectedValueOnce(new Error("No peers found"))
+      .mockResolvedValueOnce("");
+
+    const result = await resolvePlaybackPlan(plan);
+
+    expect(result).toEqual({
+      resolved: null,
+      attemptedStreams: 2,
+      errors: ["No peers found", "Source did not return a playback URL"],
     });
   });
 });

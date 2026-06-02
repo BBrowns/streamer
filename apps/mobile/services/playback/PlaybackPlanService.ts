@@ -51,6 +51,12 @@ export interface ResolvedPlaybackPlanStream {
   errors: string[];
 }
 
+export interface PlaybackPlanResolveResult {
+  resolved: ResolvedPlaybackPlanStream | null;
+  attemptedStreams: number;
+  errors: string[];
+}
+
 export function getReadyPlanStreams(plan: PlaybackPlan): Stream[] {
   if (plan.state !== "ready" || !plan.plan?.selectedCandidate) return [];
 
@@ -83,20 +89,26 @@ export function getReadyPlanStreams(plan: PlaybackPlan): Stream[] {
   return streams;
 }
 
-export async function resolveFirstPlayablePlanStream(
+export async function resolvePlaybackPlan(
   plan: PlaybackPlan,
-): Promise<ResolvedPlaybackPlanStream | null> {
+): Promise<PlaybackPlanResolveResult> {
   const streams = getReadyPlanStreams(plan);
   const errors: string[] = [];
+  let attemptedStreams = 0;
 
   for (const stream of streams) {
+    attemptedStreams += 1;
     try {
       const uri = await streamEngineManager.getPlaybackUri(stream);
       if (uri && uri.length > 0) {
         return {
-          stream: stream.url === uri ? stream : { ...stream, url: uri },
-          uri,
-          attemptedStreams: errors.length + 1,
+          resolved: {
+            stream: stream.url === uri ? stream : { ...stream, url: uri },
+            uri,
+            attemptedStreams,
+            errors,
+          },
+          attemptedStreams,
           errors,
         };
       }
@@ -106,5 +118,16 @@ export async function resolveFirstPlayablePlanStream(
     }
   }
 
-  return null;
+  return {
+    resolved: null,
+    attemptedStreams,
+    errors,
+  };
+}
+
+export async function resolveFirstPlayablePlanStream(
+  plan: PlaybackPlan,
+): Promise<ResolvedPlaybackPlanStream | null> {
+  const result = await resolvePlaybackPlan(plan);
+  return result.resolved;
 }

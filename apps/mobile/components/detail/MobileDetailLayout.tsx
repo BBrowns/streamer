@@ -17,6 +17,7 @@ import { StreamItem } from "./StreamItem";
 import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { FlashList } from "@shopify/flash-list";
 import { useTheme } from "../../hooks/useTheme";
+import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -36,6 +37,9 @@ export function MobileDetailLayout({
   handleDownloadStream,
   handleCastStream,
   planningAction,
+  playbackNotice,
+  onDismissPlaybackNotice,
+  onOpenSourcesDevices,
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
@@ -126,7 +130,7 @@ export function MobileDetailLayout({
             >
               <Ionicons name="play" size={18} color={primaryTextColor} />
               <Text style={[styles.playBestText, { color: primaryTextColor }]}>
-                {planningAction === "play" ? "Preparing..." : "Play"}
+                {planningAction === "play" ? "Finding best..." : "Play Best"}
               </Text>
             </Pressable>
             <Pressable
@@ -164,6 +168,14 @@ export function MobileDetailLayout({
               </Pressable>
             )}
           </View>
+        )}
+
+        {!!playbackNotice && !!onDismissPlaybackNotice && (
+          <PlaybackReadinessNotice
+            notice={playbackNotice}
+            onDismiss={onDismissPlaybackNotice}
+            onPrimaryAction={onOpenSourcesDevices}
+          />
         )}
 
         <Pressable
