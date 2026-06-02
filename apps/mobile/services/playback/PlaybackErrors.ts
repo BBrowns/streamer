@@ -224,6 +224,18 @@ export function mapResolveErrorsToRuntimeFailure(
   return { error, runtimeState: getPlaybackRuntimeState(error.code) };
 }
 
+export function mapPlaybackMessageToRuntimeFailure(
+  message: string,
+  fallbackCode: PlaybackErrorCode = "UNKNOWN",
+  overrides: Partial<
+    Pick<PlaybackRuntimeError, "retryable" | "shouldFallback" | "debugMessage">
+  > = {},
+): PlaybackRuntimeFailure {
+  const code = inferPlaybackErrorCodeFromMessages([message]) || fallbackCode;
+  const error = createPlaybackRuntimeError(code, message, overrides);
+  return { error, runtimeState: getPlaybackRuntimeState(error.code) };
+}
+
 export function getPlaybackActionFallback(
   action: PlaybackAction,
   fallback: string,

@@ -24,6 +24,7 @@ describe("PlayerStatusOverlay", () => {
     const screen = render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
+        runtimeState="trying_fallback"
         streamMetrics={null}
         isBuffering
         errorMessage={null}
@@ -32,6 +33,7 @@ describe("PlayerStatusOverlay", () => {
       />,
     );
 
+    expect(screen.getByText("player.status.tryingFallback")).toBeTruthy();
     expect(
       screen.getByText("Trying another source automatically."),
     ).toBeTruthy();
@@ -61,5 +63,27 @@ describe("PlayerStatusOverlay", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onOpenSourcesDevices).toHaveBeenCalledTimes(1);
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses runtime error titles and hides retry when retry is not useful", () => {
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="error"
+        streamMetrics={null}
+        isBuffering={false}
+        errorMessage="Unsupported codec h265"
+        runtimeError={{
+          code: "UNSUPPORTED_CODEC",
+          message: "Unsupported codec h265",
+          retryable: false,
+          shouldFallback: false,
+        }}
+        onBack={jest.fn()}
+        onRetry={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("player.status.unsupportedTitle")).toBeTruthy();
+    expect(screen.queryByText("common.retry")).toBeNull();
   });
 });

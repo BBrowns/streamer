@@ -9,12 +9,18 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import type { StreamMetrics, StreamLoadState } from "../../stores/playerStore";
+import type {
+  PlaybackRuntimeError,
+  PlaybackRuntimeState,
+} from "@streamer/shared";
 
 interface PlayerStatusOverlayProps {
   streamState: StreamLoadState;
+  runtimeState?: PlaybackRuntimeState;
   streamMetrics: StreamMetrics | null;
   isBuffering: boolean;
   errorMessage: string | null;
+  runtimeError?: PlaybackRuntimeError | null;
   fallbackReason?: string | null;
   onBack: () => void;
   onRetry?: () => void;
@@ -23,9 +29,11 @@ interface PlayerStatusOverlayProps {
 
 export function PlayerStatusOverlay({
   streamState,
+  runtimeState = "idle",
   streamMetrics,
   isBuffering,
   errorMessage,
+  runtimeError,
   fallbackReason,
   onBack,
   onRetry,
@@ -35,6 +43,16 @@ export function PlayerStatusOverlay({
   const { t } = useTranslation();
 
   if (streamState === "loading_metrics") {
+    const title = getLoadingTitle(runtimeState, streamMetrics, t);
+    const metricsDetail =
+      streamMetrics && runtimeState !== "trying_fallback"
+        ? `${streamMetrics.numPeers} ${t("player.controls.peers")} • ${(
+            streamMetrics.downloadSpeed /
+            1024 /
+            1024
+          ).toFixed(2)} MB/s`
+        : null;
+
     return (
       <View
         style={[
@@ -51,21 +69,19 @@ export function PlayerStatusOverlay({
           color={colors.tint}
           style={styles.spinner}
         />
-        <Text style={[styles.titleText, { color: colors.text }]}>
-          {streamMetrics?.state === "finding_peers"
-            ? t("player.status.findingPeers")
-            : streamMetrics?.state === "connecting"
-              ? t("player.status.connecting")
-              : t("player.status.buffering")}
-        </Text>
-        {streamMetrics ? (
-          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
-            {streamMetrics.numPeers} {t("player.controls.peers")} •{" "}
-            {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
-          </Text>
-        ) : fallbackReason ? (
+        <Text style={[styles.titleText, { color: colors.text }]}>{title}</Text>
+        {fallbackReason ? (
           <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
             {fallbackReason}
+          </Text>
+        ) : metricsDetail ? (
+          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
+            {metricsDetail}
+          </Text>
+        ) : runtimeState === "creating_gateway_job" ||
+          runtimeState === "preparing_metadata" ? (
+          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
+            {t("player.status.preparingSubtitle")}
           </Text>
         ) : null}
       </View>
@@ -73,6 +89,8 @@ export function PlayerStatusOverlay({
   }
 
   if (streamState === "error") {
+    const canRetry = !!onRetry && runtimeError?.retryable !== false;
+    const errorTitle = getErrorTitle(runtimeError, t);
     return (
       <View
         style={[
@@ -91,13 +109,15 @@ export function PlayerStatusOverlay({
           style={styles.errorIcon}
         />
         <Text style={[styles.errorTitle, { color: colors.error }]}>
-          {t("player.status.errorTitle")}
+          {errorTitle}
         </Text>
         <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-          {errorMessage || t("player.status.errorSubtitle")}
+          {runtimeError?.message ||
+            errorMessage ||
+            t("player.status.errorSubtitle")}
         </Text>
         <View style={styles.errorActions}>
-          {!!onRetry && (
+          {canRetry && (
             <Pressable
               style={[
                 styles.primaryButton,
@@ -162,6 +182,72 @@ export function PlayerStatusOverlay({
   }
 
   return null;
+}
+
+function getLoadingTitle(
+  runtimeState: PlaybackRuntimeState,
+  streamMetrics: StreamMetrics | null,
+  t: (key: string) => string,
+) {
+  if (runtimeState === "trying_fallback") {
+    return t("player.status.tryingFallback");
+  }
+
+  if (runtimeState === "creating_gateway_job") {
+    return t("player.status.creatingGatewayJob");
+  }
+
+  if (runtimeState === "preparing_metadata") {
+    return t("player.status.preparingMetadata");
+  }
+
+  if (
+    runtimeState === "finding_peers" ||
+    streamMetrics?.state === "finding_peers"
+  ) {
+    return t("player.status.findingPeers");
+  }
+
+  if (streamMetrics?.state === "connecting") {
+    return t("player.status.connecting");
+  }
+
+  return t("player.status.buffering");
+}
+
+function getErrorTitle(
+  runtimeError: PlaybackRuntimeError | null | undefined,
+  t: (key: string) => string,
+) {
+  if (!runtimeError) return t("player.status.errorTitle");
+
+  if (
+    runtimeError.code === "BRIDGE_UNAVAILABLE" ||
+    runtimeError.code === "BRIDGE_UNSUPPORTED"
+  ) {
+    return t("player.status.bridgeErrorTitle");
+  }
+
+  if (runtimeError.code === "NO_PEERS") {
+    return t("player.status.noPeersTitle");
+  }
+
+  if (runtimeError.code === "UNSUPPORTED_CODEC") {
+    return t("player.status.unsupportedTitle");
+  }
+
+  if (
+    runtimeError.code === "PLAYBACK_TIMEOUT" ||
+    runtimeError.code === "GATEWAY_TIMEOUT"
+  ) {
+    return t("player.status.timeoutTitle");
+  }
+
+  if (runtimeError.code === "NETWORK_OFFLINE") {
+    return t("player.status.networkTitle");
+  }
+
+  return t("player.status.errorTitle");
 }
 
 const styles = StyleSheet.create({

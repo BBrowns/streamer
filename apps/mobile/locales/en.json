@@ -355,8 +355,17 @@
     "status": {
       "findingPeers": "Finding peers...",
       "connecting": "Connecting to peers...",
+      "creatingGatewayJob": "Preparing source...",
+      "preparingMetadata": "Reading torrent metadata...",
+      "preparingSubtitle": "This can take a moment for torrent sources.",
+      "tryingFallback": "Trying another source...",
       "buffering": "Buffering...",
       "errorTitle": "Connection Failed",
+      "bridgeErrorTitle": "Bridge Not Ready",
+      "noPeersTitle": "No Peers Found",
+      "unsupportedTitle": "Source Not Supported",
+      "timeoutTitle": "Playback Timed Out",
+      "networkTitle": "Network Problem",
       "errorSubtitle": "Unable to load stream"
     },
     "errors": {
