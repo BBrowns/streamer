@@ -1,4 +1,5 @@
 import type { Stream } from "@streamer/shared";
+import type { PlaybackReadinessNoticeCopy } from "./PlaybackReadinessNotice";
 
 export interface DetailLayoutProps {
   id: string;
@@ -26,5 +27,8 @@ export interface DetailLayoutProps {
   ) => void;
   handleCastStream?: (stream?: Stream) => void;
   planningAction?: "play" | "download" | "cast" | null;
+  playbackNotice?: PlaybackReadinessNoticeCopy | null;
+  onDismissPlaybackNotice?: () => void;
+  onOpenSourcesDevices?: () => void;
   onBack: () => void;
 }

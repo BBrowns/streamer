@@ -14,6 +14,7 @@ import { StreamItem } from "./StreamItem";
 import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { FlashList } from "@shopify/flash-list";
 import { useTheme } from "../../hooks/useTheme";
+import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 
 export function DesktopDetailLayout({
   id,
@@ -31,6 +32,9 @@ export function DesktopDetailLayout({
   handleDownloadStream,
   handleCastStream,
   planningAction,
+  playbackNotice,
+  onDismissPlaybackNotice,
+  onOpenSourcesDevices,
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
@@ -144,7 +148,7 @@ export function DesktopDetailLayout({
           >
             <Ionicons name="play" size={18} color={primaryTextColor} />
             <Text style={[styles.playBestText, { color: primaryTextColor }]}>
-              {planningAction === "play" ? "Preparing..." : "Play"}
+              {planningAction === "play" ? "Finding best..." : "Play Best"}
             </Text>
           </Pressable>
           <Pressable
@@ -180,6 +184,14 @@ export function DesktopDetailLayout({
             </Pressable>
           )}
         </View>
+      )}
+
+      {!!playbackNotice && !!onDismissPlaybackNotice && (
+        <PlaybackReadinessNotice
+          notice={playbackNotice}
+          onDismiss={onDismissPlaybackNotice}
+          onPrimaryAction={onOpenSourcesDevices}
+        />
       )}
 
       {!!meta.cast && meta.cast.length > 0 && (

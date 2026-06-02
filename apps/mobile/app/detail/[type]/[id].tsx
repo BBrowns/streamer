@@ -2,7 +2,6 @@ import {
   View,
   Text,
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   useWindowDimensions,
@@ -27,16 +26,19 @@ import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../../stores/toastStore";
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
-import type { Stream } from "@streamer/shared";
-import type { PlaybackPlan } from "@streamer/shared";
+import type { PlaybackAction, PlaybackPlan, Stream } from "@streamer/shared";
 import {
   createPlaybackPlanWithBridgeRetry,
-  resolveFirstPlayablePlanStream,
+  resolvePlaybackPlan,
 } from "../../../services/playback/PlaybackPlanService";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
+import {
+  getPlaybackReadinessCopy,
+  type PlaybackReadinessNoticeCopy,
+} from "../../../components/detail/PlaybackReadinessNotice";
 
 export default function DetailScreen() {
   const { type, id } = useLocalSearchParams<{ type: string; id: string }>();
@@ -57,9 +59,20 @@ export default function DetailScreen() {
   const [planningAction, setPlanningAction] = useState<
     "play" | "download" | "cast" | null
   >(null);
+  const [playbackNotice, setPlaybackNotice] =
+    useState<PlaybackReadinessNoticeCopy | null>(null);
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
+
+  const dismissPlaybackNotice = useCallback(() => {
+    setPlaybackNotice(null);
+  }, []);
+
+  const openSourcesDevices = useCallback(() => {
+    setPlaybackNotice(null);
+    router.push("/settings");
+  }, [router]);
 
   const handleToggleLibrary = useCallback(() => {
     if (!meta) return;
@@ -139,6 +152,7 @@ export default function DetailScreen() {
     season?: number,
     episode?: number,
   ) => {
+    setPlaybackNotice(null);
     if (!stream) {
       setPlanningAction("play");
       try {
@@ -149,9 +163,15 @@ export default function DetailScreen() {
           episode,
           action: "play",
         });
-        const resolved = await resolveFirstPlayablePlanStream(plan);
+        const result = await resolvePlaybackPlan(plan);
+        const resolved = result.resolved;
         if (!resolved) {
-          showPlanMessage(plan, t("detail.errors.notPlayable"));
+          showPlanMessage(
+            plan,
+            t("detail.errors.notPlayable"),
+            "play",
+            result.errors,
+          );
           return;
         }
 
@@ -201,6 +221,7 @@ export default function DetailScreen() {
       if (!fileExists) {
         useDownloadStore.getState().verifyAndClean();
       } else {
+        setPlaybackNotice(null);
         setStream(
           { ...stream, url: task.localUri },
           {
@@ -254,11 +275,11 @@ export default function DetailScreen() {
         }
       }
 
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert(t("detail.errors.unsupported"), msg);
+      showPlanMessage(null, msg, "play");
       return;
     }
 
+    setPlaybackNotice(null);
     setStream(stream, {
       type: castType,
       itemId: id || "unknown",
@@ -279,6 +300,7 @@ export default function DetailScreen() {
     episode?: number,
   ) => {
     if (!meta) return;
+    setPlaybackNotice(null);
     try {
       let streamToDownload: Stream | undefined = stream;
       if (!streamToDownload) {
@@ -291,9 +313,15 @@ export default function DetailScreen() {
             episode,
             action: "download",
           });
-          const resolved = await resolveFirstPlayablePlanStream(plan);
+          const result = await resolvePlaybackPlan(plan);
+          const resolved = result.resolved;
           if (!resolved) {
-            showPlanMessage(plan, t("detail.errors.downloadFailed"));
+            showPlanMessage(
+              plan,
+              t("detail.errors.downloadFailed"),
+              "download",
+              result.errors,
+            );
             return;
           }
           streamToDownload = resolved.stream;
@@ -315,12 +343,13 @@ export default function DetailScreen() {
         episode,
       });
     } catch (e) {
-      Alert.alert(t("common.error"), t("detail.errors.downloadFailed"));
+      showPlanMessage(null, t("detail.errors.downloadFailed"), "download");
     }
   };
 
   const handleCastStream = async (stream?: Stream) => {
     if (!meta) return;
+    setPlaybackNotice(null);
     try {
       let streamToCast: Stream | undefined = stream;
       let uri: string | null = null;
@@ -332,9 +361,15 @@ export default function DetailScreen() {
             id: id || "unknown",
             action: "cast",
           });
-          const resolved = await resolveFirstPlayablePlanStream(plan);
+          const result = await resolvePlaybackPlan(plan);
+          const resolved = result.resolved;
           if (!resolved) {
-            showPlanMessage(plan, t("detail.errors.notPlayable"));
+            showPlanMessage(
+              plan,
+              t("detail.errors.notPlayable"),
+              "cast",
+              result.errors,
+            );
             return;
           }
           streamToCast = resolved.stream;
@@ -362,10 +397,13 @@ export default function DetailScreen() {
     }
   };
 
-  function showPlanMessage(plan: PlaybackPlan | null, fallback: string) {
-    const msg = plan?.userMessage || fallback;
-    if (Platform.OS === "web") window.alert(msg);
-    else Alert.alert(t("detail.errors.unsupported"), msg);
+  function showPlanMessage(
+    plan: PlaybackPlan | null,
+    fallback: string,
+    action: PlaybackAction = "play",
+    errors: string[] = [],
+  ) {
+    setPlaybackNotice(getPlaybackReadinessCopy(plan, fallback, action, errors));
   }
 
   const layoutProps = {
@@ -384,6 +422,9 @@ export default function DetailScreen() {
     handleDownloadStream,
     handleCastStream,
     planningAction,
+    playbackNotice,
+    onDismissPlaybackNotice: dismissPlaybackNotice,
+    onOpenSourcesDevices: openSourcesDevices,
     onBack: () => goBackOrReplace(router),
   };
 
