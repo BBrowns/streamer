@@ -1,5 +1,6 @@
 import type { PlaybackPlan } from "@streamer/shared";
-import { playBest } from "../PlaybackOrchestrator";
+import { getDownloadEligibility } from "../../downloadEligibility";
+import { playBest, prepareDownload } from "../PlaybackOrchestrator";
 import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
@@ -10,6 +11,10 @@ jest.mock("../PlaybackPlanService", () => ({
   resolvePlaybackPlan: jest.fn(),
 }));
 
+jest.mock("../../downloadEligibility", () => ({
+  getDownloadEligibility: jest.fn(),
+}));
+
 describe("PlaybackOrchestrator", () => {
   const createPlan = createPlaybackPlanWithBridgeRetry as jest.MockedFunction<
     typeof createPlaybackPlanWithBridgeRetry
@@ -17,9 +22,17 @@ describe("PlaybackOrchestrator", () => {
   const resolvePlan = resolvePlaybackPlan as jest.MockedFunction<
     typeof resolvePlaybackPlan
   >;
+  const getEligibility = getDownloadEligibility as jest.MockedFunction<
+    typeof getDownloadEligibility
+  >;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getEligibility.mockReturnValue({
+      mode: "direct-file",
+      canDownload: true,
+      offlinePlayable: true,
+    });
   });
 
   it("returns a prepared stream, media info, and fallback queue for Play Best", async () => {
@@ -238,6 +251,165 @@ describe("PlaybackOrchestrator", () => {
         shouldFallback: true,
       },
       runtimeState: "failed_unsupported_codec",
+    });
+  });
+
+  it("prepares a direct download with the resolved URL and media info", async () => {
+    const plan: PlaybackPlan = {
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: {
+          id: "direct",
+          kind: "direct",
+          stream: {
+            url: "https://cdn.example.test/movie.mp4",
+            title: "Direct",
+          },
+          riskFlags: [],
+        },
+      },
+    };
+
+    createPlan.mockResolvedValueOnce(plan);
+    resolvePlan.mockResolvedValueOnce({
+      resolved: {
+        stream: {
+          url: "https://cdn.example.test/movie.mp4",
+          title: "Direct",
+        },
+        uri: "https://cdn.example.test/movie.mp4",
+        attemptedStreams: 1,
+        errors: [],
+      },
+      attemptedStreams: 1,
+      errors: [],
+      remainingStreams: [],
+    });
+
+    const result = await prepareDownload({
+      type: "movie",
+      id: "tt123",
+      title: "Example Movie",
+      poster: "https://images.example.test/poster.jpg",
+    });
+
+    expect(createPlan).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt123",
+      season: undefined,
+      episode: undefined,
+      action: "download",
+    });
+    expect(getEligibility).toHaveBeenCalledWith({
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Direct",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      resolvedUrl: "https://cdn.example.test/movie.mp4",
+      mediaInfo: {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        poster: "https://images.example.test/poster.jpg",
+      },
+      eligibility: {
+        mode: "direct-file",
+        canDownload: true,
+        offlinePlayable: true,
+      },
+      runtimeState: "selecting_source",
+    });
+  });
+
+  it("blocks download when the selected source is not offline eligible", async () => {
+    createPlan.mockResolvedValueOnce({
+      state: "ready",
+      plan: {
+        mode: "hls",
+        selectedCandidate: {
+          id: "hls",
+          kind: "hls",
+          stream: { url: "https://cdn.example.test/master.m3u8" },
+          riskFlags: [],
+        },
+      },
+    });
+    resolvePlan.mockResolvedValueOnce({
+      resolved: {
+        stream: { url: "https://cdn.example.test/master.m3u8" },
+        uri: "https://cdn.example.test/master.m3u8",
+        attemptedStreams: 1,
+        errors: [],
+      },
+      attemptedStreams: 1,
+      errors: [],
+      remainingStreams: [],
+    });
+    getEligibility.mockReturnValueOnce({
+      mode: "unsupported",
+      canDownload: false,
+      offlinePlayable: false,
+      reason: "HLS streams are streaming-only in offline v1.",
+    });
+
+    const result = await prepareDownload({
+      type: "movie",
+      id: "tt123",
+      title: "Example Movie",
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "SOURCE_UNAVAILABLE",
+        message: "HLS streams are streaming-only in offline v1.",
+        retryable: false,
+        shouldFallback: true,
+      },
+      runtimeState: "failed_unknown",
+      attemptedStreams: 1,
+      resolveErrors: [],
+    });
+  });
+
+  it("maps download resolver peer failures to NO_PEERS", async () => {
+    createPlan.mockResolvedValueOnce({
+      state: "ready",
+      plan: {
+        mode: "bridge",
+        selectedCandidate: {
+          id: "torrent",
+          kind: "torrent",
+          stream: { infoHash: "abc123", title: "Torrent" },
+          riskFlags: [],
+        },
+      },
+    });
+    resolvePlan.mockResolvedValueOnce({
+      resolved: null,
+      attemptedStreams: 1,
+      errors: ["No peers found"],
+      remainingStreams: [],
+    });
+
+    const result = await prepareDownload({
+      type: "movie",
+      id: "tt123",
+      title: "Example Movie",
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "NO_PEERS",
+        message: "Download is unavailable right now.",
+        shouldFallback: true,
+      },
+      runtimeState: "failed_no_peers",
+      attemptedStreams: 1,
+      resolveErrors: ["No peers found"],
     });
   });
 });

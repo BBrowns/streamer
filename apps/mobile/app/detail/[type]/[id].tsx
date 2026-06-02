@@ -31,7 +31,10 @@ import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
 } from "../../../services/playback/PlaybackPlanService";
-import { playBest } from "../../../services/playback/PlaybackOrchestrator";
+import {
+  playBest,
+  prepareDownload,
+} from "../../../services/playback/PlaybackOrchestrator";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
@@ -304,25 +307,31 @@ export default function DetailScreen() {
       if (!streamToDownload) {
         setPlanningAction("download");
         try {
-          const plan = await createPlaybackPlanWithBridgeRetry({
+          const result = await prepareDownload({
             type: castType,
             id: id || "unknown",
             season,
             episode,
-            action: "download",
+            title: meta.name,
+            poster: meta.poster,
+            episodeTitle,
           });
-          const result = await resolvePlaybackPlan(plan);
-          const resolved = result.resolved;
-          if (!resolved) {
-            showPlanMessage(
-              plan,
-              t("detail.errors.downloadFailed"),
-              "download",
-              result.errors,
+          if (!result.ok) {
+            setPlaybackNotice(
+              getPlaybackReadinessCopyFromError(
+                result.error,
+                "download",
+                result.resolveErrors,
+              ),
             );
             return;
           }
-          streamToDownload = resolved.stream;
+
+          await downloadService.startDownload(result.stream, result.mediaInfo, {
+            resolvedUrl: result.resolvedUrl,
+            eligibility: result.eligibility,
+          });
+          return;
         } finally {
           setPlanningAction(null);
         }
