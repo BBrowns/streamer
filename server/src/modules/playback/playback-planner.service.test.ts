@@ -119,6 +119,39 @@ describe("PlaybackPlannerService", () => {
     expect(plan.plan?.selectedCandidate.stream.infoHash).toBe("abc123");
   });
 
+  it("uses season and episode in the stream lookup id for series", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "episode-hash",
+        title: "Show.S01E02.1080p.H264.AAC.mp4",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "series",
+        id: "tt-show",
+        season: 1,
+        episode: 2,
+        action: "play",
+        deviceProfile: webProfile,
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(aggregatorService.getStreams).toHaveBeenCalledWith(
+      "user-1",
+      "series",
+      "tt-show:1:2",
+      "req-1",
+    );
+    expect(plan.state).toBe("ready");
+    expect(plan.plan?.selectedCandidate.stream.infoHash).toBe("episode-hash");
+  });
+
   it("includes ordered fallback candidates for automatic client retry", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {
