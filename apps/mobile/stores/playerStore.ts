@@ -30,6 +30,8 @@ export type StreamLoadState = "idle" | "loading_metrics" | "playing" | "error";
 interface PlayerState {
   currentStream: Stream | null;
   mediaInfo: MediaInfo | null;
+  fallbackStreams: Stream[];
+  fallbackReason: string | null;
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
@@ -50,7 +52,12 @@ interface PlayerState {
   preferredSubtitleLang: string | null;
   autoPlayNext: boolean;
 
-  setStream: (stream: Stream, media?: MediaInfo) => void;
+  setStream: (
+    stream: Stream,
+    media?: MediaInfo,
+    fallbackStreams?: Stream[],
+  ) => void;
+  advanceToNextFallback: (reason?: string | null) => Stream | null;
   setPlaying: (playing: boolean) => void;
   setBuffering: (buffering: boolean) => void;
   setStreamStatus: (
@@ -72,6 +79,8 @@ export const usePlayerStore = create<PlayerState>()(
     (set, get) => ({
       currentStream: null,
       mediaInfo: null,
+      fallbackStreams: [],
+      fallbackReason: null,
       isPlaying: false,
       isBuffering: false,
       currentTime: 0,
@@ -87,7 +96,7 @@ export const usePlayerStore = create<PlayerState>()(
       preferredSubtitleLang: null,
       autoPlayNext: true,
 
-      setStream: (stream, media) => {
+      setStream: (stream, media, fallbackStreams = []) => {
         const state = get();
         if (state._eventSource) {
           state._eventSource.removeAllEventListeners();
@@ -98,6 +107,8 @@ export const usePlayerStore = create<PlayerState>()(
         set({
           currentStream: stream,
           mediaInfo: media ?? null,
+          fallbackStreams,
+          fallbackReason: null,
           isPlaying: false,
           isBuffering: true,
           streamState: "loading_metrics",
@@ -107,14 +118,44 @@ export const usePlayerStore = create<PlayerState>()(
           _peerTimeout: null,
         });
       },
+      advanceToNextFallback: (reason = null) => {
+        const state = get();
+        const [nextStream, ...remainingFallbacks] = state.fallbackStreams;
+        if (!nextStream) return null;
+
+        if (state._eventSource) {
+          state._eventSource.removeAllEventListeners();
+          state._eventSource.close();
+        }
+        if (state._peerTimeout) clearTimeout(state._peerTimeout);
+
+        set({
+          currentStream: nextStream,
+          fallbackStreams: remainingFallbacks,
+          fallbackReason: reason || "Trying another source automatically.",
+          isPlaying: false,
+          isBuffering: true,
+          currentTime: 0,
+          duration: 0,
+          streamState: "loading_metrics",
+          streamMetrics: null,
+          errorMessage: null,
+          _eventSource: null,
+          _peerTimeout: null,
+        });
+
+        return nextStream;
+      },
       setPlaying: (playing) => set({ isPlaying: playing }),
       setBuffering: (buffering) => set({ isBuffering: buffering }),
       setStreamStatus: (streamState, errorMessage = null) =>
-        set({
+        set((state) => ({
           streamState,
           errorMessage,
           isBuffering: streamState === "loading_metrics",
-        }),
+          fallbackReason:
+            streamState === "loading_metrics" ? state.fallbackReason : null,
+        })),
       setProgress: (currentTime, duration) => set({ currentTime, duration }),
       setPlaybackRate: (rate) => set({ playbackRate: rate }),
       setPreferredQuality: (quality) => set({ preferredQuality: quality }),
@@ -173,6 +214,11 @@ export const usePlayerStore = create<PlayerState>()(
           if (!currentMetrics || currentMetrics.numPeers === 0) {
             es.removeAllEventListeners();
             es.close();
+            const fallback = currentState.advanceToNextFallback(
+              "No peers found after 45 seconds. Trying another source automatically.",
+            );
+            if (fallback) return;
+
             set({
               streamState: "error",
               isBuffering: false,
@@ -280,6 +326,14 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
 
+          const fallback = currentState.advanceToNextFallback(
+            "Failed to connect to stream metrics. Trying another source automatically.",
+          );
+          if (fallback) {
+            es.close();
+            return;
+          }
+
           set({
             streamState: "error",
             isBuffering: false,
@@ -321,6 +375,8 @@ export const usePlayerStore = create<PlayerState>()(
         set({
           currentStream: null,
           mediaInfo: null,
+          fallbackStreams: [],
+          fallbackReason: null,
           isPlaying: false,
           isBuffering: false,
           currentTime: 0,

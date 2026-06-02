@@ -20,6 +20,23 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("PlayerStatusOverlay", () => {
+  it("shows fallback reason while trying another planned source", () => {
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="loading_metrics"
+        streamMetrics={null}
+        isBuffering
+        errorMessage={null}
+        fallbackReason="Trying another source automatically."
+        onBack={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText("Trying another source automatically."),
+    ).toBeTruthy();
+  });
+
   it("offers retry and Sources & Devices actions on playback errors", () => {
     const onRetry = jest.fn();
     const onOpenSourcesDevices = jest.fn();
