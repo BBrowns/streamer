@@ -17,6 +17,20 @@ let mainWindow = null;
 let bridgeServer = null;
 let bridgeLanUrl = "http://localhost:11470";
 let bridgePairingToken = "";
+let bridgeStartSequence = 0;
+let bridgeState = {
+  status: "stopped",
+  startedAt: null,
+  updatedAt: Date.now(),
+  error: null,
+  reason: null,
+  nodeExecutable: null,
+  nodeArch: null,
+  nativeBinary: null,
+  nativeArch: null,
+  entrypoint: null,
+  pid: null,
+};
 const downloadJobs = new Map();
 
 // Configure auto-updater
@@ -494,6 +508,44 @@ function getNodeArch(nodeExecutable) {
   }
 }
 
+function classifyBridgeError(error) {
+  const message = String(error?.message || error || "");
+  if (
+    message.includes("No Node.js runtime matches node-datachannel architecture")
+  ) {
+    return "native-architecture-mismatch";
+  }
+  if (
+    message.includes("node-datachannel") ||
+    message.includes("node_datachannel.node")
+  ) {
+    return "native-load-failed";
+  }
+  if (message.includes("Stream server entrypoint not found")) {
+    return "missing-stream-server-build";
+  }
+  return "bridge-start-failed";
+}
+
+function setBridgeState(patch) {
+  bridgeState = {
+    ...bridgeState,
+    ...patch,
+    updatedAt: Date.now(),
+  };
+}
+
+function getBridgeRuntimeDiagnostics() {
+  const nativeBinary = resolveNodeDataChannelBinary();
+  const nativeArch = detectNativeNodeArch(nativeBinary);
+  return {
+    nativeBinary,
+    nativeArch,
+    processArch: process.arch,
+    platform: process.platform,
+  };
+}
+
 function resolveNodeExecutable() {
   const nativeArch = detectNativeNodeArch(resolveNodeDataChannelBinary());
   const candidates = resolveNodeBinaryCandidates();
@@ -526,11 +578,35 @@ function resolveNodeExecutable() {
 }
 
 async function startBridgeDaemon() {
+  const startSequence = ++bridgeStartSequence;
   const pairingToken = getBridgePairingToken();
+  const runtimeDiagnostics = getBridgeRuntimeDiagnostics();
+  setBridgeState({
+    status: "starting",
+    error: null,
+    reason: null,
+    startedAt: null,
+    nodeExecutable: null,
+    nodeArch: null,
+    nativeBinary: runtimeDiagnostics.nativeBinary,
+    nativeArch: runtimeDiagnostics.nativeArch,
+    entrypoint: null,
+    pid: null,
+  });
+
   if (process.env.STREAMER_BRIDGE_IN_PROCESS === "1") {
     process.env.STREAMER_BRIDGE_TOKEN = pairingToken;
     const streamServer = await import("@streamer/stream-server");
-    return streamServer.startStreamServer(11470);
+    const server = streamServer.startStreamServer(11470);
+    setBridgeState({
+      status: "running",
+      startedAt: Date.now(),
+      nodeExecutable: process.execPath,
+      nodeArch: process.arch,
+      entrypoint: "in-process",
+      pid: process.pid,
+    });
+    return server;
   }
 
   const entrypoint = resolveBridgeEntrypoint();
@@ -541,6 +617,7 @@ async function startBridgeDaemon() {
   }
 
   const nodeExecutable = resolveNodeExecutable();
+  const nodeArch = getNodeArch(nodeExecutable);
   const child = spawn(nodeExecutable, [entrypoint], {
     cwd: path.resolve(__dirname, "../../.."),
     env: {
@@ -562,15 +639,47 @@ async function startBridgeDaemon() {
       "[stream-server] Failed to start bridge child process:",
       error,
     );
+    if (startSequence !== bridgeStartSequence) return;
+    setBridgeState({
+      status: "error",
+      error: error?.message || String(error),
+      reason: classifyBridgeError(error),
+      pid: null,
+    });
     bridgeServer = null;
   });
   child.on("exit", (code, signal) => {
+    if (startSequence !== bridgeStartSequence) return;
     if (code !== 0 && signal !== "SIGTERM") {
       console.warn(
         `[stream-server] Bridge child process exited with code ${code ?? "null"} signal ${signal ?? "null"}`,
       );
+      setBridgeState({
+        status: "error",
+        error: `Bridge process exited with code ${code ?? "null"} signal ${signal ?? "null"}`,
+        reason: "bridge-process-exited",
+        pid: null,
+      });
+    } else {
+      setBridgeState({
+        status: "stopped",
+        pid: null,
+      });
     }
     bridgeServer = null;
+  });
+
+  setBridgeState({
+    status: "running",
+    startedAt: Date.now(),
+    error: null,
+    reason: null,
+    nodeExecutable,
+    nodeArch,
+    nativeBinary: runtimeDiagnostics.nativeBinary,
+    nativeArch: runtimeDiagnostics.nativeArch,
+    entrypoint,
+    pid: child.pid || null,
   });
 
   return {
@@ -581,6 +690,89 @@ async function startBridgeDaemon() {
     },
     process: child,
   };
+}
+
+function readBridgeHealth() {
+  return new Promise((resolve) => {
+    const req = http.get("http://127.0.0.1:11470/api/health", (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.setTimeout(1500, () => {
+      req.destroy();
+      resolve(null);
+    });
+    req.on("error", () => resolve(null));
+  });
+}
+
+async function getBridgeInfoSnapshot() {
+  const health = bridgeServer ? await readBridgeHealth() : null;
+  const torrentEngine = health?.torrentEngine || null;
+  const runtimeDiagnostics = getBridgeRuntimeDiagnostics();
+  const status = bridgeServer
+    ? !health
+      ? "starting"
+      : torrentEngine?.available === false
+        ? "error"
+        : "running"
+    : bridgeState.status;
+
+  return {
+    available: !!bridgeServer && !!health && torrentEngine?.available !== false,
+    localUrl: "http://localhost:11470",
+    lanUrl: bridgeLanUrl,
+    pairingToken: getBridgePairingToken(),
+    diagnostics: {
+      ...bridgeState,
+      status,
+      reason: torrentEngine?.reason || bridgeState.reason || undefined,
+      message: torrentEngine?.message || bridgeState.error || undefined,
+      processArch: torrentEngine?.processArch || process.arch,
+      platform: torrentEngine?.platform || process.platform,
+      nativeBinary: bridgeState.nativeBinary || runtimeDiagnostics.nativeBinary,
+      nativeArch: bridgeState.nativeArch || runtimeDiagnostics.nativeArch,
+      health,
+    },
+  };
+}
+
+async function restartBridgeDaemon() {
+  try {
+    bridgeServer?.close?.();
+  } catch {}
+  bridgeServer = null;
+  setBridgeState({
+    status: "starting",
+    error: null,
+    reason: null,
+    pid: null,
+  });
+
+  try {
+    bridgeServer = await startBridgeDaemon();
+    bridgeLanUrl = resolveLanBridgeUrl();
+  } catch (error) {
+    setBridgeState({
+      status: "error",
+      error: error?.message || String(error),
+      reason: classifyBridgeError(error),
+      pid: null,
+    });
+    bridgeServer = null;
+  }
+
+  return getBridgeInfoSnapshot();
 }
 
 function createWindow() {
@@ -671,12 +863,13 @@ electron_1.app.whenReady().then(async () => {
     }
   });
 
-  electron_1.ipcMain.handle("get-bridge-info", async () => ({
-    available: !!bridgeServer,
-    localUrl: "http://localhost:11470",
-    lanUrl: bridgeLanUrl,
-    pairingToken: getBridgePairingToken(),
-  }));
+  electron_1.ipcMain.handle("get-bridge-info", async () =>
+    getBridgeInfoSnapshot(),
+  );
+
+  electron_1.ipcMain.handle("restart-bridge", async () =>
+    restartBridgeDaemon(),
+  );
 
   electron_1.ipcMain.handle(
     "download-media",
@@ -750,6 +943,12 @@ electron_1.app.whenReady().then(async () => {
     }
   } catch (error) {
     console.error("Failed to start stream server daemon:", error);
+    setBridgeState({
+      status: "error",
+      error: error?.message || String(error),
+      reason: classifyBridgeError(error),
+      pid: null,
+    });
   }
   createWindow();
   createTray();

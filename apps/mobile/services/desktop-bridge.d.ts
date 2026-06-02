@@ -31,6 +31,23 @@ export interface DesktopBridgeInfo {
   localUrl: string;
   lanUrl: string;
   pairingToken?: string;
+  diagnostics?: {
+    status?: "starting" | "running" | "stopped" | "error";
+    startedAt?: number | null;
+    updatedAt?: number;
+    error?: string | null;
+    reason?: string | null;
+    message?: string;
+    nodeExecutable?: string | null;
+    nodeArch?: string | null;
+    nativeBinary?: string | null;
+    nativeArch?: string | null;
+    entrypoint?: string | null;
+    pid?: number | null;
+    processArch?: string;
+    platform?: string;
+    health?: unknown;
+  };
 }
 
 export interface DesktopBridge {
@@ -80,6 +97,11 @@ export interface DesktopBridge {
    * Returns the local and LAN bridge URLs exposed by the desktop shell.
    */
   getBridgeInfo(): Promise<DesktopBridgeInfo>;
+
+  /**
+   * Restarts the desktop stream bridge daemon and returns fresh bridge info.
+   */
+  restartBridge(): Promise<DesktopBridgeInfo>;
 }
 
 declare global {
