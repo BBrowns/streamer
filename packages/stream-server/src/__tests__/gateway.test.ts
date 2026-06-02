@@ -41,11 +41,13 @@ describe("gateway jobs", () => {
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({
       state: "preparing",
+      phase: "preparing_metadata",
       mode: "remux",
       infoHash: "abcdef123456",
       fileIdx: 0,
       retryable: true,
       peerCount: 1,
+      progress: expect.any(Number),
       readyTimeoutMs: 120000,
       elapsedMs: expect.any(Number),
       playbackUrl: expect.stringMatching(/^\/api\/gateway\/jobs\/.+\/stream$/),
@@ -67,10 +69,65 @@ describe("gateway jobs", () => {
     expect(status.body).toMatchObject({
       id: created.body.id,
       state: "preparing",
+      phase: "preparing_metadata",
       retryable: true,
       peerCount: 1,
+      progress: expect.any(Number),
       readyTimeoutMs: 120000,
       elapsedMs: expect.any(Number),
+    });
+  });
+
+  it("cancels a preparing gateway job", async () => {
+    (ensureTorrentReady as any).mockReturnValueOnce(new Promise(() => {}));
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    const cancelled = await request(app).delete(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+    const streamed = await request(app).get(created.body.playbackUrl);
+
+    expect(cancelled.status).toBe(202);
+    expect(cancelled.body).toMatchObject({
+      id: created.body.id,
+      state: "cancelled",
+      phase: "cancelled",
+      progress: null,
+      retryable: false,
+      playbackUrl: null,
+    });
+    expect(streamed.status).toBe(410);
+    expect(streamed.body).toMatchObject({
+      error: "Gateway job cancelled",
+      retryable: false,
+    });
+  });
+
+  it("does not let late warmup completion overwrite cancellation", async () => {
+    let resolveReady: (() => void) | undefined;
+    (ensureTorrentReady as any).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveReady = resolve;
+      }),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    await request(app).delete(`/api/gateway/jobs/${created.body.id}`);
+
+    resolveReady?.();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const status = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+    expect(status.body).toMatchObject({
+      state: "cancelled",
+      phase: "cancelled",
+      retryable: false,
     });
   });
 

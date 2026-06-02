@@ -150,6 +150,7 @@ describe("Bridge auth", () => {
 
     await request(app).post("/api/gateway/jobs").send({}).expect(401);
     await request(app).get("/api/gateway/jobs/missing").expect(401);
+    await request(app).delete("/api/gateway/jobs/missing").expect(401);
     await request(app).get("/api/torrent/abcdef/metrics").expect(401);
     await request(app).get("/stats").expect(401);
   });
