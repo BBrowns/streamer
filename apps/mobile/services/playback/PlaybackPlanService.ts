@@ -55,6 +55,7 @@ export interface PlaybackPlanResolveResult {
   resolved: ResolvedPlaybackPlanStream | null;
   attemptedStreams: number;
   errors: string[];
+  remainingStreams: Stream[];
 }
 
 export function getReadyPlanStreams(plan: PlaybackPlan): Stream[] {
@@ -96,20 +97,24 @@ export async function resolvePlaybackPlan(
   const errors: string[] = [];
   let attemptedStreams = 0;
 
-  for (const stream of streams) {
+  for (const [index, stream] of streams.entries()) {
     attemptedStreams += 1;
     try {
       const uri = await streamEngineManager.getPlaybackUri(stream);
       if (uri && uri.length > 0) {
+        const resolvedStream =
+          stream.url === uri ? stream : { ...stream, url: uri };
+
         return {
           resolved: {
-            stream: stream.url === uri ? stream : { ...stream, url: uri },
+            stream: resolvedStream,
             uri,
             attemptedStreams,
             errors,
           },
           attemptedStreams,
           errors,
+          remainingStreams: streams.slice(index + 1),
         };
       }
       errors.push("Source did not return a playback URL");
@@ -122,6 +127,7 @@ export async function resolvePlaybackPlan(
     resolved: null,
     attemptedStreams,
     errors,
+    remainingStreams: [],
   };
 }
 

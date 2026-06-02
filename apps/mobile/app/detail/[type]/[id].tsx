@@ -175,16 +175,20 @@ export default function DetailScreen() {
           return;
         }
 
-        setStream(resolved.stream, {
-          type: castType,
-          itemId: id || "unknown",
-          title: episodeTitle
-            ? `${meta?.name} - ${episodeTitle}`
-            : (meta?.name ?? resolved.stream.title ?? "Unknown"),
-          poster: meta?.poster,
-          season,
-          episode,
-        });
+        setStream(
+          resolved.stream,
+          {
+            type: castType,
+            itemId: id || "unknown",
+            title: episodeTitle
+              ? `${meta?.name} - ${episodeTitle}`
+              : (meta?.name ?? resolved.stream.title ?? "Unknown"),
+            poster: meta?.poster,
+            season,
+            episode,
+          },
+          result.remainingStreams,
+        );
         router.push("/player");
       } finally {
         setPlanningAction(null);

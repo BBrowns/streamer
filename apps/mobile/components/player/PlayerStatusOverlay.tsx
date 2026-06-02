@@ -15,6 +15,7 @@ interface PlayerStatusOverlayProps {
   streamMetrics: StreamMetrics | null;
   isBuffering: boolean;
   errorMessage: string | null;
+  fallbackReason?: string | null;
   onBack: () => void;
   onRetry?: () => void;
   onOpenSourcesDevices?: () => void;
@@ -25,6 +26,7 @@ export function PlayerStatusOverlay({
   streamMetrics,
   isBuffering,
   errorMessage,
+  fallbackReason,
   onBack,
   onRetry,
   onOpenSourcesDevices,
@@ -56,12 +58,16 @@ export function PlayerStatusOverlay({
               ? t("player.status.connecting")
               : t("player.status.buffering")}
         </Text>
-        {streamMetrics && (
+        {streamMetrics ? (
           <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
             {streamMetrics.numPeers} {t("player.controls.peers")} •{" "}
             {(streamMetrics.downloadSpeed / 1024 / 1024).toFixed(2)} MB/s
           </Text>
-        )}
+        ) : fallbackReason ? (
+          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
+            {fallbackReason}
+          </Text>
+        ) : null}
       </View>
     );
   }

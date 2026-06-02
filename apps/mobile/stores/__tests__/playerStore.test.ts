@@ -117,4 +117,59 @@ describe("playerStore", () => {
       },
     );
   });
+
+  it("stores planned fallback streams when a Play Best stream starts", () => {
+    const primary = { url: "https://cdn.example.test/primary.mp4" } as Stream;
+    const fallback = { url: "https://cdn.example.test/fallback.mp4" } as Stream;
+
+    usePlayerStore.getState().setStream(primary, undefined, [fallback]);
+
+    const state = usePlayerStore.getState();
+    expect(state.currentStream).toBe(primary);
+    expect(state.fallbackStreams).toEqual([fallback]);
+  });
+
+  it("advances to the next fallback stream and clears transient metrics", () => {
+    const previousEventSource = {
+      addEventListener: jest.fn(),
+      removeAllEventListeners: jest.fn(),
+      close: jest.fn(),
+    };
+    const previousTimeout = setTimeout(() => {}, 10_000);
+    const primary = { url: "https://cdn.example.test/primary.mp4" } as Stream;
+    const fallback = { url: "https://cdn.example.test/fallback.mp4" } as Stream;
+
+    usePlayerStore.setState({
+      currentStream: primary,
+      fallbackStreams: [fallback],
+      isPlaying: true,
+      isBuffering: false,
+      streamState: "playing",
+      streamMetrics: {
+        state: "ready",
+        numPeers: 3,
+        downloadSpeed: 1024,
+        progress: 0.5,
+        downloaded: 1024,
+      },
+      _eventSource: previousEventSource as any,
+      _peerTimeout: previousTimeout,
+    });
+
+    const next = usePlayerStore
+      .getState()
+      .advanceToNextFallback("Playback timed out.");
+
+    const state = usePlayerStore.getState();
+    expect(next).toBe(fallback);
+    expect(previousEventSource.removeAllEventListeners).toHaveBeenCalled();
+    expect(previousEventSource.close).toHaveBeenCalled();
+    expect(state.currentStream).toBe(fallback);
+    expect(state.fallbackStreams).toEqual([]);
+    expect(state.fallbackReason).toBe("Playback timed out.");
+    expect(state.isPlaying).toBe(false);
+    expect(state.isBuffering).toBe(true);
+    expect(state.streamState).toBe("loading_metrics");
+    expect(state.streamMetrics).toBeNull();
+  });
 });

@@ -207,6 +207,52 @@ describe("PlaybackPlanService", () => {
       resolved: null,
       attemptedStreams: 2,
       errors: ["No peers found", "Source did not return a playback URL"],
+      remainingStreams: [],
     });
+  });
+
+  it("returns remaining streams for player-level fallback after first playback failure", async () => {
+    const plan: PlaybackPlan = {
+      state: "ready",
+      plan: {
+        mode: "direct",
+        playbackUrl: "https://cdn.example.test/first.mp4",
+        selectedCandidate: {
+          id: "first",
+          kind: "direct",
+          stream: {
+            url: "https://cdn.example.test/original-first.mp4",
+            title: "First",
+          },
+          riskFlags: [],
+        },
+        fallbackCandidates: [
+          {
+            id: "second",
+            kind: "direct",
+            stream: {
+              url: "https://cdn.example.test/second.mp4",
+              title: "Second",
+            },
+            riskFlags: [],
+          },
+        ],
+      },
+    };
+
+    getPlaybackUri.mockResolvedValueOnce("https://cdn.example.test/first.mp4");
+
+    const result = await resolvePlaybackPlan(plan);
+
+    expect(result.resolved?.stream).toEqual({
+      url: "https://cdn.example.test/first.mp4",
+      title: "First",
+    });
+    expect(result.remainingStreams).toEqual([
+      {
+        url: "https://cdn.example.test/second.mp4",
+        title: "Second",
+      },
+    ]);
   });
 });

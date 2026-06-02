@@ -54,12 +54,14 @@ export default function PlayerScreen() {
   const streamState = usePlayerStore((s) => s.streamState);
   const streamMetrics = usePlayerStore((s) => s.streamMetrics);
   const errorMessage = usePlayerStore((s) => s.errorMessage);
+  const fallbackReason = usePlayerStore((s) => s.fallbackReason);
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setBuffering = usePlayerStore((s) => s.setBuffering);
   const setStreamStatus = usePlayerStore((s) => s.setStreamStatus);
+  const advanceToNextFallback = usePlayerStore((s) => s.advanceToNextFallback);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [castModalOpen, setCastModalOpen] = useState(false);
@@ -120,16 +122,37 @@ export default function PlayerScreen() {
     setResolveAttempt((attempt) => attempt + 1);
   }, [currentStream, setStreamStatus]);
 
+  const tryAdvanceToFallback = useCallback(
+    (reason?: string | null) => {
+      const nextStream = advanceToNextFallback(reason);
+      if (!nextStream) return false;
+
+      setPlaybackUri(null);
+      setIsResolvingPlayback(true);
+      setResolveAttempt((attempt) => attempt + 1);
+      return true;
+    },
+    [advanceToNextFallback],
+  );
+
   // Effect to resolve playback URI
   useEffect(() => {
     let isMounted = true;
+    let advancedToFallback = false;
     if (currentStream) {
       const unsupportedCodecReason =
         getUnsupportedWebCodecReason(currentStream);
       if (unsupportedCodecReason) {
+        const message = t("player.errors.unsupportedCodec");
+        if (tryAdvanceToFallback(message)) {
+          advancedToFallback = true;
+          return () => {
+            isMounted = false;
+          };
+        }
         setPlaybackUri(null);
         setIsResolvingPlayback(false);
-        setStreamStatus("error", t("player.errors.unsupportedCodec"));
+        setStreamStatus("error", message);
         return () => {
           isMounted = false;
         };
@@ -147,24 +170,30 @@ export default function PlayerScreen() {
             return;
           }
 
+          const message = currentStream.infoHash
+            ? t("player.errors.bridgeUnavailable")
+            : t("player.errors.noStream");
+          if (tryAdvanceToFallback(message)) {
+            advancedToFallback = true;
+            return;
+          }
+
           setPlaybackUri(null);
-          setStreamStatus(
-            "error",
-            currentStream.infoHash
-              ? t("player.errors.bridgeUnavailable")
-              : t("player.errors.noStream"),
-          );
+          setStreamStatus("error", message);
         })
         .catch((err) => {
           if (!isMounted) return;
+          const message = err?.message || t("player.errors.playbackFailed");
+          if (tryAdvanceToFallback(message)) {
+            advancedToFallback = true;
+            return;
+          }
+
           setPlaybackUri(null);
-          setStreamStatus(
-            "error",
-            err?.message || t("player.errors.playbackFailed"),
-          );
+          setStreamStatus("error", message);
         })
         .finally(() => {
-          if (isMounted) setIsResolvingPlayback(false);
+          if (isMounted && !advancedToFallback) setIsResolvingPlayback(false);
         });
     } else {
       setPlaybackUri(null);
@@ -173,7 +202,7 @@ export default function PlayerScreen() {
     return () => {
       isMounted = false;
     };
-  }, [currentStream, resolveAttempt, setStreamStatus, t]);
+  }, [currentStream, resolveAttempt, setStreamStatus, t, tryAdvanceToFallback]);
 
   const player = useVideoPlayer(playbackUri || "", (p) => {
     p.play();
@@ -223,9 +252,12 @@ export default function PlayerScreen() {
         }
 
         if (status === "error") {
+          const message = formatPlaybackError(error?.message);
+          if (tryAdvanceToFallback(message)) return;
+
           setBuffering(false);
           setPlaying(false);
-          setStreamStatus("error", formatPlaybackError(error?.message));
+          setStreamStatus("error", message);
         }
       },
     );
@@ -260,12 +292,12 @@ export default function PlayerScreen() {
         return;
       }
 
+      const message = formatPlaybackError(t("player.errors.playbackTimeout"));
+      if (tryAdvanceToFallback(message)) return;
+
       setBuffering(false);
       setPlaying(false);
-      setStreamStatus(
-        "error",
-        formatPlaybackError(t("player.errors.playbackTimeout")),
-      );
+      setStreamStatus("error", message);
     }, PLAYBACK_START_TIMEOUT_MS);
 
     return () => {
@@ -283,6 +315,7 @@ export default function PlayerScreen() {
     setPlaying,
     setStreamStatus,
     t,
+    tryAdvanceToFallback,
   ]);
 
   const {
@@ -389,7 +422,7 @@ export default function PlayerScreen() {
         <StatusBar style="light" />
         <ActivityIndicator color={colors.tint} />
         <Text style={[styles.errorText, { color: colors.textSecondary }]}>
-          Preparing stream...
+          {fallbackReason || "Preparing stream..."}
         </Text>
       </View>
     );
@@ -522,6 +555,7 @@ export default function PlayerScreen() {
             streamMetrics={streamMetrics}
             isBuffering={isBuffering}
             errorMessage={errorMessage}
+            fallbackReason={fallbackReason}
             onBack={handleClose}
             onRetry={handleRetryPlayback}
             onOpenSourcesDevices={
