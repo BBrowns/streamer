@@ -4,9 +4,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import EventSource from "react-native-sse";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import type { Stream } from "@streamer/shared";
+import type {
+  PlaybackRuntimeError,
+  PlaybackRuntimeState,
+  Stream,
+} from "@streamer/shared";
 import { useAuthStore } from "./authStore";
 import { getBridgeAuthHeaders } from "../services/bridgeAuth";
+import {
+  createPlaybackRuntimeError,
+  getPlaybackRuntimeState,
+  mapPlaybackMessageToRuntimeFailure,
+} from "../services/playback/PlaybackErrors";
 
 export interface MediaInfo {
   type: "movie" | "series";
@@ -40,6 +49,8 @@ interface PlayerState {
   streamState: StreamLoadState;
   streamMetrics: StreamMetrics | null;
   errorMessage: string | null;
+  runtimeState: PlaybackRuntimeState;
+  runtimeError: PlaybackRuntimeError | null;
 
   // Active SSE connection & timeout refs
   _eventSource: EventSource | null;
@@ -64,6 +75,11 @@ interface PlayerState {
     state: StreamLoadState,
     errorMessage?: string | null,
   ) => void;
+  setRuntimeState: (
+    runtimeState: PlaybackRuntimeState,
+    runtimeError?: PlaybackRuntimeError | null,
+  ) => void;
+  setRuntimeFailure: (error: PlaybackRuntimeError) => void;
   setProgress: (currentTime: number, duration: number) => void;
   setPlaybackRate: (rate: number) => void;
   setAutoPlayNext: (enabled: boolean) => void;
@@ -72,6 +88,39 @@ interface PlayerState {
   setPreferredSubtitleLang: (lang: string | null) => void;
   subscribeToStreamMetrics: (infoHash: string) => void;
   clearPlayer: () => void;
+}
+
+function getRuntimeStateForStreamStatus(
+  streamState: StreamLoadState,
+  state: PlayerState,
+  errorMessage: string | null,
+): PlaybackRuntimeState {
+  if (streamState === "idle") return "idle";
+  if (streamState === "playing") return "playing";
+
+  if (streamState === "loading_metrics") {
+    if (state.fallbackReason) return "trying_fallback";
+    if (state.streamMetrics)
+      return getRuntimeStateForMetrics(state.streamMetrics);
+    return state.currentStream?.infoHash ? "finding_peers" : "buffering";
+  }
+
+  if (state.runtimeError)
+    return getPlaybackRuntimeState(state.runtimeError.code);
+
+  return mapPlaybackMessageToRuntimeFailure(
+    errorMessage || "Playback is unavailable right now.",
+    "UNKNOWN",
+  ).runtimeState;
+}
+
+function getRuntimeStateForMetrics(
+  metrics: StreamMetrics,
+): PlaybackRuntimeState {
+  if (metrics.state === "finding_peers") return "finding_peers";
+  if (metrics.state === "connecting") return "preparing_metadata";
+  if (metrics.state === "downloading") return "buffering";
+  return "playing";
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -88,6 +137,8 @@ export const usePlayerStore = create<PlayerState>()(
       streamState: "idle",
       streamMetrics: null,
       errorMessage: null,
+      runtimeState: "idle",
+      runtimeError: null,
       _eventSource: null,
       _peerTimeout: null,
       playbackRate: 1.0,
@@ -114,6 +165,8 @@ export const usePlayerStore = create<PlayerState>()(
           streamState: "loading_metrics",
           streamMetrics: null,
           errorMessage: null,
+          runtimeState: stream.infoHash ? "finding_peers" : "buffering",
+          runtimeError: null,
           _eventSource: null,
           _peerTimeout: null,
         });
@@ -140,6 +193,8 @@ export const usePlayerStore = create<PlayerState>()(
           streamState: "loading_metrics",
           streamMetrics: null,
           errorMessage: null,
+          runtimeState: "trying_fallback",
+          runtimeError: null,
           _eventSource: null,
           _peerTimeout: null,
         });
@@ -149,13 +204,45 @@ export const usePlayerStore = create<PlayerState>()(
       setPlaying: (playing) => set({ isPlaying: playing }),
       setBuffering: (buffering) => set({ isBuffering: buffering }),
       setStreamStatus: (streamState, errorMessage = null) =>
-        set((state) => ({
-          streamState,
-          errorMessage,
-          isBuffering: streamState === "loading_metrics",
-          fallbackReason:
-            streamState === "loading_metrics" ? state.fallbackReason : null,
-        })),
+        set((state) => {
+          const inferredFailure =
+            streamState === "error" && !state.runtimeError
+              ? mapPlaybackMessageToRuntimeFailure(
+                  errorMessage || "Playback is unavailable right now.",
+                  "UNKNOWN",
+                )
+              : null;
+
+          return {
+            streamState,
+            errorMessage,
+            isBuffering: streamState === "loading_metrics",
+            fallbackReason:
+              streamState === "loading_metrics" ? state.fallbackReason : null,
+            runtimeState:
+              inferredFailure?.runtimeState ||
+              getRuntimeStateForStreamStatus(streamState, state, errorMessage),
+            runtimeError:
+              streamState === "error"
+                ? state.runtimeError || inferredFailure?.error || null
+                : null,
+          };
+        }),
+      setRuntimeState: (runtimeState, runtimeError = null) =>
+        set({
+          runtimeState,
+          runtimeError,
+        }),
+      setRuntimeFailure: (error) =>
+        set({
+          streamState: "error",
+          isBuffering: false,
+          isPlaying: false,
+          fallbackReason: null,
+          errorMessage: error.message,
+          runtimeState: getPlaybackRuntimeState(error.code),
+          runtimeError: error,
+        }),
       setProgress: (currentTime, duration) => set({ currentTime, duration }),
       setPlaybackRate: (rate) => set({ playbackRate: rate }),
       setPreferredQuality: (quality) => set({ preferredQuality: quality }),
@@ -214,16 +301,24 @@ export const usePlayerStore = create<PlayerState>()(
           if (!currentMetrics || currentMetrics.numPeers === 0) {
             es.removeAllEventListeners();
             es.close();
+            const message =
+              "No peers found after 45 seconds. The torrent may be inactive or the stream-server may not be reachable.";
             const fallback = currentState.advanceToNextFallback(
               "No peers found after 45 seconds. Trying another source automatically.",
             );
             if (fallback) return;
 
+            const failure = mapPlaybackMessageToRuntimeFailure(
+              message,
+              "NO_PEERS",
+              { retryable: true, shouldFallback: false },
+            );
             set({
               streamState: "error",
               isBuffering: false,
-              errorMessage:
-                "No peers found after 45 seconds. The torrent may be inactive or the stream-server may not be reachable.",
+              errorMessage: failure.error.message,
+              runtimeState: failure.runtimeState,
+              runtimeError: failure.error,
               _eventSource: null,
               _peerTimeout: null,
             });
@@ -265,6 +360,11 @@ export const usePlayerStore = create<PlayerState>()(
               isBuffering:
                 nextStreamState === "loading_metrics" &&
                 currentState.streamState !== "playing",
+              runtimeState:
+                currentState.streamState === "playing"
+                  ? "playing"
+                  : getRuntimeStateForMetrics(metrics),
+              runtimeError: null,
             });
           } catch (e) {
             console.error("Failed to parse stream metric:", e);
@@ -334,10 +434,17 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
 
+          const failure = createPlaybackRuntimeError(
+            "BRIDGE_UNAVAILABLE",
+            "Failed to connect to streaming engine metrics",
+            { retryable: true, shouldFallback: false },
+          );
           set({
             streamState: "error",
             isBuffering: false,
-            errorMessage: "Failed to connect to streaming engine metrics",
+            errorMessage: failure.message,
+            runtimeState: getPlaybackRuntimeState(failure.code),
+            runtimeError: failure,
             _eventSource: null,
             _peerTimeout: null,
           });
@@ -361,6 +468,8 @@ export const usePlayerStore = create<PlayerState>()(
           _eventSource: es,
           _peerTimeout: timeout,
           streamState: "loading_metrics",
+          runtimeState: "finding_peers",
+          runtimeError: null,
         });
       },
 
@@ -384,6 +493,8 @@ export const usePlayerStore = create<PlayerState>()(
           streamState: "idle",
           streamMetrics: null,
           errorMessage: null,
+          runtimeState: "idle",
+          runtimeError: null,
           _eventSource: null,
           _peerTimeout: null,
         });

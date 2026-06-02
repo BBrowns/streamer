@@ -65,6 +65,8 @@ describe("playerStore", () => {
     expect(previousEventSource.close).toHaveBeenCalled();
     expect(state.isPlaying).toBe(false);
     expect(state.isBuffering).toBe(true);
+    expect(state.runtimeState).toBe("buffering");
+    expect(state.runtimeError).toBeNull();
     expect(state.streamMetrics).toBeNull();
     expect(state._eventSource).toBeNull();
     expect(state._peerTimeout).toBeNull();
@@ -127,6 +129,19 @@ describe("playerStore", () => {
     const state = usePlayerStore.getState();
     expect(state.currentStream).toBe(primary);
     expect(state.fallbackStreams).toEqual([fallback]);
+    expect(state.runtimeState).toBe("buffering");
+    expect(state.runtimeError).toBeNull();
+  });
+
+  it("starts torrent streams in a finding-peers runtime state", () => {
+    usePlayerStore
+      .getState()
+      .setStream({ infoHash: "abcdef123456" } as Stream, undefined, []);
+
+    const state = usePlayerStore.getState();
+    expect(state.streamState).toBe("loading_metrics");
+    expect(state.runtimeState).toBe("finding_peers");
+    expect(state.runtimeError).toBeNull();
   });
 
   it("advances to the next fallback stream and clears transient metrics", () => {
@@ -170,6 +185,38 @@ describe("playerStore", () => {
     expect(state.isPlaying).toBe(false);
     expect(state.isBuffering).toBe(true);
     expect(state.streamState).toBe("loading_metrics");
+    expect(state.runtimeState).toBe("trying_fallback");
+    expect(state.runtimeError).toBeNull();
     expect(state.streamMetrics).toBeNull();
+  });
+
+  it("infers typed runtime failures from legacy stream status errors", () => {
+    usePlayerStore
+      .getState()
+      .setStreamStatus("error", "Unsupported codec h265");
+
+    const state = usePlayerStore.getState();
+    expect(state.runtimeState).toBe("failed_unsupported_codec");
+    expect(state.runtimeError).toMatchObject({
+      code: "UNSUPPORTED_CODEC",
+      message: "Unsupported codec h265",
+    });
+    expect(state.isBuffering).toBe(false);
+  });
+
+  it("stores explicit typed runtime failures", () => {
+    usePlayerStore.getState().setRuntimeFailure({
+      code: "NO_PEERS",
+      message: "No peers found after 45 seconds.",
+      retryable: true,
+      shouldFallback: false,
+    });
+
+    const state = usePlayerStore.getState();
+    expect(state.streamState).toBe("error");
+    expect(state.runtimeState).toBe("failed_no_peers");
+    expect(state.runtimeError?.code).toBe("NO_PEERS");
+    expect(state.errorMessage).toBe("No peers found after 45 seconds.");
+    expect(state.isBuffering).toBe(false);
   });
 });
