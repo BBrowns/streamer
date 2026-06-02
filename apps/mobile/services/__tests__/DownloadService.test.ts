@@ -21,6 +21,16 @@ describe("getDownloadEligibility", () => {
     });
   });
 
+  it("marks direct file streams offline-playable", () => {
+    const stream: Stream = { url: "https://example.test/movie.mp4" };
+
+    expect(getDownloadEligibility(stream)).toMatchObject({
+      mode: "direct-file",
+      canDownload: true,
+      offlinePlayable: true,
+    });
+  });
+
   it("requires the desktop bridge for torrent downloads", () => {
     const stream: Stream = { infoHash: "abc123" };
 
