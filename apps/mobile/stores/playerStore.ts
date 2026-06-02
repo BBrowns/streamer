@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import type { Stream } from "@streamer/shared";
 import { useAuthStore } from "./authStore";
+import { getBridgeAuthHeaders } from "../services/bridgeAuth";
 
 export interface MediaInfo {
   type: "movie" | "series";
@@ -147,8 +148,14 @@ export const usePlayerStore = create<PlayerState>()(
           const ip = metroHost ? metroHost.split(":")[0] : "localhost";
           bridgeUrl = `http://${ip}:11470`;
         }
+        const authHeaders = getBridgeAuthHeaders();
+        const eventSourceOptions =
+          Object.keys(authHeaders).length > 0
+            ? { headers: authHeaders }
+            : undefined;
         const es = new EventSource(
           `${bridgeUrl}/api/torrent/${encodeURIComponent(infoHash)}/metrics`,
+          eventSourceOptions,
         );
 
         const timeout = setTimeout(() => {

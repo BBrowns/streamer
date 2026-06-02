@@ -103,13 +103,49 @@ function isPrivateOrReservedIpv4(host: string) {
   );
 }
 
+function isLocalOnlyIpv4(host: string) {
+  const parts = host.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
+    return false;
+  }
+
+  const [a] = parts;
+  return a === 0 || a === 127;
+}
+
+function ipv4FromMappedIpv6(host: string) {
+  const dottedMatch = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (dottedMatch) return dottedMatch[1];
+
+  const hexMatch = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (!hexMatch) return null;
+
+  const high = Number.parseInt(hexMatch[1], 16);
+  const low = Number.parseInt(hexMatch[2], 16);
+  if (Number.isNaN(high) || Number.isNaN(low)) return null;
+
+  return [(high >> 8) & 255, high & 255, (low >> 8) & 255, low & 255].join(".");
+}
+
 function isPrivateOrReservedIpv6(host: string) {
+  const mappedIpv4 = ipv4FromMappedIpv6(host);
+  if (mappedIpv4) return isPrivateOrReservedIpv4(mappedIpv4);
+
   return (
     host === "::1" ||
+    host === "::" ||
     host.startsWith("fe80:") ||
     host.startsWith("fc") ||
-    host.startsWith("fd")
+    host.startsWith("fd") ||
+    host.startsWith("ff")
   );
+}
+
+function isLocalOnlyIpv6(host: string) {
+  const mappedIpv4 = ipv4FromMappedIpv6(host);
+  if (mappedIpv4) return isLocalOnlyIpv4(mappedIpv4);
+
+  return host === "::" || host === "::1";
 }
 
 export function validateCastPlaybackUrl(
@@ -143,6 +179,13 @@ export function validateCastPlaybackUrl(
   }
 
   const ipVersion = net.isIP(host);
+  if (
+    (ipVersion === 4 && isLocalOnlyIpv4(host)) ||
+    (ipVersion === 6 && isLocalOnlyIpv6(host))
+  ) {
+    return { ok: false, reason: "Localhost playback URLs cannot be cast" };
+  }
+
   if (ipVersion === 4 && isPrivateOrReservedIpv4(host)) {
     if (!isAllowedHost(host, allowedHosts)) {
       return {

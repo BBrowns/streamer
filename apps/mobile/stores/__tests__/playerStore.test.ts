@@ -18,12 +18,18 @@ jest.mock("react-native-sse", () =>
   }),
 );
 
+import EventSource from "react-native-sse";
+import { useAuthStore } from "../authStore";
 import { usePlayerStore } from "../playerStore";
 
 describe("playerStore", () => {
   beforeEach(() => {
     mockEventSourceInstances.length = 0;
     jest.clearAllMocks();
+    useAuthStore.setState({
+      streamServerUrl: null,
+      streamServerToken: null,
+    });
     usePlayerStore.getState().clearPlayer();
   });
 
@@ -87,5 +93,28 @@ describe("playerStore", () => {
     expect(state.isBuffering).toBe(false);
     expect(state._eventSource).toBeNull();
     expect(state._peerTimeout).toBeNull();
+  });
+
+  it("sends the optional bridge auth token on metrics subscriptions", () => {
+    useAuthStore.setState({
+      streamServerUrl: "http://bridge.test",
+      streamServerToken: "pairing-token",
+    });
+    usePlayerStore.setState({
+      currentStream: { infoHash: "abcdef123456" } as Stream,
+      streamState: "idle",
+      errorMessage: null,
+    });
+
+    usePlayerStore.getState().subscribeToStreamMetrics("abcdef123456");
+
+    expect(EventSource).toHaveBeenCalledWith(
+      "http://bridge.test/api/torrent/abcdef123456/metrics",
+      {
+        headers: {
+          Authorization: "Bearer pairing-token",
+        },
+      },
+    );
   });
 });

@@ -57,11 +57,11 @@ export function createStreamServerApp() {
 
   app.get("/stream", requireBridgeAuth, streamRequest);
 
-  app.get("/stats", async (_req, res) => {
+  app.get("/stats", requireBridgeAuth, async (_req, res) => {
     res.json(await getStats());
   });
 
-  app.get("/api/torrent/:infoHash/metrics", metricsHandler);
+  app.get("/api/torrent/:infoHash/metrics", requireBridgeAuth, metricsHandler);
 
   app.get("/api/subtitles", requireBridgeAuth, getSubtitlesRequest);
   app.get("/api/subtitles/:id/stream", streamSubtitleRequest);

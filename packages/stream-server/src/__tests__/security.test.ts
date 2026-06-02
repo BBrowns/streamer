@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireBridgeAuth, validateCastPlaybackUrl } from "../security.js";
+import { createStreamServerApp } from "../index.js";
 import { pruneTorrents, validateTorrentFiles } from "../torrent.js";
 
 const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
@@ -142,6 +143,16 @@ describe("Bridge auth", () => {
 
     expect(res.status).toBe(200);
   });
+
+  it("protects bridge control and metrics routes when bridge auth is configured", async () => {
+    process.env.STREAMER_BRIDGE_TOKEN = "pairing-token";
+    const app = createStreamServerApp();
+
+    await request(app).post("/api/gateway/jobs").send({}).expect(401);
+    await request(app).get("/api/gateway/jobs/missing").expect(401);
+    await request(app).get("/api/torrent/abcdef/metrics").expect(401);
+    await request(app).get("/stats").expect(401);
+  });
 });
 
 describe("Cast playback URL validation", () => {
@@ -185,5 +196,42 @@ describe("Cast playback URL validation", () => {
     ).toMatchObject({
       ok: false,
     });
+  });
+
+  it("blocks loopback IP variants even when they appear in the allow-list", () => {
+    expect(
+      validateCastPlaybackUrl("http://127.0.0.1:11470/movie.mp4", {
+        allowedHosts: ["127.0.0.1"],
+      }),
+    ).toMatchObject({
+      ok: false,
+      reason: "Localhost playback URLs cannot be cast",
+    });
+
+    expect(
+      validateCastPlaybackUrl("http://[::1]:11470/movie.mp4", {
+        allowedHosts: ["::1"],
+      }),
+    ).toMatchObject({
+      ok: false,
+      reason: "Localhost playback URLs cannot be cast",
+    });
+
+    expect(
+      validateCastPlaybackUrl("http://[::ffff:7f00:1]:11470/movie.mp4", {
+        allowedHosts: ["::ffff:7f00:1"],
+      }),
+    ).toMatchObject({
+      ok: false,
+      reason: "Localhost playback URLs cannot be cast",
+    });
+  });
+
+  it("allows bridge-owned private IPv6 LAN playback URLs", () => {
+    expect(
+      validateCastPlaybackUrl("http://[fd00::25]:11470/api/gateway/job", {
+        allowedHosts: ["fd00::25"],
+      }),
+    ).toMatchObject({ ok: true });
   });
 });
