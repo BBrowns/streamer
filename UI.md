@@ -3,17 +3,19 @@
 > **Audience:** Engineers (human or AI agent) working on the mobile/web/desktop client.
 > This document covers design decisions, component architecture, cross-platform patterns, and concrete improvement suggestions.
 > See [ARCHITECTURE.md](./ARCHITECTURE.md) for the backend and system-level reference.
+> See [AGENT_HANDOFF.md](./AGENT_HANDOFF.md) for the current product direction and next UI/UX priorities.
 
 ---
 
 ## 1. Design Philosophy
 
-The UI follows a philosophy described in the codebase comments as **"Glassmorphic Brutalism"** — a deliberate tension between two aesthetics:
+The current product direction is **pastel glass cinema**: Apple-inspired, soft, cinematic, and calm enough for repeated media browsing. This is the target direction; some older components still show heavier/darker styling and should be treated as migration candidates.
 
-- **Glassmorphism:** Transparency layers, blurred backgrounds (`expo-blur`), frosted glass overlays (e.g. the player controls overlay, the cast modal, the onboarding carousel).
-- **Brutalism:** Heavy weight typography (`fontWeight: "900"`), high contrast, tight negative letter-spacing (`letterSpacing: -1`), uppercase labels with wide tracking, bold borders.
+- **Pastel glass:** warm mist backgrounds, frosted cards, restrained borders, lavender/blush/mint/peach accents.
+- **Cinematic media hierarchy:** large artwork, clear Play Best action, visible next content, and less source noise.
+- **Consumer-streaming UX:** users should not have to understand torrents, codecs, peers, bridge URLs, or add-on internals to press Play.
 
-The result is a premium, cinematic feel that references apps like Infuse or Plex but with sharper, more opinionated type choices.
+The long-term references are closer to Apple TV/Vision Pro-style media surfaces, StreamX-like Apple platform structure, Infuse, Plex, Netflix, Disney+, and Prime Video than to a technical source browser.
 
 **Styling approach:** The codebase uses two coexisting styling systems:
 
@@ -30,19 +32,19 @@ In practice, most components use `StyleSheet.create` with inline `colors.xxx` re
 
 The entire colour system is defined in a single `PALETTE` object with two variants:
 
-| Token           | Dark                    | Light              | Usage                                  |
-| --------------- | ----------------------- | ------------------ | -------------------------------------- |
-| `background`    | `#010101`               | `#ffffff`          | Screen backgrounds                     |
-| `card`          | `#111118`               | `#f8fafc`          | Cards, modals, surfaces                |
-| `text`          | `#ffffff`               | `#0f172a`          | Primary text                           |
-| `textSecondary` | `#94a3b8`               | `#475569`          | Labels, subtitles                      |
-| `tint`          | `#00f2ff` (neon cyan)   | `#6366f1` (indigo) | Accent — buttons, active states, icons |
-| `border`        | `rgba(255,255,255,0.1)` | `rgba(0,0,0,0.08)` | Dividers, card outlines                |
-| `error`         | `#f87171`               | `#ef4444`          | Error text, destructive actions        |
-| `success`       | `#4ade80`               | `#22c55e`          | Confirmations                          |
-| `warning`       | `#fbbf24`               | `#f59e0b`          | Warnings, incomplete states            |
+| Token           | Dark                     | Light                      | Usage                                  |
+| --------------- | ------------------------ | -------------------------- | -------------------------------------- |
+| `background`    | `#11121c`                | `#fbf6f4`                  | Cinematic midnight / soft warm mist    |
+| `card`          | `rgba(255,255,255,0.08)` | `rgba(255,255,255,0.72)`   | Frosted surfaces                       |
+| `text`          | `#fff8ff`                | `#282236`                  | Primary text                           |
+| `textSecondary` | `#c6bfd2`                | `#6f657d`                  | Labels, subtitles                      |
+| `tint`          | `#d8b4fe` (lavender)     | `#a78bfa` (soft violet)    | Accent — buttons, active states, icons |
+| `border`        | `rgba(255,255,255,0.14)` | `rgba(106, 93, 125, 0.16)` | Dividers, glass borders                |
+| `error`         | `#ff9ba6`                | `#df6b7a`                  | Error text, destructive actions        |
+| `success`       | `#a7e8bd`                | `#63b987`                  | Confirmations                          |
+| `warning`       | `#ffd9a8`                | `#d7a15f`                  | Warnings, incomplete states            |
 
-**Key design decision:** The dark theme's tint is **neon cyan** (`#00f2ff`), which is distinctive but opinionated — it gives the player and active nav elements a sci-fi quality. The light mode tint shifts to **indigo** (`#6366f1`) which pairs better with white backgrounds. This asymmetry between modes is intentional.
+**Key design decision:** The palette has moved away from neon cyan/dark sci-fi styling toward softer lavender and warm glass. Future UI work should keep that direction and avoid returning to one-note neon or heavy dark-only surfaces.
 
 ### 2.2 `useTheme()` Hook
 
@@ -62,7 +64,7 @@ Every button in the app uses the pattern:
 color: isDark ? "#000" : "#fff";
 ```
 
-This is because the tint colour changes between modes — neon cyan on dark (needs dark text for contrast) and indigo on light (needs white text). If the tint ever changes significantly, this assumption may break.
+This is because the tint colour changes between modes and needs different foreground contrast. If the tint changes significantly, verify contrast in both themes instead of blindly keeping this inversion.
 
 ---
 
@@ -214,7 +216,7 @@ PlayerScreen (app/player.tsx)
 ├── PlayerOverlay                   — gesture handler root, tap-to-show/hide controls
 │   ├── PlayerControls              — play/pause, seek bar, time, cast button
 │   ├── PlayerSettingsModal         — audio track, subtitle track, playback speed
-│   ├── PlayerStatusOverlay         — buffering spinner, error message
+│   ├── PlayerStatusOverlay         — typed readiness/error state
 │   ├── NextEpisodeOverlay          — "Up Next: Episode X" auto-play prompt
 │   └── RemoteControlBar            — Chromecast / AirPlay remote UI (when casting)
 └── DesktopCastModal                — device selector modal for web/Electron
@@ -256,6 +258,28 @@ The player reports watch progress to the server every `15_000` ms (`PROGRESS_REP
 
 **Intricacy:** The `useTraktScrobbler` hook fires independently from this interval, using the player's local state. The two are not synchronised — Trakt scrobbles can arrive at the server slightly before or after the watch progress update. This is acceptable for the use case but means `lastWatched` timestamp in the database and the Trakt scrobble timestamp may differ slightly.
 
+### 6.6 Runtime Readiness States
+
+The player no longer treats every loading problem as generic `Buffering...`.
+`playerStore` tracks typed `runtimeState` and `runtimeError` values from `@streamer/shared`.
+
+Important visible states:
+
+| Runtime state               | UX meaning                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `creating_gateway_job`      | The bridge is creating a stream gateway job.                                                |
+| `finding_peers`             | A torrent source is waiting for peers.                                                      |
+| `preparing_metadata`        | Torrent metadata exists and the bridge is warming.                                          |
+| `buffering`                 | A playable URL exists but video is not ready yet.                                           |
+| `trying_fallback`           | The app is automatically trying another source.                                             |
+| `failed_no_peers`           | Torrent source could not find peers in time.                                                |
+| `failed_bridge_unavailable` | The desktop/local bridge is missing or unreachable.                                         |
+| `failed_bridge_unsupported` | The bridge process is reachable but its engine is broken, commonly native runtime mismatch. |
+| `failed_unsupported_codec`  | The selected source cannot play on this device.                                             |
+| `failed_timeout`            | Gateway or video startup timed out.                                                         |
+
+`PlayerStatusOverlay` uses these states for titles, retry visibility, and Sources & Devices guidance. Keep future player work in this typed model rather than adding raw alert strings.
+
 ---
 
 ## 7. Detail Screen (`app/detail/[type]/[id].tsx`)
@@ -269,7 +293,9 @@ The detail screen fetches:
 
 For series, it additionally renders the `EpisodeSelector` component to let the user pick a season and episode, then fetches streams for that specific episode via `useEpisodeStreams`.
 
-**Stream list display:** Streams are grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). Selecting a chip filters the visible list. Tapping a stream navigates to `/player` with the stream data set in `playerStore`.
+**Primary flow:** The default action is `Play Best`. It calls `PlaybackOrchestrator.playBest()`, which requests a server playback plan, resolves only the selected source, and passes remaining planned fallbacks into `playerStore`.
+
+**Advanced source display:** Streams are still grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). This should increasingly become a collapsed `More Sources` fallback, not the main user flow. Tapping a manual stream remains an advanced path and still sets stream data in `playerStore`.
 
 ---
 
@@ -293,11 +319,11 @@ The Trakt OAuth flow uses `expo-web-browser` to open the Trakt authorization URL
 
 The app uses **Zustand v5** with multiple small, focused stores rather than one large global store:
 
-| Store           | Persisted              | Contents                                                                                 |
-| --------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
-| `authStore`     | ✅ `expo-secure-store` | `isAuthenticated`, `user`, `accessToken`, `refreshToken`, `theme`, `isHydrated`          |
-| `playerStore`   | ❌ (session only)      | `currentStream`, `mediaInfo`, `playbackRate`, `streamState`, `streamMetrics`, `progress` |
-| `downloadStore` | ✅ `AsyncStorage`      | `tasks` map (id → status/progress/localUri/resumeData)                                   |
+| Store           | Persisted              | Contents                                                                                        |
+| --------------- | ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `authStore`     | ✅ `expo-secure-store` | `isAuthenticated`, `user`, tokens, theme, configured `streamServerUrl`, bridge token, hydration |
+| `playerStore`   | ❌ (session only)      | `currentStream`, fallback queue, `runtimeState`, `runtimeError`, metrics, progress, preferences |
+| `downloadStore` | ✅ `AsyncStorage`      | `tasks` map (id → status/progress/localUri/resumeData)                                          |
 
 **Auth hydration guard:** The `authStore` sets `isHydrated: true` once it has loaded from `expo-secure-store`. All screens check `isHydrated` before rendering content or redirecting to login — this prevents a flash of the login screen while the token is being read from the keychain.
 

@@ -9,6 +9,7 @@ Streamer aggregates content from third-party add-ons that implement the [Stremio
 Torrent streams work on all platforms, including iOS, via a local P2P daemon that bridges magnet links to HTTP byte-range streams in real time.
 
 > **Deep dive:** See [ARCHITECTURE.md](./ARCHITECTURE.md) for full system design, module breakdown, resilience patterns, and improvement suggestions.
+> **Current handoff:** See [AGENT_HANDOFF.md](./AGENT_HANDOFF.md) for the latest playback/bridge/UI roadmap and next recommended PRs.
 
 ---
 
