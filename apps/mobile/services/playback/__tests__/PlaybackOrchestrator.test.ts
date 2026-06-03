@@ -1,6 +1,10 @@
 import type { PlaybackPlan } from "@streamer/shared";
 import { getDownloadEligibility } from "../../downloadEligibility";
-import { playBest, prepareDownload } from "../PlaybackOrchestrator";
+import {
+  playBest,
+  prepareDownload,
+  prepareCast,
+} from "../PlaybackOrchestrator";
 import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
@@ -411,5 +415,46 @@ describe("PlaybackOrchestrator", () => {
       attemptedStreams: 1,
       resolveErrors: ["No peers found"],
     });
+  });
+
+  it("prepares a cast with the resolved URL and media info", async () => {
+    createPlan.mockResolvedValueOnce({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: {
+          id: "direct",
+          kind: "direct",
+          stream: { url: "http://example.com/stream.mp4", title: "Direct" },
+          riskFlags: [],
+        },
+      },
+    });
+    resolvePlan.mockResolvedValueOnce({
+      resolved: {
+        stream: { url: "http://example.com/stream.mp4", title: "Direct" },
+        uri: "http://example.com/stream.mp4",
+        attemptedStreams: 1,
+        errors: [],
+      },
+      attemptedStreams: 1,
+      errors: [],
+      remainingStreams: [],
+    });
+
+    const result = await prepareCast({
+      type: "movie",
+      id: "tt123",
+      title: "Example Movie",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      resolvedUrl: "http://example.com/stream.mp4",
+      mediaInfo: { itemId: "tt123", title: "Example Movie" },
+    });
+    expect(createPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "cast" }),
+    );
   });
 });

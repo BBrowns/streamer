@@ -12,8 +12,14 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import { castService, type CastDevice } from "../services/CastService";
 
+import {
+  prepareCast,
+  type PlaybackOrchestratorInput,
+} from "../services/playback/PlaybackOrchestrator";
+
 interface Props {
   visible: boolean;
+  orchestratorInput?: PlaybackOrchestratorInput;
   playbackUri: string;
   title: string;
   onClose: () => void;
@@ -22,6 +28,7 @@ interface Props {
 
 export function DesktopCastModal({
   visible,
+  orchestratorInput,
   playbackUri,
   title,
   onClose,
@@ -30,6 +37,7 @@ export function DesktopCastModal({
   const [devices, setDevices] = useState<CastDevice[]>([]);
   const [loading, setLoading] = useState(false);
   const [castingTo, setCastingTo] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fetchDevices = async () => {
     setLoading(true);
@@ -47,20 +55,38 @@ export function DesktopCastModal({
     if (visible) {
       fetchDevices();
       setCastingTo(null);
+      setErrorMessage(null);
     }
   }, [visible]);
 
   const handleCast = async (device: CastDevice) => {
     setCastingTo(device.id);
+    setErrorMessage(null);
     try {
-      await castService.play(device.id, playbackUri, title);
+      let uriToCast = playbackUri;
+
+      if (!uriToCast && orchestratorInput) {
+        const result = await prepareCast(orchestratorInput);
+        if (result.ok) {
+          uriToCast = result.resolvedUrl;
+        } else {
+          throw result.error;
+        }
+      }
+
+      if (!uriToCast) {
+        throw new Error("No playback URI available for casting");
+      }
+
+      await castService.play(device.id, uriToCast, title);
       if (onCastStart) {
         onCastStart(device);
       }
       setTimeout(onClose, 1000);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Cast error:", e);
       setCastingTo(null);
+      setErrorMessage(e?.message || "Casting is unavailable right now.");
     }
   };
 
@@ -100,6 +126,8 @@ export function DesktopCastModal({
               <MaterialIcons name="close" size={24} color="#9ca3af" />
             </Pressable>
           </View>
+
+          {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
           {loading && devices.length === 0 ? (
             <View style={styles.centerBox}>
@@ -295,5 +323,11 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     fontWeight: "500",
     fontSize: 14,
+  },
+  errorText: {
+    color: "#fca5a5",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 12,
   },
 });

@@ -685,6 +685,18 @@ export default function PlayerScreen() {
           <DesktopCastModal
             visible={castModalOpen}
             onClose={() => setCastModalOpen(false)}
+            orchestratorInput={
+              mediaInfo
+                ? {
+                    type: mediaInfo.type,
+                    id: mediaInfo.itemId,
+                    title: mediaInfo.title,
+                    poster: mediaInfo.poster,
+                    season: mediaInfo.season,
+                    episode: mediaInfo.episode,
+                  }
+                : undefined
+            }
             playbackUri={playbackUri || ""}
             title={mediaInfo?.title || ""}
             onCastStart={(device: CastDevice) => {
