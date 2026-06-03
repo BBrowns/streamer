@@ -17,6 +17,8 @@ function makeRes() {
     setHeader: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
     redirect: vi.fn().mockReturnThis(),
+    write: vi.fn().mockReturnThis(),
+    end: vi.fn().mockReturnThis(),
     on: vi.fn().mockReturnThis(),
     once: vi.fn().mockReturnThis(),
     emit: vi.fn().mockReturnThis(),
