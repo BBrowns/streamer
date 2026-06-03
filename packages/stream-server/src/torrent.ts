@@ -11,7 +11,12 @@
  */
 import { Request, Response } from "express";
 import { spawn } from "child_process";
-import { waitForReady, selectBestVideoFile } from "./torrent-helpers.js";
+import path from "path";
+import {
+  waitForReady,
+  selectBestVideoFile,
+  mimeFromExt,
+} from "./torrent-helpers.js";
 import type { FileSelectionHints } from "./torrent-helpers.js";
 
 // Re-export pure helpers for stats.ts and tests
@@ -425,24 +430,22 @@ export async function serveTorrentFile(
   }
 
   const file = getSelectedFile(torrent, options.fileIdx, options.hints);
-  const streamPath = file.streamURL;
-  const host = req.hostname || "127.0.0.1";
+  const ext = path.extname(file.name).toLowerCase();
 
-  const internalUrl = `http://127.0.0.1:${serverPort}${streamPath}`;
-  const externalUrl = `http://${host}:${serverPort}${streamPath}`;
+  // Strategy:
+  // 1. Force remuxing for MKV as browsers don't support it natively
+  // 2. Proxy directly for MP4/WebM/etc to avoid 302 redirect CORS/port issues
+  const shouldRemux = options.remuxFormat === "mp4" || ext === ".mkv";
 
-  if (options.remuxFormat === "mp4") {
+  if (shouldRemux) {
     console.log(
-      `[stream-server] Remuxing to fragmented MP4 via FFmpeg: ${file.name}`,
+      `[stream-server] Streaming via FFmpeg remux (MP4): ${file.name}`,
     );
 
-    const upstream = await fetch(internalUrl);
-    if (!upstream.ok || !upstream.body) {
-      console.error(
-        `[stream-server] Failed to fetch from webtorrent: ${upstream.status}`,
-      );
-      return res.status(503).json({ error: "Failed to fetch torrent file" });
-    }
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
     const ffmpeg = spawn("ffmpeg", [
       "-hide_banner",
@@ -461,28 +464,8 @@ export async function serveTorrentFile(
       "pipe:1",
     ]);
 
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache");
-
-    const reader = upstream.body.getReader();
-    const pumpToFfmpeg = async () => {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            ffmpeg.stdin.end();
-            break;
-          }
-          if (!ffmpeg.stdin.writable) break;
-          ffmpeg.stdin.write(Buffer.from(value));
-        }
-      } catch (err: any) {
-        console.warn("[stream-server] Upstream read error:", err?.message);
-        ffmpeg.stdin.end();
-      }
-    };
-    pumpToFfmpeg();
+    const stream = file.createReadStream();
+    stream.pipe(ffmpeg.stdin);
 
     ffmpeg.stdout.pipe(res);
 
@@ -492,7 +475,7 @@ export async function serveTorrentFile(
     });
 
     res.on("close", () => {
-      reader.cancel().catch(() => {});
+      stream.destroy();
       ffmpeg.kill("SIGTERM");
     });
 
@@ -505,19 +488,40 @@ export async function serveTorrentFile(
       }
     });
 
-    ffmpeg.on("exit", (code: number | null) => {
-      if (code && code !== 0 && code !== 255) {
-        console.warn(`[stream-server] FFmpeg exited with code ${code}`);
-      }
-    });
-
     return;
   }
 
-  console.log(
-    `[stream-server] Redirecting to webtorrent server: ${externalUrl}`,
-  );
-  return res.redirect(302, externalUrl);
+  // Proxy directly to avoid redirect issues
+  console.log(`[stream-server] Proxying direct stream: ${file.name}`);
+  const mimeType = mimeFromExt(file.name);
+
+  res.setHeader("Content-Type", mimeType);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  const total = file.length;
+  const range = req.headers.range;
+
+  if (range) {
+    const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(startStr, 10);
+    const end = endStr ? parseInt(endStr, 10) : total - 1;
+    const chunksize = end - start + 1;
+
+    res.status(206).set({
+      "Content-Range": `bytes ${start}-${end}/${total}`,
+      "Content-Length": chunksize,
+    });
+
+    const stream = file.createReadStream({ start, end });
+    stream.pipe(res);
+    res.on("close", () => stream.destroy());
+  } else {
+    res.setHeader("Content-Length", total);
+    const stream = file.createReadStream();
+    stream.pipe(res);
+    res.on("close", () => stream.destroy());
+  }
 }
 
 /**
