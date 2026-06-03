@@ -146,9 +146,9 @@
       "deleteAccount": "Eliminar permanentemente tu cuenta y todos los datos"
     },
     "advanced": {
-      "configure": "Configurar infraestructura",
-      "subtitle": "URLs personalizadas de backend y servidor de transmisión",
-      "title": "Anulaciones de infraestructura",
+      "configure": "Configurar fuentes y dispositivos",
+      "subtitle": "URLs del puente, complementos, casting y resolutores opcionales",
+      "title": "Fuentes y dispositivos",
       "hide": "Ocultar",
       "backendLabel": "URL de la API del backend",
       "streamLabel": "URL del puente de transmisión",
@@ -156,7 +156,7 @@
       "restore": "Restaurar predeterminados",
       "apply": "Aplicar cambios",
       "successTitle": "Ajustes guardados",
-      "successMessage": "Tus URLs de servidor personalizadas han sido actualizadas."
+      "successMessage": "Tus ajustes de servidor y puente se han actualizado."
     },
     "alerts": {
       "deleteAccountTitle": "Eliminar cuenta",

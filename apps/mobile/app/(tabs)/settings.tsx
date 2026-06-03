@@ -2,27 +2,22 @@ import {
   View,
   Text,
   Pressable,
-  Modal,
-  TextInput,
   Alert,
   ActivityIndicator,
   StyleSheet,
-  Switch,
   Platform,
   ScrollView,
   useWindowDimensions,
+  Switch,
 } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
-import { api } from "../../services/api";
 import { Ionicons } from "@expo/vector-icons";
-import { AxiosError } from "axios";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { clearQueryCache } from "../../services/queryPersister";
@@ -32,585 +27,13 @@ import { ChangePasswordModal } from "../../components/settings/ChangePasswordMod
 import { EditProfileModal } from "../../components/settings/EditProfileModal";
 import { ActiveSessionsModal } from "../../components/settings/ActiveSessionsModal";
 import { useAccount } from "../../hooks/useAccount";
-import {
-  hapticSelection,
-  hapticWarning,
-  hapticSuccess,
-} from "../../lib/haptics";
-import { SegmentedControl } from "../../components/ui/SegmentedControl";
-import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
-import {
-  streamEngineManager,
-  type BridgeDiagnostics,
-  type BridgeStatus,
-} from "../../services/streamEngine/StreamEngineManager";
-import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
+import { hapticSelection, hapticWarning } from "../../lib/haptics";
 
-function SectionGroup({
-  title,
-  children,
-  colors,
-  framed = true,
-}: {
-  title: string;
-  children: React.ReactNode;
-  colors: any;
-  framed?: boolean;
-}) {
-  return (
-    <View style={styles.sectionGroup}>
-      <Text style={[styles.sectionGroupTitle, { color: colors.textSecondary }]}>
-        {title.toUpperCase()}
-      </Text>
-      {framed ? (
-        <View
-          style={[
-            styles.sectionGroupContent,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          {children}
-        </View>
-      ) : (
-        <View style={styles.sectionGroupPlain}>{children}</View>
-      )}
-    </View>
-  );
-}
-
-function formatBridgeReason(reason: string) {
-  switch (reason) {
-    case "native-architecture-mismatch":
-      return "Native module architecture mismatch";
-    case "native-load-failed":
-      return "Native torrent module failed to load";
-    case "invalid-url":
-      return "Invalid bridge URL";
-    default:
-      return reason.replace(/-/g, " ");
-  }
-}
-
-function diagnosticsFromDesktopBridge(
-  info: DesktopBridgeInfo | null,
-): BridgeDiagnostics | null {
-  const diagnostics = info?.diagnostics;
-  if (!diagnostics) return null;
-
-  return {
-    status:
-      diagnostics.status === "error"
-        ? "unsupported"
-        : diagnostics.status === "starting"
-          ? "loading"
-          : "unreachable",
-    url: info?.localUrl || info?.lanUrl,
-    reason: diagnostics.reason || undefined,
-    message: diagnostics.message || diagnostics.error || undefined,
-    processArch: diagnostics.processArch || diagnostics.nodeArch || undefined,
-    platform: diagnostics.platform,
-    checkedAt: diagnostics.updatedAt,
-  };
-}
-
-function SourcesDevicesPanel() {
-  const { t } = useTranslation();
-  const router = useRouter();
-  const {
-    backendUrl,
-    streamServerUrl,
-    streamServerToken,
-    setServerUrls,
-    setStreamServerToken,
-  } = useAuthStore();
-  const { colors, isDark } = useTheme();
-  const [tempBackend, setTempBackend] = useState(backendUrl || "");
-  const [tempStream, setTempStream] = useState(streamServerUrl || "");
-  const [tempStreamToken, setTempStreamToken] = useState(
-    streamServerToken || "",
-  );
-  const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
-  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(
-    streamEngineManager.bridgeStatus,
-  );
-  const [bridgeDiagnostics, setBridgeDiagnostics] = useState<BridgeDiagnostics>(
-    streamEngineManager.getBridgeDiagnostics(),
-  );
-  const [isRestartingBridge, setIsRestartingBridge] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const refreshBridge = async () => {
-      if (Platform.OS === "web" && window.desktopBridge?.getBridgeInfo) {
-        window.desktopBridge
-          .getBridgeInfo()
-          .then((info) => {
-            if (!cancelled) {
-              setBridgeInfo(info);
-              if (info.pairingToken) {
-                setTempStreamToken(info.pairingToken);
-              }
-            }
-          })
-          .catch(() => {
-            if (!cancelled) setBridgeInfo(null);
-          });
-      }
-
-      await streamEngineManager.detectBridge();
-      if (!cancelled) {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      }
-    };
-
-    refreshBridge().catch(() => {
-      if (!cancelled) {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      }
-    });
-    const timer = setInterval(() => {
-      refreshBridge().catch(() => {
-        if (!cancelled) {
-          setBridgeStatus(streamEngineManager.bridgeStatus);
-          setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-        }
-      });
-    }, 8000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
-
-  const handleSave = async () => {
-    setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
-    await setStreamServerToken(tempStreamToken.trim() || null);
-    streamEngineManager
-      .detectBridge()
-      .then(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      })
-      .catch(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      });
-    hapticSuccess();
-    Alert.alert(
-      t("settings.advanced.successTitle"),
-      t("settings.advanced.successMessage"),
-    );
-  };
-
-  const handleReset = () => {
-    setTempBackend("");
-    setTempStream("");
-    setTempStreamToken("");
-    setServerUrls(null, null);
-    void setStreamServerToken(null);
-    streamEngineManager
-      .detectBridge()
-      .then(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      })
-      .catch(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      });
-    hapticSelection();
-  };
-
-  const handleCheckBridge = async () => {
-    hapticSelection();
-    await streamEngineManager.detectBridge();
-    setBridgeStatus(streamEngineManager.bridgeStatus);
-    setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-  };
-
-  const handleRestartBridge = async () => {
-    if (!window.desktopBridge?.restartBridge) return;
-
-    hapticSelection();
-    setIsRestartingBridge(true);
-    try {
-      const info = await window.desktopBridge.restartBridge();
-      setBridgeInfo(info);
-      if (info.localUrl) {
-        setTempStream(info.localUrl);
-      }
-      if (info.pairingToken) {
-        setTempStreamToken(info.pairingToken);
-      }
-      await streamEngineManager.detectBridge();
-      setBridgeStatus(streamEngineManager.bridgeStatus);
-      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-    } catch {
-      setBridgeStatus(streamEngineManager.bridgeStatus);
-      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-    } finally {
-      setIsRestartingBridge(false);
-    }
-  };
-
-  const desktopDiagnostics = diagnosticsFromDesktopBridge(bridgeInfo);
-  const effectiveBridgeDiagnostics =
-    bridgeStatus === "unreachable" && desktopDiagnostics
-      ? desktopDiagnostics
-      : bridgeDiagnostics;
-  const effectiveBridgeStatus =
-    bridgeStatus === "unreachable" && desktopDiagnostics
-      ? desktopDiagnostics.status
-      : bridgeStatus;
-  const bridgePresentation = getBridgeStatusPresentation(
-    effectiveBridgeStatus,
-    effectiveBridgeDiagnostics,
-  );
-  const bridgeColor =
-    bridgePresentation.tone === "success"
-      ? colors.success
-      : bridgePresentation.tone === "error"
-        ? colors.error
-        : colors.warning;
-  const bridgeUrl =
-    bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
-  const bridgeRuntimeLabel =
-    effectiveBridgeDiagnostics.platform &&
-    effectiveBridgeDiagnostics.processArch
-      ? `${effectiveBridgeDiagnostics.platform}/${effectiveBridgeDiagnostics.processArch}`
-      : null;
-
-  return (
-    <View
-      style={[
-        styles.advancedBox,
-        {
-          backgroundColor: colors.card,
-          borderColor: isDark
-            ? "rgba(245, 158, 11, 0.2)"
-            : "rgba(245, 158, 11, 0.4)",
-        },
-      ]}
-    >
-      <View style={styles.advancedHeader}>
-        <View>
-          <Text style={[styles.advancedTitle, { color: colors.text }]}>
-            {t("settings.advanced.title", {
-              defaultValue: "Sources & Devices",
-            })}
-          </Text>
-          <Text
-            style={[styles.advancedSubtitle, { color: colors.textSecondary }]}
-          >
-            Add-ons, bridge URLs, casting, and optional resolvers
-          </Text>
-        </View>
-      </View>
-
-      <Pressable
-        style={[styles.manageAddonsCard, { borderColor: colors.border }]}
-        onPress={() => {
-          hapticSelection();
-          router.push("/addons");
-        }}
-      >
-        <View
-          style={[
-            styles.iconContainer,
-            { backgroundColor: "rgba(216,180,254,0.14)" },
-          ]}
-        >
-          <Ionicons name="extension-puzzle-outline" size={20} color="#d8b4fe" />
-        </View>
-        <View style={styles.menuItemTextContainer}>
-          <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-            {t("settings.items.manageAddons")}
-          </Text>
-          <Text
-            style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
-          >
-            {t("settings.subtitles.manageAddons")}
-          </Text>
-        </View>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.textSecondary}
-        />
-      </Pressable>
-
-      <View style={[styles.bridgeInfoCard, { borderColor: colors.border }]}>
-        <View style={styles.bridgeInfoHeader}>
-          <View
-            style={[styles.bridgeStatusDot, { backgroundColor: bridgeColor }]}
-          />
-          <Text style={[styles.bridgeInfoTitle, { color: colors.text }]}>
-            {bridgePresentation.title}
-          </Text>
-        </View>
-        <Text style={[styles.bridgeInfoText, { color: colors.textSecondary }]}>
-          {bridgePresentation.detail}
-        </Text>
-        <Text style={[styles.bridgeUrlText, { color: colors.textSecondary }]}>
-          {bridgeUrl}
-        </Text>
-        {(effectiveBridgeDiagnostics.reason || bridgeRuntimeLabel) && (
-          <View
-            style={[
-              styles.bridgeDiagnosticsBox,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.05)"
-                  : "rgba(255,255,255,0.62)",
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            {!!effectiveBridgeDiagnostics.reason && (
-              <Text
-                style={[
-                  styles.bridgeDiagnosticsText,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Reason: {formatBridgeReason(effectiveBridgeDiagnostics.reason)}
-              </Text>
-            )}
-            {!!bridgeRuntimeLabel && (
-              <Text
-                style={[
-                  styles.bridgeDiagnosticsText,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Runtime: {bridgeRuntimeLabel}
-              </Text>
-            )}
-          </View>
-        )}
-        <View style={styles.inlineActionRow}>
-          <Pressable
-            style={[styles.inlineAction, { borderColor: colors.border }]}
-            onPress={handleCheckBridge}
-          >
-            <Ionicons name="refresh-outline" size={16} color={colors.tint} />
-            <Text style={[styles.inlineActionText, { color: colors.tint }]}>
-              Check again
-            </Text>
-          </Pressable>
-          {bridgeInfo?.lanUrl && (
-            <Pressable
-              style={[styles.inlineAction, { borderColor: colors.border }]}
-              onPress={() => {
-                setTempStream(bridgeInfo.lanUrl);
-                if (bridgeInfo.pairingToken) {
-                  setTempStreamToken(bridgeInfo.pairingToken);
-                }
-                hapticSelection();
-              }}
-            >
-              <Ionicons name="copy-outline" size={16} color={colors.tint} />
-              <Text style={[styles.inlineActionText, { color: colors.tint }]}>
-                Use LAN URL
-              </Text>
-            </Pressable>
-          )}
-          {Platform.OS === "web" && window.desktopBridge?.restartBridge && (
-            <Pressable
-              style={[styles.inlineAction, { borderColor: colors.border }]}
-              onPress={handleRestartBridge}
-              disabled={isRestartingBridge}
-            >
-              <Ionicons name="reload-outline" size={16} color={colors.tint} />
-              <Text style={[styles.inlineActionText, { color: colors.tint }]}>
-                {isRestartingBridge ? "Restarting..." : "Restart bridge"}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-        {t("settings.advanced.backendLabel")}
-      </Text>
-      <TextInput
-        style={[
-          styles.textInput,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
-        value={tempBackend}
-        onChangeText={setTempBackend}
-        placeholder="e.g. http://192.168.1.50:3001"
-        placeholderTextColor={colors.textSecondary + "80"}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
-      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-        {t("settings.advanced.streamLabel")}
-      </Text>
-      <TextInput
-        style={[
-          styles.textInput,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
-        value={tempStream}
-        onChangeText={setTempStream}
-        placeholder="e.g. http://192.168.1.50:11470"
-        placeholderTextColor={colors.textSecondary + "80"}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-
-      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-        Bridge pairing token (optional)
-      </Text>
-      <TextInput
-        style={[
-          styles.textInput,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
-        value={tempStreamToken}
-        onChangeText={setTempStreamToken}
-        placeholder="Only needed when your bridge requires a token"
-        placeholderTextColor={colors.textSecondary + "80"}
-        autoCapitalize="none"
-        autoCorrect={false}
-        secureTextEntry
-      />
-
-      <View style={styles.warningBox}>
-        <Ionicons name="warning-outline" size={16} color="#fbbf24" />
-        <Text style={styles.warningText}>{t("settings.advanced.warning")}</Text>
-      </View>
-
-      <View
-        style={[styles.optionalServiceCard, { borderColor: colors.border }]}
-      >
-        <View style={styles.bridgeInfoHeader}>
-          <Ionicons name="diamond-outline" size={16} color={colors.tint} />
-          <Text style={[styles.bridgeInfoTitle, { color: colors.text }]}>
-            Real-Debrid
-          </Text>
-        </View>
-        <Text style={[styles.bridgeInfoText, { color: colors.textSecondary }]}>
-          Optional paid resolver. It is disabled by default and not needed for
-          first-run setup.
-        </Text>
-      </View>
-
-      <View style={styles.advancedBtns}>
-        <Pressable
-          style={[styles.resetBtn, { borderColor: colors.border }]}
-          onPress={handleReset}
-        >
-          <Text style={[styles.resetBtnText, { color: colors.textSecondary }]}>
-            {t("settings.advanced.restore")}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.saveBtn, { backgroundColor: colors.tint }]}
-          onPress={handleSave}
-        >
-          <Text
-            style={[styles.saveBtnText, { color: isDark ? "#000" : "#fff" }]}
-          >
-            {t("settings.advanced.apply")}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function AppearanceSection() {
-  const { theme, setTheme } = useAuthStore();
-  const { colors } = useTheme();
-  const { t } = useTranslation();
-
-  const options = [
-    {
-      label: t("settings.theme.light"),
-      value: "light" as const,
-      icon: "sunny-outline",
-    },
-    {
-      label: t("settings.theme.dark"),
-      value: "dark" as const,
-      icon: "moon-outline",
-    },
-    {
-      label: t("settings.theme.system"),
-      value: "system" as const,
-      icon: "contrast-outline",
-    },
-  ];
-
-  return (
-    <View style={styles.section}>
-      <SegmentedControl
-        options={options}
-        value={theme}
-        onChange={setTheme}
-        renderIcon={(name, active) => (
-          <Ionicons
-            name={name as any}
-            size={20}
-            color={active ? colors.tint : colors.textSecondary}
-          />
-        )}
-      />
-    </View>
-  );
-}
-
-function LanguageSection() {
-  const { t, i18n } = useTranslation();
-  const currentLang = i18n.language;
-
-  const languages = [
-    { label: "English", value: "en", emoji: "🇺🇸" },
-    { label: "Español", value: "es", emoji: "🇪🇸" },
-    { label: "Nederlands", value: "nl", emoji: "🇳🇱" },
-  ];
-
-  const handleLanguageChange = async (lang: string) => {
-    await i18n.changeLanguage(lang);
-    await AsyncStorage.setItem("user-language", lang);
-  };
-
-  return (
-    <View style={styles.section}>
-      <SegmentedControl
-        options={languages}
-        value={currentLang}
-        onChange={handleLanguageChange}
-      />
-    </View>
-  );
-}
+// Modular components
+import { SettingsSection } from "../../components/settings/SettingsSection";
+import { AppearanceSection } from "../../components/settings/AppearanceSection";
+import { LanguageSection } from "../../components/settings/LanguageSection";
+import { SourcesSection } from "../../components/settings/SourcesSection";
 
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
@@ -769,7 +192,7 @@ function SettingsContent() {
     if (activePane === "sources") {
       return (
         <View style={styles.desktopRightPaneContent}>
-          <SourcesDevicesPanel />
+          <SourcesSection />
         </View>
       );
     }
@@ -843,10 +266,128 @@ function SettingsContent() {
       contentContainerStyle={[styles.contentWrapper, { paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Profile */}
-      <SectionGroup
-        title={t("settings.sections.account", { defaultValue: "Account" })}
-        colors={colors}
+      {/* Streaming */}
+      <SettingsSection
+        title={t("settings.sections.sourcesDevices", {
+          defaultValue: "Sources & Devices",
+        })}
+      >
+        {isDesktop ? (
+          <Pressable
+            style={[
+              styles.menuItem,
+              activePane === "sources" && styles.menuItemActive,
+            ]}
+            onPress={() => setActivePane("sources")}
+          >
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+              ]}
+            >
+              <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                Sources & Devices
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Bridge, server URLs, and optional resolvers
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        ) : (
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              hapticSelection();
+              router.push("/sources" as any);
+            }}
+          >
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+              ]}
+            >
+              <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+            </View>
+            <View style={styles.menuItemTextContainer}>
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                Sources & Devices
+              </Text>
+              <Text
+                style={[
+                  styles.menuItemSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Configure bridge, server URLs, and resolvers
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        )}
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Pressable
+          style={styles.menuItem}
+          onPress={() => {
+            hapticSelection();
+            router.push("/addons");
+          }}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(216,180,254,0.14)" },
+            ]}
+          >
+            <Ionicons
+              name="extension-puzzle-outline"
+              size={20}
+              color="#d8b4fe"
+            />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.manageAddons")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {t("settings.subtitles.manageAddons")}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </SettingsSection>
+
+      {/* Account & Sync */}
+      <SettingsSection
+        title={t("settings.sections.account", {
+          defaultValue: "Account & Sync",
+        })}
       >
         <Pressable
           style={[
@@ -879,76 +420,9 @@ function SettingsContent() {
             color={colors.textSecondary}
           />
         </Pressable>
-      </SectionGroup>
 
-      <SectionGroup
-        title={t("settings.sections.sourcesDevices", {
-          defaultValue: "Sources & Devices",
-        })}
-        colors={colors}
-        framed={isDesktop}
-      >
-        {isDesktop ? (
-          <Pressable
-            style={[
-              styles.menuItem,
-              activePane === "sources" && styles.menuItemActive,
-            ]}
-            onPress={() => setActivePane("sources")}
-          >
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: "rgba(245, 158, 11, 0.14)" },
-              ]}
-            >
-              <Ionicons name="radio-outline" size={20} color="#f3b96b" />
-            </View>
-            <View style={styles.menuItemTextContainer}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                Sources & Devices
-              </Text>
-              <Text
-                style={[
-                  styles.menuItemSubtitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Bridge, server URLs, add-ons, and optional resolvers
-              </Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-        ) : (
-          <SourcesDevicesPanel />
-        )}
-      </SectionGroup>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-      {/* Appearance */}
-      <SectionGroup title={t("settings.appearance")} colors={colors}>
-        <View style={{ padding: 16 }}>
-          <AppearanceSection />
-        </View>
-      </SectionGroup>
-
-      {/* Language */}
-      <SectionGroup title={t("settings.language")} colors={colors}>
-        <View style={{ padding: 16, paddingTop: 4 }}>
-          <LanguageSection />
-        </View>
-      </SectionGroup>
-
-      {/* Integrations */}
-      <SectionGroup
-        title={t("settings.sections.integrations", {
-          defaultValue: "Integrations",
-        })}
-        colors={colors}
-      >
         <Pressable
           style={styles.menuItem}
           onPress={
@@ -1009,13 +483,9 @@ function SettingsContent() {
             />
           )}
         </Pressable>
-      </SectionGroup>
 
-      {/* Security */}
-      <SectionGroup
-        title={t("settings.sections.security", { defaultValue: "Security" })}
-        colors={colors}
-      >
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
         <Pressable
           style={[
             styles.menuItem,
@@ -1089,6 +559,36 @@ function SettingsContent() {
             color={colors.textSecondary}
           />
         </Pressable>
+      </SettingsSection>
+
+      {/* Application */}
+      <SettingsSection
+        title={t("settings.sections.application", {
+          defaultValue: "Application",
+        })}
+      >
+        <View style={{ padding: 16 }}>
+          <Text style={[styles.innerLabel, { color: colors.textSecondary }]}>
+            {t("settings.appearance")}
+          </Text>
+          <AppearanceSection />
+
+          <View
+            style={[
+              styles.divider,
+              {
+                backgroundColor: colors.border,
+                marginLeft: 0,
+                marginVertical: 16,
+              },
+            ]}
+          />
+
+          <Text style={[styles.innerLabel, { color: colors.textSecondary }]}>
+            {t("settings.language")}
+          </Text>
+          <LanguageSection />
+        </View>
 
         {hasCheckedBiometry && biometrySupported && (
           <>
@@ -1133,10 +633,10 @@ function SettingsContent() {
             </View>
           </>
         )}
-      </SectionGroup>
+      </SettingsSection>
 
-      {/* Privacy */}
-      <SectionGroup title={t("settings.sections.privacy")} colors={colors}>
+      {/* Privacy & Danger Zone */}
+      <SettingsSection title={t("settings.sections.privacy")}>
         <Pressable
           style={styles.menuItem}
           onPress={() => {
@@ -1209,7 +709,7 @@ function SettingsContent() {
             />
           )}
         </Pressable>
-      </SectionGroup>
+      </SettingsSection>
 
       {/* Logout */}
       <Pressable
@@ -1342,6 +842,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
+  },
+  innerLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    opacity: 0.8,
   },
   spacer: { height: 8 },
   flexSpacer: { flex: 1 },
