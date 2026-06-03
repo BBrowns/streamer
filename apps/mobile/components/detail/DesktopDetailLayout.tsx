@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { hapticImpactLight } from "../../lib/haptics";
 import type { DetailLayoutProps } from "./types";
@@ -38,8 +39,11 @@ export function DesktopDetailLayout({
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
-  const streamsData =
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const selectedStreams =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
+  const streamsData =
+    castType === "series" || !sourcesOpen ? [] : selectedStreams;
   const hasMovieSources = castType !== "series" && (streams?.length ?? 0) > 0;
   const sourceCount =
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
@@ -213,65 +217,106 @@ export function DesktopDetailLayout({
           { backgroundColor: surfaceColor, borderColor: colors.border },
         ]}
       >
-        <View style={styles.sectionTitleRow}>
-          <Ionicons
-            name={castType === "series" ? "list" : "layers-outline"}
-            size={18}
-            color={colors.tint}
-          />
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {castType === "series" ? "Episodes" : "More Sources"}
-          </Text>
-        </View>
-
         {castType === "series" ? (
-          <EpisodeSelector
-            seriesId={id}
-            videos={meta.videos || []}
-            onPlayStream={handlePlayStream}
-            onDownloadStream={handleDownloadStream}
-          />
-        ) : streamsLoading ? (
-          <ActivityIndicator color="#d8b4fe" />
-        ) : availableResolutions.length > 0 ? (
           <>
-            <View style={styles.resContainer}>
-              {availableResolutions.map((res) => (
-                <Pressable
-                  key={res}
-                  style={[
-                    styles.resBubble,
-                    {
-                      backgroundColor: softSurfaceColor,
-                      borderColor: colors.border,
-                    },
-                    selectedResolution === res && {
-                      backgroundColor: colors.tint,
-                      borderColor: colors.tint,
-                    },
-                  ]}
-                  onPress={() => {
-                    hapticImpactLight();
-                    setSelectedResolution(res);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.resText,
-                      { color: colors.textSecondary },
-                      selectedResolution === res && { color: primaryTextColor },
-                    ]}
-                  >
-                    {res === "2160p" ? "4K" : res.toUpperCase()}
-                  </Text>
-                </Pressable>
-              ))}
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="list" size={18} color={colors.tint} />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Episodes
+              </Text>
             </View>
+            <EpisodeSelector
+              seriesId={id}
+              videos={meta.videos || []}
+              onPlayStream={handlePlayStream}
+              onDownloadStream={handleDownloadStream}
+            />
           </>
         ) : (
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            No streams available. Install more add-ons.
-          </Text>
+          <>
+            <Pressable
+              style={styles.sourceDisclosureHeader}
+              onPress={() => {
+                hapticImpactLight();
+                setSourcesOpen((value) => !value);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                sourcesOpen ? "Hide more sources" : "Show more sources"
+              }
+            >
+              <View style={styles.sectionTitleRowCompact}>
+                <Ionicons name="layers-outline" size={18} color={colors.tint} />
+                <View>
+                  <Text
+                    style={[
+                      styles.sectionTitle,
+                      styles.sectionTitleCompact,
+                      { color: colors.text },
+                    ]}
+                  >
+                    More Sources
+                  </Text>
+                  <Text
+                    style={[
+                      styles.sourceDisclosureMeta,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Advanced fallback · {sourceCount} available
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name={sourcesOpen ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+
+            {sourcesOpen && streamsLoading ? (
+              <ActivityIndicator color="#d8b4fe" />
+            ) : sourcesOpen && availableResolutions.length > 0 ? (
+              <View style={styles.resContainer}>
+                {availableResolutions.map((res) => (
+                  <Pressable
+                    key={res}
+                    style={[
+                      styles.resBubble,
+                      {
+                        backgroundColor: softSurfaceColor,
+                        borderColor: colors.border,
+                      },
+                      selectedResolution === res && {
+                        backgroundColor: colors.tint,
+                        borderColor: colors.tint,
+                      },
+                    ]}
+                    onPress={() => {
+                      hapticImpactLight();
+                      setSelectedResolution(res);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.resText,
+                        { color: colors.textSecondary },
+                        selectedResolution === res && {
+                          color: primaryTextColor,
+                        },
+                      ]}
+                    >
+                      {res === "2160p" ? "4K" : res.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : sourcesOpen ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                No streams available. Install more add-ons.
+              </Text>
+            ) : null}
+          </>
         )}
       </View>
     </View>
@@ -661,6 +706,27 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 20,
   },
+  sourceDisclosureHeader: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  sectionTitleRowCompact: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  sectionTitleCompact: {
+    marginBottom: 2,
+  },
+  sourceDisclosureMeta: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
   sectionContent: {
     color: "#c6bfd2",
     fontSize: 14,
@@ -668,7 +734,9 @@ const styles = StyleSheet.create({
   },
   resContainer: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
+    marginTop: 16,
     marginBottom: 20,
   },
   resBubble: {
