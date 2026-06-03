@@ -623,7 +623,31 @@ export async function streamRequest(req: Request, res: Response) {
       typeof req.query.fileIdx === "string"
         ? Number.parseInt(req.query.fileIdx, 10)
         : undefined;
-    return serveTorrentFile(req, res, torrent, { remuxFormat, fileIdx });
+    const season =
+      typeof req.query.season === "string"
+        ? Number.parseInt(req.query.season, 10)
+        : undefined;
+    const episode =
+      typeof req.query.episode === "string"
+        ? Number.parseInt(req.query.episode, 10)
+        : undefined;
+    const title =
+      typeof req.query.title === "string" && req.query.title.trim().length > 0
+        ? req.query.title.trim()
+        : undefined;
+    const hints =
+      (Number.isInteger(season) && season! > 0) ||
+      (Number.isInteger(episode) && episode! > 0) ||
+      title
+        ? {
+            season:
+              Number.isInteger(season) && season! > 0 ? season : undefined,
+            episode:
+              Number.isInteger(episode) && episode! > 0 ? episode : undefined,
+            title,
+          }
+        : undefined;
+    return serveTorrentFile(req, res, torrent, { remuxFormat, fileIdx, hints });
   } catch (err: any) {
     console.error("[stream-server] Failed to build stream URL:", err?.message);
     return res.status(503).json({ error: "Failed to start stream server" });

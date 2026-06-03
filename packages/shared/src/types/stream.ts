@@ -4,6 +4,11 @@ export interface Stream {
   ytId?: string;
   infoHash?: string;
   fileIdx?: number;
+  fileSelectionHints?: {
+    season?: number;
+    episode?: number;
+    title?: string;
+  };
   externalUrl?: string;
   title?: string;
   name?: string;

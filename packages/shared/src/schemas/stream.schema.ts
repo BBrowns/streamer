@@ -4,6 +4,13 @@ export const streamSchema = z.object({
   url: z.string().url().optional(),
   infoHash: z.string().optional(),
   fileIdx: z.number().int().nonnegative().optional(),
+  fileSelectionHints: z
+    .object({
+      season: z.number().int().positive().optional(),
+      episode: z.number().int().positive().optional(),
+      title: z.string().optional(),
+    })
+    .optional(),
   ytId: z.string().optional(),
   externalUrl: z.string().url().optional(),
   title: z.string().optional(),

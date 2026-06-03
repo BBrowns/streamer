@@ -147,6 +147,35 @@ describe("gateway jobs", () => {
     );
   });
 
+  it("forwards file selection hints to torrent streaming", async () => {
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({
+        magnet: "magnet:?xt=urn:btih:abcdef123456",
+        fileSelectionHints: {
+          season: 1,
+          episode: 2,
+          title: "Show Name",
+        },
+      });
+
+    const streamed = await request(app).get(created.body.playbackUrl);
+
+    expect(streamed.status).toBe(204);
+    expect(serveTorrentFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ infoHash: "abcdef123456" }),
+      expect.objectContaining({
+        hints: {
+          season: 1,
+          episode: 2,
+          title: "Show Name",
+        },
+      }),
+    );
+  });
+
   it("returns bridge engine errors before the player starts loading", async () => {
     (prepareTorrent as any).mockRejectedValueOnce(
       new Error("Torrent engine unavailable"),

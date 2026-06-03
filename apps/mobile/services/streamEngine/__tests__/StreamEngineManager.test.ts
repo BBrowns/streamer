@@ -175,6 +175,11 @@ describe("TorrentEngine", () => {
     const uri = await engine.getPlaybackUri({
       infoHash: "deadbeef",
       fileIdx: 2,
+      fileSelectionHints: {
+        season: 1,
+        episode: 2,
+        title: "Show Name",
+      },
       behaviorHints: { remuxToMp4: true },
     });
 
@@ -196,6 +201,9 @@ describe("TorrentEngine", () => {
     );
     expect((global.fetch as jest.Mock).mock.calls[0][1].body).toContain(
       '"fileIdx":2',
+    );
+    expect((global.fetch as jest.Mock).mock.calls[0][1].body).toContain(
+      '"fileSelectionHints":{"season":1,"episode":2,"title":"Show Name"}',
     );
   });
 

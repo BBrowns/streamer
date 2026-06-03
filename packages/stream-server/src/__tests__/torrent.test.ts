@@ -169,6 +169,18 @@ describe("getSelectedFile", () => {
       "Requested file index 3 is not available",
     );
   });
+
+  it("uses episode hints for the smart fallback when no file index is provided", () => {
+    const torrent = makeTorrent([
+      makeFakeFile("Show.S01E01.mkv", 1_500_000_000),
+      makeFakeFile("Show.S01E02.mkv", 1_500_000_000),
+      makeFakeFile("Show.S01E03.mkv", 1_500_000_000),
+    ]);
+
+    expect(
+      getSelectedFile(torrent, undefined, { season: 1, episode: 2 }).name,
+    ).toBe("Show.S01E02.mkv");
+  });
 });
 
 // ─── waitForReady ─────────────────────────────────────────────────────────────
@@ -217,7 +229,7 @@ describe("selectBestVideoFile", () => {
     return { name, length: size };
   }
 
-  it("returns the single file when there is only one", () => {
+  it("returns the single playable video file when there is only one", () => {
     expect(
       selectBestVideoFile([makeFile("movie.mkv", 2_000_000_000)]).name,
     ).toBe("movie.mkv");
@@ -265,6 +277,17 @@ describe("selectBestVideoFile", () => {
     expect(selectBestVideoFile(files).name).toBe("Episode.S01E01.mkv");
   });
 
+  it("throws when a torrent has no playable video files", () => {
+    const files = [
+      makeFile("Episode.S01E01.en.srt", 80_000),
+      makeFile("Episode.S01E01.nfo", 20_000),
+    ];
+
+    expect(() => selectBestVideoFile(files)).toThrow(
+      "Torrent has no playable video files",
+    );
+  });
+
   it("picks the correct episode using season+episode hints (S01E02 style)", () => {
     const files = [
       makeFile("Show.S01E01.mkv", 1_500_000_000),
@@ -283,6 +306,28 @@ describe("selectBestVideoFile", () => {
     ];
     expect(selectBestVideoFile(files, { season: 1, episode: 2 }).name).toBe(
       "Show.1x02.mkv",
+    );
+  });
+
+  it("picks the correct episode using non-padded S1E2 style hints", () => {
+    const files = [
+      makeFile("Show.S1E1.mkv", 1_500_000_000),
+      makeFile("Show.S1E2.mkv", 1_500_000_000),
+    ];
+
+    expect(selectBestVideoFile(files, { season: 1, episode: 2 }).name).toBe(
+      "Show.S1E2.mkv",
+    );
+  });
+
+  it("uses title hints as a secondary tiebreaker", () => {
+    const files = [
+      makeFile("Other.Movie.2024.mkv", 2_000_000_000),
+      makeFile("Target.Movie.2024.mkv", 2_000_000_000),
+    ];
+
+    expect(selectBestVideoFile(files, { title: "Target Movie" }).name).toBe(
+      "Target.Movie.2024.mkv",
     );
   });
 

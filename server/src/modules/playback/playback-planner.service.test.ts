@@ -150,6 +150,10 @@ describe("PlaybackPlannerService", () => {
     );
     expect(plan.state).toBe("ready");
     expect(plan.plan?.selectedCandidate.stream.infoHash).toBe("episode-hash");
+    expect(plan.plan?.selectedCandidate.stream.fileSelectionHints).toEqual({
+      season: 1,
+      episode: 2,
+    });
   });
 
   it("includes ordered fallback candidates for automatic client retry", async () => {

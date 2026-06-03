@@ -160,7 +160,9 @@ function normalise(name: string): string {
  * 4. If episode hints are provided, prefer files matching `S<season>E<episode>` patterns.
  * 5. Tiebreak: largest remaining file wins.
  *
- * If no valid candidate survives all filters, falls back to the largest file overall.
+ * If all video files are excluded as samples/extras, falls back to the largest
+ * video file. Non-video-only torrents fail instead of pretending subtitles or
+ * metadata are playable.
  */
 export function selectBestVideoFile(
   files: { name: string; length: number }[],
@@ -170,26 +172,28 @@ export function selectBestVideoFile(
     throw new Error("Torrent has no files to select from");
   }
 
-  if (files.length === 1) {
-    return files[0];
-  }
-
   // --- Step 1: Filter to known video extensions ---
   const videoFiles = files.filter((f) => {
     const ext = path.extname(f.name).toLowerCase();
     return VIDEO_EXTENSIONS.has(ext);
   });
 
-  const pool = videoFiles.length > 0 ? videoFiles : files;
+  if (videoFiles.length === 0) {
+    throw new Error("Torrent has no playable video files");
+  }
+
+  if (videoFiles.length === 1) {
+    return videoFiles[0];
+  }
 
   // --- Step 2: Exclude unwanted keyword matches ---
-  const notExcluded = pool.filter((f) => {
+  const notExcluded = videoFiles.filter((f) => {
     const norm = normalise(f.name);
     return !EXCLUSION_KEYWORDS.some((kw) => norm.includes(kw));
   });
 
-  // If all files were excluded via keywords, fall back to the pool
-  const candidates = notExcluded.length > 0 ? notExcluded : pool;
+  // If all video files were excluded via keywords, fall back to video files.
+  const candidates = notExcluded.length > 0 ? notExcluded : videoFiles;
 
   // --- Step 3: Size ratio filter (drop files < 10 % of largest candidate) ---
   const maxSize = Math.max(...candidates.map((f) => f.length));
@@ -200,8 +204,13 @@ export function selectBestVideoFile(
   if (hints?.season !== undefined && hints?.episode !== undefined) {
     const s = String(hints.season).padStart(2, "0");
     const e = String(hints.episode).padStart(2, "0");
-    // Accept both S01E02 and 1x02 style patterns
-    const episodeRegex = new RegExp(`s${s}e${e}|${parseInt(s, 10)}x${e}`, "i");
+    const season = String(parseInt(s, 10));
+    const episode = String(parseInt(e, 10));
+    // Accept S01E02, S1E2, 1x02, and 1x2 style patterns.
+    const episodeRegex = new RegExp(
+      `(?:^|[^a-z0-9])(?:s0*${season}e0*${episode}|0*${season}x0*${episode})(?:[^a-z0-9]|$)`,
+      "i",
+    );
 
     const episodeMatches = sizedCandidates.filter((f) =>
       episodeRegex.test(f.name),
@@ -209,6 +218,30 @@ export function selectBestVideoFile(
 
     if (episodeMatches.length > 0) {
       return episodeMatches.reduce((a, b) => (a.length >= b.length ? a : b));
+    }
+  }
+
+  if (hints?.title) {
+    const titleWords = normalise(hints.title)
+      .split(/\s+/)
+      .filter((word) => word.length >= 3);
+    if (titleWords.length > 0) {
+      const scored = sizedCandidates
+        .map((file) => {
+          const norm = normalise(file.name);
+          return {
+            file,
+            score: titleWords.filter((word) => norm.includes(word)).length,
+          };
+        })
+        .filter((entry) => entry.score > 0);
+
+      if (scored.length > 0) {
+        return scored.reduce((a, b) => {
+          if (a.score !== b.score) return a.score > b.score ? a : b;
+          return a.file.length >= b.file.length ? a : b;
+        }).file;
+      }
     }
   }
 
