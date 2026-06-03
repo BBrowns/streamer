@@ -83,6 +83,21 @@ export type DownloadOrchestratorResult =
   | DownloadOrchestratorSuccess
   | PlaybackOrchestratorFailure;
 
+export interface CastOrchestratorSuccess {
+  ok: true;
+  stream: Stream;
+  resolvedUrl: string;
+  mediaInfo: MediaInfo;
+  runtimeState: PlaybackRuntimeState;
+  plan: PlaybackPlan;
+  attemptedStreams: number;
+  resolveErrors: string[];
+}
+
+export type CastOrchestratorResult =
+  | CastOrchestratorSuccess
+  | PlaybackOrchestratorFailure;
+
 export async function playBest(
   input: PlaybackOrchestratorInput,
 ): Promise<PlaybackOrchestratorResult> {
@@ -136,9 +151,29 @@ export async function prepareDownload(
   };
 }
 
+export async function prepareCast(
+  input: PlaybackOrchestratorInput,
+): Promise<CastOrchestratorResult> {
+  const fallback = "Casting is unavailable right now.";
+  const result = await resolveActionPlan(input, "cast", fallback);
+
+  if (!result.ok) return result;
+
+  return {
+    ok: true,
+    stream: result.stream,
+    resolvedUrl: result.uri,
+    mediaInfo: buildMediaInfo(input, result.stream),
+    runtimeState: "buffering",
+    plan: result.plan,
+    attemptedStreams: result.attemptedStreams,
+    resolveErrors: result.resolveErrors,
+  };
+}
+
 async function resolveActionPlan(
   input: PlaybackOrchestratorInput,
-  action: "play" | "download",
+  action: "play" | "download" | "cast",
   fallback: string,
 ): Promise<ResolvedActionResult> {
   const plan = await createPlaybackPlanWithBridgeRetry({
