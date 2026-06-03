@@ -148,9 +148,9 @@
       "deleteAccount": "Verwijder permanent je account en alle gegevens"
     },
     "advanced": {
-      "configure": "Infrastructuur configureren",
-      "subtitle": "Aangepaste backend- en streamserver-URL's",
-      "title": "Infrastructuur overschrijvingen",
+      "configure": "Bronnen & apparaten configureren",
+      "subtitle": "Bridge-URL's, add-ons, casten en optionele resolvers",
+      "title": "Bronnen & apparaten",
       "hide": "Verbergen",
       "backendLabel": "Backend API URL",
       "streamLabel": "Streaming Bridge URL",
@@ -158,7 +158,7 @@
       "restore": "Standaardinstellingen herstellen",
       "apply": "Wijzigingen toepassen",
       "successTitle": "Instellingen opgeslagen",
-      "successMessage": "Je aangepaste server-URL's zijn bijgewerkt."
+      "successMessage": "Je server- en bridge-instellingen zijn bijgewerkt."
     },
     "alerts": {
       "deleteAccountTitle": "Account verwijderen",

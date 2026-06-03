@@ -160,9 +160,9 @@
       "deleteAccount": "Permanently remove your account and all data"
     },
     "advanced": {
-      "configure": "Configure Infrastructure",
-      "subtitle": "Custom backend and stream server URLs",
-      "title": "Infrastructure Overrides",
+      "configure": "Configure Sources & Devices",
+      "subtitle": "Bridge URLs, add-ons, casting, and optional resolvers",
+      "title": "Sources & Devices",
       "hide": "Hide",
       "backendLabel": "Backend API URL",
       "streamLabel": "Streaming Bridge URL",
@@ -170,7 +170,7 @@
       "restore": "Restore Defaults",
       "apply": "Apply Changes",
       "successTitle": "Settings Saved",
-      "successMessage": "Your custom server URLs have been updated."
+      "successMessage": "Your server and bridge settings have been updated."
     },
     "alerts": {
       "deleteAccountTitle": "Delete Account",
