@@ -10,12 +10,19 @@ import {
 } from "../torrent.js";
 
 function makeRes() {
-  return {
+  const res = {
     headersSent: false,
     status: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    setHeader: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
     redirect: vi.fn().mockReturnThis(),
+    on: vi.fn().mockReturnThis(),
+    once: vi.fn().mockReturnThis(),
+    emit: vi.fn().mockReturnThis(),
+    removeListener: vi.fn().mockReturnThis(),
   };
+  return res;
 }
 
 describe("torrent engine native load failures", () => {
@@ -123,11 +130,13 @@ describe("torrent lookup", () => {
               name: "Show.S01E01.mkv",
               length: 1_500_000_000,
               streamURL: "/webtorrent/show-s01e01",
+              createReadStream: vi.fn(() => ({ pipe: vi.fn(), on: vi.fn() })),
             },
             {
               name: "Show.S01E02.mkv",
               length: 1_500_000_000,
               streamURL: "/webtorrent/show-s01e02",
+              createReadStream: vi.fn(() => ({ pipe: vi.fn(), on: vi.fn() })),
             },
           ],
           on: vi.fn(),
@@ -162,9 +171,11 @@ describe("torrent lookup", () => {
       res as any,
     );
 
-    expect(res.redirect).toHaveBeenCalledWith(
-      302,
-      "http://127.0.0.1:3210/webtorrent/show-s01e02",
-    );
+    // Wait for the async work to finish
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // MKV files now trigger a proxy/remux via FFmpeg instead of a 302 redirect
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "video/mp4");
+    expect(res.redirect).not.toHaveBeenCalled();
   });
 });
