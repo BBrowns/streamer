@@ -20,6 +20,7 @@ import {
   type BridgeStatus,
 } from "../../services/streamEngine/StreamEngineManager";
 import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
+import { diagnosticsFromDesktopBridge } from "../../services/streamEngine/desktopBridgeDiagnostics";
 import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
 
@@ -34,28 +35,6 @@ function formatBridgeReason(reason: string) {
     default:
       return reason.replace(/-/g, " ");
   }
-}
-
-function diagnosticsFromDesktopBridge(
-  info: DesktopBridgeInfo | null,
-): BridgeDiagnostics | null {
-  const diagnostics = info?.diagnostics;
-  if (!diagnostics) return null;
-
-  return {
-    status:
-      diagnostics.status === "error"
-        ? "unsupported"
-        : diagnostics.status === "starting"
-          ? "loading"
-          : "unreachable",
-    url: info?.localUrl || info?.lanUrl,
-    reason: diagnostics.reason || undefined,
-    message: diagnostics.message || diagnostics.error || undefined,
-    processArch: diagnostics.processArch || diagnostics.nodeArch || undefined,
-    platform: diagnostics.platform,
-    checkedAt: diagnostics.updatedAt,
-  };
 }
 
 export function SourcesSection() {
@@ -204,14 +183,8 @@ export function SourcesSection() {
   };
 
   const desktopDiagnostics = diagnosticsFromDesktopBridge(bridgeInfo);
-  const effectiveBridgeDiagnostics =
-    bridgeStatus === "unreachable" && desktopDiagnostics
-      ? desktopDiagnostics
-      : bridgeDiagnostics;
-  const effectiveBridgeStatus =
-    bridgeStatus === "unreachable" && desktopDiagnostics
-      ? desktopDiagnostics.status
-      : bridgeStatus;
+  const effectiveBridgeDiagnostics = desktopDiagnostics || bridgeDiagnostics;
+  const effectiveBridgeStatus = desktopDiagnostics?.status || bridgeStatus;
   const bridgePresentation = getBridgeStatusPresentation(
     effectiveBridgeStatus,
     effectiveBridgeDiagnostics,
@@ -310,11 +283,21 @@ export function SourcesSection() {
                 Reason: {formatBridgeReason(effectiveBridgeDiagnostics.reason)}
               </Text>
             )}
+            {!!effectiveBridgeDiagnostics.message && (
+              <Text
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary, marginTop: 4 },
+                ]}
+              >
+                {effectiveBridgeDiagnostics.message}
+              </Text>
+            )}
             {!!bridgeRuntimeLabel && (
               <Text
                 style={[
                   styles.diagnosticsText,
-                  { color: colors.textSecondary },
+                  { color: colors.textSecondary, marginTop: 4 },
                 ]}
               >
                 Runtime: {bridgeRuntimeLabel}

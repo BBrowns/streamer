@@ -78,11 +78,16 @@ npm run dev
 Or start services individually:
 
 ```bash
-npm run dev:server          # API server only  — http://localhost:3001
+npm run dev:server          # API server only — http://localhost:3001
 npm run dev:stream-server   # P2P daemon only  — http://localhost:11470
 npm run dev:mobile          # Expo client only — press 'i' (iOS), 'a' (Android), 'w' (Web)
 npm run dev:desktop         # Electron shell   — requires mobile web running on :8081 first
 ```
+
+The API server does not start the bridge by default. Desktop starts and owns its
+own bridge sidecar so it can choose the correct Node/native-module
+architecture. Set `STREAMER_BRIDGE_SUPERVISOR=true` only when you explicitly
+want the API server to supervise a standalone bridge process.
 
 ---
 
@@ -115,7 +120,10 @@ After logging in, go to the **Settings** tab and install at least one add-on.
 | Cinemeta  | Movie & series metadata | `https://v3-cinemeta.strem.io/manifest.json` |
 | Torrentio | Torrent streams         | `https://torrentio.strem.fun/manifest.json`  |
 
-> Torrent streams via Torrentio require the stream-server daemon (`npm run dev:stream-server`) to be running locally.
+> Torrent streams via Torrentio require a local bridge. The desktop app starts
+> its own bridge sidecar; mobile/native dev flows can run
+> `npm run dev:stream-server` or point Sources & Devices at a desktop bridge
+> LAN URL.
 
 ---
 

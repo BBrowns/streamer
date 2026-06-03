@@ -563,17 +563,18 @@ The desktop app has no update mechanism. Add `electron-updater` (from `electron-
 
 ## 14. Environment Variables Reference
 
-| Variable               | Default                 | Required | Description                                                |
-| ---------------------- | ----------------------- | -------- | ---------------------------------------------------------- |
-| `DATABASE_URL`         | —                       | ✅       | PostgreSQL connection string                               |
-| `JWT_SECRET`           | —                       | ✅       | HS256 signing secret (minimum 32 chars recommended)        |
-| `JWT_ACCESS_EXPIRY`    | `15m`                   |          | Access token lifetime                                      |
-| `JWT_REFRESH_EXPIRY`   | `7d`                    |          | Refresh token lifetime                                     |
-| `PORT`                 | `3001`                  |          | API server port                                            |
-| `NODE_ENV`             | `development`           |          | `test` disables rate limiting                              |
-| `CORS_ORIGINS`         | `http://localhost:8081` |          | Comma-separated allowed origins                            |
-| `ADDON_TIMEOUT_MS`     | `5000`                  |          | Per-add-on HTTP timeout (matches Cockatiel timeout policy) |
-| `ADDON_MAX_CONCURRENT` | (configured)            |          | Bulkhead concurrency limit per add-on                      |
+| Variable                     | Default                 | Required | Description                                                                                                        |
+| ---------------------------- | ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`               | —                       | ✅       | PostgreSQL connection string                                                                                       |
+| `JWT_SECRET`                 | —                       | ✅       | HS256 signing secret (minimum 32 chars recommended)                                                                |
+| `JWT_ACCESS_EXPIRY`          | `15m`                   |          | Access token lifetime                                                                                              |
+| `JWT_REFRESH_EXPIRY`         | `7d`                    |          | Refresh token lifetime                                                                                             |
+| `PORT`                       | `3001`                  |          | API server port                                                                                                    |
+| `NODE_ENV`                   | `development`           |          | `test` disables rate limiting                                                                                      |
+| `CORS_ORIGINS`               | `http://localhost:8081` |          | Comma-separated allowed origins                                                                                    |
+| `ADDON_TIMEOUT_MS`           | `5000`                  |          | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                         |
+| `ADDON_MAX_CONCURRENT`       | (configured)            |          | Bulkhead concurrency limit per add-on                                                                              |
+| `STREAMER_BRIDGE_SUPERVISOR` | `false`                 |          | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime. |
 
 ---
 
@@ -602,6 +603,9 @@ npm run dev:server         # :3001
 npm run dev:stream-server  # :11470
 npm run dev:mobile         # :8081 (Expo)
 npm run dev:desktop        # Electron (requires mobile web on :8081 first)
+
+# Desktop owns its bridge sidecar. Keep STREAMER_BRIDGE_SUPERVISOR=false
+# unless you explicitly want the API server to supervise a standalone bridge.
 
 # Run tests
 npm run test --workspace=server        # Vitest

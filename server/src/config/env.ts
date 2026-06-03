@@ -52,6 +52,9 @@ const envSchema = z.object({
   // App URLs
   APP_URL_WEB: z.string().default("http://localhost:8081"),
   APP_URL_DEEPLINK: z.string().default("streamer://"),
+
+  // Local bridge supervision
+  STREAMER_BRIDGE_SUPERVISOR: z.string().default("false"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -110,4 +113,9 @@ export const env = {
   // URLs
   appUrlWeb: envData.APP_URL_WEB,
   appUrlDeepLink: envData.APP_URL_DEEPLINK,
+
+  // Local bridge supervision
+  bridgeSupervisorEnabled: ["1", "true", "yes", "on"].includes(
+    envData.STREAMER_BRIDGE_SUPERVISOR.toLowerCase(),
+  ),
 } as const;

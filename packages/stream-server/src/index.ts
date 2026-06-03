@@ -17,6 +17,18 @@ if (process.stdin.isTTY) {
   process.stdin.pause();
 }
 
+function getBridgeRuntimeInfo() {
+  return {
+    owner: process.env.STREAMER_BRIDGE_OWNER || "standalone",
+    pid: process.pid,
+    nodeVersion: process.version,
+    nodeArch: process.env.STREAMER_BRIDGE_RUNTIME_ARCH || process.arch,
+    nativeArch: process.env.STREAMER_BRIDGE_NATIVE_ARCH || undefined,
+    processArch: process.arch,
+    platform: process.platform,
+  };
+}
+
 export function createStreamServerApp() {
   const app = express();
 
@@ -39,6 +51,7 @@ export function createStreamServerApp() {
     res.json({
       status: "active",
       torrentEngine: getTorrentEngineStatus(),
+      runtime: getBridgeRuntimeInfo(),
       version: "1.0.0",
       uptime: Math.floor(process.uptime()),
       memory: {
