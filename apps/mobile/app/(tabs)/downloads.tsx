@@ -132,7 +132,9 @@ function DownloadCard({ task }: { task: DownloadTask }) {
 
   const handleActionablePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (status === "Downloading") {
+    if (status === "Preparing") {
+      return;
+    } else if (status === "Downloading") {
       downloadService.pauseDownload(id);
     } else if (status === "Paused") {
       downloadService.resumeDownload(id);
@@ -180,7 +182,9 @@ function DownloadCard({ task }: { task: DownloadTask }) {
           {status} {status === "Downloading" && `• ${progressPercent}`}
         </Text>
 
-        {(status === "Downloading" || status === "Paused") && (
+        {(status === "Preparing" ||
+          status === "Downloading" ||
+          status === "Paused") && (
           <View
             style={[
               styles.progressBarBg,
@@ -211,6 +215,9 @@ function DownloadCard({ task }: { task: DownloadTask }) {
       </View>
 
       <Pressable style={styles.actionBtn} onPress={handleActionablePress}>
+        {status === "Preparing" && (
+          <Ionicons name="time-outline" size={24} color={colors.tint} />
+        )}
         {status === "Downloading" && (
           <Ionicons name="pause" size={24} color={colors.tint} />
         )}

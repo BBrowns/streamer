@@ -46,7 +46,8 @@ export function LibraryCard({
   const tasks = useDownloadStore((state) => state.tasks);
   const task = Object.values(tasks).find((t) => t.mediaInfo.itemId === itemId);
 
-  const isDownloading = task?.status === "Downloading";
+  const isPreparing = task?.status === "Preparing";
+  const isDownloading = task?.status === "Downloading" || isPreparing;
   const isCompleted = task?.status === "Completed";
   const progress = task?.progress || 0;
 

@@ -33,6 +33,8 @@ export function mapDesktopDownloadStatus(
   status?: DesktopDownloadJobStatus,
 ): DownloadStatus {
   switch (status) {
+    case "Pending":
+      return "Preparing";
     case "Completed":
       return "Completed";
     case "Paused":
@@ -40,7 +42,6 @@ export function mapDesktopDownloadStatus(
     case "Error":
     case "Canceled":
       return "Error";
-    case "Pending":
     case "Downloading":
     default:
       return "Downloading";
@@ -139,8 +140,24 @@ class DownloadService {
     mediaInfo: MediaInfo,
     options: DownloadStartOptions = {},
   ) {
-    const { addTask, updateProgress, setStatus, tasks } =
+    const { addTask, updateProgress, setStatus, setDownloadUrl, removeTask } =
       useDownloadStore.getState();
+
+    const id =
+      (mediaInfo as DownloadMediaItem).sourceId ||
+      stream.infoHash ||
+      stream.url ||
+      mediaInfo.itemId;
+
+    const existingTask = useDownloadStore.getState().tasks[id];
+    if (
+      existingTask?.status === "Pending" ||
+      existingTask?.status === "Preparing" ||
+      existingTask?.status === "Downloading" ||
+      existingTask?.status === "Completed"
+    ) {
+      return;
+    }
 
     let eligibility = options.eligibility || getDownloadEligibility(stream);
     if (
@@ -179,10 +196,34 @@ class DownloadService {
       return;
     }
 
+    const initialDownloadUrl =
+      options.resolvedUrl || stream.url || stream.externalUrl || "";
+    addTask(id, {
+      ...mediaInfo,
+      downloadUrl: initialDownloadUrl,
+      sourceId: id,
+    });
+    setStatus(id, "Preparing");
+
     // 1. Resolve playback URI after eligibility is known.
-    const downloadUrl =
-      options.resolvedUrl || (await streamEngineManager.getPlaybackUri(stream));
+    let downloadUrl: string | undefined;
+    try {
+      downloadUrl =
+        options.resolvedUrl ||
+        (await streamEngineManager.getPlaybackUri(stream)) ||
+        undefined;
+    } catch (e: any) {
+      setStatus(
+        id,
+        "Error",
+        undefined,
+        `Resolution failed: ${e?.message || String(e)}`,
+      );
+      return;
+    }
+
     if (!downloadUrl) {
+      setStatus(id, "Error", undefined, "Could not resolve playback URL");
       if (__DEV__)
         console.error(
           "[DownloadService] Could not resolve playback URI for download",
@@ -191,6 +232,7 @@ class DownloadService {
     }
 
     if (downloadUrl.includes(".m3u8")) {
+      setStatus(id, "Error", undefined, "HLS downloads are not supported");
       Alert.alert(
         "Unsupported Format",
         "HLS (.m3u8) streams cannot be downloaded natively for offline use. Please select a different playback source.",
@@ -198,20 +240,7 @@ class DownloadService {
       return;
     }
 
-    const id =
-      (mediaInfo as DownloadMediaItem).sourceId ||
-      stream.infoHash ||
-      stream.url ||
-      mediaInfo.itemId;
-
-    // Check if already downloading or completed
-    if (
-      tasks[id]?.status === "Downloading" ||
-      tasks[id]?.status === "Completed"
-    ) {
-      return;
-    }
-
+    setDownloadUrl(id, downloadUrl);
     const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
 
     // WEB/DESKTOP IMPLEMENTATION
@@ -219,7 +248,6 @@ class DownloadService {
       const desktopBridge = window.desktopBridge;
 
       if (desktopBridge) {
-        addTask(id, { ...mediaInfo, downloadUrl, sourceId: id });
         setStatus(id, "Downloading");
         this.ensureDesktopDownloadSubscription();
 
@@ -293,8 +321,8 @@ class DownloadService {
             "[DownloadService] Browser download opened externally; not marking offline-complete",
           );
         }
+        removeTask(id);
       } catch (e: any) {
-        addTask(id, { ...mediaInfo, downloadUrl, sourceId: id });
         setStatus(id, "Error", undefined, e.message);
       }
       return;
@@ -311,7 +339,7 @@ class DownloadService {
     const localUri = `${downloadDir}${filename}`;
     const { setResumeData } = useDownloadStore.getState();
 
-    addTask(id, { ...mediaInfo, downloadUrl, sourceId: id });
+    // Now move from Preparing to Downloading
     setStatus(id, "Downloading", localUri);
 
     // 3. Setup callback with periodic state saving
@@ -380,7 +408,7 @@ class DownloadService {
     } catch (e: any) {
       if (__DEV__) console.error("[DownloadService] Download failed:", e);
       // If it was cancelled manually, we don't mark as error here usually
-      if (tasks[id]?.status !== "Paused") {
+      if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
         setStatus(id, "Error", undefined, e.message);
       }
     } finally {
@@ -395,7 +423,10 @@ class DownloadService {
   async initialize() {
     const { tasks, setStatus } = useDownloadStore.getState();
     const interruptedTasks = Object.values(tasks).filter(
-      (t) => t.status === "Downloading" || t.status === "Paused",
+      (t) =>
+        t.status === "Downloading" ||
+        t.status === "Paused" ||
+        t.status === "Preparing",
     );
 
     if (Platform.OS === "web") {
@@ -404,14 +435,19 @@ class DownloadService {
 
       for (const task of interruptedTasks) {
         if (desktopBridge?.getDownloadJob) {
-          const job = await desktopBridge.getDownloadJob(task.id);
-          if (job) {
-            this.applyDesktopJobSnapshot(job);
-            continue;
+          try {
+            const job = await desktopBridge.getDownloadJob(task.id);
+            if (job) {
+              this.applyDesktopJobSnapshot(job);
+              continue;
+            }
+          } catch (e) {
+            console.warn(`[DownloadService] Failed to check job ${task.id}`, e);
           }
         }
 
-        if (task.status === "Downloading") {
+        // If we can't find a running job on bridge, mark as Paused/Error
+        if (task.status === "Downloading" || task.status === "Preparing") {
           setStatus(task.id, "Paused");
         }
       }
@@ -420,19 +456,23 @@ class DownloadService {
     }
 
     for (const task of interruptedTasks) {
-      // If it was "Downloading" but we just started, it's effectively "Paused"
-      if (task.status === "Downloading") {
+      // If it was "Downloading" or "Preparing" but we just started, it's effectively "Paused"
+      if (task.status === "Downloading" || task.status === "Preparing") {
         setStatus(task.id, "Paused");
       }
 
       // Verification of local file existence
       if (task.localUri) {
-        const info = await FileSystem.getInfoAsync(task.localUri);
-        if (!info.exists && task.progress > 0) {
-          console.warn(
-            `[DownloadService] Local file missing for task ${task.id}, marking as error`,
-          );
-          setStatus(task.id, "Error", undefined, "Local file missing");
+        try {
+          const info = await FileSystem.getInfoAsync(task.localUri);
+          if (!info.exists && task.progress > 0) {
+            console.warn(
+              `[DownloadService] Local file missing for task ${task.id}, marking as error`,
+            );
+            setStatus(task.id, "Error", undefined, "Local file vanished");
+          }
+        } catch (e) {
+          // Non-critical background verify failure
         }
       }
     }

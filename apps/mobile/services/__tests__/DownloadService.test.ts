@@ -60,7 +60,7 @@ describe("getDownloadEligibility", () => {
   });
 
   it("maps desktop download job statuses to mobile queue statuses", () => {
-    expect(mapDesktopDownloadStatus("Pending")).toBe("Downloading");
+    expect(mapDesktopDownloadStatus("Pending")).toBe("Preparing");
     expect(mapDesktopDownloadStatus("Downloading")).toBe("Downloading");
     expect(mapDesktopDownloadStatus("Paused")).toBe("Paused");
     expect(mapDesktopDownloadStatus("Completed")).toBe("Completed");
