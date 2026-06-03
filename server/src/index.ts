@@ -15,8 +15,15 @@ async function main() {
     // Start Trakt background sync
     traktService.startBackgroundSync();
 
-    // Start stream-server supervisor
-    supervisorService.start();
+    if (env.bridgeSupervisorEnabled) {
+      void supervisorService.start().catch((err) => {
+        logger.error({ err }, "[supervisor] Failed to start stream-server");
+      });
+    } else {
+      logger.info(
+        "[supervisor] Stream-server supervisor disabled; use the desktop bridge or npm run dev:stream-server.",
+      );
+    }
   } catch (err) {
     logger.fatal({ err }, "Failed to connect to database");
     process.exit(1);

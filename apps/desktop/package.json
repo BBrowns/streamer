@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.cjs",
+    "vendor": "node scripts/vendor-node.js",
     "predev": "npm run build --workspace=@streamer/stream-server && npm run build",
     "dev": "electron dist/main.js",
     "prestart": "npm run build --workspace=@streamer/stream-server && npm run build",

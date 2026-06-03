@@ -386,6 +386,82 @@ function resolveLanBridgeUrl() {
   return "http://localhost:11470";
 }
 
+function getBridgeOwnerClaimPath() {
+  return (
+    process.env.STREAMER_BRIDGE_CLAIM_FILE ||
+    path.join(os.tmpdir(), "streamer-bridge-owner.json")
+  );
+}
+
+function writeBridgeOwnerClaim(reason) {
+  const claim = {
+    owner: "desktop",
+    pid: process.pid,
+    port: 11470,
+    reason,
+    updatedAt: Date.now(),
+    platform: process.platform,
+    arch: process.arch,
+  };
+
+  try {
+    fs.writeFileSync(getBridgeOwnerClaimPath(), JSON.stringify(claim), {
+      mode: 0o600,
+    });
+  } catch (error) {
+    console.warn(
+      "[stream-server] Could not write bridge ownership claim:",
+      error?.message || error,
+    );
+  }
+}
+
+function clearBridgeOwnerClaim() {
+  try {
+    const claimPath = getBridgeOwnerClaimPath();
+    if (!fs.existsSync(claimPath)) return;
+
+    const claim = JSON.parse(fs.readFileSync(claimPath, "utf8"));
+    if (claim?.owner === "desktop" && claim?.pid === process.pid) {
+      fs.rmSync(claimPath, { force: true });
+    }
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+function killBridgePortProcesses() {
+  if (process.platform !== "darwin" && process.platform !== "linux") {
+    return;
+  }
+
+  try {
+    const output = execFileSync("lsof", ["-ti", ":11470"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const pids = output
+      .split(/\s+/)
+      .map((pid) => Number(pid))
+      .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
+
+    for (const pid of pids) {
+      try {
+        process.kill(pid, "SIGKILL");
+        console.log(`[stream-server] Cleared stale bridge process ${pid}`);
+      } catch {
+        // Process may have exited between lsof and kill.
+      }
+    }
+  } catch {
+    // No process was listening on the bridge port.
+  }
+}
+
+function getBridgeHealthOwner(health) {
+  return health?.runtime?.owner || null;
+}
+
 function readOrCreateBridgePairingToken() {
   const envToken = process.env.STREAMER_BRIDGE_TOKEN?.trim();
   if (envToken) return envToken;
@@ -442,12 +518,71 @@ function resolveNodeBinaryCandidates() {
     );
   }
 
+  const homeDir = os.homedir();
+  const managerCandidates = [];
+  if (process.platform === "darwin" || process.platform === "linux") {
+    // nvm
+    managerCandidates.push(
+      path.join(homeDir, ".nvm/versions/node/*/bin/node"),
+      // asdf
+      path.join(homeDir, ".asdf/installs/node/*/bin/node"),
+      // fnm
+      process.platform === "darwin"
+        ? path.join(
+            homeDir,
+            "Library/Application Support/fnm/node-versions/*/installation/bin/node",
+          )
+        : path.join(
+            homeDir,
+            ".local/share/fnm/node-versions/*/installation/bin/node",
+          ),
+    );
+  }
+
+  // Bundled vendor candidates
+  const vendorCandidates = [];
+  const vendorBase = path.resolve(__dirname, "../vendor/node");
+  const resourceBase = path.resolve(process.resourcesPath || "", "node");
+
+  for (const arch of ["arm64", "x64"]) {
+    vendorCandidates.push(
+      path.join(vendorBase, `${process.platform}-${arch}/bin/node`),
+      path.join(resourceBase, `${process.platform}-${arch}/bin/node`),
+    );
+  }
+
+  // Expand wildcards in managerCandidates
+  const expandedCandidates = [];
+  for (const pattern of managerCandidates) {
+    try {
+      if (pattern.includes("*")) {
+        const parts = pattern.split("*");
+        const dir = parts[0];
+        if (fs.existsSync(dir)) {
+          const subdirs = fs.readdirSync(dir);
+          for (const subdir of subdirs) {
+            const candidate = path.join(dir, subdir, parts[1]);
+            if (fs.existsSync(candidate)) {
+              expandedCandidates.push(candidate);
+            }
+          }
+        }
+      } else if (fs.existsSync(pattern)) {
+        expandedCandidates.push(pattern);
+      }
+    } catch (e) {
+      // Ignore errors in candidate resolution
+    }
+  }
+
   return uniqueTruthy([
     process.env.STREAMER_BRIDGE_NODE,
+    ...vendorCandidates, // Prefer bundled runtimes!
     process.env.npm_node_execpath,
     process.platform === "darwin" ? "/opt/homebrew/bin/node" : null,
     process.platform === "darwin" ? "/usr/local/bin/node" : null,
     ...pathCandidates,
+    ...expandedCandidates,
     "node",
   ]);
 }
@@ -498,6 +633,7 @@ function detectNativeNodeArch(nativeBinary) {
 }
 
 function getNodeArch(nodeExecutable) {
+  if (nodeExecutable === process.execPath) return process.arch;
   try {
     return execFileSync(nodeExecutable, ["-p", "process.arch"], {
       encoding: "utf8",
@@ -547,33 +683,56 @@ function getBridgeRuntimeDiagnostics() {
 }
 
 function resolveNodeExecutable() {
-  const nativeArch = detectNativeNodeArch(resolveNodeDataChannelBinary());
+  const nativeBinary = resolveNodeDataChannelBinary();
+  const nativeArch = detectNativeNodeArch(nativeBinary);
   const candidates = resolveNodeBinaryCandidates();
 
   if (!nativeArch) {
+    console.log(
+      "[stream-server] Could not detect native binary architecture, using default node.",
+    );
     return candidates[0] || "node";
   }
 
+  // 1. Try to find an external node binary that matches the native architecture
+  console.log(
+    `[stream-server] Searching for node binary matching ${nativeArch} among ${candidates.length} candidates...`,
+  );
   for (const candidate of candidates) {
     const nodeArch = getNodeArch(candidate);
     if (nodeArch === nativeArch) {
-      if (candidate !== candidates[0]) {
-        console.log(
-          `[stream-server] Selected ${candidate} for bridge runtime because it matches native module arch ${nativeArch}.`,
-        );
-      }
+      console.log(
+        `[stream-server] Selected matched runtime: ${candidate} (${nodeArch})`,
+      );
       return candidate;
     }
   }
 
+  // 2. Fallback: Check if Electron's own architecture matches.
+  // If so, we should probably run in-process or try to find where this electron is.
+  if (process.arch === nativeArch) {
+    console.log(
+      `[stream-server] No external ${nativeArch} node found, but Electron is ${process.arch}. Forcing bridge to run in-process.`,
+    );
+    process.env.STREAMER_BRIDGE_IN_PROCESS = "1";
+    return process.execPath;
+  }
+
   const checked = candidates
+    .slice(0, 15) // Limit output
     .map(
       (candidate) =>
-        `${candidate} (${getNodeArch(candidate) || "unavailable"})`,
+        `${path.basename(candidate)} (${getNodeArch(candidate) || "unavailable"})`,
     )
     .join(", ");
+
+  const repairHint =
+    process.platform === "darwin" && nativeArch === "arm64"
+      ? "Tip: You are on Apple Silicon. Install the 'arm64' version of Node.js (e.g., via 'brew install node' or official installer) and restart the app."
+      : "Tip: Reinstall dependencies under your current architecture or set STREAMER_BRIDGE_NODE to a matching Node binary.";
+
   throw new Error(
-    `No Node.js runtime matches node-datachannel architecture "${nativeArch}". Checked: ${checked}. Reinstall dependencies under your current Node architecture or set STREAMER_BRIDGE_NODE to a matching Node binary.`,
+    `No Node.js runtime matches node-datachannel architecture "${nativeArch}". Checked: ${checked}. ${repairHint}`,
   );
 }
 
@@ -581,6 +740,11 @@ async function startBridgeDaemon() {
   const startSequence = ++bridgeStartSequence;
   const pairingToken = getBridgePairingToken();
   const runtimeDiagnostics = getBridgeRuntimeDiagnostics();
+
+  writeBridgeOwnerClaim("starting");
+  killBridgePortProcesses();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+
   setBridgeState({
     status: "starting",
     error: null,
@@ -594,8 +758,12 @@ async function startBridgeDaemon() {
     pid: null,
   });
 
+  const entrypoint = resolveBridgeEntrypoint();
+  const nodeExecutable = resolveNodeExecutable();
   if (process.env.STREAMER_BRIDGE_IN_PROCESS === "1") {
     process.env.STREAMER_BRIDGE_TOKEN = pairingToken;
+    process.env.STREAMER_BRIDGE_OWNER = "desktop";
+    process.env.STREAMER_BRIDGE_CLAIM_FILE = getBridgeOwnerClaimPath();
     const streamServer = await import("@streamer/stream-server");
     const server = streamServer.startStreamServer(11470);
     setBridgeState({
@@ -606,17 +774,16 @@ async function startBridgeDaemon() {
       entrypoint: "in-process",
       pid: process.pid,
     });
+    writeBridgeOwnerClaim("running");
     return server;
   }
 
-  const entrypoint = resolveBridgeEntrypoint();
   if (!fs.existsSync(entrypoint)) {
     throw new Error(
       `Stream server entrypoint not found: ${entrypoint}. Run npm run build --workspace=@streamer/stream-server first.`,
     );
   }
 
-  const nodeExecutable = resolveNodeExecutable();
   const nodeArch = getNodeArch(nodeExecutable);
   const child = spawn(nodeExecutable, [entrypoint], {
     cwd: path.resolve(__dirname, "../../.."),
@@ -624,6 +791,10 @@ async function startBridgeDaemon() {
       ...process.env,
       PORT: "11470",
       STREAMER_BRIDGE_TOKEN: pairingToken,
+      STREAMER_BRIDGE_OWNER: "desktop",
+      STREAMER_BRIDGE_CLAIM_FILE: getBridgeOwnerClaimPath(),
+      STREAMER_BRIDGE_RUNTIME_ARCH: nodeArch || "",
+      STREAMER_BRIDGE_NATIVE_ARCH: runtimeDiagnostics.nativeArch || "",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -681,6 +852,7 @@ async function startBridgeDaemon() {
     entrypoint,
     pid: child.pid || null,
   });
+  writeBridgeOwnerClaim("running");
 
   return {
     close: () => {
@@ -717,15 +889,21 @@ function readBridgeHealth() {
 }
 
 async function getBridgeInfoSnapshot() {
-  const health = bridgeServer ? await readBridgeHealth() : null;
+  const rawHealth = bridgeServer ? await readBridgeHealth() : null;
+  const healthOwner = getBridgeHealthOwner(rawHealth);
+  const hasForeignBridgeOwner =
+    !!rawHealth && !!healthOwner && healthOwner !== "desktop";
+  const health = hasForeignBridgeOwner ? null : rawHealth;
   const torrentEngine = health?.torrentEngine || null;
   const runtimeDiagnostics = getBridgeRuntimeDiagnostics();
   const status = bridgeServer
-    ? !health
+    ? hasForeignBridgeOwner
       ? "starting"
-      : torrentEngine?.available === false
-        ? "error"
-        : "running"
+      : !health
+        ? "starting"
+        : torrentEngine?.available === false
+          ? "error"
+          : "running"
     : bridgeState.status;
 
   return {
@@ -736,13 +914,17 @@ async function getBridgeInfoSnapshot() {
     diagnostics: {
       ...bridgeState,
       status,
-      reason: torrentEngine?.reason || bridgeState.reason || undefined,
-      message: torrentEngine?.message || bridgeState.error || undefined,
+      reason: hasForeignBridgeOwner
+        ? "bridge-port-owned-by-other-process"
+        : torrentEngine?.reason || bridgeState.reason || undefined,
+      message: hasForeignBridgeOwner
+        ? `Waiting for the desktop bridge to reclaim port 11470 from ${healthOwner}.`
+        : torrentEngine?.message || bridgeState.error || undefined,
       processArch: torrentEngine?.processArch || process.arch,
       platform: torrentEngine?.platform || process.platform,
       nativeBinary: bridgeState.nativeBinary || runtimeDiagnostics.nativeBinary,
       nativeArch: bridgeState.nativeArch || runtimeDiagnostics.nativeArch,
-      health,
+      health: health || rawHealth,
     },
   };
 }
@@ -912,6 +1094,7 @@ electron_1.app.whenReady().then(async () => {
     );
     electron_1.app.on("will-quit", () => {
       bridgeServer?.close?.();
+      clearBridgeOwnerClaim();
     });
 
     // Announce this desktop bridge on the local network via Bonjour
@@ -943,6 +1126,7 @@ electron_1.app.whenReady().then(async () => {
     }
   } catch (error) {
     console.error("Failed to start stream server daemon:", error);
+    clearBridgeOwnerClaim();
     setBridgeState({
       status: "error",
       error: error?.message || String(error),
