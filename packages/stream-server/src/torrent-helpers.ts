@@ -101,3 +101,150 @@ export function handleTorrent(torrent: any, req: Request, res: Response) {
     req.on("close", () => stream.destroy());
   }
 }
+
+// ─── Smarter file selection ───────────────────────────────────────────────────
+
+/** Known video file extensions (lower-case). */
+const VIDEO_EXTENSIONS = new Set([
+  ".mkv",
+  ".mp4",
+  ".avi",
+  ".webm",
+  ".mov",
+  ".m4v",
+  ".wmv",
+  ".ts",
+]);
+
+/**
+ * Keyword fragments that strongly indicate non-main-feature files.
+ * Matched against the lower-cased filename (dots/hyphens/underscores normalised to spaces).
+ */
+const EXCLUSION_KEYWORDS = [
+  "sample",
+  "trailer",
+  "extra",
+  "featurette",
+  "behind the scenes",
+  "deleted scene",
+  "interview",
+  "making of",
+  "bonus",
+  "short film",
+];
+
+export interface FileSelectionHints {
+  /** e.g. 1 */
+  season?: number;
+  /** e.g. 2 */
+  episode?: number;
+  /** e.g. "The Crown" — used to prefer filenames that contain the title words */
+  title?: string;
+}
+
+/**
+ * Normalise a filename for keyword matching:
+ * replace dots/underscores/hyphens with spaces and lower-case.
+ */
+function normalise(name: string): string {
+  return name.replace(/[._\-]/g, " ").toLowerCase();
+}
+
+/**
+ * Select the best video file from a list of torrent file objects.
+ *
+ * Strategy (in order of priority):
+ * 1. Only consider files with a known video extension.
+ * 2. Exclude files whose names contain exclusion keywords (sample, trailer, etc.).
+ * 3. Exclude files smaller than 10 % of the largest video candidate (eliminates micro-extras).
+ * 4. If episode hints are provided, prefer files matching `S<season>E<episode>` patterns.
+ * 5. Tiebreak: largest remaining file wins.
+ *
+ * If all video files are excluded as samples/extras, falls back to the largest
+ * video file. Non-video-only torrents fail instead of pretending subtitles or
+ * metadata are playable.
+ */
+export function selectBestVideoFile(
+  files: { name: string; length: number }[],
+  hints?: FileSelectionHints,
+): { name: string; length: number } {
+  if (files.length === 0) {
+    throw new Error("Torrent has no files to select from");
+  }
+
+  // --- Step 1: Filter to known video extensions ---
+  const videoFiles = files.filter((f) => {
+    const ext = path.extname(f.name).toLowerCase();
+    return VIDEO_EXTENSIONS.has(ext);
+  });
+
+  if (videoFiles.length === 0) {
+    throw new Error("Torrent has no playable video files");
+  }
+
+  if (videoFiles.length === 1) {
+    return videoFiles[0];
+  }
+
+  // --- Step 2: Exclude unwanted keyword matches ---
+  const notExcluded = videoFiles.filter((f) => {
+    const norm = normalise(f.name);
+    return !EXCLUSION_KEYWORDS.some((kw) => norm.includes(kw));
+  });
+
+  // If all video files were excluded via keywords, fall back to video files.
+  const candidates = notExcluded.length > 0 ? notExcluded : videoFiles;
+
+  // --- Step 3: Size ratio filter (drop files < 10 % of largest candidate) ---
+  const maxSize = Math.max(...candidates.map((f) => f.length));
+  const sizeFiltered = candidates.filter((f) => f.length >= maxSize * 0.1);
+  const sizedCandidates = sizeFiltered.length > 0 ? sizeFiltered : candidates;
+
+  // --- Step 4: Episode hint scoring ---
+  if (hints?.season !== undefined && hints?.episode !== undefined) {
+    const s = String(hints.season).padStart(2, "0");
+    const e = String(hints.episode).padStart(2, "0");
+    const season = String(parseInt(s, 10));
+    const episode = String(parseInt(e, 10));
+    // Accept S01E02, S1E2, 1x02, and 1x2 style patterns.
+    const episodeRegex = new RegExp(
+      `(?:^|[^a-z0-9])(?:s0*${season}e0*${episode}|0*${season}x0*${episode})(?:[^a-z0-9]|$)`,
+      "i",
+    );
+
+    const episodeMatches = sizedCandidates.filter((f) =>
+      episodeRegex.test(f.name),
+    );
+
+    if (episodeMatches.length > 0) {
+      return episodeMatches.reduce((a, b) => (a.length >= b.length ? a : b));
+    }
+  }
+
+  if (hints?.title) {
+    const titleWords = normalise(hints.title)
+      .split(/\s+/)
+      .filter((word) => word.length >= 3);
+    if (titleWords.length > 0) {
+      const scored = sizedCandidates
+        .map((file) => {
+          const norm = normalise(file.name);
+          return {
+            file,
+            score: titleWords.filter((word) => norm.includes(word)).length,
+          };
+        })
+        .filter((entry) => entry.score > 0);
+
+      if (scored.length > 0) {
+        return scored.reduce((a, b) => {
+          if (a.score !== b.score) return a.score > b.score ? a : b;
+          return a.file.length >= b.file.length ? a : b;
+        }).file;
+      }
+    }
+  }
+
+  // --- Step 5: Tiebreak — largest file wins ---
+  return sizedCandidates.reduce((a, b) => (a.length >= b.length ? a : b));
+}

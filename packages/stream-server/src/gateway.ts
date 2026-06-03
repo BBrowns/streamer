@@ -7,6 +7,7 @@ import {
   prepareTorrent,
   serveTorrentFile,
 } from "./torrent.js";
+import type { FileSelectionHints } from "./torrent.js";
 
 type GatewayJobState = "preparing" | "ready" | "error" | "cancelled";
 type GatewayJobMode = "bridge" | "remux";
@@ -22,6 +23,7 @@ interface GatewayJob {
   magnet: string;
   infoHash?: string;
   fileIdx?: number;
+  hints?: FileSelectionHints;
   mode: GatewayJobMode;
   state: GatewayJobState;
   error?: string;
@@ -117,6 +119,29 @@ function serializeJob(job: GatewayJob) {
   };
 }
 
+function parsePositiveInteger(value: unknown) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    return undefined;
+  }
+  return value;
+}
+
+function parseFileSelectionHints(source: any): FileSelectionHints | undefined {
+  const raw = source?.fileSelectionHints ?? source?.hints ?? source;
+  const season = parsePositiveInteger(raw?.season);
+  const episode = parsePositiveInteger(raw?.episode);
+  const title =
+    typeof raw?.title === "string" && raw.title.trim().length > 0
+      ? raw.title.trim()
+      : undefined;
+
+  if (season === undefined && episode === undefined && title === undefined) {
+    return undefined;
+  }
+
+  return { season, episode, title };
+}
+
 function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
   if (job.progressTimer) {
     clearInterval(job.progressTimer);
@@ -190,10 +215,12 @@ function parseJobRequest(req: Request) {
       ? req.body.fileIdx
       : undefined;
   const remux = req.body?.remux === "mp4" || req.body?.remuxFormat === "mp4";
+  const hints = parseFileSelectionHints(req.body);
 
   return {
     magnet,
     fileIdx,
+    hints,
     mode: remux ? ("remux" as const) : ("bridge" as const),
   };
 }
@@ -213,6 +240,7 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
     magnet: parsed.magnet,
     infoHash: parseInfoHash(parsed.magnet),
     fileIdx: parsed.fileIdx,
+    hints: parsed.hints,
     mode: parsed.mode,
     state: "preparing",
     createdAt: Date.now(),
@@ -297,6 +325,7 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
 
     return serveTorrentFile(req, res, torrent, {
       fileIdx: job.fileIdx,
+      hints: job.hints,
       remuxFormat: job.mode === "remux" ? "mp4" : undefined,
     });
   } catch (err) {

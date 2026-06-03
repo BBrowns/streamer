@@ -14,6 +14,7 @@ function makeRes() {
     headersSent: false,
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
+    redirect: vi.fn().mockReturnThis(),
   };
 }
 
@@ -104,6 +105,66 @@ describe("torrent lookup", () => {
 
     expect(getTorrent("ABCDEF123456")).toEqual(
       expect.objectContaining({ infoHash: "abcdef123456" }),
+    );
+  });
+
+  it("passes episode hints from direct stream requests into file selection", async () => {
+    class FakeWebTorrent {
+      torrents: any[] = [];
+      on = vi.fn();
+      destroy = (cb: (err: Error | null) => void) => cb(null);
+      get = vi.fn(() => null);
+      add = vi.fn(() => {
+        const torrent = {
+          infoHash: "abcdef123456",
+          numPeers: 1,
+          files: [
+            {
+              name: "Show.S01E01.mkv",
+              length: 1_500_000_000,
+              streamURL: "/webtorrent/show-s01e01",
+            },
+            {
+              name: "Show.S01E02.mkv",
+              length: 1_500_000_000,
+              streamURL: "/webtorrent/show-s01e02",
+            },
+          ],
+          on: vi.fn(),
+        };
+        this.torrents.push(torrent);
+        return torrent;
+      });
+      createServer = () => ({
+        close: vi.fn(),
+        server: {
+          listen: (_port: number, _host: string, cb: () => void) => cb(),
+          address: () => ({ port: 3210 }),
+          on: vi.fn(),
+        },
+      });
+    }
+
+    __setWebTorrentImporterForTests(async () => ({
+      default: FakeWebTorrent as any,
+    }));
+
+    const res = makeRes();
+    await streamRequest(
+      {
+        query: {
+          magnet: "magnet:?xt=urn:btih:abcdef123456",
+          season: "1",
+          episode: "2",
+        },
+        hostname: "127.0.0.1",
+      } as any,
+      res as any,
+    );
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      302,
+      "http://127.0.0.1:3210/webtorrent/show-s01e02",
     );
   });
 });

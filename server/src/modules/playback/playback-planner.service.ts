@@ -3,6 +3,7 @@ import type {
   MediaCandidate,
   PlaybackPlan,
   PlaybackPlanRequest,
+  Stream,
 } from "@streamer/shared";
 import { aggregatorService } from "../aggregator/aggregator.service.js";
 import {
@@ -60,6 +61,25 @@ function withRemuxHint(candidate: MediaCandidate): MediaCandidate {
   };
 }
 
+function withFileSelectionHints(stream: Stream, request: PlaybackPlanRequest) {
+  if (
+    request.type !== "series" ||
+    typeof request.season !== "number" ||
+    typeof request.episode !== "number"
+  ) {
+    return stream;
+  }
+
+  return {
+    ...stream,
+    fileSelectionHints: {
+      ...stream.fileSelectionHints,
+      season: request.season,
+      episode: request.episode,
+    },
+  };
+}
+
 function fallbackCandidates(
   selected: MediaCandidate,
   candidates: MediaCandidate[],
@@ -84,7 +104,7 @@ export class PlaybackPlannerService {
     );
 
     const candidates = streams.map((stream, index) =>
-      normalizeStream(stream, index),
+      normalizeStream(withFileSelectionHints(stream, request), index),
     );
 
     if (candidates.length === 0) {

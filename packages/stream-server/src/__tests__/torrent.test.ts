@@ -8,7 +8,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "events";
 import type { Request, Response } from "express";
-import { handleTorrent, waitForReady } from "../torrent-helpers.js";
+import {
+  handleTorrent,
+  waitForReady,
+  selectBestVideoFile,
+} from "../torrent-helpers.js";
 import { getSelectedFile } from "../torrent.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -165,6 +169,18 @@ describe("getSelectedFile", () => {
       "Requested file index 3 is not available",
     );
   });
+
+  it("uses episode hints for the smart fallback when no file index is provided", () => {
+    const torrent = makeTorrent([
+      makeFakeFile("Show.S01E01.mkv", 1_500_000_000),
+      makeFakeFile("Show.S01E02.mkv", 1_500_000_000),
+      makeFakeFile("Show.S01E03.mkv", 1_500_000_000),
+    ]);
+
+    expect(
+      getSelectedFile(torrent, undefined, { season: 1, episode: 2 }).name,
+    ).toBe("Show.S01E02.mkv");
+  });
 });
 
 // ─── waitForReady ─────────────────────────────────────────────────────────────
@@ -202,6 +218,151 @@ describe("waitForReady", () => {
     const torrent = makeTorrent([]); // never emits ready
     await expect(waitForReady(torrent, 50)).rejects.toThrow(
       "Torrent ready timeout",
+    );
+  });
+});
+
+// ─── selectBestVideoFile ──────────────────────────────────────────────────────
+
+describe("selectBestVideoFile", () => {
+  function makeFile(name: string, size: number) {
+    return { name, length: size };
+  }
+
+  it("returns the single playable video file when there is only one", () => {
+    expect(
+      selectBestVideoFile([makeFile("movie.mkv", 2_000_000_000)]).name,
+    ).toBe("movie.mkv");
+  });
+
+  it("picks the main feature for a simple movie torrent", () => {
+    const files = [
+      makeFile("Movie.Name.2024.mkv", 8_000_000_000),
+      makeFile("Movie.Name.2024.srt", 50_000),
+      makeFile("cover.jpg", 200_000),
+    ];
+    expect(selectBestVideoFile(files).name).toBe("Movie.Name.2024.mkv");
+  });
+
+  it("excludes sample files and picks the main feature", () => {
+    const files = [
+      makeFile("Movie.2024.sample.mp4", 50_000_000),
+      makeFile("Movie.2024.mkv", 8_000_000_000),
+    ];
+    expect(selectBestVideoFile(files).name).toBe("Movie.2024.mkv");
+  });
+
+  it("excludes trailer files", () => {
+    const files = [
+      makeFile("Movie.2024.trailer.mp4", 200_000_000),
+      makeFile("Movie.2024.mkv", 8_000_000_000),
+    ];
+    expect(selectBestVideoFile(files).name).toBe("Movie.2024.mkv");
+  });
+
+  it("excludes featurette and extra files", () => {
+    const files = [
+      makeFile("Making.Of.featurette.mkv", 400_000_000),
+      makeFile("Behind.The.Scenes.mkv", 300_000_000),
+      makeFile("Movie.2024.mkv", 8_000_000_000),
+    ];
+    expect(selectBestVideoFile(files).name).toBe("Movie.2024.mkv");
+  });
+
+  it("excludes subtitle-only files when video files are present", () => {
+    const files = [
+      makeFile("Episode.S01E01.en.srt", 80_000),
+      makeFile("Episode.S01E01.mkv", 1_500_000_000),
+    ];
+    expect(selectBestVideoFile(files).name).toBe("Episode.S01E01.mkv");
+  });
+
+  it("throws when a torrent has no playable video files", () => {
+    const files = [
+      makeFile("Episode.S01E01.en.srt", 80_000),
+      makeFile("Episode.S01E01.nfo", 20_000),
+    ];
+
+    expect(() => selectBestVideoFile(files)).toThrow(
+      "Torrent has no playable video files",
+    );
+  });
+
+  it("picks the correct episode using season+episode hints (S01E02 style)", () => {
+    const files = [
+      makeFile("Show.S01E01.mkv", 1_500_000_000),
+      makeFile("Show.S01E02.mkv", 1_500_000_000),
+      makeFile("Show.S01E03.mkv", 1_500_000_000),
+    ];
+    expect(selectBestVideoFile(files, { season: 1, episode: 2 }).name).toBe(
+      "Show.S01E02.mkv",
+    );
+  });
+
+  it("picks the correct episode using 1x02 style hints", () => {
+    const files = [
+      makeFile("Show.1x01.mkv", 1_500_000_000),
+      makeFile("Show.1x02.mkv", 1_500_000_000),
+    ];
+    expect(selectBestVideoFile(files, { season: 1, episode: 2 }).name).toBe(
+      "Show.1x02.mkv",
+    );
+  });
+
+  it("picks the correct episode using non-padded S1E2 style hints", () => {
+    const files = [
+      makeFile("Show.S1E1.mkv", 1_500_000_000),
+      makeFile("Show.S1E2.mkv", 1_500_000_000),
+    ];
+
+    expect(selectBestVideoFile(files, { season: 1, episode: 2 }).name).toBe(
+      "Show.S1E2.mkv",
+    );
+  });
+
+  it("uses title hints as a secondary tiebreaker", () => {
+    const files = [
+      makeFile("Other.Movie.2024.mkv", 2_000_000_000),
+      makeFile("Target.Movie.2024.mkv", 2_000_000_000),
+    ];
+
+    expect(selectBestVideoFile(files, { title: "Target Movie" }).name).toBe(
+      "Target.Movie.2024.mkv",
+    );
+  });
+
+  it("falls back to largest when episode hints match nothing", () => {
+    const files = [
+      makeFile("Show.S01E01.mkv", 1_500_000_000),
+      makeFile("Show.S01E03.mkv", 2_000_000_000),
+    ];
+    // hint for episode 2, which doesn't exist
+    expect(selectBestVideoFile(files, { season: 1, episode: 2 }).name).toBe(
+      "Show.S01E03.mkv",
+    );
+  });
+
+  it("falls back to largest when all files are samples/excluded", () => {
+    const files = [
+      makeFile("sample.mp4", 50_000_000),
+      makeFile("trailer.mp4", 80_000_000),
+    ];
+    // Both are excluded, so it falls back to the pool (largest wins)
+    const result = selectBestVideoFile(files);
+    expect(["sample.mp4", "trailer.mp4"]).toContain(result.name);
+  });
+
+  it("uses size ratio to filter out tiny extras even if they have a video extension", () => {
+    const files = [
+      makeFile("Movie.2024.mkv", 8_000_000_000),
+      makeFile("intro.mp4", 5_000_000), // < 10% of 8 GB
+    ];
+    expect(selectBestVideoFile(files).name).toBe("Movie.2024.mkv");
+  });
+
+  it("throws when the file list is empty", () => {
+    expect(() => selectBestVideoFile([])).toThrow(
+      "Torrent has no files to select from",
     );
   });
 });

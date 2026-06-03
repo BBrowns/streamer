@@ -113,6 +113,7 @@ export class TorrentEngine implements IStreamEngine {
         body: JSON.stringify({
           magnet,
           fileIdx: stream.fileIdx,
+          fileSelectionHints: stream.fileSelectionHints,
           remux: stream.behaviorHints?.remuxToMp4 ? "mp4" : undefined,
         }),
       });

@@ -11,10 +11,17 @@
  */
 import { Request, Response } from "express";
 import { spawn } from "child_process";
-import { waitForReady } from "./torrent-helpers.js";
+import { waitForReady, selectBestVideoFile } from "./torrent-helpers.js";
+import type { FileSelectionHints } from "./torrent-helpers.js";
 
 // Re-export pure helpers for stats.ts and tests
-export { handleTorrent, waitForReady, mimeFromExt } from "./torrent-helpers.js";
+export {
+  handleTorrent,
+  waitForReady,
+  mimeFromExt,
+  selectBestVideoFile,
+} from "./torrent-helpers.js";
+export type { FileSelectionHints } from "./torrent-helpers.js";
 
 type WebTorrentModule = {
   default: new (options: Record<string, unknown>) => any;
@@ -305,16 +312,11 @@ function handleShutdown(signal: string) {
 process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 process.on("SIGINT", () => handleShutdown("SIGINT"));
 
-/**
- * Pick the largest file from a torrent (most likely the video).
- */
-function getLargestFile(torrent: any): any {
-  return torrent.files.reduce((a: any, b: any) =>
-    (a.length ?? 0) > (b.length ?? 0) ? a : b,
-  );
-}
-
-export function getSelectedFile(torrent: any, fileIdx?: number): any {
+export function getSelectedFile(
+  torrent: any,
+  fileIdx?: number,
+  hints?: FileSelectionHints,
+): any {
   if (typeof fileIdx === "number") {
     const selected = torrent.files?.[fileIdx];
     if (!selected) {
@@ -322,7 +324,7 @@ export function getSelectedFile(torrent: any, fileIdx?: number): any {
     }
     return selected;
   }
-  return getLargestFile(torrent);
+  return selectBestVideoFile(torrent.files ?? [], hints);
 }
 
 function enhanceMagnetWithTrackers(magnet: string) {
@@ -412,13 +414,17 @@ export async function serveTorrentFile(
   req: Request,
   res: Response,
   torrent: any,
-  options: { remuxFormat?: string; fileIdx?: number } = {},
+  options: {
+    remuxFormat?: string;
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  } = {},
 ) {
   if (!torrent.files || torrent.files.length === 0) {
     return res.status(503).json({ error: "Torrent has no files" });
   }
 
-  const file = getSelectedFile(torrent, options.fileIdx);
+  const file = getSelectedFile(torrent, options.fileIdx, options.hints);
   const streamPath = file.streamURL;
   const host = req.hostname || "127.0.0.1";
 
@@ -617,7 +623,31 @@ export async function streamRequest(req: Request, res: Response) {
       typeof req.query.fileIdx === "string"
         ? Number.parseInt(req.query.fileIdx, 10)
         : undefined;
-    return serveTorrentFile(req, res, torrent, { remuxFormat, fileIdx });
+    const season =
+      typeof req.query.season === "string"
+        ? Number.parseInt(req.query.season, 10)
+        : undefined;
+    const episode =
+      typeof req.query.episode === "string"
+        ? Number.parseInt(req.query.episode, 10)
+        : undefined;
+    const title =
+      typeof req.query.title === "string" && req.query.title.trim().length > 0
+        ? req.query.title.trim()
+        : undefined;
+    const hints =
+      (Number.isInteger(season) && season! > 0) ||
+      (Number.isInteger(episode) && episode! > 0) ||
+      title
+        ? {
+            season:
+              Number.isInteger(season) && season! > 0 ? season : undefined,
+            episode:
+              Number.isInteger(episode) && episode! > 0 ? episode : undefined,
+            title,
+          }
+        : undefined;
+    return serveTorrentFile(req, res, torrent, { remuxFormat, fileIdx, hints });
   } catch (err: any) {
     console.error("[stream-server] Failed to build stream URL:", err?.message);
     return res.status(503).json({ error: "Failed to start stream server" });

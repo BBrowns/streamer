@@ -190,6 +190,17 @@ export default function DetailScreen() {
       return;
     }
 
+    const playbackStream =
+      season && episode
+        ? {
+            ...stream,
+            fileSelectionHints: {
+              ...stream.fileSelectionHints,
+              season,
+              episode,
+            },
+          }
+        : stream;
     const streamId = stream.infoHash || stream.url;
     const task = useDownloadStore.getState().tasks[streamId || ""];
 
@@ -221,7 +232,7 @@ export default function DetailScreen() {
       } else {
         setPlaybackNotice(null);
         setStream(
-          { ...stream, url: task.localUri },
+          { ...playbackStream, url: task.localUri },
           {
             type: castType,
             itemId: id || "unknown",
@@ -239,16 +250,17 @@ export default function DetailScreen() {
       }
     }
 
-    const uri = await streamEngineManager.getPlaybackUri(stream);
+    const uri = await streamEngineManager.getPlaybackUri(playbackStream);
     const playable = !!uri && uri.length > 0;
 
     if (!playable && stream.infoHash) {
       const bridgeUp = await streamEngineManager.detectBridge();
       if (bridgeUp) {
-        const retryUri = await streamEngineManager.getPlaybackUri(stream);
+        const retryUri =
+          await streamEngineManager.getPlaybackUri(playbackStream);
         if (retryUri && retryUri.length > 0) {
           setStream(
-            { ...stream, url: retryUri },
+            { ...playbackStream, url: retryUri },
             {
               type: castType,
               itemId: id || "unknown",
@@ -281,16 +293,21 @@ export default function DetailScreen() {
     }
 
     setPlaybackNotice(null);
-    setStream(uri && stream.url !== uri ? { ...stream, url: uri } : stream, {
-      type: castType,
-      itemId: id || "unknown",
-      title: episodeTitle
-        ? `${meta?.name} - ${episodeTitle}`
-        : (meta?.name ?? stream.title ?? "Unknown"),
-      poster: meta?.poster,
-      season,
-      episode,
-    });
+    setStream(
+      uri && playbackStream.url !== uri
+        ? { ...playbackStream, url: uri }
+        : playbackStream,
+      {
+        type: castType,
+        itemId: id || "unknown",
+        title: episodeTitle
+          ? `${meta?.name} - ${episodeTitle}`
+          : (meta?.name ?? playbackStream.title ?? "Unknown"),
+        poster: meta?.poster,
+        season,
+        episode,
+      },
+    );
     router.push("/player");
   };
 
@@ -304,6 +321,16 @@ export default function DetailScreen() {
     setPlaybackNotice(null);
     try {
       let streamToDownload: Stream | undefined = stream;
+      if (streamToDownload && season && episode) {
+        streamToDownload = {
+          ...streamToDownload,
+          fileSelectionHints: {
+            ...streamToDownload.fileSelectionHints,
+            season,
+            episode,
+          },
+        };
+      }
       if (!streamToDownload) {
         setPlanningAction("download");
         try {
