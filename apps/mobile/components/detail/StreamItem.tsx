@@ -26,8 +26,10 @@ export function StreamItem({
   const engine = streamEngineManager.resolveEngine(stream);
   const id = stream.infoHash || stream.url || `stream_${index}`;
   const task = useDownloadStore((state) => state.tasks[id]);
+  const isPreparing = task?.status === "Preparing";
   const isDownloading = task?.status === "Downloading";
   const isCompleted = task?.status === "Completed";
+  const isInProgress = isPreparing || isDownloading;
   const progress = task?.progress || 0;
   const url = stream.url?.toLowerCase() ?? "";
   const isHls = url.includes(".m3u8");
@@ -141,18 +143,22 @@ export function StreamItem({
       </Pressable>
 
       <View style={styles.streamActions}>
-        {canDownload || isDownloading || isCompleted ? (
+        {canDownload || isInProgress || isCompleted ? (
           <Pressable
             style={styles.downloadIconBtn}
             onPress={() => {
               hapticImpactLight();
               onDownload();
             }}
-            disabled={isCompleted}
+            disabled={isCompleted || isInProgress}
             accessibilityRole="button"
             accessibilityLabel="Download stream"
           >
-            {isDownloading || task?.status === "Paused" ? (
+            {isPreparing ? (
+              <Text style={[styles.progressText, { color: colors.tint }]}>
+                Prep
+              </Text>
+            ) : isDownloading || task?.status === "Paused" ? (
               <Text style={[styles.progressText, { color: colors.tint }]}>
                 {(progress * 100).toFixed(0)}%
               </Text>

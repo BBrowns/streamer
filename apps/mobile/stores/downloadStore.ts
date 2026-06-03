@@ -12,6 +12,7 @@ export interface DownloadMediaItem extends MediaInfo {
 
 export type DownloadStatus =
   | "Pending"
+  | "Preparing"
   | "Downloading"
   | "Completed"
   | "Error"
@@ -49,6 +50,7 @@ interface DownloadState {
   isDownloaded: (id: string) => boolean;
   clearAll: () => void;
   setResumeData: (id: string, data: string) => void;
+  setDownloadUrl: (id: string, downloadUrl: string) => void;
   verifyAndClean: () => Promise<void>;
 }
 
@@ -125,6 +127,23 @@ export const useDownloadStore = create<DownloadState>()(
           if (!task) return state;
           return {
             tasks: { ...state.tasks, [id]: { ...task, resumeData: data } },
+          };
+        }),
+      setDownloadUrl: (id, downloadUrl) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task) return state;
+          return {
+            tasks: {
+              ...state.tasks,
+              [id]: {
+                ...task,
+                mediaInfo: {
+                  ...task.mediaInfo,
+                  downloadUrl,
+                },
+              },
+            },
           };
         }),
       verifyAndClean: async () => {
