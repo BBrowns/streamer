@@ -170,6 +170,31 @@ describe("playbackSessionSchema", () => {
     }
   });
 
+  it("accepts URL-free download progress and verification events", () => {
+    const progressEvent: PlaybackSessionEvent = {
+      id: "00000000-0000-4000-8000-000000000004",
+      sessionId: SESSION_ID,
+      at: TIMESTAMP,
+      type: "download_progress",
+      progress: 0.5,
+      totalBytesWritten: 500,
+      totalBytesExpectedToWrite: 1000,
+    };
+    const verifiedEvent: PlaybackSessionEvent = {
+      id: "00000000-0000-4000-8000-000000000005",
+      sessionId: SESSION_ID,
+      at: TIMESTAMP,
+      type: "download_verified",
+    };
+
+    expect(playbackSessionEventSchema.parse(progressEvent)).toEqual(
+      progressEvent,
+    );
+    expect(playbackSessionEventSchema.parse(verifiedEvent)).toEqual(
+      verifiedEvent,
+    );
+  });
+
   it("keeps schema inference aligned with the exported session types", () => {
     expectTypeOf<
       z.infer<typeof playbackErrorCodeSchema>

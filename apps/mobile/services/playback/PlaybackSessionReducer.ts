@@ -440,6 +440,24 @@ export function reducePlaybackSession(
       break;
     }
 
+    case "download_progress": {
+      assertSessionRule(
+        session.action === "download",
+        "Download progress can only be recorded for download sessions.",
+      );
+      nextSession.status = "downloading";
+      break;
+    }
+
+    case "download_verified": {
+      assertSessionRule(
+        session.action === "download",
+        "Download verification can only be recorded for download sessions.",
+      );
+      nextSession.status = "verifying_download";
+      break;
+    }
+
     case "fallback_started": {
       findCandidate(session, event.fromCandidateId);
       findCandidate(session, event.toCandidateId);

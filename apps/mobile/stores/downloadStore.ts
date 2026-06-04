@@ -10,6 +10,12 @@ export interface DownloadMediaItem extends MediaInfo {
   sourceId?: string;
 }
 
+export interface DownloadPlaybackSessionContext {
+  sessionId: string;
+  candidateId: string;
+  attemptId: string;
+}
+
 export type DownloadStatus =
   | "Pending"
   | "Preparing"
@@ -28,11 +34,16 @@ export interface DownloadTask {
   error?: string;
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
+  playbackSession?: DownloadPlaybackSessionContext;
 }
 
 interface DownloadState {
   tasks: Record<string, DownloadTask>;
-  addTask: (id: string, mediaInfo: DownloadMediaItem) => void;
+  addTask: (
+    id: string,
+    mediaInfo: DownloadMediaItem,
+    playbackSession?: DownloadPlaybackSessionContext,
+  ) => void;
   updateProgress: (
     id: string,
     progress: number,
@@ -58,7 +69,7 @@ export const useDownloadStore = create<DownloadState>()(
   persist(
     (set, get) => ({
       tasks: {},
-      addTask: (id, mediaInfo) =>
+      addTask: (id, mediaInfo, playbackSession) =>
         set((state) => ({
           tasks: {
             ...state.tasks,
@@ -69,6 +80,7 @@ export const useDownloadStore = create<DownloadState>()(
               status: "Pending",
               totalBytesWritten: 0,
               totalBytesExpectedToWrite: 0,
+              playbackSession,
             },
           },
         })),

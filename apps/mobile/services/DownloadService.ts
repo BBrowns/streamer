@@ -3,8 +3,10 @@ import { Platform, Alert } from "react-native";
 import {
   useDownloadStore,
   type DownloadMediaItem,
+  type DownloadPlaybackSessionContext,
   type DownloadStatus,
 } from "../stores/downloadStore";
+import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import type { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import type { Stream } from "@streamer/shared";
@@ -17,6 +19,15 @@ import {
   getDownloadEligibility,
   type DownloadEligibility,
 } from "./downloadEligibility";
+import {
+  cancelPlaybackSession,
+  completePlaybackSession,
+  failPlaybackSession,
+} from "./playback/PlaybackSessionPlaybackService";
+import {
+  createPlaybackRuntimeError,
+  inferPlaybackErrorCodeFromMessages,
+} from "./playback/PlaybackErrors";
 
 export {
   getDownloadEligibility,
@@ -27,6 +38,7 @@ export {
 export interface DownloadStartOptions {
   resolvedUrl?: string;
   eligibility?: DownloadEligibility;
+  playbackSession?: DownloadPlaybackSessionContext;
 }
 
 export function mapDesktopDownloadStatus(
@@ -48,9 +60,192 @@ export function mapDesktopDownloadStatus(
   }
 }
 
-class DownloadService {
+export class DownloadService {
   private downloadResumables: Record<string, FileSystem.DownloadResumable> = {};
   private desktopProgressUnsubscribe: (() => void) | null = null;
+  private lastSessionProgressBucket: Record<string, number> = {};
+  private finalizingTasks = new Set<string>();
+
+  private getSessionContext(
+    id: string,
+    fallback?: DownloadPlaybackSessionContext,
+  ) {
+    return useDownloadStore.getState().tasks[id]?.playbackSession || fallback;
+  }
+
+  private setSessionStatus(
+    playbackSession: DownloadPlaybackSessionContext | undefined,
+    status: "downloading" | "verifying_download",
+    reason?: string,
+  ) {
+    if (!playbackSession) return;
+    const store = usePlaybackSessionStore.getState();
+    const session = store.sessions[playbackSession.sessionId];
+    if (
+      !session ||
+      session.status === "completed" ||
+      session.status === "failed" ||
+      session.status === "cancelled" ||
+      session.status === status
+    ) {
+      return;
+    }
+
+    store.dispatchPlaybackEvent(playbackSession.sessionId, {
+      type: "status_changed",
+      from: session.status,
+      to: status,
+      reason,
+    });
+  }
+
+  private recordSessionProgress(
+    id: string,
+    progress: number,
+    totalBytesWritten: number,
+    totalBytesExpectedToWrite: number,
+  ) {
+    const playbackSession = this.getSessionContext(id);
+    if (!playbackSession) return;
+
+    const normalizedProgress = Math.max(0, Math.min(progress || 0, 1));
+    const bucket = Math.floor(normalizedProgress * 20);
+    if (
+      normalizedProgress < 1 &&
+      this.lastSessionProgressBucket[id] === bucket
+    ) {
+      return;
+    }
+
+    this.lastSessionProgressBucket[id] = bucket;
+    const session =
+      usePlaybackSessionStore.getState().sessions[playbackSession.sessionId];
+    if (
+      !session ||
+      session.status === "completed" ||
+      session.status === "failed" ||
+      session.status === "cancelled"
+    ) {
+      return;
+    }
+
+    usePlaybackSessionStore
+      .getState()
+      .recordDownloadProgress(
+        playbackSession.sessionId,
+        normalizedProgress,
+        Math.max(0, Math.round(totalBytesWritten || 0)),
+        Math.max(0, Math.round(totalBytesExpectedToWrite || 0)),
+      );
+  }
+
+  private failSession(
+    id: string,
+    error: unknown,
+    fallback?: DownloadPlaybackSessionContext,
+  ) {
+    const playbackSession = this.getSessionContext(id, fallback);
+    if (!playbackSession) return;
+    const rawMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "";
+    const code = /cannot be (?:saved|verified)|hls downloads/i.test(rawMessage)
+      ? "SOURCE_UNAVAILABLE"
+      : inferPlaybackErrorCodeFromMessages([rawMessage]) ||
+        "SOURCE_UNAVAILABLE";
+    failPlaybackSession(
+      playbackSession.sessionId,
+      createPlaybackRuntimeError(code, "Download failed before it was saved.", {
+        retryable: true,
+        shouldFallback: false,
+        debugMessage: rawMessage || undefined,
+      }),
+    );
+  }
+
+  private cancelSession(
+    id: string,
+    reason: string,
+    fallback?: DownloadPlaybackSessionContext,
+  ) {
+    const playbackSession = this.getSessionContext(id, fallback);
+    if (!playbackSession) return;
+    cancelPlaybackSession(playbackSession.sessionId, reason);
+  }
+
+  private async verifyLocalUri(localUri?: string) {
+    if (!localUri) return false;
+
+    if (Platform.OS === "web") {
+      return Boolean(
+        window.desktopBridge &&
+        (await window.desktopBridge.checkFile(localUri).catch(() => false)),
+      );
+    }
+
+    return FileSystem.getInfoAsync(localUri)
+      .then((info) => info.exists)
+      .catch(() => false);
+  }
+
+  private async finalizeCompletedTask(
+    id: string,
+    localUri?: string,
+    fallback?: DownloadPlaybackSessionContext,
+  ) {
+    const { tasks, setStatus } = useDownloadStore.getState();
+    const task = tasks[id];
+    if (
+      !task ||
+      this.finalizingTasks.has(id) ||
+      (task.status === "Completed" && task.localUri === localUri)
+    ) {
+      return;
+    }
+    this.finalizingTasks.add(id);
+    const playbackSession = task.playbackSession || fallback;
+
+    try {
+      this.setSessionStatus(
+        playbackSession,
+        "verifying_download",
+        "Verifying the saved local file.",
+      );
+      const verified = await this.verifyLocalUri(localUri);
+      if (!verified) {
+        const message = "Downloaded file could not be verified on this device.";
+        setStatus(id, "Error", undefined, message);
+        this.failSession(id, message, playbackSession);
+        return;
+      }
+
+      setStatus(id, "Completed", localUri);
+      if (playbackSession) {
+        const session =
+          usePlaybackSessionStore.getState().sessions[
+            playbackSession.sessionId
+          ];
+        if (
+          session &&
+          session.status !== "completed" &&
+          session.status !== "failed" &&
+          session.status !== "cancelled"
+        ) {
+          usePlaybackSessionStore
+            .getState()
+            .recordDownloadVerified(playbackSession.sessionId);
+          completePlaybackSession(playbackSession.sessionId);
+        }
+      }
+      delete this.lastSessionProgressBucket[id];
+      this.notifyDownloadComplete(task.mediaInfo.title);
+    } finally {
+      this.finalizingTasks.delete(id);
+    }
+  }
 
   private ensureDesktopDownloadSubscription() {
     if (Platform.OS !== "web" || this.desktopProgressUnsubscribe) return;
@@ -80,18 +275,29 @@ class DownloadService {
           totalBytesWritten,
           totalBytesExpectedToWrite,
         );
+        this.recordSessionProgress(
+          data.id,
+          data.status === "Completed" ? 1 : progress,
+          totalBytesWritten,
+          totalBytesExpectedToWrite,
+        );
 
-        if (data.status) {
+        if (data.status === "Completed") {
+          void this.finalizeCompletedTask(data.id, data.localUri);
+        } else if (data.status) {
           setStatus(
             data.id,
             mapDesktopDownloadStatus(data.status),
             data.localUri,
             data.error,
           );
-        }
-
-        if (data.status === "Completed" && task.status !== "Completed") {
-          this.notifyDownloadComplete(task.mediaInfo.title);
+          if (data.status === "Downloading") {
+            this.setSessionStatus(task.playbackSession, "downloading");
+          } else if (data.status === "Error") {
+            this.failSession(data.id, data.error || "Desktop download failed.");
+          } else if (data.status === "Canceled") {
+            this.cancelSession(data.id, "Desktop download was cancelled.");
+          }
         }
       },
     );
@@ -114,15 +320,30 @@ class DownloadService {
       job.totalBytesWritten,
       job.totalBytesExpectedToWrite,
     );
+    this.recordSessionProgress(
+      job.id,
+      job.status === "Completed" ? 1 : progress,
+      job.totalBytesWritten,
+      job.totalBytesExpectedToWrite,
+    );
+
+    if (job.status === "Completed") {
+      void this.finalizeCompletedTask(job.id, job.localUri);
+      return;
+    }
+
     setStatus(
       job.id,
       mapDesktopDownloadStatus(job.status),
       job.localUri,
       job.error,
     );
-
-    if (job.status === "Completed" && tasks[job.id].status !== "Completed") {
-      this.notifyDownloadComplete(tasks[job.id].mediaInfo.title);
+    if (job.status === "Downloading") {
+      this.setSessionStatus(tasks[job.id].playbackSession, "downloading");
+    } else if (job.status === "Error") {
+      this.failSession(job.id, job.error || "Desktop download failed.");
+    } else if (job.status === "Canceled") {
+      this.cancelSession(job.id, "Desktop download was cancelled.");
     }
   }
 
@@ -156,6 +377,12 @@ class DownloadService {
       existingTask?.status === "Downloading" ||
       existingTask?.status === "Completed"
     ) {
+      if (options.playbackSession) {
+        cancelPlaybackSession(
+          options.playbackSession.sessionId,
+          "Download is already present in the queue.",
+        );
+      }
       return;
     }
 
@@ -171,6 +398,12 @@ class DownloadService {
     }
 
     if (!eligibility.canDownload) {
+      this.failSession(
+        id,
+        eligibility.reason ||
+          "This source cannot be saved for offline playback yet.",
+        options.playbackSession,
+      );
       if (Platform.OS !== "web") {
         Alert.alert(
           "Download unavailable",
@@ -184,6 +417,12 @@ class DownloadService {
     }
 
     if (eligibility.mode === "browser-external" && stream.externalUrl) {
+      this.failSession(
+        id,
+        eligibility.reason ||
+          "External browser downloads cannot be verified offline.",
+        options.playbackSession,
+      );
       if (Platform.OS === "web") {
         const link = document.createElement("a");
         link.href = stream.externalUrl;
@@ -198,11 +437,15 @@ class DownloadService {
 
     const initialDownloadUrl =
       options.resolvedUrl || stream.url || stream.externalUrl || "";
-    addTask(id, {
-      ...mediaInfo,
-      downloadUrl: initialDownloadUrl,
-      sourceId: id,
-    });
+    addTask(
+      id,
+      {
+        ...mediaInfo,
+        downloadUrl: initialDownloadUrl,
+        sourceId: id,
+      },
+      options.playbackSession,
+    );
     setStatus(id, "Preparing");
 
     // 1. Resolve playback URI after eligibility is known.
@@ -219,11 +462,17 @@ class DownloadService {
         undefined,
         `Resolution failed: ${e?.message || String(e)}`,
       );
+      this.failSession(id, e, options.playbackSession);
       return;
     }
 
     if (!downloadUrl) {
       setStatus(id, "Error", undefined, "Could not resolve playback URL");
+      this.failSession(
+        id,
+        "Could not resolve playback URL",
+        options.playbackSession,
+      );
       if (__DEV__)
         console.error(
           "[DownloadService] Could not resolve playback URI for download",
@@ -233,6 +482,11 @@ class DownloadService {
 
     if (downloadUrl.includes(".m3u8")) {
       setStatus(id, "Error", undefined, "HLS downloads are not supported");
+      this.failSession(
+        id,
+        "HLS downloads are not supported",
+        options.playbackSession,
+      );
       Alert.alert(
         "Unsupported Format",
         "HLS (.m3u8) streams cannot be downloaded natively for offline use. Please select a different playback source.",
@@ -249,6 +503,8 @@ class DownloadService {
 
       if (desktopBridge) {
         setStatus(id, "Downloading");
+        this.setSessionStatus(options.playbackSession, "downloading");
+        this.recordSessionProgress(id, 0, 0, 0);
         this.ensureDesktopDownloadSubscription();
 
         if (desktopBridge.startDownloadJob) {
@@ -261,6 +517,7 @@ class DownloadService {
             this.applyDesktopJobSnapshot(job);
           } catch (e: any) {
             setStatus(id, "Error", undefined, e.message);
+            this.failSession(id, e, options.playbackSession);
           }
           return;
         }
@@ -277,6 +534,12 @@ class DownloadService {
               data.totalBytesWritten,
               data.totalBytesExpectedToWrite,
             );
+            this.recordSessionProgress(
+              id,
+              progress,
+              data.totalBytesWritten,
+              data.totalBytesExpectedToWrite,
+            );
           }
         });
 
@@ -287,22 +550,20 @@ class DownloadService {
             filename,
           );
           unsubscribe();
-          setStatus(id, "Completed", localUri);
+          await this.finalizeCompletedTask(
+            id,
+            localUri,
+            options.playbackSession,
+          );
           if (__DEV__)
             console.log(
               "[DownloadService] Desktop download completed:",
               localUri,
             );
-
-          api
-            .post("/api/notifications", {
-              title: "Download Complete",
-              message: `"${mediaInfo.title}" is ready to watch offline!`,
-            })
-            .catch((err) => console.warn("Failed to ping completion", err));
         } catch (e: any) {
           unsubscribe();
           setStatus(id, "Error", undefined, e.message);
+          this.failSession(id, e, options.playbackSession);
         }
         return;
       }
@@ -321,9 +582,15 @@ class DownloadService {
             "[DownloadService] Browser download opened externally; not marking offline-complete",
           );
         }
+        this.failSession(
+          id,
+          "Browser download opened externally and cannot be verified offline.",
+          options.playbackSession,
+        );
         removeTask(id);
       } catch (e: any) {
         setStatus(id, "Error", undefined, e.message);
+        this.failSession(id, e, options.playbackSession);
       }
       return;
     }
@@ -341,6 +608,8 @@ class DownloadService {
 
     // Now move from Preparing to Downloading
     setStatus(id, "Downloading", localUri);
+    this.setSessionStatus(options.playbackSession, "downloading");
+    this.recordSessionProgress(id, 0, 0, 0);
 
     // 3. Setup callback with periodic state saving
     let lastSavedProgress = 0;
@@ -352,6 +621,12 @@ class DownloadService {
         downloadProgress.totalBytesExpectedToWrite;
 
       updateProgress(
+        id,
+        progress,
+        downloadProgress.totalBytesWritten,
+        downloadProgress.totalBytesExpectedToWrite,
+      );
+      this.recordSessionProgress(
         id,
         progress,
         downloadProgress.totalBytesWritten,
@@ -386,30 +661,22 @@ class DownloadService {
     try {
       const result = await downloadResumable.downloadAsync();
       if (result) {
-        setStatus(id, "Completed", result.uri);
+        await this.finalizeCompletedTask(
+          id,
+          result.uri,
+          options.playbackSession,
+        );
         // Clear resume data on completion
         setResumeData(id, "");
         if (__DEV__)
           console.log("[DownloadService] Download completed:", result.uri);
-
-        // Notify backend of completion
-        api
-          .post("/api/notifications", {
-            title: "Download Complete",
-            message: `"${mediaInfo.title}" is ready to watch offline!`,
-          })
-          .catch((err) =>
-            console.warn(
-              "[DownloadService] Failed to notify backend of download completion",
-              err,
-            ),
-          );
       }
     } catch (e: any) {
       if (__DEV__) console.error("[DownloadService] Download failed:", e);
       // If it was cancelled manually, we don't mark as error here usually
       if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
         setStatus(id, "Error", undefined, e.message);
+        this.failSession(id, e, options.playbackSession);
       }
     } finally {
       delete this.downloadResumables[id];
@@ -422,12 +689,26 @@ class DownloadService {
    */
   async initialize() {
     const { tasks, setStatus } = useDownloadStore.getState();
+    const completedTasks = Object.values(tasks).filter(
+      (task) => task.status === "Completed",
+    );
     const interruptedTasks = Object.values(tasks).filter(
       (t) =>
         t.status === "Downloading" ||
         t.status === "Paused" ||
         t.status === "Preparing",
     );
+
+    for (const task of completedTasks) {
+      if (!(await this.verifyLocalUri(task.localUri))) {
+        setStatus(
+          task.id,
+          "Error",
+          undefined,
+          "Downloaded file could not be verified on this device.",
+        );
+      }
+    }
 
     if (Platform.OS === "web") {
       this.ensureDesktopDownloadSubscription();
@@ -536,6 +817,12 @@ class DownloadService {
             downloadProgress.totalBytesWritten,
             downloadProgress.totalBytesExpectedToWrite,
           );
+          this.recordSessionProgress(
+            id,
+            progress,
+            downloadProgress.totalBytesWritten,
+            downloadProgress.totalBytesExpectedToWrite,
+          );
 
           // Periodically save resumable state to persistent storage (every 5%)
           if (
@@ -568,10 +855,11 @@ class DownloadService {
 
       if (resumable) {
         setStatus(id, "Downloading");
+        this.setSessionStatus(task.playbackSession, "downloading");
         try {
           const result = await resumable.resumeAsync();
           if (result) {
-            setStatus(id, "Completed", result.uri);
+            await this.finalizeCompletedTask(id, result.uri);
             setResumeData(id, "");
             console.log("[DownloadService] Download completed:", result.uri);
           }
@@ -579,6 +867,7 @@ class DownloadService {
           console.error("[DownloadService] Resume failed:", e);
           if (tasks[id]?.status !== "Paused") {
             setStatus(id, "Error", undefined, e.message);
+            this.failSession(id, e);
           }
         } finally {
           delete this.downloadResumables[id];
@@ -592,9 +881,14 @@ class DownloadService {
           this.startDownload(
             { url: task.mediaInfo.downloadUrl },
             task.mediaInfo,
+            {
+              resolvedUrl: task.mediaInfo.downloadUrl,
+              playbackSession: task.playbackSession,
+            },
           );
         } else {
           setStatus(id, "Error", undefined, "Original download URL missing");
+          this.failSession(id, "Original download URL missing");
         }
       }
     }
@@ -603,6 +897,7 @@ class DownloadService {
   async deleteDownload(id: string) {
     const { tasks, removeTask } = useDownloadStore.getState();
     const task = tasks[id];
+    this.cancelSession(id, "Download was removed.");
 
     if (Platform.OS === "web") {
       const desktopBridge = window.desktopBridge;

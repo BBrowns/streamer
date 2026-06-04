@@ -1,5 +1,4 @@
 import type {
-  PlaybackErrorCode,
   PlaybackPlan,
   PlaybackRuntimeError,
   PlaybackRuntimeState,
@@ -7,15 +6,13 @@ import type {
 } from "@streamer/shared";
 import type { MediaInfo } from "../../stores/playerStore";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
-import {
-  getDownloadEligibility,
-  type DownloadEligibility,
-} from "../downloadEligibility";
+import type { DownloadEligibility } from "../downloadEligibility";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
 } from "./PlaybackPlanService";
+import { resolveDownloadSession } from "./PlaybackSessionPlaybackService";
 import { getDeviceProfile } from "./deviceProfile";
 import {
   createPlaybackRuntimeError,
@@ -78,6 +75,9 @@ export interface DownloadOrchestratorSuccess {
   resolvedUrl: string;
   mediaInfo: MediaInfo;
   eligibility: DownloadEligibility;
+  sessionId: string;
+  candidateId: string;
+  attemptId: string;
   runtimeState: PlaybackRuntimeState;
   plan: PlaybackPlan;
   attemptedStreams: number;
@@ -178,19 +178,75 @@ export async function prepareDownload(
   input: PlaybackOrchestratorInput,
 ): Promise<DownloadOrchestratorResult> {
   const fallback = "Download is unavailable right now.";
-  const result = await resolveActionPlan(input, "download", fallback);
+  const plan = await createPlaybackPlanWithBridgeRetry({
+    type: input.type,
+    id: input.id,
+    season: input.season,
+    episode: input.episode,
+    action: "download",
+  });
+  const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
+  const session = usePlaybackSessionStore.getState().createSession({
+    plan,
+    content: {
+      type: input.type,
+      id: input.id,
+      season: input.season,
+      episode: input.episode,
+    },
+    deviceProfile: getDeviceProfile(),
+    bridge: {
+      status: bridgeDiagnostics.status,
+      reason: bridgeDiagnostics.reason,
+    },
+  });
 
-  if (!result.ok) return result;
-
-  const eligibility = getDownloadEligibility(result.stream);
-  if (!eligibility.canDownload) {
-    const failure = mapDownloadEligibilityToRuntimeFailure(eligibility);
+  if (plan.state !== "ready" || !plan.selectedCandidate) {
+    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
+    usePlaybackSessionStore.getState().failSession(session.id, failure.error);
     return {
       ok: false,
       ...failure,
-      plan: result.plan,
-      attemptedStreams: result.attemptedStreams,
-      resolveErrors: result.resolveErrors,
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  const candidateId = session.selectedCandidateId;
+  if (!candidateId) {
+    const error = createPlaybackRuntimeError("SOURCE_UNAVAILABLE", fallback, {
+      retryable: true,
+      shouldFallback: false,
+    });
+    usePlaybackSessionStore.getState().failSession(session.id, error);
+    return {
+      ok: false,
+      error,
+      runtimeState: getPlaybackRuntimeState(error.code),
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  const result = await resolveDownloadSession(session.id, candidateId);
+  const attempts =
+    usePlaybackSessionStore.getState().sessions[session.id]?.attempts || [];
+  const resolveErrors = attempts
+    .map((attempt) => attempt.error?.message)
+    .filter((message): message is string => !!message);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error,
+      runtimeState: getPlaybackRuntimeState(result.error.code),
+      plan,
+      sessionId: session.id,
+      attemptedStreams: attempts.length,
+      resolveErrors,
     };
   }
 
@@ -199,11 +255,14 @@ export async function prepareDownload(
     stream: result.stream,
     resolvedUrl: result.uri,
     mediaInfo: buildMediaInfo(input, result.stream),
-    eligibility,
+    eligibility: result.eligibility,
+    sessionId: session.id,
+    candidateId: result.candidateId,
+    attemptId: result.attemptId,
     runtimeState: "selecting_source",
-    plan: result.plan,
-    attemptedStreams: result.attemptedStreams,
-    resolveErrors: result.resolveErrors,
+    plan,
+    attemptedStreams: attempts.length,
+    resolveErrors,
   };
 }
 
@@ -275,26 +334,6 @@ async function resolveActionPlan(
     plan,
     attemptedStreams: result.attemptedStreams,
     resolveErrors: result.errors,
-  };
-}
-
-function mapDownloadEligibilityToRuntimeFailure(
-  eligibility: DownloadEligibility,
-) {
-  const message =
-    eligibility.reason || "This source cannot be saved for offline playback.";
-  const code: PlaybackErrorCode =
-    eligibility.mode === "bridge-torrent"
-      ? "BRIDGE_UNAVAILABLE"
-      : "SOURCE_UNAVAILABLE";
-  const error = createPlaybackRuntimeError(code, message, {
-    retryable: eligibility.mode === "bridge-torrent",
-    shouldFallback: eligibility.mode !== "bridge-torrent",
-  });
-
-  return {
-    error,
-    runtimeState: getPlaybackRuntimeState(error.code),
   };
 }
 

@@ -67,9 +67,10 @@ The mobile client now has:
 - `stores/playbackSessionStore.ts` for persisted sessions and active-session
   selection, typed event dispatch, attempt creation, gateway progress,
   fallback, failure, and cancellation helpers
-- `services/playback/PlaybackSessionPlaybackService.ts` for Play Best candidate
-  resolution, planner timeout budgets, gateway progress, automatic fallback,
-  active-engine cancellation, and persistence-safe runtime error handling
+- `services/playback/PlaybackSessionPlaybackService.ts` for Play Best and
+  Download candidate resolution, planner timeout budgets, gateway progress,
+  automatic fallback, active-engine cancellation, action-aware offline
+  eligibility, and persistence-safe runtime error handling
 - an in-memory runtime mapping from session-local candidate IDs to planner
   candidates
 
@@ -127,8 +128,12 @@ player resolves candidates through `PlaybackSessionPlaybackService`.
 not use its legacy raw fallback queue for session-driven playback. Manual
 advanced source playback remains supported separately.
 
-Download and cast still use `PlaybackPlanService`, `PlaybackOrchestrator`, and
-stream engines directly until their session migrations are implemented.
+Primary Download now creates and resolves a `PlaybackSession` through
+`PlaybackOrchestrator` and records URL-free download progress, local-file
+verification, completion, failure, and cancellation events. Manual advanced
+source downloads remain separate. Cast still uses `PlaybackPlanService`,
+`PlaybackOrchestrator`, and stream engines directly until its session migration
+is implemented.
 
 The intended migration sequence is:
 
@@ -137,7 +142,8 @@ The intended migration sequence is:
 3. Add a client session store and typed event reducer.
 4. Route Play Best through session-driven fallback and timeout behavior.
    **Complete.**
-5. Route downloads and cast through the same session model.
+5. Route primary downloads through the same session model. **Complete.**
+6. Route cast through the same session model.
 
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.

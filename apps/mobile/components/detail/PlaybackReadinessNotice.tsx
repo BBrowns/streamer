@@ -18,6 +18,30 @@ export interface PlaybackReadinessNoticeCopy {
   primaryActionLabel?: string;
 }
 
+function actionNoun(action: PlaybackAction) {
+  if (action === "download") return "downloads";
+  if (action === "cast") return "casting";
+  return "playback";
+}
+
+function bridgeMessageForAction(
+  message: string,
+  action: PlaybackAction,
+  unsupported: boolean,
+) {
+  if (action === "play" || !/\bplay(?:back)?\b/i.test(message)) return message;
+
+  if (action === "download") {
+    return unsupported
+      ? "Desktop bridge needs repair before torrent sources can be downloaded on this device."
+      : "Start the desktop bridge to download torrent sources on this device.";
+  }
+
+  return unsupported
+    ? "Desktop bridge needs repair before torrent sources can be cast on this device."
+    : "Start the desktop bridge to cast torrent sources on this device.";
+}
+
 export function getPlaybackReadinessCopy(
   plan: PlaybackPlan | null,
   fallback: string,
@@ -34,7 +58,7 @@ export function getPlaybackReadinessCopy(
   if (state === "needsBridge") {
     return {
       title: "Desktop bridge required",
-      message,
+      message: bridgeMessageForAction(message, action, false),
       detail:
         "Open Sources & Devices to connect this device to your desktop bridge.",
       tone: "warning",
@@ -46,9 +70,8 @@ export function getPlaybackReadinessCopy(
   if (state === "bridgeUnavailable") {
     return {
       title: "Bridge needs repair",
-      message,
-      detail:
-        "The app can see the bridge, but the torrent engine is not ready for playback.",
+      message: bridgeMessageForAction(message, action, true),
+      detail: `The app can see the bridge, but the torrent engine is not ready for ${actionNoun(action)}.`,
       tone: "error",
       icon: "construct-outline",
       primaryActionLabel: "Sources & Devices",
@@ -132,7 +155,7 @@ export function getPlaybackReadinessCopyFromError(
   if (error.code === "BRIDGE_UNAVAILABLE") {
     return {
       title: "Desktop bridge required",
-      message: error.message,
+      message: bridgeMessageForAction(error.message, action, false),
       detail:
         "Open Sources & Devices to connect this device to your desktop bridge.",
       tone: "warning",
@@ -144,9 +167,8 @@ export function getPlaybackReadinessCopyFromError(
   if (error.code === "BRIDGE_UNSUPPORTED") {
     return {
       title: "Bridge needs repair",
-      message: error.message,
-      detail:
-        "The app can see the bridge, but the torrent engine is not ready for playback.",
+      message: bridgeMessageForAction(error.message, action, true),
+      detail: `The app can see the bridge, but the torrent engine is not ready for ${actionNoun(action)}.`,
       tone: "error",
       icon: "construct-outline",
       primaryActionLabel: "Sources & Devices",

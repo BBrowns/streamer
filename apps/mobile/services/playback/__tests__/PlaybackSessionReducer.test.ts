@@ -85,6 +85,25 @@ function makeReadyPlan() {
   });
 }
 
+function makeDownloadPlan() {
+  return makePlaybackPlan({
+    action: "download",
+    state: "ready",
+    plan: {
+      mode: "direct",
+      selectedCandidate: makePlannedMediaCandidate({
+        id: PLAN_PRIMARY_ID,
+        kind: "direct",
+        stream: {
+          url: "https://cdn.example.test/movie.mp4",
+          title: "Direct download",
+        },
+        actionEligibility: { action: "download", eligible: true },
+      }),
+    },
+  });
+}
+
 describe("PlaybackSessionReducer", () => {
   it("creates persistence-safe session snapshots with separate runtime candidates", () => {
     const plan = makeReadyPlan();
@@ -304,6 +323,47 @@ describe("PlaybackSessionReducer", () => {
       status: "failed",
       error: { code: "PLAYBACK_TIMEOUT" },
     });
+  });
+
+  it("records persistence-safe download progress and verification events", () => {
+    const options = makeOptions(175);
+    const { session: initialSession } = createPlaybackSessionFromPlan(
+      {
+        plan: makeDownloadPlan(),
+        content: { type: "movie", id: "tt123" },
+        deviceProfile,
+      },
+      options,
+    );
+
+    const downloading = reducePlaybackSession(
+      initialSession,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "download_progress",
+          progress: 0.25,
+          totalBytesWritten: 250,
+          totalBytesExpectedToWrite: 1000,
+        },
+        options,
+      ),
+    );
+    const verified = reducePlaybackSession(
+      downloading,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "download_verified",
+        },
+        options,
+      ),
+    );
+
+    expect(downloading.status).toBe("downloading");
+    expect(verified.status).toBe("verifying_download");
+    expect(JSON.stringify(verified)).not.toContain("cdn.example.test");
+    expect(playbackSessionSchema.safeParse(verified).success).toBe(true);
   });
 
   it("treats identical event replay as idempotent and rejects event rewrites", () => {

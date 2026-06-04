@@ -106,9 +106,9 @@ The Redis-backed remote-control presence records in `useRemoteControl.ts` and
 `server/src/modules/sessions/session.service.ts` are a separate legacy concept
 despite currently sharing the `PlaybackSession` name.
 
-Play Best and the player readiness/fallback flow now run through session
-events. The next playback-control-plane migration should cover Download or
-Cast in a separate reviewable PR.
+Play Best, the player readiness/fallback flow, and the primary Download action
+now run through session events. The next playback-control-plane migration
+should cover Cast in a separate reviewable PR.
 
 See [PLAYBACK.md](./PLAYBACK.md) before changing playback persistence or adding
 new session event payloads.
@@ -180,8 +180,12 @@ Known useful direction:
 
 Downloads still need the biggest functional pass after playback readiness:
 
-- Route Download through `PlaybackSession`, using the existing action-aware
-  orchestrator as the planning entry point.
+- Primary Download now routes through `PlaybackSession`, using the existing
+  action-aware orchestrator as the planning entry point.
+- Download sessions record bridge/gateway preparation, coarse URL-free
+  progress, failure, cancellation, local-file verification, and completion.
+- New completions are not marked offline-playable until Electron or the native
+  filesystem confirms a real local file URI.
 - Show a real queue with clear states: queued, preparing, downloading, paused, completed, failed.
 - Support pause/resume/delete robustly across platforms.
 - Mark items offline-playable only when a verified local file URI exists.
@@ -244,14 +248,17 @@ Use small reviewable PRs. Do not combine UX redesign, download architecture, gat
 
 Goal: make Download use the same inspectable session lifecycle as Play Best.
 
-Expected work:
+Status: **Complete.**
 
-- Create a Download `PlaybackSession` from the existing action-aware
-  orchestrator result.
-- Record bridge/gateway preparation, progress, failure, cancellation, and
-  verification events.
-- Prevent fake offline completion.
-- Add tests for direct file, bridge torrent, browser fallback, HLS unsupported, and Electron local URI behavior.
+Implemented:
+
+- Creates a Download `PlaybackSession` from the existing action-aware
+  orchestrator.
+- Records bridge/gateway preparation, URL-free progress, failure,
+  cancellation, and local-file verification events.
+- Prevents new fake offline completion.
+- Covers direct file, bridge torrent, browser fallback, HLS unsupported, and
+  Electron local URI behavior in tests.
 
 ### PR B: Download Queue UX And Persistence
 

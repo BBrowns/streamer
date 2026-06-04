@@ -216,6 +216,21 @@ export const playbackSessionEventSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...playbackSessionEventBaseShape,
+      type: z.literal("download_progress"),
+      progress: z.number().min(0).max(1),
+      totalBytesWritten: z.number().int().nonnegative().optional(),
+      totalBytesExpectedToWrite: z.number().int().nonnegative().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...playbackSessionEventBaseShape,
+      type: z.literal("download_verified"),
+    })
+    .strict(),
+  z
+    .object({
+      ...playbackSessionEventBaseShape,
       type: z.literal("fallback_started"),
       fromCandidateId: opaqueIdSchema,
       toCandidateId: opaqueIdSchema,
