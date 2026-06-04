@@ -53,6 +53,7 @@ export default function DetailScreen() {
   const { data: meta, isLoading: metaLoading } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
+  const setSessionStream = usePlayerStore((s) => s.setSessionStream);
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
 
@@ -182,7 +183,12 @@ export default function DetailScreen() {
           return;
         }
 
-        setStream(result.stream, result.mediaInfo, result.fallbackStreams);
+        setSessionStream(
+          result.stream,
+          result.mediaInfo,
+          result.sessionId,
+          result.candidateId,
+        );
         router.push("/player");
       } finally {
         setPlanningAction(null);

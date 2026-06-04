@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-02.
+> Last updated: 2026-06-04.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -61,27 +61,29 @@ Playback is now structured around planning rather than rendering-time resolution
 
 ### Typed Playback Orchestration
 
-The mobile app now has a typed Play Best foundation:
+The mobile app now has typed playback orchestration:
 
 - Shared playback runtime types exist:
   `PlaybackRuntimeState`, `PlaybackErrorCode`, and `PlaybackRuntimeError`.
 - `apps/mobile/services/playback/PlaybackErrors.ts` maps planner and resolver failures into typed runtime errors.
 - `apps/mobile/services/playback/PlaybackOrchestrator.ts` centralizes `playBest()`.
-- The detail screen Play Best path uses the orchestrator and passes fallback streams to the player.
+- The detail screen Play Best path uses the orchestrator to create a
+  `PlaybackSession`; it no longer passes a raw fallback stream queue to the
+  player.
 - Manual advanced source playback still exists and is intentionally separate.
 
 ### Playback Session Control Plane
 
 `@streamer/shared` defines a persistence-safe `PlaybackSession` contract for
-future Play, Download, and Cast orchestration:
+Play, Download, and Cast orchestration:
 
 - Sessions store opaque candidate snapshots, attempts, gateway job identity,
   typed terminal errors, and an append-only event log.
 - Sessions do not persist `Stream` objects, resolved media URLs, magnets, info
   hashes, external URLs, or bridge URLs.
 - Session and candidate IDs must be opaque UUIDs, not source-derived values.
-- Existing `PlaybackPlan` and `PlaybackOrchestrator` behavior remains supported
-  while later PRs migrate runtime flows onto the session model.
+- Existing `PlaybackPlan` behavior remains supported while Download and Cast
+  migrate onto the session model.
 
 The mobile client now also has:
 
@@ -91,6 +93,9 @@ The mobile client now also has:
   and keeps planner candidates in a transient in-memory runtime map; it also
   exposes typed helpers for attempts, gateway progress, fallback, failure, and
   cancellation
+- `services/playback/PlaybackSessionPlaybackService.ts`, which resolves Play
+  Best candidates in planner order, applies timeout budgets, records gateway
+  progress, performs automatic fallback, and cancels active engines/jobs
 - explicit `requiresReplan` behavior when a persisted session is rehydrated
   without its runtime candidate mapping
 
@@ -101,9 +106,9 @@ The Redis-backed remote-control presence records in `useRemoteControl.ts` and
 `server/src/modules/sessions/session.service.ts` are a separate legacy concept
 despite currently sharing the `PlaybackSession` name.
 
-The next playback-control-plane PR should route Play Best and the player
-readiness/fallback flow through these session events. Do not combine download
-or cast migration into that PR.
+Play Best and the player readiness/fallback flow now run through session
+events. The next playback-control-plane migration should cover Download or
+Cast in a separate reviewable PR.
 
 See [PLAYBACK.md](./PLAYBACK.md) before changing playback persistence or adding
 new session event payloads.
@@ -122,7 +127,13 @@ The player now stores and displays typed playback readiness:
   - `SOURCE_UNAVAILABLE`
   - `NETWORK_OFFLINE`
 - Fallback transitions use `trying_fallback`.
-- `PlayerStatusOverlay` uses typed states for better titles and retry behavior.
+- `PlayerStatusOverlay` reads session readiness, gateway progress, fallback,
+  and terminal errors for better titles and retry behavior.
+- Torrent metrics no longer mark playback as playing before the video player
+  reports a playable frame.
+- First-frame timeout and navigation-away cancellation are recorded through
+  the active session, preventing indefinite generic buffering and dangling
+  gateway jobs.
 
 ### Gateway Job Lifecycle
 
@@ -169,7 +180,8 @@ Known useful direction:
 
 Downloads still need the biggest functional pass after playback readiness:
 
-- Route Download through an action-aware orchestrator, not ad hoc stream resolution.
+- Route Download through `PlaybackSession`, using the existing action-aware
+  orchestrator as the planning entry point.
 - Show a real queue with clear states: queued, preparing, downloading, paused, completed, failed.
 - Support pause/resume/delete robustly across platforms.
 - Mark items offline-playable only when a verified local file URI exists.
@@ -181,7 +193,8 @@ Downloads still need the biggest functional pass after playback readiness:
 
 Casting is safer than before, but not yet a first-class flow:
 
-- Cast should run through playback plans with `action: "cast"`.
+- Cast planning already uses `action: "cast"`; migrate its readiness and
+  fallback lifecycle onto `PlaybackSession`.
 - Cast readiness should be shown before device selection when possible.
 - Devices should be displayed cleanly in detail/player.
 - Google Cast should remain optional/native when module support exists.
@@ -193,19 +206,21 @@ Casting is safer than before, but not yet a first-class flow:
 Gateway lifecycle exists now, but these are still open:
 
 - Validate range/seek behavior under real video player seeking.
-- Improve torrent file selection beyond trusting `fileIdx`.
 - Consider persistent gateway/download metadata for recoverability.
 - Add better cleanup around inactive ready jobs when no player consumes them.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
 ### 4. UI/UX Revamp Is Still Incomplete
 
-The current UI is not yet the full visual/product redesign the user wants:
+Home, detail, and settings now have a stronger pastel glass/cinematic baseline,
+but the UI is not yet the full visual/product redesign the user wants:
 
-- Home should be rebuilt around hero, continue watching, provider rails, recommendations, and bridge status.
+- Continue refining Home around hero, continue watching, provider rails,
+  recommendations, and bridge status.
 - Discover provider grouping should be kept and expanded with provider, genre, quality, and type filtering.
-- Detail should be more cinematic, with large artwork, clear hierarchy, `Play Best`, and collapsed advanced sources.
-- Settings should be reorganized and visually cleaned up.
+- Continue refining Detail hierarchy around `Play Best` and collapsed advanced
+  sources.
+- Continue refining the reorganized Settings and Sources & Devices screens.
 - Player controls should feel more professional and less like a generic overlay.
 - Desktop and phone layouts need screenshot-driven QA.
 
@@ -225,14 +240,16 @@ Before this can be considered production-ready:
 
 Use small reviewable PRs. Do not combine UX redesign, download architecture, gateway internals, and CI in one PR.
 
-### PR A: Route Download Through Playback Orchestrator
+### PR A: Route Download Through Playback Sessions
 
-Goal: make Download use the same centralized planning model as Play Best.
+Goal: make Download use the same inspectable session lifecycle as Play Best.
 
 Expected work:
 
-- Add action-aware orchestration for `download`.
-- Return typed download eligibility and typed runtime/download errors.
+- Create a Download `PlaybackSession` from the existing action-aware
+  orchestrator result.
+- Record bridge/gateway preparation, progress, failure, cancellation, and
+  verification events.
 - Prevent fake offline completion.
 - Add tests for direct file, bridge torrent, browser fallback, HLS unsupported, and Electron local URI behavior.
 
@@ -248,48 +265,36 @@ Expected work:
 - Verify local file existence before showing offline playable.
 - Add mobile and desktop tests where feasible.
 
-### PR C: Route Cast Through Playback Orchestrator
+### PR C: Route Cast Through Playback Sessions
 
-Goal: Cast should not bypass the planner.
+Goal: Cast should not bypass the session control plane.
 
 Expected work:
 
-- Add `cast` action orchestration.
+- Create a Cast `PlaybackSession` from the existing `cast` plan.
 - Show cast readiness/failure inline.
 - Use configured bridge URL and device capability where available.
 - Add tests that configured bridge URL is used and localhost is not hard-coded.
 
-### PR D: Smarter Torrent File Selection
+### PR D: Real-Device Gateway And Player Validation
 
-Goal: reduce bad playback choices inside multi-file torrents.
-
-Expected work:
-
-- Choose likely video files by extension, size, season/episode hints, and title matching.
-- Keep explicit `fileIdx` override.
-- Add tests for movies, episodes, samples, trailers, subtitles, and extras.
-
-### PR E: Settings And Sources & Devices UX
-
-Goal: make bridge/add-ons/paid optional services understandable.
+Goal: validate production behavior beyond mocked readiness tests.
 
 Expected work:
 
-- Reorganize settings into Account, Sources & Devices, Playback, Downloads, Advanced.
-- Surface bridge URL, bridge health, repair guidance, add-ons, and optional Real-Debrid.
-- Keep Real-Debrid disabled by default and out of onboarding.
+- Validate range requests, seeking, cancellation, and ready-job cleanup.
+- Test real torrents and direct streams on desktop, phone, and web.
+- Add golden-path coverage for candidate timeout -> fallback -> first frame.
 
-### PR F: Full Home/Detail Visual Revamp
+### PR E: Production Security And Observability
 
-Goal: deliver the promised pastel glass cinema experience.
+Goal: make the playback control plane diagnosable and release-ready.
 
 Expected work:
 
-- Home rails and cinematic hero.
-- Provider rails retained from Discover.
-- Detail page hierarchy around `Play Best`.
-- More Sources collapsed by default.
-- Desktop and phone screenshot QA.
+- Add focused bridge/add-on/remote-media URL security review and tests.
+- Verify Sentry/error reporting without leaking source URLs or tokens.
+- Add release/build pipeline coverage and golden-path telemetry.
 
 ## Engineering Rules For Future Agents
 

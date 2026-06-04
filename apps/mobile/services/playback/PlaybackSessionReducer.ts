@@ -101,7 +101,10 @@ export function toPlaybackSessionError(
 ): PlaybackSessionError {
   return {
     code: error.code,
-    message: error.message,
+    message: error.message.replace(
+      /\b(?:https?:\/\/|magnet:\?)[^\s]+/gi,
+      "[redacted]",
+    ),
     retryable: error.retryable,
     shouldFallback: error.shouldFallback,
   };
@@ -371,8 +374,10 @@ export function reducePlaybackSession(
         "attempt_failed candidate must match the referenced attempt.",
       );
       assertSessionRule(
-        attempt.status === "attempting" || attempt.status === "pending",
-        "Only pending or attempting attempts can fail.",
+        attempt.status === "attempting" ||
+          attempt.status === "pending" ||
+          attempt.status === "ready",
+        "Only pending, attempting, or ready attempts can fail.",
       );
       nextSession.attempts = replaceAttempt(session, attempt.id, {
         ...attempt,

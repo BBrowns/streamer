@@ -353,10 +353,15 @@
       "off": "Off"
     },
     "status": {
+      "planning": "Preparing playback...",
+      "checkingBridge": "Checking the desktop bridge...",
+      "selectingSource": "Selecting the best source...",
+      "checkingSource": "Checking source...",
       "findingPeers": "Finding peers...",
       "connecting": "Connecting to peers...",
       "creatingGatewayJob": "Preparing source...",
       "preparingMetadata": "Reading torrent metadata...",
+      "remuxing": "Preparing a compatible video stream...",
       "preparingSubtitle": "This can take a moment for torrent sources.",
       "tryingFallback": "Trying another source...",
       "buffering": "Buffering...",

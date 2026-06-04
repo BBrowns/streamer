@@ -133,6 +133,48 @@ describe("playerStore", () => {
     expect(state.runtimeError).toBeNull();
   });
 
+  it("stores session context without a raw fallback queue", () => {
+    const primary = { url: "https://cdn.example.test/primary.mp4" } as Stream;
+
+    usePlayerStore.getState().setSessionStream(
+      primary,
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+      },
+      "session-1",
+      "candidate-1",
+      "attempt-1",
+    );
+
+    const state = usePlayerStore.getState();
+    expect(state.currentStream).toBe(primary);
+    expect(state.fallbackStreams).toEqual([]);
+    expect(state.playbackSessionId).toBe("session-1");
+    expect(state.playbackCandidateId).toBe("candidate-1");
+    expect(state.playbackAttemptId).toBe("attempt-1");
+    expect(state.runtimeState).toBe("selecting_source");
+  });
+
+  it("does not let legacy fallback bypass an active playback session", () => {
+    const primary = { url: "https://cdn.example.test/primary.mp4" } as Stream;
+    const fallback = { url: "https://cdn.example.test/fallback.mp4" } as Stream;
+
+    usePlayerStore.setState({
+      currentStream: primary,
+      fallbackStreams: [fallback],
+      playbackSessionId: "session-1",
+      playbackCandidateId: "candidate-1",
+      playbackAttemptId: "attempt-1",
+    });
+
+    expect(
+      usePlayerStore.getState().advanceToNextFallback("Timed out."),
+    ).toBeNull();
+    expect(usePlayerStore.getState().currentStream).toBe(primary);
+  });
+
   it("starts torrent streams in a finding-peers runtime state", () => {
     usePlayerStore
       .getState()
@@ -218,5 +260,37 @@ describe("playerStore", () => {
     expect(state.runtimeError?.code).toBe("NO_PEERS");
     expect(state.errorMessage).toBe("No peers found after 45 seconds.");
     expect(state.isBuffering).toBe(false);
+  });
+
+  it("keeps torrent metrics in buffering until the video player reports playback", () => {
+    usePlayerStore
+      .getState()
+      .setSessionStream(
+        { infoHash: "abcdef123456" } as Stream,
+        undefined,
+        "session-1",
+        "candidate-1",
+        "attempt-1",
+      );
+    usePlayerStore.getState().subscribeToStreamMetrics("abcdef123456");
+    const messageHandler =
+      mockEventSourceInstances[0].addEventListener.mock.calls.find(
+        ([event]) => event === "message",
+      )?.[1];
+
+    messageHandler?.({
+      data: JSON.stringify({
+        state: "ready",
+        numPeers: 3,
+        downloadSpeed: 1024,
+        progress: 0.5,
+        downloaded: 1024,
+      }),
+    });
+
+    const state = usePlayerStore.getState();
+    expect(state.streamState).toBe("loading_metrics");
+    expect(state.runtimeState).toBe("buffering");
+    expect(state.isBuffering).toBe(true);
   });
 });

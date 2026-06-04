@@ -245,6 +245,67 @@ describe("PlaybackSessionReducer", () => {
     expect(playbackSessionSchema.safeParse(session).success).toBe(true);
   });
 
+  it("allows a ready attempt to fail before the player produces a frame", () => {
+    const options = makeOptions(150);
+    const { session: initialSession } = createPlaybackSessionFromPlan(
+      {
+        plan: makeReadyPlan(),
+        content: { type: "movie", id: "tt123" },
+        deviceProfile,
+      },
+      options,
+    );
+    const candidateId = initialSession.candidates[0].id;
+    const attempting = reducePlaybackSession(
+      initialSession,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "attempt_started",
+          attemptId: ATTEMPT_ID,
+          candidateId,
+        },
+        options,
+      ),
+    );
+    const ready = reducePlaybackSession(
+      attempting,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "attempt_ready",
+          attemptId: ATTEMPT_ID,
+          candidateId,
+        },
+        options,
+      ),
+    );
+
+    const failed = reducePlaybackSession(
+      ready,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "attempt_failed",
+          attemptId: ATTEMPT_ID,
+          candidateId,
+          error: {
+            code: "PLAYBACK_TIMEOUT",
+            message: "Playback did not start in time.",
+            retryable: true,
+            shouldFallback: true,
+          },
+        },
+        options,
+      ),
+    );
+
+    expect(failed.attempts[0]).toMatchObject({
+      status: "failed",
+      error: { code: "PLAYBACK_TIMEOUT" },
+    });
+  });
+
   it("treats identical event replay as idempotent and rejects event rewrites", () => {
     const options = makeOptions(200);
     const { session } = createPlaybackSessionFromPlan(
@@ -348,5 +409,15 @@ describe("PlaybackSessionReducer", () => {
       retryable: true,
       shouldFallback: true,
     });
+
+    expect(
+      toPlaybackSessionError({
+        code: "SOURCE_UNAVAILABLE",
+        message:
+          "Source https://signed.example.test/private-token did not respond.",
+        retryable: true,
+        shouldFallback: true,
+      }).message,
+    ).toBe("Source [redacted] did not respond.");
   });
 });

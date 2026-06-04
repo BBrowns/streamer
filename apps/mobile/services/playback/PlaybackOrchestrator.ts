@@ -6,14 +6,17 @@ import type {
   Stream,
 } from "@streamer/shared";
 import type { MediaInfo } from "../../stores/playerStore";
+import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
 import {
   getDownloadEligibility,
   type DownloadEligibility,
 } from "../downloadEligibility";
+import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
 } from "./PlaybackPlanService";
+import { getDeviceProfile } from "./deviceProfile";
 import {
   createPlaybackRuntimeError,
   getPlaybackRuntimeState,
@@ -35,7 +38,8 @@ export interface PlaybackOrchestratorSuccess {
   ok: true;
   stream: Stream;
   mediaInfo: MediaInfo;
-  fallbackStreams: Stream[];
+  sessionId: string;
+  candidateId: string;
   runtimeState: PlaybackRuntimeState;
   plan: PlaybackPlan;
   attemptedStreams: number;
@@ -47,6 +51,7 @@ export interface PlaybackOrchestratorFailure {
   error: PlaybackRuntimeError;
   runtimeState: PlaybackRuntimeState;
   plan?: PlaybackPlan;
+  sessionId?: string;
   attemptedStreams: number;
   resolveErrors: string[];
 }
@@ -102,19 +107,70 @@ export async function playBest(
   input: PlaybackOrchestratorInput,
 ): Promise<PlaybackOrchestratorResult> {
   const fallback = "Playback is unavailable right now.";
-  const result = await resolveActionPlan(input, "play", fallback);
+  const plan = await createPlaybackPlanWithBridgeRetry({
+    type: input.type,
+    id: input.id,
+    season: input.season,
+    episode: input.episode,
+    action: "play",
+  });
+  const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
+  const session = usePlaybackSessionStore.getState().createSession({
+    plan,
+    content: {
+      type: input.type,
+      id: input.id,
+      season: input.season,
+      episode: input.episode,
+    },
+    deviceProfile: getDeviceProfile(),
+    bridge: {
+      status: bridgeDiagnostics.status,
+      reason: bridgeDiagnostics.reason,
+    },
+  });
 
-  if (!result.ok) return result;
+  if (plan.state !== "ready" || !plan.selectedCandidate) {
+    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
+    usePlaybackSessionStore.getState().failSession(session.id, failure.error);
+    return {
+      ok: false,
+      ...failure,
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  const candidateId = session.selectedCandidateId;
+  if (!candidateId) {
+    const error = createPlaybackRuntimeError("SOURCE_UNAVAILABLE", fallback, {
+      retryable: true,
+      shouldFallback: false,
+    });
+    usePlaybackSessionStore.getState().failSession(session.id, error);
+    return {
+      ok: false,
+      error,
+      runtimeState: getPlaybackRuntimeState(error.code),
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
 
   return {
     ok: true,
-    stream: result.stream,
-    mediaInfo: buildMediaInfo(input, result.stream),
-    fallbackStreams: result.remainingStreams,
-    runtimeState: "buffering",
-    plan: result.plan,
-    attemptedStreams: result.attemptedStreams,
-    resolveErrors: result.resolveErrors,
+    stream: plan.selectedCandidate.stream,
+    mediaInfo: buildMediaInfo(input, plan.selectedCandidate.stream),
+    sessionId: session.id,
+    candidateId,
+    runtimeState: "selecting_source",
+    plan,
+    attemptedStreams: 0,
+    resolveErrors: [],
   };
 }
 

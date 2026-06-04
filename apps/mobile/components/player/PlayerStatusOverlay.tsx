@@ -12,6 +12,8 @@ import type { StreamMetrics, StreamLoadState } from "../../stores/playerStore";
 import type {
   PlaybackRuntimeError,
   PlaybackRuntimeState,
+  PlaybackSession,
+  PlaybackSessionStatus,
 } from "@streamer/shared";
 
 interface PlayerStatusOverlayProps {
@@ -22,6 +24,7 @@ interface PlayerStatusOverlayProps {
   errorMessage: string | null;
   runtimeError?: PlaybackRuntimeError | null;
   fallbackReason?: string | null;
+  session?: PlaybackSession | null;
   onBack: () => void;
   onRetry?: () => void;
   onOpenSourcesDevices?: () => void;
@@ -35,15 +38,42 @@ export function PlayerStatusOverlay({
   errorMessage,
   runtimeError,
   fallbackReason,
+  session,
   onBack,
   onRetry,
   onOpenSourcesDevices,
 }: PlayerStatusOverlayProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const sessionError = session?.terminalError
+    ? { ...session.terminalError }
+    : null;
+  const effectiveRuntimeError = sessionError || runtimeError;
+  const effectiveStreamState =
+    session?.status === "failed" ? "error" : streamState;
+  const latestFallback = session
+    ? [...session.eventLog]
+        .reverse()
+        .find((event) => event.type === "fallback_started")
+    : null;
+  const latestGatewayProgress = session
+    ? [...session.eventLog]
+        .reverse()
+        .find((event) => event.type === "gateway_progress")
+    : null;
+  const effectiveFallbackReason =
+    fallbackReason ||
+    (latestFallback?.type === "fallback_started"
+      ? latestFallback.reason
+      : null);
 
-  if (streamState === "loading_metrics") {
-    const title = getLoadingTitle(runtimeState, streamMetrics, t);
+  if (effectiveStreamState === "loading_metrics") {
+    const title = getLoadingTitle(
+      runtimeState,
+      streamMetrics,
+      t,
+      session?.status,
+    );
     const metricsDetail =
       streamMetrics && runtimeState !== "trying_fallback"
         ? `${streamMetrics.numPeers} ${t("player.controls.peers")} • ${(
@@ -51,7 +81,9 @@ export function PlayerStatusOverlay({
             1024 /
             1024
           ).toFixed(2)} MB/s`
-        : null;
+        : latestGatewayProgress?.type === "gateway_progress"
+          ? getGatewayProgressDetail(latestGatewayProgress, t)
+          : null;
 
     return (
       <View
@@ -70,9 +102,9 @@ export function PlayerStatusOverlay({
           style={styles.spinner}
         />
         <Text style={[styles.titleText, { color: colors.text }]}>{title}</Text>
-        {fallbackReason ? (
+        {effectiveFallbackReason ? (
           <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
-            {fallbackReason}
+            {effectiveFallbackReason}
           </Text>
         ) : metricsDetail ? (
           <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
@@ -88,9 +120,9 @@ export function PlayerStatusOverlay({
     );
   }
 
-  if (streamState === "error") {
-    const canRetry = !!onRetry && runtimeError?.retryable !== false;
-    const errorTitle = getErrorTitle(runtimeError, t);
+  if (effectiveStreamState === "error") {
+    const canRetry = !!onRetry && effectiveRuntimeError?.retryable !== false;
+    const errorTitle = getErrorTitle(effectiveRuntimeError, t);
     return (
       <View
         style={[
@@ -112,7 +144,7 @@ export function PlayerStatusOverlay({
           {errorTitle}
         </Text>
         <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-          {runtimeError?.message ||
+          {effectiveRuntimeError?.message ||
             errorMessage ||
             t("player.status.errorSubtitle")}
         </Text>
@@ -188,7 +220,31 @@ function getLoadingTitle(
   runtimeState: PlaybackRuntimeState,
   streamMetrics: StreamMetrics | null,
   t: (key: string) => string,
+  sessionStatus?: PlaybackSessionStatus,
 ) {
+  if (sessionStatus) {
+    if (sessionStatus === "planning") return t("player.status.planning");
+    if (sessionStatus === "checking_bridge")
+      return t("player.status.checkingBridge");
+    if (sessionStatus === "selecting_candidate")
+      return t("player.status.selectingSource");
+    if (
+      sessionStatus === "attempting_candidate" ||
+      sessionStatus === "probing_playback_url"
+    ) {
+      return t("player.status.checkingSource");
+    }
+    if (sessionStatus === "creating_gateway_job")
+      return t("player.status.creatingGatewayJob");
+    if (sessionStatus === "preparing_metadata")
+      return t("player.status.preparingMetadata");
+    if (sessionStatus === "finding_peers")
+      return t("player.status.findingPeers");
+    if (sessionStatus === "remuxing") return t("player.status.remuxing");
+    if (sessionStatus === "trying_fallback")
+      return t("player.status.tryingFallback");
+  }
+
   if (runtimeState === "trying_fallback") {
     return t("player.status.tryingFallback");
   }
@@ -213,6 +269,23 @@ function getLoadingTitle(
   }
 
   return t("player.status.buffering");
+}
+
+function getGatewayProgressDetail(
+  event: Extract<
+    PlaybackSession["eventLog"][number],
+    { type: "gateway_progress" }
+  >,
+  t: (key: string) => string,
+) {
+  const parts: string[] = [];
+  if (typeof event.peerCount === "number") {
+    parts.push(`${event.peerCount} ${t("player.controls.peers")}`);
+  }
+  if (typeof event.progress === "number") {
+    parts.push(`${Math.round(event.progress * 100)}%`);
+  }
+  return parts.length > 0 ? parts.join(" • ") : null;
 }
 
 function getErrorTitle(
