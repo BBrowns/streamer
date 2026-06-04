@@ -60,15 +60,37 @@ It deliberately does not store:
 Resolved media URLs remain transient runtime data. They may expire, contain
 credentials, or be unusable after an app restart.
 
+The mobile client now has:
+
+- `services/playback/PlaybackSessionReducer.ts` for pure session creation,
+  typed event reduction, lifecycle validation, and runtime-error sanitization
+- `stores/playbackSessionStore.ts` for persisted sessions and active-session
+  selection, typed event dispatch, attempt creation, gateway progress,
+  fallback, failure, and cancellation helpers
+- an in-memory runtime mapping from session-local candidate IDs to planner
+  candidates
+
+Only `PlaybackSession` records are persisted. Planner candidates and their raw
+`Stream` values are kept in memory and are deliberately lost on restart. A
+rehydrated session with candidates but without runtime mappings reports
+`requiresReplan`; callers must request a new plan instead of trying to reuse
+stale media data.
+
+Do not confuse the shared playback control-plane `PlaybackSession` with the
+legacy device-presence records named `PlaybackSession` in
+`apps/mobile/hooks/useRemoteControl.ts` and
+`server/src/modules/sessions/session.service.ts`. Those Redis-backed records
+only describe remote-control presence and current position.
+
 ## Identifier Rules
 
 Session, candidate, attempt, event, and gateway job identifiers in persisted
 sessions are opaque UUIDs.
 
 Do not derive persisted candidate IDs from a URL, magnet, info hash, add-on
-response, or another raw source identifier. Runtime code may keep a temporary
-mapping from an opaque session candidate ID to a `MediaCandidate`, but that
-mapping is not part of persisted session state.
+response, planner candidate ID, or another raw source identifier. Runtime code
+may keep a temporary mapping from an opaque session candidate ID to a
+`MediaCandidate`, but that mapping is not part of persisted session state.
 
 ## Schema Versioning
 
@@ -103,7 +125,8 @@ The intended migration sequence is:
 
 1. Add the shared `PlaybackSession` contract.
 2. Extend the planner with ordered, opaque candidates and decision rationale.
-3. Add a client session store and typed event reducer.
+3. Add a client session store and typed event reducer. **Store foundation
+   complete; live Play Best wiring follows in step 4.**
 4. Route Play Best through session-driven fallback and timeout behavior.
 5. Route downloads and cast through the same session model.
 
