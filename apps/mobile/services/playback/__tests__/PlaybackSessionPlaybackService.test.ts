@@ -19,6 +19,8 @@ import {
   advanceCastSessionAfterFailure,
   advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
+  markPlaybackSessionBuffering,
+  markPlaybackSessionPlaying,
   resolveCastSession,
   resolveDownloadSession,
   resolvePlaybackSession,
@@ -482,6 +484,64 @@ describe("PlaybackSessionPlaybackService", () => {
       { status: "ready" },
     ]);
     expect(primaryEngine.stop).toHaveBeenCalled();
+  });
+
+  it("completes the golden path from first-frame timeout through fallback to playing", async () => {
+    const primary = {
+      url: "https://cdn.example.test/primary.mp4",
+      title: "Primary",
+    } as Stream;
+    const fallback = {
+      url: "https://cdn.example.test/fallback.mp4",
+      title: "Fallback",
+    } as Stream;
+    const primaryEngine = makeEngine(async () => primary.url!);
+    const fallbackEngine = makeEngine(async () => fallback.url!);
+    resolveEngine.mockImplementation((stream) =>
+      stream.url === primary.url ? primaryEngine : fallbackEngine,
+    );
+    const session = createSession(primary, fallback);
+
+    const first = await resolvePlaybackSession(session.id);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const second = await advancePlaybackSessionAfterFailure(
+      session.id,
+      first.candidateId,
+      first.attemptId,
+      {
+        code: "PLAYBACK_TIMEOUT",
+        message: "Playback did not start in time.",
+        retryable: true,
+        shouldFallback: true,
+      },
+    );
+    expect(second).toMatchObject({ ok: true, uri: fallback.url });
+    if (!second.ok) return;
+
+    markPlaybackSessionBuffering(session.id);
+    markPlaybackSessionPlaying(session.id);
+
+    const completedSession =
+      usePlaybackSessionStore.getState().sessions[session.id];
+    expect(completedSession).toMatchObject({
+      status: "playing",
+      selectedCandidateId: second.candidateId,
+      attempts: [
+        { status: "failed", error: { code: "PLAYBACK_TIMEOUT" } },
+        { status: "ready" },
+      ],
+    });
+    expect(completedSession.eventLog.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        "fallback_started",
+        "attempt_ready",
+        "status_changed",
+      ]),
+    );
+    expect(primaryEngine.stop).toHaveBeenCalled();
+    expect(fallbackEngine.stop).not.toHaveBeenCalled();
   });
 
   it("fails the session clearly when all planned candidates fail", async () => {

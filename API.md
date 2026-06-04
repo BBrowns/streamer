@@ -107,12 +107,23 @@ The legacy bridge endpoint still exists:
 
 The current preferred torrent playback path is the gateway job API:
 
-| Method   | Route                          | Auth Req            | Description                                                                                                                |
-| -------- | ------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `POST`   | `/api/gateway/jobs`            | ✅                  | Creates a gateway job. Body: `{ magnet, fileIdx?, remux?, remuxFormat? }`. Returns `202` with job status and playback URL. |
-| `GET`    | `/api/gateway/jobs/:id`        | ✅                  | Polls job status while the bridge prepares torrent metadata/peers.                                                         |
-| `DELETE` | `/api/gateway/jobs/:id`        | ✅                  | Cancels a preparing/ready job. Returns `202` with `state: "cancelled"` and `playbackUrl: null`.                            |
-| `GET`    | `/api/gateway/jobs/:id/stream` | ❌ currently public | Streams the prepared job. Returns `410` for cancelled jobs and `503` for failed jobs.                                      |
+| Method   | Route                          | Auth Req            | Description                                                                                                                                               |
+| -------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/api/gateway/jobs`            | ✅                  | Creates a gateway job. Body: `{ magnet, fileIdx?, remux?, remuxFormat? }`. Returns `202` with job status and playback URL.                                |
+| `GET`    | `/api/gateway/jobs/:id`        | ✅                  | Polls job status while the bridge prepares torrent metadata/peers.                                                                                        |
+| `DELETE` | `/api/gateway/jobs/:id`        | ✅                  | Cancels a preparing/ready job. Returns `202` with `state: "cancelled"` and `playbackUrl: null`.                                                           |
+| `GET`    | `/api/gateway/jobs/:id/stream` | ❌ currently public | Streams the prepared job. Direct-file responses support a single HTTP byte range for seeking. Returns `410` for cancelled jobs and `503` for failed jobs. |
+
+Direct-file gateway streams support bounded, open-ended, and suffix byte
+ranges, return `416` with `Content-Range: bytes */<length>` for unsatisfiable
+ranges, and expose range headers for browser media clients. Multi-range
+requests are ignored and receive the full representation because multipart
+range responses are not implemented. FFmpeg remux responses are currently
+sequential chunked MP4 streams and do not provide byte-range seeking.
+
+The bridge prunes ready jobs that were never consumed after five minutes and
+consumed jobs after fifteen idle minutes. Jobs with active stream consumers
+are not pruned.
 
 Gateway job response shape:
 
@@ -132,6 +143,8 @@ interface GatewayJobResponse {
   error?: string;
   retryable: boolean;
   peerCount: number | null;
+  activeStreamCount: number;
+  lastStreamAccessAt: string | null;
   progress: number | null; // 0..1 while preparing, 1 when ready, null for terminal failures/cancel
   elapsedMs: number;
   readyTimeoutMs: number;

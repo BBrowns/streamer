@@ -30,12 +30,17 @@ interface GatewayJob {
   peerCount?: number;
   retryable?: boolean;
   progressTimer?: ReturnType<typeof setInterval>;
+  activeStreamCount: number;
+  lastStreamAccessAt?: number;
   createdAt: number;
   updatedAt: number;
 }
 
 const JOB_TTL_MS = 6 * 60 * 60 * 1000;
 const TERMINAL_JOB_TTL_MS = 15 * 60 * 1000;
+const UNUSED_READY_JOB_TTL_MS = 5 * 60 * 1000;
+const CONSUMED_READY_JOB_TTL_MS = 15 * 60 * 1000;
+const JOB_PRUNE_INTERVAL_MS = 60 * 1000;
 const GATEWAY_READY_TIMEOUT_MS = 120_000;
 const jobs = new Map<string, GatewayJob>();
 
@@ -62,21 +67,35 @@ function isRetryableGatewayError(error: unknown) {
   );
 }
 
-function pruneJobs() {
-  const now = Date.now();
+function shouldPruneJob(job: GatewayJob, now: number) {
+  if (job.activeStreamCount > 0) return false;
+
+  if (job.state === "ready") {
+    const referenceTime = job.lastStreamAccessAt ?? job.updatedAt;
+    const ttl = job.lastStreamAccessAt
+      ? CONSUMED_READY_JOB_TTL_MS
+      : UNUSED_READY_JOB_TTL_MS;
+    return now - referenceTime > ttl;
+  }
+
+  const ttl =
+    job.state === "error" || job.state === "cancelled"
+      ? TERMINAL_JOB_TTL_MS
+      : JOB_TTL_MS;
+  return now - job.updatedAt > ttl;
+}
+
+function pruneJobs(now = Date.now()) {
   for (const [id, job] of jobs) {
-    const terminalTtl =
-      job.state === "ready" ||
-      job.state === "error" ||
-      job.state === "cancelled"
-        ? TERMINAL_JOB_TTL_MS
-        : JOB_TTL_MS;
-    if (now - job.updatedAt > terminalTtl) {
+    if (shouldPruneJob(job, now)) {
       if (job.progressTimer) clearInterval(job.progressTimer);
       jobs.delete(id);
     }
   }
 }
+
+const pruneTimer = setInterval(pruneJobs, JOB_PRUNE_INTERVAL_MS);
+pruneTimer.unref?.();
 
 function getJobPhase(job: GatewayJob): GatewayJobPhase {
   if (job.state === "ready") return "ready";
@@ -106,6 +125,10 @@ function serializeJob(job: GatewayJob) {
     retryable:
       job.retryable ?? (job.state === "preparing" || job.state === "error"),
     peerCount: job.peerCount ?? null,
+    activeStreamCount: job.activeStreamCount,
+    lastStreamAccessAt: job.lastStreamAccessAt
+      ? new Date(job.lastStreamAccessAt).toISOString()
+      : null,
     progress: getJobProgress(job, elapsedMs),
     elapsedMs,
     readyTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
@@ -155,6 +178,24 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
 
 function isGatewayJobCancelled(job: GatewayJob) {
   return job.state === "cancelled";
+}
+
+function trackGatewayStream(job: GatewayJob, res: Response) {
+  job.activeStreamCount += 1;
+  job.lastStreamAccessAt = Date.now();
+  job.updatedAt = Date.now();
+
+  let ended = false;
+  const endTracking = () => {
+    if (ended) return;
+    ended = true;
+    job.activeStreamCount = Math.max(0, job.activeStreamCount - 1);
+    job.lastStreamAccessAt = Date.now();
+    job.updatedAt = Date.now();
+  };
+
+  res.once("finish", endTracking);
+  res.once("close", endTracking);
 }
 
 function trackGatewayJobProgress(job: GatewayJob, torrent: any) {
@@ -243,6 +284,7 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
     hints: parsed.hints,
     mode: parsed.mode,
     state: "preparing",
+    activeStreamCount: 0,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -298,6 +340,8 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
     });
   }
 
+  trackGatewayStream(job, res);
+
   try {
     const torrent = await prepareTorrent(job.magnet);
     if (isGatewayJobCancelled(job)) {
@@ -345,4 +389,8 @@ export function __resetGatewayJobsForTests() {
     if (job.progressTimer) clearInterval(job.progressTimer);
   }
   jobs.clear();
+}
+
+export function __pruneGatewayJobsForTests(now: number) {
+  pruneJobs(now);
 }
