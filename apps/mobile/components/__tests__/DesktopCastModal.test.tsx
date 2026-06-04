@@ -212,6 +212,76 @@ describe("DesktopCastModal", () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it("re-plans with explicit device capabilities after generic preparation fails", async () => {
+    getDevices.mockResolvedValueOnce([
+      {
+        id: "living-room",
+        name: "Living Room",
+        type: "chromecast",
+        capabilities: {
+          supportsMp4: true,
+          supportedCodecs: ["h265", "aac"],
+        },
+      },
+    ]);
+    prepare
+      .mockResolvedValueOnce({
+        ok: false,
+        sessionId: "session-generic",
+        error: {
+          code: "UNSUPPORTED_CODEC",
+          message: "No generic cast source is compatible.",
+          retryable: false,
+          shouldFallback: false,
+        },
+        runtimeState: "failed_unsupported_codec",
+        plan: makePlaybackPlan({
+          action: "cast",
+          state: "unsupported",
+        }),
+        attemptedStreams: 0,
+        resolveErrors: [],
+      })
+      .mockResolvedValueOnce(preparedCast);
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        title="Example Movie"
+        orchestratorInput={{
+          type: "movie",
+          id: "tt123",
+          title: "Example Movie",
+        }}
+        onClose={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("No generic cast source is compatible."),
+      ).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText("Living Room"));
+
+    await waitFor(() => {
+      expect(prepare).toHaveBeenNthCalledWith(
+        2,
+        {
+          type: "movie",
+          id: "tt123",
+          title: "Example Movie",
+        },
+        expect.objectContaining({
+          deviceProfile: expect.objectContaining({
+            supports: expect.objectContaining({ h265: true }),
+          }),
+        }),
+      );
+      expect(start).toHaveBeenCalled();
+    });
+  });
+
   it("keeps manual advanced-source casting available without creating a session", async () => {
     const screen = render(
       <DesktopCastModal

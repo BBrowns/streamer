@@ -238,8 +238,6 @@ export function DesktopCastModal({
         : sourceReadiness === "failed"
           ? "A cast-ready source could not be prepared."
           : null;
-  const devicesDisabled =
-    sourceReadiness !== "ready" || castingTo !== null || loading;
 
   return (
     <Modal
@@ -324,6 +322,13 @@ export function DesktopCastModal({
               contentContainerStyle={styles.deviceList}
               renderItem={({ item }) => {
                 const isCasting = castingTo === item.id;
+                const canRetryWithDeviceCapabilities =
+                  sourceReadiness === "failed" && !!item.capabilities;
+                const deviceDisabled =
+                  castingTo !== null ||
+                  loading ||
+                  (sourceReadiness !== "ready" &&
+                    !canRetryWithDeviceCapabilities);
                 const iconName =
                   item.type === "chromecast" ? "cast" : "airplay";
                 return (
@@ -331,11 +336,11 @@ export function DesktopCastModal({
                     style={({ pressed }) => [
                       styles.deviceItem,
                       isCasting && styles.deviceItemActive,
-                      pressed && !devicesDisabled && styles.pressed,
-                      devicesDisabled && !isCasting && styles.deviceDisabled,
+                      pressed && !deviceDisabled && styles.pressed,
+                      deviceDisabled && !isCasting && styles.deviceDisabled,
                     ]}
                     onPress={() => handleCast(item)}
-                    disabled={devicesDisabled}
+                    disabled={deviceDisabled}
                   >
                     <View style={styles.deviceInfoContainer}>
                       <MaterialIcons
