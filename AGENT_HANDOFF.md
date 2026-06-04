@@ -227,9 +227,15 @@ Still open:
 
 Gateway lifecycle exists now, but these are still open:
 
-- Validate range/seek behavior under real video player seeking.
+- Direct-file gateway range handling now supports bounded, open-ended, and
+  suffix requests, clamps ranges to file boundaries, and rejects
+  unsatisfiable requests with `416`. Validate this under real video player
+  seeking.
 - Consider persistent gateway/download metadata for recoverability.
-- Add better cleanup around inactive ready jobs when no player consumes them.
+- Unused ready jobs are now pruned periodically, while jobs with active stream
+  consumers are protected from cleanup.
+- FFmpeg remux output is still sequential and needs a packaged or persistent
+  output strategy before remuxed sources can support reliable seeking.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
 ### 4. UI/UX Revamp Is Still Incomplete
@@ -312,11 +318,22 @@ Status: **Complete.**
 
 Goal: validate production behavior beyond mocked readiness tests.
 
-Expected work:
+Status: **In progress.**
 
-- Validate range requests, seeking, cancellation, and ready-job cleanup.
-- Test real torrents and direct streams on desktop, phone, and web.
+Implemented:
+
+- Adds strict single byte-range handling for direct gateway streams, including
+  open-ended, suffix, clamped, `HEAD`, and unsatisfiable requests.
+- Adds periodic cleanup for unused ready jobs without pruning active stream
+  consumers.
 - Add golden-path coverage for candidate timeout -> fallback -> first frame.
+
+Still open:
+
+- Validate seeking, cancellation, and cleanup with real torrents and direct
+  streams on desktop, phone, and web.
+- Decide on a packaged or persistent remux strategy before claiming seek
+  support for FFmpeg-remuxed sources.
 
 ### PR E: Production Security And Observability
 

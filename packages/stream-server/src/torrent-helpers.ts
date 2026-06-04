@@ -6,6 +6,11 @@
 import path from "path";
 import type { Request, Response } from "express";
 
+export type ByteRangeResult =
+  | { type: "full" }
+  | { type: "partial"; start: number; end: number; length: number }
+  | { type: "unsatisfiable" };
+
 /** Detect MIME type from file extension for correct Content-Type header */
 export function mimeFromExt(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -19,6 +24,77 @@ export function mimeFromExt(filename: string): string {
     ".ts": "video/mp2t",
   };
   return mimes[ext] ?? "video/mp4";
+}
+
+/**
+ * Parse the single byte range used by media players for seeking.
+ *
+ * Unsupported range units and multi-range requests are ignored so the caller
+ * can serve the full representation. Malformed or unsatisfiable byte ranges
+ * are rejected instead of serving the wrong bytes as a valid seek.
+ */
+export function parseByteRange(
+  rangeHeader: string | string[] | undefined,
+  total: number,
+): ByteRangeResult {
+  if (rangeHeader === undefined) return { type: "full" };
+  if (
+    typeof rangeHeader !== "string" ||
+    !Number.isSafeInteger(total) ||
+    total < 0
+  ) {
+    return { type: "unsatisfiable" };
+  }
+
+  const unitMatch = /^([^=]+)=(.*)$/.exec(rangeHeader.trim());
+  if (!unitMatch) return { type: "unsatisfiable" };
+
+  const [, unit, rangeSet] = unitMatch;
+  if (unit.trim().toLowerCase() !== "bytes") return { type: "full" };
+
+  // Multipart byte-range responses are not implemented. Ignore the Range
+  // header and serve the full representation instead of returning a false 416.
+  if (rangeSet.includes(",")) return { type: "full" };
+
+  const match = /^(\d*)-(\d*)$/.exec(rangeSet.trim());
+  if (!match || total === 0) return { type: "unsatisfiable" };
+
+  const [, startText, endText] = match;
+  if (!startText && !endText) return { type: "unsatisfiable" };
+
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+      return { type: "unsatisfiable" };
+    }
+    const start = Math.max(0, total - suffixLength);
+    return {
+      type: "partial",
+      start,
+      end: total - 1,
+      length: total - start,
+    };
+  }
+
+  const start = Number(startText);
+  const requestedEnd = endText ? Number(endText) : total - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start < 0 ||
+    requestedEnd < start ||
+    start >= total
+  ) {
+    return { type: "unsatisfiable" };
+  }
+
+  const end = Math.min(requestedEnd, total - 1);
+  return {
+    type: "partial",
+    start,
+    end,
+    length: end - start + 1,
+  };
 }
 
 /**
@@ -72,22 +148,34 @@ export function handleTorrent(torrent: any, req: Request, res: Response) {
 
   const total: number = file.length;
   const contentType = mimeFromExt(file.name ?? "");
-  const range = req.headers.range;
+  const range = parseByteRange(
+    req.method === "GET" ? req.headers.range : undefined,
+    total,
+  );
 
-  if (range) {
-    const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(startStr, 10);
-    const end = endStr ? parseInt(endStr, 10) : total - 1;
-    const chunksize = end - start + 1;
-
-    res.writeHead(206, {
-      "Content-Range": `bytes ${start}-${end}/${total}`,
+  if (range.type === "unsatisfiable") {
+    res.writeHead(416, {
+      "Content-Range": `bytes */${total}`,
       "Accept-Ranges": "bytes",
-      "Content-Length": chunksize,
+      "Content-Type": contentType,
+    });
+    return res.end();
+  }
+
+  if (range.type === "partial") {
+    res.writeHead(206, {
+      "Content-Range": `bytes ${range.start}-${range.end}/${total}`,
+      "Accept-Ranges": "bytes",
+      "Content-Length": range.length,
       "Content-Type": contentType,
     });
 
-    const stream = file.createReadStream({ start, end });
+    if (req.method === "HEAD") return res.end();
+
+    const stream = file.createReadStream({
+      start: range.start,
+      end: range.end,
+    });
     stream.pipe(res);
     req.on("close", () => stream.destroy());
   } else {
@@ -96,6 +184,8 @@ export function handleTorrent(torrent: any, req: Request, res: Response) {
       "Accept-Ranges": "bytes",
       "Content-Type": contentType,
     });
+    if (req.method === "HEAD") return res.end();
+
     const stream = file.createReadStream();
     stream.pipe(res);
     req.on("close", () => stream.destroy());

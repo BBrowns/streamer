@@ -1,7 +1,11 @@
 import request from "supertest";
 import express from "express";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { gatewayRouter, __resetGatewayJobsForTests } from "../gateway.js";
+import {
+  gatewayRouter,
+  __pruneGatewayJobsForTests,
+  __resetGatewayJobsForTests,
+} from "../gateway.js";
 import {
   ensureTorrentReady,
   prepareTorrent,
@@ -47,6 +51,8 @@ describe("gateway jobs", () => {
       fileIdx: 0,
       retryable: true,
       peerCount: 1,
+      activeStreamCount: 0,
+      lastStreamAccessAt: null,
       progress: expect.any(Number),
       readyTimeoutMs: 120000,
       elapsedMs: expect.any(Number),
@@ -174,6 +180,53 @@ describe("gateway jobs", () => {
         },
       }),
     );
+  });
+
+  it("prunes a ready job that was never consumed", async () => {
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    __pruneGatewayJobsForTests(Date.now() + 6 * 60 * 1000);
+
+    await request(app).get(`/api/gateway/jobs/${created.body.id}`).expect(404);
+  });
+
+  it("keeps an active stream job until the consumer disconnects", async () => {
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    let releaseStream: (() => void) | undefined;
+    (serveTorrentFile as any).mockImplementationOnce(
+      (_req: unknown, res: express.Response) =>
+        new Promise<void>((resolve) => {
+          releaseStream = () => {
+            res.status(204).send();
+            resolve();
+          };
+        }),
+    );
+
+    const streamPromise = request(app).get(created.body.playbackUrl);
+    const completedStream = streamPromise.then((response) => response);
+    await vi.waitFor(() => expect(serveTorrentFile).toHaveBeenCalled());
+
+    __pruneGatewayJobsForTests(Date.now() + 30 * 60 * 1000);
+    const activeStatus = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+
+    expect(activeStatus.status).toBe(200);
+    expect(activeStatus.body.activeStreamCount).toBe(1);
+
+    releaseStream?.();
+    await completedStream;
+    __pruneGatewayJobsForTests(Date.now() + 30 * 60 * 1000);
+
+    await request(app).get(`/api/gateway/jobs/${created.body.id}`).expect(404);
   });
 
   it("returns bridge engine errors before the player starts loading", async () => {

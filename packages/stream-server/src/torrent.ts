@@ -16,6 +16,7 @@ import {
   waitForReady,
   selectBestVideoFile,
   mimeFromExt,
+  parseByteRange,
 } from "./torrent-helpers.js";
 import type { FileSelectionHints } from "./torrent-helpers.js";
 
@@ -24,6 +25,7 @@ export {
   handleTorrent,
   waitForReady,
   mimeFromExt,
+  parseByteRange,
   selectBestVideoFile,
 } from "./torrent-helpers.js";
 export type { FileSelectionHints } from "./torrent-helpers.js";
@@ -438,14 +440,17 @@ export async function serveTorrentFile(
   const shouldRemux = options.remuxFormat === "mp4" || ext === ".mkv";
 
   if (shouldRemux) {
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Accept-Ranges", "none");
+    res.setHeader("Access-Control-Expose-Headers", "Accept-Ranges");
+    if (req.method === "HEAD") return res.end();
+
     console.log(
       `[stream-server] Streaming via FFmpeg remux (MP4): ${file.name}`,
     );
-
-    res.setHeader("Content-Type", "video/mp4");
     res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Access-Control-Allow-Origin", "*");
 
     const ffmpeg = spawn("ffmpeg", [
       "-hide_banner",
@@ -498,26 +503,44 @@ export async function serveTorrentFile(
   res.setHeader("Content-Type", mimeType);
   res.setHeader("Accept-Ranges", "bytes");
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "Accept-Ranges, Content-Length, Content-Range",
+  );
 
   const total = file.length;
-  const range = req.headers.range;
+  const range = parseByteRange(
+    req.method === "GET" ? req.headers.range : undefined,
+    total,
+  );
 
-  if (range) {
-    const [startStr, endStr] = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(startStr, 10);
-    const end = endStr ? parseInt(endStr, 10) : total - 1;
-    const chunksize = end - start + 1;
+  if (range.type === "unsatisfiable") {
+    return res
+      .status(416)
+      .set({
+        "Content-Range": `bytes */${total}`,
+      })
+      .end();
+  }
 
+  if (range.type === "partial") {
     res.status(206).set({
-      "Content-Range": `bytes ${start}-${end}/${total}`,
-      "Content-Length": chunksize,
+      "Content-Range": `bytes ${range.start}-${range.end}/${total}`,
+      "Content-Length": range.length,
     });
 
-    const stream = file.createReadStream({ start, end });
+    if (req.method === "HEAD") return res.end();
+
+    const stream = file.createReadStream({
+      start: range.start,
+      end: range.end,
+    });
     stream.pipe(res);
     res.on("close", () => stream.destroy());
   } else {
     res.setHeader("Content-Length", total);
+    if (req.method === "HEAD") return res.end();
+
     const stream = file.createReadStream();
     stream.pipe(res);
     res.on("close", () => stream.destroy());

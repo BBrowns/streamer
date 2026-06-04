@@ -190,10 +190,20 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
 2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`.
 3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `phase`, `progress`, `peerCount`, elapsed time, and timeout metadata through `GET /api/gateway/jobs/:id`.
 4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, and `preparing_metadata`.
-5. Once ready, the player receives `/api/gateway/jobs/:id/stream`, an HTTP byte-range stream suitable for `expo-video`.
-6. If the player stops or the job becomes stale, the mobile engine calls `DELETE /api/gateway/jobs/:id` so warmup work is cancelled instead of leaking.
+5. Once ready, the player receives `/api/gateway/jobs/:id/stream`. Direct-file
+   responses support single HTTP byte ranges, including open-ended and suffix
+   ranges, so `expo-video` can seek without receiving incorrect byte windows.
+6. If the player stops, the mobile engine calls `DELETE /api/gateway/jobs/:id`
+   so warmup work is cancelled instead of leaking. The bridge also prunes
+   unused ready jobs on a timer while protecting jobs with active stream
+   consumers.
 
 The legacy `/stream?magnet=<encoded>&fileIndex=0` endpoint still exists for compatibility, but new torrent playback should prefer gateway jobs because they provide readiness state, cancellation, progress, and future remux/transcode hooks.
+
+FFmpeg remux output is currently a sequential chunked MP4 response. It does not
+support byte-range seeking; production-grade seek for remuxed sources requires
+a packaged or persistent remux output rather than byte offsets into the source
+container.
 
 **Chromecast:** The `castv2-client` library (running inside the daemon) communicates directly with Chromecast devices discovered via `bonjour-service` (mDNS). The `/api/cast` router handles device discovery and playback control. This avoids requiring the mobile client to implement the Chromecast protocol natively.
 

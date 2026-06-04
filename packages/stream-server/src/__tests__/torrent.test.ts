@@ -10,10 +10,11 @@ import { EventEmitter } from "events";
 import type { Request, Response } from "express";
 import {
   handleTorrent,
+  parseByteRange,
   waitForReady,
   selectBestVideoFile,
 } from "../torrent-helpers.js";
-import { getSelectedFile } from "../torrent.js";
+import { getSelectedFile, serveTorrentFile } from "../torrent.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -36,17 +37,23 @@ function makeFakeFile(name = "movie.mp4", size = 1_000_000) {
 function makeReqRes(
   headers: Record<string, string> = {},
   query: Record<string, string> = {},
+  method = "GET",
 ) {
   const req = {
     query,
     headers,
+    method,
     on: vi.fn(),
   } as unknown as Request;
 
   const res = {
     headersSent: false,
     status: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    setHeader: vi.fn(),
     send: vi.fn().mockReturnThis(),
+    end: vi.fn().mockReturnThis(),
+    on: vi.fn(),
     writeHead: vi.fn(),
     json: vi.fn().mockReturnThis(),
   } as unknown as Response;
@@ -99,6 +106,39 @@ describe("handleTorrent", () => {
     expect(file.createReadStream).toHaveBeenCalledWith({ start: 0, end: 1023 });
   });
 
+  it("returns 416 for an unsatisfiable range without opening a stream", () => {
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=5000000-" });
+
+    handleTorrent(torrent, req, res);
+
+    expect(res.writeHead).toHaveBeenCalledWith(
+      416,
+      expect.objectContaining({
+        "Content-Range": "bytes */5000000",
+        "Accept-Ranges": "bytes",
+      }),
+    );
+    expect(res.end).toHaveBeenCalled();
+    expect(file.createReadStream).not.toHaveBeenCalled();
+  });
+
+  it("does not open a stream for a HEAD request", () => {
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=1000-2000" }, {}, "HEAD");
+
+    handleTorrent(torrent, req, res);
+
+    expect(res.writeHead).toHaveBeenCalledWith(
+      200,
+      expect.objectContaining({ "Content-Length": 5_000_000 }),
+    );
+    expect(res.end).toHaveBeenCalled();
+    expect(file.createReadStream).not.toHaveBeenCalled();
+  });
+
   it("picks the largest file from a multi-file torrent", () => {
     const small = makeFakeFile("subtitle.srt", 10_000);
     const big = makeFakeFile("movie.mp4", 4_000_000_000);
@@ -149,6 +189,102 @@ describe("handleTorrent", () => {
       const callArgs = (res.writeHead as any).mock.calls.at(-1);
       expect(callArgs[1]["Content-Type"]).toBe(expectedMime);
     }
+  });
+});
+
+describe("parseByteRange", () => {
+  it("supports open-ended and suffix ranges used while seeking", () => {
+    expect(parseByteRange("bytes=1000-", 5_000)).toEqual({
+      type: "partial",
+      start: 1_000,
+      end: 4_999,
+      length: 4_000,
+    });
+    expect(parseByteRange("bytes=-500", 5_000)).toEqual({
+      type: "partial",
+      start: 4_500,
+      end: 4_999,
+      length: 500,
+    });
+  });
+
+  it("clamps an oversized range to the file boundary", () => {
+    expect(parseByteRange("bytes=4000-9000", 5_000)).toEqual({
+      type: "partial",
+      start: 4_000,
+      end: 4_999,
+      length: 1_000,
+    });
+  });
+
+  it("ignores unsupported units and multi-range requests", () => {
+    expect(parseByteRange("items=0-10", 5_000)).toEqual({
+      type: "full",
+    });
+    expect(parseByteRange("bytes=0-10,20-30", 5_000)).toEqual({
+      type: "full",
+    });
+  });
+
+  it("rejects malformed and out-of-bounds byte ranges", () => {
+    expect(parseByteRange("bytes=broken", 5_000)).toEqual({
+      type: "unsatisfiable",
+    });
+    expect(parseByteRange("bytes=5000-", 5_000)).toEqual({
+      type: "unsatisfiable",
+    });
+  });
+});
+
+describe("serveTorrentFile", () => {
+  it("serves a clamped gateway seek range with exposed response headers", async () => {
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=4000000-9000000" });
+
+    await serveTorrentFile(req, res, torrent);
+
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "Access-Control-Expose-Headers",
+      "Accept-Ranges, Content-Length, Content-Range",
+    );
+    expect(res.status).toHaveBeenCalledWith(206);
+    expect(res.set).toHaveBeenCalledWith({
+      "Content-Range": "bytes 4000000-4999999/5000000",
+      "Content-Length": 1_000_000,
+    });
+    expect(file.createReadStream).toHaveBeenCalledWith({
+      start: 4_000_000,
+      end: 4_999_999,
+    });
+  });
+
+  it("returns 416 for an out-of-bounds gateway seek", async () => {
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=5000000-" });
+
+    await serveTorrentFile(req, res, torrent);
+
+    expect(res.status).toHaveBeenCalledWith(416);
+    expect(res.set).toHaveBeenCalledWith({
+      "Content-Range": "bytes */5000000",
+    });
+    expect(res.end).toHaveBeenCalled();
+    expect(file.createReadStream).not.toHaveBeenCalled();
+  });
+
+  it("does not start FFmpeg for a remux HEAD probe", async () => {
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({}, {}, "HEAD");
+
+    await serveTorrentFile(req, res, torrent);
+
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "video/mp4");
+    expect(res.setHeader).toHaveBeenCalledWith("Accept-Ranges", "none");
+    expect(res.end).toHaveBeenCalled();
+    expect(file.createReadStream).not.toHaveBeenCalled();
   });
 });
 
