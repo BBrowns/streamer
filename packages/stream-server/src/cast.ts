@@ -20,6 +20,18 @@ interface CastDevice {
   type: "chromecast";
 }
 
+const CAST_CONTENT_TYPES = new Set([
+  "video/mp4",
+  "application/vnd.apple.mpegurl",
+  "application/x-mpegURL",
+]);
+
+export function getSafeCastContentType(contentType?: string) {
+  return contentType && CAST_CONTENT_TYPES.has(contentType)
+    ? contentType
+    : "video/mp4";
+}
+
 let devices: CastDevice[] = [];
 let bonjour: any = null;
 
@@ -61,10 +73,11 @@ router.get("/devices", async (_req: Request, res: Response) => {
 });
 
 router.post("/play", async (req: Request, res: Response) => {
-  const { deviceId, url, title } = req.body as {
+  const { deviceId, url, title, contentType } = req.body as {
     deviceId: string;
     url: string;
     title?: string;
+    contentType?: string;
   };
   const device = devices.find((d) => d.id === deviceId);
   const safeUrl = validateCastPlaybackUrl(url, {
@@ -80,6 +93,8 @@ router.post("/play", async (req: Request, res: Response) => {
   if (!safeUrl.ok) {
     return res.status(400).json({ error: safeUrl.reason });
   }
+
+  const safeContentType = getSafeCastContentType(contentType);
 
   try {
     const { Client, DefaultMediaReceiver } = await import("castv2-client");
@@ -103,7 +118,7 @@ router.post("/play", async (req: Request, res: Response) => {
       player.load(
         {
           contentId: safeUrl.url!,
-          contentType: "video/mp4",
+          contentType: safeContentType,
           streamType: "BUFFERED",
           metadata: {
             type: 0,

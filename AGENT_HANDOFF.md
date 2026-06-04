@@ -203,17 +203,25 @@ Still open:
 - Persisted retry URLs may expire; a future pass should re-plan sources instead
   of relying indefinitely on an old resolved URL.
 
-### 2. Casting Needs Product Flow
+### 2. Casting Needs Native And Real-Device Validation
 
-Casting is safer than before, but not yet a first-class flow:
+Casting now uses the playback session control plane for the primary flow:
 
-- Cast planning already uses `action: "cast"`; migrate its readiness and
-  fallback lifecycle onto `PlaybackSession`.
-- Cast readiness should be shown before device selection when possible.
-- Devices should be displayed cleanly in detail/player.
+- Cast readiness is prepared and shown before device selection when possible.
+- Cast source resolution, display-start failure, and automatic fallback are
+  recorded on `PlaybackSession`.
+- Configured bridge URLs are used for discovery, playback, and control.
+- Bridge-backed cast sessions remain active until the user stops casting so
+  their gateway jobs are not cancelled early.
+
+Still open:
+
+- Validate discovery, HLS, direct MP4, torrent gateway, stop, and fallback on
+  real Chromecast devices.
 - Google Cast should remain optional/native when module support exists.
 - AirPlay on iOS should use the video player path where possible.
-- If a cast device cannot play the selected source, fallback should be automatic.
+- Consider richer device-specific capability discovery when a reliable source
+  is available.
 
 ### 3. Gateway Robustness Still Needs Hardening
 
@@ -293,7 +301,7 @@ Implemented:
 
 Goal: Cast should not bypass the session control plane.
 
-Expected work:
+Status: **Complete.**
 
 - Create a Cast `PlaybackSession` from the existing `cast` plan.
 - Show cast readiness/failure inline.

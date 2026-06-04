@@ -35,7 +35,6 @@ import { PlayerControls } from "../components/player/PlayerControls";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
 import { DesktopCastModal } from "../components/DesktopCastModal";
-import { castService, type CastDevice } from "../services/CastService";
 import { goBackOrReplace } from "../lib/navigation";
 import { getUnsupportedWebCodecReason } from "../services/streamEngine/codecSupport";
 import {
@@ -50,6 +49,8 @@ import {
   markPlaybackSessionPlaying,
   resolvePlaybackSession,
 } from "../services/playback/PlaybackSessionPlaybackService";
+import { stopCastSession } from "../services/playback/PlaybackSessionCastService";
+import { useCastStore } from "../stores/castStore";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -85,12 +86,12 @@ export default function PlayerScreen() {
   const activeSession = usePlaybackSessionStore((s) =>
     playbackSessionId ? s.sessions[playbackSessionId] || null : null,
   );
+  const activeCast = useCastStore((s) => s.activeCast);
+  const setActiveCast = useCastStore((s) => s.setActiveCast);
+  const clearActiveCast = useCastStore((s) => s.clearActiveCast);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [castModalOpen, setCastModalOpen] = useState(false);
-  const [activeCastDevice, setActiveCastDevice] = useState<CastDevice | null>(
-    null,
-  );
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -125,12 +126,18 @@ export default function PlayerScreen() {
   }, [controlsVisible, showControls]);
 
   const handleClose = useCallback(() => {
+    if (activeCast) {
+      void stopCastSession(activeCast.device.id, activeCast.sessionId).catch(
+        (error) => console.error("Failed to stop cast", error),
+      );
+      clearActiveCast();
+    }
     if (playbackSessionId) {
       cancelPlaybackSession(playbackSessionId, "User left the player.");
     }
     goBackOrReplace(router);
     setTimeout(() => clearPlayer(), 100);
-  }, [router, clearPlayer, playbackSessionId]);
+  }, [activeCast, clearActiveCast, router, clearPlayer, playbackSessionId]);
 
   const handleOpenSourcesDevices = useCallback(() => {
     if (playbackSessionId) {
@@ -153,6 +160,18 @@ export default function PlayerScreen() {
       }
     },
     [playbackSessionId],
+  );
+
+  useEffect(
+    () => () => {
+      const cast = useCastStore.getState().activeCast;
+      if (!cast) return;
+      void stopCastSession(cast.device.id, cast.sessionId).catch((error) =>
+        console.error("Failed to stop cast", error),
+      );
+      useCastStore.getState().clearActiveCast();
+    },
+    [],
   );
 
   const handleRetryPlayback = useCallback(async () => {
@@ -586,13 +605,18 @@ export default function PlayerScreen() {
   });
 
   const stopCasting = async () => {
-    if (!activeCastDevice) return;
+    if (!activeCast) return;
+    const closeRemoteOnlyPlayer = !currentStream;
     try {
-      await castService.control(activeCastDevice.id, "stop");
+      await stopCastSession(activeCast.device.id, activeCast.sessionId);
     } catch (e) {
       console.error("Failed to stop cast", e);
+    } finally {
+      clearActiveCast();
+      if (closeRemoteOnlyPlayer) {
+        goBackOrReplace(router);
+      }
     }
-    setActiveCastDevice(null);
   };
 
   const waitingTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -672,7 +696,7 @@ export default function PlayerScreen() {
     );
   }
 
-  if (!currentStream) {
+  if (!currentStream && !activeCast) {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
@@ -693,11 +717,11 @@ export default function PlayerScreen() {
       <View style={styles.container}>
         <StatusBar hidden />
         <View style={styles.videoContainer}>
-          {activeCastDevice ? (
+          {activeCast ? (
             <View style={styles.castContainer}>
-              {mediaInfo?.poster && (
+              {activeCast.mediaInfo.poster && (
                 <Image
-                  source={{ uri: mediaInfo.poster }}
+                  source={{ uri: activeCast.mediaInfo.poster }}
                   style={styles.castBg}
                   blurRadius={20}
                 />
@@ -710,7 +734,7 @@ export default function PlayerScreen() {
                   {t("player.casting.active")}
                 </Text>
                 <Text style={styles.castSubtitle}>
-                  {t("player.casting.to", { name: activeCastDevice.name })}
+                  {t("player.casting.to", { name: activeCast.device.name })}
                 </Text>
                 <Pressable style={styles.stopCastBtn} onPress={stopCasting}>
                   <Ionicons name="stop-circle" size={24} color={colors.error} />
@@ -777,11 +801,11 @@ export default function PlayerScreen() {
             onBack={handleClose}
             onRetry={handleRetryPlayback}
             onOpenSourcesDevices={
-              currentStream.infoHash ? handleOpenSourcesDevices : undefined
+              currentStream?.infoHash ? handleOpenSourcesDevices : undefined
             }
           />
 
-          {controlsVisible && !activeCastDevice && (
+          {controlsVisible && !activeCast && currentStream && (
             <PlayerOverlay
               currentStream={currentStream}
               engineType={engine?.getEngineType() ?? "Unknown"}
@@ -798,7 +822,7 @@ export default function PlayerScreen() {
             player={player}
             currentTime={player?.currentTime || 0}
             duration={player?.duration || 0}
-            isVisible={controlsVisible && !activeCastDevice}
+            isVisible={controlsVisible && !activeCast}
             isPlaying={player?.playing ?? false}
             onPlayPause={() => {
               if (player?.playing) player.pause();
@@ -864,8 +888,18 @@ export default function PlayerScreen() {
             }
             playbackUri={playbackUri || ""}
             title={mediaInfo?.title || ""}
-            onCastStart={(device: CastDevice) => {
-              setActiveCastDevice(device);
+            onCastStart={(device, details) => {
+              if (player?.playing) player.pause();
+              setActiveCast({
+                device,
+                mediaInfo: details.source?.mediaInfo ||
+                  mediaInfo || {
+                    type: "movie",
+                    itemId: "unknown",
+                    title: "Streamer",
+                  },
+                sessionId: details.sessionId,
+              });
               setCastModalOpen(false);
             }}
           />

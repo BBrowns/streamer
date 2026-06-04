@@ -30,14 +30,11 @@ import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
 import type { PlaybackAction, PlaybackPlan, Stream } from "@streamer/shared";
 import {
-  createPlaybackPlanWithBridgeRetry,
-  resolvePlaybackPlan,
-} from "../../../services/playback/PlaybackPlanService";
-import {
   playBest,
   prepareDownload,
 } from "../../../services/playback/PlaybackOrchestrator";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
+import { useCastStore } from "../../../stores/castStore";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -63,7 +60,8 @@ export default function DetailScreen() {
     null,
   );
   const [castModalOpen, setCastModalOpen] = useState(false);
-  const [plannedCastUri, setPlannedCastUri] = useState<string | null>(null);
+  const [manualCastUri, setManualCastUri] = useState<string | null>(null);
+  const [castUsesPlanner, setCastUsesPlanner] = useState(false);
   const [planningAction, setPlanningAction] = useState<
     "play" | "download" | "cast" | null
   >(null);
@@ -374,49 +372,24 @@ export default function DetailScreen() {
     if (!meta) return;
     setPlaybackNotice(null);
     try {
-      let streamToCast: Stream | undefined = stream;
-      let uri: string | null = null;
-      if (!streamToCast) {
-        setPlanningAction("cast");
-        try {
-          const plan = await createPlaybackPlanWithBridgeRetry({
-            type: castType,
-            id: id || "unknown",
-            action: "cast",
-          });
-          const result = await resolvePlaybackPlan(plan);
-          const resolved = result.resolved;
-          if (!resolved) {
-            showPlanMessage(
-              plan,
-              t("detail.errors.notPlayable"),
-              "cast",
-              result.errors,
-            );
-            return;
-          }
-          streamToCast = resolved.stream;
-          uri = resolved.uri;
-        } finally {
-          setPlanningAction(null);
-        }
-      }
-
-      if (!streamToCast) {
-        showPlanMessage(null, t("detail.errors.notPlayable"));
+      if (!stream) {
+        setManualCastUri(null);
+        setCastUsesPlanner(true);
+        setCastModalOpen(true);
         return;
       }
 
-      uri = uri || (await streamEngineManager.getPlaybackUri(streamToCast));
+      const uri = await streamEngineManager.getPlaybackUri(stream);
       if (!uri) {
-        showPlanMessage(null, t("detail.errors.notPlayable"));
+        showPlanMessage(null, t("detail.errors.notPlayable"), "cast");
         return;
       }
 
-      setPlannedCastUri(uri);
+      setManualCastUri(uri);
+      setCastUsesPlanner(false);
       setCastModalOpen(true);
     } catch {
-      showPlanMessage(null, t("detail.errors.notPlayable"));
+      showPlanMessage(null, t("detail.errors.notPlayable"), "cast");
     }
   };
 
@@ -458,13 +431,37 @@ export default function DetailScreen() {
       ) : (
         <MobileDetailLayout {...layoutProps} />
       )}
-      {plannedCastUri && (
+      {castModalOpen && (
         <DesktopCastModal
           visible={castModalOpen}
-          playbackUri={plannedCastUri}
+          orchestratorInput={
+            castUsesPlanner
+              ? {
+                  type: castType,
+                  id: id || "unknown",
+                  title: meta.name,
+                  poster: meta.poster,
+                }
+              : undefined
+          }
+          playbackUri={manualCastUri || ""}
           title={meta.name}
           onClose={() => setCastModalOpen(false)}
-          onCastStart={() => setCastModalOpen(false)}
+          onCastStart={(device, details) => {
+            usePlayerStore.getState().clearPlayer();
+            useCastStore.getState().setActiveCast({
+              device,
+              mediaInfo: details.source?.mediaInfo || {
+                type: castType,
+                itemId: id || "unknown",
+                title: meta.name,
+                poster: meta.poster,
+              },
+              sessionId: details.sessionId,
+            });
+            setCastModalOpen(false);
+            router.push("/player");
+          }}
         />
       )}
     </>

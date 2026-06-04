@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { requireBridgeAuth, validateCastPlaybackUrl } from "../security.js";
 import { createStreamServerApp } from "../index.js";
 import { pruneTorrents, validateTorrentFiles } from "../torrent.js";
+import { getSafeCastContentType } from "../cast.js";
 
 const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
 
@@ -234,5 +235,17 @@ describe("Cast playback URL validation", () => {
         allowedHosts: ["fd00::25"],
       }),
     ).toMatchObject({ ok: true });
+  });
+});
+
+describe("Cast content type validation", () => {
+  it("allows supported HLS content types", () => {
+    expect(getSafeCastContentType("application/vnd.apple.mpegurl")).toBe(
+      "application/vnd.apple.mpegurl",
+    );
+  });
+
+  it("falls back to MP4 for untrusted content types", () => {
+    expect(getSafeCastContentType("text/html")).toBe("video/mp4");
   });
 });

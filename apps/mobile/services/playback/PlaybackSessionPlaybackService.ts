@@ -71,7 +71,7 @@ type PlaybackSessionInternalResolutionResult =
   | PlaybackSessionInternalResolutionSuccess
   | PlaybackSessionResolutionFailure;
 
-type SessionResolutionAction = "play" | "download";
+type SessionResolutionAction = "play" | "download" | "cast";
 
 class PlaybackResolutionTimeoutError extends Error {
   constructor(message: string) {
@@ -110,9 +110,11 @@ function runtimeErrorFromSession(
   if (session.status === "cancelled") {
     return createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",
-      session.action === "download"
-        ? "Download was cancelled."
-        : "Playback was cancelled.",
+      getActionMessage(session.action, {
+        play: "Playback was cancelled.",
+        download: "Download was cancelled.",
+        cast: "Casting was cancelled.",
+      }),
       {
         retryable: true,
         shouldFallback: false,
@@ -124,6 +126,13 @@ function runtimeErrorFromSession(
     retryable: true,
     shouldFallback: false,
   });
+}
+
+function getActionMessage(
+  action: SessionResolutionAction,
+  messages: Record<SessionResolutionAction, string>,
+) {
+  return messages[action];
 }
 
 function toSafeRuntimeError(
@@ -364,9 +373,11 @@ async function attemptCandidate(
   if (!session || !candidate) {
     const error = createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",
-      action === "download"
-        ? "Download needs to be prepared again."
-        : "Playback needs to be prepared again.",
+      getActionMessage(action, {
+        play: "Playback needs to be prepared again.",
+        download: "Download needs to be prepared again.",
+        cast: "Casting needs to be prepared again.",
+      }),
       { retryable: true, shouldFallback: false },
     );
     if (session && !isTerminal(session)) store.failSession(sessionId, error);
@@ -392,7 +403,7 @@ async function attemptCandidate(
     }
   }
 
-  if (unsupportedCodecReason) {
+  if (action !== "cast" && unsupportedCodecReason) {
     const error = createPlaybackRuntimeError("UNSUPPORTED_CODEC", undefined, {
       retryable: false,
       shouldFallback: hasFallback,
@@ -451,9 +462,11 @@ async function attemptCandidate(
     const uri = await withTimeout(
       engine.getPlaybackUri(stream),
       timeoutMs,
-      action === "download"
-        ? "Download source preparation timed out."
-        : "Playback source preparation timed out.",
+      getActionMessage(action, {
+        play: "Playback source preparation timed out.",
+        download: "Download source preparation timed out.",
+        cast: "Cast source preparation timed out.",
+      }),
     );
     const latestSession = getSession(sessionId);
     if (!latestSession || isTerminal(latestSession)) {
@@ -557,9 +570,11 @@ async function resolveCandidateChain(
   if (!store.hasRuntimeCandidates(sessionId)) {
     const error = createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",
-      action === "download"
-        ? "Download needs to be prepared again."
-        : "Playback needs to be prepared again.",
+      getActionMessage(action, {
+        play: "Playback needs to be prepared again.",
+        download: "Download needs to be prepared again.",
+        cast: "Casting needs to be prepared again.",
+      }),
       { retryable: true, shouldFallback: false },
     );
     store.failSession(sessionId, error);
@@ -666,15 +681,43 @@ export async function resolveDownloadSession(
   return { ok: false, sessionId, error };
 }
 
-export async function advancePlaybackSessionAfterFailure(
+export function resolveCastSession(
+  sessionId: string,
+  startCandidateId?: string,
+): Promise<PlaybackSessionResolutionResult> {
+  const existing = resolutionBySession.get(sessionId);
+  if (existing) return existing;
+
+  const resolution = resolveCandidateChain(
+    sessionId,
+    "cast",
+    startCandidateId,
+  ).finally(() => {
+    resolutionBySession.delete(sessionId);
+  });
+  resolutionBySession.set(sessionId, resolution);
+  return resolution;
+}
+
+async function advanceSessionAfterFailure(
   sessionId: string,
   candidateId: string,
   attemptId: string | null,
   error: PlaybackRuntimeError,
+  action: "play" | "cast",
 ): Promise<PlaybackSessionResolutionResult> {
   const store = usePlaybackSessionStore.getState();
   const session = getSession(sessionId);
   if (!session) return { ok: false, sessionId, error };
+  if (session.action !== action) {
+    const actionError = createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      `This session cannot be used for ${action}.`,
+      { retryable: false, shouldFallback: false },
+    );
+    if (!isTerminal(session)) store.failSession(sessionId, actionError);
+    return { ok: false, sessionId, error: actionError };
+  }
   if (isTerminal(session)) {
     return { ok: false, sessionId, error: runtimeErrorFromSession(session) };
   }
@@ -716,9 +759,39 @@ export async function advancePlaybackSessionAfterFailure(
 
   return resolveCandidateChain(
     sessionId,
-    "play",
+    action,
     nextCandidate.id,
     safeError.message,
+  );
+}
+
+export function advancePlaybackSessionAfterFailure(
+  sessionId: string,
+  candidateId: string,
+  attemptId: string | null,
+  error: PlaybackRuntimeError,
+): Promise<PlaybackSessionResolutionResult> {
+  return advanceSessionAfterFailure(
+    sessionId,
+    candidateId,
+    attemptId,
+    error,
+    "play",
+  );
+}
+
+export function advanceCastSessionAfterFailure(
+  sessionId: string,
+  candidateId: string,
+  attemptId: string | null,
+  error: PlaybackRuntimeError,
+): Promise<PlaybackSessionResolutionResult> {
+  return advanceSessionAfterFailure(
+    sessionId,
+    candidateId,
+    attemptId,
+    error,
+    "cast",
   );
 }
 
@@ -728,6 +801,10 @@ export function markPlaybackSessionBuffering(sessionId: string) {
 
 export function markPlaybackSessionPlaying(sessionId: string) {
   dispatchSessionStatus(sessionId, "playing");
+}
+
+export function markPlaybackSessionCasting(sessionId: string) {
+  dispatchSessionStatus(sessionId, "casting");
 }
 
 export function failPlaybackSession(

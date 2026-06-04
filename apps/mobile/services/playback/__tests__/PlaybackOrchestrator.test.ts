@@ -13,7 +13,10 @@ import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
 } from "../PlaybackPlanService";
-import { resolveDownloadSession } from "../PlaybackSessionPlaybackService";
+import {
+  resolveCastSession,
+  resolveDownloadSession,
+} from "../PlaybackSessionPlaybackService";
 
 jest.mock("../PlaybackPlanService", () => ({
   createPlaybackPlanWithBridgeRetry: jest.fn(),
@@ -21,6 +24,7 @@ jest.mock("../PlaybackPlanService", () => ({
 }));
 
 jest.mock("../PlaybackSessionPlaybackService", () => ({
+  resolveCastSession: jest.fn(),
   resolveDownloadSession: jest.fn(),
 }));
 
@@ -37,6 +41,9 @@ describe("PlaybackOrchestrator", () => {
   >;
   const resolveDownload = resolveDownloadSession as jest.MockedFunction<
     typeof resolveDownloadSession
+  >;
+  const resolveCast = resolveCastSession as jest.MockedFunction<
+    typeof resolveCastSession
   >;
 
   beforeEach(() => {
@@ -397,6 +404,10 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("prepares a cast with the resolved URL and media info", async () => {
+    const stream = {
+      url: "http://example.com/stream.mp4",
+      title: "Direct",
+    };
     createPlan.mockResolvedValueOnce(
       makePlaybackPlan({
         action: "cast",
@@ -404,24 +415,21 @@ describe("PlaybackOrchestrator", () => {
         plan: {
           mode: "direct",
           selectedCandidate: makePlannedMediaCandidate({
-            id: "direct",
+            id: "00000000-0000-4000-8000-000000000301",
             kind: "direct",
-            stream: { url: "http://example.com/stream.mp4", title: "Direct" },
+            stream,
             actionEligibility: { action: "cast", eligible: true },
           }),
         },
       }),
     );
-    resolvePlan.mockResolvedValueOnce({
-      resolved: {
-        stream: { url: "http://example.com/stream.mp4", title: "Direct" },
-        uri: "http://example.com/stream.mp4",
-        attemptedStreams: 1,
-        errors: [],
-      },
-      attemptedStreams: 1,
-      errors: [],
-      remainingStreams: [],
+    resolveCast.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      candidateId: "00000000-0000-4000-8000-000000000002",
+      attemptId: "00000000-0000-4000-8000-000000000003",
+      stream,
+      uri: stream.url,
     });
 
     const result = await prepareCast({
@@ -434,9 +442,30 @@ describe("PlaybackOrchestrator", () => {
       ok: true,
       resolvedUrl: "http://example.com/stream.mp4",
       mediaInfo: { itemId: "tt123", title: "Example Movie" },
+      sessionId: expect.any(String),
+      candidateId: expect.any(String),
+      attemptId: expect.any(String),
     });
     expect(createPlan).toHaveBeenCalledWith(
       expect.objectContaining({ action: "cast" }),
     );
+    expect(resolveCast).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+    );
+    expect(
+      result.ok &&
+        usePlaybackSessionStore.getState().sessions[result.sessionId],
+    ).toMatchObject({
+      action: "cast",
+      castProfile: {
+        supportsHls: true,
+        supportsMp4: true,
+        supportsMkv: false,
+        canAccessLocalhost: false,
+        requiresRemoteReachableUrl: true,
+        remuxAllowed: true,
+      },
+    });
   });
 });

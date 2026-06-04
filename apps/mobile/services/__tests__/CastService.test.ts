@@ -24,6 +24,11 @@ describe("CastService", () => {
     expect(global.fetch).toHaveBeenCalledWith(
       "http://192.168.1.25:11470/api/cast/devices",
     );
+    expect(
+      jest
+        .mocked(global.fetch)
+        .mock.calls.every(([url]) => !String(url).includes("localhost")),
+    ).toBe(true);
   });
 
   it("uses the configured stream bridge URL for playback", async () => {
@@ -41,9 +46,15 @@ describe("CastService", () => {
           deviceId: "living-room",
           url: "https://example.test/movie.mp4",
           title: "Movie",
+          contentType: "video/mp4",
         }),
       }),
     );
+    expect(
+      jest
+        .mocked(global.fetch)
+        .mock.calls.every(([url]) => !String(url).includes("localhost")),
+    ).toBe(true);
   });
 
   it("sends the optional bridge auth token to protected bridge endpoints", async () => {

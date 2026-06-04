@@ -1,24 +1,29 @@
 import type {
+  DeviceProfile,
   PlaybackPlan,
   PlaybackRuntimeError,
   PlaybackRuntimeState,
+  PlaybackSessionCastProfile,
   Stream,
 } from "@streamer/shared";
 import type { MediaInfo } from "../../stores/playerStore";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
 import type { DownloadEligibility } from "../downloadEligibility";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import { createPlaybackPlanWithBridgeRetry } from "./PlaybackPlanService";
 import {
-  createPlaybackPlanWithBridgeRetry,
-  resolvePlaybackPlan,
-} from "./PlaybackPlanService";
-import { resolveDownloadSession } from "./PlaybackSessionPlaybackService";
-import { getDeviceProfile } from "./deviceProfile";
+  resolveCastSession,
+  resolveDownloadSession,
+} from "./PlaybackSessionPlaybackService";
+import {
+  getCastSessionProfile,
+  getChromecastDeviceProfile,
+  getDeviceProfile,
+} from "./deviceProfile";
 import {
   createPlaybackRuntimeError,
   getPlaybackRuntimeState,
   mapPlaybackPlanToRuntimeFailure,
-  mapResolveErrorsToRuntimeFailure,
 } from "./PlaybackErrors";
 
 export interface PlaybackOrchestratorInput {
@@ -57,18 +62,6 @@ export type PlaybackOrchestratorResult =
   | PlaybackOrchestratorSuccess
   | PlaybackOrchestratorFailure;
 
-interface ResolvedActionSuccess {
-  ok: true;
-  stream: Stream;
-  uri: string;
-  remainingStreams: Stream[];
-  plan: PlaybackPlan;
-  attemptedStreams: number;
-  resolveErrors: string[];
-}
-
-type ResolvedActionResult = ResolvedActionSuccess | PlaybackOrchestratorFailure;
-
 export interface DownloadOrchestratorSuccess {
   ok: true;
   stream: Stream;
@@ -93,6 +86,9 @@ export interface CastOrchestratorSuccess {
   stream: Stream;
   resolvedUrl: string;
   mediaInfo: MediaInfo;
+  sessionId: string;
+  candidateId: string;
+  attemptId: string;
   runtimeState: PlaybackRuntimeState;
   plan: PlaybackPlan;
   attemptedStreams: number;
@@ -102,6 +98,11 @@ export interface CastOrchestratorSuccess {
 export type CastOrchestratorResult =
   | CastOrchestratorSuccess
   | PlaybackOrchestratorFailure;
+
+export interface PrepareCastOptions {
+  deviceProfile?: DeviceProfile;
+  castProfile?: PlaybackSessionCastProfile;
+}
 
 export async function playBest(
   input: PlaybackOrchestratorInput,
@@ -268,72 +269,98 @@ export async function prepareDownload(
 
 export async function prepareCast(
   input: PlaybackOrchestratorInput,
+  options: PrepareCastOptions = {},
 ): Promise<CastOrchestratorResult> {
   const fallback = "Casting is unavailable right now.";
-  const result = await resolveActionPlan(input, "cast", fallback);
+  const deviceProfile = options.deviceProfile ?? getChromecastDeviceProfile();
+  const castProfile =
+    options.castProfile ?? getCastSessionProfile(deviceProfile);
+  const plan = await createPlaybackPlanWithBridgeRetry({
+    type: input.type,
+    id: input.id,
+    season: input.season,
+    episode: input.episode,
+    action: "cast",
+    deviceProfile,
+  });
+  const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
+  const session = usePlaybackSessionStore.getState().createSession({
+    plan,
+    content: {
+      type: input.type,
+      id: input.id,
+      season: input.season,
+      episode: input.episode,
+    },
+    deviceProfile,
+    bridge: {
+      status: bridgeDiagnostics.status,
+      reason: bridgeDiagnostics.reason,
+    },
+    castProfile,
+  });
 
-  if (!result.ok) return result;
+  if (plan.state !== "ready" || !plan.selectedCandidate) {
+    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
+    usePlaybackSessionStore.getState().failSession(session.id, failure.error);
+    return {
+      ok: false,
+      ...failure,
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  const candidateId = session.selectedCandidateId;
+  if (!candidateId) {
+    const error = createPlaybackRuntimeError("SOURCE_UNAVAILABLE", fallback, {
+      retryable: true,
+      shouldFallback: false,
+    });
+    usePlaybackSessionStore.getState().failSession(session.id, error);
+    return {
+      ok: false,
+      error,
+      runtimeState: getPlaybackRuntimeState(error.code),
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  const result = await resolveCastSession(session.id, candidateId);
+  const attempts =
+    usePlaybackSessionStore.getState().sessions[session.id]?.attempts || [];
+  const resolveErrors = attempts
+    .map((attempt) => attempt.error?.message)
+    .filter((message): message is string => !!message);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error,
+      runtimeState: getPlaybackRuntimeState(result.error.code),
+      plan,
+      sessionId: session.id,
+      attemptedStreams: attempts.length,
+      resolveErrors,
+    };
+  }
 
   return {
     ok: true,
     stream: result.stream,
     resolvedUrl: result.uri,
     mediaInfo: buildMediaInfo(input, result.stream),
-    runtimeState: "buffering",
-    plan: result.plan,
-    attemptedStreams: result.attemptedStreams,
-    resolveErrors: result.resolveErrors,
-  };
-}
-
-async function resolveActionPlan(
-  input: PlaybackOrchestratorInput,
-  action: "play" | "download" | "cast",
-  fallback: string,
-): Promise<ResolvedActionResult> {
-  const plan = await createPlaybackPlanWithBridgeRetry({
-    type: input.type,
-    id: input.id,
-    season: input.season,
-    episode: input.episode,
-    action,
-  });
-
-  if (plan.state !== "ready") {
-    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
-    return {
-      ok: false,
-      ...failure,
-      plan,
-      attemptedStreams: 0,
-      resolveErrors: [],
-    };
-  }
-
-  const result = await resolvePlaybackPlan(plan);
-  if (!result.resolved) {
-    const failure =
-      result.errors.length > 0
-        ? mapResolveErrorsToRuntimeFailure(result.errors, fallback)
-        : mapPlaybackPlanToRuntimeFailure(plan, fallback);
-
-    return {
-      ok: false,
-      ...failure,
-      plan,
-      attemptedStreams: result.attemptedStreams,
-      resolveErrors: result.errors,
-    };
-  }
-
-  return {
-    ok: true,
-    stream: result.resolved.stream,
-    uri: result.resolved.uri,
-    remainingStreams: result.remainingStreams,
+    sessionId: session.id,
+    candidateId: result.candidateId,
+    attemptId: result.attemptId,
+    runtimeState: "selecting_source",
     plan,
-    attemptedStreams: result.attemptedStreams,
-    resolveErrors: result.errors,
+    attemptedStreams: attempts.length,
+    resolveErrors,
   };
 }
 
