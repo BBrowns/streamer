@@ -9,6 +9,10 @@ const http = require("http");
 const os = require("os");
 const crypto = require("crypto");
 const { spawn, execFileSync } = require("child_process");
+const {
+  resolveManagedDownloadPath,
+  toStreamerUri,
+} = require("./download-paths");
 
 const { autoUpdater } = require("electron-updater");
 
@@ -64,6 +68,8 @@ const downloadsPath = path.join(
 if (!fs.existsSync(downloadsPath)) {
   fs.mkdirSync(downloadsPath, { recursive: true });
 }
+const downloadJobsPath = path.join(downloadsPath, "download-jobs.json");
+let persistDownloadJobsTimer = null;
 
 function sanitizeDownloadFilename(filename) {
   const fallback = `download-${Date.now()}.mp4`;
@@ -85,8 +91,118 @@ function snapshotDownloadJob(job) {
   };
 }
 
+function serializeDownloadJob(job) {
+  return {
+    id: job.id,
+    status: job.status,
+    downloadUrl: job.downloadUrl,
+    filename: job.filename,
+    totalBytesWritten: job.totalBytesWritten,
+    totalBytesExpectedToWrite: job.totalBytesExpectedToWrite,
+    localUri: job.localUri || undefined,
+    error: job.error || undefined,
+  };
+}
+
+function persistDownloadJobsNow() {
+  if (persistDownloadJobsTimer) {
+    clearTimeout(persistDownloadJobsTimer);
+    persistDownloadJobsTimer = null;
+  }
+
+  const jobs = Array.from(downloadJobs.values()).map(serializeDownloadJob);
+  const tempPath = `${downloadJobsPath}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify({ version: 1, jobs }), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    fs.renameSync(tempPath, downloadJobsPath);
+  } catch (error) {
+    console.warn("[downloads] Failed to persist download jobs:", error);
+    try {
+      fs.rmSync(tempPath, { force: true });
+    } catch {}
+  }
+}
+
+function schedulePersistDownloadJobs() {
+  if (persistDownloadJobsTimer) return;
+  persistDownloadJobsTimer = setTimeout(persistDownloadJobsNow, 500);
+}
+
+function restoreDownloadJobs() {
+  if (!fs.existsSync(downloadJobsPath)) return;
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(downloadJobsPath, "utf8"));
+    const jobs = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
+
+    for (const storedJob of jobs) {
+      if (
+        !storedJob ||
+        typeof storedJob.id !== "string" ||
+        typeof storedJob.downloadUrl !== "string" ||
+        typeof storedJob.filename !== "string"
+      ) {
+        continue;
+      }
+
+      const filename = sanitizeDownloadFilename(storedJob.filename);
+      const filePath = path.join(downloadsPath, filename);
+      const tempPath = `${filePath}.part`;
+      const completedFileExists = fs.existsSync(filePath);
+      const partialFileExists = fs.existsSync(tempPath);
+      const storedStatus = storedJob.status;
+      const status =
+        storedStatus === "Completed"
+          ? completedFileExists
+            ? "Completed"
+            : "Error"
+          : storedStatus === "Error"
+            ? "Error"
+            : "Paused";
+      const totalBytesWritten = partialFileExists
+        ? fs.statSync(tempPath).size
+        : completedFileExists
+          ? fs.statSync(filePath).size
+          : Math.max(0, Number(storedJob.totalBytesWritten) || 0);
+
+      downloadJobs.set(storedJob.id, {
+        id: storedJob.id,
+        downloadUrl: storedJob.downloadUrl,
+        filename,
+        filePath,
+        tempPath,
+        status,
+        totalBytesWritten,
+        totalBytesExpectedToWrite: Math.max(
+          totalBytesWritten,
+          Number(storedJob.totalBytesExpectedToWrite) || 0,
+        ),
+        localUri: completedFileExists ? toStreamerUri(filePath) : null,
+        error:
+          status === "Error"
+            ? storedJob.error || "Downloaded file could not be found."
+            : null,
+        req: null,
+        file: null,
+        pauseRequested: false,
+        cancelRequested: false,
+        waiters: [],
+      });
+    }
+  } catch (error) {
+    console.warn("[downloads] Failed to restore download jobs:", error);
+  }
+}
+
+restoreDownloadJobs();
+electron_1.app.on("will-quit", persistDownloadJobsNow);
+
 function emitDownloadJob(job) {
   const snapshot = snapshotDownloadJob(job);
+  schedulePersistDownloadJobs();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("download-progress", snapshot);
     mainWindow.webContents.send("download-job-updated", snapshot);
@@ -118,7 +234,7 @@ function failDownloadJob(job, error) {
 
 function completeDownloadJob(job) {
   job.status = "Completed";
-  job.localUri = `streamer://${job.filePath}`;
+  job.localUri = toStreamerUri(job.filePath);
   job.error = null;
   job.req = null;
   job.file = null;
@@ -269,7 +385,15 @@ function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
 }
 
 function startDownloadJob(id, rawUrl, filename) {
-  const existingJob = downloadJobs.get(id);
+  let existingJob = downloadJobs.get(id);
+  if (
+    existingJob?.status === "Completed" &&
+    !fs.existsSync(existingJob.filePath)
+  ) {
+    downloadJobs.delete(id);
+    schedulePersistDownloadJobs();
+    existingJob = null;
+  }
   if (
     existingJob &&
     ["Pending", "Downloading", "Paused", "Completed"].includes(
@@ -301,6 +425,7 @@ function startDownloadJob(id, rawUrl, filename) {
   };
 
   downloadJobs.set(id, job);
+  schedulePersistDownloadJobs();
   startDownloadRequest(job, 0);
   return snapshotDownloadJob(job);
 }
@@ -351,6 +476,7 @@ function cancelDownloadJob(id) {
   emitDownloadJob(job);
   settleDownloadJob(job);
   downloadJobs.delete(id);
+  schedulePersistDownloadJobs();
   return snapshotDownloadJob(job);
 }
 
@@ -1007,12 +1133,10 @@ function createTray() {
 electron_1.app.whenReady().then(async () => {
   // Register custom protocol to bypass security sandbox for local downloaded files
   electron_1.protocol.registerFileProtocol("streamer", (request, callback) => {
-    const url = request.url.replace("streamer://", "");
-    try {
-      return callback(decodeURIComponent(url));
-    } catch (error) {
-      console.error("Protocol error:", error);
-    }
+    const filePath = resolveManagedDownloadPath(downloadsPath, request.url);
+    if (filePath) return callback(filePath);
+    console.warn("[downloads] Rejected unmanaged streamer protocol path");
+    return callback({ error: -6 });
   });
 
   // Set up IPC Handlers
@@ -1032,14 +1156,15 @@ electron_1.app.whenReady().then(async () => {
   });
 
   electron_1.ipcMain.handle("check-file", async (event, localUri) => {
-    if (!localUri.startsWith("streamer://")) return false;
-    const filePath = decodeURIComponent(localUri.replace("streamer://", ""));
-    return fs.existsSync(filePath);
+    const filePath = resolveManagedDownloadPath(downloadsPath, localUri);
+    return Boolean(filePath && fs.existsSync(filePath));
   });
 
   electron_1.ipcMain.handle("delete-file", async (event, localUri) => {
-    if (!localUri.startsWith("streamer://")) return;
-    const filePath = decodeURIComponent(localUri.replace("streamer://", ""));
+    const filePath = resolveManagedDownloadPath(downloadsPath, localUri);
+    if (!filePath) {
+      throw new Error("Downloaded file path is not managed by Streamer");
+    }
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

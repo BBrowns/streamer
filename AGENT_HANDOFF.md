@@ -176,22 +176,32 @@ Known useful direction:
 
 ## Current Known Gaps
 
-### 1. Downloads Are Not Product-Grade Yet
+### 1. Downloads Need Real-Device Validation
 
-Downloads still need the biggest functional pass after playback readiness:
+The main download queue and persistence pass is complete:
 
-- Primary Download now routes through `PlaybackSession`, using the existing
+- Primary Download routes through `PlaybackSession`, using the existing
   action-aware orchestrator as the planning entry point.
 - Download sessions record bridge/gateway preparation, coarse URL-free
   progress, failure, cancellation, local-file verification, and completion.
-- New completions are not marked offline-playable until Electron or the native
-  filesystem confirms a real local file URI.
-- Show a real queue with clear states: queued, preparing, downloading, paused, completed, failed.
-- Support pause/resume/delete robustly across platforms.
-- Mark items offline-playable only when a verified local file URI exists.
+- The Downloads screen presents active, attention, and ready-offline groups
+  with visible pause, resume, retry, play, delete, filter, storage, and error
+  states.
+- Offline badges and library filtering use one verified-local-file invariant.
+- Electron persists managed download-job metadata and restores interrupted jobs
+  as recoverable paused items after restart.
+- Electron local-file playback, verification, and deletion are constrained to
+  the app-managed offline-media directory.
+
+Still open:
+
+- Validate pause, resume, delete, restart recovery, and storage reporting with
+  real large files on desktop, iPhone, and Android.
 - Keep HLS offline unsupported in v1 unless a proper segment packager is built.
-- Torrent downloads on mobile should use the desktop bridge/gateway as resolver/downloader where needed.
-- Persist meaningful download/job metadata so restarts do not fake completion.
+- Torrent downloads on mobile should use the desktop bridge/gateway as
+  resolver/downloader where needed.
+- Persisted retry URLs may expire; a future pass should re-plan sources instead
+  of relying indefinitely on an old resolved URL.
 
 ### 2. Casting Needs Product Flow
 
@@ -264,13 +274,20 @@ Implemented:
 
 Goal: make Downloads feel like a real streaming-app queue.
 
-Expected work:
+Status: **Complete.**
 
-- Add visible queue states and actions.
-- Make pause/resume/delete robust.
-- Add storage/error clarity.
-- Verify local file existence before showing offline playable.
-- Add mobile and desktop tests where feasible.
+Implemented:
+
+- Adds visible active, attention, and ready-offline queue sections with direct
+  actions, filters, progress, storage totals, and persisted safe error text.
+- Makes pause, resume, retry, delete, and delete-all operate through
+  `DownloadService` instead of clearing UI state without deleting files.
+- Requires a verified local URI before any download is shown as offline
+  playable across Downloads, Library, Detail, and source cards.
+- Reconciles persisted mobile queue state with Electron jobs and local files.
+- Persists Electron download-job metadata for restart recovery and constrains
+  `streamer://` local-file access to managed offline media.
+- Adds mobile queue/service/component tests and desktop path-boundary tests.
 
 ### PR C: Route Cast Through Playback Sessions
 

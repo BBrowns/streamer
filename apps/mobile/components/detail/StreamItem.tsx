@@ -2,7 +2,10 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Stream } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
-import { useDownloadStore } from "../../stores/downloadStore";
+import {
+  isTaskOfflinePlayable,
+  useDownloadStore,
+} from "../../stores/downloadStore";
 import {
   streamEngineManager,
   type BridgeStatus,
@@ -28,8 +31,9 @@ export function StreamItem({
   const task = useDownloadStore((state) => state.tasks[id]);
   const isPreparing = task?.status === "Preparing";
   const isDownloading = task?.status === "Downloading";
-  const isCompleted = task?.status === "Completed";
-  const isInProgress = isPreparing || isDownloading;
+  const isVerifying = task?.status === "Verifying";
+  const isCompleted = isTaskOfflinePlayable(task);
+  const isInProgress = isPreparing || isDownloading || isVerifying;
   const progress = task?.progress || 0;
   const url = stream.url?.toLowerCase() ?? "";
   const isHls = url.includes(".m3u8");
@@ -158,7 +162,7 @@ export function StreamItem({
               <Text style={[styles.progressText, { color: colors.tint }]}>
                 Prep
               </Text>
-            ) : isDownloading || task?.status === "Paused" ? (
+            ) : isDownloading || isVerifying || task?.status === "Paused" ? (
               <Text style={[styles.progressText, { color: colors.tint }]}>
                 {(progress * 100).toFixed(0)}%
               </Text>

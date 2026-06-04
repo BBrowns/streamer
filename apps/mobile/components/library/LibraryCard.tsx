@@ -11,7 +11,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import type { LibraryItem } from "@streamer/shared";
-import { useDownloadStore } from "../../stores/downloadStore";
+import {
+  isTaskOfflinePlayable,
+  useDownloadStore,
+} from "../../stores/downloadStore";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
@@ -47,8 +50,11 @@ export function LibraryCard({
   const task = Object.values(tasks).find((t) => t.mediaInfo.itemId === itemId);
 
   const isPreparing = task?.status === "Preparing";
-  const isDownloading = task?.status === "Downloading" || isPreparing;
-  const isCompleted = task?.status === "Completed";
+  const isDownloading =
+    task?.status === "Downloading" ||
+    task?.status === "Verifying" ||
+    isPreparing;
+  const isCompleted = isTaskOfflinePlayable(task);
   const progress = task?.progress || 0;
 
   const handlePress = () => {

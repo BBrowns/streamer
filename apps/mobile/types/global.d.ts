@@ -2,8 +2,34 @@
 
 interface DesktopDownloadProgressData {
   id: string;
+  status?:
+    | "Pending"
+    | "Downloading"
+    | "Paused"
+    | "Completed"
+    | "Error"
+    | "Canceled";
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
+  localUri?: string;
+  error?: string;
+}
+
+interface DesktopDownloadJob {
+  id: string;
+  status:
+    | "Pending"
+    | "Downloading"
+    | "Paused"
+    | "Completed"
+    | "Error"
+    | "Canceled";
+  downloadUrl: string;
+  filename: string;
+  totalBytesWritten: number;
+  totalBytesExpectedToWrite: number;
+  localUri?: string;
+  error?: string;
 }
 
 interface DesktopBridgeInfo {
@@ -40,6 +66,16 @@ interface DesktopBridge {
     downloadUrl: string,
     filename: string,
   ): Promise<string>;
+
+  startDownloadJob(
+    id: string,
+    downloadUrl: string,
+    filename: string,
+  ): Promise<DesktopDownloadJob>;
+  getDownloadJob(id: string): Promise<DesktopDownloadJob | null>;
+  pauseDownloadJob(id: string): Promise<DesktopDownloadJob | null>;
+  resumeDownloadJob(id: string): Promise<DesktopDownloadJob | null>;
+  cancelDownloadJob(id: string): Promise<DesktopDownloadJob | null>;
 
   /**
    * Subscribes to download progress events.

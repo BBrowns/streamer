@@ -84,36 +84,78 @@
   },
   "downloads": {
     "title": "Downloads",
+    "unknownTitle": "Download",
     "header": {
-      "subtitle": "Manage your offline content",
+      "subtitle": "Your queue and verified offline files on this device",
       "clearAll": "Clear All"
     },
     "alerts": {
       "clearTitle": "Clear All Downloads",
-      "clearMessage": "Are you sure? This will delete all downloaded files from your device."
+      "clearMessage": "Are you sure? This will delete all downloaded files from your device.",
+      "clearAllTitle": "Delete all downloads?",
+      "clearAllMessage": "This removes every managed download and its local file from this device.",
+      "clearAllConfirm": "Delete every managed download and remove its local file?",
+      "clearAllButton": "Delete all",
+      "deleteTitle": "Delete download?",
+      "deleteMessage": "Delete \"{{title}}\" from this device?"
     },
     "card": {
       "unknown": "Unknown Download",
       "manage": "Manage your downloaded media",
       "viewDetails": "View Details",
-      "delete": "Delete Download"
+      "delete": "Delete Download",
+      "movie": "Movie",
+      "series": "Series"
     },
     "actions": {
       "manage": "Manage your downloaded media",
       "viewDetails": "View Details",
       "delete": "Delete Download",
-      "clearAll": "Clear All"
+      "clearAll": "Delete all",
+      "pause": "Pause",
+      "resume": "Resume",
+      "retry": "Retry",
+      "play": "Play"
     },
     "status": {
+      "queued": "Queued",
+      "preparing": "Preparing",
       "downloading": "Downloading",
+      "verifying": "Verifying",
       "paused": "Paused",
+      "checking": "Checking file",
+      "readyOffline": "Ready offline",
       "completed": "Completed",
-      "error": "Error"
+      "error": "Needs attention"
+    },
+    "sections": {
+      "active": "Active queue",
+      "activeSubtitle": "Preparing, downloading, and paused items",
+      "attention": "Needs attention",
+      "attentionSubtitle": "Retry or remove failed downloads",
+      "ready": "Ready offline",
+      "readySubtitle": "Verified files available on this device"
+    },
+    "filters": {
+      "all": "All {{count}}",
+      "active": "Active {{count}}",
+      "ready": "Ready {{count}}",
+      "attention": "Issues {{count}}"
+    },
+    "summary": {
+      "active": "Active",
+      "ready": "Ready",
+      "storage": "Offline storage"
+    },
+    "footer": {
+      "verified": "Offline items are shown as ready only after the local file is verified."
     },
     "empty": {
       "title": "No Downloads",
       "description": "Movies and shows you download will appear here.",
-      "action": "Go Discover"
+      "action": "Browse movies and shows",
+      "filterTitle": "Nothing in this view",
+      "filterDescription": "Choose another filter to see the rest of the queue."
     }
   },
   "onboarding": {
