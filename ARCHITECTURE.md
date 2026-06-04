@@ -293,13 +293,15 @@ Detail Play Best
 
 Important client modules:
 
-| Module                                      | Responsibility                                                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `services/playback/PlaybackPlanService.ts`  | Calls and validates `/api/playback/plan`, includes device profile and bridge diagnostics, resolves planned streams. |
-| `services/playback/PlaybackOrchestrator.ts` | Central Play Best entry point; returns a prepared stream or typed runtime error.                                    |
-| `services/playback/PlaybackErrors.ts`       | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                |
-| `stores/playerStore.ts`                     | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                           |
-| `components/player/PlayerStatusOverlay.tsx` | Displays typed readiness/error states instead of an endless generic buffering state.                                |
+| Module                                        | Responsibility                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `services/playback/PlaybackPlanService.ts`    | Calls and validates `/api/playback/plan`, includes device profile and bridge diagnostics, resolves planned streams. |
+| `services/playback/PlaybackOrchestrator.ts`   | Central Play Best entry point; returns a prepared stream or typed runtime error.                                    |
+| `services/playback/PlaybackErrors.ts`         | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                |
+| `services/playback/PlaybackSessionReducer.ts` | Creates persistence-safe sessions and applies typed append-only lifecycle events.                                   |
+| `stores/playbackSessionStore.ts`              | Persists validated control-plane sessions while keeping raw planner candidates in memory only.                      |
+| `stores/playerStore.ts`                       | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                           |
+| `components/player/PlayerStatusOverlay.tsx`   | Displays typed readiness/error states instead of an endless generic buffering state.                                |
 
 Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
 
@@ -314,6 +316,12 @@ plane contract. A session records action, opaque candidate snapshots, attempts,
 gateway progress, typed errors, and an append-only event log. It never persists
 `Stream` objects, resolved media URLs, magnets, info hashes, external URLs, or
 bridge URLs.
+
+The mobile `playbackSessionStore` persists only validated `PlaybackSession`
+records. Its session candidate IDs are newly generated UUIDs rather than
+planner candidate IDs. A module-local runtime map connects those IDs to
+`PlannedMediaCandidate` values for the current app process; after restart the
+missing mapping intentionally requires a new plan.
 
 The existing planner/orchestrator/player flow remains backwards compatible
 while later work moves Play, Download, and Cast onto the shared session model.
@@ -335,11 +343,12 @@ After completion, the service fires a `POST /api/notifications` to create a serv
 
 ### 6.6 Key Zustand Stores
 
-| Store           | Contents                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| `authStore`     | `isAuthenticated`, `user`, JWT token, bridge URL/token, theme preference; hydrates from secure storage |
-| `playerStore`   | `currentStream`, `mediaInfo`, fallback queue, `runtimeState`, `runtimeError`, stream state, metrics    |
-| `downloadStore` | `tasks` map (id → progress/status/localUri/resumeData); persisted to AsyncStorage                      |
+| Store                  | Contents                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `authStore`            | `isAuthenticated`, `user`, JWT token, bridge URL/token, theme preference; hydrates from secure storage |
+| `playbackSessionStore` | Persistence-safe playback control sessions plus transient planner-candidate lookup helpers             |
+| `playerStore`          | `currentStream`, `mediaInfo`, fallback queue, `runtimeState`, `runtimeError`, stream state, metrics    |
+| `downloadStore`        | `tasks` map (id → progress/status/localUri/resumeData); persisted to AsyncStorage                      |
 
 ### 6.7 Trakt Scrobbling
 

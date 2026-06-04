@@ -83,6 +83,28 @@ future Play, Download, and Cast orchestration:
 - Existing `PlaybackPlan` and `PlaybackOrchestrator` behavior remains supported
   while later PRs migrate runtime flows onto the session model.
 
+The mobile client now also has:
+
+- `services/playback/PlaybackSessionReducer.ts`, a pure typed reducer for
+  session creation and append-only lifecycle events
+- `stores/playbackSessionStore.ts`, which persists only schema-valid sessions
+  and keeps planner candidates in a transient in-memory runtime map; it also
+  exposes typed helpers for attempts, gateway progress, fallback, failure, and
+  cancellation
+- explicit `requiresReplan` behavior when a persisted session is rehydrated
+  without its runtime candidate mapping
+
+Session-local candidate IDs are newly generated UUIDs and are not planner
+candidate IDs. Do not persist or reconstruct the runtime candidate map.
+
+The Redis-backed remote-control presence records in `useRemoteControl.ts` and
+`server/src/modules/sessions/session.service.ts` are a separate legacy concept
+despite currently sharing the `PlaybackSession` name.
+
+The next playback-control-plane PR should route Play Best and the player
+readiness/fallback flow through these session events. Do not combine download
+or cast migration into that PR.
+
 See [PLAYBACK.md](./PLAYBACK.md) before changing playback persistence or adding
 new session event payloads.
 
