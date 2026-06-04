@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { playbackPlanSchema } from "@streamer/shared";
 import { playbackPlannerService } from "./playback-planner.service.js";
 
 export class PlaybackController {
@@ -13,7 +14,7 @@ export class PlaybackController {
       requestId,
     );
 
-    return c.json(plan);
+    return c.json(playbackPlanSchema.parse(plan));
   }
 }
 

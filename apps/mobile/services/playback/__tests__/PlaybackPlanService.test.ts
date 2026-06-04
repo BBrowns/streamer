@@ -1,6 +1,9 @@
-import type { PlaybackPlan } from "@streamer/shared";
 import { api } from "../../api";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
+import {
+  makePlaybackPlan,
+  makePlannedMediaCandidate,
+} from "../../../test-utils/playbackPlan";
 import {
   createPlaybackPlan,
   getReadyPlanStreams,
@@ -63,7 +66,10 @@ describe("PlaybackPlanService", () => {
       message: "node-datachannel was installed for another arch",
     });
     (api.post as jest.Mock).mockResolvedValueOnce({
-      data: { state: "bridgeUnavailable" },
+      data: makePlaybackPlan({
+        state: "bridgeUnavailable",
+        userMessage: "Bridge is unavailable.",
+      }),
     });
 
     await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
@@ -80,31 +86,41 @@ describe("PlaybackPlanService", () => {
     );
   });
 
+  it("rejects malformed planner responses at the client boundary", async () => {
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: { state: "ready" },
+    });
+
+    await expect(
+      createPlaybackPlan({ type: "movie", id: "tt123", action: "play" }),
+    ).rejects.toThrow();
+  });
+
   it("returns selected and fallback streams in planner order", () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "bridge",
         playbackUrl: "http://bridge.test/api/gateway/jobs/job-1/stream",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "torrent-1",
           kind: "torrent",
           stream: { infoHash: "torrent-1", title: "Torrent source" },
-          riskFlags: [],
-        },
+          requiresBridge: true,
+        }),
         fallbackCandidates: [
-          {
+          makePlannedMediaCandidate({
             id: "direct-1",
             kind: "direct",
             stream: {
               url: "https://cdn.example.test/movie.mp4",
               title: "Direct source",
             },
-            riskFlags: [],
-          },
+            rank: 1,
+          }),
         ],
       },
-    };
+    });
 
     const streams = getReadyPlanStreams(plan);
 
@@ -122,29 +138,29 @@ describe("PlaybackPlanService", () => {
   });
 
   it("tries fallback streams when the selected source cannot resolve", async () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "bridge",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "stale-torrent",
           kind: "torrent",
           stream: { infoHash: "stale-torrent", title: "Stale torrent" },
-          riskFlags: [],
-        },
+          requiresBridge: true,
+        }),
         fallbackCandidates: [
-          {
+          makePlannedMediaCandidate({
             id: "direct-fallback",
             kind: "direct",
             stream: {
               url: "https://cdn.example.test/fallback.mp4",
               title: "Fallback",
             },
-            riskFlags: [],
-          },
+            rank: 1,
+          }),
         ],
       },
-    };
+    });
 
     getPlaybackUri
       .mockRejectedValueOnce(new Error("No peers found"))
@@ -173,29 +189,29 @@ describe("PlaybackPlanService", () => {
   });
 
   it("returns resolve diagnostics when every planned source fails", async () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "bridge",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "dead-torrent",
           kind: "torrent",
           stream: { infoHash: "dead-torrent", title: "Dead torrent" },
-          riskFlags: [],
-        },
+          requiresBridge: true,
+        }),
         fallbackCandidates: [
-          {
+          makePlannedMediaCandidate({
             id: "empty-direct",
             kind: "direct",
             stream: {
               url: "https://cdn.example.test/empty.mp4",
               title: "Empty direct",
             },
-            riskFlags: [],
-          },
+            rank: 1,
+          }),
         ],
       },
-    };
+    });
 
     getPlaybackUri
       .mockRejectedValueOnce(new Error("No peers found"))
@@ -212,33 +228,32 @@ describe("PlaybackPlanService", () => {
   });
 
   it("returns remaining streams for player-level fallback after first playback failure", async () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "direct",
         playbackUrl: "https://cdn.example.test/first.mp4",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "first",
           kind: "direct",
           stream: {
             url: "https://cdn.example.test/original-first.mp4",
             title: "First",
           },
-          riskFlags: [],
-        },
+        }),
         fallbackCandidates: [
-          {
+          makePlannedMediaCandidate({
             id: "second",
             kind: "direct",
             stream: {
               url: "https://cdn.example.test/second.mp4",
               title: "Second",
             },
-            riskFlags: [],
-          },
+            rank: 1,
+          }),
         ],
       },
-    };
+    });
 
     getPlaybackUri.mockResolvedValueOnce("https://cdn.example.test/first.mp4");
 

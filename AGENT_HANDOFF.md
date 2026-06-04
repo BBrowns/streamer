@@ -49,7 +49,13 @@ Recent work stabilized the server/add-on boundary:
 Playback is now structured around planning rather than rendering-time resolution:
 
 - Device profiles and bridge state are sent to the playback planner.
-- The planner ranks and rejects sources server-side.
+- Planner v2 ranks and rejects sources server-side using opaque UUID candidate
+  IDs, deterministic ordering, typed rejection reasons, action eligibility,
+  compatibility details, and timeout budgets.
+- Top-level `selectedCandidate`, `fallbackCandidates`, and `orderedCandidates`
+  are canonical for new code. The nested `plan` object remains a temporary
+  compatibility wrapper for the current mobile resolver.
+- Server and mobile validate planner responses with `playbackPlanSchema`.
 - The client no longer needs to resolve every visible stream card.
 - Source cards should remain cheap metadata views; resolution should happen only on Play, Download, or Cast.
 

@@ -39,9 +39,16 @@ This is the core content fan-out router. It queries all installed add-ons in par
 
 The playback planner is the current central contract for `Play Best`, bridge readiness, and future download/cast orchestration. The client sends the desired action, device capabilities, and bridge health; the server returns a ranked source plan or a typed user-facing plan state.
 
-| Method | Route   | Description                                                                                                                                            |
-| ------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST` | `/plan` | Body: `PlaybackPlanRequest`. Returns `PlaybackPlan` with `state`, selected candidate, fallback candidates, optional gateway playback URL, and rejects. |
+| Method | Route   | Description                                                                                                                                                                                                                                                                      |
+| ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/plan` | Body: `PlaybackPlanRequest`. Returns Planner v2 `PlaybackPlan` with deterministic ordered candidates, top-level selection and fallbacks, typed rejection and decision reasons, action eligibility, compatibility details, timeout budgets, and an optional gateway playback URL. |
+
+Planner v2 candidate IDs are opaque, plan-local UUIDs. Clients must not persist
+them as source identity or expect the same ID from a later plan request.
+Top-level `selectedCandidate`, `fallbackCandidates`, and `orderedCandidates` are
+canonical. The nested `plan` object is a temporary compatibility wrapper for
+the current resolver and may be removed after session-based orchestration is
+fully adopted.
 
 Important plan states:
 
