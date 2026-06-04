@@ -1,4 +1,5 @@
 import type {
+  DeviceProfile,
   PlaybackAction,
   PlaybackPlan,
   PlaybackPlanRequest,
@@ -12,14 +13,19 @@ import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
 export async function createPlaybackPlan(
   input: Pick<PlaybackPlanRequest, "type" | "id" | "season" | "episode"> & {
     action: PlaybackAction;
+    deviceProfile?: DeviceProfile;
   },
 ): Promise<PlaybackPlan> {
+  const { deviceProfile: requestedDeviceProfile, ...request } = input;
   const deviceProfile =
-    input.action === "cast" ? getChromecastDeviceProfile() : getDeviceProfile();
+    requestedDeviceProfile ??
+    (input.action === "cast"
+      ? getChromecastDeviceProfile()
+      : getDeviceProfile());
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
 
   const { data } = await api.post<PlaybackPlan>("/api/playback/plan", {
-    ...input,
+    ...request,
     deviceProfile,
     bridge: {
       status: streamEngineManager.bridgeStatus,
@@ -34,6 +40,7 @@ export async function createPlaybackPlan(
 export async function createPlaybackPlanWithBridgeRetry(
   input: Pick<PlaybackPlanRequest, "type" | "id" | "season" | "episode"> & {
     action: PlaybackAction;
+    deviceProfile?: DeviceProfile;
   },
 ): Promise<PlaybackPlan> {
   const plan = await createPlaybackPlan(input);

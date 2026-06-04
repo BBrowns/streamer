@@ -140,8 +140,11 @@ Electron persists managed download-job metadata and restores interrupted jobs
 as paused. Electron `streamer://` playback, file verification, and deletion are
 limited to its app-managed offline-media directory.
 
-Cast still uses `PlaybackPlanService`, `PlaybackOrchestrator`, and stream
-engines directly until its session migration is implemented.
+Primary Cast now creates and resolves a `PlaybackSession` through
+`PlaybackOrchestrator`. The cast dialog prepares a cast-ready source before
+device selection when possible, records readiness and fallback through
+`PlaybackSessionPlaybackService`, and keeps bridge-backed sessions active while
+the remote display is playing. Manual advanced-source casts remain separate.
 
 The intended migration sequence is:
 
@@ -153,7 +156,7 @@ The intended migration sequence is:
 5. Route primary downloads through the same session model. **Complete.**
 6. Add verified download queue state and Electron restart recovery.
    **Complete.**
-7. Route cast through the same session model.
+7. Route cast through the same session model. **Complete.**
 
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.

@@ -1,14 +1,20 @@
 import { Platform } from "react-native";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "./bridgeAuth";
+import type { CastDeviceCapabilities } from "./playback/deviceProfile";
 
 export interface CastDevice {
   id: string;
   name: string;
   type: string;
+  capabilities?: CastDeviceCapabilities;
 }
 
 export type CastControlAction = "play" | "pause" | "stop";
+export type CastContentType =
+  | "video/mp4"
+  | "application/vnd.apple.mpegurl"
+  | "application/x-mpegURL";
 
 class CastService {
   getBridgeUrl(): string {
@@ -35,11 +41,16 @@ class CastService {
     return Array.isArray(data) ? data : data.devices || [];
   }
 
-  async play(deviceId: string, url: string, title: string): Promise<void> {
+  async play(
+    deviceId: string,
+    url: string,
+    title: string,
+    contentType: CastContentType = "video/mp4",
+  ): Promise<void> {
     const res = await fetch(`${this.getBridgeUrl()}/api/cast/play`, {
       method: "POST",
       headers: withBridgeJsonHeaders(),
-      body: JSON.stringify({ deviceId, url, title }),
+      body: JSON.stringify({ deviceId, url, title, contentType }),
     });
 
     if (!res.ok) {

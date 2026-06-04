@@ -16,8 +16,10 @@ import type {
 } from "../../streamEngine/IStreamEngine";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
 import {
+  advanceCastSessionAfterFailure,
   advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
+  resolveCastSession,
   resolveDownloadSession,
   resolvePlaybackSession,
 } from "../PlaybackSessionPlaybackService";
@@ -69,7 +71,7 @@ function installUuidMock() {
 function makePlan(
   primary: Stream,
   fallback?: Stream,
-  action: "play" | "download" = "play",
+  action: "play" | "download" | "cast" = "play",
 ) {
   const getKind = (stream: Stream) =>
     stream.infoHash
@@ -109,7 +111,7 @@ function makePlan(
 function createSession(
   primary: Stream,
   fallback?: Stream,
-  action: "play" | "download" = "play",
+  action: "play" | "download" | "cast" = "play",
 ) {
   return usePlaybackSessionStore.getState().createSession({
     plan: makePlan(primary, fallback, action),
@@ -339,6 +341,77 @@ describe("PlaybackSessionPlaybackService", () => {
         }),
       ]),
     );
+  });
+
+  it("resolves a cast candidate using the cast device profile instead of the local web codec check", async () => {
+    const primary = {
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Movie H.265",
+    } as Stream;
+    const engine = makeEngine(async () => primary.url!);
+    resolveEngine.mockReturnValue(engine);
+    const session = createSession(primary, undefined, "cast");
+
+    const result = await resolveCastSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      stream: primary,
+      uri: primary.url,
+    });
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id],
+    ).toMatchObject({
+      action: "cast",
+      status: "ready",
+      attempts: [{ status: "ready" }],
+    });
+  });
+
+  it("falls back to the next cast candidate after a display rejects a ready source", async () => {
+    const primary = {
+      url: "https://cdn.example.test/primary.mp4",
+      title: "Primary",
+    } as Stream;
+    const fallback = {
+      url: "https://cdn.example.test/fallback.mp4",
+      title: "Fallback",
+    } as Stream;
+    const primaryEngine = makeEngine(async () => primary.url!);
+    const fallbackEngine = makeEngine(async () => fallback.url!);
+    resolveEngine.mockImplementation((stream) =>
+      stream.url === primary.url ? primaryEngine : fallbackEngine,
+    );
+    const session = createSession(primary, fallback, "cast");
+    const first = await resolveCastSession(session.id);
+    expect(first.ok).toBe(true);
+
+    const error: PlaybackRuntimeError = {
+      code: "SOURCE_UNAVAILABLE",
+      message: "Display rejected source.",
+      retryable: true,
+      shouldFallback: true,
+    };
+    const result =
+      first.ok &&
+      (await advanceCastSessionAfterFailure(
+        session.id,
+        first.candidateId,
+        first.attemptId,
+        error,
+      ));
+
+    expect(result).toMatchObject({
+      ok: true,
+      uri: fallback.url,
+    });
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id].attempts,
+    ).toMatchObject([
+      { status: "failed", error: { code: "SOURCE_UNAVAILABLE" } },
+      { status: "ready" },
+    ]);
+    expect(primaryEngine.stop).toHaveBeenCalled();
   });
 
   it("rejects external browser downloads as unverified offline content", async () => {
