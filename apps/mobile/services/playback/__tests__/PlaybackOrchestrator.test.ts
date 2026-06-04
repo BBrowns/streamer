@@ -1,5 +1,4 @@
 import * as Crypto from "expo-crypto";
-import { getDownloadEligibility } from "../../downloadEligibility";
 import { usePlaybackSessionStore } from "../../../stores/playbackSessionStore";
 import {
   makePlaybackPlan,
@@ -14,14 +13,15 @@ import {
   createPlaybackPlanWithBridgeRetry,
   resolvePlaybackPlan,
 } from "../PlaybackPlanService";
+import { resolveDownloadSession } from "../PlaybackSessionPlaybackService";
 
 jest.mock("../PlaybackPlanService", () => ({
   createPlaybackPlanWithBridgeRetry: jest.fn(),
   resolvePlaybackPlan: jest.fn(),
 }));
 
-jest.mock("../../downloadEligibility", () => ({
-  getDownloadEligibility: jest.fn(),
+jest.mock("../PlaybackSessionPlaybackService", () => ({
+  resolveDownloadSession: jest.fn(),
 }));
 
 jest.mock("expo-crypto", () => ({
@@ -35,8 +35,8 @@ describe("PlaybackOrchestrator", () => {
   const resolvePlan = resolvePlaybackPlan as jest.MockedFunction<
     typeof resolvePlaybackPlan
   >;
-  const getEligibility = getDownloadEligibility as jest.MockedFunction<
-    typeof getDownloadEligibility
+  const resolveDownload = resolveDownloadSession as jest.MockedFunction<
+    typeof resolveDownloadSession
   >;
 
   beforeEach(() => {
@@ -49,11 +49,6 @@ describe("PlaybackOrchestrator", () => {
       );
     jest.clearAllMocks();
     usePlaybackSessionStore.getState().clearAllSessions();
-    getEligibility.mockReturnValue({
-      mode: "direct-file",
-      canDownload: true,
-      offlinePlayable: true,
-    });
   });
 
   afterEach(() => {
@@ -229,7 +224,7 @@ describe("PlaybackOrchestrator", () => {
       plan: {
         mode: "direct",
         selectedCandidate: makePlannedMediaCandidate({
-          id: "direct",
+          id: "00000000-0000-4000-8000-000000000201",
           kind: "direct",
           stream: {
             url: "https://cdn.example.test/movie.mp4",
@@ -241,19 +236,21 @@ describe("PlaybackOrchestrator", () => {
     });
 
     createPlan.mockResolvedValueOnce(plan);
-    resolvePlan.mockResolvedValueOnce({
-      resolved: {
-        stream: {
-          url: "https://cdn.example.test/movie.mp4",
-          title: "Direct",
-        },
-        uri: "https://cdn.example.test/movie.mp4",
-        attemptedStreams: 1,
-        errors: [],
+    resolveDownload.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      candidateId: "00000000-0000-4000-8000-000000000002",
+      attemptId: "00000000-0000-4000-8000-000000000003",
+      stream: {
+        url: "https://cdn.example.test/movie.mp4",
+        title: "Direct",
       },
-      attemptedStreams: 1,
-      errors: [],
-      remainingStreams: [],
+      uri: "https://cdn.example.test/movie.mp4",
+      eligibility: {
+        mode: "direct-file",
+        canDownload: true,
+        offlinePlayable: true,
+      },
     });
 
     const result = await prepareDownload({
@@ -270,10 +267,6 @@ describe("PlaybackOrchestrator", () => {
       episode: undefined,
       action: "download",
     });
-    expect(getEligibility).toHaveBeenCalledWith({
-      url: "https://cdn.example.test/movie.mp4",
-      title: "Direct",
-    });
     expect(result).toMatchObject({
       ok: true,
       resolvedUrl: "https://cdn.example.test/movie.mp4",
@@ -289,6 +282,21 @@ describe("PlaybackOrchestrator", () => {
         offlinePlayable: true,
       },
       runtimeState: "selecting_source",
+      attemptedStreams: 0,
+      resolveErrors: [],
+    });
+    expect(resolvePlan).not.toHaveBeenCalled();
+    expect(resolveDownload).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+    );
+    expect(result.ok && result.sessionId).toEqual(expect.any(String));
+    expect(
+      result.ok &&
+        usePlaybackSessionStore.getState().sessions[result.sessionId],
+    ).toMatchObject({
+      action: "download",
+      content: { type: "movie", id: "tt123" },
     });
   });
 
@@ -300,7 +308,7 @@ describe("PlaybackOrchestrator", () => {
         plan: {
           mode: "hls",
           selectedCandidate: makePlannedMediaCandidate({
-            id: "hls",
+            id: "00000000-0000-4000-8000-000000000202",
             kind: "hls",
             stream: { url: "https://cdn.example.test/master.m3u8" },
             actionEligibility: { action: "download", eligible: true },
@@ -308,22 +316,15 @@ describe("PlaybackOrchestrator", () => {
         },
       }),
     );
-    resolvePlan.mockResolvedValueOnce({
-      resolved: {
-        stream: { url: "https://cdn.example.test/master.m3u8" },
-        uri: "https://cdn.example.test/master.m3u8",
-        attemptedStreams: 1,
-        errors: [],
+    resolveDownload.mockResolvedValueOnce({
+      ok: false,
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      error: {
+        code: "SOURCE_UNAVAILABLE",
+        message: "HLS streams are streaming-only in offline v1.",
+        retryable: false,
+        shouldFallback: false,
       },
-      attemptedStreams: 1,
-      errors: [],
-      remainingStreams: [],
-    });
-    getEligibility.mockReturnValueOnce({
-      mode: "unsupported",
-      canDownload: false,
-      offlinePlayable: false,
-      reason: "HLS streams are streaming-only in offline v1.",
     });
 
     const result = await prepareDownload({
@@ -338,12 +339,13 @@ describe("PlaybackOrchestrator", () => {
         code: "SOURCE_UNAVAILABLE",
         message: "HLS streams are streaming-only in offline v1.",
         retryable: false,
-        shouldFallback: true,
+        shouldFallback: false,
       },
       runtimeState: "failed_unknown",
-      attemptedStreams: 1,
+      attemptedStreams: 0,
       resolveErrors: [],
     });
+    expect(resolvePlan).not.toHaveBeenCalled();
   });
 
   it("maps download resolver peer failures to NO_PEERS", async () => {
@@ -354,7 +356,7 @@ describe("PlaybackOrchestrator", () => {
         plan: {
           mode: "bridge",
           selectedCandidate: makePlannedMediaCandidate({
-            id: "torrent",
+            id: "00000000-0000-4000-8000-000000000203",
             kind: "torrent",
             stream: { infoHash: "abc123", title: "Torrent" },
             requiresBridge: true,
@@ -363,11 +365,15 @@ describe("PlaybackOrchestrator", () => {
         },
       }),
     );
-    resolvePlan.mockResolvedValueOnce({
-      resolved: null,
-      attemptedStreams: 1,
-      errors: ["No peers found"],
-      remainingStreams: [],
+    resolveDownload.mockResolvedValueOnce({
+      ok: false,
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      error: {
+        code: "NO_PEERS",
+        message: "Download is unavailable right now.",
+        retryable: true,
+        shouldFallback: false,
+      },
     });
 
     const result = await prepareDownload({
@@ -381,12 +387,13 @@ describe("PlaybackOrchestrator", () => {
       error: {
         code: "NO_PEERS",
         message: "Download is unavailable right now.",
-        shouldFallback: true,
+        shouldFallback: false,
       },
       runtimeState: "failed_no_peers",
-      attemptedStreams: 1,
-      resolveErrors: ["No peers found"],
+      attemptedStreams: 0,
+      resolveErrors: [],
     });
+    expect(resolvePlan).not.toHaveBeenCalled();
   });
 
   it("prepares a cast with the resolved URL and media info", async () => {

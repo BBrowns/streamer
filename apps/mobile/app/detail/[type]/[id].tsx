@@ -363,6 +363,11 @@ export default function DetailScreen() {
           await downloadService.startDownload(result.stream, result.mediaInfo, {
             resolvedUrl: result.resolvedUrl,
             eligibility: result.eligibility,
+            playbackSession: {
+              sessionId: result.sessionId,
+              candidateId: result.candidateId,
+              attemptId: result.attemptId,
+            },
           });
           return;
         } finally {

@@ -89,6 +89,13 @@ export interface PlaybackSessionStoreState {
     progress?: number,
     peerCount?: number,
   ) => PlaybackSession;
+  recordDownloadProgress: (
+    sessionId: string,
+    progress: number,
+    totalBytesWritten?: number,
+    totalBytesExpectedToWrite?: number,
+  ) => PlaybackSession;
+  recordDownloadVerified: (sessionId: string) => PlaybackSession;
   recordFallback: (
     sessionId: string,
     fromCandidateId: string,
@@ -99,6 +106,7 @@ export interface PlaybackSessionStoreState {
     sessionId: string,
     error: PlaybackRuntimeError,
   ) => PlaybackSession;
+  completeSession: (sessionId: string) => PlaybackSession;
   cancelSession: (sessionId: string, reason?: string) => PlaybackSession;
   setActiveSession: (sessionId: string | null) => void;
   getRuntimeCandidate: (
@@ -175,6 +183,24 @@ export const usePlaybackSessionStore = create<PlaybackSessionStoreState>()(
           peerCount,
         }),
 
+      recordDownloadProgress: (
+        sessionId,
+        progress,
+        totalBytesWritten,
+        totalBytesExpectedToWrite,
+      ) =>
+        get().dispatchPlaybackEvent(sessionId, {
+          type: "download_progress",
+          progress,
+          totalBytesWritten,
+          totalBytesExpectedToWrite,
+        }),
+
+      recordDownloadVerified: (sessionId) =>
+        get().dispatchPlaybackEvent(sessionId, {
+          type: "download_verified",
+        }),
+
       recordFallback: (sessionId, fromCandidateId, toCandidateId, reason) =>
         get().dispatchPlaybackEvent(sessionId, {
           type: "fallback_started",
@@ -187,6 +213,11 @@ export const usePlaybackSessionStore = create<PlaybackSessionStoreState>()(
         get().dispatchPlaybackEvent(sessionId, {
           type: "session_failed",
           error: toPlaybackSessionError(error),
+        }),
+
+      completeSession: (sessionId) =>
+        get().dispatchPlaybackEvent(sessionId, {
+          type: "session_completed",
         }),
 
       cancelSession: (sessionId, reason) =>

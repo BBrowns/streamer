@@ -110,14 +110,25 @@ function bridgeAvailable(bridge?: BridgeHealthHint) {
   return bridge?.status === "available";
 }
 
-function bridgeMessage(bridge?: BridgeHealthHint) {
+function bridgeActionCopy(action: PlaybackAction) {
+  if (action === "download") {
+    return { unsupportedVerb: "be downloaded", startVerb: "download" };
+  }
+  if (action === "cast") {
+    return { unsupportedVerb: "be cast", startVerb: "cast" };
+  }
+  return { unsupportedVerb: "play", startVerb: "play" };
+}
+
+function bridgeMessage(action: PlaybackAction, bridge?: BridgeHealthHint) {
+  const { unsupportedVerb, startVerb } = bridgeActionCopy(action);
   if (bridge?.status === "unsupported") {
-    return "Desktop bridge needs repair before torrent sources can play on this device.";
+    return `Desktop bridge needs repair before torrent sources can ${unsupportedVerb} on this device.`;
   }
   if (bridge?.status === "wrong-url") {
     return "The desktop bridge URL is invalid. Check Sources & Devices.";
   }
-  return "Start the desktop bridge to play torrent sources on this device.";
+  return `Start the desktop bridge to ${startVerb} torrent sources on this device.`;
 }
 
 function bridgeRejectReason(bridge?: BridgeHealthHint): PlaybackRejectReason {
@@ -130,6 +141,7 @@ function titleOf(candidate: MediaCandidate) {
 
 function rejectionMessage(
   reason: PlaybackRejectReason,
+  action: PlaybackAction,
   bridge?: BridgeHealthHint,
 ) {
   switch (reason) {
@@ -141,7 +153,7 @@ function rejectionMessage(
       return "Source container is not supported by this device profile.";
     case "bridge_unavailable":
     case "torrent_no_bridge":
-      return bridgeMessage(bridge);
+      return bridgeMessage(action, bridge);
     case "hls_offline_unsupported":
       return "HLS sources are streaming-only in offline v1.";
     case "cast_device_incompatible":
@@ -354,7 +366,11 @@ function toRejectedCandidate(
   return {
     candidateId: evaluation.candidate.id,
     title: titleOf(evaluation.candidate),
-    reason: rejectionMessage(reasonCode, bridge),
+    reason: rejectionMessage(
+      reasonCode,
+      evaluation.actionEligibility.action,
+      bridge,
+    ),
     reasonCode,
     requiresBridge: evaluation.requiresBridge,
     requiresRemux: evaluation.requiresRemux,
@@ -541,7 +557,7 @@ export class PlaybackPlannerService {
           : "needsBridge",
         rejectedCandidates,
         evaluations,
-        bridgeMessage(request.bridge),
+        bridgeMessage(request.action, request.bridge),
         bridgeRejection.reasonCode,
       );
     }

@@ -199,7 +199,9 @@ describe("PlaybackPlannerService", () => {
     );
 
     expect(plan.state).toBe("bridgeUnavailable");
-    expect(plan.userMessage).toContain("repair");
+    expect(plan.userMessage).toBe(
+      "Desktop bridge needs repair before torrent sources can play on this device.",
+    );
     expect(plan.requiresBridge).toBe(true);
     expect(plan.actionEligibility).toEqual({
       action: "play",
@@ -207,6 +209,33 @@ describe("PlaybackPlannerService", () => {
       reason: "bridge_unavailable",
     });
     expect(plan.rejectedCandidates[0].reasonCode).toBe("bridge_unavailable");
+  });
+
+  it("uses download-specific bridge repair guidance", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "abc123",
+        title: "Movie.2026.1080p.H264.AAC.mp4",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "download",
+        deviceProfile: webProfile,
+        bridge: { status: "unsupported", reason: "architecture-mismatch" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("bridgeUnavailable");
+    expect(plan.userMessage).toBe(
+      "Desktop bridge needs repair before torrent sources can be downloaded on this device.",
+    );
   });
 
   it("reports torrent_no_bridge when torrent sources have no bridge configuration", async () => {

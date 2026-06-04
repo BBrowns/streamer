@@ -18,6 +18,7 @@ import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
 import {
   advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
+  resolveDownloadSession,
   resolvePlaybackSession,
 } from "../PlaybackSessionPlaybackService";
 
@@ -28,6 +29,8 @@ jest.mock("expo-crypto", () => ({
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
     resolveEngine: jest.fn(),
+    bridgeAvailable: true,
+    bridgeStatus: "available",
   },
 }));
 
@@ -63,24 +66,39 @@ function installUuidMock() {
     );
 }
 
-function makePlan(primary: Stream, fallback?: Stream) {
+function makePlan(
+  primary: Stream,
+  fallback?: Stream,
+  action: "play" | "download" = "play",
+) {
+  const getKind = (stream: Stream) =>
+    stream.infoHash
+      ? "torrent"
+      : stream.externalUrl
+        ? "external"
+        : stream.url?.includes(".m3u8")
+          ? "hls"
+          : "direct";
   return makePlaybackPlan({
+    action,
     state: "ready",
     plan: {
       mode: primary.infoHash ? "bridge" : "direct",
       selectedCandidate: makePlannedMediaCandidate({
         id: PRIMARY_PLAN_ID,
-        kind: primary.infoHash ? "torrent" : "direct",
+        kind: getKind(primary),
         stream: primary,
         requiresBridge: !!primary.infoHash,
+        actionEligibility: { action, eligible: true },
       }),
       fallbackCandidates: fallback
         ? [
             makePlannedMediaCandidate({
               id: FALLBACK_PLAN_ID,
-              kind: "direct",
+              kind: getKind(fallback),
               stream: fallback,
               rank: 1,
+              actionEligibility: { action, eligible: true },
             }),
           ]
         : [],
@@ -88,9 +106,13 @@ function makePlan(primary: Stream, fallback?: Stream) {
   });
 }
 
-function createSession(primary: Stream, fallback?: Stream) {
+function createSession(
+  primary: Stream,
+  fallback?: Stream,
+  action: "play" | "download" = "play",
+) {
   return usePlaybackSessionStore.getState().createSession({
-    plan: makePlan(primary, fallback),
+    plan: makePlan(primary, fallback, action),
     content: { type: "movie", id: "tt123" },
     deviceProfile,
     bridge: { status: "available" },
@@ -140,6 +162,8 @@ describe("PlaybackSessionPlaybackService", () => {
     jest.clearAllMocks();
     installUuidMock();
     usePlaybackSessionStore.getState().clearAllSessions();
+    streamEngineManager.bridgeAvailable = true;
+    streamEngineManager.bridgeStatus = "available";
   });
 
   afterEach(() => {
@@ -218,6 +242,127 @@ describe("PlaybackSessionPlaybackService", () => {
       ]),
     );
     expect(JSON.stringify(updated)).not.toContain("bridge.test");
+  });
+
+  it("resolves a direct download through a download session", async () => {
+    const primary = {
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Direct download",
+    } as Stream;
+    const engine = makeEngine(async () => primary.url!);
+    resolveEngine.mockReturnValue(engine);
+    const session = createSession(primary, undefined, "download");
+
+    const result = await resolveDownloadSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      stream: primary,
+      uri: primary.url,
+      eligibility: {
+        mode: "direct-file",
+        canDownload: true,
+        offlinePlayable: true,
+      },
+    });
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id],
+    ).toMatchObject({
+      action: "download",
+      status: "ready",
+      attempts: [{ status: "ready" }],
+    });
+  });
+
+  it("skips HLS for offline download and resolves the next eligible candidate", async () => {
+    const primary = {
+      url: "https://cdn.example.test/master.m3u8",
+      title: "Streaming only",
+    } as Stream;
+    const fallback = {
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Offline file",
+    } as Stream;
+    const fallbackEngine = makeEngine(async () => fallback.url!);
+    resolveEngine.mockReturnValue(fallbackEngine);
+    const session = createSession(primary, fallback, "download");
+
+    const result = await resolveDownloadSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      stream: fallback,
+      eligibility: { mode: "direct-file", offlinePlayable: true },
+    });
+    expect(resolveEngine).toHaveBeenCalledTimes(1);
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id].attempts,
+    ).toMatchObject([
+      { status: "failed", error: { code: "SOURCE_UNAVAILABLE" } },
+      { status: "ready" },
+    ]);
+  });
+
+  it("records bridge preparation for a torrent download", async () => {
+    const primary = { infoHash: "abc123", title: "Torrent" } as Stream;
+    const engine = makeEngine(async () => {
+      engine.emitGateway({
+        id: GATEWAY_JOB_ID,
+        state: "preparing",
+        phase: "finding_peers",
+        progress: 0.25,
+        peerCount: 2,
+      });
+      return `http://bridge.test/api/gateway/jobs/${GATEWAY_JOB_ID}/stream`;
+    });
+    resolveEngine.mockReturnValue(engine);
+    const session = createSession(primary, undefined, "download");
+
+    const result = await resolveDownloadSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      eligibility: {
+        mode: "bridge-torrent",
+        canDownload: true,
+        offlinePlayable: true,
+      },
+    });
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id].eventLog,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "gateway_progress",
+          phase: "finding_peers",
+          progress: 0.25,
+        }),
+      ]),
+    );
+  });
+
+  it("rejects external browser downloads as unverified offline content", async () => {
+    const primary = {
+      externalUrl: "https://downloads.example.test/movie.mp4",
+      title: "External download",
+    } as Stream;
+    const session = createSession(primary, undefined, "download");
+
+    const result = await resolveDownloadSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "SOURCE_UNAVAILABLE",
+        shouldFallback: false,
+      },
+    });
+    expect(resolveEngine).not.toHaveBeenCalled();
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id],
+    ).toMatchObject({
+      status: "failed",
+    });
   });
 
   it("marks a ready attempt failed and falls back after a first-frame error", async () => {

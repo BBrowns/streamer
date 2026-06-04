@@ -186,6 +186,17 @@ export interface PlaybackGatewayProgressEvent extends PlaybackSessionEventBase {
   peerCount?: number;
 }
 
+export interface PlaybackDownloadProgressEvent extends PlaybackSessionEventBase {
+  type: "download_progress";
+  progress: number;
+  totalBytesWritten?: number;
+  totalBytesExpectedToWrite?: number;
+}
+
+export interface PlaybackDownloadVerifiedEvent extends PlaybackSessionEventBase {
+  type: "download_verified";
+}
+
 export interface PlaybackFallbackStartedEvent extends PlaybackSessionEventBase {
   type: "fallback_started";
   fromCandidateId: string;
@@ -217,6 +228,8 @@ export type PlaybackSessionEvent =
   | PlaybackAttemptSkippedEvent
   | PlaybackGatewayJobAttachedEvent
   | PlaybackGatewayProgressEvent
+  | PlaybackDownloadProgressEvent
+  | PlaybackDownloadVerifiedEvent
   | PlaybackFallbackStartedEvent
   | PlaybackSessionFailedEvent
   | PlaybackSessionCancelledEvent

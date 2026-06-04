@@ -71,8 +71,32 @@ describe("PlaybackReadinessNotice", () => {
     ).toMatchObject({
       title: "Bridge needs repair",
       message: "Bridge is running but the streaming engine is unavailable.",
+      detail:
+        "The app can see the bridge, but the torrent engine is not ready for playback.",
       tone: "error",
       primaryActionLabel: "Sources & Devices",
+    });
+  });
+
+  it("uses download-specific bridge repair guidance", () => {
+    expect(
+      getPlaybackReadinessCopyFromError(
+        {
+          code: "BRIDGE_UNSUPPORTED",
+          message:
+            "Desktop bridge needs repair before torrent sources can play on this device.",
+          retryable: false,
+          shouldFallback: false,
+        },
+        "download",
+      ),
+    ).toMatchObject({
+      title: "Bridge needs repair",
+      message:
+        "Desktop bridge needs repair before torrent sources can be downloaded on this device.",
+      detail:
+        "The app can see the bridge, but the torrent engine is not ready for downloads.",
+      tone: "error",
     });
   });
 
