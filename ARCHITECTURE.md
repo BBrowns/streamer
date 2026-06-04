@@ -303,6 +303,16 @@ Important client modules:
 
 Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
 
+`@streamer/shared` also defines the persistence-safe `PlaybackSession` control
+plane contract. A session records action, opaque candidate snapshots, attempts,
+gateway progress, typed errors, and an append-only event log. It never persists
+`Stream` objects, resolved media URLs, magnets, info hashes, external URLs, or
+bridge URLs.
+
+The existing planner/orchestrator/player flow remains backwards compatible
+while later work moves Play, Download, and Cast onto the shared session model.
+See [PLAYBACK.md](./PLAYBACK.md) for the contract rules and migration sequence.
+
 ### 6.5 Download Service
 
 `services/DownloadService.ts` implements resumable offline downloads across three platform surfaces:

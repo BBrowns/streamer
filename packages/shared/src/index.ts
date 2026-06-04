@@ -7,6 +7,7 @@ export * from "./types/library";
 export * from "./types/catalog-manifest";
 export * from "./types/feature-flag";
 export * from "./types/playback";
+export * from "./types/playback-session";
 
 // Zod Schemas
 export * from "./schemas/manifest.schema";
@@ -17,6 +18,7 @@ export * from "./schemas/library.schema";
 export * from "./schemas/aggregator.schema";
 export * from "./schemas/addon.schema";
 export * from "./schemas/playback.schema";
+export * from "./schemas/playback-session.schema";
 export {
   catalogLayoutSchema,
   catalogManifestSchema,

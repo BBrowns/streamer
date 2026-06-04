@@ -2,6 +2,19 @@ import { z } from "zod";
 
 export const playbackActionSchema = z.enum(["play", "download", "cast"]);
 
+export const playbackErrorCodeSchema = z.enum([
+  "NO_SOURCES",
+  "NO_PEERS",
+  "BRIDGE_UNAVAILABLE",
+  "BRIDGE_UNSUPPORTED",
+  "UNSUPPORTED_CODEC",
+  "GATEWAY_TIMEOUT",
+  "SOURCE_UNAVAILABLE",
+  "NETWORK_OFFLINE",
+  "PLAYBACK_TIMEOUT",
+  "UNKNOWN",
+]);
+
 export const bridgeStatusSchema = z.enum([
   "available",
   "unreachable",

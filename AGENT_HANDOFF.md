@@ -64,6 +64,22 @@ The mobile app now has a typed Play Best foundation:
 - The detail screen Play Best path uses the orchestrator and passes fallback streams to the player.
 - Manual advanced source playback still exists and is intentionally separate.
 
+### Playback Session Control Plane
+
+`@streamer/shared` defines a persistence-safe `PlaybackSession` contract for
+future Play, Download, and Cast orchestration:
+
+- Sessions store opaque candidate snapshots, attempts, gateway job identity,
+  typed terminal errors, and an append-only event log.
+- Sessions do not persist `Stream` objects, resolved media URLs, magnets, info
+  hashes, external URLs, or bridge URLs.
+- Session and candidate IDs must be opaque UUIDs, not source-derived values.
+- Existing `PlaybackPlan` and `PlaybackOrchestrator` behavior remains supported
+  while later PRs migrate runtime flows onto the session model.
+
+See [PLAYBACK.md](./PLAYBACK.md) before changing playback persistence or adding
+new session event payloads.
+
 ### Player Runtime State
 
 The player now stores and displays typed playback readiness:
