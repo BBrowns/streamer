@@ -1,72 +1,147 @@
 import {
-  View,
-  Text,
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  ActionSheetIOS,
-  Platform,
   Alert,
+  Platform,
+  Pressable,
   RefreshControl,
+  SectionList,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
-import { useDownloadStore, DownloadTask } from "../../stores/downloadStore";
-import { downloadService } from "../../services/DownloadService";
-import { usePlayerStore } from "../../stores/playerStore";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { DownloadQueueCard } from "../../components/downloads/DownloadQueueCard";
+import {
+  formatBytes,
+  getDownloadQueueGroup,
+  getDownloadQueueSummary,
+  sortDownloadTasks,
+  type DownloadQueueGroup,
+} from "../../components/downloads/downloadPresentation";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { useTheme } from "../../hooks/useTheme";
-import { SkeletonLoader } from "../../components/ui/SkeletonLoader";
-import { useState, useEffect } from "react";
+import { hapticImpactLight } from "../../lib/haptics";
+import {
+  isTaskOfflinePlayable,
+  type DownloadTask,
+  useDownloadStore,
+} from "../../stores/downloadStore";
+import { usePlayerStore } from "../../stores/playerStore";
+import {
+  downloadService,
+  type DownloadOperationResult,
+} from "../../services/DownloadService";
 
-function DownloadCard({ task }: { task: DownloadTask }) {
+type QueueFilter = "all" | DownloadQueueGroup;
+
+interface DownloadSection {
+  key: DownloadQueueGroup;
+  title: string;
+  subtitle: string;
+  data: DownloadTask[];
+}
+
+export default function DownloadsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const { mediaInfo, progress, status, id, error } = task;
+  const tasksDict = useDownloadStore((state) => state.tasks);
+  const tasks = useMemo(
+    () => sortDownloadTasks(Object.values(tasksDict)),
+    [tasksDict],
+  );
+  const summary = useMemo(() => getDownloadQueueSummary(tasks), [tasks]);
+  const [filter, setFilter] = useState<QueueFilter>("all");
+  const [refreshing, setRefreshing] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
 
-  const handleLongPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const title =
-      mediaInfo.title ||
-      t("downloads.unknownTitle", { defaultValue: "Unknown Download" });
-    const deleteAction = () => downloadService.deleteDownload(id);
+  const refreshQueue = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await downloadService.refreshQueue();
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: [
-            t("common.cancel", { defaultValue: "Cancel" }),
-            t("downloads.actions.viewDetails", {
-              defaultValue: "View Details",
+  useEffect(() => {
+    void refreshQueue();
+  }, [refreshQueue]);
+
+  const runTaskOperation = useCallback(
+    async (id: string, operation: () => Promise<DownloadOperationResult>) => {
+      hapticImpactLight();
+      setBusyIds((current) => new Set(current).add(id));
+      try {
+        await operation();
+      } finally {
+        setBusyIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  const openTask = useCallback(
+    async (task: DownloadTask) => {
+      hapticImpactLight();
+      if (
+        isTaskOfflinePlayable(task) &&
+        task.localUri &&
+        (await downloadService.verifyTask(task.id))
+      ) {
+        usePlayerStore
+          .getState()
+          .setStream({ ...task.mediaInfo, url: task.localUri }, task.mediaInfo);
+        router.push("/player");
+        return;
+      }
+
+      if (task.mediaInfo.itemId) {
+        router.push(
+          `/detail/${task.mediaInfo.type}/${task.mediaInfo.itemId}` as any,
+        );
+      }
+    },
+    [router],
+  );
+
+  const confirmDelete = useCallback(
+    (task: DownloadTask) => {
+      const title =
+        task.mediaInfo.title ||
+        t("downloads.unknownTitle", { defaultValue: "Download" });
+      const deleteTask = () =>
+        void runTaskOperation(task.id, () =>
+          downloadService.deleteDownload(task.id),
+        );
+
+      if (Platform.OS === "web") {
+        if (
+          window.confirm(
+            t("downloads.alerts.deleteMessage", {
+              defaultValue: `Delete "${title}" from this device?`,
+              title,
             }),
-            t("downloads.actions.delete", { defaultValue: "Delete Download" }),
-          ],
-          destructiveButtonIndex: 2,
-          cancelButtonIndex: 0,
-          title,
-          message: t("downloads.actions.manage", {
-            defaultValue: "Manage your downloaded media",
-          }),
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 1) {
-            if (mediaInfo.itemId)
-              router.push(`/detail/${mediaInfo.type}/${mediaInfo.itemId}`);
-          } else if (buttonIndex === 2) {
-            deleteAction();
-          }
-        },
-      );
-    } else {
+          )
+        ) {
+          deleteTask();
+        }
+        return;
+      }
+
       Alert.alert(
-        title,
-        t("downloads.actions.manage", {
-          defaultValue: "Manage your downloaded media",
+        t("downloads.alerts.deleteTitle", { defaultValue: "Delete download?" }),
+        t("downloads.alerts.deleteMessage", {
+          defaultValue: `Delete "${title}" from this device?`,
+          title,
         }),
         [
           {
@@ -74,207 +149,47 @@ function DownloadCard({ task }: { task: DownloadTask }) {
             style: "cancel",
           },
           {
-            text: t("downloads.actions.viewDetails", {
-              defaultValue: "View Details",
-            }),
-            onPress: () => {
-              if (mediaInfo.itemId)
-                router.push(`/detail/${mediaInfo.type}/${mediaInfo.itemId}`);
-            },
-          },
-          {
             text: t("downloads.actions.delete", { defaultValue: "Delete" }),
             style: "destructive",
-            onPress: deleteAction,
+            onPress: deleteTask,
           },
         ],
       );
-    }
-  };
-
-  const handlePress = async () => {
-    if (status === "Completed" && task.localUri) {
-      let fileExists = true;
-
-      if (Platform.OS === "web") {
-        const desktopBridge = (window as any).desktopBridge;
-        if (desktopBridge) {
-          try {
-            fileExists = await desktopBridge.checkFile(task.localUri);
-          } catch (e) {}
-        }
-      } else {
-        try {
-          const info = await FileSystem.getInfoAsync(task.localUri);
-          fileExists = info.exists;
-        } catch (e) {
-          // Ignore and let player fail if there's a problem
-        }
-      }
-
-      if (!fileExists) {
-        Alert.alert(
-          t("downloads.alerts.errorTitle", { defaultValue: "File Missing" }),
-          t("downloads.alerts.errorMessage", {
-            defaultValue: "The downloaded file could not be found.",
-          }),
-        );
-        useDownloadStore.getState().verifyAndClean();
-        return;
-      }
-      const { setStream } = usePlayerStore.getState();
-      setStream({ ...mediaInfo, url: task.localUri }, mediaInfo);
-      router.push("/player");
-    } else if (mediaInfo.itemId) {
-      router.push(`/detail/${mediaInfo.type}/${mediaInfo.itemId}`);
-    }
-  };
-
-  const handleActionablePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (status === "Preparing") {
-      return;
-    } else if (status === "Downloading") {
-      downloadService.pauseDownload(id);
-    } else if (status === "Paused") {
-      downloadService.resumeDownload(id);
-    } else if (status === "Completed") {
-      handlePress();
-    } else if (status === "Error") {
-      downloadService.resumeDownload(id);
-    }
-  };
-
-  const progressPercent = (progress * 100).toFixed(0) + "%";
-
-  const statusColor =
-    status === "Completed"
-      ? "#4ade80"
-      : status === "Error"
-        ? (colors.error ?? "#ef4444")
-        : colors.textSecondary;
-
-  return (
-    <Pressable
-      style={[
-        styles.cardContainer,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-        },
-      ]}
-      onPress={handlePress}
-      onLongPress={handleLongPress}
-    >
-      <Image
-        source={{ uri: mediaInfo.poster ?? undefined }}
-        style={styles.cardImage}
-      />
-      <View style={styles.cardInfo}>
-        <Text
-          style={[styles.cardTitle, { color: colors.text }]}
-          numberOfLines={2}
-        >
-          {mediaInfo.title ||
-            t("downloads.unknownTitle", { defaultValue: "Video" })}
-        </Text>
-        <Text style={[styles.cardSubtitle, { color: statusColor }]}>
-          {status} {status === "Downloading" && `• ${progressPercent}`}
-        </Text>
-
-        {(status === "Preparing" ||
-          status === "Downloading" ||
-          status === "Paused") && (
-          <View
-            style={[
-              styles.progressBarBg,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(0,0,0,0.08)",
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.progressBarFill,
-                { width: progressPercent as any, backgroundColor: colors.tint },
-              ]}
-            />
-          </View>
-        )}
-
-        {error && (
-          <Text
-            style={[styles.errorText, { color: colors.error ?? "#ef4444" }]}
-            numberOfLines={1}
-          >
-            {error}
-          </Text>
-        )}
-      </View>
-
-      <Pressable style={styles.actionBtn} onPress={handleActionablePress}>
-        {status === "Preparing" && (
-          <Ionicons name="time-outline" size={24} color={colors.tint} />
-        )}
-        {status === "Downloading" && (
-          <Ionicons name="pause" size={24} color={colors.tint} />
-        )}
-        {(status === "Paused" || status === "Error") && (
-          <Ionicons name="play" size={24} color={colors.tint} />
-        )}
-        {status === "Completed" && (
-          <Ionicons name="checkmark-circle" size={24} color="#4ade80" />
-        )}
-      </Pressable>
-    </Pressable>
+    },
+    [runTaskOperation, t],
   );
-}
 
-export default function DownloadsScreen() {
-  const { t } = useTranslation();
-  const { colors } = useTheme();
-  const tasksDict = useDownloadStore((state) => state.tasks);
-  const tasks = Object.values(tasksDict).reverse();
-  const { clearAll } = useDownloadStore();
-  const [refreshing, setRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Simulate initial load for skeleton polish
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
+  const deleteAll = useCallback(async () => {
+    setDeletingAll(true);
+    try {
+      await downloadService.deleteAllDownloads();
+    } finally {
+      setDeletingAll(false);
+    }
   }, []);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    // Verify and clean stale download tasks
-    await useDownloadStore.getState().verifyAndClean?.();
-    setRefreshing(false);
-  };
-
-  const confirmClearAll = () => {
+  const confirmClearAll = useCallback(() => {
     if (Platform.OS === "web") {
       if (
         window.confirm(
           t("downloads.alerts.clearAllConfirm", {
             defaultValue:
-              "Are you sure you want to clear your download history? Local browser files must be deleted manually.",
+              "Delete every managed download and remove its local file?",
           }),
         )
       ) {
-        clearAll();
+        void deleteAll();
       }
       return;
     }
+
     Alert.alert(
       t("downloads.alerts.clearAllTitle", {
-        defaultValue: "Clear All Downloads",
+        defaultValue: "Delete all downloads?",
       }),
       t("downloads.alerts.clearAllMessage", {
         defaultValue:
-          "Are you sure? This will delete all downloaded files from your device.",
+          "This removes every managed download and its local file from this device.",
       }),
       [
         {
@@ -283,86 +198,302 @@ export default function DownloadsScreen() {
         },
         {
           text: t("downloads.alerts.clearAllButton", {
-            defaultValue: "Clear All",
+            defaultValue: "Delete all",
           }),
           style: "destructive",
-          onPress: () => clearAll(),
+          onPress: () => void deleteAll(),
         },
       ],
     );
-  };
+  }, [deleteAll, t]);
 
-  if (isLoading) {
+  const sections = useMemo<DownloadSection[]>(() => {
+    const groups: Record<DownloadQueueGroup, DownloadTask[]> = {
+      active: [],
+      attention: [],
+      ready: [],
+    };
+    for (const task of tasks) groups[getDownloadQueueGroup(task)].push(task);
+
+    const definitions: DownloadSection[] = [
+      {
+        key: "active",
+        title: t("downloads.sections.active", {
+          defaultValue: "Active queue",
+        }),
+        subtitle: t("downloads.sections.activeSubtitle", {
+          defaultValue: "Preparing, downloading, and paused items",
+        }),
+        data: groups.active,
+      },
+      {
+        key: "attention",
+        title: t("downloads.sections.attention", {
+          defaultValue: "Needs attention",
+        }),
+        subtitle: t("downloads.sections.attentionSubtitle", {
+          defaultValue: "Retry or remove failed downloads",
+        }),
+        data: groups.attention,
+      },
+      {
+        key: "ready",
+        title: t("downloads.sections.ready", {
+          defaultValue: "Ready offline",
+        }),
+        subtitle: t("downloads.sections.readySubtitle", {
+          defaultValue: "Verified files available on this device",
+        }),
+        data: groups.ready,
+      },
+    ];
+
+    return definitions.filter(
+      (section) =>
+        section.data.length > 0 && (filter === "all" || filter === section.key),
+    );
+  }, [filter, t, tasks]);
+
+  const readySize = formatBytes(summary.readyBytes);
+  const filterOptions = [
+    {
+      label: t("downloads.filters.all", {
+        defaultValue: `All ${tasks.length}`,
+        count: tasks.length,
+      }),
+      value: "all" as const,
+    },
+    {
+      label: t("downloads.filters.active", {
+        defaultValue: `Active ${summary.active}`,
+        count: summary.active,
+      }),
+      value: "active" as const,
+    },
+    {
+      label: t("downloads.filters.ready", {
+        defaultValue: `Ready ${summary.ready}`,
+        count: summary.ready,
+      }),
+      value: "ready" as const,
+    },
+    {
+      label: t("downloads.filters.attention", {
+        defaultValue: `Issues ${summary.attention}`,
+        count: summary.attention,
+      }),
+      value: "attention" as const,
+    },
+  ];
+
+  if (tasks.length === 0 && !refreshing) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.listContent}>
-          {[1, 2, 3].map((i) => (
-            <View
-              key={i}
-              style={[
-                styles.cardContainer,
-                { height: 135, borderColor: colors.border, opacity: 0.5 },
-              ]}
-            >
-              <SkeletonLoader width={90} height={135} />
-              <View style={{ flex: 1, padding: 12, gap: 10 }}>
-                <SkeletonLoader width="80%" height={20} />
-                <SkeletonLoader width="40%" height={15} />
-                <View style={{ marginTop: 10 }}>
-                  <SkeletonLoader width="100%" height={4} />
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
+        <EmptyState
+          size="large"
+          icon="cloud-download-outline"
+          title={t("downloads.empty.title", { defaultValue: "No downloads" })}
+          description={t("downloads.empty.description", {
+            defaultValue:
+              "Movies and shows you save for offline viewing will appear here.",
+          })}
+          actionLabel={t("downloads.empty.action", {
+            defaultValue: "Browse movies and shows",
+          })}
+          onAction={() => router.push("/discover")}
+        />
       </View>
-    );
-  }
-
-  if (tasks.length === 0) {
-    return (
-      <EmptyState
-        size="large"
-        icon="cloud-download-outline"
-        title={t("downloads.empty.title", { defaultValue: "No Downloads" })}
-        description={t("downloads.empty.description", {
-          defaultValue: "Movies and shows you download will appear here.",
-        })}
-      />
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.contentWrapper}>
-        <View style={styles.headerRow}>
-          <Text
-            style={[styles.headerSubtitle, { color: colors.textSecondary }]}
-          >
-            {t("downloads.subtitle", {
-              defaultValue: "Manage your offline content",
-            })}
-          </Text>
-          <Pressable onPress={confirmClearAll} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>
-              {t("downloads.actions.clearAll", { defaultValue: "Clear All" })}
-            </Text>
-          </Pressable>
-        </View>
-        <FlatList
-          data={tasks}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <DownloadCard task={item} />}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.tint}
-              colors={[colors.tint]}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshQueue}
+            tintColor={colors.tint}
+            colors={[colors.tint]}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <View style={styles.headerTitleRow}>
+              <View style={styles.headerText}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {t("downloads.title", { defaultValue: "Downloads" })}
+                </Text>
+                <Text
+                  style={[styles.subtitle, { color: colors.textSecondary }]}
+                >
+                  {t("downloads.header.subtitle", {
+                    defaultValue:
+                      "Your queue and verified offline files on this device",
+                  })}
+                </Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.clearButton,
+                  {
+                    backgroundColor: colors.error + (isDark ? "16" : "10"),
+                  },
+                  pressed && styles.pressed,
+                ]}
+                onPress={confirmClearAll}
+                disabled={deletingAll}
+                accessibilityRole="button"
+                accessibilityLabel={t("downloads.actions.clearAll", {
+                  defaultValue: "Delete all downloads",
+                })}
+              >
+                <Ionicons name="trash-outline" size={17} color={colors.error} />
+                <Text style={[styles.clearButtonText, { color: colors.error }]}>
+                  {t("downloads.actions.clearAll", {
+                    defaultValue: "Delete all",
+                  })}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <SummaryItem
+                label={t("downloads.summary.active", {
+                  defaultValue: "Active",
+                })}
+                value={String(summary.active)}
+                color={colors.tint}
+              />
+              <SummaryItem
+                label={t("downloads.summary.ready", {
+                  defaultValue: "Ready",
+                })}
+                value={String(summary.ready)}
+                color={colors.success}
+              />
+              <SummaryItem
+                label={t("downloads.summary.storage", {
+                  defaultValue: "Offline storage",
+                })}
+                value={readySize || "—"}
+                color={colors.warning}
+              />
+            </View>
+
+            <FilterChipBar
+              options={filterOptions}
+              value={filter}
+              onChange={setFilter}
+              containerStyle={styles.filters}
             />
-          }
-        />
+          </View>
+        }
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              {section.title}
+            </Text>
+            <Text
+              style={[styles.sectionSubtitle, { color: colors.textSecondary }]}
+            >
+              {section.subtitle}
+            </Text>
+          </View>
+        )}
+        renderItem={({ item }) => (
+          <DownloadQueueCard
+            task={item}
+            busy={busyIds.has(item.id)}
+            onOpen={() => void openTask(item)}
+            onPause={() =>
+              void runTaskOperation(item.id, () =>
+                downloadService.pauseDownload(item.id),
+              )
+            }
+            onResume={() =>
+              void runTaskOperation(item.id, () =>
+                downloadService.resumeDownload(item.id),
+              )
+            }
+            onRetry={() =>
+              void runTaskOperation(item.id, () =>
+                downloadService.resumeDownload(item.id),
+              )
+            }
+            onDelete={() => confirmDelete(item)}
+          />
+        )}
+        ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
+        SectionSeparatorComponent={() => (
+          <View style={styles.sectionSeparator} />
+        )}
+        ListEmptyComponent={
+          <EmptyState
+            icon="filter-outline"
+            title={t("downloads.empty.filterTitle", {
+              defaultValue: "Nothing in this view",
+            })}
+            description={t("downloads.empty.filterDescription", {
+              defaultValue:
+                "Choose another filter to see the rest of the queue.",
+            })}
+          />
+        }
+        ListFooterComponent={
+          <View style={styles.footer}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              {t("downloads.footer.verified", {
+                defaultValue:
+                  "Offline items are shown as ready only after the local file is verified.",
+              })}
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  const { colors, isDark } = useTheme();
+  return (
+    <View
+      style={[
+        styles.summaryItem,
+        {
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.055)"
+            : "rgba(255,255,255,0.58)",
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <View style={[styles.summaryMarker, { backgroundColor: color }]} />
+      <View>
+        <Text style={[styles.summaryValue, { color: colors.text }]}>
+          {value}
+        </Text>
+        <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+          {label}
+        </Text>
       </View>
     </View>
   );
@@ -372,76 +503,132 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  contentWrapper: {
-    flex: 1,
+  listContent: {
     width: "100%",
-    maxWidth: 800,
+    maxWidth: 1040,
     alignSelf: "center",
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 44,
   },
-  headerRow: {
+  header: {
+    marginBottom: 18,
+  },
+  headerTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-  },
-  clearBtn: {
-    padding: 6,
-  },
-  clearBtnText: {
-    color: "#ef4444",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  listContent: {
-    padding: 16,
+    alignItems: "flex-start",
     gap: 16,
   },
-  cardContainer: {
-    flexDirection: "row",
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  cardImage: {
-    width: 90,
-    height: 135,
-  },
-  cardInfo: {
+  headerText: {
     flex: 1,
-    padding: 12,
-    justifyContent: "center",
+    minWidth: 0,
   },
-  cardTitle: {
-    fontSize: 15,
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  subtitle: {
+    marginTop: 5,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: "600",
-    marginBottom: 4,
+    letterSpacing: 0,
   },
-  cardSubtitle: {
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  progressBarBg: {
-    height: 4,
-    borderRadius: 2,
-    marginTop: 4,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  errorText: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  actionBtn: {
-    padding: 20,
-    justifyContent: "center",
+  clearButton: {
+    minHeight: 38,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  clearButtonText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+  summaryRow: {
+    marginTop: 20,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  summaryItem: {
+    minWidth: 132,
+    minHeight: 64,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  summaryMarker: {
+    width: 4,
+    height: 30,
+    borderRadius: 2,
+  },
+  summaryValue: {
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  summaryLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+  filters: {
+    marginTop: 15,
+    marginBottom: 0,
+    marginHorizontal: -16,
+  },
+  sectionHeader: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  sectionSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    letterSpacing: 0,
+  },
+  itemSeparator: {
+    height: 12,
+  },
+  sectionSeparator: {
+    height: 18,
+  },
+  footer: {
+    marginTop: 28,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  footerText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    letterSpacing: 0,
+  },
+  pressed: {
+    opacity: 0.72,
   },
 });

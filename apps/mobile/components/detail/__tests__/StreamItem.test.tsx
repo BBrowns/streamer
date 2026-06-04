@@ -64,4 +64,44 @@ describe("StreamItem", () => {
 
     expect(getByText("Prep")).toBeTruthy();
   });
+
+  it("shows offline only after the local file has been verified", () => {
+    useDownloadStore.getState().addTask("abc123", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+      sourceId: "abc123",
+    });
+    useDownloadStore
+      .getState()
+      .setStatus("abc123", "Completed", "file:///downloads/movie.mp4");
+
+    const unverified = render(
+      <StreamItem
+        stream={{ infoHash: "abc123", title: "Torrent source" }}
+        index={0}
+        onPress={jest.fn()}
+        onDownload={jest.fn()}
+      />,
+    );
+
+    expect(unverified.queryByText("Offline")).toBeNull();
+    unverified.unmount();
+
+    useDownloadStore
+      .getState()
+      .markVerified("abc123", "file:///downloads/movie.mp4");
+
+    const verified = render(
+      <StreamItem
+        stream={{ infoHash: "abc123", title: "Torrent source" }}
+        index={0}
+        onPress={jest.fn()}
+        onDownload={jest.fn()}
+      />,
+    );
+
+    expect(verified.getByText("Offline")).toBeTruthy();
+  });
 });

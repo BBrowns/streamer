@@ -26,7 +26,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import type { LibraryItem } from "@streamer/shared";
 import * as Haptics from "expo-haptics";
-import { useDownloadStore } from "../../stores/downloadStore";
+import {
+  isTaskOfflinePlayable,
+  useDownloadStore,
+} from "../../stores/downloadStore";
 import { Ionicons } from "@expo/vector-icons";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { useTheme } from "../../hooks/useTheme";
@@ -158,11 +161,13 @@ export default function LibraryScreen() {
   const filteredItems = useMemo(() => {
     if (activeFilter === "offline") {
       // Map download tasks to a similar structure as LibraryItem
-      return Object.values(tasks).map((t) => ({
-        ...t.mediaInfo,
-        itemId: t.mediaInfo.itemId,
-        id: t.id, // using task id for list key
-      }));
+      return Object.values(tasks)
+        .filter(isTaskOfflinePlayable)
+        .map((t) => ({
+          ...t.mediaInfo,
+          itemId: t.mediaInfo.itemId,
+          id: t.id, // using task id for list key
+        }));
     }
     if (!items) return [];
     if (activeFilter === "all") return items;

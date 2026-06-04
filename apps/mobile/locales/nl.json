@@ -78,30 +78,78 @@
   },
   "downloads": {
     "title": "Downloads",
+    "unknownTitle": "Download",
     "header": {
-      "subtitle": "Beheer je offline content",
+      "subtitle": "Je wachtrij en geverifieerde offline bestanden op dit apparaat",
       "clearAll": "Alles wissen"
     },
     "alerts": {
       "clearTitle": "Alle downloads wissen",
-      "clearMessage": "Weet je het zeker? Dit verwijdert alle gedownloade bestanden van je apparaat."
+      "clearMessage": "Weet je het zeker? Dit verwijdert alle gedownloade bestanden van je apparaat.",
+      "clearAllTitle": "Alle downloads verwijderen?",
+      "clearAllMessage": "Dit verwijdert elke beheerde download en het lokale bestand van dit apparaat.",
+      "clearAllConfirm": "Alle beheerde downloads en lokale bestanden verwijderen?",
+      "clearAllButton": "Alles verwijderen",
+      "deleteTitle": "Download verwijderen?",
+      "deleteMessage": "\"{{title}}\" van dit apparaat verwijderen?"
     },
     "card": {
       "unknown": "Onbekende download",
       "manage": "Beheer je gedownloade media",
       "viewDetails": "Details bekijken",
-      "delete": "Download verwijderen"
+      "delete": "Download verwijderen",
+      "movie": "Film",
+      "series": "Serie"
+    },
+    "actions": {
+      "manage": "Beheer je gedownloade media",
+      "viewDetails": "Details bekijken",
+      "delete": "Download verwijderen",
+      "clearAll": "Alles verwijderen",
+      "pause": "Pauzeren",
+      "resume": "Hervatten",
+      "retry": "Opnieuw proberen",
+      "play": "Afspelen"
     },
     "status": {
+      "queued": "In wachtrij",
+      "preparing": "Voorbereiden",
       "downloading": "Downloaden",
+      "verifying": "Controleren",
       "paused": "Gepauzeerd",
+      "checking": "Bestand controleren",
+      "readyOffline": "Offline beschikbaar",
       "completed": "Voltooid",
-      "error": "Fout"
+      "error": "Aandacht nodig"
+    },
+    "sections": {
+      "active": "Actieve wachtrij",
+      "activeSubtitle": "Voorbereiden, downloaden en gepauzeerde items",
+      "attention": "Aandacht nodig",
+      "attentionSubtitle": "Probeer mislukte downloads opnieuw of verwijder ze",
+      "ready": "Offline beschikbaar",
+      "readySubtitle": "Geverifieerde bestanden op dit apparaat"
+    },
+    "filters": {
+      "all": "Alles {{count}}",
+      "active": "Actief {{count}}",
+      "ready": "Offline {{count}}",
+      "attention": "Problemen {{count}}"
+    },
+    "summary": {
+      "active": "Actief",
+      "ready": "Offline",
+      "storage": "Offline opslag"
+    },
+    "footer": {
+      "verified": "Items worden pas als offline beschikbaar getoond nadat het lokale bestand is gecontroleerd."
     },
     "empty": {
       "title": "Geen downloads",
       "description": "Films en series die je downloadt verschijnen hier.",
-      "action": "Ga naar Ontdekken"
+      "action": "Bekijk films en series",
+      "filterTitle": "Niets in deze weergave",
+      "filterDescription": "Kies een ander filter om de rest van de wachtrij te zien."
     }
   },
   "onboarding": {

@@ -5,6 +5,7 @@ import {
   type DownloadMediaItem,
   type DownloadPlaybackSessionContext,
   type DownloadStatus,
+  isTaskOfflinePlayable,
 } from "../stores/downloadStore";
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import type { MediaInfo } from "../stores/playerStore";
@@ -41,6 +42,28 @@ export interface DownloadStartOptions {
   playbackSession?: DownloadPlaybackSessionContext;
 }
 
+export interface DownloadOperationResult {
+  ok: boolean;
+  error?: string;
+}
+
+export function toSafeDownloadErrorMessage(
+  error: unknown,
+  fallback = "Download failed.",
+) {
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const sanitized = rawMessage
+    .replace(/\b(?:https?:\/\/|magnet:\?)[^\s]+/gi, "[source]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (sanitized || fallback).slice(0, 240);
+}
+
 export function mapDesktopDownloadStatus(
   status?: DesktopDownloadJobStatus,
 ): DownloadStatus {
@@ -48,7 +71,7 @@ export function mapDesktopDownloadStatus(
     case "Pending":
       return "Preparing";
     case "Completed":
-      return "Completed";
+      return "Verifying";
     case "Paused":
       return "Paused";
     case "Error":
@@ -65,6 +88,10 @@ export class DownloadService {
   private desktopProgressUnsubscribe: (() => void) | null = null;
   private lastSessionProgressBucket: Record<string, number> = {};
   private finalizingTasks = new Set<string>();
+
+  private getDownloadFilename(id: string) {
+    return `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
+  }
 
   private getSessionContext(
     id: string,
@@ -201,7 +228,7 @@ export class DownloadService {
     if (
       !task ||
       this.finalizingTasks.has(id) ||
-      (task.status === "Completed" && task.localUri === localUri)
+      (isTaskOfflinePlayable(task) && task.localUri === localUri)
     ) {
       return;
     }
@@ -209,6 +236,7 @@ export class DownloadService {
     const playbackSession = task.playbackSession || fallback;
 
     try {
+      setStatus(id, "Verifying", localUri);
       this.setSessionStatus(
         playbackSession,
         "verifying_download",
@@ -217,12 +245,12 @@ export class DownloadService {
       const verified = await this.verifyLocalUri(localUri);
       if (!verified) {
         const message = "Downloaded file could not be verified on this device.";
-        setStatus(id, "Error", undefined, message);
+        useDownloadStore.getState().markFileMissing(id, message);
         this.failSession(id, message, playbackSession);
         return;
       }
 
-      setStatus(id, "Completed", localUri);
+      useDownloadStore.getState().markVerified(id, localUri!);
       if (playbackSession) {
         const session =
           usePlaybackSessionStore.getState().sessions[
@@ -289,7 +317,7 @@ export class DownloadService {
             data.id,
             mapDesktopDownloadStatus(data.status),
             data.localUri,
-            data.error,
+            data.error ? toSafeDownloadErrorMessage(data.error) : undefined,
           );
           if (data.status === "Downloading") {
             this.setSessionStatus(task.playbackSession, "downloading");
@@ -336,7 +364,7 @@ export class DownloadService {
       job.id,
       mapDesktopDownloadStatus(job.status),
       job.localUri,
-      job.error,
+      job.error ? toSafeDownloadErrorMessage(job.error) : undefined,
     );
     if (job.status === "Downloading") {
       this.setSessionStatus(tasks[job.id].playbackSession, "downloading");
@@ -375,6 +403,7 @@ export class DownloadService {
       existingTask?.status === "Pending" ||
       existingTask?.status === "Preparing" ||
       existingTask?.status === "Downloading" ||
+      existingTask?.status === "Verifying" ||
       existingTask?.status === "Completed"
     ) {
       if (options.playbackSession) {
@@ -456,12 +485,11 @@ export class DownloadService {
         (await streamEngineManager.getPlaybackUri(stream)) ||
         undefined;
     } catch (e: any) {
-      setStatus(
-        id,
-        "Error",
-        undefined,
-        `Resolution failed: ${e?.message || String(e)}`,
+      const message = toSafeDownloadErrorMessage(
+        e,
+        "Download source could not be resolved.",
       );
+      setStatus(id, "Error", undefined, `Resolution failed: ${message}`);
       this.failSession(id, e, options.playbackSession);
       return;
     }
@@ -495,7 +523,7 @@ export class DownloadService {
     }
 
     setDownloadUrl(id, downloadUrl);
-    const filename = `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
+    const filename = this.getDownloadFilename(id);
 
     // WEB/DESKTOP IMPLEMENTATION
     if (Platform.OS === "web") {
@@ -516,7 +544,7 @@ export class DownloadService {
             );
             this.applyDesktopJobSnapshot(job);
           } catch (e: any) {
-            setStatus(id, "Error", undefined, e.message);
+            setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
             this.failSession(id, e, options.playbackSession);
           }
           return;
@@ -562,7 +590,7 @@ export class DownloadService {
             );
         } catch (e: any) {
           unsubscribe();
-          setStatus(id, "Error", undefined, e.message);
+          setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
           this.failSession(id, e, options.playbackSession);
         }
         return;
@@ -589,7 +617,7 @@ export class DownloadService {
         );
         removeTask(id);
       } catch (e: any) {
-        setStatus(id, "Error", undefined, e.message);
+        setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
         this.failSession(id, e, options.playbackSession);
       }
       return;
@@ -675,7 +703,7 @@ export class DownloadService {
       if (__DEV__) console.error("[DownloadService] Download failed:", e);
       // If it was cancelled manually, we don't mark as error here usually
       if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
-        setStatus(id, "Error", undefined, e.message);
+        setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
         this.failSession(id, e, options.playbackSession);
       }
     } finally {
@@ -683,14 +711,35 @@ export class DownloadService {
     }
   }
 
+  async verifyTask(id: string): Promise<boolean> {
+    const task = useDownloadStore.getState().tasks[id];
+    if (!task?.localUri) {
+      if (task) {
+        useDownloadStore
+          .getState()
+          .markFileMissing(id, "Downloaded file could not be found.");
+      }
+      return false;
+    }
+
+    if (await this.verifyLocalUri(task.localUri)) {
+      useDownloadStore.getState().markVerified(id, task.localUri);
+      return true;
+    }
+
+    useDownloadStore
+      .getState()
+      .markFileMissing(id, "Downloaded file could not be found.");
+    return false;
+  }
+
   /**
-   * Initializes the download service by scanning for interrupted tasks
-   * and preparing them for resumption.
+   * Reconciles persisted queue state with local files and managed desktop jobs.
    */
-  async initialize() {
+  async refreshQueue() {
     const { tasks, setStatus } = useDownloadStore.getState();
     const completedTasks = Object.values(tasks).filter(
-      (task) => task.status === "Completed",
+      (task) => task.status === "Completed" || task.status === "Verifying",
     );
     const interruptedTasks = Object.values(tasks).filter(
       (t) =>
@@ -700,14 +749,7 @@ export class DownloadService {
     );
 
     for (const task of completedTasks) {
-      if (!(await this.verifyLocalUri(task.localUri))) {
-        setStatus(
-          task.id,
-          "Error",
-          undefined,
-          "Downloaded file could not be verified on this device.",
-        );
-      }
+      await this.verifyTask(task.id);
     }
 
     if (Platform.OS === "web") {
@@ -727,7 +769,8 @@ export class DownloadService {
           }
         }
 
-        // If we can't find a running job on bridge, mark as Paused/Error
+        // A desktop restart can temporarily remove the in-memory job. Keep
+        // the queue item recoverable so Resume can recreate it from metadata.
         if (task.status === "Downloading" || task.status === "Preparing") {
           setStatus(task.id, "Paused");
         }
@@ -764,139 +807,245 @@ export class DownloadService {
       );
   }
 
-  async pauseDownload(id: string) {
+  /**
+   * Initializes the download service after persisted stores have hydrated.
+   */
+  async initialize() {
+    await this.refreshQueue();
+  }
+
+  async pauseDownload(id: string): Promise<DownloadOperationResult> {
+    const { tasks, setStatus } = useDownloadStore.getState();
+    const task = tasks[id];
+    if (!task) return { ok: false, error: "Download task was not found." };
+
     if (Platform.OS === "web") {
       const desktopBridge = window.desktopBridge;
-      if (desktopBridge?.pauseDownloadJob) {
-        this.applyDesktopJobSnapshot(await desktopBridge.pauseDownloadJob(id));
+      if (!desktopBridge?.pauseDownloadJob) {
+        const error = "Desktop download controls are unavailable.";
+        setStatus(id, "Error", undefined, error);
+        return { ok: false, error };
       }
-      return;
+
+      try {
+        const job = await desktopBridge.pauseDownloadJob(id);
+        if (job) {
+          this.applyDesktopJobSnapshot(job);
+          if (job.status === "Error" || job.status === "Canceled") {
+            const error = toSafeDownloadErrorMessage(
+              job.error,
+              "Download could not pause.",
+            );
+            return { ok: false, error };
+          }
+        } else {
+          // The queue remains recoverable even if Electron restarted and lost
+          // the active request object.
+          setStatus(id, "Paused");
+        }
+        return { ok: true };
+      } catch (error) {
+        const message = toSafeDownloadErrorMessage(
+          error,
+          "Download could not pause.",
+        );
+        setStatus(id, "Error", undefined, message);
+        return { ok: false, error: message };
+      }
     }
 
     const resumable = this.downloadResumables[id];
     if (resumable) {
       try {
-        const pauseResult = await resumable.pauseAsync();
+        await resumable.pauseAsync();
         const resumeData = JSON.stringify(await resumable.savable());
         useDownloadStore
           .getState()
           .setStatus(id, "Paused", undefined, undefined, resumeData);
-        console.log("[DownloadService] Download paused and state saved");
-      } catch (e) {
-        if (__DEV__) console.error("[DownloadService] Pause failed:", e);
+        if (__DEV__)
+          console.log("[DownloadService] Download paused and state saved");
+        return { ok: true };
+      } catch (error) {
+        const message = toSafeDownloadErrorMessage(
+          error,
+          "Download could not pause.",
+        );
+        setStatus(id, "Error", undefined, message);
+        if (__DEV__) console.error("[DownloadService] Pause failed:", error);
+        return { ok: false, error: message };
       }
     }
+
+    // After an app restart there is no in-memory resumable object yet. Keep
+    // the task paused so Resume can rehydrate or restart it.
+    setStatus(id, "Paused");
+    return { ok: true };
   }
 
-  async resumeDownload(id: string) {
-    if (Platform.OS === "web") {
-      const desktopBridge = window.desktopBridge;
-      if (desktopBridge?.resumeDownloadJob) {
-        this.ensureDesktopDownloadSubscription();
-        this.applyDesktopJobSnapshot(await desktopBridge.resumeDownloadJob(id));
-        return;
-      }
-    }
-
+  async resumeDownload(id: string): Promise<DownloadOperationResult> {
     const { tasks, setStatus, updateProgress, setResumeData } =
       useDownloadStore.getState();
     const task = tasks[id];
-    if (task && (task.status === "Paused" || task.status === "Error")) {
-      let resumable = this.downloadResumables[id];
+    if (!task) return { ok: false, error: "Download task was not found." };
+    if (task.status !== "Paused" && task.status !== "Error") {
+      return { ok: false, error: "Download is not paused or failed." };
+    }
 
-      if (!resumable && task.resumeData && task.localUri) {
-        const callback = async (
-          downloadProgress: FileSystem.DownloadProgressData,
-        ) => {
-          const progress =
-            downloadProgress.totalBytesWritten /
-            downloadProgress.totalBytesExpectedToWrite;
-          updateProgress(
-            id,
-            progress,
-            downloadProgress.totalBytesWritten,
-            downloadProgress.totalBytesExpectedToWrite,
-          );
-          this.recordSessionProgress(
-            id,
-            progress,
-            downloadProgress.totalBytesWritten,
-            downloadProgress.totalBytesExpectedToWrite,
-          );
-
-          // Periodically save resumable state to persistent storage (every 5%)
-          if (
-            Math.floor(progress * 20) > Math.floor((task.progress || 0) * 20)
-          ) {
-            try {
-              const r = this.downloadResumables[id];
-              if (r) {
-                const savable = await r.savable();
-                setResumeData(id, JSON.stringify(savable));
-              }
-            } catch (e) {}
-          }
-        };
-
-        try {
-          const savable = JSON.parse(task.resumeData);
-          resumable = new FileSystem.DownloadResumable(
-            savable.url,
-            savable.fileUri,
-            savable.options,
-            callback,
-            savable.resumeData,
-          );
-          this.downloadResumables[id] = resumable;
-        } catch (e) {
-          console.warn("[DownloadService] Failed to rehydrate resumable", e);
-        }
+    if (Platform.OS === "web") {
+      const desktopBridge = window.desktopBridge;
+      if (!desktopBridge?.startDownloadJob) {
+        const error = "Open the desktop app to resume this download.";
+        setStatus(id, "Error", undefined, error);
+        return { ok: false, error };
       }
 
-      if (resumable) {
-        setStatus(id, "Downloading");
-        this.setSessionStatus(task.playbackSession, "downloading");
-        try {
-          const result = await resumable.resumeAsync();
-          if (result) {
-            await this.finalizeCompletedTask(id, result.uri);
-            setResumeData(id, "");
-            console.log("[DownloadService] Download completed:", result.uri);
-          }
-        } catch (e: any) {
-          console.error("[DownloadService] Resume failed:", e);
-          if (tasks[id]?.status !== "Paused") {
-            setStatus(id, "Error", undefined, e.message);
-            this.failSession(id, e);
-          }
-        } finally {
-          delete this.downloadResumables[id];
-        }
-      } else {
-        if (__DEV__)
-          console.warn(
-            "[DownloadService] Resumable object and resumeData lost, restarting download",
+      if (!task.mediaInfo.downloadUrl) {
+        const error = "Original download URL is missing.";
+        setStatus(id, "Error", undefined, error);
+        return { ok: false, error };
+      }
+
+      try {
+        this.ensureDesktopDownloadSubscription();
+        const existingJob = desktopBridge.resumeDownloadJob
+          ? await desktopBridge.resumeDownloadJob(id)
+          : null;
+        const job =
+          existingJob ||
+          (await desktopBridge.startDownloadJob(
+            id,
+            task.mediaInfo.downloadUrl,
+            this.getDownloadFilename(id),
+          ));
+        this.applyDesktopJobSnapshot(job);
+        if (job.status === "Error" || job.status === "Canceled") {
+          const error = toSafeDownloadErrorMessage(
+            job.error,
+            "Download could not resume.",
           );
-        if (task.mediaInfo.downloadUrl) {
-          this.startDownload(
-            { url: task.mediaInfo.downloadUrl },
-            task.mediaInfo,
-            {
-              resolvedUrl: task.mediaInfo.downloadUrl,
-              playbackSession: task.playbackSession,
-            },
-          );
-        } else {
-          setStatus(id, "Error", undefined, "Original download URL missing");
-          this.failSession(id, "Original download URL missing");
+          return { ok: false, error };
         }
+        return { ok: true };
+      } catch (error) {
+        const message = toSafeDownloadErrorMessage(
+          error,
+          "Download could not resume.",
+        );
+        setStatus(id, "Error", undefined, message);
+        return { ok: false, error: message };
       }
     }
+
+    let resumable = this.downloadResumables[id];
+
+    if (!resumable && task.resumeData && task.localUri) {
+      const callback = async (
+        downloadProgress: FileSystem.DownloadProgressData,
+      ) => {
+        const progress =
+          downloadProgress.totalBytesWritten /
+          downloadProgress.totalBytesExpectedToWrite;
+        updateProgress(
+          id,
+          progress,
+          downloadProgress.totalBytesWritten,
+          downloadProgress.totalBytesExpectedToWrite,
+        );
+        this.recordSessionProgress(
+          id,
+          progress,
+          downloadProgress.totalBytesWritten,
+          downloadProgress.totalBytesExpectedToWrite,
+        );
+
+        // Periodically save resumable state to persistent storage (every 5%)
+        if (Math.floor(progress * 20) > Math.floor((task.progress || 0) * 20)) {
+          try {
+            const activeResumable = this.downloadResumables[id];
+            if (activeResumable) {
+              const savable = await activeResumable.savable();
+              setResumeData(id, JSON.stringify(savable));
+            }
+          } catch {}
+        }
+      };
+
+      try {
+        const savable = JSON.parse(task.resumeData);
+        resumable = new FileSystem.DownloadResumable(
+          savable.url,
+          savable.fileUri,
+          savable.options,
+          callback,
+          savable.resumeData,
+        );
+        this.downloadResumables[id] = resumable;
+      } catch (error) {
+        if (__DEV__)
+          console.warn(
+            "[DownloadService] Failed to rehydrate resumable",
+            error,
+          );
+      }
+    }
+
+    if (resumable) {
+      setStatus(id, "Downloading");
+      this.setSessionStatus(task.playbackSession, "downloading");
+      try {
+        const result = await resumable.resumeAsync();
+        if (result) {
+          await this.finalizeCompletedTask(id, result.uri);
+          setResumeData(id, "");
+          if (__DEV__)
+            console.log("[DownloadService] Download completed:", result.uri);
+        }
+        return { ok: true };
+      } catch (error) {
+        const message = toSafeDownloadErrorMessage(
+          error,
+          "Download could not resume.",
+        );
+        if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
+          setStatus(id, "Error", undefined, message);
+          this.failSession(id, error);
+        }
+        if (__DEV__) console.error("[DownloadService] Resume failed:", error);
+        return { ok: false, error: message };
+      } finally {
+        delete this.downloadResumables[id];
+      }
+    }
+
+    if (__DEV__)
+      console.warn(
+        "[DownloadService] Resumable object and resumeData lost, restarting download",
+      );
+    if (task.mediaInfo.downloadUrl) {
+      await this.startDownload(
+        { url: task.mediaInfo.downloadUrl },
+        task.mediaInfo,
+        {
+          resolvedUrl: task.mediaInfo.downloadUrl,
+          playbackSession: task.playbackSession,
+        },
+      );
+      const restartedTask = useDownloadStore.getState().tasks[id];
+      return restartedTask?.status === "Error"
+        ? { ok: false, error: restartedTask.error }
+        : { ok: true };
+    }
+
+    const error = "Original download URL is missing.";
+    setStatus(id, "Error", undefined, error);
+    this.failSession(id, error);
+    return { ok: false, error };
   }
 
-  async deleteDownload(id: string) {
-    const { tasks, removeTask } = useDownloadStore.getState();
+  async deleteDownload(id: string): Promise<DownloadOperationResult> {
+    const { tasks, removeTask, setStatus } = useDownloadStore.getState();
     const task = tasks[id];
+    if (!task) return { ok: true };
     this.cancelSession(id, "Download was removed.");
 
     if (Platform.OS === "web") {
@@ -913,31 +1062,62 @@ export class DownloadService {
             console.log(
               "[DownloadService] Deleted desktop local file and task",
             );
-        } catch (e) {
+          return { ok: true };
+        } catch (error) {
+          const message = toSafeDownloadErrorMessage(
+            error,
+            "Downloaded file could not be deleted.",
+          );
+          setStatus(id, "Error", undefined, message);
           if (__DEV__)
-            console.error("[DownloadService] Desktop deletion failed:", e);
+            console.error("[DownloadService] Desktop deletion failed:", error);
+          return { ok: false, error: message };
         }
-        return;
       }
 
       // Vanilla Browser Fallback
       // Browser files are stored externally by the user; we only clear our state
       removeTask(id);
-      return;
+      return { ok: true };
     }
 
-    if (task && task.localUri) {
+    if (task.localUri) {
       try {
         await FileSystem.deleteAsync(task.localUri, { idempotent: true });
         removeTask(id);
         if (__DEV__)
           console.log("[DownloadService] Deleted local file and task");
-      } catch (e) {
-        if (__DEV__) console.error("[DownloadService] Deletion failed:", e);
+        return { ok: true };
+      } catch (error) {
+        const message = toSafeDownloadErrorMessage(
+          error,
+          "Downloaded file could not be deleted.",
+        );
+        setStatus(id, "Error", undefined, message);
+        if (__DEV__) console.error("[DownloadService] Deletion failed:", error);
+        return { ok: false, error: message };
       }
-    } else {
-      removeTask(id);
     }
+
+    removeTask(id);
+    return { ok: true };
+  }
+
+  async deleteAllDownloads(): Promise<{
+    deleted: number;
+    failed: number;
+  }> {
+    const ids = Object.keys(useDownloadStore.getState().tasks);
+    let deleted = 0;
+    let failed = 0;
+
+    for (const id of ids) {
+      const result = await this.deleteDownload(id);
+      if (result.ok) deleted += 1;
+      else failed += 1;
+    }
+
+    return { deleted, failed };
   }
 }
 

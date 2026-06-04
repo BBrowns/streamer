@@ -11,6 +11,7 @@ import {
   DownloadService,
   getDownloadEligibility,
   mapDesktopDownloadStatus,
+  toSafeDownloadErrorMessage,
 } from "../DownloadService";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 
@@ -146,7 +147,7 @@ describe("getDownloadEligibility", () => {
     expect(mapDesktopDownloadStatus("Pending")).toBe("Preparing");
     expect(mapDesktopDownloadStatus("Downloading")).toBe("Downloading");
     expect(mapDesktopDownloadStatus("Paused")).toBe("Paused");
-    expect(mapDesktopDownloadStatus("Completed")).toBe("Completed");
+    expect(mapDesktopDownloadStatus("Completed")).toBe("Verifying");
     expect(mapDesktopDownloadStatus("Error")).toBe("Error");
     expect(mapDesktopDownloadStatus("Canceled")).toBe("Error");
   });
@@ -217,6 +218,7 @@ describe("DownloadService session completion", () => {
       status: "Completed",
       localUri: "streamer:///downloads/source_1.mp4",
       playbackSession,
+      offlineVerifiedAt: expect.any(String),
     });
     expect(
       usePlaybackSessionStore.getState().sessions[playbackSession.sessionId],
@@ -345,7 +347,7 @@ describe("DownloadService session completion", () => {
     );
     expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
       status: "Error",
-      error: "Downloaded file could not be verified on this device.",
+      error: "Downloaded file could not be found.",
     });
   });
 
@@ -372,5 +374,175 @@ describe("DownloadService session completion", () => {
     ).toMatchObject({
       status: "cancelled",
     });
+  });
+
+  it("marks a persisted completed file verified during initialization", async () => {
+    window.desktopBridge = {
+      checkFile: jest.fn().mockResolvedValue(true),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore
+      .getState()
+      .setStatus("source-1", "Completed", "streamer:///downloads/movie.mp4");
+    const service = new DownloadService();
+
+    await service.initialize();
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Completed",
+      localUri: "streamer:///downloads/movie.mp4",
+      offlineVerifiedAt: expect.any(String),
+    });
+    expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(true);
+  });
+
+  it("restarts a missing desktop job from persisted queue metadata", async () => {
+    window.desktopBridge = {
+      resumeDownloadJob: jest.fn().mockResolvedValue(null),
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-1",
+        status: "Downloading",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_1.mp4",
+        totalBytesWritten: 250,
+        totalBytesExpectedToWrite: 1000,
+      }),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore.getState().setStatus("source-1", "Paused");
+    const service = new DownloadService();
+
+    await expect(service.resumeDownload("source-1")).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
+      "source-1",
+      "https://cdn.example.test/movie.mp4",
+      "source_1.mp4",
+    );
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Downloading",
+      progress: 0.25,
+    });
+  });
+
+  it("reports an immediate desktop resume error instead of returning success", async () => {
+    window.desktopBridge = {
+      resumeDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-1",
+        status: "Error",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_1.mp4",
+        totalBytesWritten: 250,
+        totalBytesExpectedToWrite: 1000,
+        error: "Request failed for https://signed.example.test/movie.mp4",
+      }),
+      startDownloadJob: jest.fn(),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore.getState().setStatus("source-1", "Paused");
+    const service = new DownloadService();
+
+    await expect(service.resumeDownload("source-1")).resolves.toEqual({
+      ok: false,
+      error: "Request failed for [source]",
+    });
+
+    expect(window.desktopBridge!.startDownloadJob).not.toHaveBeenCalled();
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      error: "Request failed for [source]",
+    });
+  });
+
+  it("keeps a desktop task recoverable when its active job is missing", async () => {
+    window.desktopBridge = {
+      pauseDownloadJob: jest.fn().mockResolvedValue(null),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore.getState().setStatus("source-1", "Downloading");
+    const service = new DownloadService();
+
+    await expect(service.pauseDownload("source-1")).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Paused",
+    });
+  });
+
+  it("keeps failed deletions visible with a safe retryable error", async () => {
+    window.desktopBridge = {
+      cancelDownloadJob: jest.fn().mockResolvedValue(null),
+      deleteFile: jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Could not delete https://signed.example.test/movie.mp4?token=secret",
+          ),
+        ),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore
+      .getState()
+      .markVerified("source-1", "streamer:///downloads/movie.mp4");
+    const service = new DownloadService();
+
+    await expect(service.deleteDownload("source-1")).resolves.toMatchObject({
+      ok: false,
+    });
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      error: "Could not delete [source]",
+    });
+    expect(
+      JSON.stringify(useDownloadStore.getState().tasks["source-1"]),
+    ).not.toContain("signed.example.test");
+  });
+
+  it("sanitizes source URLs before download errors are persisted", () => {
+    expect(
+      toSafeDownloadErrorMessage(
+        "Request failed for https://signed.example.test/movie.mp4?token=secret",
+      ),
+    ).toBe("Request failed for [source]");
   });
 });

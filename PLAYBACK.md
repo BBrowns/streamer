@@ -131,9 +131,17 @@ advanced source playback remains supported separately.
 Primary Download now creates and resolves a `PlaybackSession` through
 `PlaybackOrchestrator` and records URL-free download progress, local-file
 verification, completion, failure, and cancellation events. Manual advanced
-source downloads remain separate. Cast still uses `PlaybackPlanService`,
-`PlaybackOrchestrator`, and stream engines directly until its session migration
-is implemented.
+source downloads remain separate.
+
+`DownloadService` owns queue reconciliation and the verified-offline invariant:
+a task is offline-playable only after its local URI exists and has been
+verified. The persisted mobile queue stores task state for UI recovery, while
+Electron persists managed download-job metadata and restores interrupted jobs
+as paused. Electron `streamer://` playback, file verification, and deletion are
+limited to its app-managed offline-media directory.
+
+Cast still uses `PlaybackPlanService`, `PlaybackOrchestrator`, and stream
+engines directly until its session migration is implemented.
 
 The intended migration sequence is:
 
@@ -143,7 +151,9 @@ The intended migration sequence is:
 4. Route Play Best through session-driven fallback and timeout behavior.
    **Complete.**
 5. Route primary downloads through the same session model. **Complete.**
-6. Route cast through the same session model.
+6. Add verified download queue state and Electron restart recovery.
+   **Complete.**
+7. Route cast through the same session model.
 
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.

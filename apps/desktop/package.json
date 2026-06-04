@@ -10,7 +10,8 @@
     "predev": "npm run build --workspace=@streamer/stream-server && npm run build",
     "dev": "electron dist/main.js",
     "prestart": "npm run build --workspace=@streamer/stream-server && npm run build",
-    "start": "electron dist/main.js"
+    "start": "electron dist/main.js",
+    "test": "node --test src/*.test.js"
   },
   "devDependencies": {
     "electron": "^40.7.0"

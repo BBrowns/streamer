@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as FileSystem from "expo-file-system";
 import { useState, useEffect, useCallback } from "react";
 import { useMeta } from "../../../hooks/useMeta";
 import { useStreams } from "../../../hooks/useStreams";
@@ -20,7 +19,10 @@ import {
   useRemoveFromLibrary,
 } from "../../../hooks/useLibrary";
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
-import { useDownloadStore } from "../../../stores/downloadStore";
+import {
+  isTaskOfflinePlayable,
+  useDownloadStore,
+} from "../../../stores/downloadStore";
 import { downloadService } from "../../../services/DownloadService";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../../stores/toastStore";
@@ -210,32 +212,8 @@ export default function DetailScreen() {
     const streamId = stream.infoHash || stream.url;
     const task = useDownloadStore.getState().tasks[streamId || ""];
 
-    if (
-      task?.status === "Completed" &&
-      task.localUri &&
-      task.localUri.length > 5
-    ) {
-      let fileExists = true;
-
-      if (Platform.OS === "web") {
-        const desktopBridge = (window as any).desktopBridge;
-        if (desktopBridge) {
-          try {
-            fileExists = await desktopBridge.checkFile(task.localUri);
-          } catch (e) {}
-        }
-      } else {
-        try {
-          const info = await FileSystem.getInfoAsync(task.localUri);
-          fileExists = info.exists;
-        } catch {
-          // ignore
-        }
-      }
-
-      if (!fileExists) {
-        useDownloadStore.getState().verifyAndClean();
-      } else {
+    if (isTaskOfflinePlayable(task) && task?.localUri) {
+      if (await downloadService.verifyTask(task.id)) {
         setPlaybackNotice(null);
         setStream(
           { ...playbackStream, url: task.localUri },

@@ -76,30 +76,78 @@
   },
   "downloads": {
     "title": "Descargas",
+    "unknownTitle": "Descarga",
     "header": {
-      "subtitle": "Gestiona tu contenido sin conexión",
+      "subtitle": "Tu cola y archivos sin conexión verificados en este dispositivo",
       "clearAll": "Borrar todo"
     },
     "alerts": {
       "clearTitle": "Borrar todas las descargas",
-      "clearMessage": "¿Estás seguro? Esto eliminará todos los archivos descargados de tu dispositivo."
+      "clearMessage": "¿Estás seguro? Esto eliminará todos los archivos descargados de tu dispositivo.",
+      "clearAllTitle": "¿Eliminar todas las descargas?",
+      "clearAllMessage": "Esto elimina cada descarga gestionada y su archivo local de este dispositivo.",
+      "clearAllConfirm": "¿Eliminar todas las descargas gestionadas y sus archivos locales?",
+      "clearAllButton": "Eliminar todo",
+      "deleteTitle": "¿Eliminar descarga?",
+      "deleteMessage": "¿Eliminar \"{{title}}\" de este dispositivo?"
     },
     "card": {
       "unknown": "Descarga desconocida",
       "manage": "Gestiona tus medios descargados",
       "viewDetails": "Ver detalles",
-      "delete": "Eliminar descarga"
+      "delete": "Eliminar descarga",
+      "movie": "Película",
+      "series": "Serie"
+    },
+    "actions": {
+      "manage": "Gestiona tus medios descargados",
+      "viewDetails": "Ver detalles",
+      "delete": "Eliminar descarga",
+      "clearAll": "Eliminar todo",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "retry": "Reintentar",
+      "play": "Reproducir"
     },
     "status": {
+      "queued": "En cola",
+      "preparing": "Preparando",
       "downloading": "Descargando",
+      "verifying": "Verificando",
       "paused": "Pausado",
+      "checking": "Comprobando archivo",
+      "readyOffline": "Disponible sin conexión",
       "completed": "Completado",
-      "error": "Error"
+      "error": "Requiere atención"
+    },
+    "sections": {
+      "active": "Cola activa",
+      "activeSubtitle": "Elementos preparando, descargando y pausados",
+      "attention": "Requiere atención",
+      "attentionSubtitle": "Reintenta o elimina las descargas fallidas",
+      "ready": "Disponible sin conexión",
+      "readySubtitle": "Archivos verificados disponibles en este dispositivo"
+    },
+    "filters": {
+      "all": "Todo {{count}}",
+      "active": "Activo {{count}}",
+      "ready": "Listo {{count}}",
+      "attention": "Problemas {{count}}"
+    },
+    "summary": {
+      "active": "Activo",
+      "ready": "Listo",
+      "storage": "Almacenamiento sin conexión"
+    },
+    "footer": {
+      "verified": "Los elementos solo se muestran como disponibles sin conexión después de verificar el archivo local."
     },
     "empty": {
       "title": "Sin descargas",
       "description": "Las películas y series que descargues aparecerán aquí.",
-      "action": "Ir a Descubrir"
+      "action": "Explorar películas y series",
+      "filterTitle": "No hay nada en esta vista",
+      "filterDescription": "Elige otro filtro para ver el resto de la cola."
     }
   },
   "onboarding": {
