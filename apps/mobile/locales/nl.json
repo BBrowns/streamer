@@ -341,10 +341,24 @@
       "off": "Uit"
     },
     "status": {
+      "planning": "Afspelen voorbereiden...",
+      "checkingBridge": "Desktop bridge controleren...",
+      "selectingSource": "Beste bron selecteren...",
+      "checkingSource": "Bron controleren...",
       "findingPeers": "Peers zoeken...",
       "connecting": "Verbinden met peers...",
+      "creatingGatewayJob": "Bron voorbereiden...",
+      "preparingMetadata": "Torrentmetadata lezen...",
+      "remuxing": "Compatibele videostream voorbereiden...",
+      "preparingSubtitle": "Dit kan even duren voor torrentbronnen.",
+      "tryingFallback": "Een andere bron proberen...",
       "buffering": "Bufferen...",
       "errorTitle": "Verbinding mislukt",
+      "bridgeErrorTitle": "Bridge niet gereed",
+      "noPeersTitle": "Geen peers gevonden",
+      "unsupportedTitle": "Bron niet ondersteund",
+      "timeoutTitle": "Afspelen duurde te lang",
+      "networkTitle": "Netwerkprobleem",
       "errorSubtitle": "Stream laden mislukt"
     },
     "errors": {

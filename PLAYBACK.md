@@ -31,9 +31,9 @@ device/action input. Candidate IDs are opaque and plan-local; callers must not
 expect the same UUID across separate plan requests.
 
 The top-level Planner v2 fields are canonical for new code. The nested `plan`
-object remains temporarily for the existing mobile resolver because it also
-contains the selected playback mode and optional direct playback URL. Server
-and client both validate the response with `playbackPlanSchema`.
+object remains temporarily for download/cast compatibility and its optional
+direct playback URL. Server and client both validate the response with
+`playbackPlanSchema`.
 
 `PlaybackSession` is the persistence-safe source of truth for one play,
 download, or cast workflow. It stores:
@@ -67,6 +67,9 @@ The mobile client now has:
 - `stores/playbackSessionStore.ts` for persisted sessions and active-session
   selection, typed event dispatch, attempt creation, gateway progress,
   fallback, failure, and cancellation helpers
+- `services/playback/PlaybackSessionPlaybackService.ts` for Play Best candidate
+  resolution, planner timeout budgets, gateway progress, automatic fallback,
+  active-engine cancellation, and persistence-safe runtime error handling
 - an in-memory runtime mapping from session-local candidate IDs to planner
   candidates
 
@@ -118,16 +121,22 @@ event payload or error message.
 
 ## Current And Future Ownership
 
-Current code still uses `PlaybackPlanService`, `PlaybackOrchestrator`,
-`playerStore`, and stream engines directly. Those contracts remain supported.
+Play Best now creates a `PlaybackSession` in `PlaybackOrchestrator`, then the
+player resolves candidates through `PlaybackSessionPlaybackService`.
+`playerStore` keeps only transient session/candidate/attempt context and does
+not use its legacy raw fallback queue for session-driven playback. Manual
+advanced source playback remains supported separately.
+
+Download and cast still use `PlaybackPlanService`, `PlaybackOrchestrator`, and
+stream engines directly until their session migrations are implemented.
 
 The intended migration sequence is:
 
 1. Add the shared `PlaybackSession` contract.
 2. Extend the planner with ordered, opaque candidates and decision rationale.
-3. Add a client session store and typed event reducer. **Store foundation
-   complete; live Play Best wiring follows in step 4.**
+3. Add a client session store and typed event reducer.
 4. Route Play Best through session-driven fallback and timeout behavior.
+   **Complete.**
 5. Route downloads and cast through the same session model.
 
 XState is optional. Introduce it only if a typed reducer/service cannot keep

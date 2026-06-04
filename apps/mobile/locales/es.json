@@ -330,10 +330,24 @@
       "off": "Desactivado"
     },
     "status": {
+      "planning": "Preparando la reproducción...",
+      "checkingBridge": "Comprobando el puente de escritorio...",
+      "selectingSource": "Seleccionando la mejor fuente...",
+      "checkingSource": "Comprobando la fuente...",
       "findingPeers": "Buscando pares...",
       "connecting": "Conectando con pares...",
+      "creatingGatewayJob": "Preparando la fuente...",
+      "preparingMetadata": "Leyendo metadatos del torrent...",
+      "remuxing": "Preparando un flujo de vídeo compatible...",
+      "preparingSubtitle": "Esto puede tardar un momento con fuentes torrent.",
+      "tryingFallback": "Probando otra fuente...",
       "buffering": "Cargando el búfer...",
       "errorTitle": "Error de conexión",
+      "bridgeErrorTitle": "El puente no está listo",
+      "noPeersTitle": "No se encontraron pares",
+      "unsupportedTitle": "Fuente no compatible",
+      "timeoutTitle": "La reproducción agotó el tiempo",
+      "networkTitle": "Problema de red",
       "errorSubtitle": "No se pudo cargar el flujo"
     },
     "errors": {

@@ -1,4 +1,6 @@
+import * as Crypto from "expo-crypto";
 import { getDownloadEligibility } from "../../downloadEligibility";
+import { usePlaybackSessionStore } from "../../../stores/playbackSessionStore";
 import {
   makePlaybackPlan,
   makePlannedMediaCandidate,
@@ -22,6 +24,10 @@ jest.mock("../../downloadEligibility", () => ({
   getDownloadEligibility: jest.fn(),
 }));
 
+jest.mock("expo-crypto", () => ({
+  randomUUID: jest.fn(),
+}));
+
 describe("PlaybackOrchestrator", () => {
   const createPlan = createPlaybackPlanWithBridgeRetry as jest.MockedFunction<
     typeof createPlaybackPlanWithBridgeRetry
@@ -34,7 +40,15 @@ describe("PlaybackOrchestrator", () => {
   >;
 
   beforeEach(() => {
+    let value = 1;
+    jest
+      .mocked(Crypto.randomUUID)
+      .mockImplementation(
+        () =>
+          `00000000-0000-4000-8000-${String(value++).padStart(12, "0")}` as `${string}-${string}-${string}-${string}-${string}`,
+      );
     jest.clearAllMocks();
+    usePlaybackSessionStore.getState().clearAllSessions();
     getEligibility.mockReturnValue({
       mode: "direct-file",
       canDownload: true,
@@ -42,41 +56,38 @@ describe("PlaybackOrchestrator", () => {
     });
   });
 
-  it("returns a prepared stream, media info, and fallback queue for Play Best", async () => {
+  afterEach(() => {
+    usePlaybackSessionStore.getState().clearAllSessions();
+  });
+
+  it("creates a session for Play Best without resolving streams in the orchestrator", async () => {
     const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "direct",
         selectedCandidate: makePlannedMediaCandidate({
-          id: "primary",
+          id: "00000000-0000-4000-8000-000000000101",
           kind: "direct",
           stream: {
             url: "https://cdn.example.test/primary.mp4",
             title: "Primary",
           },
         }),
+        fallbackCandidates: [
+          makePlannedMediaCandidate({
+            id: "00000000-0000-4000-8000-000000000102",
+            kind: "direct",
+            rank: 1,
+            stream: {
+              url: "https://cdn.example.test/fallback.mp4",
+              title: "Fallback",
+            },
+          }),
+        ],
       },
     });
-    const fallback = {
-      url: "https://cdn.example.test/fallback.mp4",
-      title: "Fallback",
-    };
 
     createPlan.mockResolvedValueOnce(plan);
-    resolvePlan.mockResolvedValueOnce({
-      resolved: {
-        stream: {
-          url: "https://cdn.example.test/primary.mp4",
-          title: "Primary",
-        },
-        uri: "https://cdn.example.test/primary.mp4",
-        attemptedStreams: 1,
-        errors: [],
-      },
-      attemptedStreams: 1,
-      errors: [],
-      remainingStreams: [fallback],
-    });
 
     const result = await playBest({
       type: "movie",
@@ -104,10 +115,21 @@ describe("PlaybackOrchestrator", () => {
         title: "Example Movie",
         poster: "https://images.example.test/poster.jpg",
       },
-      fallbackStreams: [fallback],
-      runtimeState: "buffering",
-      attemptedStreams: 1,
+      runtimeState: "selecting_source",
+      attemptedStreams: 0,
       resolveErrors: [],
+    });
+    expect(resolvePlan).not.toHaveBeenCalled();
+    expect(result.ok && result.sessionId).toEqual(expect.any(String));
+    expect(result.ok && result.candidateId).toEqual(expect.any(String));
+    expect(
+      result.ok &&
+        usePlaybackSessionStore.getState().sessions[result.sessionId],
+    ).toMatchObject({
+      action: "play",
+      status: "selecting_candidate",
+      content: { type: "movie", id: "tt123" },
+      candidates: [{ rank: 0 }, { rank: 1 }],
     });
   });
 
@@ -137,6 +159,13 @@ describe("PlaybackOrchestrator", () => {
       runtimeState: "failed_no_sources",
       attemptedStreams: 0,
       resolveErrors: [],
+    });
+    expect(
+      result.sessionId &&
+        usePlaybackSessionStore.getState().sessions[result.sessionId],
+    ).toMatchObject({
+      status: "failed",
+      terminalError: { code: "NO_SOURCES" },
     });
   });
 
@@ -190,83 +219,6 @@ describe("PlaybackOrchestrator", () => {
         shouldFallback: false,
       },
       runtimeState: "failed_bridge_unsupported",
-    });
-  });
-
-  it("maps resolver peer failures to NO_PEERS", async () => {
-    createPlan.mockResolvedValueOnce(
-      makePlaybackPlan({
-        state: "ready",
-        plan: {
-          mode: "bridge",
-          selectedCandidate: makePlannedMediaCandidate({
-            id: "torrent",
-            kind: "torrent",
-            stream: { infoHash: "abc123", title: "Torrent" },
-            requiresBridge: true,
-          }),
-        },
-      }),
-    );
-    resolvePlan.mockResolvedValueOnce({
-      resolved: null,
-      attemptedStreams: 1,
-      errors: ["No peers found"],
-      remainingStreams: [],
-    });
-
-    const result = await playBest({
-      type: "movie",
-      id: "tt123",
-      title: "Example Movie",
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: {
-        code: "NO_PEERS",
-        shouldFallback: true,
-      },
-      runtimeState: "failed_no_peers",
-      attemptedStreams: 1,
-      resolveErrors: ["No peers found"],
-    });
-  });
-
-  it("maps resolver codec failures to UNSUPPORTED_CODEC", async () => {
-    createPlan.mockResolvedValueOnce(
-      makePlaybackPlan({
-        state: "ready",
-        plan: {
-          mode: "direct",
-          selectedCandidate: makePlannedMediaCandidate({
-            id: "hevc",
-            kind: "direct",
-            stream: { url: "https://cdn.example.test/hevc.mkv" },
-          }),
-        },
-      }),
-    );
-    resolvePlan.mockResolvedValueOnce({
-      resolved: null,
-      attemptedStreams: 1,
-      errors: ["Unsupported codec h265"],
-      remainingStreams: [],
-    });
-
-    const result = await playBest({
-      type: "movie",
-      id: "tt123",
-      title: "Example Movie",
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: {
-        code: "UNSUPPORTED_CODEC",
-        shouldFallback: true,
-      },
-      runtimeState: "failed_unsupported_codec",
     });
   });
 

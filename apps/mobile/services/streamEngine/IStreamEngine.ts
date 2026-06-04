@@ -1,4 +1,4 @@
-import type { Stream } from "@streamer/shared";
+import type { PlaybackGatewayPhase, Stream } from "@streamer/shared";
 
 /** Audio track descriptor */
 export interface AudioTrack {
@@ -25,13 +25,7 @@ export interface StreamStats {
 export interface GatewayJobProgress {
   id?: string;
   state?: "preparing" | "ready" | "error" | "cancelled";
-  phase?:
-    | "creating_gateway_job"
-    | "finding_peers"
-    | "preparing_metadata"
-    | "ready"
-    | "error"
-    | "cancelled";
+  phase?: PlaybackGatewayPhase;
   progress?: number | null;
   peerCount?: number | null;
   error?: string;

@@ -12,7 +12,6 @@ import {
   Pressable,
   Platform,
   Image,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -23,6 +22,7 @@ import { useTranslation } from "react-i18next";
 
 import { useTheme } from "../hooks/useTheme";
 import { usePlayerStore } from "../stores/playerStore";
+import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import { usePlayerHotkeys } from "../hooks/usePlayerHotkeys";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { usePlayerController } from "../hooks/usePlayerController";
@@ -42,6 +42,14 @@ import {
   createPlaybackRuntimeError,
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
+import { playBest } from "../services/playback/PlaybackOrchestrator";
+import {
+  advancePlaybackSessionAfterFailure,
+  cancelPlaybackSession,
+  markPlaybackSessionBuffering,
+  markPlaybackSessionPlaying,
+  resolvePlaybackSession,
+} from "../services/playback/PlaybackSessionPlaybackService";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -61,6 +69,9 @@ export default function PlayerScreen() {
   const runtimeState = usePlayerStore((s) => s.runtimeState);
   const runtimeError = usePlayerStore((s) => s.runtimeError);
   const fallbackReason = usePlayerStore((s) => s.fallbackReason);
+  const playbackSessionId = usePlayerStore((s) => s.playbackSessionId);
+  const playbackCandidateId = usePlayerStore((s) => s.playbackCandidateId);
+  const playbackAttemptId = usePlayerStore((s) => s.playbackAttemptId);
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
@@ -69,7 +80,11 @@ export default function PlayerScreen() {
   const setStreamStatus = usePlayerStore((s) => s.setStreamStatus);
   const setRuntimeState = usePlayerStore((s) => s.setRuntimeState);
   const setRuntimeFailure = usePlayerStore((s) => s.setRuntimeFailure);
+  const setSessionStream = usePlayerStore((s) => s.setSessionStream);
   const advanceToNextFallback = usePlayerStore((s) => s.advanceToNextFallback);
+  const activeSession = usePlaybackSessionStore((s) =>
+    playbackSessionId ? s.sessions[playbackSessionId] || null : null,
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [castModalOpen, setCastModalOpen] = useState(false);
@@ -77,7 +92,6 @@ export default function PlayerScreen() {
     null,
   );
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
-  const [isResolvingPlayback, setIsResolvingPlayback] = useState(false);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
 
@@ -90,6 +104,7 @@ export default function PlayerScreen() {
   const seekFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoViewRef = useRef<any>(null);
+  const fallbackInFlightRef = useRef(false);
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -110,133 +125,272 @@ export default function PlayerScreen() {
   }, [controlsVisible, showControls]);
 
   const handleClose = useCallback(() => {
+    if (playbackSessionId) {
+      cancelPlaybackSession(playbackSessionId, "User left the player.");
+    }
     goBackOrReplace(router);
     setTimeout(() => clearPlayer(), 100);
-  }, [router, clearPlayer]);
+  }, [router, clearPlayer, playbackSessionId]);
 
   const handleOpenSourcesDevices = useCallback(() => {
+    if (playbackSessionId) {
+      cancelPlaybackSession(
+        playbackSessionId,
+        "User opened Sources & Devices.",
+      );
+    }
     clearPlayer();
     router.replace("/settings");
-  }, [clearPlayer, router]);
+  }, [clearPlayer, playbackSessionId, router]);
+
+  useEffect(
+    () => () => {
+      if (playbackSessionId) {
+        cancelPlaybackSession(
+          playbackSessionId,
+          "Player screen was closed before playback completed.",
+        );
+      }
+    },
+    [playbackSessionId],
+  );
 
   const handleRetryPlayback = useCallback(async () => {
     if (!currentStream) return;
+
+    if (playbackSessionId && mediaInfo) {
+      cancelPlaybackSession(playbackSessionId, "User retried playback.");
+      setPlaybackUri(null);
+      setStreamStatus("loading_metrics");
+      const result = await playBest({
+        type: mediaInfo.type,
+        id: mediaInfo.itemId,
+        title: mediaInfo.title,
+        poster: mediaInfo.poster,
+        season: mediaInfo.season,
+        episode: mediaInfo.episode,
+      });
+      if (result.ok) {
+        setSessionStream(
+          result.stream,
+          result.mediaInfo,
+          result.sessionId,
+          result.candidateId,
+        );
+      } else {
+        setRuntimeFailure(result.error);
+      }
+      return;
+    }
+
     setPlaybackUri(null);
-    setIsResolvingPlayback(true);
     setStreamStatus("loading_metrics");
     if (currentStream.infoHash) {
       await streamEngineManager.detectBridge();
     }
     setResolveAttempt((attempt) => attempt + 1);
-  }, [currentStream, setStreamStatus]);
+  }, [
+    currentStream,
+    mediaInfo,
+    playbackSessionId,
+    setRuntimeFailure,
+    setSessionStream,
+    setStreamStatus,
+  ]);
 
   const tryAdvanceToFallback = useCallback(
-    (reason?: string | null) => {
+    async (
+      error: ReturnType<typeof createPlaybackRuntimeError>,
+      reason?: string | null,
+    ) => {
+      if (playbackSessionId && playbackCandidateId && playbackAttemptId) {
+        if (fallbackInFlightRef.current) return true;
+
+        fallbackInFlightRef.current = true;
+        setPlaybackUri(null);
+        try {
+          const result = await advancePlaybackSessionAfterFailure(
+            playbackSessionId,
+            playbackCandidateId,
+            playbackAttemptId,
+            error,
+          );
+          if (!result.ok) {
+            setRuntimeFailure(result.error);
+            return false;
+          }
+
+          setSessionStream(
+            result.stream,
+            mediaInfo || undefined,
+            result.sessionId,
+            result.candidateId,
+            result.attemptId,
+            result.fallbackReason || reason || error.message,
+          );
+          setPlaybackUri(result.uri);
+          return true;
+        } finally {
+          fallbackInFlightRef.current = false;
+        }
+      }
+
       const nextStream = advanceToNextFallback(reason);
       if (!nextStream) return false;
 
       setPlaybackUri(null);
-      setIsResolvingPlayback(true);
       setResolveAttempt((attempt) => attempt + 1);
       return true;
     },
-    [advanceToNextFallback],
+    [
+      advanceToNextFallback,
+      mediaInfo,
+      playbackAttemptId,
+      playbackCandidateId,
+      playbackSessionId,
+      setRuntimeFailure,
+      setSessionStream,
+    ],
   );
 
   // Effect to resolve playback URI
   useEffect(() => {
     let isMounted = true;
-    let advancedToFallback = false;
-    if (currentStream) {
+    const resolve = async () => {
+      if (!currentStream) {
+        setPlaybackUri(null);
+        return;
+      }
+
+      if (
+        playbackSessionId &&
+        playbackCandidateId &&
+        playbackAttemptId &&
+        currentStream.url
+      ) {
+        setPlaybackUri(currentStream.url);
+        return;
+      }
+
+      setStreamStatus("loading_metrics");
+
+      if (playbackSessionId) {
+        const result = await resolvePlaybackSession(
+          playbackSessionId,
+          playbackCandidateId || undefined,
+        );
+        if (!isMounted) return;
+
+        if (!result.ok) {
+          setPlaybackUri(null);
+          setRuntimeFailure(result.error);
+          return;
+        }
+
+        setSessionStream(
+          result.stream,
+          mediaInfo || undefined,
+          result.sessionId,
+          result.candidateId,
+          result.attemptId,
+          result.fallbackReason,
+        );
+        setPlaybackUri(result.uri);
+        return;
+      }
+
       const unsupportedCodecReason =
         getUnsupportedWebCodecReason(currentStream);
       if (unsupportedCodecReason) {
         const message = t("player.errors.unsupportedCodec");
-        if (tryAdvanceToFallback(message)) {
-          advancedToFallback = true;
-          return () => {
-            isMounted = false;
-          };
-        }
+        const error = createPlaybackRuntimeError("UNSUPPORTED_CODEC", message, {
+          retryable: false,
+          shouldFallback: false,
+        });
+        if (await tryAdvanceToFallback(error, message)) return;
+        if (!isMounted) return;
         setPlaybackUri(null);
-        setIsResolvingPlayback(false);
-        setRuntimeFailure(
-          createPlaybackRuntimeError("UNSUPPORTED_CODEC", message, {
-            retryable: false,
-            shouldFallback: false,
-          }),
-        );
-        return () => {
-          isMounted = false;
-        };
+        setRuntimeFailure(error);
+        return;
       }
 
-      setIsResolvingPlayback(true);
-      setStreamStatus("loading_metrics");
-      streamEngineManager
-        .getPlaybackUri(currentStream)
-        .then((uri) => {
-          if (!isMounted) return;
+      try {
+        const uri = await streamEngineManager.getPlaybackUri(currentStream);
+        if (!isMounted) return;
 
-          if (uri && uri.length > 0) {
-            setPlaybackUri(uri);
-            return;
-          }
+        if (uri && uri.length > 0) {
+          setPlaybackUri(uri);
+          return;
+        }
 
-          const message = currentStream.infoHash
-            ? t("player.errors.bridgeUnavailable")
-            : t("player.errors.noStream");
-          if (tryAdvanceToFallback(message)) {
-            advancedToFallback = true;
-            return;
-          }
+        const message = currentStream.infoHash
+          ? t("player.errors.bridgeUnavailable")
+          : t("player.errors.noStream");
+        const error = createPlaybackRuntimeError(
+          currentStream.infoHash ? "BRIDGE_UNAVAILABLE" : "SOURCE_UNAVAILABLE",
+          message,
+          { retryable: true, shouldFallback: false },
+        );
+        if (await tryAdvanceToFallback(error, message)) return;
 
-          setPlaybackUri(null);
-          setRuntimeFailure(
-            createPlaybackRuntimeError(
-              currentStream.infoHash
-                ? "BRIDGE_UNAVAILABLE"
-                : "SOURCE_UNAVAILABLE",
-              message,
-              { retryable: true, shouldFallback: false },
-            ),
-          );
-        })
-        .catch((err) => {
-          if (!isMounted) return;
-          const message = err?.message || t("player.errors.playbackFailed");
-          if (tryAdvanceToFallback(message)) {
-            advancedToFallback = true;
-            return;
-          }
+        setPlaybackUri(null);
+        setRuntimeFailure(error);
+      } catch (err: any) {
+        if (!isMounted) return;
+        const message = err?.message || t("player.errors.playbackFailed");
+        const error = mapPlaybackMessageToRuntimeFailure(
+          message,
+          currentStream.infoHash ? "BRIDGE_UNAVAILABLE" : "SOURCE_UNAVAILABLE",
+          { retryable: true, shouldFallback: false },
+        ).error;
+        if (await tryAdvanceToFallback(error, message)) return;
 
-          setPlaybackUri(null);
-          setRuntimeFailure(
-            mapPlaybackMessageToRuntimeFailure(
-              message,
-              currentStream.infoHash
-                ? "BRIDGE_UNAVAILABLE"
-                : "SOURCE_UNAVAILABLE",
-              { retryable: true, shouldFallback: false },
-            ).error,
-          );
-        })
-        .finally(() => {
-          if (isMounted && !advancedToFallback) setIsResolvingPlayback(false);
-        });
-    } else {
-      setPlaybackUri(null);
-      setIsResolvingPlayback(false);
-    }
+        setPlaybackUri(null);
+        setRuntimeFailure(error);
+      }
+    };
+
+    void resolve();
     return () => {
       isMounted = false;
     };
   }, [
     currentStream,
+    mediaInfo,
+    playbackAttemptId,
+    playbackCandidateId,
+    playbackSessionId,
     resolveAttempt,
     setRuntimeFailure,
+    setSessionStream,
     setStreamStatus,
     t,
+    tryAdvanceToFallback,
+  ]);
+
+  useEffect(() => {
+    if (
+      !playbackSessionId ||
+      !playbackCandidateId ||
+      !playbackAttemptId ||
+      !runtimeError ||
+      streamState !== "error" ||
+      !activeSession ||
+      activeSession.status === "failed" ||
+      activeSession.status === "cancelled" ||
+      activeSession.status === "completed"
+    ) {
+      return;
+    }
+
+    void tryAdvanceToFallback(runtimeError, runtimeError.message);
+  }, [
+    activeSession,
+    playbackAttemptId,
+    playbackCandidateId,
+    playbackSessionId,
+    runtimeError,
+    streamState,
     tryAdvanceToFallback,
   ]);
 
@@ -251,6 +405,9 @@ export default function PlayerScreen() {
     setBuffering(true);
 
     const markLoading = () => {
+      if (playbackSessionId) {
+        markPlaybackSessionBuffering(playbackSessionId);
+      }
       const state = usePlayerStore.getState();
       if (state.streamState === "playing") {
         setBuffering(true);
@@ -261,6 +418,9 @@ export default function PlayerScreen() {
     };
 
     const markPlaying = () => {
+      if (playbackSessionId) {
+        markPlaybackSessionPlaying(playbackSessionId);
+      }
       setBuffering(false);
       setPlaying(true);
       setStreamStatus("playing");
@@ -290,15 +450,21 @@ export default function PlayerScreen() {
 
         if (status === "error") {
           const message = formatPlaybackError(error?.message);
-          if (tryAdvanceToFallback(message)) return;
-
-          setBuffering(false);
-          setPlaying(false);
-          setRuntimeFailure(
-            mapPlaybackMessageToRuntimeFailure(message, "SOURCE_UNAVAILABLE", {
+          const runtimeFailure = mapPlaybackMessageToRuntimeFailure(
+            message,
+            "SOURCE_UNAVAILABLE",
+            {
               retryable: true,
               shouldFallback: false,
-            }).error,
+            },
+          ).error;
+          void tryAdvanceToFallback(runtimeFailure, message).then(
+            (advanced) => {
+              if (advanced) return;
+              setBuffering(false);
+              setPlaying(false);
+              setRuntimeFailure(runtimeFailure);
+            },
           );
         }
       },
@@ -324,6 +490,18 @@ export default function PlayerScreen() {
       }
     });
 
+    const remainingSessionBudgetMs = activeSession
+      ? Math.max(
+          0,
+          Date.parse(activeSession.createdAt) +
+            activeSession.timeoutBudgetMs -
+            Date.now(),
+        )
+      : PLAYBACK_START_TIMEOUT_MS;
+    const watchdogTimeoutMs = Math.min(
+      PLAYBACK_START_TIMEOUT_MS,
+      remainingSessionBudgetMs,
+    );
     const watchdog = setTimeout(() => {
       const state = usePlayerStore.getState();
       if (
@@ -335,17 +513,21 @@ export default function PlayerScreen() {
       }
 
       const message = formatPlaybackError(t("player.errors.playbackTimeout"));
-      if (tryAdvanceToFallback(message)) return;
-
-      setBuffering(false);
-      setPlaying(false);
-      setRuntimeFailure(
-        createPlaybackRuntimeError("PLAYBACK_TIMEOUT", message, {
+      const timeoutError = createPlaybackRuntimeError(
+        "PLAYBACK_TIMEOUT",
+        message,
+        {
           retryable: true,
           shouldFallback: false,
-        }),
+        },
       );
-    }, PLAYBACK_START_TIMEOUT_MS);
+      void tryAdvanceToFallback(timeoutError, message).then((advanced) => {
+        if (advanced) return;
+        setBuffering(false);
+        setPlaying(false);
+        setRuntimeFailure(timeoutError);
+      });
+    }, watchdogTimeoutMs);
 
     return () => {
       statusSub.remove();
@@ -356,7 +538,9 @@ export default function PlayerScreen() {
     };
   }, [
     currentStream,
+    activeSession,
     playbackUri,
+    playbackSessionId,
     player,
     setBuffering,
     setPlaying,
@@ -465,55 +649,35 @@ export default function PlayerScreen() {
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
-  if (currentStream && isResolvingPlayback && !playbackUri) {
+  if (currentStream && !playbackUri) {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
-        <ActivityIndicator color={colors.tint} />
-        <Text style={[styles.errorText, { color: colors.textSecondary }]}>
-          {fallbackReason || "Preparing stream..."}
-        </Text>
+        <PlayerStatusOverlay
+          streamState={streamState}
+          runtimeState={runtimeState}
+          streamMetrics={streamMetrics}
+          isBuffering={isBuffering}
+          errorMessage={errorMessage}
+          runtimeError={runtimeError}
+          fallbackReason={fallbackReason}
+          session={activeSession}
+          onBack={handleClose}
+          onRetry={handleRetryPlayback}
+          onOpenSourcesDevices={
+            currentStream.infoHash ? handleOpenSourcesDevices : undefined
+          }
+        />
       </View>
     );
   }
 
-  if (!currentStream || !playbackUri) {
+  if (!currentStream) {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
-        <Text style={styles.errorText}>
-          {currentStream
-            ? runtimeError?.message ||
-              errorMessage ||
-              t("player.errors.playbackFailed")
-            : t("player.errors.noStream")}
-        </Text>
+        <Text style={styles.errorText}>{t("player.errors.noStream")}</Text>
         <View style={styles.errorActions}>
-          {!!currentStream && (
-            <Pressable
-              style={styles.errorPrimaryButton}
-              onPress={handleRetryPlayback}
-            >
-              <Text
-                style={[
-                  styles.errorPrimaryButtonText,
-                  { color: isDark ? "#000" : "#fff" },
-                ]}
-              >
-                {t("common.retry")}
-              </Text>
-            </Pressable>
-          )}
-          {!!currentStream?.infoHash && (
-            <Pressable
-              style={styles.errorButton}
-              onPress={handleOpenSourcesDevices}
-            >
-              <Text style={styles.errorButtonText}>
-                {t("player.errors.openSourcesDevices")}
-              </Text>
-            </Pressable>
-          )}
           <Pressable style={styles.errorButton} onPress={handleClose}>
             <Text style={styles.errorButtonText}>
               {t("player.errors.goBack")}
@@ -609,6 +773,7 @@ export default function PlayerScreen() {
             errorMessage={errorMessage}
             runtimeError={runtimeError}
             fallbackReason={fallbackReason}
+            session={activeSession}
             onBack={handleClose}
             onRetry={handleRetryPlayback}
             onOpenSourcesDevices={
@@ -727,20 +892,6 @@ const createStyles = (colors: any, isDark: boolean) =>
       gap: 10,
       maxWidth: 540,
       paddingHorizontal: 20,
-    },
-    errorPrimaryButton: {
-      backgroundColor: colors.tint,
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 12,
-      minWidth: 44,
-      minHeight: 44,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    errorPrimaryButtonText: {
-      color: "#fff",
-      fontWeight: "800",
     },
     errorButton: {
       backgroundColor: colors.tint + "15",

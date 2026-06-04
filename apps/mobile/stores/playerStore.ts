@@ -41,6 +41,9 @@ interface PlayerState {
   mediaInfo: MediaInfo | null;
   fallbackStreams: Stream[];
   fallbackReason: string | null;
+  playbackSessionId: string | null;
+  playbackCandidateId: string | null;
+  playbackAttemptId: string | null;
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
@@ -67,6 +70,14 @@ interface PlayerState {
     stream: Stream,
     media?: MediaInfo,
     fallbackStreams?: Stream[],
+  ) => void;
+  setSessionStream: (
+    stream: Stream,
+    media: MediaInfo | undefined,
+    sessionId: string,
+    candidateId: string,
+    attemptId?: string | null,
+    fallbackReason?: string | null,
   ) => void;
   advanceToNextFallback: (reason?: string | null) => Stream | null;
   setPlaying: (playing: boolean) => void;
@@ -119,8 +130,7 @@ function getRuntimeStateForMetrics(
 ): PlaybackRuntimeState {
   if (metrics.state === "finding_peers") return "finding_peers";
   if (metrics.state === "connecting") return "preparing_metadata";
-  if (metrics.state === "downloading") return "buffering";
-  return "playing";
+  return "buffering";
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -130,6 +140,9 @@ export const usePlayerStore = create<PlayerState>()(
       mediaInfo: null,
       fallbackStreams: [],
       fallbackReason: null,
+      playbackSessionId: null,
+      playbackCandidateId: null,
+      playbackAttemptId: null,
       isPlaying: false,
       isBuffering: false,
       currentTime: 0,
@@ -160,6 +173,9 @@ export const usePlayerStore = create<PlayerState>()(
           mediaInfo: media ?? null,
           fallbackStreams,
           fallbackReason: null,
+          playbackSessionId: null,
+          playbackCandidateId: null,
+          playbackAttemptId: null,
           isPlaying: false,
           isBuffering: true,
           streamState: "loading_metrics",
@@ -171,8 +187,46 @@ export const usePlayerStore = create<PlayerState>()(
           _peerTimeout: null,
         });
       },
+      setSessionStream: (
+        stream,
+        media,
+        sessionId,
+        candidateId,
+        attemptId = null,
+        fallbackReason = null,
+      ) => {
+        const state = get();
+        if (state._eventSource) {
+          state._eventSource.removeAllEventListeners();
+          state._eventSource.close();
+        }
+        if (state._peerTimeout) clearTimeout(state._peerTimeout);
+
+        set({
+          currentStream: stream,
+          mediaInfo: media ?? null,
+          fallbackStreams: [],
+          fallbackReason,
+          playbackSessionId: sessionId,
+          playbackCandidateId: candidateId,
+          playbackAttemptId: attemptId,
+          isPlaying: false,
+          isBuffering: true,
+          currentTime: 0,
+          duration: 0,
+          streamState: "loading_metrics",
+          streamMetrics: null,
+          errorMessage: null,
+          runtimeState: fallbackReason ? "trying_fallback" : "selecting_source",
+          runtimeError: null,
+          _eventSource: null,
+          _peerTimeout: null,
+        });
+      },
       advanceToNextFallback: (reason = null) => {
         const state = get();
+        if (state.playbackSessionId) return null;
+
         const [nextStream, ...remainingFallbacks] = state.fallbackStreams;
         if (!nextStream) return null;
 
@@ -303,9 +357,11 @@ export const usePlayerStore = create<PlayerState>()(
             es.close();
             const message =
               "No peers found after 45 seconds. The torrent may be inactive or the stream-server may not be reachable.";
-            const fallback = currentState.advanceToNextFallback(
-              "No peers found after 45 seconds. Trying another source automatically.",
-            );
+            const fallback = currentState.playbackSessionId
+              ? null
+              : currentState.advanceToNextFallback(
+                  "No peers found after 45 seconds. Trying another source automatically.",
+                );
             if (fallback) return;
 
             const failure = mapPlaybackMessageToRuntimeFailure(
@@ -346,10 +402,7 @@ export const usePlayerStore = create<PlayerState>()(
               return;
             }
 
-            const nextStreamState =
-              metrics.state === "ready" || metrics.state === "downloading"
-                ? "playing"
-                : "loading_metrics";
+            const nextStreamState = "loading_metrics";
 
             set({
               streamMetrics: metrics,
@@ -426,9 +479,11 @@ export const usePlayerStore = create<PlayerState>()(
             return;
           }
 
-          const fallback = currentState.advanceToNextFallback(
-            "Failed to connect to stream metrics. Trying another source automatically.",
-          );
+          const fallback = currentState.playbackSessionId
+            ? null
+            : currentState.advanceToNextFallback(
+                "Failed to connect to stream metrics. Trying another source automatically.",
+              );
           if (fallback) {
             es.close();
             return;
@@ -486,6 +541,9 @@ export const usePlayerStore = create<PlayerState>()(
           mediaInfo: null,
           fallbackStreams: [],
           fallbackReason: null,
+          playbackSessionId: null,
+          playbackCandidateId: null,
+          playbackAttemptId: null,
           isPlaying: false,
           isBuffering: false,
           currentTime: 0,
