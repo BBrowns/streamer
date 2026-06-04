@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type {
   DeviceProfile,
   MediaCandidate,
   PlaybackAction,
+  PlaybackDeviceCompatibility,
   Stream,
 } from "@streamer/shared";
 
@@ -19,7 +21,7 @@ function sourceText(stream: Stream): string {
     .join(" ");
 }
 
-export function normalizeStream(stream: Stream, index: number): MediaCandidate {
+export function normalizeStream(stream: Stream): MediaCandidate {
   const text = sourceText(stream);
   const lower = text.toLowerCase();
   const url = stream.url?.toLowerCase() ?? "";
@@ -87,8 +89,7 @@ export function normalizeStream(stream: Stream, index: number): MediaCandidate {
     : undefined;
 
   return {
-    id:
-      stream.infoHash || stream.url || stream.externalUrl || `stream-${index}`,
+    id: randomUUID(),
     stream,
     kind,
     quality,
@@ -102,7 +103,7 @@ export function normalizeStream(stream: Stream, index: number): MediaCandidate {
   };
 }
 
-function hasCompatibleVideo(
+export function hasCompatibleVideo(
   candidate: MediaCandidate,
   deviceProfile: DeviceProfile,
 ) {
@@ -115,7 +116,7 @@ function hasCompatibleVideo(
   return true;
 }
 
-function hasCompatibleAudio(
+export function hasCompatibleAudio(
   candidate: MediaCandidate,
   deviceProfile: DeviceProfile,
 ) {
@@ -124,7 +125,7 @@ function hasCompatibleAudio(
   return true;
 }
 
-function hasCompatibleContainer(
+export function hasCompatibleContainer(
   candidate: MediaCandidate,
   deviceProfile: DeviceProfile,
 ) {
@@ -132,6 +133,66 @@ function hasCompatibleContainer(
   if (candidate.container === "mkv") return deviceProfile.supports.mkv;
   if (candidate.container === "mp4") return deviceProfile.supports.mp4;
   return true;
+}
+
+export type CastSourceReachability = "reachable" | "localhost" | "unreachable";
+
+export function getCastSourceReachability(
+  candidate: MediaCandidate,
+  bridgeUrl?: string,
+): CastSourceReachability {
+  const value =
+    candidate.kind === "torrent"
+      ? bridgeUrl
+      : candidate.stream.url || candidate.stream.externalUrl;
+  if (!value) return "unreachable";
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "unreachable";
+    }
+
+    const hostname = url.hostname.toLowerCase();
+    const localhost =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "0.0.0.0";
+    return localhost ? "localhost" : "reachable";
+  } catch {
+    return "unreachable";
+  }
+}
+
+export function isCandidateReachableForCast(
+  candidate: MediaCandidate,
+  bridgeUrl?: string,
+) {
+  return getCastSourceReachability(candidate, bridgeUrl) === "reachable";
+}
+
+export function getDeviceCompatibility(
+  candidate: MediaCandidate,
+  deviceProfile: DeviceProfile,
+  sourceReachable = true,
+): PlaybackDeviceCompatibility {
+  const containerSupported = hasCompatibleContainer(candidate, deviceProfile);
+  const videoCodecSupported = hasCompatibleVideo(candidate, deviceProfile);
+  const audioCodecSupported = hasCompatibleAudio(candidate, deviceProfile);
+
+  return {
+    compatible:
+      containerSupported &&
+      videoCodecSupported &&
+      audioCodecSupported &&
+      sourceReachable,
+    containerSupported,
+    videoCodecSupported,
+    audioCodecSupported,
+    qualityWithinProfile: qualityWithinProfile(candidate, deviceProfile),
+    sourceReachable,
+  };
 }
 
 export function candidateNeedsRemux(
@@ -200,9 +261,31 @@ export function scoreCandidate(
   }
 
   if (action === "download" && candidate.kind === "hls") score -= 600;
+  if (action === "download" && candidate.kind === "direct") score += 200;
+  if (action === "cast" && candidate.kind === "hls") score += 180;
+  if (action === "cast" && candidate.container === "mp4") score += 120;
   if (action === "cast" && candidate.container === "mkv") score -= 250;
 
   return score;
+}
+
+export function candidateSortKey(candidate: MediaCandidate) {
+  return [
+    candidate.kind,
+    candidate.quality,
+    candidate.container,
+    candidate.videoCodec,
+    candidate.audioCodec,
+    candidate.stream.title,
+    candidate.stream.name,
+    candidate.stream.infoHash,
+    candidate.stream.fileIdx,
+    candidate.stream.url,
+    candidate.stream.externalUrl,
+  ]
+    .filter((value) => value !== undefined && value !== null && value !== "")
+    .join("|")
+    .toLowerCase();
 }
 
 export function isDirectlyPlayable(

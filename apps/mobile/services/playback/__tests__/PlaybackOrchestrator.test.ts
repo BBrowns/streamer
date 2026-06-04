@@ -1,5 +1,8 @@
-import type { PlaybackPlan } from "@streamer/shared";
 import { getDownloadEligibility } from "../../downloadEligibility";
+import {
+  makePlaybackPlan,
+  makePlannedMediaCandidate,
+} from "../../../test-utils/playbackPlan";
 import {
   playBest,
   prepareDownload,
@@ -40,21 +43,20 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("returns a prepared stream, media info, and fallback queue for Play Best", async () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "direct",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "primary",
           kind: "direct",
           stream: {
             url: "https://cdn.example.test/primary.mp4",
             title: "Primary",
           },
-          riskFlags: [],
-        },
+        }),
       },
-    };
+    });
     const fallback = {
       url: "https://cdn.example.test/fallback.mp4",
       title: "Fallback",
@@ -110,10 +112,12 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("maps not-found plans to NO_SOURCES without resolving streams", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "notFound",
-      userMessage: "No sources were returned.",
-    });
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        state: "notFound",
+        userMessage: "No sources were returned.",
+      }),
+    );
 
     const result = await playBest({
       type: "movie",
@@ -137,10 +141,12 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("maps bridge-required plans to BRIDGE_UNAVAILABLE", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "needsBridge",
-      userMessage: "Start the desktop bridge to play torrent sources.",
-    });
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        state: "needsBridge",
+        userMessage: "Start the desktop bridge to play torrent sources.",
+      }),
+    );
 
     const result = await playBest({
       type: "series",
@@ -162,10 +168,13 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("maps broken bridge plans to BRIDGE_UNSUPPORTED", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "bridgeUnavailable",
-      userMessage: "Bridge is running but the streaming engine is unavailable.",
-    });
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        state: "bridgeUnavailable",
+        userMessage:
+          "Bridge is running but the streaming engine is unavailable.",
+      }),
+    );
 
     const result = await playBest({
       type: "movie",
@@ -185,18 +194,20 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("maps resolver peer failures to NO_PEERS", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "ready",
-      plan: {
-        mode: "bridge",
-        selectedCandidate: {
-          id: "torrent",
-          kind: "torrent",
-          stream: { infoHash: "abc123", title: "Torrent" },
-          riskFlags: [],
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "bridge",
+          selectedCandidate: makePlannedMediaCandidate({
+            id: "torrent",
+            kind: "torrent",
+            stream: { infoHash: "abc123", title: "Torrent" },
+            requiresBridge: true,
+          }),
         },
-      },
-    });
+      }),
+    );
     resolvePlan.mockResolvedValueOnce({
       resolved: null,
       attemptedStreams: 1,
@@ -223,18 +234,19 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("maps resolver codec failures to UNSUPPORTED_CODEC", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "ready",
-      plan: {
-        mode: "direct",
-        selectedCandidate: {
-          id: "hevc",
-          kind: "direct",
-          stream: { url: "https://cdn.example.test/hevc.mkv" },
-          riskFlags: [],
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate({
+            id: "hevc",
+            kind: "direct",
+            stream: { url: "https://cdn.example.test/hevc.mkv" },
+          }),
         },
-      },
-    });
+      }),
+    );
     resolvePlan.mockResolvedValueOnce({
       resolved: null,
       attemptedStreams: 1,
@@ -259,21 +271,22 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("prepares a direct download with the resolved URL and media info", async () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
+      action: "download",
       state: "ready",
       plan: {
         mode: "direct",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "direct",
           kind: "direct",
           stream: {
             url: "https://cdn.example.test/movie.mp4",
             title: "Direct",
           },
-          riskFlags: [],
-        },
+          actionEligibility: { action: "download", eligible: true },
+        }),
       },
-    };
+    });
 
     createPlan.mockResolvedValueOnce(plan);
     resolvePlan.mockResolvedValueOnce({
@@ -328,18 +341,21 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("blocks download when the selected source is not offline eligible", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "ready",
-      plan: {
-        mode: "hls",
-        selectedCandidate: {
-          id: "hls",
-          kind: "hls",
-          stream: { url: "https://cdn.example.test/master.m3u8" },
-          riskFlags: [],
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        action: "download",
+        state: "ready",
+        plan: {
+          mode: "hls",
+          selectedCandidate: makePlannedMediaCandidate({
+            id: "hls",
+            kind: "hls",
+            stream: { url: "https://cdn.example.test/master.m3u8" },
+            actionEligibility: { action: "download", eligible: true },
+          }),
         },
-      },
-    });
+      }),
+    );
     resolvePlan.mockResolvedValueOnce({
       resolved: {
         stream: { url: "https://cdn.example.test/master.m3u8" },
@@ -379,18 +395,22 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("maps download resolver peer failures to NO_PEERS", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "ready",
-      plan: {
-        mode: "bridge",
-        selectedCandidate: {
-          id: "torrent",
-          kind: "torrent",
-          stream: { infoHash: "abc123", title: "Torrent" },
-          riskFlags: [],
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        action: "download",
+        state: "ready",
+        plan: {
+          mode: "bridge",
+          selectedCandidate: makePlannedMediaCandidate({
+            id: "torrent",
+            kind: "torrent",
+            stream: { infoHash: "abc123", title: "Torrent" },
+            requiresBridge: true,
+            actionEligibility: { action: "download", eligible: true },
+          }),
         },
-      },
-    });
+      }),
+    );
     resolvePlan.mockResolvedValueOnce({
       resolved: null,
       attemptedStreams: 1,
@@ -418,18 +438,21 @@ describe("PlaybackOrchestrator", () => {
   });
 
   it("prepares a cast with the resolved URL and media info", async () => {
-    createPlan.mockResolvedValueOnce({
-      state: "ready",
-      plan: {
-        mode: "direct",
-        selectedCandidate: {
-          id: "direct",
-          kind: "direct",
-          stream: { url: "http://example.com/stream.mp4", title: "Direct" },
-          riskFlags: [],
+    createPlan.mockResolvedValueOnce(
+      makePlaybackPlan({
+        action: "cast",
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate({
+            id: "direct",
+            kind: "direct",
+            stream: { url: "http://example.com/stream.mp4", title: "Direct" },
+            actionEligibility: { action: "cast", eligible: true },
+          }),
         },
-      },
-    });
+      }),
+    );
     resolvePlan.mockResolvedValueOnce({
       resolved: {
         stream: { url: "http://example.com/stream.mp4", title: "Direct" },

@@ -4,6 +4,7 @@ import type {
   PlaybackPlanRequest,
   Stream,
 } from "@streamer/shared";
+import { playbackPlanSchema } from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
@@ -27,7 +28,7 @@ export async function createPlaybackPlan(
     },
   });
 
-  return data;
+  return playbackPlanSchema.parse(data);
 }
 
 export async function createPlaybackPlanWithBridgeRetry(
@@ -59,14 +60,14 @@ export interface PlaybackPlanResolveResult {
 }
 
 export function getReadyPlanStreams(plan: PlaybackPlan): Stream[] {
-  if (plan.state !== "ready" || !plan.plan?.selectedCandidate) return [];
+  if (plan.state !== "ready" || !plan.selectedCandidate) return [];
 
   const entries = [
     {
-      candidate: plan.plan.selectedCandidate,
-      playbackUrl: plan.plan.playbackUrl,
+      candidate: plan.selectedCandidate,
+      playbackUrl: plan.plan?.playbackUrl,
     },
-    ...(plan.plan.fallbackCandidates || []).map((candidate) => ({
+    ...plan.fallbackCandidates.map((candidate) => ({
       candidate,
       playbackUrl: undefined,
     })),

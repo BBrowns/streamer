@@ -16,6 +16,25 @@ contract is `PlaybackSession` in `@streamer/shared`.
 `MediaCandidate` contains a full `Stream`, which may include short-lived or
 sensitive fields such as URLs, magnet-derived identifiers, or external URLs.
 
+Planner v2 returns:
+
+- opaque UUID candidate IDs
+- a deterministic `orderedCandidates` list
+- top-level `selectedCandidate` and `fallbackCandidates`
+- typed `rejectedCandidates` and decision reasons
+- requested-action eligibility
+- selected-path bridge, remux, and device compatibility details
+- action-specific timeout budgets
+
+Candidate ordering is deterministic for the same normalized source set and
+device/action input. Candidate IDs are opaque and plan-local; callers must not
+expect the same UUID across separate plan requests.
+
+The top-level Planner v2 fields are canonical for new code. The nested `plan`
+object remains temporarily for the existing mobile resolver because it also
+contains the selected playback mode and optional direct playback URL. Server
+and client both validate the response with `playbackPlanSchema`.
+
 `PlaybackSession` is the persistence-safe source of truth for one play,
 download, or cast workflow. It stores:
 

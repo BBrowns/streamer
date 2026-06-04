@@ -163,12 +163,13 @@ export function mapPlaybackPlanToRuntimeFailure(
     return { error, runtimeState: getPlaybackRuntimeState(error.code) };
   }
 
-  const debugMessage = plan.debug?.rejectedCandidates
-    ?.map(
-      (candidate) =>
-        `${candidate.title || candidate.candidateId}: ${candidate.reason}`,
-    )
-    .join("; ");
+  const debugMessage =
+    plan.rejectedCandidates
+      .map(
+        (candidate) =>
+          `${candidate.title || candidate.candidateId}: ${candidate.reason}`,
+      )
+      .join("; ") || undefined;
   const message = plan.userMessage || fallback;
 
   if (plan.state === "needsBridge") {

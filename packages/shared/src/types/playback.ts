@@ -109,6 +109,7 @@ export interface PlaybackPlanRequest {
 }
 
 export interface MediaCandidate {
+  /** Opaque runtime identifier. Do not derive or persist it as source identity. */
   id: string;
   stream: Stream;
   kind: "direct" | "hls" | "torrent" | "external" | "unknown";
@@ -122,18 +123,110 @@ export interface MediaCandidate {
   riskFlags: string[];
 }
 
+export type PlaybackRejectReason =
+  | "no_sources"
+  | "unsupported_codec"
+  | "unsupported_container"
+  | "bridge_unavailable"
+  | "hls_offline_unsupported"
+  | "torrent_no_bridge"
+  | "device_incompatible"
+  | "cast_device_incompatible"
+  | "localhost_not_castable"
+  | "source_missing_url"
+  | "unknown_stream_type";
+
+export type PlaybackDecisionReasonCode =
+  | "selected_highest_score"
+  | "direct_source_preferred"
+  | "hls_source_preferred"
+  | "bridge_source_selected"
+  | "remux_selected"
+  | "offline_eligible_source_selected"
+  | "cast_compatible_source_selected"
+  | "device_compatible"
+  | "quality_within_profile"
+  | "quality_above_profile"
+  | "fallbacks_available"
+  | "bridge_required"
+  | "no_action_eligible_candidates";
+
+export interface PlaybackDecisionReason {
+  code: PlaybackDecisionReasonCode;
+  message: string;
+  candidateId?: string;
+}
+
+export interface PlaybackActionEligibility {
+  action: PlaybackAction;
+  eligible: boolean;
+  reason?: PlaybackRejectReason;
+}
+
+export interface PlaybackDeviceCompatibility {
+  compatible: boolean;
+  containerSupported: boolean;
+  videoCodecSupported: boolean;
+  audioCodecSupported: boolean;
+  qualityWithinProfile: boolean;
+  sourceReachable: boolean;
+}
+
+export interface PlaybackTimeoutBudget {
+  totalMs: number;
+  directProbeMs: number;
+  hlsProbeMs: number;
+  bridgeConnectMs: number;
+  torrentMetadataMs: number;
+  peerDiscoveryMs: number;
+  remuxReadyMs: number;
+}
+
+/**
+ * Runtime candidate enriched by the planner for the requested action.
+ *
+ * The candidate id is an opaque UUID. The nested Stream remains transient
+ * runtime data and must not be copied into a persisted PlaybackSession.
+ */
+export interface PlannedMediaCandidate extends MediaCandidate {
+  rank: number;
+  score: number;
+  requiresBridge: boolean;
+  requiresRemux: boolean;
+  deviceCompatibility: PlaybackDeviceCompatibility;
+  actionEligibility: PlaybackActionEligibility;
+  decisionReasons: PlaybackDecisionReasonCode[];
+}
+
 export interface RejectedCandidate {
   candidateId: string;
   title?: string;
   reason: string;
+  reasonCode: PlaybackRejectReason;
+  requiresBridge: boolean;
+  requiresRemux: boolean;
+  deviceCompatibility: PlaybackDeviceCompatibility;
+  actionEligibility: PlaybackActionEligibility;
 }
 
 export interface PlaybackPlan {
+  version: 2;
+  action: PlaybackAction;
   state: PlaybackPlanState;
+  selectedCandidate?: PlannedMediaCandidate;
+  fallbackCandidates: PlannedMediaCandidate[];
+  orderedCandidates: PlannedMediaCandidate[];
+  rejectedCandidates: RejectedCandidate[];
+  decisionReasons: PlaybackDecisionReason[];
+  actionEligibility: PlaybackActionEligibility;
+  timeoutBudget: PlaybackTimeoutBudget;
+  requiresBridge: boolean;
+  requiresRemux: boolean;
+  deviceCompatibility?: PlaybackDeviceCompatibility;
   plan?: {
     mode: PlaybackPlanMode;
-    selectedCandidate: MediaCandidate;
-    fallbackCandidates?: MediaCandidate[];
+    selectedCandidate: PlannedMediaCandidate;
+    fallbackCandidates?: PlannedMediaCandidate[];
     playbackUrl?: string;
   };
   userMessage?: string;

@@ -3,6 +3,10 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { DesktopCastModal } from "../DesktopCastModal";
 import { castService } from "../../services/CastService";
 import { prepareCast } from "../../services/playback/PlaybackOrchestrator";
+import {
+  makePlaybackPlan,
+  makePlannedMediaCandidate,
+} from "../../test-utils/playbackPlan";
 
 jest.mock("@expo/vector-icons", () => ({
   MaterialIcons: () => null,
@@ -84,18 +88,19 @@ describe("DesktopCastModal", () => {
         title: "Example Movie",
       },
       runtimeState: "buffering",
-      plan: {
+      plan: makePlaybackPlan({
+        action: "cast",
         state: "ready",
         plan: {
           mode: "direct",
-          selectedCandidate: {
+          selectedCandidate: makePlannedMediaCandidate({
             id: "direct",
             kind: "direct",
             stream: { url: "https://cdn.example.test/movie.mp4" },
-            riskFlags: [],
-          },
+            actionEligibility: { action: "cast", eligible: true },
+          }),
         },
-      },
+      }),
       attemptedStreams: 1,
       resolveErrors: [],
     });

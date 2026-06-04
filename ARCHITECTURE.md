@@ -293,15 +293,21 @@ Detail Play Best
 
 Important client modules:
 
-| Module                                      | Responsibility                                                                                        |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `services/playback/PlaybackPlanService.ts`  | Calls `/api/playback/plan`, includes device profile and bridge diagnostics, resolves planned streams. |
-| `services/playback/PlaybackOrchestrator.ts` | Central Play Best entry point; returns a prepared stream or typed runtime error.                      |
-| `services/playback/PlaybackErrors.ts`       | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                  |
-| `stores/playerStore.ts`                     | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.             |
-| `components/player/PlayerStatusOverlay.tsx` | Displays typed readiness/error states instead of an endless generic buffering state.                  |
+| Module                                      | Responsibility                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `services/playback/PlaybackPlanService.ts`  | Calls and validates `/api/playback/plan`, includes device profile and bridge diagnostics, resolves planned streams. |
+| `services/playback/PlaybackOrchestrator.ts` | Central Play Best entry point; returns a prepared stream or typed runtime error.                                    |
+| `services/playback/PlaybackErrors.ts`       | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                |
+| `stores/playerStore.ts`                     | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                           |
+| `components/player/PlayerStatusOverlay.tsx` | Displays typed readiness/error states instead of an endless generic buffering state.                                |
 
 Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
+
+Planner v2 exposes deterministic ordered candidates, top-level selection and
+fallbacks, typed rejection reasons, requested-action eligibility, compatibility
+details, and timeout budgets. Candidate IDs are opaque UUIDs. The nested
+`plan` object is a temporary compatibility wrapper for the current resolver;
+new orchestration code should use the top-level fields.
 
 `@streamer/shared` also defines the persistence-safe `PlaybackSession` control
 plane contract. A session records action, opaque candidate snapshots, attempts,

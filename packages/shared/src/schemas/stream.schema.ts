@@ -15,6 +15,8 @@ export const streamSchema = z.object({
   externalUrl: z.string().url().optional(),
   title: z.string().optional(),
   name: z.string().optional(),
+  type: z.string().optional(),
+  id: z.string().optional(),
   behaviorHints: z
     .object({
       notWebReady: z.boolean().optional(),

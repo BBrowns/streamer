@@ -1,4 +1,7 @@
-import type { PlaybackPlan } from "@streamer/shared";
+import {
+  makePlaybackPlan,
+  makePlannedMediaCandidate,
+} from "../../../test-utils/playbackPlan";
 import {
   getPlaybackReadinessCopy,
   getPlaybackReadinessCopyFromError,
@@ -12,11 +15,11 @@ jest.mock("@expo/vector-icons", () => ({
 
 describe("PlaybackReadinessNotice", () => {
   it("turns bridge-required plans into a Sources & Devices action", () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "needsBridge",
       userMessage: "Start the desktop bridge to play torrent sources.",
       debug: { rejectedCandidates: [] },
-    };
+    });
 
     expect(
       getPlaybackReadinessCopy(plan, "Not playable", "play"),
@@ -29,18 +32,18 @@ describe("PlaybackReadinessNotice", () => {
   });
 
   it("summarizes failed ready plans with resolve diagnostics", () => {
-    const plan: PlaybackPlan = {
+    const plan = makePlaybackPlan({
       state: "ready",
       plan: {
         mode: "bridge",
-        selectedCandidate: {
+        selectedCandidate: makePlannedMediaCandidate({
           id: "torrent-1",
           kind: "torrent",
           stream: { infoHash: "torrent-1" },
-          riskFlags: [],
-        },
+          requiresBridge: true,
+        }),
       },
-    };
+    });
 
     expect(
       getPlaybackReadinessCopy(plan, "This stream is not playable.", "play", [
