@@ -114,12 +114,12 @@ The legacy bridge endpoint still exists:
 
 The current preferred torrent playback path is the gateway job API:
 
-| Method   | Route                          | Auth Req            | Description                                                                                                                                               |
-| -------- | ------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST`   | `/api/gateway/jobs`            | ✅                  | Creates a gateway job. Body: `{ magnet, fileIdx?, remux?, remuxFormat? }`. Returns `202` with job status and playback URL.                                |
-| `GET`    | `/api/gateway/jobs/:id`        | ✅                  | Polls job status while the bridge prepares torrent metadata/peers.                                                                                        |
-| `DELETE` | `/api/gateway/jobs/:id`        | ✅                  | Cancels a preparing/ready job. Returns `202` with `state: "cancelled"` and `playbackUrl: null`.                                                           |
-| `GET`    | `/api/gateway/jobs/:id/stream` | ❌ currently public | Streams the prepared job. Direct-file responses support a single HTTP byte range for seeking. Returns `410` for cancelled jobs and `503` for failed jobs. |
+| Method   | Route                          | Auth Req         | Description                                                                                                                                                                    |
+| -------- | ------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST`   | `/api/gateway/jobs`            | ✅               | Creates a gateway job. Body: `{ magnet, fileIdx?, remux?, remuxFormat? }`. Returns `202` with job status and a signed playback URL.                                            |
+| `GET`    | `/api/gateway/jobs/:id`        | ✅               | Polls job status while the bridge prepares torrent metadata/peers and returns a freshly signed playback URL while the job can stream.                                          |
+| `DELETE` | `/api/gateway/jobs/:id`        | ✅               | Cancels a preparing/ready job. Returns `202` with `state: "cancelled"` and `playbackUrl: null`.                                                                                |
+| `GET`    | `/api/gateway/jobs/:id/stream` | Signed URL query | Streams the prepared job. Requires `expires` and `signature` query params. Direct-file responses support a single HTTP byte range for seeking. Returns `403`, `410`, or `503`. |
 
 Direct-file gateway streams support bounded, open-ended, and suffix byte
 ranges, return `416` with `Content-Range: bytes */<length>` for unsatisfiable
@@ -127,6 +127,13 @@ ranges, and expose range headers for browser media clients. Multi-range
 requests are ignored and receive the full representation because multipart
 range responses are not implemented. FFmpeg remux responses are currently
 sequential chunked MP4 streams and do not provide byte-range seeking.
+
+Gateway stream URLs are HMAC-signed so native video players and cast devices do
+not need custom auth headers. The signature binds the URL to one gateway job and
+an expiry timestamp. Status polling returns a fresh signed URL; an expired URL
+is accepted only when it matches the same signature already used by the active
+stream and stays inside a short grace window, so ongoing range requests do not
+break mid-playback.
 
 The bridge prunes ready jobs that were never consumed after five minutes and
 consumed jobs after fifteen idle minutes. Jobs with active stream consumers
@@ -155,7 +162,7 @@ interface GatewayJobResponse {
   progress: number | null; // 0..1 while preparing, 1 when ready, null for terminal failures/cancel
   elapsedMs: number;
   readyTimeoutMs: number;
-  playbackUrl: string | null;
+  playbackUrl: string | null; // signed /api/gateway/jobs/:id/stream URL with expires/signature query params
   metricsUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -284,4 +291,4 @@ While `server/src/modules/addon` validates add-on manifests via Zod on installat
 
 #### 5. Local Network Stream Handoff
 
-Most bridge control routes now support token auth through `STREAMER_BRIDGE_TOKEN`, bearer auth, or `x-streamer-bridge-token`. Continue tightening the local handoff surface: gateway stream URLs are intentionally easy for `expo-video` and cast devices to consume, so future hardening should use short-lived signed stream URLs rather than requiring native video elements to set custom headers.
+Most bridge control routes now support token auth through `STREAMER_BRIDGE_TOKEN`, bearer auth, or `x-streamer-bridge-token`. Gateway stream URLs are signed query URLs so `expo-video` and cast devices can consume them without custom headers. Future hardening should focus on observability redaction, pairing-token lifecycle, and release-time secret management.

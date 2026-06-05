@@ -1,11 +1,12 @@
 import request from "supertest";
 import express from "express";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   gatewayRouter,
   __pruneGatewayJobsForTests,
   __resetGatewayJobsForTests,
 } from "../gateway.js";
+import { createSignedGatewayStreamPath } from "../security.js";
 import {
   ensureTorrentReady,
   prepareTorrent,
@@ -23,8 +24,13 @@ const app = express();
 app.use(express.json());
 app.use("/api/gateway", gatewayRouter);
 
+const previousGatewayStreamSecret = process.env.STREAMER_GATEWAY_STREAM_SECRET;
+const previousGatewayStreamTtl = process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
+
 describe("gateway jobs", () => {
   beforeEach(() => {
+    process.env.STREAMER_GATEWAY_STREAM_SECRET = "test-gateway-secret";
+    delete process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
     __resetGatewayJobsForTests();
     vi.clearAllMocks();
     (prepareTorrent as any).mockResolvedValue({
@@ -33,6 +39,20 @@ describe("gateway jobs", () => {
       files: [{ name: "movie.mkv", streamURL: "/webtorrent/file" }],
     });
     (ensureTorrentReady as any).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    if (previousGatewayStreamSecret === undefined) {
+      delete process.env.STREAMER_GATEWAY_STREAM_SECRET;
+    } else {
+      process.env.STREAMER_GATEWAY_STREAM_SECRET = previousGatewayStreamSecret;
+    }
+
+    if (previousGatewayStreamTtl === undefined) {
+      delete process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
+    } else {
+      process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = previousGatewayStreamTtl;
+    }
   });
 
   it("creates a remux job with stable playback and metrics URLs", async () => {
@@ -56,7 +76,9 @@ describe("gateway jobs", () => {
       progress: expect.any(Number),
       readyTimeoutMs: 120000,
       elapsedMs: expect.any(Number),
-      playbackUrl: expect.stringMatching(/^\/api\/gateway\/jobs\/.+\/stream$/),
+      playbackUrl: expect.stringMatching(
+        /^\/api\/gateway\/jobs\/.+\/stream\?expires=\d+&signature=.+$/,
+      ),
       metricsUrl: "/api/torrent/abcdef123456/metrics",
     });
   });
@@ -151,6 +173,71 @@ describe("gateway jobs", () => {
       expect.objectContaining({ infoHash: "abcdef123456" }),
       expect.objectContaining({ remuxFormat: "mp4" }),
     );
+  });
+
+  it("rejects unsigned gateway stream URLs", async () => {
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    const streamed = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}/stream`,
+    );
+
+    expect(streamed.status).toBe(403);
+    expect(streamed.body).toMatchObject({
+      error: "Gateway stream URL signature required",
+    });
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects tampered gateway stream URLs", async () => {
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    const tamperedUrl = String(created.body.playbackUrl).replace(
+      /signature=[^&]+/,
+      "signature=tampered",
+    );
+
+    const streamed = await request(app).get(tamperedUrl);
+
+    expect(streamed.status).toBe(403);
+    expect(streamed.body).toMatchObject({
+      error: "Gateway stream URL signature required",
+    });
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects expired gateway stream URLs before playback starts", async () => {
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    const expiredUrl = createSignedGatewayStreamPath(
+      created.body.id,
+      Date.now() - 3 * 60 * 60 * 1000,
+    );
+
+    const streamed = await request(app).get(expiredUrl);
+
+    expect(streamed.status).toBe(403);
+    expect(streamed.body).toMatchObject({
+      error: "Gateway stream URL expired",
+    });
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
+  it("allows an expired signed URL during active playback grace", async () => {
+    process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = "50";
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    await request(app).get(created.body.playbackUrl).expect(204);
+
+    expect(serveTorrentFile).toHaveBeenCalledTimes(2);
   });
 
   it("forwards file selection hints to torrent streaming", async () => {

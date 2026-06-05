@@ -1,6 +1,10 @@
 import { randomUUID } from "crypto";
 import { Router, type Request, type Response } from "express";
-import { requireBridgeAuth } from "./security.js";
+import {
+  createSignedGatewayStreamPath,
+  requireBridgeAuth,
+  validateGatewayStreamSignature,
+} from "./security.js";
 import {
   ensureTorrentReady,
   isTorrentEngineUnavailableError,
@@ -31,6 +35,7 @@ interface GatewayJob {
   retryable?: boolean;
   progressTimer?: ReturnType<typeof setInterval>;
   activeStreamCount: number;
+  activeStreamSignature?: string;
   lastStreamAccessAt?: number;
   createdAt: number;
   updatedAt: number;
@@ -133,7 +138,7 @@ function serializeJob(job: GatewayJob) {
     elapsedMs,
     readyTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
     playbackUrl:
-      job.state === "cancelled" ? null : `/api/gateway/jobs/${job.id}/stream`,
+      job.state === "cancelled" ? null : createSignedGatewayStreamPath(job.id),
     metricsUrl: job.infoHash
       ? `/api/torrent/${encodeURIComponent(job.infoHash)}/metrics`
       : null,
@@ -178,6 +183,12 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
 
 function isGatewayJobCancelled(job: GatewayJob) {
   return job.state === "cancelled";
+}
+
+function getRequestSignature(req: Request) {
+  const raw = req.query.signature;
+  if (Array.isArray(raw)) return String(raw[0] ?? "");
+  return typeof raw === "string" ? raw : "";
 }
 
 function trackGatewayStream(job: GatewayJob, res: Response) {
@@ -327,6 +338,22 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
   pruneJobs();
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: "Gateway job not found" });
+
+  const signature = validateGatewayStreamSignature(req.params.id, req.query, {
+    lastStreamAccessAt: job.lastStreamAccessAt,
+    activeSignature: job.activeStreamSignature,
+  });
+  if (!signature.ok) {
+    return res.status(403).json({
+      error:
+        signature.reason === "expired"
+          ? "Gateway stream URL expired"
+          : "Gateway stream URL signature required",
+    });
+  }
+
+  job.activeStreamSignature = getRequestSignature(req);
+
   if (isGatewayJobCancelled(job)) {
     return res.status(410).json({
       error: job.error || "Gateway job cancelled",
