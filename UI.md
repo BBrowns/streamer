@@ -65,6 +65,10 @@ The first pilot migration is `SourcesSection`, because bridge/add-on setup is
 one of the highest-friction product areas. Future PRs should reuse these
 primitives before adding another local button/card/input style.
 
+The detail-screen action hierarchy now uses `DetailActionPanel` to keep
+`Play Best` primary for movies, keep series playback on episode rows, and keep
+Download, Cast, and Add as secondary actions.
+
 Do not do:
 
 - Do not perform a full visual rewrite in one PR.

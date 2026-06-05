@@ -19,6 +19,7 @@ import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { FlashList } from "@shopify/flash-list";
 import { useTheme } from "../../hooks/useTheme";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
+import { DetailActionPanel } from "./DetailActionPanel";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -27,6 +28,7 @@ export function MobileDetailLayout({
   id,
   castType,
   meta,
+  streams,
   streamsLoading,
   groupedStreams,
   availableResolutions,
@@ -51,6 +53,8 @@ export function MobileDetailLayout({
     castType === "series" || !sourcesOpen ? [] : selectedStreams;
   const hasMovieSources =
     castType !== "series" && availableResolutions.length > 0;
+  const sourceCount =
+    castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
   const primaryTextColor = isDark ? "#2c1738" : "#ffffff";
   const surfaceColor = isDark ? "rgba(255,255,255,0.08)" : colors.card;
   const softSurfaceColor = isDark
@@ -121,58 +125,19 @@ export function MobileDetailLayout({
           )}
         </View>
 
-        {castType !== "series" && hasMovieSources && (
-          <View style={styles.primaryActionRow}>
-            <Pressable
-              style={[
-                styles.playBestBtn,
-                { backgroundColor: colors.tint },
-                planningAction && styles.actionDisabled,
-              ]}
-              disabled={!!planningAction}
-              onPress={() => handlePlayStream()}
-            >
-              <Ionicons name="play" size={18} color={primaryTextColor} />
-              <Text style={[styles.playBestText, { color: primaryTextColor }]}>
-                {planningAction === "play" ? "Finding best..." : "Play Best"}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.secondaryActionBtn,
-                { backgroundColor: surfaceColor, borderColor: colors.border },
-                planningAction && styles.actionDisabled,
-              ]}
-              disabled={!!planningAction}
-              onPress={() => handleDownloadStream()}
-            >
-              <Ionicons name="download-outline" size={18} color={colors.tint} />
-              <Text
-                style={[styles.secondaryActionText, { color: colors.tint }]}
-              >
-                {planningAction === "download" ? "Preparing..." : "Download"}
-              </Text>
-            </Pressable>
-            {handleCastStream && (
-              <Pressable
-                style={[
-                  styles.secondaryActionBtn,
-                  { backgroundColor: surfaceColor, borderColor: colors.border },
-                  planningAction && styles.actionDisabled,
-                ]}
-                disabled={!!planningAction}
-                onPress={() => handleCastStream()}
-              >
-                <Ionicons name="tv-outline" size={18} color={colors.tint} />
-                <Text
-                  style={[styles.secondaryActionText, { color: colors.tint }]}
-                >
-                  {planningAction === "cast" ? "Preparing..." : "Cast"}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        )}
+        <DetailActionPanel
+          castType={castType}
+          sourceCount={sourceCount}
+          episodeCount={meta.videos?.length || 0}
+          streamsLoading={streamsLoading}
+          hasPlayableSources={hasMovieSources}
+          inLibrary={!!inLibrary}
+          planningAction={planningAction}
+          onPlayBest={() => handlePlayStream()}
+          onDownload={() => handleDownloadStream()}
+          onCast={handleCastStream ? () => handleCastStream() : undefined}
+          onToggleLibrary={handleToggleLibrary}
+        />
 
         {!!playbackNotice && !!onDismissPlaybackNotice && (
           <PlaybackReadinessNotice
@@ -181,32 +146,6 @@ export function MobileDetailLayout({
             onPrimaryAction={onOpenSourcesDevices}
           />
         )}
-
-        <Pressable
-          style={[
-            styles.libraryBtn,
-            { backgroundColor: surfaceColor, borderColor: colors.border },
-            inLibrary && {
-              backgroundColor: colors.tint,
-              borderColor: colors.tint,
-            },
-          ]}
-          onPress={handleToggleLibrary}
-        >
-          <Ionicons
-            name={inLibrary ? "checkmark" : "add"}
-            size={18}
-            color={inLibrary ? primaryTextColor : colors.tint}
-          />
-          <Text
-            style={[
-              styles.libraryBtnText,
-              { color: inLibrary ? primaryTextColor : colors.tint },
-            ]}
-          >
-            {inLibrary ? "In Library" : "Add to Library"}
-          </Text>
-        </Pressable>
 
         {!!meta.genres && meta.genres.length > 0 && (
           <View style={styles.genreRow}>
@@ -478,74 +417,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 8,
-  },
-  libraryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(216, 180, 254, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 180, 254, 0.28)",
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    alignSelf: "flex-start",
-    marginBottom: 24,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  primaryActionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 14,
-    flexWrap: "wrap",
-  },
-  playBestBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#f2d7ff",
-    borderRadius: 18,
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    minHeight: 48,
-  },
-  playBestText: {
-    color: "#2c1738",
-    fontWeight: "900",
-  },
-  secondaryActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  secondaryActionText: {
-    color: "#f2d7ff",
-    fontWeight: "800",
-  },
-  actionDisabled: {
-    opacity: 0.55,
-  },
-  libraryBtnActive: {
-    backgroundColor: "#d8b4fe",
-    borderColor: "#d8b4fe",
-  },
-  libraryBtnText: {
-    color: "#f2d7ff",
-    fontWeight: "800",
-    fontSize: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0,
-  },
-  libraryBtnTextActive: {
-    color: "#2c1738",
   },
   genreRow: {
     flexDirection: "row",
