@@ -18,6 +18,7 @@ import {
   restoreQueryCache,
   persistQueryCache,
 } from "../services/queryPersister";
+import Constants from "expo-constants";
 import "../global.css";
 import { DesktopLayout } from "../components/ui/DesktopLayout";
 import { useAuthStore } from "../stores/authStore";
@@ -31,17 +32,29 @@ import { migrateTokensToSecureStorage } from "../services/secureStorage";
 import { BiometricLockOverlay } from "../components/ui/BiometricLockOverlay";
 import { RemoteControlBar } from "../components/player/RemoteControlBar";
 import { downloadService } from "../services/DownloadService";
+import {
+  createRedactedError,
+  redactSensitiveText,
+} from "../services/redaction";
+import { createMobileSentryConfig } from "../services/sentryConfig";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
 });
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
-  tracesSampleRate: __DEV__ ? 0 : 1.0,
-  debug: false, // disable verbose Sentry console spam in dev
-  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN, // only enable if DSN is set
-});
+Sentry.init(
+  createMobileSentryConfig({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    appVersion: Constants.expoConfig?.version,
+    environment: process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT,
+    release: process.env.EXPO_PUBLIC_SENTRY_RELEASE,
+    tracesSampleRate: process.env.EXPO_PUBLIC_SENTRY_TRACES_SAMPLE_RATE,
+    sampleRate: process.env.EXPO_PUBLIC_SENTRY_ERROR_SAMPLE_RATE,
+    enableInDev: process.env.EXPO_PUBLIC_SENTRY_ENABLE_DEV,
+    isDev: __DEV__,
+    nodeEnv: process.env.NODE_ENV,
+  }),
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,7 +91,7 @@ async function hydrateDesktopBridgeSettings() {
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   useEffect(() => {
-    Sentry.captureException(error);
+    Sentry.captureException(createRedactedError(error));
   }, [error]);
 
   return (
@@ -86,7 +99,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       <Text style={styles.errorEmoji}>⚠️</Text>
       <Text style={styles.errorTitle}>Something went wrong</Text>
       <Text style={styles.errorMessage}>
-        {error.message || "An unexpected error occurred."}
+        {error.message
+          ? redactSensitiveText(error.message)
+          : "An unexpected error occurred."}
       </Text>
       <Pressable style={styles.retryButton} onPress={retry}>
         <Text style={styles.retryButtonText}>Try Again</Text>

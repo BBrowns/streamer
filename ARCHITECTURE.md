@@ -531,7 +531,10 @@ The `policyCache` in `aggregator.service.ts` is a **module-level singleton** `Ma
 
 ### Refresh Token Rotation Security
 
-Refresh tokens are single-use (deleted on use, new one issued). If an attacker replays a stolen refresh token, the legitimate token the real user holds becomes invalid — detection signal. The server does not yet implement automatic account lockout on replay detection, but the data is there.
+Refresh tokens are single-use. On normal refresh, the consumed token is marked
+with `revokedAt` and a new token is issued. If a revoked token is presented
+again, the server treats it as replay, deletes all refresh tokens for that user,
+logs a security warning, and forces re-authentication.
 
 ### Desktop Bridge Detection
 
@@ -549,9 +552,12 @@ These are concrete, prioritised engineering improvements for anyone extending th
 
 ### High Priority
 
-#### 1. Refresh Token Replay Detection
+#### 1. Refresh Token Replay Notification And Session UX
 
-The current rotation scheme (delete old token → issue new) detects replays by invalidation, but silently fails — the real user just gets a new token. Add an explicit replay detection: if a token that has already been consumed is presented again, immediately invalidate _all_ refresh tokens for that user and force re-authentication. Log the event and optionally notify the user via the notification system.
+Replay detection is implemented for refresh tokens. Still open: notify the user
+through the notification system, consider revoking active device-session records
+alongside refresh tokens, and add user-facing copy that explains why they were
+forced to log in again.
 
 #### 2. Observability Redaction And Secret Hygiene
 
@@ -561,9 +567,13 @@ desktop handoff, mobile ErrorBoundary/Sentry, and DownloadService paths that
 previously risked leaking source URLs, bridge tokens, signed stream URLs,
 magnets, info hashes, local URIs, or reset tokens.
 
-Still open: configure production Sentry intentionally. Define sampling,
-breadcrumb policy, source-map upload, release health, and a final payload audit
-for code paths outside the app-controlled ErrorBoundary capture path.
+Mobile Sentry is now configured with explicit release/environment values,
+conservative production tracing, no default PII, redacted `beforeSend` and
+`beforeBreadcrumb` hooks, and disabled-by-default development behavior.
+
+Still open: add server, desktop, and stream-server Sentry integrations in a
+separate dependency-bearing PR. Define production source-map upload, release
+health, and deployment metadata in the release pipeline.
 
 #### 3. Manifest re-validation on Startup
 
