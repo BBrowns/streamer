@@ -27,6 +27,7 @@
     "webtorrent": "^2.8.5"
   },
   "dependencies": {
+    "@sentry/node": "^10.56.0",
     "bonjour-service": "^1.3.0",
     "castv2-client": "^1.2.0"
   }

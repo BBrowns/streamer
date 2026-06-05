@@ -569,11 +569,14 @@ magnets, info hashes, local URIs, or reset tokens.
 
 Mobile Sentry is now configured with explicit release/environment values,
 conservative production tracing, no default PII, redacted `beforeSend` and
-`beforeBreadcrumb` hooks, and disabled-by-default development behavior.
+`beforeBreadcrumb` hooks, and disabled-by-default development behavior. Server
+and stream-server also have `@sentry/node` baselines for unhandled backend and
+bridge failures, using conservative production tracing, no default PII, and the
+same redaction posture before events or breadcrumbs leave the process.
 
-Still open: add server, desktop, and stream-server Sentry integrations in a
-separate dependency-bearing PR. Define production source-map upload, release
-health, and deployment metadata in the release pipeline.
+Still open: add Electron main-process Sentry if needed. Define production
+source-map upload, release health, release creation, and deployment metadata in
+the release pipeline.
 
 #### 3. Manifest re-validation on Startup
 
@@ -628,21 +631,29 @@ The desktop app has no update mechanism. Add `electron-updater` (from `electron-
 
 ## 14. Environment Variables Reference
 
-| Variable                             | Default                     | Required | Description                                                                                                                                 |
-| ------------------------------------ | --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                       | —                           | ✅       | PostgreSQL connection string                                                                                                                |
-| `JWT_SECRET`                         | —                           | ✅       | HS256 signing secret (minimum 32 chars recommended)                                                                                         |
-| `JWT_ACCESS_EXPIRY`                  | `15m`                       |          | Access token lifetime                                                                                                                       |
-| `JWT_REFRESH_EXPIRY`                 | `7d`                        |          | Refresh token lifetime                                                                                                                      |
-| `PORT`                               | `3001`                      |          | API server port                                                                                                                             |
-| `NODE_ENV`                           | `development`               |          | `test` disables rate limiting                                                                                                               |
-| `CORS_ORIGINS`                       | `http://localhost:8081`     |          | Comma-separated allowed origins                                                                                                             |
-| `ADDON_TIMEOUT_MS`                   | `5000`                      |          | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                                                  |
-| `ADDON_MAX_CONCURRENT`               | (configured)                |          | Bulkhead concurrency limit per add-on                                                                                                       |
-| `STREAMER_BRIDGE_SUPERVISOR`         | `false`                     |          | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime.                          |
-| `STREAMER_BRIDGE_TOKEN`              | —                           |          | Optional bridge control-route token; clients send bearer auth or `x-streamer-bridge-token`.                                                 |
-| `STREAMER_GATEWAY_STREAM_SECRET`     | per-process random fallback |          | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
-| `STREAMER_GATEWAY_STREAM_URL_TTL_MS` | `7200000`                   |          | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
+| Variable                             | Default                      | Required | Description                                                                                                                                 |
+| ------------------------------------ | ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                       | —                            | ✅       | PostgreSQL connection string                                                                                                                |
+| `JWT_SECRET`                         | —                            | ✅       | HS256 signing secret (minimum 32 chars recommended)                                                                                         |
+| `JWT_ACCESS_EXPIRY`                  | `15m`                        |          | Access token lifetime                                                                                                                       |
+| `JWT_REFRESH_EXPIRY`                 | `7d`                         |          | Refresh token lifetime                                                                                                                      |
+| `PORT`                               | `3001`                       |          | API server port                                                                                                                             |
+| `NODE_ENV`                           | `development`                |          | `test` disables rate limiting                                                                                                               |
+| `CORS_ORIGINS`                       | `http://localhost:8081`      |          | Comma-separated allowed origins                                                                                                             |
+| `ADDON_TIMEOUT_MS`                   | `5000`                       |          | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                                                  |
+| `ADDON_MAX_CONCURRENT`               | (configured)                 |          | Bulkhead concurrency limit per add-on                                                                                                       |
+| `STREAMER_BRIDGE_SUPERVISOR`         | `false`                      |          | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime.                          |
+| `STREAMER_BRIDGE_TOKEN`              | —                            |          | Optional bridge control-route token; clients send bearer auth or `x-streamer-bridge-token`.                                                 |
+| `STREAMER_GATEWAY_STREAM_SECRET`     | per-process random fallback  |          | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
+| `STREAMER_GATEWAY_STREAM_URL_TTL_MS` | `7200000`                    |          | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
+| `SENTRY_DSN`                         | —                            |          | Enables API server Sentry in production and can act as a fallback DSN for the stream-server bridge.                                         |
+| `SENTRY_ENVIRONMENT`                 | `NODE_ENV`                   |          | Environment name attached to server/bridge Sentry events.                                                                                   |
+| `SENTRY_RELEASE`                     | package fallback             |          | Release name attached to server/bridge Sentry events.                                                                                       |
+| `SENTRY_TRACES_SAMPLE_RATE`          | `0.05` in production         |          | Server/bridge Sentry trace sample rate. Clamped to `0..1`.                                                                                  |
+| `SENTRY_ERROR_SAMPLE_RATE`           | `1`                          |          | Server/bridge Sentry error event sample rate. Clamped to `0..1`.                                                                            |
+| `SENTRY_ENABLE_DEV`                  | `false`                      |          | Allows server/bridge Sentry in development when a DSN is present.                                                                           |
+| `STREAMER_BRIDGE_SENTRY_DSN`         | `SENTRY_DSN` fallback        |          | Bridge-specific Sentry DSN for the stream-server sidecar.                                                                                   |
+| `STREAMER_BRIDGE_SENTRY_*`           | matching `SENTRY_*` fallback |          | Bridge-specific overrides for environment, release, sample rates, and development enablement.                                               |
 
 ---
 

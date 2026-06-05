@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { ZodError } from "zod";
 import { logger } from "../config/logger.js";
+import { captureServerException } from "../services/sentry.service.js";
 
 export class AppError extends Error {
   constructor(
@@ -81,6 +82,12 @@ export function errorHandler(err: Error, c: Context) {
       );
     }
   }
+
+  captureServerException(err, {
+    requestId,
+    method: c.req.method,
+    url: c.req.url,
+  });
 
   return c.json(
     {

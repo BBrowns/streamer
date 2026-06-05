@@ -5,6 +5,13 @@ import { logger } from "./config/logger.js";
 import { prisma } from "./prisma/client.js";
 import { traktService } from "./modules/trakt/adapters/trakt.routes.js";
 import { supervisorService } from "./modules/system/supervisor.service.js";
+import {
+  captureServerException,
+  flushServerSentry,
+  initServerSentry,
+} from "./services/sentry.service.js";
+
+initServerSentry();
 
 async function main() {
   // Verify database connection
@@ -18,6 +25,7 @@ async function main() {
     if (env.bridgeSupervisorEnabled) {
       void supervisorService.start().catch((err) => {
         logger.error({ err }, "[supervisor] Failed to start stream-server");
+        captureServerException(err, { component: "stream-server-supervisor" });
       });
     } else {
       logger.info(
@@ -74,6 +82,7 @@ async function main() {
     supervisorService.stop();
     traktService.stopBackgroundSync();
     await prisma.$disconnect();
+    await flushServerSentry();
     process.exit(0);
   };
 
@@ -81,7 +90,9 @@ async function main() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   logger.fatal({ err }, "Unhandled startup error");
+  captureServerException(err, { component: "server-startup" });
+  await flushServerSentry();
   process.exit(1);
 });
