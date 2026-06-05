@@ -17,6 +17,7 @@ type AppButtonProps = {
   label: string;
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
+  accessibilityLabel?: string;
   variant?: AppButtonVariant;
   size?: AppButtonSize;
   disabled?: boolean;
@@ -29,6 +30,7 @@ export function AppButton({
   label,
   onPress,
   icon,
+  accessibilityLabel,
   variant = "secondary",
   size = "medium",
   disabled = false,
@@ -54,7 +56,7 @@ export function AppButton({
       disabled={disabled || loading}
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       style={({ pressed }) => [
         styles.button,
         styles[size],
@@ -64,8 +66,14 @@ export function AppButton({
             ? colors.tint
             : isGhost
               ? "transparent"
-              : colors.card,
-          borderColor: isPrimary ? colors.tint : colors.border,
+              : isDanger
+                ? colors.error + "14"
+                : colors.card,
+          borderColor: isPrimary
+            ? colors.tint
+            : isDanger
+              ? colors.error + "33"
+              : colors.border,
           opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
         },
         style,

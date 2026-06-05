@@ -71,6 +71,11 @@ The detail-screen action hierarchy now uses `DetailActionPanel` to keep
 `Play Best` primary for movies, keep series playback on episode rows, and keep
 Download, Cast, and Add as secondary actions.
 
+The downloads queue now uses `AppButton`, `Surface`, and `StatusPill` for
+queue cards, destructive actions, summary metrics, and verified-offline status.
+This keeps download readiness aligned with Sources, Detail, and Player without
+changing download service behaviour.
+
 Do not do:
 
 - Do not perform a full visual rewrite in one PR.

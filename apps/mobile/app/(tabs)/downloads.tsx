@@ -1,7 +1,6 @@
 import {
   Alert,
   Platform,
-  Pressable,
   RefreshControl,
   SectionList,
   StyleSheet,
@@ -22,6 +21,8 @@ import {
 } from "../../components/downloads/downloadPresentation";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { FilterChipBar } from "../../components/ui/FilterChipBar";
+import { AppButton } from "../../components/ui/AppButton";
+import { Surface } from "../../components/ui/Surface";
 import { useTheme } from "../../hooks/useTheme";
 import { hapticImpactLight } from "../../lib/haptics";
 import {
@@ -47,7 +48,7 @@ interface DownloadSection {
 export default function DownloadsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const tasksDict = useDownloadStore((state) => state.tasks);
   const tasks = useMemo(
     () => sortDownloadTasks(Object.values(tasksDict)),
@@ -337,28 +338,19 @@ export default function DownloadsScreen() {
                   })}
                 </Text>
               </View>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.clearButton,
-                  {
-                    backgroundColor: colors.error + (isDark ? "16" : "10"),
-                  },
-                  pressed && styles.pressed,
-                ]}
-                onPress={confirmClearAll}
-                disabled={deletingAll}
-                accessibilityRole="button"
+              <AppButton
+                label={t("downloads.actions.clearAll", {
+                  defaultValue: "Delete all",
+                })}
                 accessibilityLabel={t("downloads.actions.clearAll", {
                   defaultValue: "Delete all downloads",
                 })}
-              >
-                <Ionicons name="trash-outline" size={17} color={colors.error} />
-                <Text style={[styles.clearButtonText, { color: colors.error }]}>
-                  {t("downloads.actions.clearAll", {
-                    defaultValue: "Delete all",
-                  })}
-                </Text>
-              </Pressable>
+                icon="trash-outline"
+                variant="danger"
+                size="small"
+                onPress={confirmClearAll}
+                disabled={deletingAll}
+              />
             </View>
 
             <View style={styles.summaryRow}>
@@ -473,19 +465,9 @@ function SummaryItem({
   value: string;
   color: string;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   return (
-    <View
-      style={[
-        styles.summaryItem,
-        {
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.055)"
-            : "rgba(255,255,255,0.58)",
-          borderColor: colors.border,
-        },
-      ]}
-    >
+    <Surface padded={false} style={styles.summaryItem}>
       <View style={[styles.summaryMarker, { backgroundColor: color }]} />
       <View>
         <Text style={[styles.summaryValue, { color: colors.text }]}>
@@ -495,7 +477,7 @@ function SummaryItem({
           {label}
         </Text>
       </View>
-    </View>
+    </Surface>
   );
 }
 
@@ -537,20 +519,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0,
   },
-  clearButton: {
-    minHeight: 38,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
-  clearButtonText: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0,
-  },
   summaryRow: {
     marginTop: 20,
     flexDirection: "row",
@@ -560,8 +528,6 @@ const styles = StyleSheet.create({
   summaryItem: {
     minWidth: 132,
     minHeight: 64,
-    borderWidth: 1,
-    borderRadius: 8,
     paddingHorizontal: 13,
     flexDirection: "row",
     alignItems: "center",
@@ -627,8 +593,5 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "600",
     letterSpacing: 0,
-  },
-  pressed: {
-    opacity: 0.72,
   },
 });
