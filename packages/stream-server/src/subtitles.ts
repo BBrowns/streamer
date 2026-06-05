@@ -7,6 +7,7 @@ import {
   validateTorrentFiles,
 } from "./torrent.js";
 import path from "path";
+import { redactSensitiveText } from "./redaction.js";
 
 export interface SubtitleTrack {
   id: string; // "internal:0" or "external:0"
@@ -99,7 +100,7 @@ export async function getSubtitlesRequest(req: Request, res: Response) {
   } catch (err: any) {
     res
       .status(isTorrentEngineUnavailableError(err) ? 503 : 500)
-      .json({ error: err.message });
+      .json({ error: redactSensitiveText(err?.message ?? "Subtitle failed") });
   }
 }
 
@@ -169,7 +170,10 @@ export async function streamSubtitleRequest(req: Request, res: Response) {
       });
 
       ffmpeg.on("error", (err) => {
-        console.error("[subtitles] FFmpeg extraction error:", err.message);
+        console.error(
+          "[subtitles] FFmpeg extraction error:",
+          redactSensitiveText(err.message),
+        );
         if (!res.headersSent) res.status(500).end();
       });
 

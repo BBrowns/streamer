@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { redactSensitiveText } from "./redaction.js";
 import { requireBridgeAuth } from "./security.js";
 
 const router = Router();
@@ -40,7 +41,9 @@ router.post("/", async (req: Request, res: Response) => {
 
     res.json({ success: true, message: "Handoff received" });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res
+      .status(500)
+      .json({ error: redactSensitiveText(err?.message ?? "Handoff failed") });
   }
 });
 

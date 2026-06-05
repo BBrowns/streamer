@@ -7,6 +7,7 @@ import {
   validateCastPlaybackUrl,
   validateGatewayStreamSignature,
 } from "../security.js";
+import { redactSensitiveText } from "../redaction.js";
 import { createStreamServerApp } from "../index.js";
 import { pruneTorrents, validateTorrentFiles } from "../torrent.js";
 import { getSafeCastContentType } from "../cast.js";
@@ -264,6 +265,23 @@ describe("Gateway stream URL signing", () => {
         activeGraceMs: 10_000,
       }),
     ).toMatchObject({ ok: false, reason: "expired" });
+  });
+});
+
+describe("stream-server log redaction", () => {
+  it("redacts signed gateway URLs, magnets, and bearer tokens", () => {
+    const output = redactSensitiveText(
+      "Bearer bridge-token magnet:?xt=urn:btih:abcdef http://127.0.0.1:11470/api/gateway/jobs/job-1/stream?expires=123&signature=sig",
+    );
+
+    expect(output).toContain("Bearer [redacted]");
+    expect(output).toContain("[magnet]");
+    expect(output).toContain(
+      "http://127.0.0.1:11470/api/gateway/jobs/[job]/stream?[signed]",
+    );
+    expect(output).not.toContain("bridge-token");
+    expect(output).not.toContain("abcdef");
+    expect(output).not.toContain("signature=sig");
   });
 });
 

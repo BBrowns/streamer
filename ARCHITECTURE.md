@@ -555,11 +555,15 @@ The current rotation scheme (delete old token → issue new) detects replays by 
 
 #### 2. Observability Redaction And Secret Hygiene
 
-Gateway stream URLs are now signed and add-on outbound fetches have SSRF
-guards, but production logging still needs a dedicated pass. Verify Sentry
-breadcrumbs, exception payloads, debug email behavior, and bridge supervisor
-logs do not leak source URLs, bridge tokens, signed stream URLs, magnets, or
-reset tokens.
+Gateway stream URLs are signed, add-on outbound fetches have SSRF guards, and
+the current logging baseline redacts the app-controlled server, stream-server,
+desktop handoff, mobile ErrorBoundary/Sentry, and DownloadService paths that
+previously risked leaking source URLs, bridge tokens, signed stream URLs,
+magnets, info hashes, local URIs, or reset tokens.
+
+Still open: configure production Sentry intentionally. Define sampling,
+breadcrumb policy, source-map upload, release health, and a final payload audit
+for code paths outside the app-controlled ErrorBoundary capture path.
 
 #### 3. Manifest re-validation on Startup
 

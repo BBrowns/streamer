@@ -37,6 +37,20 @@ let bridgeState = {
 };
 const downloadJobs = new Map();
 
+function redactSensitiveText(value) {
+  return String(value ?? "")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/magnet:\?[^\s"'<>]+/gi, "[magnet]")
+    .replace(
+      /(\/api\/gateway\/jobs\/[^/\s]+\/stream)\?[^\s"'<>]+/gi,
+      "$1?[signed]",
+    )
+    .replace(
+      /([?&](?:token|access_token|refresh_token|signature|auth|authorization|key|api_key)=)[^&\s]+/gi,
+      "$1[redacted]",
+    );
+}
+
 // Configure auto-updater
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -56,7 +70,9 @@ function checkUpdates() {
   });
 
   autoUpdater.on("error", (err) => {
-    console.error("[updater] Error in auto-updater: " + err);
+    console.error(
+      "[updater] Error in auto-updater: " + redactSensitiveText(err),
+    );
   });
 }
 
@@ -1143,7 +1159,7 @@ electron_1.app.whenReady().then(async () => {
   electron_1.ipcMain.on("handoff-play", (event, data) => {
     if (mainWindow) {
       console.log(
-        `[handoff] Directing UI to play: ${data.title || data.magnet}`,
+        `[handoff] Directing UI to play${data.title ? `: ${data.title}` : ""}`,
       );
 
       // Construct the player URL with parameters

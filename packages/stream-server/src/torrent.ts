@@ -19,6 +19,7 @@ import {
   parseByteRange,
 } from "./torrent-helpers.js";
 import type { FileSelectionHints } from "./torrent-helpers.js";
+import { redactSensitiveText } from "./redaction.js";
 
 // Re-export pure helpers for stats.ts and tests
 export {
@@ -244,7 +245,10 @@ export async function getClient(): Promise<any> {
       });
 
       client.on("error", (err: Error) => {
-        console.error("[stream-server] WebTorrent client error:", err.message);
+        console.error(
+          "[stream-server] WebTorrent client error:",
+          redactSensitiveText(err.message),
+        );
       });
 
       if (typeof client.createServer !== "function") {
@@ -298,7 +302,10 @@ export async function destroyClient(): Promise<void> {
   return new Promise<void>((resolve) => {
     client.destroy((err: Error | null) => {
       if (err)
-        console.error("[stream-server] Error destroying client:", err.message);
+        console.error(
+          "[stream-server] Error destroying client:",
+          redactSensitiveText(err.message),
+        );
       client = null;
       lastAccessMap.clear();
       resolve();
@@ -353,9 +360,7 @@ function attachTorrentLogging(torrent: any) {
   torrent.on("wire", () => {
     const n = torrent.numPeers;
     if (lastLoggedPeers === -1 || n >= lastLoggedPeers + 10) {
-      console.log(
-        `[stream-server] Peers: ${n} (infoHash: ${torrent.infoHash?.slice(0, 8) ?? "..."})`,
-      );
+      console.log(`[stream-server] Peers: ${n}`);
       lastLoggedPeers = n;
     }
   });
@@ -371,10 +376,14 @@ function attachTorrentLogging(torrent: any) {
     const msgStr = String(msg);
     const isTransient = transientPatterns.some((p) => msgStr.includes(p));
     if (isTransient) return;
-    console.warn(`[stream-server] Torrent warning: ${msgStr}`);
+    console.warn(
+      `[stream-server] Torrent warning: ${redactSensitiveText(msgStr)}`,
+    );
   });
   torrent.on("error", (err: Error) => {
-    console.error(`[stream-server] Torrent error: ${err.message}`);
+    console.error(
+      `[stream-server] Torrent error: ${redactSensitiveText(err.message)}`,
+    );
   });
 }
 
@@ -385,9 +394,7 @@ export async function prepareTorrent(magnet: string): Promise<any> {
   if (existing) {
     lastAccessMap.set(existing.infoHash, Date.now());
     attachTorrentLogging(existing);
-    console.log(
-      `[stream-server] Reusing existing torrent: ${existing.infoHash}`,
-    );
+    console.log("[stream-server] Reusing existing torrent");
     return existing;
   }
 
@@ -398,9 +405,7 @@ export async function prepareTorrent(magnet: string): Promise<any> {
   if (torrent.infoHash) lastAccessMap.set(torrent.infoHash, Date.now());
   attachTorrentLogging(torrent);
 
-  console.log(
-    `[stream-server] Added new torrent: ${torrent.infoHash || "(awaiting metadata)"}`,
-  );
+  console.log("[stream-server] Added new torrent");
 
   return torrent;
 }
@@ -476,7 +481,7 @@ export async function serveTorrentFile(
 
     ffmpeg.stderr.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
-      if (msg) console.warn(`[ffmpeg] ${msg}`);
+      if (msg) console.warn(`[ffmpeg] ${redactSensitiveText(msg)}`);
     });
 
     res.on("close", () => {
@@ -485,7 +490,10 @@ export async function serveTorrentFile(
     });
 
     ffmpeg.on("error", (err: Error) => {
-      console.error("[stream-server] FFmpeg spawn error:", err.message);
+      console.error(
+        "[stream-server] FFmpeg spawn error:",
+        redactSensitiveText(err.message),
+      );
       if (!res.headersSent) {
         res.status(503).json({
           error: "FFmpeg not available. Install with: brew install ffmpeg",
@@ -630,7 +638,7 @@ export async function streamRequest(req: Request, res: Response) {
       "[stream-server]",
       isTimeout
         ? "Torrent metadata timeout (no peers found)"
-        : `Torrent error: ${msg}`,
+        : `Torrent error: ${redactSensitiveText(msg)}`,
     );
     if (!res.headersSent) {
       return res.status(503).json({
@@ -675,7 +683,10 @@ export async function streamRequest(req: Request, res: Response) {
         : undefined;
     return serveTorrentFile(req, res, torrent, { remuxFormat, fileIdx, hints });
   } catch (err: any) {
-    console.error("[stream-server] Failed to build stream URL:", err?.message);
+    console.error(
+      "[stream-server] Failed to build stream URL:",
+      redactSensitiveText(err?.message ?? ""),
+    );
     return res.status(503).json({ error: "Failed to start stream server" });
   }
 }

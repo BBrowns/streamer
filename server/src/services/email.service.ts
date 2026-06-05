@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
+import { redactSensitiveText } from "../utils/redaction";
 
 class EmailService {
   private transporter: nodemailer.Transporter | null = null;
@@ -40,11 +41,14 @@ class EmailService {
         throw error;
       }
     } else {
-      logger.info("--- [DEBUG EMAIL START] ---");
-      logger.info(`To: ${to}`);
-      logger.info(`Subject: ${subject}`);
-      logger.info(`Text: ${text}`);
-      logger.info("--- [DEBUG EMAIL END] ---");
+      logger.info(
+        {
+          to,
+          subject,
+          text: redactSensitiveText(text),
+        },
+        "Email debug output",
+      );
     }
   }
 
