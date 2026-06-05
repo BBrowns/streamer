@@ -335,14 +335,32 @@ Still open:
 - Decide on a packaged or persistent remux strategy before claiming seek
   support for FFmpeg-remuxed sources.
 
-### PR E: Production Security And Observability
+### PR E: Security Baseline And Trust Boundaries
 
-Goal: make the playback control plane diagnosable and release-ready.
+Goal: harden the production trust boundaries before deeper observability work.
 
-Expected work:
+Status: **In progress.**
 
-- Add focused bridge/add-on/remote-media URL security review and tests.
-- Verify Sentry/error reporting without leaking source URLs or tokens.
+Implemented:
+
+- Add-on manifest/catalog/meta/stream fetches validate every outbound target,
+  block private/internal/reserved IP ranges by default, and validate redirect
+  targets before following them.
+- Local/private add-ons require explicit `ADDON_ALLOW_PRIVATE_NETWORKS=true`
+  opt-in for tests or development.
+- Mobile bridge URLs are constrained to trusted local/LAN URLs before playback
+  and cast services use them.
+- Source-bearing logs were reduced: resolved stream URLs, local download URIs,
+  raw magnets, and torrent info hashes are no longer emitted by the touched
+  playback/bridge paths.
+- Adds focused server and mobile tests for SSRF, redirects, configured bridge
+  URLs, and cast bridge routing.
+
+Still open:
+
+- Add short-lived signed gateway stream URLs.
+- Do a follow-up Sentry/error-reporting pass that verifies breadcrumbs and
+  exceptions do not contain source URLs, bridge tokens, or magnets.
 - Add release/build pipeline coverage and golden-path telemetry.
 
 ## Engineering Rules For Future Agents

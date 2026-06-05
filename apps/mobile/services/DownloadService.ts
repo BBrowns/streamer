@@ -696,8 +696,7 @@ export class DownloadService {
         );
         // Clear resume data on completion
         setResumeData(id, "");
-        if (__DEV__)
-          console.log("[DownloadService] Download completed:", result.uri);
+        if (__DEV__) console.log("[DownloadService] Download completed");
       }
     } catch (e: any) {
       if (__DEV__) console.error("[DownloadService] Download failed:", e);
@@ -997,8 +996,7 @@ export class DownloadService {
         if (result) {
           await this.finalizeCompletedTask(id, result.uri);
           setResumeData(id, "");
-          if (__DEV__)
-            console.log("[DownloadService] Download completed:", result.uri);
+          if (__DEV__) console.log("[DownloadService] Download completed");
         }
         return { ok: true };
       } catch (error) {

@@ -15,7 +15,9 @@ router.post("/", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Magnet link is required" });
   }
 
-  console.log(`[handoff] Received stream request for: ${title || magnet}`);
+  console.log(
+    `[handoff] Received stream request${title ? ` for: ${title}` : ""}`,
+  );
 
   try {
     // We attempt to communicate with the Electron main process if available

@@ -217,7 +217,7 @@ export async function pruneTorrents(client: any) {
   // Remove oldest torrents until we are below the limit
   const toRemove = sorted.slice(0, torrents.length - MAX_ACTIVE_TORRENTS + 1);
   for (const t of toRemove) {
-    console.log(`[stream-server] Pruning inactive torrent: ${t.infoHash}`);
+    console.log("[stream-server] Pruning inactive torrent");
     await new Promise<void>((resolve) => {
       t.destroy(() => {
         lastAccessMap.delete(t.infoHash);
@@ -613,7 +613,6 @@ export async function streamRequest(req: Request, res: Response) {
     `[stream-server] Received magnet request at:`,
     new Date().toISOString(),
   );
-  console.log(`[stream-server] Raw req.query.magnet:`, magnet);
 
   if (!magnet) {
     return res.status(400).json({ error: "Magnet link is required" });

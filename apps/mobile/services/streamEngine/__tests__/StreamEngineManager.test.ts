@@ -1,4 +1,4 @@
-import { StreamEngineManager } from "../StreamEngineManager";
+import { StreamEngineManager, validateBridgeUrl } from "../StreamEngineManager";
 import { HLSEngine } from "../HLSEngine";
 import { HttpVideoEngine } from "../HttpVideoEngine";
 import { TorrentEngine } from "../TorrentEngine";
@@ -104,6 +104,60 @@ describe("StreamEngineManager", () => {
         message: "node-datachannel was installed for another arch",
         processArch: "x64",
         platform: "darwin",
+      });
+    });
+  });
+
+  describe("validateBridgeUrl", () => {
+    it("allows localhost, Android emulator, and LAN bridge URLs", () => {
+      expect(validateBridgeUrl("http://localhost:11470")).toMatchObject({
+        ok: true,
+      });
+      expect(validateBridgeUrl("http://10.0.2.2:11470")).toMatchObject({
+        ok: true,
+      });
+      expect(validateBridgeUrl("http://192.168.1.25:11470")).toMatchObject({
+        ok: true,
+      });
+      expect(validateBridgeUrl("http://[fd00::25]:11470")).toMatchObject({
+        ok: true,
+      });
+    });
+
+    it("rejects public, credentialed, and non-http bridge URLs", () => {
+      expect(validateBridgeUrl("https://bridge.example.com")).toMatchObject({
+        ok: false,
+        reason: "not-local-or-lan",
+      });
+      expect(validateBridgeUrl("http://user:pass@192.168.1.25")).toMatchObject({
+        ok: false,
+        reason: "credentials-not-allowed",
+      });
+      expect(validateBridgeUrl("file:///tmp/bridge")).toMatchObject({
+        ok: false,
+        reason: "invalid-protocol",
+      });
+    });
+
+    it("ignores an untrusted configured bridge URL and falls back to local detection", async () => {
+      useAuthStore.setState({
+        streamServerUrl: "https://bridge.example.com",
+      });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+      }) as any;
+
+      await manager.detectBridge();
+
+      expect(
+        jest
+          .mocked(global.fetch)
+          .mock.calls.every(
+            ([url]) => !String(url).includes("bridge.example.com"),
+          ),
+      ).toBe(true);
+      expect(manager.getBridgeDiagnostics()).toMatchObject({
+        status: expect.any(String),
       });
     });
   });

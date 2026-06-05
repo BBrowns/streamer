@@ -139,7 +139,13 @@ bulkhead → timeout → retry (1×, exponential backoff) → circuit breaker
 
 A `policyCache` map (keyed by `addonId`) preserves circuit breaker state across requests so the breaker actually tracks cumulative failures — not just per-request state.
 
-**SSRF protection:** All add-on URLs are validated to use `https:` before any request is made. An internal IP blocklist is noted as a TODO.
+**SSRF protection:** Add-on manifest, catalog, meta, and stream requests are
+validated before every outbound fetch. The validator blocks credentials,
+non-HTTPS URLs by default, localhost, link-local, private, carrier-grade NAT,
+benchmark, documentation, multicast, and other reserved IP ranges across IPv4,
+IPv6, and IPv4-mapped IPv6. Redirects are followed manually and each redirect
+target is validated before the next request. Local/private add-ons require the
+explicit `ADDON_ALLOW_PRIVATE_NETWORKS=true` opt-in for development or tests.
 
 ### 4.4 Authentication
 
@@ -537,9 +543,13 @@ These are concrete, prioritised engineering improvements for anyone extending th
 
 ### High Priority
 
-#### 1. SSRF Internal IP Blocklist
+#### 1. Short-Lived Signed Gateway Stream URLs
 
-The `resilientFetch` function in `aggregator.service.ts` validates that add-on URLs use HTTPS, but there is an explicit `// TODO: Implement internal IP blocklist` comment. A malicious add-on manifest URL pointing at `http://169.254.169.254` (AWS metadata endpoint) or `http://10.0.0.1` (internal network) could be used for server-side request forgery. Implement a blocklist that rejects private IPv4/IPv6 ranges (RFC 1918 + loopback + link-local) before making any outbound request.
+Gateway stream URLs intentionally remain header-free so native video players
+and cast devices can consume them. The bridge now authenticates control
+routes, validates cast URLs, and tightens add-on SSRF boundaries, but stream
+URLs are still bearer-by-possession while a job exists. Add short-lived signed
+stream URLs before treating the local handoff surface as production hardened.
 
 #### 2. Refresh Token Replay Detection
 

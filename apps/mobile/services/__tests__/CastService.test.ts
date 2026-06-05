@@ -75,4 +75,20 @@ describe("CastService", () => {
       }),
     );
   });
+
+  it("does not send cast requests to an untrusted public bridge URL", async () => {
+    useAuthStore.setState({
+      streamServerUrl: "https://bridge.example.com",
+    });
+
+    await castService.getDevices();
+
+    expect(
+      jest
+        .mocked(global.fetch)
+        .mock.calls.every(
+          ([url]) => !String(url).includes("bridge.example.com"),
+        ),
+    ).toBe(true);
+  });
 });

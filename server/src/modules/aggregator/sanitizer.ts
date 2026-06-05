@@ -12,6 +12,20 @@ const MAX_TEXT_LENGTH = 10_000;
 /** Maximum allowed URL length */
 const MAX_URL_LENGTH = 2_048;
 
+function urlLogSummary(url: string) {
+  try {
+    if (url.startsWith("magnet:")) return { scheme: "magnet" };
+    const parsed = new URL(url);
+    return {
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      pathname: parsed.pathname,
+    };
+  } catch {
+    return { invalid: true };
+  }
+}
+
 /**
  * Decode HTML entities iteratively until no more remain.
  * Prevents double-encoding bypass attacks like `&amp;lt;script&amp;gt;`.
@@ -111,7 +125,7 @@ export function sanitizeMeta<T extends Record<string, unknown>>(meta: T): T {
         if (!isValidUrl(value)) {
           (sanitized as Record<string, unknown>)[key] = undefined;
           logger.debug(
-            { key, url: value.slice(0, 100) },
+            { key, target: urlLogSummary(value) },
             "Stripped invalid URL from add-on meta",
           );
         }
@@ -146,7 +160,7 @@ export function sanitizeMeta<T extends Record<string, unknown>>(meta: T): T {
 /** Sanitize stream URLs */
 export function sanitizeStreamUrl(url: string): string | null {
   if (!isValidUrl(url)) {
-    logger.debug({ url: url.slice(0, 100) }, "Stripped invalid stream URL");
+    logger.debug({ target: urlLogSummary(url) }, "Stripped invalid stream URL");
     return null;
   }
   return url;

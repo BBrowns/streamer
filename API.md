@@ -97,6 +97,13 @@ The stream-server runs locally on the device (or on the local network via Docker
 
 Most control routes support bridge authentication. When `STREAMER_BRIDGE_TOKEN` is configured, clients must send either `Authorization: Bearer <token>` or `x-streamer-bridge-token: <token>`.
 
+Third-party add-on fetches are treated as untrusted outbound requests. Manifest
+and runtime resource URLs must use HTTPS by default and are checked against
+private, localhost, link-local, metadata, multicast, and reserved IP ranges.
+Redirect targets are revalidated before they are followed. Local/private
+add-ons for development or tests require explicit
+`ADDON_ALLOW_PRIVATE_NETWORKS=true`.
+
 ### 2.1 Playback
 
 The legacy bridge endpoint still exists:

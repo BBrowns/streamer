@@ -65,7 +65,7 @@ export class TorrentEngine implements IStreamEngine {
         data.resolved.url &&
         data.resolved.type !== "magnet"
       ) {
-        console.log("[TorrentEngine] Resolved via Debrid:", data.resolved.url);
+        console.log("[TorrentEngine] Resolved via Debrid");
         return data.resolved.url;
       }
     } catch (e) {
