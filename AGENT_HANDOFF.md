@@ -428,7 +428,7 @@ Known limitations:
 Goal: configure mobile Sentry intentionally now that app-controlled telemetry
 redaction exists.
 
-Status: **In review.**
+Status: **Complete.**
 
 Implemented:
 
@@ -450,6 +450,37 @@ Known limitations:
 - Sentry source-map upload still depends on real organization/project/env
   configuration in the release pipeline.
 - Session replay remains intentionally unconfigured for privacy.
+
+### PR I: Server And Bridge Sentry Baseline
+
+Goal: add production-safe Sentry capture for backend and local bridge failures
+without weakening the existing redaction baseline.
+
+Status: **In review.**
+
+Implemented:
+
+- Adds `@sentry/node` to the server and stream-server workspaces.
+- Server Sentry initialization is disabled without `SENTRY_DSN`, disabled in
+  tests, and disabled in development unless `SENTRY_ENABLE_DEV=true`.
+- Stream-server Sentry initialization supports bridge-specific env vars first
+  (`STREAMER_BRIDGE_SENTRY_*`) and common `SENTRY_*` fallbacks.
+- Server Hono unhandled 500 errors, startup errors, and stream-server
+  supervisor startup failures are captured with sanitized context.
+- Stream-server Express route errors and listen errors are captured with
+  sanitized context.
+- Both services use conservative production tracing, no default PII, and
+  redacted `beforeSend`/`beforeBreadcrumb` hooks.
+- Adds focused server and stream-server tests for enablement, sampling, PII
+  handling, and signed URL/magnet/token redaction.
+
+Known limitations:
+
+- Electron main-process Sentry is still not configured separately.
+- Source-map upload, release creation, and deploy metadata are still release
+  pipeline work.
+- This PR does not enable Sentry by default; production must provide DSNs and
+  release/environment env vars.
 
 ## Engineering Rules For Future Agents
 

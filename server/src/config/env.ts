@@ -55,6 +55,14 @@ const envSchema = z.object({
 
   // Local bridge supervision
   STREAMER_BRIDGE_SUPERVISOR: z.string().default("false"),
+
+  // Observability
+  SENTRY_DSN: z.string().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+  SENTRY_RELEASE: z.string().optional(),
+  SENTRY_TRACES_SAMPLE_RATE: z.string().optional(),
+  SENTRY_ERROR_SAMPLE_RATE: z.string().optional(),
+  SENTRY_ENABLE_DEV: z.string().default("false"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -118,4 +126,16 @@ export const env = {
   bridgeSupervisorEnabled: ["1", "true", "yes", "on"].includes(
     envData.STREAMER_BRIDGE_SUPERVISOR.toLowerCase(),
   ),
+
+  // Observability
+  sentry: {
+    dsn: envData.SENTRY_DSN,
+    environment: envData.SENTRY_ENVIRONMENT,
+    release: envData.SENTRY_RELEASE,
+    tracesSampleRate: envData.SENTRY_TRACES_SAMPLE_RATE,
+    errorSampleRate: envData.SENTRY_ERROR_SAMPLE_RATE,
+    enableDev: ["1", "true", "yes", "on"].includes(
+      envData.SENTRY_ENABLE_DEV.toLowerCase(),
+    ),
+  },
 } as const;
