@@ -1,7 +1,6 @@
 import {
   ActivityIndicator,
   Image,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +16,9 @@ import {
   getDownloadSizeLabel,
   getDownloadStatusKey,
 } from "./downloadPresentation";
+import { AppButton } from "../ui/AppButton";
+import { StatusPill } from "../ui/StatusPill";
+import { Surface } from "../ui/Surface";
 
 interface DownloadQueueCardProps {
   task: DownloadTask;
@@ -82,13 +84,13 @@ export function DownloadQueueCard({
       : task.status === "Paused"
         ? colors.warning
         : colors.tint;
-  const statusSurface = isError
-    ? colors.error + "18"
+  const statusTone = isError
+    ? "error"
     : isReady
-      ? colors.success + "18"
+      ? "success"
       : task.status === "Paused"
-        ? colors.warning + "18"
-        : colors.tint + "18";
+        ? "warning"
+        : "info";
   const isWorking =
     busy ||
     task.status === "Pending" ||
@@ -116,14 +118,20 @@ export function DownloadQueueCard({
       : primaryAction === "retry"
         ? "refresh"
         : "play";
+  const deleteActionLabel = t("downloads.actions.delete", {
+    defaultValue: "Delete",
+  });
+  const deleteAccessibilityLabel = t("downloads.actions.deleteDownload", {
+    defaultValue: "Delete download",
+  });
 
   return (
-    <View
+    <Surface
+      padded={false}
       style={[
         styles.card,
         compact && styles.cardCompact,
         {
-          backgroundColor: isDark ? "rgba(255,255,255,0.055)" : colors.card,
           borderColor: isError ? colors.error + "50" : colors.border,
         },
       ]}
@@ -156,13 +164,7 @@ export function DownloadQueueCard({
                 {sizeLabel ? `  ·  ${sizeLabel}` : ""}
               </Text>
             </View>
-            <View
-              style={[styles.statusBadge, { backgroundColor: statusSurface }]}
-            >
-              <Text style={[styles.statusBadgeText, { color: statusColor }]}>
-                {statusLabel}
-              </Text>
-            </View>
+            <StatusPill label={statusLabel} tone={statusTone} />
           </View>
 
           {showProgress ? (
@@ -233,51 +235,29 @@ export function DownloadQueueCard({
             </Text>
           </View>
         ) : primaryAction ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryAction,
-              { backgroundColor: statusSurface },
-              pressed && styles.pressed,
-            ]}
+          <AppButton
+            label={primaryLabel}
+            icon={primaryIcon}
+            variant={isReady ? "primary" : "secondary"}
+            size="small"
             onPress={runPrimaryAction}
-            accessibilityRole="button"
-            accessibilityLabel={primaryLabel}
             disabled={busy}
-          >
-            <Ionicons name={primaryIcon} size={18} color={statusColor} />
-            <Text style={[styles.primaryActionText, { color: statusColor }]}>
-              {primaryLabel}
-            </Text>
-          </Pressable>
+          />
         ) : (
           <View />
         )}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconAction,
-            {
-              backgroundColor: isDark
-                ? "rgba(255,255,255,0.06)"
-                : "rgba(40,34,54,0.05)",
-            },
-            pressed && styles.pressed,
-          ]}
+        <AppButton
+          label={deleteActionLabel}
+          accessibilityLabel={deleteAccessibilityLabel}
+          icon="trash-outline"
+          variant="danger"
+          size="small"
           onPress={onDelete}
-          accessibilityRole="button"
-          accessibilityLabel={t("downloads.actions.delete", {
-            defaultValue: "Delete download",
-          })}
           disabled={busy}
-        >
-          <Ionicons
-            name="trash-outline"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </Pressable>
+        />
       </View>
-    </View>
+    </Surface>
   );
 }
 
@@ -330,17 +310,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "600",
-    letterSpacing: 0,
-  },
-  statusBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "800",
     letterSpacing: 0,
   },
   progressArea: {
@@ -400,32 +369,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0,
-  },
-  primaryAction: {
-    minHeight: 36,
-    minWidth: 94,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    cursor: Platform.OS === "web" ? "pointer" : undefined,
-  } as any,
-  primaryActionText: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0,
-  },
-  iconAction: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: Platform.OS === "web" ? "pointer" : undefined,
-  } as any,
-  pressed: {
-    opacity: 0.72,
   },
 });
