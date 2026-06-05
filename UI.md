@@ -60,6 +60,8 @@ Current pilot primitives:
 - `components/ui/Surface.tsx` for bordered pastel glass panels.
 - `components/ui/StatusPill.tsx` for bridge/playback/download readiness labels.
 - `components/ui/TextField.tsx` for themed form inputs.
+- `components/ui/PlaybackStatusPanel.tsx` for centered player readiness and
+  error states with consistent status pills and actions.
 
 The first pilot migration is `SourcesSection`, because bridge/add-on setup is
 one of the highest-friction product areas. Future PRs should reuse these

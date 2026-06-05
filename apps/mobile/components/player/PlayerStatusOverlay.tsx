@@ -1,11 +1,4 @@
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-} from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import type { StreamMetrics, StreamLoadState } from "../../stores/playerStore";
@@ -15,6 +8,7 @@ import type {
   PlaybackSession,
   PlaybackSessionStatus,
 } from "@streamer/shared";
+import { PlaybackStatusPanel } from "../ui/PlaybackStatusPanel";
 
 interface PlayerStatusOverlayProps {
   streamState: StreamLoadState;
@@ -43,7 +37,7 @@ export function PlayerStatusOverlay({
   onRetry,
   onOpenSourcesDevices,
 }: PlayerStatusOverlayProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const sessionError = session?.terminalError
     ? { ...session.terminalError }
@@ -84,121 +78,73 @@ export function PlayerStatusOverlay({
         : latestGatewayProgress?.type === "gateway_progress"
           ? getGatewayProgressDetail(latestGatewayProgress, t)
           : null;
+    const message =
+      effectiveFallbackReason ||
+      metricsDetail ||
+      (runtimeState === "creating_gateway_job" ||
+      runtimeState === "preparing_metadata"
+        ? t("player.status.preparingSubtitle")
+        : null);
 
     return (
-      <View
-        style={[
-          styles.metricsOverlay,
-          {
-            backgroundColor: isDark
-              ? "rgba(0,0,0,0.8)"
-              : "rgba(255,255,255,0.85)",
-          },
-        ]}
-      >
-        <ActivityIndicator
-          size="large"
-          color={colors.tint}
-          style={styles.spinner}
-        />
-        <Text style={[styles.titleText, { color: colors.text }]}>{title}</Text>
-        {effectiveFallbackReason ? (
-          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
-            {effectiveFallbackReason}
-          </Text>
-        ) : metricsDetail ? (
-          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
-            {metricsDetail}
-          </Text>
-        ) : runtimeState === "creating_gateway_job" ||
-          runtimeState === "preparing_metadata" ? (
-          <Text style={[styles.subtitleText, { color: colors.textSecondary }]}>
-            {t("player.status.preparingSubtitle")}
-          </Text>
-        ) : null}
-      </View>
+      <PlaybackStatusPanel
+        tone={runtimeState === "trying_fallback" ? "warning" : "loading"}
+        statusLabel={
+          runtimeState === "trying_fallback"
+            ? t("player.status.tryingFallback")
+            : t("downloads.status.preparing")
+        }
+        loading={runtimeState !== "trying_fallback"}
+        title={title}
+        message={message}
+      />
     );
   }
 
   if (effectiveStreamState === "error") {
     const canRetry = !!onRetry && effectiveRuntimeError?.retryable !== false;
     const errorTitle = getErrorTitle(effectiveRuntimeError, t);
+    const actions = [
+      ...(canRetry
+        ? [
+            {
+              label: t("common.retry"),
+              onPress: onRetry,
+              variant: "primary" as const,
+              icon: "refresh-outline" as const,
+            },
+          ]
+        : []),
+      ...(onOpenSourcesDevices
+        ? [
+            {
+              label: t("player.errors.openSourcesDevices"),
+              onPress: onOpenSourcesDevices,
+              variant: "secondary" as const,
+              icon: "radio-outline" as const,
+            },
+          ]
+        : []),
+      {
+        label: t("player.errors.goBack"),
+        onPress: onBack,
+        variant: "secondary" as const,
+        icon: "chevron-back" as const,
+      },
+    ];
+
     return (
-      <View
-        style={[
-          styles.errorOverlay,
-          {
-            backgroundColor: isDark
-              ? "rgba(0,0,0,0.95)"
-              : "rgba(255,255,255,0.95)",
-          },
-        ]}
-      >
-        <MaterialIcons
-          name="error-outline"
-          size={48}
-          color={colors.error}
-          style={styles.errorIcon}
-        />
-        <Text style={[styles.errorTitle, { color: colors.error }]}>
-          {errorTitle}
-        </Text>
-        <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
-          {effectiveRuntimeError?.message ||
-            errorMessage ||
-            t("player.status.errorSubtitle")}
-        </Text>
-        <View style={styles.errorActions}>
-          {canRetry && (
-            <Pressable
-              style={[
-                styles.primaryButton,
-                { backgroundColor: colors.tint, borderColor: colors.tint },
-              ]}
-              onPress={onRetry}
-            >
-              <Text
-                style={[
-                  styles.primaryButtonText,
-                  { color: isDark ? "#000" : "#fff" },
-                ]}
-              >
-                {t("common.retry")}
-              </Text>
-            </Pressable>
-          )}
-          {!!onOpenSourcesDevices && (
-            <Pressable
-              style={[
-                styles.backButton,
-                {
-                  backgroundColor: colors.tint + "15",
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={onOpenSourcesDevices}
-            >
-              <Text style={[styles.backButtonText, { color: colors.text }]}>
-                {t("player.errors.openSourcesDevices")}
-              </Text>
-            </Pressable>
-          )}
-          <Pressable
-            style={[
-              styles.backButton,
-              {
-                backgroundColor: colors.tint + "15",
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={onBack}
-          >
-            <Text style={[styles.backButtonText, { color: colors.text }]}>
-              {t("player.errors.goBack")}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+      <PlaybackStatusPanel
+        tone="error"
+        statusLabel={t("downloads.status.error")}
+        title={errorTitle}
+        message={
+          effectiveRuntimeError?.message ||
+          errorMessage ||
+          t("player.status.errorSubtitle")
+        }
+        actions={actions}
+      />
     );
   }
 
@@ -324,76 +270,6 @@ function getErrorTitle(
 }
 
 const styles = StyleSheet.create({
-  metricsOverlay: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 30,
-    padding: 24,
-    backgroundColor: "rgba(0,0,0,0.8)",
-  },
-  spinner: { marginBottom: 16 },
-  titleText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  subtitleText: { color: "#a1a1aa", marginTop: 8, fontSize: 14 },
-  errorOverlay: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 30,
-    padding: 24,
-    backgroundColor: "rgba(0,0,0,0.95)",
-  },
-  errorIcon: { marginBottom: 16 },
-  errorTitle: {
-    color: "#fca5a5",
-    fontSize: 18,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  errorMessage: {
-    color: "#a1a1aa",
-    textAlign: "center",
-    maxWidth: 280,
-    marginBottom: 24,
-  },
-  errorActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 10,
-    maxWidth: 520,
-  },
-  primaryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  primaryButtonText: { color: "#fff", fontWeight: "800" },
-  backButton: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  backButtonText: { color: "#fff", fontWeight: "600" },
   bufferingOverlay: {
     position: "absolute",
     top: 0,
