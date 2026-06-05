@@ -7,9 +7,10 @@ import {
   Pressable,
   useWindowDimensions,
 } from "react-native";
-import { Link, usePathname } from "expo-router";
+import { Link, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -119,53 +120,67 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
             active={pathname === "/settings"}
           />
           {/* Search button */}
-          {!!onSearchOpen && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.navLink,
-                pressed && {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(0,0,0,0.05)",
-                },
-              ]}
-              onPress={onSearchOpen}
-              accessibilityLabel="Search (⌘K)"
-            >
-              <View style={styles.navLinkInner}>
-                <Ionicons
-                  name="search-outline"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <Text
-                  style={[styles.navLabel, { color: colors.textSecondary }]}
-                >
-                  Search
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.kbdHint,
-                  {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.05)",
-                  },
-                ]}
-              >
-                <Text style={[styles.kbdText, { color: colors.textSecondary }]}>
-                  ⌘K
-                </Text>
-              </View>
-            </Pressable>
-          )}
+          {!!onSearchOpen && <SearchNavButton onSearchOpen={onSearchOpen} />}
         </View>
       </View>
 
       {/* Main Content Area */}
       <View style={styles.content}>{children}</View>
     </View>
+  );
+}
+
+function SearchNavButton({ onSearchOpen }: { onSearchOpen: () => void }) {
+  const { colors, isDark } = useTheme();
+  const { isKeyboardFocused, webPressableProps } =
+    useWebPressableActivation(onSearchOpen);
+
+  return (
+    <Pressable
+      {...webPressableProps}
+      style={({ pressed }) => [
+        styles.navLink,
+        isKeyboardFocused && styles.navLinkFocused,
+        pressed && {
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.08)"
+            : "rgba(0,0,0,0.05)",
+        },
+      ]}
+      onPress={onSearchOpen}
+      accessibilityRole="button"
+      accessibilityLabel="Search (⌘K)"
+    >
+      <View style={styles.navLinkInner}>
+        <Ionicons
+          name="search-outline"
+          size={20}
+          color={isKeyboardFocused ? colors.text : colors.textSecondary}
+        />
+        <Text
+          style={[
+            styles.navLabel,
+            { color: isKeyboardFocused ? colors.text : colors.textSecondary },
+          ]}
+        >
+          Search
+        </Text>
+      </View>
+      <View
+        style={[
+          styles.kbdHint,
+          {
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(0,0,0,0.05)",
+          },
+        ]}
+      >
+        <Text style={[styles.kbdText, { color: colors.textSecondary }]}>
+          ⌘K
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -183,12 +198,17 @@ function NavLink({
   active: boolean;
 }) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   const [isHovered, setIsHovered] = React.useState(false);
   const isWeb = Platform.OS === "web";
+  const { isKeyboardFocused, webPressableProps } = useWebPressableActivation(
+    () => router.push(href as any),
+  );
 
   return (
     <Link href={href as any} asChild>
       <Pressable
+        {...webPressableProps}
         style={({ pressed }) => [
           styles.navLink,
           active && { backgroundColor: colors.tint + "15" },
@@ -199,6 +219,7 @@ function NavLink({
                 ? "rgba(255,255,255,0.04)"
                 : "rgba(0,0,0,0.03)",
             },
+          isWeb && isKeyboardFocused && styles.navLinkFocused,
           pressed && {
             backgroundColor: isDark
               ? "rgba(255,255,255,0.08)"
@@ -224,7 +245,9 @@ function NavLink({
               styles.navLabel,
               { color: active ? colors.text : colors.textSecondary },
               active && { fontWeight: "700" },
-              isWeb && isHovered && !active && { color: colors.text },
+              isWeb &&
+                (isHovered || isKeyboardFocused) &&
+                !active && { color: colors.text },
             ]}
           >
             {label}
@@ -286,6 +309,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  navLinkFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: "#a78bfa",
+    outlineOffset: 2,
+  } as any,
   activeBar: {
     position: "absolute",
     left: 0,

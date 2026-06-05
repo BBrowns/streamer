@@ -13,6 +13,7 @@ import {
 import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
 import { getDownloadEligibility } from "../../services/DownloadService";
 import { useTheme } from "../../hooks/useTheme";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 export function StreamItem({
   stream,
@@ -46,6 +47,20 @@ export function StreamItem({
   const badgeSurface = isDark ? "rgba(242,215,255,0.12)" : "#f3edf8";
   const readySurface = isDark ? "rgba(197,233,213,0.18)" : "#e7f6ee";
   const warnSurface = isDark ? "rgba(255,219,166,0.18)" : "#fff3df";
+  const handlePlayPress = () => {
+    hapticImpactLight();
+    onPress();
+  };
+  const handleDownloadPress = () => {
+    hapticImpactLight();
+    onDownload();
+  };
+  const { isKeyboardFocused: isPlayFocused, webPressableProps: playProps } =
+    useWebPressableActivation(handlePlayPress);
+  const {
+    isKeyboardFocused: isDownloadFocused,
+    webPressableProps: downloadProps,
+  } = useWebPressableActivation(handleDownloadPress);
 
   const sourceStateLabel = isTorrent
     ? bridgeStatus === "available"
@@ -66,11 +81,9 @@ export function StreamItem({
       ]}
     >
       <Pressable
-        style={styles.streamPressArea}
-        onPress={() => {
-          hapticImpactLight();
-          onPress();
-        }}
+        {...playProps}
+        style={[styles.streamPressArea, isPlayFocused && styles.webFocused]}
+        onPress={handlePlayPress}
         accessibilityRole="button"
         accessibilityLabel={`Play stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
         accessibilityHint={
@@ -149,11 +162,12 @@ export function StreamItem({
       <View style={styles.streamActions}>
         {canDownload || isInProgress || isCompleted ? (
           <Pressable
-            style={styles.downloadIconBtn}
-            onPress={() => {
-              hapticImpactLight();
-              onDownload();
-            }}
+            {...(isCompleted || isInProgress ? {} : downloadProps)}
+            style={[
+              styles.downloadIconBtn,
+              isDownloadFocused && styles.webFocused,
+            ]}
+            onPress={handleDownloadPress}
             disabled={isCompleted || isInProgress}
             accessibilityRole="button"
             accessibilityLabel="Download stream"
@@ -279,6 +293,13 @@ const styles = StyleSheet.create({
   downloadIconBtn: {
     padding: 4,
   },
+  webFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: "#a78bfa",
+    outlineOffset: 2,
+  } as any,
   progressText: {
     color: "#f2d7ff",
     fontSize: 13,

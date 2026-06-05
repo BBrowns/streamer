@@ -1,4 +1,4 @@
-import React, { memo, useEffect } from "react";
+import React, { memo, useCallback } from "react";
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
@@ -8,6 +8,7 @@ import { hapticImpactLight } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 const isWeb = Platform.OS === "web";
 const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
@@ -25,26 +26,26 @@ function CatalogCardInner({
   const { colors, isDark } = useTheme();
   const [imageError, setImageError] = React.useState(!item.poster);
 
-  const handlePress = () => {
+  const handlePress = useCallback(() => {
     hapticImpactLight();
     router.push(`/detail/${item.type}/${item.id}`);
-  };
-
-  useEffect(() => {
-    if (isFocused && onEnter) {
-      // Allow parent to trigger navigation on Enter
-    }
-  }, [isFocused, onEnter]);
+  }, [item.id, item.type, router]);
+  const { isKeyboardFocused, webPressableProps } = useWebPressableActivation(
+    onEnter ?? handlePress,
+  );
+  const visuallyFocused = isFocused || isKeyboardFocused;
 
   return (
     <Pressable
       // @ts-ignore web-only
       {...({ dataSet: { catalogCard: true } } as any)}
+      {...webPressableProps}
       style={({ hovered, pressed }: any) => [
         styles.cardContainer,
         { backgroundColor: colors.card, borderColor: colors.border },
-        isWeb && (hovered || isFocused) && styles.cardHovered,
-        isWeb && (hovered || isFocused) && { borderColor: colors.tint },
+        isWeb && (hovered || visuallyFocused) && styles.cardHovered,
+        isWeb && visuallyFocused && styles.cardFocused,
+        isWeb && (hovered || visuallyFocused) && { borderColor: colors.tint },
         pressed && { opacity: 0.9 },
       ]}
       onPress={handlePress}
@@ -160,6 +161,13 @@ const styles = StyleSheet.create({
           shadowOpacity: 0.3,
           shadowRadius: 12,
         }),
+  } as any,
+  cardFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: "#a78bfa",
+    outlineOffset: 3,
   } as any,
   imageWrapper: {
     position: "relative",

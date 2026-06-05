@@ -11,9 +11,9 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useContinueWatching } from "../../hooks/useContinueWatching";
-import { usePlayerStore } from "../../stores/playerStore";
 import { useTheme } from "../../hooks/useTheme";
 import type { WatchProgress } from "@streamer/shared";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 /** Progress bar showing how far through the content */
 function ProgressBar({ current, total }: { current: number; total: number }) {
@@ -52,11 +52,14 @@ function ContinueWatchingCard({ item }: { item: WatchProgress }) {
   const handlePress = () => {
     router.push(`/detail/${item.type}/${item.itemId}`);
   };
+  const { isKeyboardFocused, webPressableProps } =
+    useWebPressableActivation(handlePress);
 
   const remainingMinutes = Math.ceil((item.duration - item.currentTime) / 60);
 
   return (
     <Pressable
+      {...webPressableProps}
       style={({ hovered }: any) => [
         styles.card,
         {
@@ -65,10 +68,11 @@ function ContinueWatchingCard({ item }: { item: WatchProgress }) {
           width: cardWidth,
         },
         Platform.OS === "web" &&
-          hovered && {
+          (hovered || isKeyboardFocused) && {
             borderColor: colors.tint,
             boxShadow: "0 4px 8px rgba(0,0,0,0.2)",
           },
+        Platform.OS === "web" && isKeyboardFocused && styles.cardFocused,
       ]}
       onPress={handlePress}
       accessibilityRole="button"
@@ -194,6 +198,13 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     cursor: Platform.OS === "web" ? "pointer" : undefined,
+  } as any,
+  cardFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: "#a78bfa",
+    outlineOffset: 3,
   } as any,
   posterContainer: {
     position: "relative",

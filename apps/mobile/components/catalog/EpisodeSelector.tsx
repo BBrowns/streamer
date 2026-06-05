@@ -14,6 +14,7 @@ import { useEpisodeStreams } from "../../hooks/useEpisodeStreams";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { StreamItem } from "../detail/StreamItem";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
 
@@ -31,6 +32,28 @@ function EpisodeRow({
   onToggleSources: () => void;
 }) {
   const { colors, isDark } = useTheme();
+  const handlePlayPress = () => {
+    hapticImpactLight();
+    onPress();
+  };
+  const handleDownloadPress = () => {
+    hapticImpactLight();
+    onDownload();
+  };
+  const handleToggleSourcesPress = () => {
+    hapticImpactLight();
+    onToggleSources();
+  };
+  const { isKeyboardFocused: isPlayFocused, webPressableProps: playProps } =
+    useWebPressableActivation(handlePlayPress);
+  const {
+    isKeyboardFocused: isDownloadFocused,
+    webPressableProps: downloadProps,
+  } = useWebPressableActivation(handleDownloadPress);
+  const {
+    isKeyboardFocused: isSourcesFocused,
+    webPressableProps: sourcesProps,
+  } = useWebPressableActivation(handleToggleSourcesPress);
 
   const releasedDate = video.released
     ? new Date(video.released).toLocaleDateString(undefined, {
@@ -61,11 +84,9 @@ function EpisodeRow({
       ]}
     >
       <Pressable
-        style={styles.episodePlayArea}
-        onPress={() => {
-          hapticImpactLight();
-          onPress();
-        }}
+        {...playProps}
+        style={[styles.episodePlayArea, isPlayFocused && styles.webFocused]}
+        onPress={handlePlayPress}
         accessibilityRole="button"
         accessibilityLabel={`Play episode ${video.episode}: ${video.title}`}
       >
@@ -119,6 +140,7 @@ function EpisodeRow({
       </Pressable>
       <View style={styles.episodeActions}>
         <Pressable
+          {...downloadProps}
           style={[
             styles.episodeIconButton,
             {
@@ -126,11 +148,9 @@ function EpisodeRow({
                 ? "rgba(255,255,255,0.06)"
                 : "rgba(0,0,0,0.04)",
             },
+            isDownloadFocused && styles.webFocused,
           ]}
-          onPress={() => {
-            hapticImpactLight();
-            onDownload();
-          }}
+          onPress={handleDownloadPress}
           accessibilityRole="button"
           accessibilityLabel={`Download episode ${video.episode}: ${video.title}`}
         >
@@ -141,6 +161,7 @@ function EpisodeRow({
           />
         </Pressable>
         <Pressable
+          {...sourcesProps}
           style={[
             styles.episodeSourceButton,
             {
@@ -153,11 +174,9 @@ function EpisodeRow({
                 ? "rgba(216,180,254,0.2)"
                 : "rgba(167,139,250,0.16)",
             },
+            isSourcesFocused && styles.webFocused,
           ]}
-          onPress={() => {
-            hapticImpactLight();
-            onToggleSources();
-          }}
+          onPress={handleToggleSourcesPress}
           accessibilityRole="button"
           accessibilityLabel={`Advanced sources for episode ${video.episode}: ${video.title}`}
         >
@@ -538,6 +557,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
+  webFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: "#a78bfa",
+    outlineOffset: 2,
+  } as any,
   streamLoading: {
     flexDirection: "row",
     alignItems: "center",
