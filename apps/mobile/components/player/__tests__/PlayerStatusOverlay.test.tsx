@@ -4,7 +4,7 @@ import type { PlaybackSession } from "@streamer/shared";
 import { PlayerStatusOverlay } from "../PlayerStatusOverlay";
 
 jest.mock("@expo/vector-icons", () => ({
-  MaterialIcons: () => null,
+  Ionicons: () => null,
 }));
 
 jest.mock("../../../hooks/useTheme", () => ({
@@ -13,6 +13,9 @@ jest.mock("../../../hooks/useTheme", () => ({
     colors: {
       tint: "#a78bfa",
       error: "#ff9ba6",
+      success: "#a7e8bd",
+      warning: "#ffd9a8",
+      card: "rgba(255,255,255,0.08)",
       text: "#ffffff",
       textSecondary: "#c7bfd5",
       border: "rgba(255,255,255,0.16)",
@@ -65,7 +68,7 @@ describe("PlayerStatusOverlay", () => {
       />,
     );
 
-    expect(screen.getByText("player.status.tryingFallback")).toBeTruthy();
+    expect(screen.getAllByText("player.status.tryingFallback").length).toBe(2);
     expect(
       screen.getByText("Trying another source automatically."),
     ).toBeTruthy();
