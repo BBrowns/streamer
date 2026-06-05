@@ -158,5 +158,27 @@ The intended migration sequence is:
    **Complete.**
 7. Route cast through the same session model. **Complete.**
 
+Current status: steps 1 through 7 are complete. Remaining work is validation
+and production hardening: real-device download/cast/gateway tests, release
+pipeline coverage, production telemetry/source-map configuration, and a more
+polished player readiness UI.
+
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.
+
+## Agent Guardrails
+
+- Do not persist raw `Stream` objects, media URLs, magnets, info hashes,
+  external URLs, bridge URLs, or subtitle URLs inside `PlaybackSession` events
+  or snapshots.
+- Do not bypass `PlaybackOrchestrator` and
+  `PlaybackSessionPlaybackService` for primary Play, Download, or Cast flows.
+- Do not make manual source picking the default UX again. `More Sources` is an
+  advanced fallback.
+- Do not mark downloads offline-playable unless a local file URI exists and has
+  been verified.
+- Do not add XState just because the workflow is stateful. Add it only when the
+  reducer/service model has become harder to reason about than a formal state
+  machine.
+- Rehydrated sessions without runtime candidate mappings must re-plan; they
+  must not attempt to reconstruct source data from persisted state.

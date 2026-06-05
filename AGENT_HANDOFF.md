@@ -82,8 +82,8 @@ Play, Download, and Cast orchestration:
 - Sessions do not persist `Stream` objects, resolved media URLs, magnets, info
   hashes, external URLs, or bridge URLs.
 - Session and candidate IDs must be opaque UUIDs, not source-derived values.
-- Existing `PlaybackPlan` behavior remains supported while Download and Cast
-  migrate onto the session model.
+- Existing `PlaybackPlan` behavior remains supported as a compatibility wrapper.
+  Primary Play, Download, and Cast flows now use the session model.
 
 The mobile client now also has:
 
@@ -106,9 +106,8 @@ The Redis-backed remote-control presence records in `useRemoteControl.ts` and
 `server/src/modules/sessions/session.service.ts` are a separate legacy concept
 despite currently sharing the `PlaybackSession` name.
 
-Play Best, the player readiness/fallback flow, and the primary Download action
-now run through session events. The next playback-control-plane migration
-should cover Cast in a separate reviewable PR.
+Play Best, the player readiness/fallback flow, the primary Download action,
+and primary Cast now run through session events.
 
 See [PLAYBACK.md](./PLAYBACK.md) before changing playback persistence or adding
 new session event payloads.
@@ -521,7 +520,7 @@ Known limitations:
 Goal: make the desktop bridge packaging path explicit and smoke-testable before
 full signing/notarization release work.
 
-Status: **In review.**
+Status: **Complete.**
 
 Implemented:
 
@@ -550,6 +549,30 @@ Known limitations:
 - App icon, signing identity, notarization, updater feed, and release upload are
   still open.
 
+### PR L: Docs Sync And Agent Guardrails
+
+Goal: keep future agents aligned with the actual post-session, post-packaging
+architecture.
+
+Status: **In review.**
+
+Implemented:
+
+- Syncs README, playback, UI, architecture, and handoff docs with the current
+  Play/Download/Cast session control plane.
+- Documents that PR K packaged sidecar inputs are complete.
+- Clarifies desktop bridge ownership, CI package checks, and remaining
+  production release gaps.
+- Adds explicit "do not do" guardrails for raw URL persistence, source-picker
+  regressions, fake offline downloads, optional Real-Debrid, XState, Tamagui,
+  and broad UI rewrites.
+
+Known limitations:
+
+- This PR is documentation-only. It does not change runtime behavior.
+- The next implementation PR should start with a focused design-system pilot,
+  then continue into screenshot-driven Home/Detail/Player polish.
+
 ## Engineering Rules For Future Agents
 
 - Start every task from updated `master`.
@@ -562,6 +585,17 @@ Known limitations:
 - Keep Real-Debrid optional, disabled by default, and absent from first-run onboarding.
 - Prefer typed planner/orchestrator contracts over stringly typed UI logic.
 - Prefer user-facing states over raw alerts for playback/download/cast failures.
+- Do not replace the architecture with Plex/Jellyfin-style library hosting;
+  that does not fit the add-on aggregation and dynamic playback-planning goal.
+- Do not persist or log resolved source URLs, magnets, info hashes, bridge
+  tokens, signed gateway URLs, local file URIs, or bridge URLs.
+- Do not make manual source selection the primary detail-page UX again.
+- Do not show offline completion unless a local file has been verified.
+- Do not make Real-Debrid part of onboarding or default playback.
+- Do not introduce XState unless the existing reducer/service lifecycle is no
+  longer understandable or testable.
+- Do not introduce a full Tamagui migration in one PR; pilot primitives first.
+- Do not make the API server own the desktop bridge by default.
 
 ## Validation Baseline
 

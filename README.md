@@ -11,6 +11,7 @@ Torrent streams work on all platforms, including iOS, via a local P2P daemon tha
 > **Deep dive:** See [ARCHITECTURE.md](./ARCHITECTURE.md) for full system design, module breakdown, resilience patterns, and improvement suggestions.
 > **Current handoff:** See [AGENT_HANDOFF.md](./AGENT_HANDOFF.md) for the latest playback/bridge/UI roadmap and next recommended PRs.
 > **Playback control plane:** See [PLAYBACK.md](./PLAYBACK.md) for `PlaybackSession` persistence and event rules.
+> **UI direction:** See [UI.md](./UI.md) for the pastel glass cinema design direction and current UX guardrails.
 
 ---
 
@@ -83,6 +84,7 @@ npm run dev:server          # API server only — http://localhost:3001
 npm run dev:stream-server   # P2P daemon only  — http://localhost:11470
 npm run dev:mobile          # Expo client only — press 'i' (iOS), 'a' (Android), 'w' (Web)
 npm run dev:desktop         # Electron shell   — requires mobile web running on :8081 first
+npm run dev:desktop-all     # Desktop-oriented dev flow: API + Expo web + Electron
 ```
 
 The API server does not start the bridge by default. Desktop starts and owns its
@@ -94,25 +96,26 @@ want the API server to supervise a standalone bridge process.
 
 ## Features
 
-| Feature                | Details                                                                                                       |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Auth**               | JWT access tokens (15 min) + rotating refresh tokens (7 d). Email verification, password reset. Rate-limited. |
-| **Add-on Registry**    | Install any Stremio-compatible add-on by URL. Manifest validated via Zod on install.                          |
-| **Catalog Aggregator** | Parallel fan-out to all installed add-ons; 5 s timeout + circuit breaker per add-on.                          |
-| **Library**            | Save movies/series; resume watch progress across devices.                                                     |
-| **Video Player**       | `expo-video` with a Strategy Pattern stream engine (HLS · MP4 · Torrent · Real-Debrid).                       |
-| **Downloads**          | Resumable offline downloads — native (iOS/Android), Electron bridge (desktop), anchor fallback (web).         |
-| **Trakt.tv**           | OAuth integration; auto-scrobbles watch events and syncs history bidirectionally.                             |
-| **Casting**            | Chromecast via Google Cast SDK (mobile) or Bonjour/castv2 (desktop).                                          |
-| **Notifications**      | In-app notification system; download completion triggers a server-side notification.                          |
-| **Resilience**         | Cockatiel circuit breakers, React Error Boundaries, Sentry exception tracking, React Query retry.             |
-| **i18n**               | i18next — locale files in `apps/mobile/locales/`.                                                             |
+| Feature                | Details                                                                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**               | JWT access tokens (15 min) + rotating refresh tokens (7 d). Email verification, password reset. Rate-limited.                                         |
+| **Add-on Registry**    | Install any Stremio-compatible add-on by URL. Manifest validated via Zod on install.                                                                  |
+| **Catalog Aggregator** | Parallel fan-out to all installed add-ons; 5 s timeout + circuit breaker per add-on.                                                                  |
+| **Library**            | Save movies/series; resume watch progress across devices.                                                                                             |
+| **Video Player**       | `expo-video` with session-driven Play Best planning for HLS, MP4, and torrent gateway sources. Real-Debrid is optional and only used when configured. |
+| **Downloads**          | Session-driven offline downloads with verified local-file state — native (iOS/Android), Electron bridge (desktop), anchor fallback (web).             |
+| **Trakt.tv**           | OAuth integration; auto-scrobbles watch events and syncs history bidirectionally.                                                                     |
+| **Casting**            | Session-driven cast preparation with Google Cast SDK where available and Bonjour/castv2 through the desktop bridge.                                   |
+| **Notifications**      | In-app notification system; download completion triggers a server-side notification.                                                                  |
+| **Resilience**         | Cockatiel circuit breakers, React Error Boundaries, Sentry exception tracking, React Query retry.                                                     |
+| **i18n**               | i18next — locale files in `apps/mobile/locales/`.                                                                                                     |
 
 ---
 
 ## Getting Content
 
-After logging in, go to the **Settings** tab and install at least one add-on.
+After logging in, go to **Settings -> Sources & Devices** and install at
+least one add-on.
 
 **Recommended add-ons to start:**
 
@@ -125,6 +128,22 @@ After logging in, go to the **Settings** tab and install at least one add-on.
 > its own bridge sidecar; mobile/native dev flows can run
 > `npm run dev:stream-server` or point Sources & Devices at a desktop bridge
 > LAN URL.
+
+---
+
+## Current Product Guardrails
+
+- The primary playback UX is **Play Best**. Source picking is an advanced
+  fallback and should not become the default flow again.
+- `PlaybackSession` is the persistence-safe source of truth for Play,
+  Download, and Cast. Do not persist raw media URLs, magnets, info hashes, or
+  bridge URLs.
+- Downloads are offline-playable only after a real local file URI is verified.
+  Do not show fake offline completion.
+- Real-Debrid is optional, disabled by default, paid-service aware, and absent
+  from first-run onboarding.
+- In the desktop flow, Electron owns the bridge sidecar. The API server bridge
+  supervisor is opt-in through `STREAMER_BRIDGE_SUPERVISOR=true`.
 
 ---
 
@@ -176,4 +195,6 @@ npm run lint                 # ESLint (Turbo)
 npm run format               # Prettier (all files)
 npm run db:studio --workspace=server   # Prisma Studio (DB GUI)
 npm run db:seed --workspace=server     # Seed the database
+npm run package:dir --workspace=@streamer/desktop    # Build unpacked desktop app
+npm run package:check --workspace=@streamer/desktop  # Verify packaged sidecar inputs
 ```

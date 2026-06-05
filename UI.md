@@ -17,12 +17,49 @@ The current product direction is **pastel glass cinema**: Apple-inspired, soft, 
 
 The long-term references are closer to Apple TV/Vision Pro-style media surfaces, StreamX-like Apple platform structure, Infuse, Plex, Netflix, Disney+, and Prime Video than to a technical source browser.
 
+The current UI is an improved baseline, not the final Netflix/Disney+/Prime
+quality product. Future UI work should be screenshot-driven and should preserve
+the now-central playback architecture.
+
+Primary hierarchy:
+
+1. `Play Best` is the main action.
+2. Download, Cast, and Add are secondary actions.
+3. `More Sources` is collapsed by default and treated as an advanced fallback.
+4. Sources & Devices explains bridge/add-on health without forcing users to
+   understand torrents or codecs before pressing Play.
+
 **Styling approach:** The codebase uses two coexisting styling systems:
 
 - **NativeWind v4** (Tailwind for React Native) for utility classes in some components.
 - **`StyleSheet.create()`** with `useTheme()` for dynamic, theme-aware styles in all core components.
 
 In practice, most components use `StyleSheet.create` with inline `colors.xxx` references, not Tailwind classes. NativeWind is present (`global.css`, `tailwind.config.js`, `nativewind-env.d.ts`) but is the minority pattern. New components should default to `StyleSheet.create` + `useTheme`.
+
+Tamagui is not currently a committed full-app migration. If introduced, treat
+it as a pilot for constrained primitives such as buttons, surfaces, sheets,
+status pills, and settings panels before replacing large screens.
+
+Useful future primitives:
+
+- `AppButton`
+- `Surface`
+- `ContentCard`
+- `StatusPill`
+- `SectionHeader`
+- `PlaybackStatusPanel`
+- `EmptyState`
+- `ErrorState`
+- `ActionSheet`
+
+Do not do:
+
+- Do not perform a full visual rewrite in one PR.
+- Do not reintroduce neon/dark-heavy styling as the default app identity.
+- Do not expose raw source complexity as the primary detail-screen flow.
+- Do not add a marketing landing page instead of improving the actual app
+  screens.
+- Do not merge meaningful UI changes without desktop and phone screenshot QA.
 
 ---
 
@@ -295,7 +332,7 @@ For series, it additionally renders the `EpisodeSelector` component to let the u
 
 **Primary flow:** The default action is `Play Best`. It calls `PlaybackOrchestrator.playBest()`, which requests a server playback plan, resolves only the selected source, and passes remaining planned fallbacks into `playerStore`.
 
-**Advanced source display:** Streams are still grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). This should increasingly become a collapsed `More Sources` fallback, not the main user flow. Tapping a manual stream remains an advanced path and still sets stream data in `playerStore`.
+**Advanced source display:** Streams are still grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). This should remain collapsed as `More Sources`, not the main user flow. Tapping a manual stream remains an advanced path and should not bypass the session-driven primary Play Best path.
 
 ---
 
