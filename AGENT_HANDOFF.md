@@ -396,7 +396,7 @@ Follow-ups:
 Goal: make logs and app-controlled telemetry safer before production
 observability is expanded.
 
-Status: **In review.**
+Status: **Complete.**
 
 Implemented:
 
@@ -422,6 +422,34 @@ Known limitations:
 - Subtitle URLs can still carry an encoded magnet as part of the current API
   response contract; they should be moved to opaque/signed identifiers in a
   later bridge API hardening pass.
+
+### PR H: Mobile Production Sentry Baseline
+
+Goal: configure mobile Sentry intentionally now that app-controlled telemetry
+redaction exists.
+
+Status: **In review.**
+
+Implemented:
+
+- Mobile Sentry initialization now uses explicit environment, release, error
+  sample rate, and trace sample rate settings.
+- Sentry remains disabled without `EXPO_PUBLIC_SENTRY_DSN`, disabled in tests,
+  and disabled in development unless `EXPO_PUBLIC_SENTRY_ENABLE_DEV=true`.
+- Default tracing is conservative in production and off in development.
+- `sendDefaultPii` is disabled.
+- `beforeSend` and `beforeBreadcrumb` recursively redact bridge tokens, bearer
+  tokens, signed gateway URLs, magnets, source/download URLs, local URIs, and
+  info hashes.
+- Expo Router's global error boundary captures and renders redacted errors.
+
+Known limitations:
+
+- Server, desktop, and stream-server Sentry/observability integrations are not
+  added in this PR. Add those in a separate dependency-bearing PR.
+- Sentry source-map upload still depends on real organization/project/env
+  configuration in the release pipeline.
+- Session replay remains intentionally unconfigured for privacy.
 
 ## Engineering Rules For Future Agents
 
