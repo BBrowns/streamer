@@ -376,7 +376,12 @@
       "close": "Sluiten",
       "nowPlaying": "Nu aan het afspelen",
       "engine": "Engine",
-      "peers": "peers"
+      "peers": "peers",
+      "play": "Afspelen",
+      "pause": "Pauzeren",
+      "seekBack": "10 seconden terugspoelen",
+      "seekForward": "10 seconden vooruitspoelen",
+      "progress": "Afspeelvoortgang"
     },
     "settings": {
       "title": "Afspeelinstellingen",

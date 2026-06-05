@@ -365,7 +365,12 @@
       "close": "Cerrar",
       "nowPlaying": "Reproduciendo ahora",
       "engine": "Engine",
-      "peers": "pares"
+      "peers": "pares",
+      "play": "Reproducir",
+      "pause": "Pausar",
+      "seekBack": "Retroceder 10 segundos",
+      "seekForward": "Avanzar 10 segundos",
+      "progress": "Progreso de reproducción"
     },
     "settings": {
       "title": "Ajustes de reproducción",

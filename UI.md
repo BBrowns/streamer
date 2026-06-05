@@ -289,13 +289,14 @@ Manages `controlsVisible` state using a 4-second auto-hide timer. Taps anywhere 
 
 ### 6.3 `PlayerControls`
 
-Renders the bottom control bar:
+Renders the visible playback control surface:
 
-- Seek bar (custom, not a native slider — `react-native-gesture-handler` `PanGestureHandler` for scrubbing)
-- Current time / duration
-- Play/Pause, Skip ±10s
-- Playback speed indicator
-- Cast button (conditional on platform)
+- Center glass controls with Play/Pause and Skip ±10s.
+- Bottom pastel glass progress tray with current time, duration, and progress.
+- Accessible progress control using `accessibilityRole="adjustable"`,
+  `accessibilityActions`, and ±10s seek actions.
+- Web pointer pass-through so the overlay can remain visible without blocking
+  unrelated video-surface interactions.
 
 ### 6.4 `usePlayerHotkeys`
 

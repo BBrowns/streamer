@@ -382,7 +382,12 @@
       "close": "Close",
       "nowPlaying": "Now Playing",
       "engine": "Engine",
-      "peers": "peers"
+      "peers": "peers",
+      "play": "Play playback",
+      "pause": "Pause playback",
+      "seekBack": "Seek back 10 seconds",
+      "seekForward": "Seek forward 10 seconds",
+      "progress": "Playback progress"
     },
     "settings": {
       "title": "Playback Settings",
