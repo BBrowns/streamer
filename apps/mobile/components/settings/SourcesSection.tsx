@@ -3,9 +3,7 @@ import {
   View,
   Text,
   Pressable,
-  TextInput,
   Alert,
-  ActivityIndicator,
   StyleSheet,
   Platform,
 } from "react-native";
@@ -23,6 +21,10 @@ import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeS
 import { diagnosticsFromDesktopBridge } from "../../services/streamEngine/desktopBridgeDiagnostics";
 import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
+import { AppButton } from "../ui/AppButton";
+import { StatusPill } from "../ui/StatusPill";
+import { Surface } from "../ui/Surface";
+import { TextField } from "../ui/TextField";
 
 function formatBridgeReason(reason: string) {
   switch (reason) {
@@ -47,7 +49,7 @@ export function SourcesSection() {
     setServerUrls,
     setStreamServerToken,
   } = useAuthStore();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const [tempBackend, setTempBackend] = useState(backendUrl || "");
   const [tempStream, setTempStream] = useState(streamServerUrl || "");
@@ -189,12 +191,12 @@ export function SourcesSection() {
     effectiveBridgeStatus,
     effectiveBridgeDiagnostics,
   );
-  const bridgeColor =
+  const bridgeTone =
     bridgePresentation.tone === "success"
-      ? colors.success
+      ? "success"
       : bridgePresentation.tone === "error"
-        ? colors.error
-        : colors.warning;
+        ? "error"
+        : "warning";
   const bridgeUrl =
     bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
   const bridgeRuntimeLabel =
@@ -219,41 +221,56 @@ export function SourcesSection() {
       </View>
 
       <Pressable
-        style={[styles.addonsCard, { borderColor: colors.border }]}
         onPress={() => {
           hapticSelection();
           router.push("/addons");
         }}
+        accessibilityRole="button"
       >
-        <View
-          style={[
-            styles.iconContainer,
-            { backgroundColor: "rgba(216,180,254,0.14)" },
-          ]}
-        >
-          <Ionicons name="extension-puzzle-outline" size={20} color="#d8b4fe" />
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>
-            {t("settings.items.manageAddons")}
-          </Text>
-          <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
-            {t("settings.subtitles.manageAddons")}
-          </Text>
-        </View>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.textSecondary}
-        />
+        <Surface variant="accent" style={styles.addonsCard}>
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(216,180,254,0.14)" },
+            ]}
+          >
+            <Ionicons
+              name="extension-puzzle-outline"
+              size={20}
+              color="#d8b4fe"
+            />
+          </View>
+          <View style={styles.textContainer}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              {t("settings.items.manageAddons")}
+            </Text>
+            <Text
+              style={[styles.cardSubtitle, { color: colors.textSecondary }]}
+            >
+              {t("settings.subtitles.manageAddons")}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Surface>
       </Pressable>
 
-      <View style={[styles.bridgeCard, { borderColor: colors.border }]}>
+      <Surface style={styles.bridgeCard}>
         <View style={styles.bridgeHeader}>
-          <View style={[styles.statusDot, { backgroundColor: bridgeColor }]} />
-          <Text style={[styles.bridgeTitle, { color: colors.text }]}>
-            {bridgePresentation.title}
-          </Text>
+          <StatusPill
+            label={bridgePresentation.title}
+            tone={bridgeTone}
+            icon={
+              bridgeTone === "success"
+                ? "checkmark-circle-outline"
+                : bridgeTone === "error"
+                  ? "alert-circle-outline"
+                  : "warning-outline"
+            }
+          />
         </View>
         <Text style={[styles.bridgeText, { color: colors.textSecondary }]}>
           {bridgePresentation.detail}
@@ -262,17 +279,7 @@ export function SourcesSection() {
           {bridgeUrl}
         </Text>
         {(effectiveBridgeDiagnostics.reason || bridgeRuntimeLabel) && (
-          <View
-            style={[
-              styles.diagnosticsBox,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.05)"
-                  : "rgba(255,255,255,0.62)",
-                borderColor: colors.border,
-              },
-            ]}
-          >
+          <Surface style={styles.diagnosticsBox}>
             {!!effectiveBridgeDiagnostics.reason && (
               <Text
                 style={[
@@ -303,21 +310,22 @@ export function SourcesSection() {
                 Runtime: {bridgeRuntimeLabel}
               </Text>
             )}
-          </View>
+          </Surface>
         )}
         <View style={styles.actionRow}>
-          <Pressable
-            style={[styles.actionButton, { borderColor: colors.border }]}
+          <AppButton
+            label="Check again"
+            icon="refresh-outline"
+            size="small"
+            variant="ghost"
             onPress={handleCheckBridge}
-          >
-            <Ionicons name="refresh-outline" size={16} color={colors.tint} />
-            <Text style={[styles.actionText, { color: colors.tint }]}>
-              Check again
-            </Text>
-          </Pressable>
+          />
           {bridgeInfo?.lanUrl && (
-            <Pressable
-              style={[styles.actionButton, { borderColor: colors.border }]}
+            <AppButton
+              label="Use LAN URL"
+              icon="copy-outline"
+              size="small"
+              variant="ghost"
               onPress={() => {
                 setTempStream(bridgeInfo.lanUrl);
                 if (bridgeInfo.pairingToken) {
@@ -325,101 +333,56 @@ export function SourcesSection() {
                 }
                 hapticSelection();
               }}
-            >
-              <Ionicons name="copy-outline" size={16} color={colors.tint} />
-              <Text style={[styles.actionText, { color: colors.tint }]}>
-                Use LAN URL
-              </Text>
-            </Pressable>
+            />
           )}
           {Platform.OS === "web" && window.desktopBridge?.restartBridge && (
-            <Pressable
-              style={[styles.actionButton, { borderColor: colors.border }]}
+            <AppButton
+              label={isRestartingBridge ? "Restarting..." : "Restart bridge"}
+              icon="reload-outline"
+              size="small"
+              variant="ghost"
               onPress={handleRestartBridge}
               disabled={isRestartingBridge}
-            >
-              <Ionicons name="reload-outline" size={16} color={colors.tint} />
-              <Text style={[styles.actionText, { color: colors.tint }]}>
-                {isRestartingBridge ? "Restarting..." : "Restart bridge"}
-              </Text>
-            </Pressable>
+              loading={isRestartingBridge}
+            />
           )}
         </View>
-      </View>
+      </Surface>
 
-      <Text style={[styles.label, { color: colors.textSecondary }]}>
-        {t("settings.advanced.backendLabel")}
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
+      <TextField
+        label={t("settings.advanced.backendLabel")}
         value={tempBackend}
         onChangeText={setTempBackend}
         placeholder="e.g. http://192.168.1.50:3001"
-        placeholderTextColor={colors.textSecondary + "80"}
         autoCapitalize="none"
         autoCorrect={false}
       />
 
-      <Text style={[styles.label, { color: colors.textSecondary }]}>
-        {t("settings.advanced.streamLabel")}
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
+      <TextField
+        label={t("settings.advanced.streamLabel")}
         value={tempStream}
         onChangeText={setTempStream}
         placeholder="e.g. http://192.168.1.50:11470"
-        placeholderTextColor={colors.textSecondary + "80"}
         autoCapitalize="none"
         autoCorrect={false}
       />
 
-      <Text style={[styles.label, { color: colors.textSecondary }]}>
-        Bridge pairing token (optional)
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-            color: colors.text,
-            borderColor: colors.border,
-          },
-        ]}
+      <TextField
+        label="Bridge pairing token (optional)"
         value={tempStreamToken}
         onChangeText={setTempStreamToken}
         placeholder="Only needed when your bridge requires a token"
-        placeholderTextColor={colors.textSecondary + "80"}
         autoCapitalize="none"
         autoCorrect={false}
         secureTextEntry
       />
 
-      <View style={styles.warningBox}>
+      <Surface variant="warning" style={styles.warningBox}>
         <Ionicons name="warning-outline" size={16} color="#fbbf24" />
         <Text style={styles.warningText}>{t("settings.advanced.warning")}</Text>
-      </View>
+      </Surface>
 
-      <View style={[styles.serviceCard, { borderColor: colors.border }]}>
+      <Surface variant="accent" style={styles.serviceCard}>
         <View style={styles.bridgeHeader}>
           <Ionicons name="diamond-outline" size={16} color={colors.tint} />
           <Text style={[styles.bridgeTitle, { color: colors.text }]}>
@@ -430,29 +393,23 @@ export function SourcesSection() {
           Optional paid resolver. It is disabled by default and not needed for
           first-run setup.
         </Text>
-      </View>
+      </Surface>
 
       <View style={styles.footer}>
-        <Pressable
-          style={[styles.resetButton, { borderColor: colors.border }]}
+        <AppButton
+          label={t("settings.advanced.restore")}
           onPress={handleReset}
-        >
-          <Text
-            style={[styles.resetButtonText, { color: colors.textSecondary }]}
-          >
-            {t("settings.advanced.restore")}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.saveButton, { backgroundColor: colors.tint }]}
+          variant="secondary"
+          size="large"
+          fullWidth
+        />
+        <AppButton
+          label={t("settings.advanced.apply")}
           onPress={handleSave}
-        >
-          <Text
-            style={[styles.saveButtonText, { color: isDark ? "#000" : "#fff" }]}
-          >
-            {t("settings.advanced.apply")}
-          </Text>
-        </Pressable>
+          variant="primary"
+          size="large"
+          fullWidth
+        />
       </View>
     </View>
   );
@@ -477,23 +434,11 @@ const styles = StyleSheet.create({
   addonsCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 16,
-    borderWidth: 1,
-    backgroundColor: "rgba(216,180,254,0.08)",
-    padding: 16,
   },
   bridgeCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.04)",
     gap: 10,
   },
   serviceCard: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    backgroundColor: "rgba(242,215,255,0.06)",
     gap: 8,
   },
   iconContainer: {
@@ -520,11 +465,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
   bridgeTitle: {
     fontSize: 14,
     fontWeight: "700",
@@ -539,9 +479,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   diagnosticsBox: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
     gap: 4,
   },
   diagnosticsText: {
@@ -554,36 +491,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     marginTop: 4,
   },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  actionText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: -8,
-  },
-  input: {
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    fontSize: 15,
-  },
   warningBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(251, 191, 36, 0.08)",
-    padding: 14,
-    borderRadius: 12,
   },
   warningText: {
     color: "#fbbf24",
@@ -596,26 +506,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     marginTop: 8,
-  },
-  resetButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  resetButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  saveButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 14,
-    fontWeight: "bold",
   },
 });
