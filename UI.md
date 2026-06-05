@@ -52,6 +52,19 @@ Useful future primitives:
 - `ErrorState`
 - `ActionSheet`
 
+Current pilot primitives:
+
+- `components/ui/AppButton.tsx` for primary, secondary, ghost, and danger
+  actions with consistent sizing, icon support, loading state, and accessibility
+  state.
+- `components/ui/Surface.tsx` for bordered pastel glass panels.
+- `components/ui/StatusPill.tsx` for bridge/playback/download readiness labels.
+- `components/ui/TextField.tsx` for themed form inputs.
+
+The first pilot migration is `SourcesSection`, because bridge/add-on setup is
+one of the highest-friction product areas. Future PRs should reuse these
+primitives before adding another local button/card/input style.
+
 Do not do:
 
 - Do not perform a full visual rewrite in one PR.
