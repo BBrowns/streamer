@@ -9,9 +9,35 @@ jest.mock("expo-secure-store", () => ({
 
 // Mock react-native-reanimated
 jest.mock("react-native-reanimated", () => {
-  const Reanimated = require("react-native-reanimated/mock");
-  Reanimated.default.call = () => {};
-  return Reanimated;
+  const animation = {
+    duration: () => animation,
+    springify: () => animation,
+    delay: () => animation,
+  };
+
+  return {
+    __esModule: true,
+    default: {
+      View: "Animated.View",
+      Image: "Animated.Image",
+      FlatList: "Animated.FlatList",
+      createAnimatedComponent: (Component) => Component,
+      call: () => {},
+    },
+    FadeIn: animation,
+    FadeOut: animation,
+    SlideInDown: animation,
+    SlideOutDown: animation,
+    SlideInUp: animation,
+    useSharedValue: (value) => ({ value }),
+    useAnimatedStyle: (factory) => factory(),
+    useAnimatedScrollHandler: () => ({}),
+    withTiming: (value) => value,
+    withSpring: (value) => value,
+    withRepeat: (value) => value,
+    interpolate: (_value, _inputRange, outputRange) => outputRange[0],
+    runOnJS: (fn) => fn,
+  };
 });
 
 // Mock AsyncStorage
