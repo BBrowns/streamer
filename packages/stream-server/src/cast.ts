@@ -8,6 +8,7 @@
 import { Router, Request, Response } from "express";
 import type { Client as CastClientType } from "castv2-client";
 import { requireBridgeAuth, validateCastPlaybackUrl } from "./security.js";
+import { redactSensitiveText } from "./redaction.js";
 
 const router = Router();
 router.use(requireBridgeAuth);
@@ -63,7 +64,10 @@ async function startDiscovery() {
       devices = devices.filter((d) => d.id !== id);
     });
   } catch (err) {
-    console.error("Failed to start bonjour discovery:", err);
+    console.error(
+      "Failed to start bonjour discovery:",
+      redactSensitiveText(String((err as Error | undefined)?.message ?? err)),
+    );
   }
 }
 
@@ -137,7 +141,9 @@ router.post("/play", async (req: Request, res: Response) => {
     client.close();
     return res.json({ success: true });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message ?? "Failed to cast" });
+    return res
+      .status(500)
+      .json({ error: redactSensitiveText(err?.message ?? "Failed to cast") });
   }
 });
 

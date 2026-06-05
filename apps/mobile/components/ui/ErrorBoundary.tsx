@@ -1,6 +1,10 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import {
+  createRedactedError,
+  redactSensitiveText,
+} from "../../services/redaction";
 
 interface Props {
   children: ReactNode;
@@ -31,16 +35,22 @@ class ErrorBoundaryInner extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error("[ErrorBoundary]", error.message, errorInfo.componentStack);
+    const redactedError = createRedactedError(error);
+    const redactedStack = redactSensitiveText(errorInfo.componentStack ?? "");
+
+    console.error("[ErrorBoundary]", redactedError.message, redactedStack);
 
     // Report to Sentry or custom error handler
-    this.props.onError?.(error, errorInfo);
+    this.props.onError?.(redactedError, {
+      ...errorInfo,
+      componentStack: redactedStack,
+    });
 
     try {
       // Lazy Sentry import — only if available
       const Sentry = require("@sentry/react-native");
-      Sentry.captureException(error, {
-        extra: { componentStack: errorInfo.componentStack },
+      Sentry.captureException(redactedError, {
+        extra: { componentStack: redactedStack },
       });
     } catch {
       // Sentry not available — that's fine
@@ -76,7 +86,9 @@ class ErrorBoundaryInner extends Component<Props, State> {
             Something went wrong
           </Text>
           <Text style={[styles.description, { color: textSecondary }]}>
-            {this.state.error?.message || "An unexpected error occurred."}
+            {this.state.error?.message
+              ? redactSensitiveText(this.state.error.message)
+              : "An unexpected error occurred."}
           </Text>
           <Pressable
             style={[styles.retryButton, { backgroundColor: tint }]}

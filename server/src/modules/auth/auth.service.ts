@@ -281,7 +281,8 @@ export class AuthService {
   /**
    * Generate a password reset token.
    * In production, send this via email (SendGrid/Resend/SES).
-   * For dev, the token is returned in the response and logged.
+   * For dev, the token is returned in the response for local UI flows, but is
+   * never logged.
    */
   async forgotPassword(emailInput: string): Promise<{ resetToken: string }> {
     const email = emailInput.toLowerCase().trim();
@@ -311,7 +312,7 @@ export class AuthService {
     await emailService.sendPasswordResetEmail(user.email, resetToken);
 
     logger.info(
-      { userId: user.id, resetToken },
+      { userId: user.id },
       "Password reset token generated and email sent",
     );
 

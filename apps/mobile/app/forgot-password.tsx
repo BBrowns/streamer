@@ -49,7 +49,7 @@ export default function ForgotPasswordScreen() {
       if (res.resetToken) {
         setResetToken(res.resetToken);
         setSuccessMessage(
-          `Reset token generated (Dev Mode): ${res.resetToken}`,
+          "Reset token generated in development mode. Continue to reset your password.",
         );
       } else {
         setSuccessMessage(res.message || t("auth.forgot.success"));

@@ -29,6 +29,7 @@ import {
   createPlaybackRuntimeError,
   inferPlaybackErrorCodeFromMessages,
 } from "./playback/PlaybackErrors";
+import { redactSensitiveText } from "./redaction";
 
 export {
   getDownloadEligibility,
@@ -57,8 +58,8 @@ export function toSafeDownloadErrorMessage(
       : typeof error === "string"
         ? error
         : "";
-  const sanitized = rawMessage
-    .replace(/\b(?:https?:\/\/|magnet:\?)[^\s]+/gi, "[source]")
+  const sanitized = redactSensitiveText(rawMessage)
+    .replace(/\[url\]|\[magnet\]/g, "[source]")
     .replace(/\s+/g, " ")
     .trim();
   return (sanitized || fallback).slice(0, 240);
@@ -584,10 +585,7 @@ export class DownloadService {
             options.playbackSession,
           );
           if (__DEV__)
-            console.log(
-              "[DownloadService] Desktop download completed:",
-              localUri,
-            );
+            console.log("[DownloadService] Desktop download completed");
         } catch (e: any) {
           unsubscribe();
           setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
@@ -699,7 +697,12 @@ export class DownloadService {
         if (__DEV__) console.log("[DownloadService] Download completed");
       }
     } catch (e: any) {
-      if (__DEV__) console.error("[DownloadService] Download failed:", e);
+      if (__DEV__) {
+        console.error(
+          "[DownloadService] Download failed:",
+          redactSensitiveText(String(e?.message || e)),
+        );
+      }
       // If it was cancelled manually, we don't mark as error here usually
       if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
         setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));

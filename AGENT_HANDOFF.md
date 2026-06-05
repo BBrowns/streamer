@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-04.
+> Last updated: 2026-06-05.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -161,6 +161,10 @@ Bridge behavior is safer and more explicit:
 - Bridge auth is supported through bearer token or `x-streamer-bridge-token`.
 - Gateway, metrics, stream, stats, and cast/control routes are covered by auth tests where relevant.
 - CPU/native architecture mismatch is surfaced as unsupported bridge health instead of silently appearing available.
+- Server, mobile, desktop, and stream-server logs now have a baseline redaction
+  pass for bridge tokens, bearer tokens, reset tokens, signed gateway URLs,
+  magnets, source URLs, local file URIs, and torrent info hashes in the touched
+  playback/download/cast/error-reporting paths.
 
 ### UI/UX Progress
 
@@ -339,7 +343,7 @@ Still open:
 
 Goal: harden the production trust boundaries before deeper observability work.
 
-Status: **In progress.**
+Status: **Complete.**
 
 Implemented:
 
@@ -363,7 +367,7 @@ Follow-ups moved to the next security hardening PRs.
 Goal: keep native player and cast URLs header-free while preventing unsigned
 gateway stream URL reuse.
 
-Status: **In progress.**
+Status: **Merged in PR #74.**
 
 Implemented:
 
@@ -380,12 +384,44 @@ Implemented:
 - Adds stream-server tests for unsigned, tampered, expired, renewed, and
   active-grace stream URLs.
 
-Still open:
+Follow-ups:
 
 - Do a follow-up Sentry/error-reporting pass that verifies breadcrumbs and
   exceptions do not contain source URLs, signed stream URLs, bridge tokens, or
   magnets.
 - Add release/build pipeline coverage and golden-path telemetry.
+
+### PR G: Observability Redaction And Secret Hygiene
+
+Goal: make logs and app-controlled telemetry safer before production
+observability is expanded.
+
+Status: **In review.**
+
+Implemented:
+
+- Adds a central server log redaction hook that recursively redacts sensitive
+  object keys, bearer tokens, bridge tokens, reset/verification query tokens,
+  signed gateway stream URLs, magnets, source/download URLs, local URIs, and
+  info hashes before Pino emits log entries.
+- Removes explicit password reset token logging and redacts development email
+  debug output while preserving enough context to debug email delivery.
+- Adds stream-server redaction for WebTorrent, FFmpeg, cast, subtitle, handoff,
+  and gateway-stream construction errors, and removes raw info hash/magnet
+  lifecycle logs from the touched bridge paths.
+- Adds mobile redaction for ErrorBoundary console/Sentry payloads and
+  DownloadService error/local-URI logs.
+- Adds focused server, stream-server, and mobile redaction tests.
+
+Known limitations:
+
+- This does not configure full production Sentry sampling, release health,
+  breadcrumb policy, or source-map upload.
+- The non-production forgot-password response still returns a reset token for
+  local UI flow compatibility; it is no longer logged.
+- Subtitle URLs can still carry an encoded magnet as part of the current API
+  response contract; they should be moved to opaque/signed identifiers in a
+  later bridge API hardening pass.
 
 ## Engineering Rules For Future Agents
 
