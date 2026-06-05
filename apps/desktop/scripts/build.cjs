@@ -4,7 +4,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const srcDir = path.join(root, "src");
 const distDir = path.join(root, "dist");
-const entryFiles = ["main.js", "preload.js", "download-paths.js"];
+const entryFiles = ["main.js", "preload.js", "download-paths.js", "sentry.js"];
 
 fs.rmSync(distDir, { recursive: true, force: true });
 fs.mkdirSync(distDir, { recursive: true });

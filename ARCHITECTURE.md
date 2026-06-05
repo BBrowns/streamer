@@ -572,11 +572,13 @@ conservative production tracing, no default PII, redacted `beforeSend` and
 `beforeBreadcrumb` hooks, and disabled-by-default development behavior. Server
 and stream-server also have `@sentry/node` baselines for unhandled backend and
 bridge failures, using conservative production tracing, no default PII, and the
-same redaction posture before events or breadcrumbs leave the process.
+same redaction posture before events or breadcrumbs leave the process. Electron
+main-process Sentry uses `@sentry/electron` with desktop-specific env overrides,
+the same redaction posture, and observer-only uncaught exception capture so it
+does not swallow normal crash behavior.
 
-Still open: add Electron main-process Sentry if needed. Define production
-source-map upload, release health, release creation, and deployment metadata in
-the release pipeline.
+Still open: define production source-map upload, release health, release
+creation, and deployment metadata in the release pipeline.
 
 #### 3. Manifest re-validation on Startup
 
@@ -654,6 +656,8 @@ The desktop app has no update mechanism. Add `electron-updater` (from `electron-
 | `SENTRY_ENABLE_DEV`                  | `false`                      |          | Allows server/bridge Sentry in development when a DSN is present.                                                                           |
 | `STREAMER_BRIDGE_SENTRY_DSN`         | `SENTRY_DSN` fallback        |          | Bridge-specific Sentry DSN for the stream-server sidecar.                                                                                   |
 | `STREAMER_BRIDGE_SENTRY_*`           | matching `SENTRY_*` fallback |          | Bridge-specific overrides for environment, release, sample rates, and development enablement.                                               |
+| `STREAMER_DESKTOP_SENTRY_DSN`        | `SENTRY_DSN` fallback        |          | Desktop Electron main-process Sentry DSN. Disabled when unset.                                                                              |
+| `STREAMER_DESKTOP_SENTRY_*`          | matching `SENTRY_*` fallback |          | Desktop-specific overrides for environment, release, sample rates, and development enablement.                                              |
 
 ---
 

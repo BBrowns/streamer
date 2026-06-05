@@ -456,7 +456,7 @@ Known limitations:
 Goal: add production-safe Sentry capture for backend and local bridge failures
 without weakening the existing redaction baseline.
 
-Status: **In review.**
+Status: **Complete.**
 
 Implemented:
 
@@ -476,9 +476,43 @@ Implemented:
 
 Known limitations:
 
-- Electron main-process Sentry is still not configured separately.
 - Source-map upload, release creation, and deploy metadata are still release
   pipeline work.
+- This PR does not enable Sentry by default; production must provide DSNs and
+  release/environment env vars.
+
+### PR J: Electron Main-Process Sentry Baseline
+
+Goal: add production-safe Sentry capture for Electron main-process failures
+without enabling renderer telemetry or changing crash semantics.
+
+Status: **In review.**
+
+Implemented:
+
+- Adds `@sentry/electron` to the desktop workspace and copies the Sentry helper
+  into `dist` during the desktop build.
+- Electron main-process Sentry initialization supports desktop-specific env vars
+  first (`STREAMER_DESKTOP_SENTRY_*`) and common `SENTRY_*` fallbacks.
+- Sentry remains disabled without a DSN, disabled in tests, and disabled in
+  development unless `STREAMER_DESKTOP_SENTRY_ENABLE_DEV=true` or
+  `SENTRY_ENABLE_DEV=true`.
+- Captures auto-updater errors, bridge daemon spawn/exit/start failures,
+  Bonjour discovery failures, system tray creation failures, download
+  persistence/restore errors, and uncaught exceptions through
+  `uncaughtExceptionMonitor` so normal Node/Electron crash behavior is not
+  swallowed.
+- Uses conservative production tracing, no default PII, and redacted
+  `beforeSend`/`beforeBreadcrumb` hooks for bearer tokens, signed gateway URLs,
+  magnets, source/download URLs, local URIs, info hashes, and common secret
+  keys.
+
+Known limitations:
+
+- Renderer-process Sentry and session replay remain intentionally unconfigured
+  for privacy and scope control.
+- Source-map upload, release creation, release health, and deploy metadata are
+  still release pipeline work.
 - This PR does not enable Sentry by default; production must provide DSNs and
   release/environment env vars.
 
