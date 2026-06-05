@@ -14,6 +14,12 @@ const {
   toStreamerUri,
 } = require("./download-paths");
 const {
+  resolveBridgeEntrypointPath,
+  resolveBridgeWorkingDirectoryPath,
+  resolveNodeBinaryCandidatePaths,
+  resolveNodeDataChannelBinaryPath,
+} = require("./bridge-runtime");
+const {
   captureDesktopException,
   captureDesktopMessage,
   flushDesktopSentry,
@@ -658,109 +664,34 @@ function getBridgePairingToken() {
 }
 
 function resolveBridgeEntrypoint() {
-  const candidates = [
-    path.resolve(__dirname, "../../../packages/stream-server/dist/index.js"),
-    path.resolve(__dirname, "../../packages/stream-server/dist/index.js"),
-  ];
-  return (
-    candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0]
-  );
-}
-
-function uniqueTruthy(values) {
-  return [...new Set(values.filter(Boolean))];
+  return resolveBridgeEntrypointPath({
+    dirname: __dirname,
+    env: process.env,
+    exists: fs.existsSync,
+    resourcesPath: process.resourcesPath,
+  });
 }
 
 function resolveNodeBinaryCandidates() {
-  const pathCandidates = [];
-  for (const searchPath of (process.env.PATH || "").split(path.delimiter)) {
-    if (!searchPath) continue;
-    pathCandidates.push(
-      path.join(searchPath, process.platform === "win32" ? "node.exe" : "node"),
-    );
-  }
-
-  const homeDir = os.homedir();
-  const managerCandidates = [];
-  if (process.platform === "darwin" || process.platform === "linux") {
-    // nvm
-    managerCandidates.push(
-      path.join(homeDir, ".nvm/versions/node/*/bin/node"),
-      // asdf
-      path.join(homeDir, ".asdf/installs/node/*/bin/node"),
-      // fnm
-      process.platform === "darwin"
-        ? path.join(
-            homeDir,
-            "Library/Application Support/fnm/node-versions/*/installation/bin/node",
-          )
-        : path.join(
-            homeDir,
-            ".local/share/fnm/node-versions/*/installation/bin/node",
-          ),
-    );
-  }
-
-  // Bundled vendor candidates
-  const vendorCandidates = [];
-  const vendorBase = path.resolve(__dirname, "../vendor/node");
-  const resourceBase = path.resolve(process.resourcesPath || "", "node");
-
-  for (const arch of ["arm64", "x64"]) {
-    vendorCandidates.push(
-      path.join(vendorBase, `${process.platform}-${arch}/bin/node`),
-      path.join(resourceBase, `${process.platform}-${arch}/bin/node`),
-    );
-  }
-
-  // Expand wildcards in managerCandidates
-  const expandedCandidates = [];
-  for (const pattern of managerCandidates) {
-    try {
-      if (pattern.includes("*")) {
-        const parts = pattern.split("*");
-        const dir = parts[0];
-        if (fs.existsSync(dir)) {
-          const subdirs = fs.readdirSync(dir);
-          for (const subdir of subdirs) {
-            const candidate = path.join(dir, subdir, parts[1]);
-            if (fs.existsSync(candidate)) {
-              expandedCandidates.push(candidate);
-            }
-          }
-        }
-      } else if (fs.existsSync(pattern)) {
-        expandedCandidates.push(pattern);
-      }
-    } catch (e) {
-      // Ignore errors in candidate resolution
-    }
-  }
-
-  return uniqueTruthy([
-    process.env.STREAMER_BRIDGE_NODE,
-    ...vendorCandidates, // Prefer bundled runtimes!
-    process.env.npm_node_execpath,
-    process.platform === "darwin" ? "/opt/homebrew/bin/node" : null,
-    process.platform === "darwin" ? "/usr/local/bin/node" : null,
-    ...pathCandidates,
-    ...expandedCandidates,
-    "node",
-  ]);
+  return resolveNodeBinaryCandidatePaths({
+    dirname: __dirname,
+    env: process.env,
+    exists: fs.existsSync,
+    homeDir: os.homedir(),
+    isPackaged: electron_1.app.isPackaged,
+    pathEnv: process.env.PATH || "",
+    platform: process.platform,
+    readdir: fs.readdirSync,
+    resourcesPath: process.resourcesPath,
+  });
 }
 
 function resolveNodeDataChannelBinary() {
-  const candidates = [
-    path.resolve(
-      __dirname,
-      "../../../node_modules/node-datachannel/build/Release/node_datachannel.node",
-    ),
-    path.resolve(
-      __dirname,
-      "../../node_modules/node-datachannel/build/Release/node_datachannel.node",
-    ),
-  ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+  return resolveNodeDataChannelBinaryPath({
+    dirname: __dirname,
+    exists: fs.existsSync,
+    resourcesPath: process.resourcesPath,
+  });
 }
 
 function detectNativeNodeArch(nativeBinary) {
@@ -948,7 +879,11 @@ async function startBridgeDaemon() {
 
   const nodeArch = getNodeArch(nodeExecutable);
   const child = spawn(nodeExecutable, [entrypoint], {
-    cwd: path.resolve(__dirname, "../../.."),
+    cwd: resolveBridgeWorkingDirectoryPath({
+      dirname: __dirname,
+      entrypoint,
+      resourcesPath: process.resourcesPath,
+    }),
     env: {
       ...process.env,
       PORT: "11470",

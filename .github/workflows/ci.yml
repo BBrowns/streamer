@@ -22,6 +22,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
+      - name: Lint All Workspaces
+        run: npm run lint
       - name: Type Check All Workspaces
         run: npm run typecheck:all
 
@@ -169,3 +171,11 @@ jobs:
         run: npx tsc --project packages/shared/tsconfig.json
       - name: Build Server
         run: npx tsc --project server/tsconfig.json
+      - name: Build Stream Server Sidecar
+        run: npm run build --workspace=@streamer/stream-server
+      - name: Build Desktop Main Process
+        run: npm run build --workspace=@streamer/desktop
+      - name: Vendor Desktop Node Runtimes
+        run: npm run vendor --workspace=@streamer/desktop
+      - name: Desktop Package Input Smoke
+        run: npm run package:check --workspace=@streamer/desktop

@@ -486,7 +486,7 @@ Known limitations:
 Goal: add production-safe Sentry capture for Electron main-process failures
 without enabling renderer telemetry or changing crash semantics.
 
-Status: **In review.**
+Status: **Complete.**
 
 Implemented:
 
@@ -515,6 +515,40 @@ Known limitations:
   still release pipeline work.
 - This PR does not enable Sentry by default; production must provide DSNs and
   release/environment env vars.
+
+### PR K: Desktop Packaged Sidecar Inputs
+
+Goal: make the desktop bridge packaging path explicit and smoke-testable before
+full signing/notarization release work.
+
+Status: **In review.**
+
+Implemented:
+
+- Adds an `electron-builder` config and desktop package scripts for a packaged
+  desktop app directory.
+- Builds the stream-server sidecar as a mostly bundled Node ESM entrypoint so
+  the packaged helper does not rely on a full repository `node_modules` tree.
+- Copies explicit sidecar resources into the packaged app:
+  `stream-server/index.js`, macOS arm64/x64 vendor Node runtimes, and the
+  `node-datachannel` native binding.
+- Moves bridge entrypoint, vendor runtime, native binary, and working directory
+  resolution into a testable desktop helper.
+- Packaged desktop runtime resolution prefers packaged resources over system
+  Node. `STREAMER_BRIDGE_NODE` is only considered in packaged apps when
+  `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE=1`.
+- Adds CI smoke coverage for desktop package inputs after stream-server,
+  desktop, and vendor runtime builds.
+
+Known limitations:
+
+- This is not yet a signed/notarized desktop release pipeline.
+- The packaged runtime target is macOS arm64/x64. Windows and Linux sidecar
+  packaging still need platform-specific vendor runtime support.
+- The desktop shell still loads the dev Expo web URL; production web asset
+  packaging remains separate release work.
+- App icon, signing identity, notarization, updater feed, and release upload are
+  still open.
 
 ## Engineering Rules For Future Agents
 

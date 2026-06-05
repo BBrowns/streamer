@@ -1,0 +1,36 @@
+{
+  "appId": "app.streamer.desktop",
+  "productName": "Streamer",
+  "directories": {
+    "output": "release"
+  },
+  "files": ["dist/**/*", "package.json"],
+  "extraResources": [
+    {
+      "from": "../../packages/stream-server/dist/index.js",
+      "to": "stream-server/index.js"
+    },
+    {
+      "from": "vendor/node",
+      "to": "node",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "../../node_modules/node-datachannel",
+      "to": "node_modules/node-datachannel",
+      "filter": ["build/Release/**/*", "package.json", "src/**/*"]
+    }
+  ],
+  "asar": true,
+  "npmRebuild": false,
+  "mac": {
+    "category": "public.app-category.entertainment",
+    "target": ["dir"]
+  },
+  "win": {
+    "target": ["dir"]
+  },
+  "linux": {
+    "target": ["dir"]
+  }
+}
