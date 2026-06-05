@@ -496,14 +496,21 @@ Detox tests target elements via `testID` props added to key interactive elements
 
 ## 11. CI/CD (`.github/workflows/ci.yml`)
 
-The GitHub Actions pipeline runs on every push and PR:
+The GitHub Actions pipeline runs on every push and PR. The current baseline is:
 
-1. `npm install` (with dependency integrity check)
-2. `turbo run typecheck` — TypeScript across all workspaces
-3. `turbo run lint` — ESLint
-4. `turbo run test` — Vitest (server) + Jest (mobile)
+1. Dependency install and integrity checks.
+2. `npm run lint`.
+3. `npm run typecheck:all`.
+4. `npm run format:check`.
+5. Server tests with PostgreSQL/Testcontainers.
+6. Stream-server tests.
+7. Mobile Jest tests.
+8. Build checks for shared, server, stream-server, and desktop.
+9. Desktop package-input smoke checks, including stream-server sidecar output,
+   macOS arm64/x64 vendor Node runtimes, and native bridge bindings.
 
-Turbo's remote cache means unchanged packages are not rebuilt between runs.
+Turbo's cache is used where appropriate, but CI should still prove that
+packaged desktop sidecar inputs exist before release work starts.
 
 ---
 
@@ -633,9 +640,12 @@ The desktop app and server-side supervisor have improved bridge startup/diagnost
 
 Integration tests currently spin up one Postgres container per test file, sequentially. `vitest`'s `--pool=threads` with Testcontainers can run multiple containers in parallel, but requires unique port assignment and careful `beforeAll`/`afterAll` scoping. Worth investigating to cut CI time as the test suite grows.
 
-#### 12. Electron Auto-Update
+#### 12. Electron Release And Auto-Update Pipeline
 
-The desktop app has no update mechanism. Add `electron-updater` (from `electron-builder`) and a simple GitHub Releases-based update feed. This is especially important because the desktop app holds the `desktopBridge` download/cast surface that web users depend on.
+The desktop app has `electron-updater` hooks and packaged sidecar inputs, but
+it does not yet have a complete signed/notarized release pipeline, update feed,
+release upload, or production web asset packaging. Finish those pieces before
+claiming production desktop distribution.
 
 ---
 
