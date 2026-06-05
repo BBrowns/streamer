@@ -448,7 +448,12 @@ The stream list on the detail screen renders inside a `ScrollView` (not a `FlatL
 
 #### 7. Keyboard Navigation for Desktop
 
-On Electron/web, interactive elements (catalog cards, episode list items) are not reachable via `Tab` key navigation. Add `focusable`, `onKeyDown`, and focus ring styles to `CatalogItemCard`, `NavLink`, and the stream list items. The `DesktopLayout` sidebar navigation is partially keyboard-accessible via Expo Router's `<Link>` (which renders an `<a>` tag on web), but the main content area is not.
+Electron/web now has a baseline `useWebPressableActivation` helper for
+Tab-focusable Pressables, Enter/Space activation, and visible focus rings.
+It is applied to catalog cards, Continue Watching cards, library cards,
+episode row actions, stream source rows, and the desktop sidebar nav/search.
+Future passes should extend this to remaining settings/detail controls and
+validate full keyboard-only browse -> detail -> Play Best flows in Electron.
 
 #### 8. Player Seek Bar Accessibility
 

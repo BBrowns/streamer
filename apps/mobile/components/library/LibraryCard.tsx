@@ -15,12 +15,12 @@ import {
   isTaskOfflinePlayable,
   useDownloadStore,
 } from "../../stores/downloadStore";
-import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import Animated from "react-native-reanimated";
 import { hapticImpactLight, hapticImpactHeavy } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 export function LibraryCard({
   item,
@@ -65,6 +65,8 @@ export function LibraryCard({
       router.push(`/detail/${item.type}/${itemId}`);
     }
   };
+  const { isKeyboardFocused, webPressableProps } =
+    useWebPressableActivation(handlePress);
 
   const handleContextMenu = (e: any) => {
     if (!isWeb || isSelectionMode) return;
@@ -148,6 +150,7 @@ export function LibraryCard({
 
   return (
     <Pressable
+      {...webPressableProps}
       style={[
         styles.cardContainer,
         {
@@ -155,12 +158,13 @@ export function LibraryCard({
           borderColor:
             isSelectionMode && isSelected
               ? colors.tint
-              : isWeb && isHovered
+              : isWeb && (isHovered || isKeyboardFocused)
                 ? colors.tint
                 : colors.border,
           borderWidth: isSelectionMode && isSelected ? 2 : 1,
         },
         isSelectionMode && isSelected && styles.cardSelected,
+        isWeb && isKeyboardFocused && styles.cardFocused,
       ]}
       onPress={handlePress}
       onLongPress={handleLongPress}
@@ -344,6 +348,13 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     cursor: Platform.OS === "web" ? "pointer" : undefined,
+  } as any,
+  cardFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: "#a78bfa",
+    outlineOffset: 3,
   } as any,
   cardImage: {
     width: "100%",
