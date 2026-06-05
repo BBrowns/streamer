@@ -13,8 +13,17 @@ const {
   resolveManagedDownloadPath,
   toStreamerUri,
 } = require("./download-paths");
+const {
+  captureDesktopException,
+  captureDesktopMessage,
+  flushDesktopSentry,
+  initDesktopSentry,
+  redactSensitiveText,
+} = require("./sentry");
 
 const { autoUpdater } = require("electron-updater");
+
+initDesktopSentry();
 
 let tray = null;
 let mainWindow = null;
@@ -37,19 +46,12 @@ let bridgeState = {
 };
 const downloadJobs = new Map();
 
-function redactSensitiveText(value) {
-  return String(value ?? "")
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
-    .replace(/magnet:\?[^\s"'<>]+/gi, "[magnet]")
-    .replace(
-      /(\/api\/gateway\/jobs\/[^/\s]+\/stream)\?[^\s"'<>]+/gi,
-      "$1?[signed]",
-    )
-    .replace(
-      /([?&](?:token|access_token|refresh_token|signature|auth|authorization|key|api_key)=)[^&\s]+/gi,
-      "$1[redacted]",
-    );
-}
+process.on("uncaughtExceptionMonitor", (error) => {
+  captureDesktopException(error, {
+    component: "electron-main",
+    kind: "uncaught-exception",
+  });
+});
 
 // Configure auto-updater
 autoUpdater.autoDownload = true;
@@ -70,6 +72,7 @@ function checkUpdates() {
   });
 
   autoUpdater.on("error", (err) => {
+    captureDesktopException(err, { component: "auto-updater" });
     console.error(
       "[updater] Error in auto-updater: " + redactSensitiveText(err),
     );
@@ -135,7 +138,14 @@ function persistDownloadJobsNow() {
     });
     fs.renameSync(tempPath, downloadJobsPath);
   } catch (error) {
-    console.warn("[downloads] Failed to persist download jobs:", error);
+    captureDesktopException(error, {
+      component: "downloads",
+      action: "persist",
+    });
+    console.warn(
+      "[downloads] Failed to persist download jobs:",
+      redactSensitiveText(error?.message || error),
+    );
     try {
       fs.rmSync(tempPath, { force: true });
     } catch {}
@@ -209,12 +219,22 @@ function restoreDownloadJobs() {
       });
     }
   } catch (error) {
-    console.warn("[downloads] Failed to restore download jobs:", error);
+    captureDesktopException(error, {
+      component: "downloads",
+      action: "restore",
+    });
+    console.warn(
+      "[downloads] Failed to restore download jobs:",
+      redactSensitiveText(error?.message || error),
+    );
   }
 }
 
 restoreDownloadJobs();
 electron_1.app.on("will-quit", persistDownloadJobsNow);
+electron_1.app.on("will-quit", () => {
+  void flushDesktopSentry(2000);
+});
 
 function emitDownloadJob(job) {
   const snapshot = snapshotDownloadJob(job);
@@ -948,9 +968,16 @@ async function startBridgeDaemon() {
     process.stderr.write(`[stream-server] ${chunk}`);
   });
   child.on("error", (error) => {
+    captureDesktopException(error, {
+      component: "stream-server",
+      action: "spawn",
+      nodeExecutable,
+      entrypoint,
+      nativeArch: runtimeDiagnostics.nativeArch,
+    });
     console.error(
       "[stream-server] Failed to start bridge child process:",
-      error,
+      redactSensitiveText(error?.message || error),
     );
     if (startSequence !== bridgeStartSequence) return;
     setBridgeState({
@@ -964,6 +991,15 @@ async function startBridgeDaemon() {
   child.on("exit", (code, signal) => {
     if (startSequence !== bridgeStartSequence) return;
     if (code !== 0 && signal !== "SIGTERM") {
+      captureDesktopMessage("Bridge child process exited unexpectedly", {
+        component: "stream-server",
+        action: "exit",
+        code,
+        signal,
+        nodeExecutable,
+        entrypoint,
+        nativeArch: runtimeDiagnostics.nativeArch,
+      });
       console.warn(
         `[stream-server] Bridge child process exited with code ${code ?? "null"} signal ${signal ?? "null"}`,
       );
@@ -1142,7 +1178,11 @@ function createTray() {
     tray.setContextMenu(contextMenu);
     tray.on("double-click", () => mainWindow.show());
   } catch (e) {
-    console.warn("Failed to create system tray:", e);
+    captureDesktopException(e, { component: "system-tray" });
+    console.warn(
+      "Failed to create system tray:",
+      redactSensitiveText(e?.message || e),
+    );
   }
 }
 
@@ -1260,13 +1300,21 @@ electron_1.app.whenReady().then(async () => {
         });
       });
     } catch (discoveryError) {
+      captureDesktopException(discoveryError, { component: "bonjour" });
       console.warn(
         "[discovery] Failed to announce via Bonjour:",
-        discoveryError,
+        redactSensitiveText(discoveryError?.message || discoveryError),
       );
     }
   } catch (error) {
-    console.error("Failed to start stream server daemon:", error);
+    captureDesktopException(error, {
+      component: "stream-server",
+      action: "start-daemon",
+    });
+    console.error(
+      "Failed to start stream server daemon:",
+      redactSensitiveText(error?.message || error),
+    );
     clearBridgeOwnerClaim();
     setBridgeState({
       status: "error",
