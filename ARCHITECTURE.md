@@ -196,9 +196,15 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
 2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`.
 3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `phase`, `progress`, `peerCount`, elapsed time, and timeout metadata through `GET /api/gateway/jobs/:id`.
 4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, and `preparing_metadata`.
-5. Once ready, the player receives `/api/gateway/jobs/:id/stream`. Direct-file
-   responses support single HTTP byte ranges, including open-ended and suffix
-   ranges, so `expo-video` can seek without receiving incorrect byte windows.
+5. Once ready, the player receives a signed
+   `/api/gateway/jobs/:id/stream?expires=...&signature=...` URL. The URL is
+   header-free for `expo-video` and cast devices, but the bridge validates the
+   HMAC signature and expiry before serving bytes. Direct-file responses
+   support single HTTP byte ranges, including open-ended and suffix ranges, so
+   `expo-video` can seek without receiving incorrect byte windows. Expired
+   URLs are accepted only when they match the same signature already used by
+   the active stream and stay inside a short grace window, avoiding broken
+   ongoing range requests mid-playback.
 6. If the player stops, the mobile engine calls `DELETE /api/gateway/jobs/:id`
    so warmup work is cancelled instead of leaking. The bridge also prunes
    unused ready jobs on a timer while protecting jobs with active stream
@@ -215,7 +221,7 @@ container.
 
 **Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served. Gateway jobs expose coarser preparation progress before the media URL is ready.
 
-**Bridge auth:** Control routes use `requireBridgeAuth` when `STREAMER_BRIDGE_TOKEN` is configured. Clients can send either bearer auth or `x-streamer-bridge-token`. Stream URLs intended for native video/cast consumption remain a separate hardening topic because many video elements cannot attach custom headers.
+**Bridge auth:** Control routes use `requireBridgeAuth` when `STREAMER_BRIDGE_TOKEN` is configured. Clients can send either bearer auth or `x-streamer-bridge-token`. Gateway stream URLs stay header-free for native video/cast consumption, but are HMAC-signed with expiry query params before the bridge serves bytes.
 
 > **Critical:** The stream-server must be running locally on the same machine as the client (or reachable on the local network) for torrent playback to work. It is not a cloud service.
 
@@ -543,17 +549,17 @@ These are concrete, prioritised engineering improvements for anyone extending th
 
 ### High Priority
 
-#### 1. Short-Lived Signed Gateway Stream URLs
-
-Gateway stream URLs intentionally remain header-free so native video players
-and cast devices can consume them. The bridge now authenticates control
-routes, validates cast URLs, and tightens add-on SSRF boundaries, but stream
-URLs are still bearer-by-possession while a job exists. Add short-lived signed
-stream URLs before treating the local handoff surface as production hardened.
-
-#### 2. Refresh Token Replay Detection
+#### 1. Refresh Token Replay Detection
 
 The current rotation scheme (delete old token → issue new) detects replays by invalidation, but silently fails — the real user just gets a new token. Add an explicit replay detection: if a token that has already been consumed is presented again, immediately invalidate _all_ refresh tokens for that user and force re-authentication. Log the event and optionally notify the user via the notification system.
+
+#### 2. Observability Redaction And Secret Hygiene
+
+Gateway stream URLs are now signed and add-on outbound fetches have SSRF
+guards, but production logging still needs a dedicated pass. Verify Sentry
+breadcrumbs, exception payloads, debug email behavior, and bridge supervisor
+logs do not leak source URLs, bridge tokens, signed stream URLs, magnets, or
+reset tokens.
 
 #### 3. Manifest re-validation on Startup
 
@@ -608,18 +614,21 @@ The desktop app has no update mechanism. Add `electron-updater` (from `electron-
 
 ## 14. Environment Variables Reference
 
-| Variable                     | Default                 | Required | Description                                                                                                        |
-| ---------------------------- | ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`               | —                       | ✅       | PostgreSQL connection string                                                                                       |
-| `JWT_SECRET`                 | —                       | ✅       | HS256 signing secret (minimum 32 chars recommended)                                                                |
-| `JWT_ACCESS_EXPIRY`          | `15m`                   |          | Access token lifetime                                                                                              |
-| `JWT_REFRESH_EXPIRY`         | `7d`                    |          | Refresh token lifetime                                                                                             |
-| `PORT`                       | `3001`                  |          | API server port                                                                                                    |
-| `NODE_ENV`                   | `development`           |          | `test` disables rate limiting                                                                                      |
-| `CORS_ORIGINS`               | `http://localhost:8081` |          | Comma-separated allowed origins                                                                                    |
-| `ADDON_TIMEOUT_MS`           | `5000`                  |          | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                         |
-| `ADDON_MAX_CONCURRENT`       | (configured)            |          | Bulkhead concurrency limit per add-on                                                                              |
-| `STREAMER_BRIDGE_SUPERVISOR` | `false`                 |          | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime. |
+| Variable                             | Default                     | Required | Description                                                                                                                                 |
+| ------------------------------------ | --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                       | —                           | ✅       | PostgreSQL connection string                                                                                                                |
+| `JWT_SECRET`                         | —                           | ✅       | HS256 signing secret (minimum 32 chars recommended)                                                                                         |
+| `JWT_ACCESS_EXPIRY`                  | `15m`                       |          | Access token lifetime                                                                                                                       |
+| `JWT_REFRESH_EXPIRY`                 | `7d`                        |          | Refresh token lifetime                                                                                                                      |
+| `PORT`                               | `3001`                      |          | API server port                                                                                                                             |
+| `NODE_ENV`                           | `development`               |          | `test` disables rate limiting                                                                                                               |
+| `CORS_ORIGINS`                       | `http://localhost:8081`     |          | Comma-separated allowed origins                                                                                                             |
+| `ADDON_TIMEOUT_MS`                   | `5000`                      |          | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                                                  |
+| `ADDON_MAX_CONCURRENT`               | (configured)                |          | Bulkhead concurrency limit per add-on                                                                                                       |
+| `STREAMER_BRIDGE_SUPERVISOR`         | `false`                     |          | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime.                          |
+| `STREAMER_BRIDGE_TOKEN`              | —                           |          | Optional bridge control-route token; clients send bearer auth or `x-streamer-bridge-token`.                                                 |
+| `STREAMER_GATEWAY_STREAM_SECRET`     | per-process random fallback |          | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
+| `STREAMER_GATEWAY_STREAM_URL_TTL_MS` | `7200000`                   |          | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
 
 ---
 

@@ -355,6 +355,28 @@ describe("TorrentEngine", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves signed gateway stream query params when building the playback URI", async () => {
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        playbackUrl:
+          "/api/gateway/jobs/job-1/stream?expires=123&signature=signed",
+      }),
+    });
+
+    const uri = await engine.getPlaybackUri({ infoHash: "deadbeef" });
+
+    expect(uri).toBe(
+      "http://bridge.test/api/gateway/jobs/job-1/stream?expires=123&signature=signed",
+    );
+  });
+
   it("sends the optional bridge auth token when creating gateway jobs", async () => {
     useAuthStore.setState({ streamServerToken: "pairing-token" });
     engine = new TorrentEngine({

@@ -1,12 +1,19 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { requireBridgeAuth, validateCastPlaybackUrl } from "../security.js";
+import {
+  createSignedGatewayStreamPath,
+  requireBridgeAuth,
+  validateCastPlaybackUrl,
+  validateGatewayStreamSignature,
+} from "../security.js";
 import { createStreamServerApp } from "../index.js";
 import { pruneTorrents, validateTorrentFiles } from "../torrent.js";
 import { getSafeCastContentType } from "../cast.js";
 
 const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
+const previousGatewayStreamSecret = process.env.STREAMER_GATEWAY_STREAM_SECRET;
+const previousGatewayStreamTtl = process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
 
 function protectedApp() {
   const app = express();
@@ -154,6 +161,109 @@ describe("Bridge auth", () => {
     await request(app).delete("/api/gateway/jobs/missing").expect(401);
     await request(app).get("/api/torrent/abcdef/metrics").expect(401);
     await request(app).get("/stats").expect(401);
+  });
+});
+
+describe("Gateway stream URL signing", () => {
+  afterEach(() => {
+    if (previousGatewayStreamSecret === undefined) {
+      delete process.env.STREAMER_GATEWAY_STREAM_SECRET;
+    } else {
+      process.env.STREAMER_GATEWAY_STREAM_SECRET = previousGatewayStreamSecret;
+    }
+
+    if (previousGatewayStreamTtl === undefined) {
+      delete process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
+    } else {
+      process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = previousGatewayStreamTtl;
+    }
+  });
+
+  it("creates a signed gateway stream path that validates for the bound job", () => {
+    process.env.STREAMER_GATEWAY_STREAM_SECRET = "test-gateway-secret";
+    process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = "60000";
+    const path = createSignedGatewayStreamPath("job-1", 1_000);
+    const query = Object.fromEntries(
+      new URL(`http://bridge.test${path}`).searchParams,
+    );
+
+    expect(path).toMatch(
+      /^\/api\/gateway\/jobs\/job-1\/stream\?expires=61000&signature=.+$/,
+    );
+    expect(
+      validateGatewayStreamSignature("job-1", query, { now: 2_000 }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("rejects missing, tampered, and expired gateway stream signatures", () => {
+    process.env.STREAMER_GATEWAY_STREAM_SECRET = "test-gateway-secret";
+    process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = "60000";
+    const path = createSignedGatewayStreamPath("job-1", 1_000);
+    const query = Object.fromEntries(
+      new URL(`http://bridge.test${path}`).searchParams,
+    );
+
+    expect(
+      validateGatewayStreamSignature("job-1", {}, { now: 2_000 }),
+    ).toMatchObject({ ok: false, reason: "missing" });
+    expect(
+      validateGatewayStreamSignature(
+        "job-1",
+        { ...query, signature: "tampered" },
+        { now: 2_000 },
+      ),
+    ).toMatchObject({ ok: false, reason: "invalid" });
+    expect(
+      validateGatewayStreamSignature("job-1", query, { now: 70_000 }),
+    ).toMatchObject({ ok: false, reason: "expired" });
+  });
+
+  it("allows expired signatures only while the same job is actively streaming", () => {
+    process.env.STREAMER_GATEWAY_STREAM_SECRET = "test-gateway-secret";
+    process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = "60000";
+    const path = createSignedGatewayStreamPath("job-1", 1_000);
+    const query = Object.fromEntries(
+      new URL(`http://bridge.test${path}`).searchParams,
+    );
+
+    expect(
+      validateGatewayStreamSignature("job-1", query, {
+        now: 70_000,
+        lastStreamAccessAt: 65_000,
+        activeSignature: String(query.signature),
+        activeGraceMs: 10_000,
+      }),
+    ).toMatchObject({ ok: true });
+    expect(
+      validateGatewayStreamSignature("job-1", query, {
+        now: 80_000,
+        lastStreamAccessAt: 65_000,
+        activeSignature: String(query.signature),
+        activeGraceMs: 10_000,
+      }),
+    ).toMatchObject({ ok: false, reason: "expired" });
+  });
+
+  it("does not extend expired signatures that were not the active stream URL", () => {
+    process.env.STREAMER_GATEWAY_STREAM_SECRET = "test-gateway-secret";
+    process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS = "60000";
+    const activePath = createSignedGatewayStreamPath("job-1", 1_000);
+    const inactivePath = createSignedGatewayStreamPath("job-1", 2_000);
+    const activeQuery = Object.fromEntries(
+      new URL(`http://bridge.test${activePath}`).searchParams,
+    );
+    const inactiveQuery = Object.fromEntries(
+      new URL(`http://bridge.test${inactivePath}`).searchParams,
+    );
+
+    expect(
+      validateGatewayStreamSignature("job-1", inactiveQuery, {
+        now: 80_000,
+        lastStreamAccessAt: 75_000,
+        activeSignature: String(activeQuery.signature),
+        activeGraceMs: 10_000,
+      }),
+    ).toMatchObject({ ok: false, reason: "expired" });
   });
 });
 

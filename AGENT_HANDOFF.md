@@ -318,7 +318,7 @@ Status: **Complete.**
 
 Goal: validate production behavior beyond mocked readiness tests.
 
-Status: **In progress.**
+Status: **Merged in PR #73.**
 
 Implemented:
 
@@ -356,11 +356,35 @@ Implemented:
 - Adds focused server and mobile tests for SSRF, redirects, configured bridge
   URLs, and cast bridge routing.
 
+Follow-ups moved to the next security hardening PRs.
+
+### PR F: Signed Gateway Stream URLs
+
+Goal: keep native player and cast URLs header-free while preventing unsigned
+gateway stream URL reuse.
+
+Status: **In progress.**
+
+Implemented:
+
+- Gateway job responses now return signed
+  `/api/gateway/jobs/:id/stream?expires=...&signature=...` URLs.
+- The stream route validates the HMAC signature and expiry before preparing or
+  serving torrent bytes.
+- Signing uses `STREAMER_GATEWAY_STREAM_SECRET` when configured, otherwise
+  falls back to `STREAMER_BRIDGE_TOKEN`, then a per-process random secret.
+- Status polling renews the signed playback URL while the job can stream.
+- Expired URLs are accepted only when they match the same signature already
+  used by the active stream and stay inside a short grace window, so ongoing
+  byte-range requests do not fail mid-playback.
+- Adds stream-server tests for unsigned, tampered, expired, renewed, and
+  active-grace stream URLs.
+
 Still open:
 
-- Add short-lived signed gateway stream URLs.
 - Do a follow-up Sentry/error-reporting pass that verifies breadcrumbs and
-  exceptions do not contain source URLs, bridge tokens, or magnets.
+  exceptions do not contain source URLs, signed stream URLs, bridge tokens, or
+  magnets.
 - Add release/build pipeline coverage and golden-path telemetry.
 
 ## Engineering Rules For Future Agents

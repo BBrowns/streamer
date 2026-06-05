@@ -1,9 +1,21 @@
-import { timingSafeEqual } from "crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import net from "net";
 import type { NextFunction, Request, Response } from "express";
 
 export interface CastUrlValidationOptions {
   allowedHosts?: string[];
+}
+
+export interface GatewayStreamUrlValidationOptions {
+  now?: number;
+  lastStreamAccessAt?: number;
+  activeSignature?: string;
+  activeGraceMs?: number;
+}
+
+export interface GatewayStreamUrlValidationResult {
+  ok: boolean;
+  reason?: "missing" | "invalid" | "expired";
 }
 
 export interface CastUrlValidationResult {
@@ -17,6 +29,9 @@ const LOCAL_HOSTNAMES = new Set([
   "ip6-localhost",
   "metadata.google.internal",
 ]);
+const DEFAULT_GATEWAY_STREAM_URL_TTL_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_GATEWAY_ACTIVE_STREAM_GRACE_MS = 10 * 60 * 1000;
+const fallbackGatewayStreamSecret = randomBytes(32).toString("hex");
 
 function normalizeHost(host?: string | null) {
   if (!host) return "";
@@ -47,6 +62,32 @@ function getConfiguredBridgeToken() {
   return process.env.STREAMER_BRIDGE_TOKEN?.trim() || "";
 }
 
+function getGatewayStreamSigningSecret() {
+  return (
+    process.env.STREAMER_GATEWAY_STREAM_SECRET?.trim() ||
+    getConfiguredBridgeToken() ||
+    fallbackGatewayStreamSecret
+  );
+}
+
+function getGatewayStreamUrlTtlMs() {
+  const raw = Number(process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS);
+  return Number.isFinite(raw) && raw > 0
+    ? raw
+    : DEFAULT_GATEWAY_STREAM_URL_TTL_MS;
+}
+
+function signGatewayStreamUrl(jobId: string, expiresAt: number) {
+  return createHmac("sha256", getGatewayStreamSigningSecret())
+    .update(`gateway-stream:v1:${jobId}:${expiresAt}`)
+    .digest("base64url");
+}
+
+function normalizeQueryValue(value: unknown) {
+  if (Array.isArray(value)) return value[0];
+  return typeof value === "string" ? value : undefined;
+}
+
 function readRequestBridgeToken(req: Request) {
   const authorization = req.get("authorization") || "";
   if (authorization.toLowerCase().startsWith("bearer ")) {
@@ -74,6 +115,58 @@ export function requireBridgeAuth(
   }
 
   res.status(401).json({ error: "Bridge authentication required" });
+}
+
+export function createSignedGatewayStreamPath(jobId: string, now = Date.now()) {
+  const expiresAt = now + getGatewayStreamUrlTtlMs();
+  const signature = signGatewayStreamUrl(jobId, expiresAt);
+  const params = new URLSearchParams({
+    expires: String(expiresAt),
+    signature,
+  });
+
+  return `/api/gateway/jobs/${encodeURIComponent(jobId)}/stream?${params.toString()}`;
+}
+
+export function validateGatewayStreamSignature(
+  jobId: string,
+  query: Pick<Request, "query">["query"],
+  options: GatewayStreamUrlValidationOptions = {},
+): GatewayStreamUrlValidationResult {
+  const expiresRaw = normalizeQueryValue(query.expires);
+  const signature = normalizeQueryValue(query.signature);
+  if (!expiresRaw || !signature) {
+    return { ok: false, reason: "missing" };
+  }
+
+  const expiresAt = Number(expiresRaw);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const expected = signGatewayStreamUrl(jobId, expiresAt);
+  if (!safeEqual(signature, expected)) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const now = options.now ?? Date.now();
+  if (expiresAt >= now) {
+    return { ok: true };
+  }
+
+  const activeGraceMs =
+    options.activeGraceMs ?? DEFAULT_GATEWAY_ACTIVE_STREAM_GRACE_MS;
+  const lastStreamAccessAt = options.lastStreamAccessAt;
+  if (
+    lastStreamAccessAt &&
+    options.activeSignature === signature &&
+    now - lastStreamAccessAt >= 0 &&
+    now - lastStreamAccessAt <= activeGraceMs
+  ) {
+    return { ok: true };
+  }
+
+  return { ok: false, reason: "expired" };
 }
 
 function isAllowedHost(host: string, allowedHosts: string[]) {
