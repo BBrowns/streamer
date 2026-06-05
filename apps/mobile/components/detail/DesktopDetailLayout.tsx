@@ -16,6 +16,7 @@ import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { FlashList } from "@shopify/flash-list";
 import { useTheme } from "../../hooks/useTheme";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
+import { DetailActionPanel } from "./DetailActionPanel";
 
 export function DesktopDetailLayout({
   id,
@@ -139,56 +140,20 @@ export function DesktopDetailLayout({
         </Text>
       )}
 
-      {castType !== "series" && (
-        <View style={styles.primaryActionRow}>
-          <Pressable
-            style={[
-              styles.playBestBtn,
-              { backgroundColor: colors.tint },
-              (!hasMovieSources || planningAction) && styles.actionDisabled,
-            ]}
-            disabled={!hasMovieSources || !!planningAction}
-            onPress={() => handlePlayStream()}
-          >
-            <Ionicons name="play" size={18} color={primaryTextColor} />
-            <Text style={[styles.playBestText, { color: primaryTextColor }]}>
-              {planningAction === "play" ? "Finding best..." : "Play Best"}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.secondaryActionBtn,
-              { backgroundColor: surfaceColor, borderColor: colors.border },
-              (!hasMovieSources || planningAction) && styles.actionDisabled,
-            ]}
-            disabled={!hasMovieSources || !!planningAction}
-            onPress={() => handleDownloadStream()}
-          >
-            <Ionicons name="download-outline" size={18} color={colors.tint} />
-            <Text style={[styles.secondaryActionText, { color: colors.tint }]}>
-              {planningAction === "download" ? "Preparing..." : "Download"}
-            </Text>
-          </Pressable>
-          {handleCastStream && (
-            <Pressable
-              style={[
-                styles.secondaryActionBtn,
-                { backgroundColor: surfaceColor, borderColor: colors.border },
-                (!hasMovieSources || planningAction) && styles.actionDisabled,
-              ]}
-              disabled={!hasMovieSources || !!planningAction}
-              onPress={() => handleCastStream()}
-            >
-              <Ionicons name="tv-outline" size={18} color={colors.tint} />
-              <Text
-                style={[styles.secondaryActionText, { color: colors.tint }]}
-              >
-                {planningAction === "cast" ? "Preparing..." : "Cast"}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      )}
+      <DetailActionPanel
+        castType={castType}
+        sourceCount={sourceCount}
+        episodeCount={meta.videos?.length || 0}
+        streamsLoading={streamsLoading}
+        hasPlayableSources={hasMovieSources}
+        inLibrary={!!inLibrary}
+        planningAction={planningAction}
+        onPlayBest={() => handlePlayStream()}
+        onDownload={() => handleDownloadStream()}
+        onCast={handleCastStream ? () => handleCastStream() : undefined}
+        onToggleLibrary={handleToggleLibrary}
+        style={styles.detailActionPanel}
+      />
 
       {!!playbackNotice && !!onDismissPlaybackNotice && (
         <PlaybackReadinessNotice
@@ -375,31 +340,6 @@ export function DesktopDetailLayout({
             </View>
           )}
         </View>
-        <Pressable
-          style={[
-            styles.libraryBtn,
-            { borderColor: colors.border, backgroundColor: surfaceColor },
-            inLibrary && {
-              backgroundColor: colors.tint,
-              borderColor: colors.tint,
-            },
-          ]}
-          onPress={handleToggleLibrary}
-        >
-          <Ionicons
-            name={inLibrary ? "checkmark" : "add"}
-            size={18}
-            color={inLibrary ? primaryTextColor : colors.tint}
-          />
-          <Text
-            style={[
-              styles.libraryBtnText,
-              { color: inLibrary ? primaryTextColor : colors.tint },
-            ]}
-          >
-            {inLibrary ? "In Library" : "Add to Library"}
-          </Text>
-        </Pressable>
         <View
           style={[
             styles.deviceHintCard,
@@ -588,74 +528,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  libraryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "rgba(216, 180, 254, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 180, 254, 0.28)",
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    alignSelf: "stretch",
-    marginTop: 18,
-    marginBottom: 16,
-    minHeight: 48,
-  },
-  primaryActionRow: {
-    flexDirection: "row",
-    gap: 10,
+  detailActionPanel: {
+    maxWidth: 820,
     marginBottom: 28,
-    flexWrap: "wrap",
-  },
-  playBestBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#f2d7ff",
-    borderRadius: 18,
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    minHeight: 48,
-  },
-  actionDisabled: {
-    opacity: 0.45,
-  },
-  playBestText: {
-    color: "#2c1738",
-    fontWeight: "900",
-  },
-  secondaryActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  secondaryActionText: {
-    color: "#f2d7ff",
-    fontWeight: "800",
-  },
-  libraryBtnActive: {
-    backgroundColor: "#d8b4fe",
-    borderColor: "#d8b4fe",
-  },
-  libraryBtnText: {
-    color: "#f2d7ff",
-    fontWeight: "800",
-    fontSize: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0,
-  },
-  libraryBtnTextActive: {
-    color: "#2c1738",
   },
   genreRow: {
     flexDirection: "row",
