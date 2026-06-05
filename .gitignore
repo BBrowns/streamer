@@ -96,4 +96,5 @@ expo-env.d.ts
 # Stream server
 packages/stream-server/downloads/
 apps/desktop/vendor/
+apps/desktop/release/
 .aider*

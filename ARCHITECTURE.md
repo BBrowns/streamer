@@ -424,6 +424,14 @@ An Electron shell that loads the Expo web build on `localhost:8081`. It adds:
   - `deleteFile(localUri)` — delete downloaded files
   - `onDownloadProgress(callback)` — IPC event subscription
 - Native OS integration (system tray, window management).
+- **Packaged bridge sidecar inputs** — desktop packaging uses
+  `apps/desktop/electron-builder.json` plus the desktop workspace
+  `package:dir` script. The package includes
+  `packages/stream-server/dist/index.js`, macOS arm64/x64 vendor Node runtimes,
+  and the `node-datachannel` native binding as explicit resources. Packaged
+  bridge resolution prefers those resources over system Node, with
+  `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE=1` required before a packaged app honors
+  `STREAMER_BRIDGE_NODE`.
 
 ---
 
@@ -646,6 +654,9 @@ The desktop app has no update mechanism. Add `electron-updater` (from `electron-
 | `ADDON_MAX_CONCURRENT`               | (configured)                 |          | Bulkhead concurrency limit per add-on                                                                                                       |
 | `STREAMER_BRIDGE_SUPERVISOR`         | `false`                      |          | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime.                          |
 | `STREAMER_BRIDGE_TOKEN`              | —                            |          | Optional bridge control-route token; clients send bearer auth or `x-streamer-bridge-token`.                                                 |
+| `STREAMER_BRIDGE_ENTRYPOINT`         | packaged/dev auto-detect     |          | Optional desktop bridge entrypoint override. Intended for diagnostics and local repair only.                                                |
+| `STREAMER_BRIDGE_NODE`               | packaged/dev auto-detect     |          | Optional Node runtime override. Packaged desktop apps ignore it unless `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE=1`.                               |
+| `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE`  | `false` in packaged desktop  |          | Allows packaged desktop apps to fall back to system Node for bridge repair/debugging.                                                       |
 | `STREAMER_GATEWAY_STREAM_SECRET`     | per-process random fallback  |          | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
 | `STREAMER_GATEWAY_STREAM_URL_TTL_MS` | `7200000`                    |          | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
 | `SENTRY_DSN`                         | —                            |          | Enables API server Sentry in production and can act as a fallback DSN for the stream-server bridge.                                         |
@@ -689,6 +700,9 @@ npm run dev:desktop        # Electron (requires mobile web on :8081 first)
 
 # Desktop owns its bridge sidecar. Keep STREAMER_BRIDGE_SUPERVISOR=false
 # unless you explicitly want the API server to supervise a standalone bridge.
+
+# Package desktop sidecar inputs and produce an unsigned app directory.
+npm run package:dir --workspace=@streamer/desktop
 
 # Run tests
 npm run test --workspace=server        # Vitest
