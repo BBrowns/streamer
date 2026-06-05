@@ -6,6 +6,25 @@ import { validateSafeUrl } from "../../utils/security.js";
 import { addonManifestSchema } from "@streamer/shared";
 import type { AddonManifest, InstalledAddon } from "@streamer/shared";
 
+const MAX_ADDON_REDIRECTS = 3;
+
+function isRedirectStatus(status: number) {
+  return [301, 302, 303, 307, 308].includes(status);
+}
+
+function safeUrlForLog(urlString: string) {
+  try {
+    const parsed = new URL(urlString);
+    return {
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      pathname: parsed.pathname,
+    };
+  } catch {
+    return { invalid: true };
+  }
+}
+
 export class AddonService {
   /** Fetch and validate manifest from a remote add-on URL */
   async fetchManifest(transportUrl: string): Promise<AddonManifest> {
@@ -15,9 +34,7 @@ export class AddonService {
       : `${base}/manifest.json`;
 
     try {
-      await validateSafeUrl(manifestUrl);
-
-      const { data } = await axios.get(manifestUrl, { timeout: 5000 });
+      const { data } = await this.fetchSafeAddonJson(manifestUrl);
       const manifest = addonManifestSchema.parse(data);
       return manifest;
     } catch (err: any) {
@@ -25,11 +42,41 @@ export class AddonService {
         throw new AppError(400, "Invalid add-on manifest format");
       }
       logger.warn(
-        { transportUrl, error: err.message },
+        { target: safeUrlForLog(transportUrl), error: err.message },
         "Failed to fetch add-on manifest",
       );
       throw new AppError(502, "Could not reach add-on at the provided URL");
     }
+  }
+
+  private async fetchSafeAddonJson(url: string, redirects = 0): Promise<any> {
+    if (redirects > MAX_ADDON_REDIRECTS) {
+      throw new Error("Too many add-on redirects");
+    }
+
+    await validateSafeUrl(url);
+
+    const response = await axios.get(url, {
+      timeout: 5000,
+      maxRedirects: 0,
+      maxContentLength: 1024 * 1024,
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || isRedirectStatus(status),
+    });
+
+    if (isRedirectStatus(response.status)) {
+      const location = response.headers.location;
+      if (typeof location !== "string" || location.trim().length === 0) {
+        throw new Error("Add-on redirect missing Location header");
+      }
+
+      return this.fetchSafeAddonJson(
+        new URL(location, url).toString(),
+        redirects + 1,
+      );
+    }
+
+    return response;
   }
 
   /** Install an add-on for a user */
@@ -118,10 +165,7 @@ export class AddonService {
         },
       });
 
-      logger.info(
-        { addonId, transportUrl: addon.transportUrl },
-        "Add-on manifest re-validated",
-      );
+      logger.info({ addonId }, "Add-on manifest re-validated");
     } catch (err: any) {
       // If re-validation fails, update lastValidatedAt anyway to prevent constant retries
       // but keep the old manifest. Or maybe wait less? Let's just update timestamp to "now"

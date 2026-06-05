@@ -78,6 +78,9 @@ beforeEach(async () => {
 
 describe("Aggregator Resilience: Addon Timeout Handling", () => {
   it("should return partial results when slow add-on times out", async () => {
+    const previousAllowPrivate = process.env.ADDON_ALLOW_PRIVATE_NETWORKS;
+    process.env.ADDON_ALLOW_PRIVATE_NETWORKS = "true";
+
     // Create a mock "slow add-on" server
     const slowAddon = new Hono();
     slowAddon.get("/manifest.json", (c) => {
@@ -141,6 +144,11 @@ describe("Aggregator Resilience: Addon Timeout Handling", () => {
       // Results will be empty because the slow add-on timed out
       expect(catRes.body.metas).toEqual([]);
     } finally {
+      if (previousAllowPrivate === undefined) {
+        delete process.env.ADDON_ALLOW_PRIVATE_NETWORKS;
+      } else {
+        process.env.ADDON_ALLOW_PRIVATE_NETWORKS = previousAllowPrivate;
+      }
       slowServer.close();
     }
   }, 15000);

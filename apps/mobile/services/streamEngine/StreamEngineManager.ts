@@ -36,6 +36,73 @@ function resolveBridgeUrl(): string {
   return "http://localhost:11470";
 }
 
+function normalizeHost(host?: string | null) {
+  const trimmed = (host || "").trim().toLowerCase();
+  return trimmed.startsWith("[") && trimmed.endsWith("]")
+    ? trimmed.slice(1, -1)
+    : trimmed;
+}
+
+function isIpv4PrivateOrLocal(host: string) {
+  const parts = host.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
+    return false;
+  }
+
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+function isIpv6PrivateOrLocal(host: string) {
+  return (
+    host === "::1" ||
+    host.startsWith("fe80:") ||
+    host.startsWith("fc") ||
+    host.startsWith("fd")
+  );
+}
+
+export function validateBridgeUrl(rawUrl: string | null | undefined): {
+  ok: boolean;
+  url?: string;
+  reason?: string;
+} {
+  if (!rawUrl || rawUrl.trim().length === 0) {
+    return { ok: false, reason: "missing-url" };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { ok: false, reason: "invalid-url" };
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { ok: false, reason: "invalid-protocol" };
+  }
+
+  if (parsed.username || parsed.password) {
+    return { ok: false, reason: "credentials-not-allowed" };
+  }
+
+  const host = normalizeHost(parsed.hostname);
+  const isLocalHost =
+    host === "localhost" || host.endsWith(".localhost") || host === "10.0.2.2";
+  const isPrivateIp = isIpv4PrivateOrLocal(host) || isIpv6PrivateOrLocal(host);
+
+  if (!isLocalHost && !isPrivateIp) {
+    return { ok: false, reason: "not-local-or-lan" };
+  }
+
+  return { ok: true, url: parsed.toString().replace(/\/$/, "") };
+}
+
 export type BridgeStatus =
   | "available"
   | "unreachable"
@@ -83,6 +150,17 @@ export class StreamEngineManager {
   async detectBridge(): Promise<boolean> {
     const urlsToTry = new Set<string>();
     const defaultUrl = this.getBridgeUrl();
+    if (!defaultUrl) {
+      this.bridgeAvailable = false;
+      this.bridgeStatus = "wrong-url";
+      this.bridgeDiagnostics = {
+        status: "wrong-url",
+        reason: "invalid-url",
+        message: "Bridge URL is not trusted.",
+        checkedAt: Date.now(),
+      };
+      return false;
+    }
     urlsToTry.add(defaultUrl);
 
     // Fallbacks for simulators/local usage
@@ -109,7 +187,7 @@ export class StreamEngineManager {
     for (const url of urlsToTry) {
       const probe = await this.probeBridge(url);
       const { status } = probe;
-      console.log(`[StreamEngineManager] Probe ${url}: ${status}`);
+      console.log(`[StreamEngineManager] Bridge probe result: ${status}`);
 
       if (status === "available") {
         this.bridgeUrl = url;
@@ -229,7 +307,25 @@ export class StreamEngineManager {
 
   getBridgeUrl(): string {
     const { streamServerUrl } = useAuthStore.getState();
-    this.bridgeUrl = streamServerUrl || resolveBridgeUrl();
+    if (streamServerUrl) {
+      const validation = validateBridgeUrl(streamServerUrl);
+      if (validation.ok && validation.url) {
+        this.bridgeUrl = validation.url;
+        return this.bridgeUrl;
+      }
+
+      this.bridgeAvailable = false;
+      this.bridgeStatus = "wrong-url";
+      this.bridgeDiagnostics = {
+        status: "wrong-url",
+        url: streamServerUrl,
+        reason: validation.reason,
+        message: "Configured bridge URL is not a trusted local/LAN URL.",
+        checkedAt: Date.now(),
+      };
+    }
+
+    this.bridgeUrl = resolveBridgeUrl();
     return this.bridgeUrl;
   }
 

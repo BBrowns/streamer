@@ -26,6 +26,53 @@ const secureAgent = new https.Agent({
   keepAlive: true,
 });
 
+const MAX_ADDON_REDIRECTS = 3;
+
+function isRedirectStatus(status: number) {
+  return [301, 302, 303, 307, 308].includes(status);
+}
+
+function safeUrlForLog(urlString: string) {
+  try {
+    const parsed = new URL(urlString);
+    return {
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      pathname: parsed.pathname,
+    };
+  } catch {
+    return { invalid: true };
+  }
+}
+
+async function fetchSafeAddonJson(url: string, redirects = 0): Promise<any> {
+  if (redirects > MAX_ADDON_REDIRECTS) {
+    throw new Error("Too many add-on redirects");
+  }
+
+  await validateSafeUrl(url);
+
+  const response = await axios.get(url, {
+    timeout: 5000,
+    httpsAgent: secureAgent,
+    maxRedirects: 0,
+    maxContentLength: 1024 * 1024, // 1MB limit for sanitation
+    validateStatus: (status) =>
+      (status >= 200 && status < 300) || isRedirectStatus(status),
+  });
+
+  if (isRedirectStatus(response.status)) {
+    const location = response.headers.location;
+    if (typeof location !== "string" || location.trim().length === 0) {
+      throw new Error("Add-on redirect missing Location header");
+    }
+
+    return fetchSafeAddonJson(new URL(location, url).toString(), redirects + 1);
+  }
+
+  return response.data;
+}
+
 export function buildCatalogPath(
   type: string,
   catalogId: string,
@@ -55,20 +102,16 @@ async function resilientFetch<T>(
     .replace(/\/$/, "");
   const url = `${base}/${resourcePath}`;
 
-  // SSRF Protection: Enforce HTTPS and IP restrictions
-  await validateSafeUrl(url);
-
   const start = Date.now();
 
   try {
     const result = await policy.execute(async () => {
-      logger.debug({ requestId, addonId, url }, "Fetching from add-on");
+      logger.debug(
+        { requestId, addonId, target: safeUrlForLog(url) },
+        "Fetching from add-on",
+      );
 
-      const { data } = await axios.get(url, {
-        timeout: 5000,
-        httpsAgent: secureAgent,
-        maxContentLength: 1024 * 1024, // 1MB limit for sanitation
-      });
+      const data = await fetchSafeAddonJson(url);
 
       // Strict Sanitation: Validate against expected Zod schema
       const parsed = schema.safeParse(data);
@@ -91,7 +134,13 @@ async function resilientFetch<T>(
     return result;
   } catch (err: any) {
     logger.warn(
-      { requestId, addonId, latencyMs: Date.now() - start, error: err.message },
+      {
+        requestId,
+        addonId,
+        latencyMs: Date.now() - start,
+        target: safeUrlForLog(url),
+        error: err.message,
+      },
       "Add-on fetch failed",
     );
     throw err;
