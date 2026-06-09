@@ -1,4 +1,8 @@
-import type { BridgeStatus } from "./StreamEngineManager";
+import type {
+  BridgeRepairPlan,
+  BridgeSelfTest,
+  BridgeStatus,
+} from "./StreamEngineManager";
 
 export type BridgeStatusTone = "success" | "warning" | "error" | "neutral";
 
@@ -6,7 +10,11 @@ export interface BridgeStatusContext {
   reason?: string;
   message?: string;
   processArch?: string;
+  runtimeArch?: string;
+  nativeArch?: string;
   platform?: string;
+  selfTest?: BridgeSelfTest;
+  repair?: BridgeRepairPlan;
 }
 
 export interface BridgeStatusPresentation {
@@ -24,7 +32,10 @@ export function getBridgeStatusPresentation(
     case "available":
       return {
         title: "Bridge ready",
-        detail: "Desktop playback, downloads, and casting can use this bridge.",
+        detail:
+          context.selfTest?.status === "pass"
+            ? "Desktop playback, downloads, and casting can use this bridge. Runtime self-test passed."
+            : "Desktop playback, downloads, and casting can use this bridge.",
         badge: "Bridge ready",
         tone: "success",
       };
@@ -32,9 +43,14 @@ export function getBridgeStatusPresentation(
       return {
         title: "Bridge needs repair",
         detail:
-          context.reason === "native-architecture-mismatch"
-            ? "The desktop bridge is running, but the torrent engine was installed for a different processor architecture. Reinstall dependencies with the same Node/Electron architecture, then restart the desktop app."
-            : "The desktop bridge is reachable, but its torrent engine cannot start. Reinstall the desktop dependencies for this machine, then restart the app.",
+          context.repair?.detail ||
+          (context.reason === "native-architecture-mismatch"
+            ? `The desktop bridge runtime does not match the native torrent module architecture${
+                context.runtimeArch && context.nativeArch
+                  ? ` (${context.runtimeArch} vs ${context.nativeArch})`
+                  : ""
+              }.`
+            : "The desktop bridge is reachable, but its torrent engine cannot start. Use the repair steps below, then restart the app."),
         badge: "Repair needed",
         tone: "error",
       };

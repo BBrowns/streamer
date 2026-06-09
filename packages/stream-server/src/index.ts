@@ -22,15 +22,171 @@ if (process.stdin.isTTY) {
   process.stdin.pause();
 }
 
+type BridgeHealthCheckStatus = "pass" | "warn" | "fail";
+
+interface BridgeHealthCheck {
+  name: string;
+  status: BridgeHealthCheckStatus;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+interface BridgeRepairPlan {
+  required: boolean;
+  reason?: string;
+  title?: string;
+  detail?: string;
+  actionLabel?: string;
+  steps?: string[];
+}
+
 function getBridgeRuntimeInfo() {
+  const nodeArch = process.env.STREAMER_BRIDGE_RUNTIME_ARCH || process.arch;
+  const nativeArch = process.env.STREAMER_BRIDGE_NATIVE_ARCH || undefined;
+
   return {
     owner: process.env.STREAMER_BRIDGE_OWNER || "standalone",
     pid: process.pid,
     nodeVersion: process.version,
-    nodeArch: process.env.STREAMER_BRIDGE_RUNTIME_ARCH || process.arch,
-    nativeArch: process.env.STREAMER_BRIDGE_NATIVE_ARCH || undefined,
+    nodeArch,
+    nativeArch,
     processArch: process.arch,
     platform: process.platform,
+    architectureMismatch: Boolean(nativeArch && nodeArch !== nativeArch),
+  };
+}
+
+function repairPlanForReason(reason?: string): BridgeRepairPlan {
+  switch (reason) {
+    case "native-architecture-mismatch":
+      return {
+        required: true,
+        reason,
+        title: "Bridge runtime architecture mismatch",
+        detail:
+          "The bridge is using a Node runtime that does not match the native torrent module architecture.",
+        actionLabel: "Repair runtime",
+        steps: [
+          "Install or select a Node.js runtime that matches the node-datachannel native binary architecture.",
+          "If you are on Apple Silicon, prefer an arm64 Node.js install.",
+          "If you intentionally use another runtime, set STREAMER_BRIDGE_NODE to the matching Node binary.",
+          "Restart the desktop app after changing Node or rebuilding dependencies.",
+        ],
+      };
+    case "native-load-failed":
+      return {
+        required: true,
+        reason,
+        title: "Native torrent module failed to load",
+        detail:
+          "The torrent engine cannot load node-datachannel. Reinstall or rebuild desktop dependencies for this machine.",
+        actionLabel: "Rebuild dependencies",
+        steps: [
+          "Stop the desktop app.",
+          "Reinstall dependencies from the repository root.",
+          "Rebuild or reinstall node-datachannel for the current runtime.",
+          "Restart the desktop app and run the bridge self-test again.",
+        ],
+      };
+    case "missing-stream-server-build":
+      return {
+        required: true,
+        reason,
+        title: "Stream bridge build is missing",
+        detail:
+          "The desktop shell cannot find the packaged stream-server entrypoint.",
+        actionLabel: "Build bridge",
+        steps: [
+          "Run npm run build --workspace=@streamer/stream-server.",
+          "Restart the desktop app.",
+          "For packaged builds, verify that the stream-server dist files are included as desktop resources.",
+        ],
+      };
+    case "bridge-port-owned-by-other-process":
+      return {
+        required: true,
+        reason,
+        title: "Bridge port is already in use",
+        detail:
+          "Another process owns port 11470, so the desktop bridge cannot fully start.",
+        actionLabel: "Reclaim port",
+        steps: [
+          "Close other Streamer instances.",
+          "Restart the desktop app.",
+          "If the issue remains, stop the process using port 11470 and try again.",
+        ],
+      };
+    default:
+      return {
+        required: false,
+      };
+  }
+}
+
+function buildBridgeSelfTest(input: {
+  runtime: ReturnType<typeof getBridgeRuntimeInfo>;
+  torrentEngine: ReturnType<typeof getTorrentEngineStatus>;
+  engineCheckErrorMessage?: string;
+}) {
+  const { runtime, torrentEngine, engineCheckErrorMessage } = input;
+  const repairReason =
+    torrentEngine.available === false
+      ? torrentEngine.reason || "torrent-engine-unavailable"
+      : runtime.architectureMismatch
+        ? "native-architecture-mismatch"
+        : undefined;
+  const repair = repairPlanForReason(repairReason);
+
+  const checks: BridgeHealthCheck[] = [
+    {
+      name: "runtime",
+      status: runtime.architectureMismatch ? "fail" : "pass",
+      message: runtime.architectureMismatch
+        ? `Node runtime architecture ${runtime.nodeArch} does not match native module architecture ${runtime.nativeArch}.`
+        : "Node runtime architecture matches the detected native module architecture.",
+      details: {
+        nodeArch: runtime.nodeArch,
+        nativeArch: runtime.nativeArch,
+        processArch: runtime.processArch,
+        platform: runtime.platform,
+      },
+    },
+    {
+      name: "torrent-engine",
+      status: torrentEngine.available ? "pass" : "fail",
+      message: torrentEngine.available
+        ? `Torrent engine is ${torrentEngine.state}.`
+        : torrentEngine.message ||
+          engineCheckErrorMessage ||
+          "Torrent engine is unavailable.",
+      details: {
+        state: torrentEngine.state,
+        reason: torrentEngine.reason,
+        processArch: torrentEngine.processArch,
+        platform: torrentEngine.platform,
+      },
+    },
+  ];
+
+  const status: BridgeHealthCheckStatus = checks.some(
+    (check) => check.status === "fail",
+  )
+    ? "fail"
+    : checks.some((check) => check.status === "warn")
+      ? "warn"
+      : "pass";
+
+  return {
+    selfTest: {
+      status,
+      checkedAt: Date.now(),
+      summary:
+        status === "pass"
+          ? "Bridge runtime self-test passed."
+          : "Bridge runtime self-test found an issue.",
+      checks,
+    },
+    repair,
   };
 }
 
@@ -46,17 +202,30 @@ export function createStreamServerApp() {
   app.get("/api/health", async (_req, res) => {
     const memUsage = process.memoryUsage();
     let torrentCount = 0;
+    let engineCheckErrorMessage: string | undefined;
+
     try {
       const client = await getClient();
       torrentCount = client.torrents?.length ?? 0;
-    } catch {
-      /* client not yet initialized */
+    } catch (error) {
+      engineCheckErrorMessage =
+        error instanceof Error ? error.message : String(error);
     }
+
+    const runtime = getBridgeRuntimeInfo();
+    const torrentEngine = getTorrentEngineStatus();
+    const { selfTest, repair } = buildBridgeSelfTest({
+      runtime,
+      torrentEngine,
+      engineCheckErrorMessage,
+    });
 
     res.json({
       status: "active",
-      torrentEngine: getTorrentEngineStatus(),
-      runtime: getBridgeRuntimeInfo(),
+      torrentEngine,
+      runtime,
+      selfTest,
+      repair,
       version: "1.0.0",
       uptime: Math.floor(process.uptime()),
       memory: {
@@ -67,7 +236,6 @@ export function createStreamServerApp() {
       activeTorrents: torrentCount,
     });
   });
-
   // Legacy status endpoint (keep backward compat)
   app.get("/status", (_req, res) => {
     res.json({ status: "active", version: "1.0.0" });

@@ -26,6 +26,57 @@ export interface DesktopDownloadJob {
   error?: string;
 }
 
+export type DesktopBridgeSelfTestStatus = "pass" | "warn" | "fail";
+
+export interface DesktopBridgeSelfTestCheck {
+  name: string;
+  status: DesktopBridgeSelfTestStatus;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface DesktopBridgeSelfTest {
+  status: DesktopBridgeSelfTestStatus;
+  checkedAt?: number;
+  summary?: string;
+  checks?: DesktopBridgeSelfTestCheck[];
+}
+
+export interface DesktopBridgeRepairPlan {
+  required: boolean;
+  reason?: string;
+  title?: string;
+  detail?: string;
+  actionLabel?: string;
+  steps?: string[];
+}
+
+export interface DesktopBridgeRuntimeInfo {
+  owner?: string;
+  pid?: number;
+  nodeVersion?: string;
+  nodeArch?: string;
+  nativeArch?: string;
+  processArch?: string;
+  platform?: string;
+  architectureMismatch?: boolean;
+}
+
+export interface DesktopBridgeHealthPayload {
+  status?: string;
+  torrentEngine?: {
+    available?: boolean;
+    state?: string;
+    reason?: string;
+    message?: string;
+    processArch?: string;
+    platform?: string;
+  };
+  runtime?: DesktopBridgeRuntimeInfo;
+  selfTest?: DesktopBridgeSelfTest;
+  repair?: DesktopBridgeRepairPlan;
+}
+
 export interface DesktopBridgeInfo {
   available: boolean;
   localUrl: string;
@@ -46,7 +97,9 @@ export interface DesktopBridgeInfo {
     pid?: number | null;
     processArch?: string;
     platform?: string;
-    health?: unknown;
+    selfTest?: DesktopBridgeSelfTest;
+    repair?: DesktopBridgeRepairPlan;
+    health?: DesktopBridgeHealthPayload;
   };
 }
 
