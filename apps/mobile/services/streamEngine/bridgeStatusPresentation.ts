@@ -45,11 +45,11 @@ export function getBridgeStatusPresentation(
         detail:
           context.repair?.detail ||
           (context.reason === "native-architecture-mismatch"
-            ? `The desktop bridge runtime does not match the native torrent module architecture${
+            ? `The desktop bridge is running, but the torrent engine was installed for a different processor architecture${
                 context.runtimeArch && context.nativeArch
                   ? ` (${context.runtimeArch} vs ${context.nativeArch})`
                   : ""
-              }.`
+              }. Reinstall dependencies with the same Node/Electron architecture, then restart the desktop app.`
             : "The desktop bridge is reachable, but its torrent engine cannot start. Use the repair steps below, then restart the app."),
         badge: "Repair needed",
         tone: "error",
