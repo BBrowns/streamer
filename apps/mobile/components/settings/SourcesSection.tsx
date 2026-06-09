@@ -32,10 +32,27 @@ function formatBridgeReason(reason: string) {
       return "Native module architecture mismatch";
     case "native-load-failed":
       return "Native torrent module failed to load";
+    case "missing-stream-server-build":
+      return "Stream bridge build is missing";
+    case "bridge-port-owned-by-other-process":
+      return "Bridge port is already in use";
     case "invalid-url":
       return "Invalid bridge URL";
     default:
       return reason.replace(/-/g, " ");
+  }
+}
+
+function formatSelfTestStatus(status: string) {
+  switch (status) {
+    case "pass":
+      return "Passed";
+    case "warn":
+      return "Warning";
+    case "fail":
+      return "Failed";
+    default:
+      return status;
   }
 }
 
@@ -205,6 +222,23 @@ export function SourcesSection() {
       ? `${effectiveBridgeDiagnostics.platform}/${effectiveBridgeDiagnostics.processArch}`
       : null;
 
+  const bridgeSelfTest = effectiveBridgeDiagnostics.selfTest;
+  const bridgeRepair = effectiveBridgeDiagnostics.repair;
+  const bridgeRepairSteps = bridgeRepair?.steps ?? [];
+  const bridgeRepairTitle = bridgeRepair?.title || "Bridge repair steps";
+  const bridgeRepairDetail = bridgeRepair?.detail || bridgePresentation.detail;
+
+  const handleShowBridgeRepairSteps = () => {
+    const body =
+      bridgeRepairSteps.length > 0
+        ? `${bridgeRepairDetail}\n\n${bridgeRepairSteps
+            .map((step, index) => `${index + 1}. ${step}`)
+            .join("\n\n")}`
+        : bridgeRepairDetail;
+
+    Alert.alert(bridgeRepairTitle, body);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -278,13 +312,36 @@ export function SourcesSection() {
         <Text style={[styles.bridgeUrlText, { color: colors.textSecondary }]}>
           {bridgeUrl}
         </Text>
-        {(effectiveBridgeDiagnostics.reason || bridgeRuntimeLabel) && (
+        {(effectiveBridgeDiagnostics.reason ||
+          bridgeRuntimeLabel ||
+          bridgeSelfTest ||
+          bridgeRepair?.required) && (
           <Surface style={styles.diagnosticsBox}>
-            {!!effectiveBridgeDiagnostics.reason && (
+            {!!bridgeSelfTest && (
               <Text
                 style={[
                   styles.diagnosticsText,
                   { color: colors.textSecondary },
+                ]}
+              >
+                Self-test: {formatSelfTestStatus(bridgeSelfTest.status)}
+              </Text>
+            )}
+            {!!bridgeRepair?.required && (
+              <Text
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary, marginTop: 4 },
+                ]}
+              >
+                Repair: {bridgeRepair.actionLabel || bridgeRepair.title}
+              </Text>
+            )}
+            {!!effectiveBridgeDiagnostics.reason && (
+              <Text
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary, marginTop: 4 },
                 ]}
               >
                 Reason: {formatBridgeReason(effectiveBridgeDiagnostics.reason)}
@@ -308,6 +365,9 @@ export function SourcesSection() {
                 ]}
               >
                 Runtime: {bridgeRuntimeLabel}
+                {effectiveBridgeDiagnostics.nativeArch
+                  ? ` · Native: ${effectiveBridgeDiagnostics.nativeArch}`
+                  : ""}
               </Text>
             )}
           </Surface>
@@ -320,6 +380,15 @@ export function SourcesSection() {
             variant="ghost"
             onPress={handleCheckBridge}
           />
+          {bridgeRepair?.required && (
+            <AppButton
+              label="Repair steps"
+              icon="build-outline"
+              size="small"
+              variant="ghost"
+              onPress={handleShowBridgeRepairSteps}
+            />
+          )}
           {bridgeInfo?.lanUrl && (
             <AppButton
               label="Use LAN URL"

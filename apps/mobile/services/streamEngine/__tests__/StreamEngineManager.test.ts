@@ -106,6 +106,58 @@ describe("StreamEngineManager", () => {
         platform: "darwin",
       });
     });
+
+    it("preserves bridge self-test and repair guidance from health", async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          torrentEngine: {
+            available: false,
+            reason: "native-architecture-mismatch",
+            message: "node-datachannel was installed for another arch",
+            processArch: "x64",
+            platform: "darwin",
+          },
+          runtime: {
+            nodeArch: "x64",
+            nativeArch: "arm64",
+            processArch: "x64",
+            platform: "darwin",
+            architectureMismatch: true,
+          },
+          selfTest: {
+            status: "fail",
+            summary: "Bridge runtime self-test found an issue.",
+          },
+          repair: {
+            required: true,
+            reason: "native-architecture-mismatch",
+            actionLabel: "Repair runtime",
+            steps: ["Install matching Node.js", "Restart the desktop app"],
+          },
+        }),
+      }) as any;
+
+      const available = await manager.detectBridge();
+
+      expect(available).toBe(false);
+      expect(manager.bridgeStatus).toBe("unsupported");
+      expect(manager.getBridgeDiagnostics()).toMatchObject({
+        status: "unsupported",
+        reason: "native-architecture-mismatch",
+        processArch: "x64",
+        runtimeArch: "x64",
+        nativeArch: "arm64",
+        platform: "darwin",
+        selfTest: {
+          status: "fail",
+        },
+        repair: {
+          required: true,
+          actionLabel: "Repair runtime",
+        },
+      });
+    });
   });
 
   describe("validateBridgeUrl", () => {

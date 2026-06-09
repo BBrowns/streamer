@@ -110,7 +110,33 @@ export type BridgeStatus =
   | "loading"
   | "no-peers"
   | "unsupported";
+
 export type StreamingStrategy = "debrid" | "local";
+
+export type BridgeSelfTestStatus = "pass" | "warn" | "fail";
+
+export interface BridgeSelfTestCheck {
+  name: string;
+  status: BridgeSelfTestStatus;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface BridgeSelfTest {
+  status: BridgeSelfTestStatus;
+  checkedAt?: number;
+  summary?: string;
+  checks?: BridgeSelfTestCheck[];
+}
+
+export interface BridgeRepairPlan {
+  required: boolean;
+  reason?: string;
+  title?: string;
+  detail?: string;
+  actionLabel?: string;
+  steps?: string[];
+}
 
 export interface BridgeDiagnostics {
   status: BridgeStatus;
@@ -118,7 +144,11 @@ export interface BridgeDiagnostics {
   reason?: string;
   message?: string;
   processArch?: string;
+  runtimeArch?: string;
+  nativeArch?: string;
   platform?: string;
+  selfTest?: BridgeSelfTest;
+  repair?: BridgeRepairPlan;
   checkedAt?: number;
 }
 
@@ -221,15 +251,18 @@ export class StreamEngineManager {
     this.bridgeAvailable = false;
     const finalProbe = unsupportedProbe || wrongUrlProbe;
     this.bridgeStatus = finalProbe?.status || "unreachable";
-    this.bridgeDiagnostics = {
-      status: this.bridgeStatus,
-      url: finalProbe?.url || defaultUrl,
-      reason: finalProbe?.reason,
-      message: finalProbe?.message,
-      processArch: finalProbe?.processArch,
-      platform: finalProbe?.platform,
-      checkedAt: Date.now(),
-    };
+    this.bridgeDiagnostics = finalProbe
+      ? {
+          ...finalProbe,
+          status: this.bridgeStatus,
+          url: finalProbe.url || defaultUrl,
+          checkedAt: Date.now(),
+        }
+      : {
+          status: this.bridgeStatus,
+          url: defaultUrl,
+          checkedAt: Date.now(),
+        };
     console.warn(
       this.bridgeStatus === "unsupported"
         ? "[StreamEngineManager] Bridge is reachable but unsupported."
@@ -266,19 +299,53 @@ export class StreamEngineManager {
 
       if (res.ok) {
         const data = await res.json().catch(() => null);
-        if (data?.torrentEngine?.available === false) {
+        const torrentEngine = data?.torrentEngine;
+        const runtime = data?.runtime;
+        const selfTest = data?.selfTest;
+        const repair = data?.repair;
+
+        const reason = repair?.reason || torrentEngine?.reason || undefined;
+        const message =
+          repair?.detail ||
+          torrentEngine?.message ||
+          selfTest?.summary ||
+          undefined;
+        const processArch =
+          torrentEngine?.processArch ||
+          runtime?.processArch ||
+          runtime?.nodeArch ||
+          undefined;
+        const runtimeArch = runtime?.nodeArch || undefined;
+        const nativeArch = runtime?.nativeArch || undefined;
+        const platform =
+          torrentEngine?.platform || runtime?.platform || undefined;
+
+        if (
+          torrentEngine?.available === false ||
+          repair?.required === true ||
+          selfTest?.status === "fail"
+        ) {
           return {
             status: "unsupported",
-            reason: data.torrentEngine.reason,
-            message: data.torrentEngine.message,
-            processArch: data.torrentEngine.processArch,
-            platform: data.torrentEngine.platform,
+            reason,
+            message,
+            processArch,
+            runtimeArch,
+            nativeArch,
+            platform,
+            selfTest,
+            repair,
           };
         }
+
         return {
           status: "available",
-          processArch: data?.torrentEngine?.processArch,
-          platform: data?.torrentEngine?.platform,
+          processArch,
+          runtimeArch,
+          nativeArch,
+          platform,
+          selfTest,
+          repair,
         };
       }
     } catch {
