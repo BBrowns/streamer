@@ -9,9 +9,13 @@
  * 5. Bridge returns 302 redirect → webtorrent server URL for the largest video file
  * 6. expo-video follows redirect, streams directly from webtorrent
  */
-import { Request, Response } from "express";
-import { spawn } from "child_process";
+import { createHash } from "crypto";
+import { spawn as nodeSpawn } from "child_process";
+import { createReadStream } from "fs";
+import { mkdtemp, rename, rm, stat } from "fs/promises";
+import { tmpdir } from "os";
 import path from "path";
+import { Request, Response } from "express";
 import {
   waitForReady,
   selectBestVideoFile,
@@ -102,6 +106,367 @@ const MAX_ACTIVE_TORRENTS = parseInt(
 /** Track last access time per infoHash for pruning */
 const lastAccessMap = new Map<string, number>();
 const loggedTorrents = new WeakSet<object>();
+
+type FfmpegSpawner = typeof nodeSpawn;
+
+interface RemuxedFile {
+  filePath: string;
+  size: number;
+}
+
+interface RemuxCacheEntry {
+  key: string;
+  filePath: string;
+  partialPath: string;
+  promise: Promise<RemuxedFile>;
+  pending: boolean;
+  createdAt: number;
+  lastAccessAt: number;
+}
+
+const REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
+const remuxCache = new Map<string, RemuxCacheEntry>();
+let remuxRootPromise: Promise<string> | null = null;
+let spawnFfmpeg: FfmpegSpawner = nodeSpawn;
+
+function getRemuxRootDir() {
+  if (!remuxRootPromise) {
+    remuxRootPromise = mkdtemp(path.join(tmpdir(), "streamer-remux-"));
+  }
+  return remuxRootPromise;
+}
+
+function removeRemuxEntryFiles(entry: RemuxCacheEntry) {
+  return Promise.all([
+    rm(entry.filePath, { force: true }),
+    rm(entry.partialPath, { force: true }),
+  ]);
+}
+
+function pruneRemuxCache(now = Date.now()) {
+  for (const [key, entry] of remuxCache) {
+    if (entry.pending) continue;
+    if (now - entry.lastAccessAt <= REMUX_CACHE_TTL_MS) continue;
+
+    remuxCache.delete(key);
+    void removeRemuxEntryFiles(entry).catch(() => undefined);
+  }
+}
+
+async function clearRemuxCache() {
+  const entries = [...remuxCache.values()];
+  remuxCache.clear();
+
+  await Promise.all(
+    entries.map((entry) => removeRemuxEntryFiles(entry).catch(() => undefined)),
+  );
+
+  if (remuxRootPromise) {
+    const root = await remuxRootPromise.catch(() => undefined);
+    remuxRootPromise = null;
+    if (root) await rm(root, { recursive: true, force: true });
+  }
+}
+
+function getRemuxCacheKey(
+  torrent: any,
+  file: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  },
+) {
+  const sourceIdentity = JSON.stringify({
+    infoHash: String(torrent.infoHash ?? "unknown").toLowerCase(),
+    fileIdx: options.fileIdx ?? null,
+    hints: options.hints ?? null,
+    name: file.name ?? null,
+    path: file.path ?? null,
+    length: file.length ?? null,
+  });
+
+  return createHash("sha256").update(sourceIdentity).digest("hex").slice(0, 32);
+}
+
+function runFfmpegRemuxToFile(
+  file: any,
+  partialPath: string,
+): Promise<RemuxedFile> {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawnFfmpeg("ffmpeg", [
+      "-hide_banner",
+      "-loglevel",
+      "warning",
+      "-y",
+      "-i",
+      "pipe:0",
+      "-map",
+      "0:v:0?",
+      "-map",
+      "0:a:0?",
+      "-c:v",
+      "copy",
+      "-c:a",
+      "aac",
+      "-movflags",
+      "+faststart",
+      "-f",
+      "mp4",
+      partialPath,
+    ]);
+
+    let stderr = "";
+    let settled = false;
+
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+
+      try {
+        ffmpeg.kill("SIGTERM");
+      } catch {}
+
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+
+    ffmpeg.stderr.on("data", (data: Buffer) => {
+      const msg = data.toString().trim();
+      if (!msg) return;
+
+      stderr = `${stderr}\n${msg}`.slice(-2_000);
+      console.warn(`[ffmpeg] ${redactSensitiveText(msg)}`);
+    });
+
+    ffmpeg.on("error", fail);
+
+    ffmpeg.stdin.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EPIPE") return;
+      fail(err);
+    });
+
+    ffmpeg.on("close", async (code) => {
+      if (settled) return;
+
+      if (code !== 0) {
+        fail(
+          new Error(
+            `FFmpeg remux failed with exit code ${code}${
+              stderr ? `: ${redactSensitiveText(stderr.trim())}` : ""
+            }`,
+          ),
+        );
+        return;
+      }
+
+      settled = true;
+
+      try {
+        const stats = await stat(partialPath);
+        if (stats.size <= 0) {
+          throw new Error("FFmpeg remux produced an empty output file");
+        }
+
+        resolve({
+          filePath: partialPath,
+          size: stats.size,
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    const sourceStream = file.createReadStream();
+    sourceStream.on?.("error", fail);
+    sourceStream.pipe(ffmpeg.stdin);
+  });
+}
+
+async function getOrCreateSeekableRemux(
+  torrent: any,
+  file: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  },
+): Promise<RemuxedFile> {
+  pruneRemuxCache();
+
+  const key = getRemuxCacheKey(torrent, file, options);
+  const existing = remuxCache.get(key);
+  if (existing) {
+    existing.lastAccessAt = Date.now();
+    return existing.promise;
+  }
+
+  const root = await getRemuxRootDir();
+  const filePath = path.join(root, `${key}.mp4`);
+  const partialPath = path.join(root, `${key}.partial.mp4`);
+
+  const entry: RemuxCacheEntry = {
+    key,
+    filePath,
+    partialPath,
+    promise: Promise.resolve({ filePath, size: 0 }),
+    pending: true,
+    createdAt: Date.now(),
+    lastAccessAt: Date.now(),
+  };
+
+  entry.promise = (async () => {
+    await rm(filePath, { force: true });
+    await rm(partialPath, { force: true });
+
+    console.log(
+      `[stream-server] Preparing seekable FFmpeg remux: ${file.name}`,
+    );
+
+    const remuxed = await runFfmpegRemuxToFile(file, partialPath);
+    await rename(remuxed.filePath, filePath);
+
+    const stats = await stat(filePath);
+    return {
+      filePath,
+      size: stats.size,
+    };
+  })()
+    .then((remuxed) => {
+      entry.pending = false;
+      entry.lastAccessAt = Date.now();
+      return remuxed;
+    })
+    .catch(async (err) => {
+      remuxCache.delete(key);
+      entry.pending = false;
+      await removeRemuxEntryFiles(entry).catch(() => undefined);
+      throw err;
+    });
+
+  remuxCache.set(key, entry);
+  return entry.promise;
+}
+
+async function serveSeekableVideoFile(
+  req: Request,
+  res: Response,
+  filePath: string,
+  total: number,
+  contentType: string,
+) {
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "Accept-Ranges, Content-Length, Content-Range",
+  );
+
+  const rangeHeader =
+    req.method === "GET" || req.method === "HEAD"
+      ? typeof req.headers?.range === "string"
+        ? req.headers.range
+        : undefined
+      : undefined;
+
+  const range = parseByteRange(rangeHeader, total);
+
+  if (range.type === "unsatisfiable") {
+    return res
+      .status(416)
+      .set({
+        "Content-Range": `bytes */${total}`,
+      })
+      .end();
+  }
+
+  if (range.type === "partial") {
+    res.status(206).set({
+      "Content-Range": `bytes ${range.start}-${range.end}/${total}`,
+      "Content-Length": range.length,
+    });
+
+    if (req.method === "HEAD") return res.end();
+
+    const stream = createReadStream(filePath, {
+      start: range.start,
+      end: range.end,
+    });
+    stream.pipe(res);
+    res.on("close", () => stream.destroy());
+    stream.on("error", (err) => {
+      console.error(
+        "[stream-server] Remux cache stream error:",
+        redactSensitiveText(err.message),
+      );
+      if (!res.headersSent) {
+        res.status(503).json({ error: "Failed to stream remuxed file" });
+      } else {
+        res.destroy(err);
+      }
+    });
+    return;
+  }
+
+  res.setHeader("Content-Length", total);
+  if (req.method === "HEAD") return res.end();
+
+  const stream = createReadStream(filePath);
+  stream.pipe(res);
+  res.on("close", () => stream.destroy());
+  stream.on("error", (err) => {
+    console.error(
+      "[stream-server] Remux cache stream error:",
+      redactSensitiveText(err.message),
+    );
+    if (!res.headersSent) {
+      res.status(503).json({ error: "Failed to stream remuxed file" });
+    } else {
+      res.destroy(err);
+    }
+  });
+}
+
+async function serveSeekableRemuxedFile(
+  req: Request,
+  res: Response,
+  torrent: any,
+  file: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  },
+) {
+  try {
+    const remuxed = await getOrCreateSeekableRemux(torrent, file, options);
+    return serveSeekableVideoFile(
+      req,
+      res,
+      remuxed.filePath,
+      remuxed.size,
+      "video/mp4",
+    );
+  } catch (err) {
+    console.error(
+      "[stream-server] FFmpeg remux failed:",
+      redactSensitiveText((err as Error | undefined)?.message ?? String(err)),
+    );
+
+    if (!res.headersSent) {
+      return res.status(503).json({
+        error: "FFmpeg remux failed. Install or repair FFmpeg, then retry.",
+        retryable: true,
+      });
+    }
+  }
+}
+
+export function __setFfmpegSpawnerForTests(spawner: FfmpegSpawner) {
+  spawnFfmpeg = spawner;
+}
+
+export async function __resetRemuxCacheForTests() {
+  spawnFfmpeg = nodeSpawn;
+  await clearRemuxCache();
+}
 
 function isNodeDataChannelLoadError(err: unknown) {
   const message = String((err as Error | undefined)?.message ?? err);
@@ -289,6 +654,8 @@ export async function getClient(): Promise<any> {
  * Gracefully destroy the webtorrent client and shared HTTP server.
  */
 export async function destroyClient(): Promise<void> {
+  await clearRemuxCache();
+
   if (!client) return;
 
   if (serverInstance) {
@@ -445,63 +812,10 @@ export async function serveTorrentFile(
   const shouldRemux = options.remuxFormat === "mp4" || ext === ".mkv";
 
   if (shouldRemux) {
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Accept-Ranges", "none");
-    res.setHeader("Access-Control-Expose-Headers", "Accept-Ranges");
-    if (req.method === "HEAD") return res.end();
-
-    console.log(
-      `[stream-server] Streaming via FFmpeg remux (MP4): ${file.name}`,
-    );
-    res.setHeader("Transfer-Encoding", "chunked");
-
-    const ffmpeg = spawn("ffmpeg", [
-      "-hide_banner",
-      "-loglevel",
-      "warning",
-      "-i",
-      "pipe:0",
-      "-c:v",
-      "copy",
-      "-c:a",
-      "aac",
-      "-f",
-      "mp4",
-      "-movflags",
-      "frag_keyframe+empty_moov+faststart",
-      "pipe:1",
-    ]);
-
-    const stream = file.createReadStream();
-    stream.pipe(ffmpeg.stdin);
-
-    ffmpeg.stdout.pipe(res);
-
-    ffmpeg.stderr.on("data", (data: Buffer) => {
-      const msg = data.toString().trim();
-      if (msg) console.warn(`[ffmpeg] ${redactSensitiveText(msg)}`);
+    return serveSeekableRemuxedFile(req, res, torrent, file, {
+      fileIdx: options.fileIdx,
+      hints: options.hints,
     });
-
-    res.on("close", () => {
-      stream.destroy();
-      ffmpeg.kill("SIGTERM");
-    });
-
-    ffmpeg.on("error", (err: Error) => {
-      console.error(
-        "[stream-server] FFmpeg spawn error:",
-        redactSensitiveText(err.message),
-      );
-      if (!res.headersSent) {
-        res.status(503).json({
-          error: "FFmpeg not available. Install with: brew install ffmpeg",
-        });
-      }
-    });
-
-    return;
   }
 
   // Proxy directly to avoid redirect issues

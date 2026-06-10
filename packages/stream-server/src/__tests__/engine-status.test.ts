@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "events";
+import { writeFile } from "fs/promises";
 import {
+  __resetRemuxCacheForTests,
   __resetTorrentEngineForTests,
+  __setFfmpegSpawnerForTests,
   __setWebTorrentImporterForTests,
   getClient,
   getTorrent,
@@ -25,6 +29,29 @@ function makeRes() {
     removeListener: vi.fn().mockReturnThis(),
   };
   return res;
+}
+
+function makeSuccessfulFfmpegSpawner(output: Buffer) {
+  return vi.fn((_command: string, args: string[]) => {
+    const child = new EventEmitter() as any;
+    child.stdin = new EventEmitter() as any;
+    child.stdin.write = vi.fn();
+    child.stdin.end = vi.fn();
+    child.stdin.destroy = vi.fn();
+    child.stderr = new EventEmitter();
+    child.kill = vi.fn();
+
+    const outputPath = args.at(-1);
+    if (typeof outputPath !== "string") {
+      throw new Error("Expected FFmpeg output path as the last argument");
+    }
+
+    setTimeout(() => {
+      void writeFile(outputPath, output).then(() => child.emit("close", 0));
+    }, 0);
+
+    return child;
+  }) as any;
 }
 
 describe("torrent engine native load failures", () => {
@@ -90,6 +117,10 @@ describe("torrent engine native load failures", () => {
 describe("torrent lookup", () => {
   beforeEach(() => {
     __resetTorrentEngineForTests();
+  });
+
+  afterEach(async () => {
+    await __resetRemuxCacheForTests();
   });
 
   it("matches info hashes case-insensitively for metrics lookups", async () => {
@@ -159,10 +190,14 @@ describe("torrent lookup", () => {
     __setWebTorrentImporterForTests(async () => ({
       default: FakeWebTorrent as any,
     }));
+    __setFfmpegSpawnerForTests(
+      makeSuccessfulFfmpegSpawner(Buffer.from("remuxed-mp4")),
+    );
 
     const res = makeRes();
     await streamRequest(
       {
+        method: "HEAD",
         query: {
           magnet: "magnet:?xt=urn:btih:abcdef123456",
           season: "1",

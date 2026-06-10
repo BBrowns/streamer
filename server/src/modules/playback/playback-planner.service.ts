@@ -209,6 +209,20 @@ function actionEligibility(
   return { action, eligible, reason };
 }
 
+function remuxCanProvideCodecFallback(
+  request: PlaybackPlanRequest,
+  requiresRemux: boolean,
+  compatibility: PlaybackDeviceCompatibility,
+) {
+  return (
+    requiresRemux &&
+    request.deviceProfile.supports.mp4 &&
+    request.deviceProfile.supports.aac &&
+    compatibility.videoCodecSupported &&
+    compatibility.sourceReachable
+  );
+}
+
 function getCandidateDecisionReasons(
   candidate: MediaCandidate,
   request: PlaybackPlanRequest,
@@ -258,13 +272,15 @@ function evaluateCandidate(
     sourceReachable,
   );
 
-  if (
-    requiresRemux &&
-    deviceCompatibility.videoCodecSupported &&
-    deviceCompatibility.audioCodecSupported &&
-    deviceCompatibility.sourceReachable &&
-    request.deviceProfile.supports.mp4
-  ) {
+  const remuxProvidesCodecFallback = remuxCanProvideCodecFallback(
+    request,
+    requiresRemux,
+    deviceCompatibility,
+  );
+
+  if (remuxProvidesCodecFallback) {
+    deviceCompatibility.containerSupported = true;
+    deviceCompatibility.audioCodecSupported = true;
     deviceCompatibility.compatible = true;
   }
 
@@ -280,7 +296,10 @@ function evaluateCandidate(
     rejectionReason = "localhost_not_castable";
   } else if (request.action === "cast" && castReachability === "unreachable") {
     rejectionReason = "cast_device_incompatible";
-  } else if (candidateNeedsTranscode(candidate, request.deviceProfile)) {
+  } else if (
+    candidateNeedsTranscode(candidate, request.deviceProfile) &&
+    !remuxProvidesCodecFallback
+  ) {
     rejectionReason =
       request.action === "cast"
         ? "cast_device_incompatible"

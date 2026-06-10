@@ -5,8 +5,9 @@
  * exported). We avoid mocking the WebTorrent client at module level to
  * prevent ESM singleton state from causing vitest to hang.
  */
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "events";
+import { writeFile } from "fs/promises";
 import type { Request, Response } from "express";
 import {
   handleTorrent,
@@ -14,7 +15,12 @@ import {
   waitForReady,
   selectBestVideoFile,
 } from "../torrent-helpers.js";
-import { getSelectedFile, serveTorrentFile } from "../torrent.js";
+import {
+  __resetRemuxCacheForTests,
+  __setFfmpegSpawnerForTests,
+  getSelectedFile,
+  serveTorrentFile,
+} from "../torrent.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -46,19 +52,21 @@ function makeReqRes(
     on: vi.fn(),
   } as unknown as Request;
 
-  const res = {
+  const res = new EventEmitter() as any;
+  Object.assign(res, {
     headersSent: false,
-    status: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
+    status: vi.fn().mockReturnValue(res),
+    set: vi.fn().mockReturnValue(res),
     setHeader: vi.fn(),
-    send: vi.fn().mockReturnThis(),
-    end: vi.fn().mockReturnThis(),
-    on: vi.fn(),
+    send: vi.fn().mockReturnValue(res),
+    end: vi.fn().mockReturnValue(res),
+    write: vi.fn().mockReturnValue(true),
     writeHead: vi.fn(),
-    json: vi.fn().mockReturnThis(),
-  } as unknown as Response;
+    json: vi.fn().mockReturnValue(res),
+    destroy: vi.fn(),
+  });
 
-  return { req, res };
+  return { req, res: res as Response };
 }
 
 function makeTorrent(files: any[] = []) {
@@ -66,6 +74,33 @@ function makeTorrent(files: any[] = []) {
   t.files = files;
   return t;
 }
+
+function makeSuccessfulFfmpegSpawner(output: Buffer) {
+  return vi.fn((_command: string, args: string[]) => {
+    const child = new EventEmitter() as any;
+    child.stdin = new EventEmitter() as any;
+    child.stdin.write = vi.fn();
+    child.stdin.end = vi.fn();
+    child.stdin.destroy = vi.fn();
+    child.stderr = new EventEmitter();
+    child.kill = vi.fn();
+
+    const outputPath = args.at(-1);
+    if (typeof outputPath !== "string") {
+      throw new Error("Expected FFmpeg output path as the last argument");
+    }
+
+    setTimeout(() => {
+      void writeFile(outputPath, output).then(() => child.emit("close", 0));
+    }, 0);
+
+    return child;
+  }) as any;
+}
+
+afterEach(async () => {
+  await __resetRemuxCacheForTests();
+});
 
 // ─── handleTorrent ────────────────────────────────────────────────────────────
 
@@ -274,17 +309,56 @@ describe("serveTorrentFile", () => {
     expect(file.createReadStream).not.toHaveBeenCalled();
   });
 
-  it("does not start FFmpeg for a remux HEAD probe", async () => {
+  it("materializes MKV remux output as seekable MP4 for HEAD probes", async () => {
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    const spawner = makeSuccessfulFfmpegSpawner(remuxedBytes);
+    __setFfmpegSpawnerForTests(spawner);
+
     const file = makeFakeFile("film.mkv", 5_000_000);
     const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+
     const { req, res } = makeReqRes({}, {}, "HEAD");
 
     await serveTorrentFile(req, res, torrent);
 
+    expect(spawner).toHaveBeenCalledTimes(1);
+    expect(file.createReadStream).toHaveBeenCalledWith();
     expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "video/mp4");
-    expect(res.setHeader).toHaveBeenCalledWith("Accept-Ranges", "none");
+    expect(res.setHeader).toHaveBeenCalledWith("Accept-Ranges", "bytes");
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "Access-Control-Expose-Headers",
+      "Accept-Ranges, Content-Length, Content-Range",
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "Content-Length",
+      remuxedBytes.length,
+    );
     expect(res.end).toHaveBeenCalled();
-    expect(file.createReadStream).not.toHaveBeenCalled();
+  });
+
+  it("serves byte ranges from cached remux output without spawning FFmpeg again", async () => {
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    const spawner = makeSuccessfulFfmpegSpawner(remuxedBytes);
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+
+    const warm = makeReqRes({}, {}, "HEAD");
+    await serveTorrentFile(warm.req, warm.res, torrent);
+
+    const range = makeReqRes({ range: "bytes=4-7" }, {}, "HEAD");
+    await serveTorrentFile(range.req, range.res, torrent);
+
+    expect(spawner).toHaveBeenCalledTimes(1);
+    expect(range.res.status).toHaveBeenCalledWith(206);
+    expect(range.res.set).toHaveBeenCalledWith({
+      "Content-Range": `bytes 4-7/${remuxedBytes.length}`,
+      "Content-Length": 4,
+    });
+    expect(range.res.end).toHaveBeenCalled();
   });
 });
 
