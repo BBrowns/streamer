@@ -155,6 +155,11 @@ export interface DesktopBridge {
    * Restarts the desktop stream bridge daemon and returns fresh bridge info.
    */
   restartBridge(): Promise<DesktopBridgeInfo>;
+
+  /**
+   * Returns device storage information (total and free bytes).
+   */
+  getStorageInfo(): Promise<{ total: number; free: number }>;
 }
 
 declare global {

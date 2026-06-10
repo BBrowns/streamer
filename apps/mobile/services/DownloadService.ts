@@ -475,6 +475,7 @@ export class DownloadService {
         sourceId: id,
       },
       options.playbackSession,
+      stream,
     );
     setStatus(id, "Preparing");
 
@@ -921,6 +922,32 @@ export class DownloadService {
           ));
         this.applyDesktopJobSnapshot(job);
         if (job.status === "Error" || job.status === "Canceled") {
+          const rawMessage =
+            typeof job.error === "string"
+              ? job.error
+              : (job.error as any)?.message || String(job.error || "");
+          const isAccessError =
+            /401|403|410/i.test(rawMessage) ||
+            rawMessage.includes("Forbidden") ||
+            rawMessage.includes("Gone");
+
+          if (isAccessError) {
+            if (__DEV__)
+              console.info(
+                "[DownloadService] Desktop resume access error, attempting replan...",
+              );
+            const freshUrl = await this.replanDownloadUrl(id);
+            if (freshUrl) {
+              const freshJob = await desktopBridge.startDownloadJob(
+                id,
+                freshUrl,
+                this.getDownloadFilename(id),
+              );
+              this.applyDesktopJobSnapshot(freshJob);
+              return { ok: true };
+            }
+          }
+
           const error = toSafeDownloadErrorMessage(
             job.error,
             "Download could not resume.",
@@ -1003,6 +1030,36 @@ export class DownloadService {
         }
         return { ok: true };
       } catch (error) {
+        // 1. Detect expiration or source errors that signal we need a new URL
+        const rawMessage =
+          error instanceof Error ? error.message : String(error);
+        const isAccessError =
+          /401|403|410/i.test(rawMessage) ||
+          rawMessage.includes("Forbidden") ||
+          rawMessage.includes("Gone");
+
+        if (isAccessError) {
+          if (__DEV__)
+            console.info(
+              "[DownloadService] Resume access error, attempting replan...",
+            );
+          const freshUrl = await this.replanDownloadUrl(id);
+          if (freshUrl) {
+            // Restart the internal resumable with the new URL
+            // and try standard resume again (if it supports dynamic URL update)
+            // or just restart from scratch if it's too complex.
+            // For now, we try to restart with startDownload which handles full resume.
+            return this.startDownload(
+              task.originalStream || { url: freshUrl },
+              task.mediaInfo,
+              {
+                resolvedUrl: freshUrl,
+                playbackSession: task.playbackSession,
+              },
+            ).then(() => ({ ok: true }));
+          }
+        }
+
         const message = toSafeDownloadErrorMessage(
           error,
           "Download could not resume.",
@@ -1119,6 +1176,78 @@ export class DownloadService {
     }
 
     return { deleted, failed };
+  }
+
+  /**
+   * Re-resolves the download URL if it's expired or missing.
+   */
+  private async replanDownloadUrl(id: string): Promise<string | undefined> {
+    const { tasks, setDownloadUrl } = useDownloadStore.getState();
+    const task = tasks[id];
+    if (!task) return undefined;
+
+    const stream = task.originalStream;
+    if (!stream) {
+      if (__DEV__)
+        console.warn(
+          "[DownloadService] Cannot replan: originalStream missing",
+          id,
+        );
+      return undefined;
+    }
+
+    try {
+      if (__DEV__)
+        console.log("[DownloadService] Replanning download URL for", id);
+      const downloadUrl = await streamEngineManager.getPlaybackUri(stream);
+      if (downloadUrl) {
+        setDownloadUrl(id, downloadUrl);
+        return downloadUrl;
+      }
+    } catch (e) {
+      if (__DEV__) console.error("[DownloadService] Replan failed", e);
+    }
+    return undefined;
+  }
+
+  /**
+   * Returns device storage information and download usage.
+   */
+  async getStorageDiagnostics() {
+    const { tasks } = useDownloadStore.getState();
+    const info = {
+      totalSpace: 0,
+      freeSpace: 0,
+      appUsage: 0,
+    };
+
+    if (Platform.OS === "web") {
+      // Desktop bridge can report storage
+      const desktopBridge = window.desktopBridge;
+      if (desktopBridge?.getStorageInfo) {
+        try {
+          const remoteInfo = await desktopBridge.getStorageInfo();
+          info.totalSpace = remoteInfo.total;
+          info.freeSpace = remoteInfo.free;
+        } catch {}
+      }
+    } else {
+      try {
+        const [free, total] = await Promise.all([
+          FileSystem.getFreeDiskStorageAsync(),
+          FileSystem.getTotalDiskCapacityAsync(),
+        ]);
+        info.freeSpace = free;
+        info.totalSpace = total;
+      } catch {}
+    }
+
+    // Calculate usage from tasks
+    info.appUsage = Object.values(tasks).reduce((sum, task) => {
+      return sum + (task.totalBytesWritten || 0);
+    }, 0);
+
+    return info;
   }
 }
 

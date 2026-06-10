@@ -39,6 +39,7 @@ export interface DownloadTask {
   createdAt: string;
   updatedAt: string;
   offlineVerifiedAt?: string;
+  originalStream?: import("@streamer/shared").Stream;
 }
 
 export interface DownloadState {
@@ -47,6 +48,7 @@ export interface DownloadState {
     id: string,
     mediaInfo: DownloadMediaItem,
     playbackSession?: DownloadPlaybackSessionContext,
+    originalStream?: import("@streamer/shared").Stream,
   ) => void;
   updateProgress: (
     id: string,
@@ -123,7 +125,7 @@ export const useDownloadStore = create<DownloadState>()(
   persist(
     (set, get) => ({
       tasks: {},
-      addTask: (id, mediaInfo, playbackSession) => {
+      addTask: (id, mediaInfo, playbackSession, originalStream) => {
         const timestamp = nowIso();
         set((state) => ({
           tasks: {
@@ -136,6 +138,7 @@ export const useDownloadStore = create<DownloadState>()(
               totalBytesWritten: 0,
               totalBytesExpectedToWrite: 0,
               playbackSession,
+              originalStream,
               createdAt: state.tasks[id]?.createdAt || timestamp,
               updatedAt: timestamp,
             },
