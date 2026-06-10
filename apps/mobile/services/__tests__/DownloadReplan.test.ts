@@ -167,4 +167,68 @@ describe("DownloadService - Replan & Diagnostics", () => {
     // appUsage should always be correct regardless of platform
     expect(stats.appUsage).toBe(750);
   });
+
+  it("replans after native restart when resumable state is lost", async () => {
+    setPlatform("ios");
+    const id = "task-restart";
+    const originalStream = { infoHash: "hash-restart" };
+    const mediaInfo = {
+      type: "movie",
+      itemId: "tt-restart",
+      title: "Restart Test",
+      sourceId: id,
+      downloadUrl: "http://expired.test",
+    } as any;
+
+    useDownloadStore
+      .getState()
+      .addTask(id, mediaInfo, undefined, originalStream);
+    useDownloadStore.getState().setStatus(id, "Paused");
+
+    jest
+      .mocked(streamEngineManager.getPlaybackUri)
+      .mockResolvedValue("http://fresh-after-restart.test");
+
+    const service = new DownloadService();
+    const startDownloadSpy = jest
+      .spyOn(service, "startDownload")
+      .mockResolvedValue();
+
+    const result = await service.resumeDownload(id);
+
+    expect(result.ok).toBe(true);
+    expect(streamEngineManager.getPlaybackUri).toHaveBeenCalledWith(
+      originalStream,
+    );
+    expect(startDownloadSpy).toHaveBeenCalledWith(
+      originalStream,
+      mediaInfo,
+      expect.objectContaining({
+        resolvedUrl: "http://fresh-after-restart.test",
+      }),
+    );
+
+    startDownloadSpy.mockRestore();
+  });
+
+  it("reads desktop storage diagnostics from the desktop bridge", async () => {
+    setPlatform("web");
+    window.desktopBridge = {
+      getStorageInfo: jest.fn().mockResolvedValue({
+        total: 2_000_000,
+        free: 1_000_000,
+        appUsage: 123_456,
+      }),
+    } as any;
+
+    const service = new DownloadService();
+    const stats = await service.getStorageDiagnostics();
+
+    expect(window.desktopBridge!.getStorageInfo).toHaveBeenCalled();
+    expect(stats).toEqual({
+      totalSpace: 2_000_000,
+      freeSpace: 1_000_000,
+      appUsage: 123_456,
+    });
+  });
 });

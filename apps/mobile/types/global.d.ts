@@ -104,6 +104,11 @@ interface DesktopBridge {
    * Restarts the desktop stream bridge daemon and returns fresh bridge info.
    */
   restartBridge(): Promise<DesktopBridgeInfo>;
+
+  /**
+   * Returns device storage information from the desktop shell.
+   */
+  getStorageInfo(): Promise<{ total: number; free: number; appUsage?: number }>;
 }
 
 declare global {

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   deleteFile: (localUri) => ipcRenderer.invoke("delete-file", localUri),
   getBridgeInfo: () => ipcRenderer.invoke("get-bridge-info"),
   restartBridge: () => ipcRenderer.invoke("restart-bridge"),
+  getStorageInfo: () => ipcRenderer.invoke("get-storage-info"),
   onDownloadProgress: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on("download-progress", handler);

@@ -157,9 +157,9 @@ export interface DesktopBridge {
   restartBridge(): Promise<DesktopBridgeInfo>;
 
   /**
-   * Returns device storage information (total and free bytes).
+   * Returns device storage information (total, free, and optional app usage bytes).
    */
-  getStorageInfo(): Promise<{ total: number; free: number }>;
+  getStorageInfo(): Promise<{ total: number; free: number; appUsage?: number }>;
 }
 
 declare global {
