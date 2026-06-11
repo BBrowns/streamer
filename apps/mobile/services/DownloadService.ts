@@ -902,7 +902,12 @@ export class DownloadService {
         return { ok: false, error };
       }
 
-      if (!task.mediaInfo.downloadUrl) {
+      let desktopDownloadUrl: string | undefined = task.mediaInfo.downloadUrl;
+      if (!desktopDownloadUrl && task.originalStream) {
+        desktopDownloadUrl = await this.replanDownloadUrl(id);
+      }
+
+      if (!desktopDownloadUrl) {
         const error = "Original download URL is missing.";
         setStatus(id, "Error", undefined, error);
         return { ok: false, error };
@@ -917,7 +922,7 @@ export class DownloadService {
           existingJob ||
           (await desktopBridge.startDownloadJob(
             id,
-            task.mediaInfo.downloadUrl,
+            desktopDownloadUrl,
             this.getDownloadFilename(id),
           ));
         this.applyDesktopJobSnapshot(job);
@@ -1079,12 +1084,18 @@ export class DownloadService {
       console.warn(
         "[DownloadService] Resumable object and resumeData lost, restarting download",
       );
-    if (task.mediaInfo.downloadUrl) {
+
+    const replannedUrl = task.originalStream
+      ? await this.replanDownloadUrl(id)
+      : undefined;
+    const restartUrl = replannedUrl || task.mediaInfo.downloadUrl;
+
+    if (restartUrl) {
       await this.startDownload(
-        { url: task.mediaInfo.downloadUrl },
+        task.originalStream || { url: restartUrl },
         task.mediaInfo,
         {
-          resolvedUrl: task.mediaInfo.downloadUrl,
+          resolvedUrl: restartUrl,
           playbackSession: task.playbackSession,
         },
       );
@@ -1229,6 +1240,9 @@ export class DownloadService {
           const remoteInfo = await desktopBridge.getStorageInfo();
           info.totalSpace = remoteInfo.total;
           info.freeSpace = remoteInfo.free;
+          if (typeof remoteInfo.appUsage === "number") {
+            info.appUsage = remoteInfo.appUsage;
+          }
         } catch {}
       }
     } else {
@@ -1242,10 +1256,13 @@ export class DownloadService {
       } catch {}
     }
 
-    // Calculate usage from tasks
-    info.appUsage = Object.values(tasks).reduce((sum, task) => {
+    // Fall back to tracked task usage when the platform cannot report actual app usage.
+    const trackedUsage = Object.values(tasks).reduce((sum, task) => {
       return sum + (task.totalBytesWritten || 0);
     }, 0);
+    if (info.appUsage <= 0) {
+      info.appUsage = trackedUsage;
+    }
 
     return info;
   }

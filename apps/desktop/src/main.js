@@ -93,6 +93,49 @@ const downloadsPath = path.join(
 if (!fs.existsSync(downloadsPath)) {
   fs.mkdirSync(downloadsPath, { recursive: true });
 }
+
+function getDirectorySizeBytes(dirPath) {
+  if (!fs.existsSync(dirPath)) return 0;
+
+  let total = 0;
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    const entryPath = path.join(dirPath, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        total += getDirectorySizeBytes(entryPath);
+      } else if (entry.isFile()) {
+        total += fs.statSync(entryPath).size;
+      }
+    } catch {
+      // Best-effort diagnostics only; ignore files that disappear mid-scan.
+    }
+  }
+
+  return total;
+}
+
+function getStorageInfo() {
+  const info = {
+    total: 0,
+    free: 0,
+    appUsage: getDirectorySizeBytes(downloadsPath),
+  };
+
+  try {
+    const stats = fs.statfsSync(downloadsPath);
+    const blockSize = Number(stats.bsize || 0);
+    info.total = Number(stats.blocks || 0) * blockSize;
+    info.free = Number(stats.bavail || 0) * blockSize;
+  } catch (error) {
+    console.warn(
+      "[downloads] Failed to read storage info:",
+      redactSensitiveText(error?.message || error),
+    );
+  }
+
+  return info;
+}
+
 const downloadJobsPath = path.join(downloadsPath, "download-jobs.json");
 let persistDownloadJobsTimer = null;
 
@@ -1168,6 +1211,8 @@ electron_1.app.whenReady().then(async () => {
   electron_1.ipcMain.handle("restart-bridge", async () =>
     restartBridgeDaemon(),
   );
+
+  electron_1.ipcMain.handle("get-storage-info", async () => getStorageInfo());
 
   electron_1.ipcMain.handle(
     "download-media",
