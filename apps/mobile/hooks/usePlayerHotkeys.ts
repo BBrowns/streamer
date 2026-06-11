@@ -10,6 +10,9 @@ interface UsePlayerHotkeysArgs {
     typeof setTimeout
   > | null>;
   SEEK_SECONDS: number;
+  canSeek?: boolean;
+  onToggleFullscreen?: () => void;
+  onToggleMute?: () => void;
 }
 
 export function usePlayerHotkeys({
@@ -18,6 +21,9 @@ export function usePlayerHotkeys({
   setSeekFeedback,
   seekFeedbackTimer,
   SEEK_SECONDS,
+  canSeek = true,
+  onToggleFullscreen,
+  onToggleMute,
 }: UsePlayerHotkeysArgs) {
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -43,25 +49,18 @@ export function usePlayerHotkeys({
           break;
         case "f":
           e.preventDefault();
-          const videoElement = document.querySelector("video");
-          if (videoElement) {
-            if (!document.fullscreenElement) {
-              videoElement.requestFullscreen().catch(console.error);
-            } else {
-              document.exitFullscreen().catch(console.error);
-            }
-          }
+          if (onToggleFullscreen) onToggleFullscreen();
           break;
         case "m":
           e.preventDefault();
-          if (player) {
-            player.muted = !player.muted;
-            showControls();
-          }
+          if (onToggleMute) onToggleMute();
+          else if (player) player.muted = !player.muted;
+          showControls();
           break;
         case "arrowleft":
         case "j":
           e.preventDefault();
+          if (!canSeek) break;
           player?.seekBy(-SEEK_SECONDS);
           setSeekFeedback("left");
           if (seekFeedbackTimer.current)
@@ -75,6 +74,7 @@ export function usePlayerHotkeys({
         case "arrowright":
         case "l":
           e.preventDefault();
+          if (!canSeek) break;
           player?.seekBy(SEEK_SECONDS);
           setSeekFeedback("right");
           if (seekFeedbackTimer.current)
@@ -95,7 +95,7 @@ export function usePlayerHotkeys({
         case "8":
         case "9":
           e.preventDefault();
-          if (player && player.duration) {
+          if (canSeek && player && player.duration) {
             const percent = parseInt(e.key) * 10;
             player.currentTime = (player.duration * percent) / 100;
             showControls();
@@ -106,5 +106,14 @@ export function usePlayerHotkeys({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [player, showControls, setSeekFeedback, seekFeedbackTimer, SEEK_SECONDS]);
+  }, [
+    player,
+    showControls,
+    setSeekFeedback,
+    seekFeedbackTimer,
+    SEEK_SECONDS,
+    canSeek,
+    onToggleFullscreen,
+    onToggleMute,
+  ]);
 }
