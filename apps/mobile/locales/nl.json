@@ -14,7 +14,15 @@
     },
     "sections": {
       "popularMovies": "Populaire films",
-      "topTVShows": "Top TV-series"
+      "topTVShows": "Top TV-series",
+      "recentlyAdded": "Nieuw toegevoegd",
+      "fromProviders": "Van je providers",
+      "libraryShortcuts": "Snel verder"
+    },
+    "shortcuts": {
+      "discoverDetail": "Blader door alle providers",
+      "libraryDetail": "Opgeslagen films en series",
+      "downloadsDetail": "Offline beschikbare titels"
     },
     "filters": {
       "movies": "Films",
@@ -23,7 +31,10 @@
     "empty": {
       "title": "Geen content gevonden",
       "description": "Installeer enkele add-ons in Instellingen om te beginnen met browsen.",
-      "action": "Beheer add-ons"
+      "action": "Beheer add-ons",
+      "retryTitle": "Home kon niet laden",
+      "retryDescription": "Ververs je catalogi of controleer je verbinding.",
+      "retryAction": "Opnieuw proberen"
     }
   },
   "discover": {

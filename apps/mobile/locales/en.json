@@ -14,7 +14,15 @@
     },
     "sections": {
       "popularMovies": "Popular Movies",
-      "topTVShows": "Top TV Shows"
+      "topTVShows": "Top TV Shows",
+      "recentlyAdded": "Recently Added",
+      "fromProviders": "From Your Providers",
+      "libraryShortcuts": "Jump Back In"
+    },
+    "shortcuts": {
+      "discoverDetail": "Browse every provider",
+      "libraryDetail": "Saved movies and shows",
+      "downloadsDetail": "Offline-ready titles"
     },
     "filters": {
       "movies": "Movies",
@@ -23,7 +31,10 @@
     "empty": {
       "title": "No Content Found",
       "description": "Install some add-ons in Settings to start browsing.",
-      "action": "Manage Add-ons"
+      "action": "Manage Add-ons",
+      "retryTitle": "Home could not load",
+      "retryDescription": "Refresh your catalogs or check your connection.",
+      "retryAction": "Retry"
     }
   },
   "discover": {
