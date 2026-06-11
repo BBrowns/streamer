@@ -183,12 +183,11 @@ describe("Aggregator: Sanitized Results", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ transportUrl: "https://169.254.169.254/manifest.json" });
 
-    // Assuming the error mapper maps throwing Error to 500 or 502 with the message
-    // Actually, AddonService traps it in fetchManifest
     expect(res.status).not.toBe(201); // should fail
-    // It throws an AppError(502, "Could not reach add-on at the provided URL") normally if fetch fails on axios
-    // If validateSafeUrl throws Error, AddonService `catch(err)` logs it and throws AppError(502)
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      code: "ADDON_SOURCE_BLOCKED",
+    });
   });
 });
 

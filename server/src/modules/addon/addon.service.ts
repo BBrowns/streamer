@@ -1,29 +1,13 @@
-import axios from "axios";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
 import { AppError } from "../../middleware/error.middleware.js";
-import { validateSafeUrl } from "../../utils/security.js";
 import { addonManifestSchema } from "@streamer/shared";
 import type { AddonManifest, InstalledAddon } from "@streamer/shared";
-
-const MAX_ADDON_REDIRECTS = 3;
-
-function isRedirectStatus(status: number) {
-  return [301, 302, 303, 307, 308].includes(status);
-}
-
-function safeUrlForLog(urlString: string) {
-  try {
-    const parsed = new URL(urlString);
-    return {
-      protocol: parsed.protocol,
-      hostname: parsed.hostname,
-      pathname: parsed.pathname,
-    };
-  } catch {
-    return { invalid: true };
-  }
-}
+import {
+  AddonSourcePolicyError,
+  fetchSafeAddonJson,
+  safeUrlForLog,
+} from "./addon-fetcher.js";
 
 export class AddonService {
   /** Fetch and validate manifest from a remote add-on URL */
@@ -34,12 +18,23 @@ export class AddonService {
       : `${base}/manifest.json`;
 
     try {
-      const { data } = await this.fetchSafeAddonJson(manifestUrl);
+      const data = await fetchSafeAddonJson(manifestUrl, { kind: "manifest" });
       const manifest = addonManifestSchema.parse(data);
       return manifest;
     } catch (err: any) {
       if (err.name === "ZodError") {
         throw new AppError(400, "Invalid add-on manifest format");
+      }
+      if (err instanceof AddonSourcePolicyError) {
+        const message =
+          err.code === "oversized-response"
+            ? "Add-on manifest is too large"
+            : "Add-on URL is blocked by the source safety policy";
+        logger.warn(
+          { target: safeUrlForLog(transportUrl), code: err.code },
+          "Blocked add-on manifest by source policy",
+        );
+        throw new AppError(400, message, "ADDON_SOURCE_BLOCKED");
       }
       logger.warn(
         { target: safeUrlForLog(transportUrl), error: err.message },
@@ -47,36 +42,6 @@ export class AddonService {
       );
       throw new AppError(502, "Could not reach add-on at the provided URL");
     }
-  }
-
-  private async fetchSafeAddonJson(url: string, redirects = 0): Promise<any> {
-    if (redirects > MAX_ADDON_REDIRECTS) {
-      throw new Error("Too many add-on redirects");
-    }
-
-    await validateSafeUrl(url);
-
-    const response = await axios.get(url, {
-      timeout: 5000,
-      maxRedirects: 0,
-      maxContentLength: 1024 * 1024,
-      validateStatus: (status) =>
-        (status >= 200 && status < 300) || isRedirectStatus(status),
-    });
-
-    if (isRedirectStatus(response.status)) {
-      const location = response.headers.location;
-      if (typeof location !== "string" || location.trim().length === 0) {
-        throw new Error("Add-on redirect missing Location header");
-      }
-
-      return this.fetchSafeAddonJson(
-        new URL(location, url).toString(),
-        redirects + 1,
-      );
-    }
-
-    return response;
   }
 
   /** Install an add-on for a user */

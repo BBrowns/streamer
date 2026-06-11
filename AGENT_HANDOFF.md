@@ -116,6 +116,10 @@ Use [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) as the canonical record for
 real-target playback, download, cast, bridge, and remux validation. Local unit
 tests are not enough to mark a runtime supported.
 
+Use [docs/ADDON_TRUST_MODEL.md](./docs/ADDON_TRUST_MODEL.md) before changing
+add-on manifest/resource fetching, source URL validation, redirect handling, or
+private-network development exceptions.
+
 ### Player Runtime State
 
 The player now stores and displays typed playback readiness:
@@ -694,6 +698,8 @@ Known limitations:
   that does not fit the add-on aggregation and dynamic playback-planning goal.
 - Do not persist or log resolved source URLs, magnets, info hashes, bridge
   tokens, signed gateway URLs, local file URIs, or bridge URLs.
+- Do not bypass the add-on source safety policy for manifest, catalog, meta,
+  stream, or search fetches.
 - Do not make manual source selection the primary detail-page UX again.
 - Do not show offline completion unless a local file has been verified.
 - Do not make Real-Debrid part of onboarding or default playback.

@@ -67,6 +67,26 @@ describe("validateSafeUrl", () => {
     await expect(
       validateSafeUrl("https://192.168.1.10/manifest.json"),
     ).rejects.toThrow("SSRF Blocked");
+    await expect(
+      validateSafeUrl("https://[::1]/manifest.json"),
+    ).rejects.toThrow("SSRF Blocked");
+    await expect(
+      validateSafeUrl("https://[::ffff:127.0.0.1]/manifest.json"),
+    ).rejects.toThrow("SSRF Blocked");
+  });
+
+  it("blocks metadata hostnames and suspicious protocols", async () => {
+    await expect(
+      validateSafeUrl("https://metadata.google.internal/manifest.json"),
+    ).rejects.toThrow("local hostname");
+    await expect(
+      validateSafeUrl("javascript:alert(1)", { allowHttp: true }),
+    ).rejects.toThrow("Unsupported URL protocol");
+    await expect(
+      validateSafeUrl("ftp://example.com/manifest.json", {
+        allowHttp: true,
+      }),
+    ).rejects.toThrow("Unsupported URL protocol");
   });
 
   it("blocks hostnames when any resolved address is private", async () => {
@@ -140,7 +160,10 @@ describe("AddonService fetchManifest trust boundary", () => {
 
     await expect(
       service.fetchManifest("https://addon.example.test/manifest.json"),
-    ).rejects.toThrow("Could not reach add-on");
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: "ADDON_SOURCE_BLOCKED",
+    });
     expect(axiosGet).toHaveBeenCalledTimes(1);
   });
 
@@ -176,6 +199,39 @@ describe("AddonService fetchManifest trust boundary", () => {
       2,
       "https://addon.example.test/real-manifest.json",
       expect.objectContaining({ maxRedirects: 0 }),
+    );
+  });
+
+  it("rejects oversized manifests before schema validation", async () => {
+    axiosGet.mockResolvedValueOnce({
+      status: 200,
+      headers: {},
+      data: {
+        id: "huge.addon",
+        version: "1.0.0",
+        name: "Huge Addon",
+        description: "x".repeat(300 * 1024),
+        resources: ["catalog"],
+        types: ["movie"],
+        catalogs: [{ type: "movie", id: "top", name: "Top" }],
+      },
+    });
+
+    const service = new AddonService();
+
+    await expect(
+      service.fetchManifest("https://addon.example.test/manifest.json"),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Add-on manifest is too large",
+      code: "ADDON_SOURCE_BLOCKED",
+    });
+    expect(axiosGet).toHaveBeenCalledWith(
+      "https://addon.example.test/manifest.json",
+      expect.objectContaining({
+        maxContentLength: 256 * 1024,
+        maxBodyLength: 256 * 1024,
+      }),
     );
   });
 });

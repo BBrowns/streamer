@@ -433,7 +433,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/InstalledAddon'
         '400':
-          description: Invalid manifest
+          description: Invalid manifest or blocked by source safety policy
         '409':
           description: Already installed
         '502':
