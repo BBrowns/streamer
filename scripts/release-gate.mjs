@@ -142,6 +142,8 @@ function checkSecurityCoverage() {
     "server/tests/sentry.unit.test.ts",
     "packages/stream-server/src/__tests__/security.test.ts",
     "packages/stream-server/src/__tests__/sentry.test.ts",
+    "apps/desktop/src/electron-hardening.test.js",
+    "apps/desktop/src/security.test.js",
     "apps/mobile/services/__tests__/redaction.test.ts",
     "apps/mobile/services/__tests__/sentryConfig.test.ts",
     "apps/mobile/services/__tests__/sentryBreadcrumbs.test.ts",

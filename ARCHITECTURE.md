@@ -417,13 +417,19 @@ shared/src/
 
 ## 8. The Desktop App (`apps/desktop/`)
 
-An Electron shell that loads the Expo web build on `localhost:8081`. It adds:
+An Electron shell that loads the Expo web build on `localhost:8081` in
+development. It adds:
 
 - **`desktopBridge`** — a context-bridged IPC object injected into `window` that the mobile web app detects to unlock desktop-specific features:
   - `downloadMedia(id, url, filename)` — native file download with progress events
   - `deleteFile(localUri)` — delete downloaded files
   - `onDownloadProgress(callback)` — IPC event subscription
 - Native OS integration (system tray, window management).
+- **Electron security boundary** — `BrowserWindow` runs with Node integration
+  disabled, context isolation enabled, sandboxing enabled, webviews disabled,
+  deny-by-default permissions, CSP injection, renderer navigation allowlists,
+  HTTPS-only external opening, and trusted IPC sender validation. See
+  [docs/ELECTRON_SECURITY.md](./docs/ELECTRON_SECURITY.md).
 - **Packaged bridge sidecar inputs** — desktop packaging uses
   `apps/desktop/electron-builder.json` plus the desktop workspace
   `package:dir` script. The package includes

@@ -262,6 +262,8 @@ jobs:
         run: npm run build --workspace=@streamer/stream-server
       - name: Build Desktop Main Process
         run: npm run build --workspace=@streamer/desktop
+      - name: Run Desktop Security Tests
+        run: npm run test --workspace=@streamer/desktop
       - name: Vendor Desktop Node Runtimes
         run: npm run vendor --workspace=@streamer/desktop
       - name: Desktop Package Input Smoke
@@ -289,7 +291,7 @@ jobs:
           # Build Check
 
           - Status: ${{ job.status }}
-          - Scope: shared build, server build, stream-server sidecar build, desktop main build, vendor Node runtimes, desktop package inputs, and Sentry release dry-run.
+          - Scope: shared build, server build, stream-server sidecar build, desktop main build/tests, vendor Node runtimes, desktop package inputs, and Sentry release dry-run.
           EOF
       - name: Upload CI summary
         if: always()
