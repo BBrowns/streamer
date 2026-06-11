@@ -266,31 +266,30 @@ function SettingsContent() {
       contentContainerStyle={[styles.contentWrapper, { paddingBottom: 40 }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Streaming */}
+      {/* Sources & add-ons */}
       <SettingsSection
-        title={t("settings.sections.sourcesDevices", {
-          defaultValue: "Sources & Devices",
+        title={t("settings.sections.sourcesAddons", {
+          defaultValue: "Sources & Add-ons",
         })}
       >
         {isDesktop ? (
           <Pressable
-            style={[
-              styles.menuItem,
-              activePane === "sources" && styles.menuItemActive,
-            ]}
+            style={styles.menuItem}
             onPress={() => setActivePane("sources")}
           >
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+                { backgroundColor: "rgba(129,140,248,0.15)" },
               ]}
             >
-              <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+              <Ionicons name="play-circle-outline" size={20} color="#818cf8" />
             </View>
             <View style={styles.menuItemTextContainer}>
               <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                Sources & Devices
+                {t("settings.items.playbackReadiness", {
+                  defaultValue: "Playback readiness",
+                })}
               </Text>
               <Text
                 style={[
@@ -298,7 +297,10 @@ function SettingsContent() {
                   { color: colors.textSecondary },
                 ]}
               >
-                Bridge, server URLs, and optional resolvers
+                {t("settings.subtitles.playbackReadiness", {
+                  defaultValue:
+                    "Check bridge, cast, downloads, and stream readiness",
+                })}
               </Text>
             </View>
             <Ionicons
@@ -325,7 +327,9 @@ function SettingsContent() {
             </View>
             <View style={styles.menuItemTextContainer}>
               <Text style={[styles.menuItemTitle, { color: colors.text }]}>
-                Sources & Devices
+                {t("settings.items.playbackReadiness", {
+                  defaultValue: "Playback readiness",
+                })}
               </Text>
               <Text
                 style={[
@@ -333,7 +337,10 @@ function SettingsContent() {
                   { color: colors.textSecondary },
                 ]}
               >
-                Configure bridge, server URLs, and resolvers
+                {t("settings.subtitles.playbackReadiness", {
+                  defaultValue:
+                    "Check bridge, cast, downloads, and stream readiness",
+                })}
               </Text>
             </View>
             <Ionicons
@@ -373,6 +380,91 @@ function SettingsContent() {
               style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
             >
               {t("settings.subtitles.manageAddons")}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </SettingsSection>
+
+      {/* Playback & Downloads */}
+      <SettingsSection
+        title={t("settings.sections.playbackDownloads", {
+          defaultValue: "Playback & Downloads",
+        })}
+      >
+        <Pressable
+          style={[
+            styles.menuItem,
+            isDesktop && activePane === "sources" && styles.menuItemActive,
+          ]}
+          onPress={() => {
+            hapticSelection();
+            if (isDesktop) setActivePane("sources");
+            else router.push("/sources" as any);
+          }}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+            ]}
+          >
+            <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("settings.items.desktopBridgeCast", {
+                defaultValue: "Desktop bridge & cast",
+              })}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {t("settings.subtitles.desktopBridgeCast", {
+                defaultValue:
+                  "LAN URL, cast readiness, torrent engine, and repair actions",
+              })}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Pressable
+          style={styles.menuItem}
+          onPress={() => {
+            hapticSelection();
+            router.push("/downloads");
+          }}
+        >
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(56, 189, 248, 0.12)" },
+            ]}
+          >
+            <Ionicons name="cloud-download-outline" size={20} color="#38bdf8" />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              {t("tabs.downloads")}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {t("settings.subtitles.downloads", {
+                defaultValue:
+                  "Queue, offline files, verification, and storage state",
+              })}
             </Text>
           </View>
           <Ionicons

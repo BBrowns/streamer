@@ -30,7 +30,7 @@ export default function SourcesScreen() {
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
       >
-        <SourcesSection />
+        <SourcesSection showHeader={false} />
         <View style={styles.spacer} />
       </ScrollView>
     </ErrorBoundary>

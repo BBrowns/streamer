@@ -170,6 +170,8 @@
     "finish": "Voltooien & Inloggen"
   },
   "settings": {
+    "appearance": "Uiterlijk",
+    "language": "Taal",
     "sections": {
       "account": "Account",
       "appearance": "Uiterlijk",
@@ -178,10 +180,14 @@
       "security": "Beveiliging",
       "privacy": "Privacy & Gegevens",
       "sourcesDevices": "Bronnen & apparaten",
+      "sourcesAddons": "Bronnen & add-ons",
+      "playbackDownloads": "Afspelen & downloads",
       "advanced": "Geavanceerd"
     },
     "items": {
       "manageAddons": "Beheer add-ons",
+      "playbackReadiness": "Afspeelstatus",
+      "desktopBridgeCast": "Desktop bridge & cast",
       "trakt": "Trakt.tv",
       "activeSessions": "Actieve sessies",
       "changePassword": "Wachtwoord wijzigen",
@@ -191,6 +197,9 @@
     },
     "subtitles": {
       "manageAddons": "Installeer en verwijder contentbronnen",
+      "playbackReadiness": "Controleer bridge, cast, downloads en streamgereedheid",
+      "desktopBridgeCast": "LAN-URL, caststatus, torrent-engine en herstelacties",
+      "downloads": "Wachtrij, offline bestanden, verificatie en opslagstatus",
       "traktConnected": "Verbonden",
       "traktDisconnected": "Synchroniseer kijkgeschiedenis over apparaten",
       "activeSessions": "{{count}} apparaat ingelogd",
