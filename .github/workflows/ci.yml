@@ -65,6 +65,38 @@ jobs:
           fi
           echo "✅ No secrets detected"
 
+  test-shared:
+    name: Shared Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm install --no-audit --no-fund
+      - name: Run Shared Tests
+        run: npm run test --workspace=@streamer/shared
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/shared-tests.md <<'EOF'
+          # Shared Tests
+
+          - Status: ${{ job.status }}
+          - Command: `npm run test --workspace=@streamer/shared`
+          - Scope: shared schemas, playback fixtures, build metadata, and observability helpers.
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-shared-tests
+          path: artifacts/ci-summaries/shared-tests.md
+          retention-days: 14
+
   test-server:
     name: Server Tests
     runs-on: ubuntu-latest
@@ -119,6 +151,25 @@ jobs:
           working-directory: server
           json-summary-path: coverage/coverage-summary.json
           json-final-path: coverage/coverage-final.json
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/server-tests.md <<'EOF'
+          # Server Tests
+
+          - Status: ${{ job.status }}
+          - Command: `npm run test --workspace=server -- --coverage`
+          - Scope: API, auth, planner, add-on security, redaction, Sentry, and database-backed integration tests.
+          - Artifact: `server-coverage`
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-server-tests
+          path: artifacts/ci-summaries/server-tests.md
+          retention-days: 14
 
   test-stream-server:
     name: Stream Server Tests
@@ -135,6 +186,24 @@ jobs:
         run: npx tsc --noEmit --project packages/stream-server/tsconfig.json
       - name: Run Stream Server Tests
         run: npm run test --workspace=@streamer/stream-server
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/stream-server-tests.md <<'EOF'
+          # Stream Server Tests
+
+          - Status: ${{ job.status }}
+          - Commands: `npx tsc --noEmit --project packages/stream-server/tsconfig.json`, `npm run test --workspace=@streamer/stream-server`
+          - Scope: bridge health, gateway, range/seek, torrent engine diagnostics, security, Sentry, and subtitle handling.
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-stream-server-tests
+          path: artifacts/ci-summaries/stream-server-tests.md
+          retention-days: 14
 
   test-mobile:
     name: Mobile Tests
@@ -153,6 +222,24 @@ jobs:
         run: npx tsc --noEmit --project apps/mobile/tsconfig.json
       - name: Run Mobile Jest Tests
         run: npm run test --workspace=apps/mobile -- --runInBand
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/mobile-tests.md <<'EOF'
+          # Mobile Tests
+
+          - Status: ${{ job.status }}
+          - Commands: `npx tsc --noEmit --project apps/mobile/tsconfig.json`, `npm run test --workspace=apps/mobile -- --runInBand`
+          - Scope: Play Best sessions, downloads, cast, bridge diagnostics, UI units, stores, and redaction.
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-mobile-tests
+          path: artifacts/ci-summaries/mobile-tests.md
+          retention-days: 14
 
   build-check:
     name: Build Check
@@ -194,3 +281,91 @@ jobs:
           STREAMER_GIT_SHA: ${{ github.sha }}
           STREAMER_BUILD_DATE: ${{ github.event.head_commit.timestamp }}
           STREAMER_BUILD_ENVIRONMENT: production
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/build-check.md <<'EOF'
+          # Build Check
+
+          - Status: ${{ job.status }}
+          - Scope: shared build, server build, stream-server sidecar build, desktop main build, vendor Node runtimes, desktop package inputs, and Sentry release dry-run.
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-build-check
+          path: artifacts/ci-summaries/build-check.md
+          retention-days: 14
+
+  desktop-package:
+    name: Desktop Package Artifact
+    runs-on: macos-latest
+    needs: build-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm install --no-audit --no-fund
+      - name: Build macOS desktop package directory
+        run: npm run package:mac --workspace=@streamer/desktop
+      - name: Validate packaged inputs
+        run: npm run package:check --workspace=@streamer/desktop
+      - name: Upload desktop package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-package-dir
+          path: apps/desktop/release/**
+          if-no-files-found: error
+          retention-days: 14
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/desktop-package.md <<'EOF'
+          # Desktop Package Artifact
+
+          - Status: ${{ job.status }}
+          - Command: `npm run package:mac --workspace=@streamer/desktop`
+          - Artifact: `desktop-macos-package-dir`
+          - Scope: unsigned macOS Electron package directory with stream-server sidecar resources.
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-desktop-package
+          path: artifacts/ci-summaries/desktop-package.md
+          retention-days: 14
+
+  release-gate:
+    name: Release Gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - lint-and-typecheck
+      - format-check
+      - security-audit
+      - test-shared
+      - test-server
+      - test-stream-server
+      - test-mobile
+      - build-check
+      - desktop-package
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run release gate
+        run: npm run release:gate
+      - name: Upload release gate summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-release-gate
+          path: artifacts/ci-summaries/release-gate.md
+          retention-days: 14

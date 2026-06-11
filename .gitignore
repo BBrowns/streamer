@@ -58,6 +58,7 @@ docker-data/
 
 # Packed tarballs
 *.tgz
+artifacts/
 
 # SQLite journals
 *.db-journal
