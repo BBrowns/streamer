@@ -7,6 +7,7 @@ const distDir = path.join(root, "dist");
 const entryFiles = [
   "main.js",
   "preload.js",
+  "build-metadata.js",
   "download-paths.js",
   "sentry.js",
   "bridge-runtime.js",

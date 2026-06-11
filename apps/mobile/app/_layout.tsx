@@ -37,6 +37,10 @@ import {
   redactSensitiveText,
 } from "../services/redaction";
 import { createMobileSentryConfig } from "../services/sentryConfig";
+import {
+  clientBuildMetadata,
+  clientBuildSentryTags,
+} from "../services/buildMetadata";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -53,8 +57,11 @@ Sentry.init(
     enableInDev: process.env.EXPO_PUBLIC_SENTRY_ENABLE_DEV,
     isDev: __DEV__,
     nodeEnv: process.env.NODE_ENV,
+    buildMetadata: clientBuildMetadata,
   }),
 );
+Sentry.setTags(clientBuildSentryTags);
+Sentry.setContext("build", { ...clientBuildMetadata });
 
 const queryClient = new QueryClient({
   defaultOptions: {

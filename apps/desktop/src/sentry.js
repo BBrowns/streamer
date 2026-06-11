@@ -8,6 +8,11 @@ try {
   Sentry = null;
 }
 
+const {
+  buildMetadataToSentryTags,
+  createDesktopBuildMetadata,
+} = require("./build-metadata");
+
 const SENSITIVE_KEY_PATTERN =
   /^(authorization|auth|bearer|token|access_token|refresh_token|signature|secret|password|api_key|key)$/i;
 const SENSITIVE_VALUE_KEY_PATTERN =
@@ -87,8 +92,9 @@ function redactSensitiveValue(value, key = "", depth = 0) {
   return value;
 }
 
-function createDesktopSentryOptions(env = process.env) {
+function createDesktopSentryOptions(env = process.env, buildMetadata = null) {
   const nodeEnv = env.NODE_ENV || "development";
+  const metadata = buildMetadata || createDesktopBuildMetadata(env);
   const dsn = String(
     env.STREAMER_DESKTOP_SENTRY_DSN || env.SENTRY_DSN || "",
   ).trim();
@@ -106,11 +112,12 @@ function createDesktopSentryOptions(env = process.env) {
     environment:
       env.STREAMER_DESKTOP_SENTRY_ENVIRONMENT ||
       env.SENTRY_ENVIRONMENT ||
+      metadata.environment ||
       nodeEnv,
     release:
       env.STREAMER_DESKTOP_SENTRY_RELEASE ||
       env.SENTRY_RELEASE ||
-      `streamer-desktop@${env.npm_package_version || "unknown"}`,
+      metadata.release,
     debug: false,
     sendDefaultPii: false,
     maxBreadcrumbs: 50,
@@ -133,9 +140,12 @@ function createDesktopSentryOptions(env = process.env) {
   };
 }
 
-function initDesktopSentry() {
+function initDesktopSentry(buildMetadata = null) {
   if (!Sentry?.init) return false;
-  Sentry.init(createDesktopSentryOptions(process.env));
+  const metadata = buildMetadata || createDesktopBuildMetadata(process.env);
+  Sentry.init(createDesktopSentryOptions(process.env, metadata));
+  Sentry.setTags?.(buildMetadataToSentryTags(metadata));
+  Sentry.setContext?.("build", metadata);
   return true;
 }
 

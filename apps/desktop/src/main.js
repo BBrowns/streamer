@@ -26,10 +26,22 @@ const {
   initDesktopSentry,
   redactSensitiveText,
 } = require("./sentry");
+const { createDesktopBuildMetadata } = require("./build-metadata");
 
 const { autoUpdater } = require("electron-updater");
 
-initDesktopSentry();
+const desktopBuildMetadata = createDesktopBuildMetadata(process.env, {
+  appVersion: electron_1.app.getVersion(),
+});
+
+initDesktopSentry(desktopBuildMetadata);
+console.log(
+  JSON.stringify({
+    service: "streamer-desktop-main",
+    event: "started",
+    build: desktopBuildMetadata,
+  }),
+);
 
 let tray = null;
 let mainWindow = null;
@@ -900,6 +912,11 @@ async function startBridgeDaemon() {
     process.env.STREAMER_BRIDGE_TOKEN = pairingToken;
     process.env.STREAMER_BRIDGE_OWNER = "desktop";
     process.env.STREAMER_BRIDGE_CLAIM_FILE = getBridgeOwnerClaimPath();
+    process.env.STREAMER_APP_VERSION = desktopBuildMetadata.appVersion;
+    process.env.STREAMER_GIT_SHA = desktopBuildMetadata.gitSha;
+    process.env.STREAMER_BUILD_DATE = desktopBuildMetadata.buildDate;
+    process.env.STREAMER_BUILD_CHANNEL = desktopBuildMetadata.buildChannel;
+    process.env.STREAMER_BUILD_ENVIRONMENT = desktopBuildMetadata.environment;
     const streamServer = await import("@streamer/stream-server");
     const server = streamServer.startStreamServer(11470);
     setBridgeState({
@@ -933,6 +950,11 @@ async function startBridgeDaemon() {
       STREAMER_BRIDGE_TOKEN: pairingToken,
       STREAMER_BRIDGE_OWNER: "desktop",
       STREAMER_BRIDGE_CLAIM_FILE: getBridgeOwnerClaimPath(),
+      STREAMER_APP_VERSION: desktopBuildMetadata.appVersion,
+      STREAMER_GIT_SHA: desktopBuildMetadata.gitSha,
+      STREAMER_BUILD_DATE: desktopBuildMetadata.buildDate,
+      STREAMER_BUILD_CHANNEL: desktopBuildMetadata.buildChannel,
+      STREAMER_BUILD_ENVIRONMENT: desktopBuildMetadata.environment,
       STREAMER_BRIDGE_RUNTIME_ARCH: nodeArch || "",
       STREAMER_BRIDGE_NATIVE_ARCH: runtimeDiagnostics.nativeArch || "",
     },
@@ -1067,6 +1089,7 @@ async function getBridgeInfoSnapshot() {
     localUrl: "http://localhost:11470",
     lanUrl: bridgeLanUrl,
     pairingToken: getBridgePairingToken(),
+    build: desktopBuildMetadata,
     diagnostics: {
       ...bridgeState,
       status,
@@ -1080,6 +1103,7 @@ async function getBridgeInfoSnapshot() {
       platform: torrentEngine?.platform || process.platform,
       nativeBinary: bridgeState.nativeBinary || runtimeDiagnostics.nativeBinary,
       nativeArch: bridgeState.nativeArch || runtimeDiagnostics.nativeArch,
+      build: desktopBuildMetadata,
       health: health || rawHealth,
     },
   };
@@ -1268,7 +1292,7 @@ electron_1.app.whenReady().then(async () => {
         protocol: "tcp",
         port: 11470,
         txt: {
-          version: "1.0.0",
+          version: desktopBuildMetadata.appVersion,
           id: electron_1.app.getPath("userData"),
         },
       });

@@ -20,6 +20,27 @@ describe("mobile Sentry config", () => {
     expect(config.sendDefaultPii).toBe(false);
   });
 
+  it("uses build metadata for release and environment", () => {
+    const config = createMobileSentryConfig({
+      dsn: "https://public@example.ingest.sentry.io/1",
+      isDev: false,
+      nodeEnv: "production",
+      buildMetadata: {
+        appVersion: "2.0.0",
+        gitSha: "1234567890abcdef",
+        gitShaShort: "1234567890ab",
+        buildDate: "2026-06-11T10:00:00.000Z",
+        buildChannel: "beta",
+        runtimeType: "desktop-renderer",
+        environment: "preview",
+        release: "streamer-desktop-renderer@2.0.0+1234567890ab",
+      },
+    });
+
+    expect(config.environment).toBe("preview");
+    expect(config.release).toBe("streamer-desktop-renderer@2.0.0+1234567890ab");
+  });
+
   it("enables production Sentry with conservative default tracing", () => {
     const config = createMobileSentryConfig({
       dsn: "https://public@example.ingest.sentry.io/1",

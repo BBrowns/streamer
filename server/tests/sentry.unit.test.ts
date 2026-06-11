@@ -34,6 +34,26 @@ describe("server Sentry config", () => {
     expect(options.sampleRate).toBe(1);
   });
 
+  it("uses build metadata for release and environment", () => {
+    const options = createServerSentryOptionsFromInput({
+      dsn: "https://public@example.ingest.sentry.io/1",
+      nodeEnv: "production",
+      buildMetadata: {
+        appVersion: "2.0.0",
+        gitSha: "1234567890abcdef",
+        gitShaShort: "1234567890ab",
+        buildDate: "2026-06-11T10:00:00.000Z",
+        buildChannel: "beta",
+        runtimeType: "server",
+        environment: "preview",
+        release: "streamer-server@2.0.0+1234567890ab",
+      },
+    });
+
+    expect(options.environment).toBe("preview");
+    expect(options.release).toBe("streamer-server@2.0.0+1234567890ab");
+  });
+
   it("redacts sensitive event payloads before sending", () => {
     const options = createServerSentryOptionsFromInput({
       dsn: "https://public@example.ingest.sentry.io/1",

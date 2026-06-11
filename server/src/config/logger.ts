@@ -1,5 +1,6 @@
 import pino from "pino";
 import { env } from "./env.js";
+import { serverBuildMetadata } from "./build-metadata.js";
 import { getRequestId } from "../utils/request-context.js";
 import { redactSensitiveLogValue } from "../utils/redaction.js";
 
@@ -9,7 +10,14 @@ export const logger = pino({
     env.nodeEnv === "development"
       ? { target: "pino-pretty", options: { colorize: true } }
       : undefined,
-  base: { service: "streamer-server" },
+  base: {
+    service: "streamer-server",
+    buildId: serverBuildMetadata.release,
+    runtimeType: serverBuildMetadata.runtimeType,
+    appVersion: serverBuildMetadata.appVersion,
+    gitSha: serverBuildMetadata.gitShaShort,
+    buildChannel: serverBuildMetadata.buildChannel,
+  },
   timestamp: pino.stdTimeFunctions.isoTime,
   mixin() {
     const requestId = getRequestId();

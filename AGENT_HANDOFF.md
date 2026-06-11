@@ -271,6 +271,11 @@ Before this can be considered production-ready:
 - CI/CD needs stable desktop/mobile/server/stream-server build and test coverage.
 - Release pipelines are needed for desktop and mobile.
 - Sentry/error reporting should be verified across server, mobile, desktop, and bridge.
+- Build metadata should stay centralized: see
+  [docs/BUILD_METADATA.md](./docs/BUILD_METADATA.md). Release pipelines should
+  inject `STREAMER_APP_VERSION`, `STREAMER_GIT_SHA`,
+  `STREAMER_BUILD_DATE`, `STREAMER_BUILD_CHANNEL`, and
+  `STREAMER_BUILD_ENVIRONMENT`.
 - Secrets/env management needs review.
 - Bridge, add-on URLs, auth, cast URLs, and remote media URLs need a focused security review.
 - Privacy export/delete flows should be verified end-to-end.
