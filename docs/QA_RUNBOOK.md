@@ -14,7 +14,7 @@ This document provides step-by-step instructions for performing manual playback 
 
 ## Test Procedure
 
-For each fixture in the [Playback Matrix](../PLAYBACK_MATRIX.md):
+For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
 
 ### 1. First Frame (TimeToFirstFrame)
 
@@ -27,7 +27,10 @@ For each fixture in the [Playback Matrix](../PLAYBACK_MATRIX.md):
 - **Step:** Seek to the middle of the video.
 - **Verification:** The player should quickly resume playback from the new position.
 - **Expectation:** Smooth seeking without "unsatisfiable range" errors or infinite buffering.
-- **Note:** MKV remuxing may be sequential in v1 (see ROADMAP PR 88).
+- **Note:** MKV remux output is materialized to a temporary MP4 before byte-range
+  seeking is reliable. During materialization the player should show a
+  `remuxing`/preparing state, allow cancellation, and avoid pretending seeking
+  is ready before the remuxed file exists.
 
 ### 3. Fallback
 
@@ -55,3 +58,9 @@ If a test fails:
 2.  **Desktop:** Check the Electron console and `stream-server.log`.
 3.  **Server:** Check the main API server logs.
 4.  **Redaction:** Ensure the logs do not contain raw magnets or tokens before sharing.
+
+## Recording Results
+
+Create a dated run record under `docs/qa-runs/` using the template in
+[QA_MATRIX.md](./QA_MATRIX.md). Do not mark a runtime as supported unless the
+result is recorded with build, device, source fixture, and pass/fail notes.

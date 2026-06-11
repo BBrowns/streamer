@@ -18,6 +18,7 @@ type GatewayJobMode = "bridge" | "remux";
 type GatewayJobPhase =
   | "finding_peers"
   | "preparing_metadata"
+  | "remuxing"
   | "ready"
   | "error"
   | "cancelled";
@@ -34,6 +35,8 @@ interface GatewayJob {
   peerCount?: number;
   retryable?: boolean;
   progressTimer?: ReturnType<typeof setInterval>;
+  abortController?: AbortController;
+  remuxStartedAt?: number;
   activeStreamCount: number;
   activeStreamSignature?: string;
   lastStreamAccessAt?: number;
@@ -106,12 +109,20 @@ function getJobPhase(job: GatewayJob): GatewayJobPhase {
   if (job.state === "ready") return "ready";
   if (job.state === "error") return "error";
   if (job.state === "cancelled") return "cancelled";
+  if (job.mode === "remux" && job.remuxStartedAt) return "remuxing";
   return (job.peerCount ?? 0) > 0 ? "preparing_metadata" : "finding_peers";
 }
 
 function getJobProgress(job: GatewayJob, elapsedMs: number) {
   if (job.state === "ready") return 1;
   if (job.state === "error" || job.state === "cancelled") return null;
+  if (job.mode === "remux" && job.remuxStartedAt) {
+    const remuxElapsed = Date.now() - job.remuxStartedAt;
+    return Math.min(
+      0.98,
+      Math.max(0.25, 0.25 + (remuxElapsed / GATEWAY_READY_TIMEOUT_MS) * 0.7),
+    );
+  }
   const elapsedProgress = elapsedMs / GATEWAY_READY_TIMEOUT_MS;
   const peerProgress = (job.peerCount ?? 0) > 0 ? 0.2 : 0;
   return Math.min(0.95, Math.max(peerProgress, elapsedProgress));
@@ -175,6 +186,8 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
     clearInterval(job.progressTimer);
     job.progressTimer = undefined;
   }
+  job.abortController?.abort(new Error(error));
+  job.abortController = undefined;
   job.state = "cancelled";
   job.error = error;
   job.retryable = false;
@@ -388,6 +401,38 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
         retryable: false,
       });
     }
+    if (job.mode === "remux") {
+      job.state = "preparing";
+      job.retryable = true;
+      job.remuxStartedAt = Date.now();
+      job.updatedAt = Date.now();
+      const abortController = new AbortController();
+      job.abortController = abortController;
+
+      try {
+        const result = await serveTorrentFile(req, res, torrent, {
+          fileIdx: job.fileIdx,
+          hints: job.hints,
+          remuxFormat: "mp4",
+          signal: abortController.signal,
+        });
+        if (!isGatewayJobCancelled(job) && res.statusCode < 400) {
+          job.state = "ready";
+          job.retryable = false;
+        } else if (!isGatewayJobCancelled(job) && res.statusCode >= 400) {
+          job.state = "error";
+          job.error = "Remux preparation failed.";
+          job.retryable = true;
+        }
+        job.updatedAt = Date.now();
+        return result;
+      } finally {
+        if (job.abortController === abortController) {
+          job.abortController = undefined;
+        }
+      }
+    }
+
     job.state = "ready";
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
@@ -397,7 +442,6 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
     return serveTorrentFile(req, res, torrent, {
       fileIdx: job.fileIdx,
       hints: job.hints,
-      remuxFormat: job.mode === "remux" ? "mp4" : undefined,
     });
   } catch (err) {
     const error = sanitizeGatewayError(err);

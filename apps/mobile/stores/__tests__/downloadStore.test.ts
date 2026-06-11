@@ -1,6 +1,7 @@
 import {
   isTaskOfflinePlayable,
   migrateDownloadTasks,
+  sanitizeDownloadTaskForPersistence,
   useDownloadStore,
 } from "../downloadStore";
 
@@ -146,5 +147,81 @@ describe("downloadStore", () => {
     expect(migrated?.tasks?.["source-1"]?.offlineVerifiedAt).toBe(
       "2026-06-04T10:05:00.000Z",
     );
+  });
+
+  it("strips sensitive download runtime data during migration", () => {
+    const migrated = migrateDownloadTasks(
+      {
+        tasks: {
+          "https://signed.example.test/movie.mp4?token=secret": {
+            id: "https://signed.example.test/movie.mp4?token=secret",
+            mediaInfo: {
+              type: "movie",
+              itemId: "tt123",
+              title: "Example Movie",
+              downloadUrl: "https://signed.example.test/movie.mp4?token=secret",
+            },
+            resumeData: JSON.stringify({
+              url: "https://signed.example.test/movie.mp4?token=secret",
+            }),
+            originalStream: {
+              url: "https://signed.example.test/movie.mp4?token=secret",
+            },
+            localUri: "file:///downloads/movie.mp4",
+            progress: 0.5,
+            status: "Paused",
+            totalBytesWritten: 500,
+            totalBytesExpectedToWrite: 1000,
+          },
+        },
+      },
+      2,
+    );
+
+    const task = Object.values(migrated?.tasks ?? {})[0];
+    expect(Object.keys(migrated?.tasks ?? {})[0]).not.toContain("https://");
+    expect(task).toMatchObject({
+      mediaInfo: {
+        downloadUrl: "",
+      },
+      replanContext: {
+        type: "movie",
+        id: "tt123",
+      },
+    });
+    expect(task?.resumeData).toBeUndefined();
+    expect(task?.originalStream).toBeUndefined();
+  });
+
+  it("strips sensitive runtime fields before persistence", () => {
+    const safeTask = sanitizeDownloadTaskForPersistence({
+      id: "source-1",
+      mediaInfo: {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        downloadUrl: "https://signed.example.test/movie.mp4?token=secret",
+      },
+      resumeData: JSON.stringify({
+        url: "https://signed.example.test/movie.mp4?token=secret",
+      }),
+      originalStream: {
+        url: "https://signed.example.test/movie.mp4?token=secret",
+      },
+      progress: 0.5,
+      status: "Paused",
+      totalBytesWritten: 500,
+      totalBytesExpectedToWrite: 1000,
+      createdAt: "2026-06-04T10:00:00.000Z",
+      updatedAt: "2026-06-04T10:05:00.000Z",
+    });
+
+    expect(safeTask.mediaInfo.downloadUrl).toBe("");
+    expect("resumeData" in safeTask).toBe(false);
+    expect("originalStream" in safeTask).toBe(false);
+    expect(safeTask.replanContext).toMatchObject({
+      type: "movie",
+      id: "tt123",
+    });
   });
 });

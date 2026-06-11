@@ -87,7 +87,7 @@ describe("DownloadService - Replan & Diagnostics", () => {
       originalStream,
     );
     expect(startDownloadSpy).toHaveBeenCalledWith(
-      originalStream,
+      { ...originalStream, infoHash: undefined, url: "http://fresh.test" },
       mediaInfo,
       expect.objectContaining({ resolvedUrl: "http://fresh.test" }),
     );
@@ -201,7 +201,11 @@ describe("DownloadService - Replan & Diagnostics", () => {
       originalStream,
     );
     expect(startDownloadSpy).toHaveBeenCalledWith(
-      originalStream,
+      {
+        ...originalStream,
+        infoHash: undefined,
+        url: "http://fresh-after-restart.test",
+      },
       mediaInfo,
       expect.objectContaining({
         resolvedUrl: "http://fresh-after-restart.test",

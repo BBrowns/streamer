@@ -1,11 +1,15 @@
 import * as FileSystem from "expo-file-system/legacy";
+import * as Crypto from "expo-crypto";
 import { Platform, Alert } from "react-native";
 import {
   useDownloadStore,
   type DownloadMediaItem,
   type DownloadPlaybackSessionContext,
+  type DownloadReplanContext,
   type DownloadStatus,
+  buildDownloadReplanContext,
   isTaskOfflinePlayable,
+  safeDownloadTaskId,
 } from "../stores/downloadStore";
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import type { MediaInfo } from "../stores/playerStore";
@@ -25,6 +29,7 @@ import {
   completePlaybackSession,
   failPlaybackSession,
 } from "./playback/PlaybackSessionPlaybackService";
+import { prepareDownload } from "./playback/PlaybackOrchestrator";
 import {
   createPlaybackRuntimeError,
   inferPlaybackErrorCodeFromMessages,
@@ -92,6 +97,17 @@ export class DownloadService {
 
   private getDownloadFilename(id: string) {
     return `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
+  }
+
+  private getDownloadTaskId(stream: Stream, mediaInfo: MediaInfo) {
+    const item = mediaInfo as DownloadMediaItem;
+    const explicitSafeId = safeDownloadTaskId(item.sourceId, item);
+    if (explicitSafeId) return explicitSafeId;
+
+    const contentSafeId = safeDownloadTaskId(undefined, item);
+    if (contentSafeId) return contentSafeId;
+
+    return Crypto.randomUUID();
   }
 
   private getSessionContext(
@@ -276,6 +292,97 @@ export class DownloadService {
     }
   }
 
+  private async prepareRestartableDownload(id: string): Promise<
+    | {
+        stream: Stream;
+        mediaInfo: MediaInfo;
+        resolvedUrl: string;
+        eligibility?: DownloadEligibility;
+        playbackSession?: DownloadPlaybackSessionContext;
+      }
+    | undefined
+  > {
+    const { tasks, setDownloadUrl, setPlaybackSession } =
+      useDownloadStore.getState();
+    const task = tasks[id];
+    if (!task) return undefined;
+
+    if (task.originalStream) {
+      const resolvedUrl = await streamEngineManager.getPlaybackUri(
+        task.originalStream,
+      );
+      if (!resolvedUrl) return undefined;
+      const resolvedStream = task.originalStream.infoHash
+        ? ({
+            ...task.originalStream,
+            infoHash: undefined,
+            url: resolvedUrl,
+          } as Stream)
+        : task.originalStream;
+      setDownloadUrl(id, resolvedUrl);
+      return {
+        stream: resolvedStream,
+        mediaInfo: { ...task.mediaInfo, sourceId: id } as DownloadMediaItem,
+        resolvedUrl,
+        playbackSession: task.playbackSession,
+      };
+    }
+
+    const replanContext: DownloadReplanContext | undefined =
+      task.replanContext || buildDownloadReplanContext(task.mediaInfo);
+    if (!replanContext) return undefined;
+
+    const result = await prepareDownload(replanContext);
+    if (!result.ok) {
+      const message = toSafeDownloadErrorMessage(
+        result.error.message,
+        "Download needs to be prepared again.",
+      );
+      useDownloadStore.getState().setStatus(id, "Error", undefined, message);
+      this.failSession(id, result.error, task.playbackSession);
+      return undefined;
+    }
+
+    const playbackSession = {
+      sessionId: result.sessionId,
+      candidateId: result.candidateId,
+      attemptId: result.attemptId,
+    };
+    setPlaybackSession(id, playbackSession);
+    setDownloadUrl(id, result.resolvedUrl);
+    return {
+      stream: result.stream,
+      mediaInfo: { ...result.mediaInfo, sourceId: id } as DownloadMediaItem,
+      resolvedUrl: result.resolvedUrl,
+      eligibility: result.eligibility,
+      playbackSession,
+    };
+  }
+
+  private async restartDownloadFromPlan(
+    id: string,
+  ): Promise<DownloadOperationResult> {
+    const prepared = await this.prepareRestartableDownload(id);
+    if (!prepared) {
+      const error =
+        "Download needs to be prepared again before it can resume safely.";
+      useDownloadStore.getState().setStatus(id, "Error", undefined, error);
+      this.failSession(id, error);
+      return { ok: false, error };
+    }
+
+    await this.startDownload(prepared.stream, prepared.mediaInfo, {
+      resolvedUrl: prepared.resolvedUrl,
+      eligibility: prepared.eligibility,
+      playbackSession: prepared.playbackSession,
+    });
+
+    const restartedTask = useDownloadStore.getState().tasks[id];
+    return restartedTask?.status === "Error"
+      ? { ok: false, error: restartedTask.error }
+      : { ok: true };
+  }
+
   private ensureDesktopDownloadSubscription() {
     if (Platform.OS !== "web" || this.desktopProgressUnsubscribe) return;
 
@@ -393,11 +500,11 @@ export class DownloadService {
     const { addTask, updateProgress, setStatus, setDownloadUrl, removeTask } =
       useDownloadStore.getState();
 
-    const id =
-      (mediaInfo as DownloadMediaItem).sourceId ||
-      stream.infoHash ||
-      stream.url ||
-      mediaInfo.itemId;
+    const id = this.getDownloadTaskId(stream, mediaInfo);
+    const taskMediaInfo = {
+      ...mediaInfo,
+      sourceId: id,
+    } as DownloadMediaItem;
 
     const existingTask = useDownloadStore.getState().tasks[id];
     if (
@@ -470,12 +577,12 @@ export class DownloadService {
     addTask(
       id,
       {
-        ...mediaInfo,
+        ...taskMediaInfo,
         downloadUrl: initialDownloadUrl,
-        sourceId: id,
       },
       options.playbackSession,
       stream,
+      buildDownloadReplanContext(taskMediaInfo),
     );
     setStatus(id, "Preparing");
 
@@ -908,9 +1015,7 @@ export class DownloadService {
       }
 
       if (!desktopDownloadUrl) {
-        const error = "Original download URL is missing.";
-        setStatus(id, "Error", undefined, error);
-        return { ok: false, error };
+        return this.restartDownloadFromPlan(id);
       }
 
       try {
@@ -941,16 +1046,7 @@ export class DownloadService {
               console.info(
                 "[DownloadService] Desktop resume access error, attempting replan...",
               );
-            const freshUrl = await this.replanDownloadUrl(id);
-            if (freshUrl) {
-              const freshJob = await desktopBridge.startDownloadJob(
-                id,
-                freshUrl,
-                this.getDownloadFilename(id),
-              );
-              this.applyDesktopJobSnapshot(freshJob);
-              return { ok: true };
-            }
+            return this.restartDownloadFromPlan(id);
           }
 
           const error = toSafeDownloadErrorMessage(
@@ -1048,21 +1144,7 @@ export class DownloadService {
             console.info(
               "[DownloadService] Resume access error, attempting replan...",
             );
-          const freshUrl = await this.replanDownloadUrl(id);
-          if (freshUrl) {
-            // Restart the internal resumable with the new URL
-            // and try standard resume again (if it supports dynamic URL update)
-            // or just restart from scratch if it's too complex.
-            // For now, we try to restart with startDownload which handles full resume.
-            return this.startDownload(
-              task.originalStream || { url: freshUrl },
-              task.mediaInfo,
-              {
-                resolvedUrl: freshUrl,
-                playbackSession: task.playbackSession,
-              },
-            ).then(() => ({ ok: true }));
-          }
+          return this.restartDownloadFromPlan(id);
         }
 
         const message = toSafeDownloadErrorMessage(
@@ -1085,27 +1167,10 @@ export class DownloadService {
         "[DownloadService] Resumable object and resumeData lost, restarting download",
       );
 
-    const replannedUrl = task.originalStream
-      ? await this.replanDownloadUrl(id)
-      : undefined;
-    const restartUrl = replannedUrl || task.mediaInfo.downloadUrl;
+    const restarted = await this.restartDownloadFromPlan(id);
+    if (restarted.ok) return restarted;
 
-    if (restartUrl) {
-      await this.startDownload(
-        task.originalStream || { url: restartUrl },
-        task.mediaInfo,
-        {
-          resolvedUrl: restartUrl,
-          playbackSession: task.playbackSession,
-        },
-      );
-      const restartedTask = useDownloadStore.getState().tasks[id];
-      return restartedTask?.status === "Error"
-        ? { ok: false, error: restartedTask.error }
-        : { ok: true };
-    }
-
-    const error = "Original download URL is missing.";
+    const error = restarted.error || "Original download URL is missing.";
     setStatus(id, "Error", undefined, error);
     this.failSession(id, error);
     return { ok: false, error };
