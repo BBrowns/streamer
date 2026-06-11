@@ -16,7 +16,7 @@ test("desktop sentry stays disabled without a DSN", () => {
 
   assert.equal(options.enabled, false);
   assert.equal(options.dsn, "");
-  assert.equal(options.release, "streamer-desktop@1.2.3");
+  assert.equal(options.release, "streamer-desktop-main@1.2.3");
 });
 
 test("desktop sentry stays disabled in development unless explicitly enabled", () => {
@@ -26,6 +26,28 @@ test("desktop sentry stays disabled in development unless explicitly enabled", (
   });
 
   assert.equal(options.enabled, false);
+});
+
+test("desktop sentry release uses build metadata when provided", () => {
+  const options = createDesktopSentryOptions(
+    {
+      NODE_ENV: "production",
+      STREAMER_DESKTOP_SENTRY_DSN: "https://example@sentry.io/1",
+    },
+    {
+      appVersion: "2.0.0",
+      gitSha: "1234567890abcdef",
+      gitShaShort: "1234567890ab",
+      buildDate: "2026-06-11T10:00:00.000Z",
+      buildChannel: "beta",
+      runtimeType: "desktop-main",
+      environment: "preview",
+      release: "streamer-desktop-main@2.0.0+1234567890ab",
+    },
+  );
+
+  assert.equal(options.environment, "preview");
+  assert.equal(options.release, "streamer-desktop-main@2.0.0+1234567890ab");
 });
 
 test("desktop sentry can be enabled in production", () => {

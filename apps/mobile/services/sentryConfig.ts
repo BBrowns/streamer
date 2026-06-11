@@ -3,6 +3,7 @@ import type {
   ErrorEvent,
   ReactNativeOptions,
 } from "@sentry/react-native";
+import type { BuildMetadata } from "@streamer/shared";
 import { redactSensitiveText } from "./redaction";
 
 type SentryRecord = Record<string, unknown>;
@@ -23,6 +24,7 @@ export interface MobileSentryConfigInput {
   enableInDev?: string;
   isDev: boolean;
   nodeEnv?: string;
+  buildMetadata?: BuildMetadata;
 }
 
 function parseSampleRate(value: string | undefined, fallback: number): number {
@@ -120,9 +122,12 @@ export function createMobileSentryConfig(
     input.nodeEnv !== "test" &&
     (!input.isDev || input.enableInDev === "true");
   const environment =
-    input.environment?.trim() || (input.isDev ? "development" : "production");
+    input.environment?.trim() ||
+    input.buildMetadata?.environment ||
+    (input.isDev ? "development" : "production");
   const release =
     input.release?.trim() ||
+    input.buildMetadata?.release ||
     `streamer-mobile@${input.appVersion?.trim() || "unknown"}`;
 
   const beforeSend: NonNullable<ReactNativeOptions["beforeSend"]> = (event) =>

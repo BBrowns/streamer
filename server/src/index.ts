@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
+import { serverBuildMetadata } from "./config/build-metadata.js";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { prisma } from "./prisma/client.js";
@@ -47,7 +48,7 @@ async function main() {
     },
     (info) => {
       logger.info(
-        { port: info.port, env: env.nodeEnv },
+        { port: info.port, env: env.nodeEnv, build: serverBuildMetadata },
         `Streamer server running on port ${info.port}`,
       );
     },

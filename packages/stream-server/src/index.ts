@@ -10,6 +10,7 @@ import { handoffRouter } from "./handoff.js";
 import { gatewayRouter } from "./gateway.js";
 import { requireBridgeAuth } from "./security.js";
 import { redactSensitiveText } from "./redaction.js";
+import { streamServerBuildMetadata } from "./build-metadata.js";
 import {
   captureStreamServerException,
   initStreamServerSentry,
@@ -226,7 +227,8 @@ export function createStreamServerApp() {
       runtime,
       selfTest,
       repair,
-      version: "1.0.0",
+      version: streamServerBuildMetadata.appVersion,
+      build: streamServerBuildMetadata,
       uptime: Math.floor(process.uptime()),
       memory: {
         heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
@@ -238,7 +240,11 @@ export function createStreamServerApp() {
   });
   // Legacy status endpoint (keep backward compat)
   app.get("/status", (_req, res) => {
-    res.json({ status: "active", version: "1.0.0" });
+    res.json({
+      status: "active",
+      version: streamServerBuildMetadata.appVersion,
+      build: streamServerBuildMetadata,
+    });
   });
 
   app.get("/stream", requireBridgeAuth, streamRequest);
@@ -285,6 +291,14 @@ export function startStreamServer(port: number | string = PORT) {
   initStreamServerSentry();
   const app = createStreamServerApp();
   const server = app.listen(Number(port), "0.0.0.0", () => {
+    console.log(
+      JSON.stringify({
+        service: "streamer-stream-server",
+        event: "started",
+        port: Number(port),
+        build: streamServerBuildMetadata,
+      }),
+    );
     console.log(`Stream server (Bridge) running on http://0.0.0.0:${port}`);
   });
   server.on("error", (err: Error) => {

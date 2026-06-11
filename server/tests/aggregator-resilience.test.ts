@@ -199,6 +199,9 @@ describe("Feature Flags", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("ok");
     expect(res.body.features).toBeDefined();
+    expect(res.body.build).toMatchObject({
+      runtimeType: "server",
+    });
     expect(typeof res.body.features["continue-watching"]).toBe("boolean");
     expect(typeof res.body.features["server-driven-ui"]).toBe("boolean");
   });

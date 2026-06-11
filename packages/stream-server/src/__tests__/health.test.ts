@@ -62,6 +62,10 @@ describe("bridge health", () => {
       platform: process.platform,
       architectureMismatch: false,
     });
+    expect(res.body.build).toMatchObject({
+      runtimeType: "stream-server",
+    });
+    expect(res.body.version).toBe(res.body.build.appVersion);
     expect(res.body.selfTest).toMatchObject({
       status: "pass",
       summary: "Bridge runtime self-test passed.",

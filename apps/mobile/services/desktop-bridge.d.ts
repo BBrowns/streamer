@@ -1,3 +1,5 @@
+import type { BuildMetadata } from "@streamer/shared";
+
 export interface DesktopDownloadProgressData {
   id: string;
   status?: DesktopDownloadJobStatus;
@@ -75,6 +77,7 @@ export interface DesktopBridgeHealthPayload {
   runtime?: DesktopBridgeRuntimeInfo;
   selfTest?: DesktopBridgeSelfTest;
   repair?: DesktopBridgeRepairPlan;
+  build?: BuildMetadata;
 }
 
 export interface DesktopBridgeInfo {
@@ -82,6 +85,7 @@ export interface DesktopBridgeInfo {
   localUrl: string;
   lanUrl: string;
   pairingToken?: string;
+  build?: BuildMetadata;
   diagnostics?: {
     status?: "starting" | "running" | "stopped" | "error";
     startedAt?: number | null;
@@ -100,6 +104,7 @@ export interface DesktopBridgeInfo {
     selfTest?: DesktopBridgeSelfTest;
     repair?: DesktopBridgeRepairPlan;
     health?: DesktopBridgeHealthPayload;
+    build?: BuildMetadata;
   };
 }
 

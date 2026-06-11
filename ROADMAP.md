@@ -71,22 +71,28 @@ for real-device QA.
 
 ## Next PRs
 
-### PR #91 - Cast and AirPlay Capability Validation
+### PR #91 - Release Versioning And Build Metadata
 
-Goal: prove cast flows on real devices.
+Goal: every runtime should know exactly what version/build it is running.
 
 Scope:
 
-- Chromecast discovery/start/stop/fallback on real hardware.
-- iOS AirPlay path review through native player behavior.
-- Device capability labels in player/detail where available.
-- Regression tests for configured bridge URL usage and cast fallback.
+- Shared build metadata contract for app version, git SHA, build date, build
+  channel, runtime type, environment, and release name.
+- API server `/health` build metadata.
+- Stream-server bridge `/api/health` and `/status` build metadata.
+- Desktop bridge diagnostics build metadata.
+- Mobile/desktop renderer diagnostics build metadata.
+- Sentry release names, tags, and build context.
+- Structured server logs with build identifiers.
 
 Acceptance:
 
-- Cast MP4/HLS/gateway source behavior is recorded in the QA matrix.
-- Unsupported device/source combinations fail with clear user copy.
-- No hard-coded localhost cast behavior returns.
+- User/support can identify the exact build from diagnostics and health
+  endpoints.
+- Logs include a build id.
+- Sentry events include release/version/channel/runtime tags.
+- Docs explain the version source of truth.
 
 ### PR #92 - Security Hardening Round Two
 

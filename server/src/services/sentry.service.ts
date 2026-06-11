@@ -1,4 +1,9 @@
 import * as Sentry from "@sentry/node";
+import type { BuildMetadata } from "@streamer/shared";
+import {
+  buildMetadataToSentryTags,
+  createBuildMetadataFromEnv,
+} from "@streamer/shared";
 import { env } from "../config/env.js";
 import { redactSensitiveLogValue } from "../utils/redaction.js";
 
@@ -13,6 +18,7 @@ export interface ServerSentryConfigInput {
   errorSampleRate?: string;
   tracesSampleRate?: string;
   packageVersion?: string;
+  buildMetadata?: BuildMetadata;
 }
 
 function parseSampleRate(value: string | undefined, fallback: number): number {
@@ -49,6 +55,17 @@ function sanitizeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
 export function createServerSentryOptionsFromInput(
   input: ServerSentryConfigInput,
 ): Sentry.NodeOptions {
+  const buildMetadata =
+    input.buildMetadata ||
+    createBuildMetadataFromEnv(
+      {
+        ...process.env,
+        NODE_ENV: input.nodeEnv,
+        STREAMER_APP_VERSION: input.packageVersion,
+        SENTRY_ENVIRONMENT: input.environment,
+      },
+      { runtimeType: "server" },
+    );
   const dsn = input.dsn?.trim() ?? "";
   const enabled =
     Boolean(dsn) &&
@@ -64,9 +81,8 @@ export function createServerSentryOptionsFromInput(
   return {
     dsn,
     enabled,
-    environment: input.environment || input.nodeEnv,
-    release:
-      input.release || `streamer-server@${input.packageVersion ?? "unknown"}`,
+    environment: input.environment || buildMetadata.environment,
+    release: input.release || buildMetadata.release,
     debug: false,
     sendDefaultPii: false,
     maxBreadcrumbs: 50,
@@ -81,6 +97,10 @@ export function createServerSentryOptionsFromInput(
 }
 
 export function createServerSentryOptions(): Sentry.NodeOptions {
+  const buildMetadata = createBuildMetadataFromEnv(process.env, {
+    runtimeType: "server",
+  });
+
   return createServerSentryOptionsFromInput({
     dsn: env.sentry.dsn,
     nodeEnv: env.nodeEnv,
@@ -90,11 +110,29 @@ export function createServerSentryOptions(): Sentry.NodeOptions {
     tracesSampleRate: env.sentry.tracesSampleRate,
     errorSampleRate: env.sentry.errorSampleRate,
     packageVersion: process.env.npm_package_version,
+    buildMetadata,
   });
 }
 
 export function initServerSentry(): void {
-  Sentry.init(createServerSentryOptions());
+  const buildMetadata = createBuildMetadataFromEnv(process.env, {
+    runtimeType: "server",
+  });
+  Sentry.init(
+    createServerSentryOptionsFromInput({
+      dsn: env.sentry.dsn,
+      nodeEnv: env.nodeEnv,
+      enableDev: env.sentry.enableDev,
+      environment: env.sentry.environment,
+      release: env.sentry.release,
+      tracesSampleRate: env.sentry.tracesSampleRate,
+      errorSampleRate: env.sentry.errorSampleRate,
+      packageVersion: process.env.npm_package_version,
+      buildMetadata,
+    }),
+  );
+  Sentry.setTags(buildMetadataToSentryTags(buildMetadata));
+  Sentry.setContext("build", { ...buildMetadata });
 }
 
 export function captureServerException(

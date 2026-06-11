@@ -25,6 +25,10 @@ import { AppButton } from "../ui/AppButton";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
 import { TextField } from "../ui/TextField";
+import {
+  clientBuildMetadata,
+  formatBuildLabel,
+} from "../../services/buildMetadata";
 
 function formatBridgeReason(reason: string) {
   switch (reason) {
@@ -224,6 +228,9 @@ export function SourcesSection() {
 
   const bridgeSelfTest = effectiveBridgeDiagnostics.selfTest;
   const bridgeRepair = effectiveBridgeDiagnostics.repair;
+  const desktopBuildMetadata =
+    bridgeInfo?.build || bridgeInfo?.diagnostics?.build || null;
+  const bridgeBuildMetadata = bridgeInfo?.diagnostics?.health?.build || null;
   const bridgeRepairSteps = bridgeRepair?.steps ?? [];
   const bridgeRepairTitle = bridgeRepair?.title || "Bridge repair steps";
   const bridgeRepairDetail = bridgeRepair?.detail || bridgePresentation.detail;
@@ -416,6 +423,32 @@ export function SourcesSection() {
             />
           )}
         </View>
+      </Surface>
+
+      <Surface style={styles.diagnosticsBox}>
+        <Text style={[styles.diagnosticsText, { color: colors.textSecondary }]}>
+          App build: {formatBuildLabel(clientBuildMetadata)}
+        </Text>
+        {!!desktopBuildMetadata && (
+          <Text
+            style={[
+              styles.diagnosticsText,
+              { color: colors.textSecondary, marginTop: 4 },
+            ]}
+          >
+            Desktop build: {formatBuildLabel(desktopBuildMetadata)}
+          </Text>
+        )}
+        {!!bridgeBuildMetadata && (
+          <Text
+            style={[
+              styles.diagnosticsText,
+              { color: colors.textSecondary, marginTop: 4 },
+            ]}
+          >
+            Bridge build: {formatBuildLabel(bridgeBuildMetadata)}
+          </Text>
+        )}
       </Surface>
 
       <TextField

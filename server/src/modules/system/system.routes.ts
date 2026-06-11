@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { serverBuildMetadata } from "../../config/build-metadata.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
 
 export const systemRouter = new OpenAPIHono();
@@ -13,6 +14,29 @@ const HealthResponseSchema = z
       .record(z.string(), z.boolean())
       .openapi({ example: { "new-player": true } }),
     uptime: z.number().openapi({ example: 3600 }),
+    build: z
+      .object({
+        appVersion: z.string(),
+        gitSha: z.string(),
+        gitShaShort: z.string(),
+        buildDate: z.string(),
+        buildChannel: z.string(),
+        runtimeType: z.literal("server"),
+        environment: z.enum(["development", "preview", "production", "test"]),
+        release: z.string(),
+      })
+      .openapi({
+        example: {
+          appVersion: "0.1.0",
+          gitSha: "1234567890abcdef",
+          gitShaShort: "1234567890ab",
+          buildDate: "2026-06-11T10:00:00.000Z",
+          buildChannel: "production",
+          runtimeType: "server",
+          environment: "production",
+          release: "streamer-server@0.1.0+1234567890ab",
+        },
+      }),
   })
   .openapi("HealthResponse");
 
@@ -55,6 +79,7 @@ systemRouter.openapi(healthRoute, async (c) => {
         timestamp: new Date().toISOString(),
         features: featureFlags.getAll(),
         uptime: process.uptime(),
+        build: serverBuildMetadata,
       },
       200,
     );
