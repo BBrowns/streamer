@@ -35,13 +35,6 @@ import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 
-type HomeShortcut = {
-  label: string;
-  detail: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  route: string;
-};
-
 function flattenCatalogPages(data: any): MetaPreview[] {
   return (
     data?.pages.flatMap(
@@ -141,87 +134,6 @@ function HomeRail({
         ListFooterComponent={<View style={styles.railEndSpacer} />}
       />
       <View style={[styles.railDivider, { backgroundColor: colors.border }]} />
-    </View>
-  );
-}
-
-function HomeShortcuts() {
-  const router = useRouter();
-  const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
-
-  const shortcuts: HomeShortcut[] = [
-    {
-      label: t("tabs.discover"),
-      detail: t("home.shortcuts.discoverDetail"),
-      icon: "compass-outline",
-      route: "/discover",
-    },
-    {
-      label: t("tabs.library"),
-      detail: t("home.shortcuts.libraryDetail"),
-      icon: "bookmark-outline",
-      route: "/library",
-    },
-    {
-      label: t("tabs.downloads"),
-      detail: t("home.shortcuts.downloadsDetail"),
-      icon: "cloud-download-outline",
-      route: "/downloads",
-    },
-  ];
-
-  return (
-    <View style={styles.shortcutSection}>
-      <SectionHeader
-        eyebrow="LIBRARY"
-        title={t("home.sections.libraryShortcuts")}
-      />
-      <View style={styles.shortcutGrid}>
-        {shortcuts.map((shortcut) => (
-          <Pressable
-            key={shortcut.route}
-            style={({ pressed }: any) => [
-              styles.shortcutCard,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.07)"
-                  : "rgba(255,255,255,0.72)",
-                borderColor: colors.border,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              },
-            ]}
-            onPress={() => router.push(shortcut.route as any)}
-            accessibilityRole="button"
-            accessibilityLabel={shortcut.label}
-          >
-            <View
-              style={[
-                styles.shortcutIcon,
-                { backgroundColor: colors.tint + (isDark ? "2E" : "18") },
-              ]}
-            >
-              <Ionicons name={shortcut.icon} size={20} color={colors.tint} />
-            </View>
-            <View style={styles.shortcutCopy}>
-              <Text style={[styles.shortcutTitle, { color: colors.text }]}>
-                {shortcut.label}
-              </Text>
-              <Text
-                style={[styles.shortcutDetail, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {shortcut.detail}
-              </Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-        ))}
-      </View>
     </View>
   );
 }
@@ -403,8 +315,6 @@ function HomeContent() {
 
       <ContinueWatchingRow />
 
-      <HomeShortcuts />
-
       <HomeRail
         testID="home-popular-movies"
         eyebrow="TRENDING"
@@ -494,45 +404,6 @@ const styles = StyleSheet.create({
   sectionActionText: {
     fontSize: 13,
     fontWeight: "800",
-  },
-  shortcutSection: {
-    marginBottom: 28,
-  },
-  shortcutGrid: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  shortcutCard: {
-    minHeight: 78,
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 16px 34px rgba(44, 34, 54, 0.10)" }
-      : {}),
-  } as any,
-  shortcutIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shortcutCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  shortcutTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  shortcutDetail: {
-    marginTop: 3,
-    fontSize: 12,
-    fontWeight: "600",
   },
   railContainer: {
     marginBottom: 26,

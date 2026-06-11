@@ -16,13 +16,7 @@
       "popularMovies": "Películas populares",
       "topTVShows": "Series destacadas",
       "recentlyAdded": "Añadido recientemente",
-      "fromProviders": "De tus proveedores",
-      "libraryShortcuts": "Continúa rápido"
-    },
-    "shortcuts": {
-      "discoverDetail": "Explora todos los proveedores",
-      "libraryDetail": "Películas y series guardadas",
-      "downloadsDetail": "Títulos disponibles sin conexión"
+      "fromProviders": "De tus proveedores"
     },
     "filters": {
       "movies": "Películas",

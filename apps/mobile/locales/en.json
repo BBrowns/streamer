@@ -16,13 +16,7 @@
       "popularMovies": "Popular Movies",
       "topTVShows": "Top TV Shows",
       "recentlyAdded": "Recently Added",
-      "fromProviders": "From Your Providers",
-      "libraryShortcuts": "Jump Back In"
-    },
-    "shortcuts": {
-      "discoverDetail": "Browse every provider",
-      "libraryDetail": "Saved movies and shows",
-      "downloadsDetail": "Offline-ready titles"
+      "fromProviders": "From Your Providers"
     },
     "filters": {
       "movies": "Movies",

@@ -16,13 +16,7 @@
       "popularMovies": "Populaire films",
       "topTVShows": "Top TV-series",
       "recentlyAdded": "Nieuw toegevoegd",
-      "fromProviders": "Van je providers",
-      "libraryShortcuts": "Snel verder"
-    },
-    "shortcuts": {
-      "discoverDetail": "Blader door alle providers",
-      "libraryDetail": "Opgeslagen films en series",
-      "downloadsDetail": "Offline beschikbare titels"
+      "fromProviders": "Van je providers"
     },
     "filters": {
       "movies": "Films",
