@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-05.
+> Last updated: 2026-06-11.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -112,6 +112,10 @@ and primary Cast now run through session events.
 See [PLAYBACK.md](./PLAYBACK.md) before changing playback persistence or adding
 new session event payloads.
 
+Use [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) as the canonical record for
+real-target playback, download, cast, bridge, and remux validation. Local unit
+tests are not enough to mark a runtime supported.
+
 ### Player Runtime State
 
 The player now stores and displays typed playback readiness:
@@ -195,6 +199,9 @@ The main download queue and persistence pass is complete:
   as recoverable paused items after restart.
 - Electron local-file playback, verification, and deletion are constrained to
   the app-managed offline-media directory.
+- Download queue persistence now strips resolved download URLs, resume data, and
+  raw `Stream` objects. Restart recovery uses safe content replan metadata or
+  runtime-only source data.
 
 Still open:
 
@@ -203,8 +210,8 @@ Still open:
 - Keep HLS offline unsupported in v1 unless a proper segment packager is built.
 - Torrent downloads on mobile should use the desktop bridge/gateway as
   resolver/downloader where needed.
-- Persisted retry URLs may expire; a future pass should re-plan sources instead
-  of relying indefinitely on an old resolved URL.
+- Validate safe replan-on-resume with real large files after app restart on
+  desktop, iPhone, and Android.
 
 ### 2. Casting Needs Native And Real-Device Validation
 
@@ -237,8 +244,10 @@ Gateway lifecycle exists now, but these are still open:
 - Consider persistent gateway/download metadata for recoverability.
 - Unused ready jobs are now pruned periodically, while jobs with active stream
   consumers are protected from cleanup.
-- FFmpeg remux output is still sequential and needs a packaged or persistent
-  output strategy before remuxed sources can support reliable seeking.
+- FFmpeg remux output is materialized into temporary MP4 cache files before
+  range seeking. Remux preparation now supports timeout, explicit cancellation,
+  and gateway `remuxing` status. Real large-file playback and seek behavior still
+  need device validation.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
 ### 4. UI/UX Revamp Is Still Incomplete
@@ -335,8 +344,8 @@ Still open:
 
 - Validate seeking, cancellation, and cleanup with real torrents and direct
   streams on desktop, phone, and web.
-- Decide on a packaged or persistent remux strategy before claiming seek
-  support for FFmpeg-remuxed sources.
+- Validate temp-file remux seek behavior with real large MKV torrents before
+  claiming production support.
 
 ### PR E: Security Baseline And Trust Boundaries
 

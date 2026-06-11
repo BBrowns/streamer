@@ -175,6 +175,59 @@ describe("gateway jobs", () => {
     );
   });
 
+  it("reports remuxing status and aborts remux work when the job is cancelled", async () => {
+    let remuxSignal: AbortSignal | undefined;
+    (serveTorrentFile as any).mockImplementationOnce(
+      (
+        _req: unknown,
+        res: express.Response,
+        _torrent: unknown,
+        options: { signal?: AbortSignal },
+      ) =>
+        new Promise<void>((resolve) => {
+          remuxSignal = options.signal;
+          options.signal?.addEventListener(
+            "abort",
+            () => {
+              res.status(410).json({ error: "Gateway job cancelled" });
+              resolve();
+            },
+            { once: true },
+          );
+        }),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456", remux: "mp4" });
+    const streamPromise = request(app)
+      .get(created.body.playbackUrl)
+      .then((response) => response);
+
+    await vi.waitFor(() => expect(serveTorrentFile).toHaveBeenCalled());
+    const status = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+    const cancelled = await request(app).delete(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+    const streamed = await streamPromise;
+
+    expect(status.body).toMatchObject({
+      state: "preparing",
+      phase: "remuxing",
+      mode: "remux",
+      progress: expect.any(Number),
+    });
+    expect(cancelled.body).toMatchObject({
+      state: "cancelled",
+      phase: "cancelled",
+      retryable: false,
+    });
+    expect(remuxSignal?.aborted).toBe(true);
+    expect(streamed.status).toBe(410);
+  });
+
   it("rejects unsigned gateway stream URLs", async () => {
     const created = await request(app)
       .post("/api/gateway/jobs")

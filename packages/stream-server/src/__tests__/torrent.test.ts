@@ -49,6 +49,8 @@ function makeReqRes(
     query,
     headers,
     method,
+    once: vi.fn(),
+    off: vi.fn(),
     on: vi.fn(),
   } as unknown as Request;
 
@@ -96,6 +98,21 @@ function makeSuccessfulFfmpegSpawner(output: Buffer) {
 
     return child;
   }) as any;
+}
+
+function makeHangingFfmpegSpawner() {
+  const child = new EventEmitter() as any;
+  child.stdin = new EventEmitter() as any;
+  child.stdin.write = vi.fn();
+  child.stdin.end = vi.fn();
+  child.stdin.destroy = vi.fn();
+  child.stderr = new EventEmitter();
+  child.kill = vi.fn();
+
+  return {
+    child,
+    spawner: vi.fn(() => child) as any,
+  };
 }
 
 afterEach(async () => {
@@ -359,6 +376,59 @@ describe("serveTorrentFile", () => {
       "Content-Length": 4,
     });
     expect(range.res.end).toHaveBeenCalled();
+  });
+
+  it("times out a remux that never becomes ready", async () => {
+    const { child, spawner } = makeHangingFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+    const sourceStream = file.createReadStream();
+    const { req, res } = makeReqRes();
+
+    await serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      remuxTimeoutMs: 5,
+    });
+
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(sourceStream.destroy).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.stringContaining("timed out"),
+        retryable: true,
+      }),
+    );
+  });
+
+  it("returns a non-retryable cancellation when a remux job is aborted", async () => {
+    const { child, spawner } = makeHangingFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+    const controller = new AbortController();
+    const { req, res } = makeReqRes();
+
+    const result = serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      signal: controller.signal,
+    });
+    controller.abort(new Error("Gateway job cancelled"));
+    await result;
+
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(res.status).toHaveBeenCalledWith(410);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "Gateway job cancelled",
+        retryable: false,
+      }),
+    );
   });
 });
 

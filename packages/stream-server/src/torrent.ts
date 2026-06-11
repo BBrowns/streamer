@@ -122,9 +122,14 @@ interface RemuxCacheEntry {
   pending: boolean;
   createdAt: number;
   lastAccessAt: number;
+  abortController: AbortController;
 }
 
 const REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
+const REMUX_READY_TIMEOUT_MS = Number.parseInt(
+  process.env.REMUX_READY_TIMEOUT_MS || "90000",
+  10,
+);
 const remuxCache = new Map<string, RemuxCacheEntry>();
 let remuxRootPromise: Promise<string> | null = null;
 let spawnFfmpeg: FfmpegSpawner = nodeSpawn;
@@ -188,9 +193,27 @@ function getRemuxCacheKey(
   return createHash("sha256").update(sourceIdentity).digest("hex").slice(0, 32);
 }
 
+class RemuxAbortError extends Error {
+  code = "REMUX_ABORTED";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "RemuxAbortError";
+  }
+}
+
+function isAbortLikeError(err: unknown) {
+  return (
+    err instanceof RemuxAbortError ||
+    (err as { code?: string } | undefined)?.code === "REMUX_ABORTED" ||
+    (err as { name?: string } | undefined)?.name === "AbortError"
+  );
+}
+
 function runFfmpegRemuxToFile(
   file: any,
   partialPath: string,
+  signal?: AbortSignal,
 ): Promise<RemuxedFile> {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawnFfmpeg("ffmpeg", [
@@ -217,6 +240,7 @@ function runFfmpegRemuxToFile(
 
     let stderr = "";
     let settled = false;
+    const sourceStream = file.createReadStream();
 
     const fail = (err: unknown) => {
       if (settled) return;
@@ -225,9 +249,29 @@ function runFfmpegRemuxToFile(
       try {
         ffmpeg.kill("SIGTERM");
       } catch {}
+      try {
+        sourceStream.destroy?.();
+      } catch {}
 
       reject(err instanceof Error ? err : new Error(String(err)));
     };
+
+    const abortRemux = () => {
+      const reason =
+        signal?.reason instanceof Error
+          ? signal.reason.message
+          : typeof signal?.reason === "string"
+            ? signal.reason
+            : "FFmpeg remux was cancelled.";
+      fail(new RemuxAbortError(reason));
+    };
+
+    if (signal?.aborted) {
+      abortRemux();
+      return;
+    }
+
+    signal?.addEventListener("abort", abortRemux, { once: true });
 
     ffmpeg.stderr.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
@@ -246,6 +290,7 @@ function runFfmpegRemuxToFile(
 
     ffmpeg.on("close", async (code) => {
       if (settled) return;
+      signal?.removeEventListener("abort", abortRemux);
 
       if (code !== 0) {
         fail(
@@ -275,7 +320,6 @@ function runFfmpegRemuxToFile(
       }
     });
 
-    const sourceStream = file.createReadStream();
     sourceStream.on?.("error", fail);
     sourceStream.pipe(ffmpeg.stdin);
   });
@@ -287,6 +331,7 @@ async function getOrCreateSeekableRemux(
   options: {
     fileIdx?: number;
     hints?: FileSelectionHints;
+    signal?: AbortSignal;
   },
 ): Promise<RemuxedFile> {
   pruneRemuxCache();
@@ -301,6 +346,18 @@ async function getOrCreateSeekableRemux(
   const root = await getRemuxRootDir();
   const filePath = path.join(root, `${key}.mp4`);
   const partialPath = path.join(root, `${key}.partial.mp4`);
+  const abortController = new AbortController();
+  if (options.signal) {
+    if (options.signal.aborted) {
+      abortController.abort(options.signal.reason);
+    } else {
+      options.signal.addEventListener(
+        "abort",
+        () => abortController.abort(options.signal?.reason),
+        { once: true },
+      );
+    }
+  }
 
   const entry: RemuxCacheEntry = {
     key,
@@ -310,6 +367,7 @@ async function getOrCreateSeekableRemux(
     pending: true,
     createdAt: Date.now(),
     lastAccessAt: Date.now(),
+    abortController,
   };
 
   entry.promise = (async () => {
@@ -320,7 +378,11 @@ async function getOrCreateSeekableRemux(
       `[stream-server] Preparing seekable FFmpeg remux: ${file.name}`,
     );
 
-    const remuxed = await runFfmpegRemuxToFile(file, partialPath);
+    const remuxed = await runFfmpegRemuxToFile(
+      file,
+      partialPath,
+      abortController.signal,
+    );
     await rename(remuxed.filePath, filePath);
 
     const stats = await stat(filePath);
@@ -343,6 +405,36 @@ async function getOrCreateSeekableRemux(
 
   remuxCache.set(key, entry);
   return entry.promise;
+}
+
+function createRemuxTimeoutSignal(
+  parentSignal: AbortSignal | undefined,
+  timeoutMs: number,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort(
+      new RemuxAbortError(
+        `FFmpeg remux timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
+      ),
+    );
+  }, timeoutMs);
+  timeout.unref?.();
+
+  const abortFromParent = () => {
+    controller.abort(parentSignal?.reason);
+  };
+  if (parentSignal?.aborted) abortFromParent();
+  else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+
+  return {
+    signal: controller.signal,
+    abort: (reason: Error) => controller.abort(reason),
+    cleanup: () => {
+      clearTimeout(timeout);
+      parentSignal?.removeEventListener("abort", abortFromParent);
+    },
+  };
 }
 
 async function serveSeekableVideoFile(
@@ -433,10 +525,30 @@ async function serveSeekableRemuxedFile(
   options: {
     fileIdx?: number;
     hints?: FileSelectionHints;
+    signal?: AbortSignal;
+    remuxTimeoutMs?: number;
   },
 ) {
+  const timeout = createRemuxTimeoutSignal(
+    options.signal,
+    options.remuxTimeoutMs ?? REMUX_READY_TIMEOUT_MS,
+  );
+  const abortOnClose = () => {
+    if (!timeout.signal.aborted) {
+      timeout.abort(new RemuxAbortError("FFmpeg remux was cancelled."));
+    }
+  };
+  req.once?.("close", abortOnClose);
+  res.once?.("close", abortOnClose);
+
   try {
-    const remuxed = await getOrCreateSeekableRemux(torrent, file, options);
+    const remuxed = await getOrCreateSeekableRemux(torrent, file, {
+      ...options,
+      signal: timeout.signal,
+    });
+    timeout.cleanup();
+    req.off?.("close", abortOnClose);
+    res.off?.("close", abortOnClose);
     return serveSeekableVideoFile(
       req,
       res,
@@ -445,15 +557,27 @@ async function serveSeekableRemuxedFile(
       "video/mp4",
     );
   } catch (err) {
+    timeout.cleanup();
+    req.off?.("close", abortOnClose);
+    res.off?.("close", abortOnClose);
+    if (isAbortLikeError(err) && res.destroyed) {
+      return;
+    }
+
     console.error(
       "[stream-server] FFmpeg remux failed:",
       redactSensitiveText((err as Error | undefined)?.message ?? String(err)),
     );
 
     if (!res.headersSent) {
-      return res.status(503).json({
-        error: "FFmpeg remux failed. Install or repair FFmpeg, then retry.",
-        retryable: true,
+      const message =
+        err instanceof RemuxAbortError
+          ? err.message
+          : "FFmpeg remux failed. Install or repair FFmpeg, then retry.";
+      const cancelled = isAbortLikeError(err) && /cancelled/i.test(message);
+      return res.status(cancelled ? 410 : 503).json({
+        error: message,
+        retryable: !cancelled,
       });
     }
   }
@@ -797,6 +921,8 @@ export async function serveTorrentFile(
     remuxFormat?: string;
     fileIdx?: number;
     hints?: FileSelectionHints;
+    signal?: AbortSignal;
+    remuxTimeoutMs?: number;
   } = {},
 ) {
   if (!torrent.files || torrent.files.length === 0) {
@@ -815,6 +941,8 @@ export async function serveTorrentFile(
     return serveSeekableRemuxedFile(req, res, torrent, file, {
       fileIdx: options.fileIdx,
       hints: options.hints,
+      signal: options.signal,
+      remuxTimeoutMs: options.remuxTimeoutMs,
     });
   }
 
