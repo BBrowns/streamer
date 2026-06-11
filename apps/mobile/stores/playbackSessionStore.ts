@@ -61,6 +61,57 @@ function sanitizePersistedSessions(value: unknown) {
   return sessions;
 }
 
+function markPersistedSessionForReplan(session: PlaybackSession) {
+  if (TERMINAL_STATUSES.has(session.status)) return session;
+
+  const event = createPlaybackSessionEvent(
+    session.id,
+    {
+      type: "session_failed",
+      error: toPlaybackSessionError({
+        code: "SOURCE_UNAVAILABLE",
+        message:
+          "Playback needs to be prepared again after restarting the app.",
+        retryable: true,
+        shouldFallback: false,
+      }),
+    },
+    factoryOptions(),
+  );
+
+  return reducePlaybackSession(session, event);
+}
+
+function markPersistedSessionsForReplan(
+  sessions: Record<string, PlaybackSession>,
+) {
+  const markedSessions: Record<string, PlaybackSession> = {};
+  for (const [sessionId, session] of Object.entries(sessions)) {
+    markedSessions[sessionId] = markPersistedSessionForReplan(session);
+  }
+  return markedSessions;
+}
+
+function markMissingRuntimeSessionsForReplan(
+  sessions: Record<string, PlaybackSession>,
+) {
+  const markedSessions: Record<string, PlaybackSession> = {};
+  for (const [sessionId, session] of Object.entries(sessions)) {
+    const needsRuntimeReplan =
+      !TERMINAL_STATUSES.has(session.status) &&
+      session.candidates.length > 0 &&
+      !hasCompleteRuntimeCandidateMap(sessionId, session);
+    markedSessions[sessionId] = needsRuntimeReplan
+      ? markPersistedSessionForReplan(session)
+      : session;
+  }
+  return markedSessions;
+}
+
+function isRestorableActiveSession(session?: PlaybackSession | null) {
+  return Boolean(session && !TERMINAL_STATUSES.has(session.status));
+}
+
 function hasCompleteRuntimeCandidateMap(
   sessionId: string,
   session: PlaybackSession,
@@ -326,14 +377,17 @@ export const usePlaybackSessionStore = create<PlaybackSessionStoreState>()(
         const currentSessions = sanitizePersistedSessions(
           currentState.sessions,
         );
-        const sessions = {
-          ...persistedSessions,
+        const mergedSessions = {
+          ...markPersistedSessionsForReplan(persistedSessions),
           ...currentSessions,
         };
+        const sessions = markMissingRuntimeSessionsForReplan(mergedSessions);
         const activeSessionId =
-          currentState.activeSessionId && sessions[currentState.activeSessionId]
+          currentState.activeSessionId &&
+          isRestorableActiveSession(sessions[currentState.activeSessionId])
             ? currentState.activeSessionId
-            : persisted?.activeSessionId && sessions[persisted.activeSessionId]
+            : persisted?.activeSessionId &&
+                isRestorableActiveSession(sessions[persisted.activeSessionId])
               ? persisted.activeSessionId
               : null;
 

@@ -159,6 +159,21 @@ describe("gateway jobs", () => {
     });
   });
 
+  it("prunes cancelled terminal gateway jobs after their cleanup TTL", async () => {
+    (ensureTorrentReady as any).mockReturnValueOnce(new Promise(() => {}));
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    await request(app)
+      .delete(`/api/gateway/jobs/${created.body.id}`)
+      .expect(202);
+
+    __pruneGatewayJobsForTests(Date.now() + 16 * 60 * 1000);
+
+    await request(app).get(`/api/gateway/jobs/${created.body.id}`).expect(404);
+  });
+
   it("streams a gateway job through the remux path", async () => {
     const created = await request(app)
       .post("/api/gateway/jobs")

@@ -588,6 +588,38 @@ Known limitations:
 - CI does not replace the real-device QA matrix. Unknown targets in
   [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) remain release blockers.
 
+### PR #94: Crash Recovery And Session Cleanup
+
+Goal: make restart/crash recovery deterministic so stale playback, download,
+cast, and gateway state does not come back as if it were still live.
+
+Status: **In review.**
+
+Implemented:
+
+- Rehydrated non-terminal `PlaybackSession` records are marked failed with a
+  retryable "prepare again" error instead of becoming the active session again
+  without their runtime candidate map.
+- `session_failed` now clears `gatewayJobId`, matching cancellation/completion
+  cleanup and preventing terminal sessions from advertising stale gateway work.
+- Player state already persists preferences only, so resolved playback URLs and
+  transient streams are not restored after restart.
+- Cast state remains runtime-only and is not persisted; the app does not falsely
+  resume an active cast session after restart.
+- Download recovery tests now cover interrupted desktop jobs that disappeared
+  after restart and failed verification states that must remain failed.
+- Gateway tests now cover terminal cancelled-job TTL pruning.
+
+Known limitations:
+
+- App restart can make active Play/Download/Cast sessions require a fresh plan;
+  this is intentional because resolved source URLs and candidate runtime maps
+  are transient and must not be reconstructed from persisted state.
+- Gateway jobs are still in-memory with TTL cleanup. Persistent gateway job
+  metadata remains future work if cross-process recovery becomes necessary.
+- Real crash/restart QA on packaged desktop, iPhone, Android, and browser still
+  belongs in [docs/QA_MATRIX.md](./docs/QA_MATRIX.md).
+
 ### PR K: Desktop Packaged Sidecar Inputs
 
 Goal: make the desktop bridge packaging path explicit and smoke-testable before
