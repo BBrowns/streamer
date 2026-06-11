@@ -14,7 +14,9 @@
     },
     "sections": {
       "popularMovies": "Películas populares",
-      "topTVShows": "Series destacadas"
+      "topTVShows": "Series destacadas",
+      "recentlyAdded": "Añadido recientemente",
+      "fromProviders": "De tus proveedores"
     },
     "filters": {
       "movies": "Películas",
@@ -23,7 +25,10 @@
     "empty": {
       "title": "No se encontró contenido",
       "description": "Instala algunos complementos en Ajustes para empezar a explorar.",
-      "action": "Gestionar complementos"
+      "action": "Gestionar complementos",
+      "retryTitle": "No se pudo cargar Inicio",
+      "retryDescription": "Actualiza tus catálogos o comprueba la conexión.",
+      "retryAction": "Reintentar"
     }
   },
   "discover": {

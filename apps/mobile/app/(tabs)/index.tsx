@@ -4,13 +4,14 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import * as Haptics from "expo-haptics";
 import { useInfiniteCatalog } from "../../hooks/useInfiniteCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,9 +20,10 @@ import type {
   InstalledAddon,
   MetaPreview,
 } from "@streamer/shared";
-import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
-import { FilterChipBar } from "../../components/ui/FilterChipBar";
-import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
+import {
+  SkeletonLoader,
+  SkeletonRow,
+} from "../../components/ui/SkeletonLoader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
@@ -29,93 +31,116 @@ import { Ionicons } from "@expo/vector-icons";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useTheme } from "../../hooks/useTheme";
 import { useAddons } from "../../hooks/useAddons";
-import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
-import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
-
 import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 
-function SourceBridgeStatusCard() {
-  const { colors } = useTheme();
-  const router = useRouter();
-  const streamServerUrl = useAuthStore((s) => s.streamServerUrl);
-  const { data: addons } = useAddons();
-  const [bridgeStatus, setBridgeStatus] = useState(
-    streamEngineManager.bridgeStatus,
-  );
-
-  useEffect(() => {
-    streamEngineManager.detectBridge().then(() => {
-      setBridgeStatus(streamEngineManager.bridgeStatus);
-    });
-    const timer = setInterval(
-      () => setBridgeStatus(streamEngineManager.bridgeStatus),
-      5000,
-    );
-    return () => clearInterval(timer);
-  }, []);
-
-  const bridgeReady = bridgeStatus === "available";
-  const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
-  const bridgeColor =
-    bridgePresentation.tone === "success"
-      ? colors.success
-      : bridgePresentation.tone === "error"
-        ? colors.error
-        : colors.warning;
-
+function flattenCatalogPages(data: any): MetaPreview[] {
   return (
-    <Pressable
-      style={[
-        styles.sourceStatus,
-        { borderColor: colors.border, backgroundColor: colors.card },
-      ]}
-      onPress={() => router.push("/sources" as any)}
-      accessibilityRole="button"
-      accessibilityLabel="Open Sources & Devices settings"
-    >
-      <View style={styles.sourceStatusItem}>
-        <Ionicons
-          name="extension-puzzle-outline"
-          size={18}
-          color={colors.tint}
-        />
-        <View style={styles.sourceStatusCopy}>
-          <Text style={[styles.sourceStatusTitle, { color: colors.text }]}>
-            {addons?.length ?? 0} add-ons
-          </Text>
-          <Text
-            style={[styles.sourceStatusText, { color: colors.textSecondary }]}
-          >
-            Content sources
-          </Text>
-        </View>
-      </View>
-      <View style={styles.sourceStatusDivider} />
-      <View style={styles.sourceStatusItem}>
-        <View style={[styles.bridgeDot, { backgroundColor: bridgeColor }]} />
-        <View style={styles.sourceStatusCopy}>
-          <Text style={[styles.sourceStatusTitle, { color: colors.text }]}>
-            {bridgePresentation.title}
-          </Text>
-          <Text
-            style={[styles.sourceStatusText, { color: colors.textSecondary }]}
-            numberOfLines={1}
-          >
-            {bridgeReady
-              ? streamServerUrl || streamEngineManager.getBridgeUrl()
-              : bridgePresentation.detail}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
+    data?.pages.flatMap(
+      (page: { metas?: MetaPreview[] }) => page.metas ?? [],
+    ) ?? []
   );
 }
 
-function HomeProviderRails({ type }: { type: "movie" | "series" }) {
-  const router = useRouter();
+function SectionHeader({
+  eyebrow,
+  title,
+  actionLabel,
+  onAction,
+}: {
+  eyebrow?: string;
+  title: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   const { colors } = useTheme();
+
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleWrap}>
+        {!!eyebrow && (
+          <Text style={[styles.sectionEyebrow, { color: colors.tint }]}>
+            {eyebrow}
+          </Text>
+        )}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          {title}
+        </Text>
+      </View>
+      {!!actionLabel && !!onAction && (
+        <Pressable
+          style={[
+            styles.sectionAction,
+            { borderColor: colors.border, backgroundColor: colors.card },
+          ]}
+          onPress={onAction}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+        >
+          <Text style={[styles.sectionActionText, { color: colors.tint }]}>
+            {actionLabel}
+          </Text>
+          <Ionicons name="chevron-forward" size={15} color={colors.tint} />
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function HomeRail({
+  title,
+  eyebrow,
+  items,
+  isLoading,
+  testID,
+}: {
+  title: string;
+  eyebrow: string;
+  items: MetaPreview[];
+  isLoading: boolean;
+  testID: string;
+}) {
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const cardWidth = isDesktop ? 198 : 142;
+
+  if (isLoading) {
+    return (
+      <View style={styles.railContainer}>
+        <SectionHeader eyebrow={eyebrow} title={title} />
+        <SkeletonRow />
+      </View>
+    );
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <View testID={testID} style={styles.railContainer}>
+      <SectionHeader eyebrow={eyebrow} title={title} />
+      <FlatList
+        horizontal
+        data={items}
+        keyExtractor={(item, index) => `${testID}-${item.id}-${index}`}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.railContent}
+        renderItem={({ item }) => (
+          <View style={[styles.railCard, { width: cardWidth }]}>
+            <CatalogItemCard item={item} />
+          </View>
+        )}
+        ListFooterComponent={<View style={styles.railEndSpacer} />}
+      />
+      <View style={[styles.railDivider, { backgroundColor: colors.border }]} />
+    </View>
+  );
+}
+
+function HomeProviderRails() {
+  const router = useRouter();
+  const { t } = useTranslation();
   const { data: addons } = useAddons();
 
   const catalogRows = useMemo(() => {
@@ -126,44 +151,25 @@ function HomeProviderRails({ type }: { type: "movie" | "series" }) {
 
     addons?.forEach((addon) => {
       addon.manifest.catalogs.forEach((catalog) => {
-        if (catalog.type === type) {
+        if (catalog.type === "movie" || catalog.type === "series") {
           rows.push({ catalog, addon });
         }
       });
     });
 
-    return rows.slice(0, 5);
-  }, [addons, type]);
+    return rows.slice(0, 6);
+  }, [addons]);
 
   if (catalogRows.length === 0) return null;
 
   return (
     <View style={styles.providerRailSection}>
-      <View style={styles.providerRailHeader}>
-        <View>
-          <Text style={[styles.sectionEyebrow, { color: colors.tint }]}>
-            SOURCES
-          </Text>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            From your providers
-          </Text>
-        </View>
-        <Pressable
-          style={[
-            styles.discoverShortcut,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-          onPress={() => router.push("/discover")}
-          accessibilityRole="button"
-          accessibilityLabel="Open Discover"
-        >
-          <Text style={[styles.discoverShortcutText, { color: colors.tint }]}>
-            Discover
-          </Text>
-          <Ionicons name="chevron-forward" size={15} color={colors.tint} />
-        </Pressable>
-      </View>
-
+      <SectionHeader
+        eyebrow="PROVIDERS"
+        title={t("home.sections.fromProviders")}
+        actionLabel={t("tabs.discover")}
+        onAction={() => router.push("/discover")}
+      />
       {catalogRows.map(({ catalog, addon }) => (
         <CatalogRow
           key={`home-${addon.id}-${catalog.type}-${catalog.id}`}
@@ -175,41 +181,77 @@ function HomeProviderRails({ type }: { type: "movie" | "series" }) {
   );
 }
 
+function HomeSkeleton() {
+  return (
+    <View style={styles.loadingWrap}>
+      <SkeletonLoader
+        variant="card"
+        height={420}
+        borderRadius={28}
+        style={styles.heroSkeleton}
+      />
+      <SkeletonRow />
+      <SkeletonRow />
+      <SkeletonRow />
+    </View>
+  );
+}
+
 // ─── Home Content ─────────────────────────────────────────────────────────────
 function HomeContent() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const numColumns = useResponsiveColumns();
   const { t } = useTranslation();
-
   const { colors } = useTheme();
-  const [activeFilter, setActiveFilter] = useState<"movie" | "series">("movie");
   const [refreshing, setRefreshing] = useState(false);
-  const {
-    data: infiniteData,
-    isLoading,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useInfiniteCatalog(activeFilter);
 
-  const flatData =
-    infiniteData?.pages.flatMap(
-      (page: { metas: MetaPreview[] }) => page.metas,
-    ) ?? [];
+  const movieCatalog = useInfiniteCatalog("movie");
+  const seriesCatalog = useInfiniteCatalog("series");
+
+  const movieItems = useMemo(
+    () => flattenCatalogPages(movieCatalog.data),
+    [movieCatalog.data],
+  );
+  const seriesItems = useMemo(
+    () => flattenCatalogPages(seriesCatalog.data),
+    [seriesCatalog.data],
+  );
+
+  const heroItem = movieItems[0] ?? seriesItems[0];
+  const popularMovies = movieItems.slice(
+    heroItem === movieItems[0] ? 1 : 0,
+    13,
+  );
+  const topSeries = seriesItems.slice(heroItem === seriesItems[0] ? 1 : 0, 13);
+  const recentlyAdded = [...movieItems.slice(1, 7), ...seriesItems.slice(1, 7)]
+    .filter(
+      (item, index, all) => all.findIndex((i) => i.id === item.id) === index,
+    )
+    .slice(0, 12);
+
+  const isLoading =
+    !isHydrated || movieCatalog.isLoading || seriesCatalog.isLoading;
+  const hasAnyItems = movieItems.length > 0 || seriesItems.length > 0;
+  const hasLoadError =
+    !hasAnyItems && (movieCatalog.isError || seriesCatalog.isError);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ["catalog"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["catalog"] }),
+      queryClient.invalidateQueries({ queryKey: ["addons"] }),
+      queryClient.invalidateQueries({ queryKey: ["progress"] }),
+      queryClient.invalidateQueries({ queryKey: ["library"] }),
+    ]);
     setRefreshing(false);
   }, [queryClient]);
 
   if (!isHydrated) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <SkeletonCardGrid count={6} />
+        <HomeSkeleton />
       </View>
     );
   }
@@ -229,31 +271,11 @@ function HomeContent() {
     );
   }
 
-  const heroItem = flatData?.[0];
-  const gridData = flatData.slice(heroItem ? 1 : 0);
-
   return (
-    <FlatList
-      testID="home-grid"
-      style={[styles.flatList, { backgroundColor: colors.background }]}
-      data={gridData}
-      keyExtractor={(item, index) => `${item.id}-${index}`}
-      key={`grid-${numColumns}`}
-      numColumns={numColumns}
-      columnWrapperStyle={
-        numColumns > 1
-          ? {
-              backgroundColor: colors.background,
-              gap: 16,
-              paddingHorizontal: 16,
-            }
-          : undefined
-      }
-      contentContainerStyle={{
-        paddingHorizontal: 16,
-        paddingBottom: 40, // More padding for bottom spinner
-        backgroundColor: colors.background,
-      }}
+    <ScrollView
+      testID="home-screen"
+      style={[styles.scroll, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.scrollContent}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -262,74 +284,63 @@ function HomeContent() {
           colors={[colors.tint]}
         />
       }
-      ListHeaderComponent={
-        <View
-          style={[styles.homeHeader, { backgroundColor: colors.background }]}
-        >
-          <OfflineBanner />
+    >
+      <OfflineBanner />
 
-          {heroItem && <HomeHeroBanner item={heroItem} />}
+      {heroItem ? <HomeHeroBanner item={heroItem} /> : <HomeSkeleton />}
 
-          <SourceBridgeStatusCard />
-
-          <ContinueWatchingRow />
-
-          {isAuthenticated && isHydrated && (
-            <FilterChipBar
-              options={[
-                { label: t("home.filters.movies"), value: "movie" },
-                { label: t("home.filters.series"), value: "series" },
-              ]}
-              value={activeFilter}
-              onChange={(v) => setActiveFilter(v as "movie" | "series")}
-              containerStyle={styles.homeFilterBar}
-            />
-          )}
-
-          <HomeProviderRails type={activeFilter} />
-
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionEyebrow, { color: colors.tint }]}>
-              RECOMMENDED
-            </Text>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {activeFilter === "movie"
-                ? t("home.sections.popularMovies")
-                : t("home.sections.topTVShows")}
-            </Text>
-          </View>
-
-          {isLoading && <SkeletonCardGrid count={numColumns * 3} />}
-
-          {flatData.length === 0 && !isLoading && (
-            <EmptyState
-              icon="cube-outline"
-              title={t("home.empty.title")}
-              description={t("home.empty.description")}
-              actionLabel={t("home.empty.action")}
-              onAction={() => router.push("/addons")}
-            />
-          )}
+      {hasLoadError && (
+        <View style={styles.stateWrap}>
+          <EmptyState
+            icon="cloud-offline-outline"
+            title={t("home.empty.retryTitle")}
+            description={t("home.empty.retryDescription")}
+            actionLabel={t("home.empty.retryAction")}
+            onAction={handleRefresh}
+          />
         </View>
-      }
-      renderItem={({ item }) => <CatalogItemCard item={item} />}
-      onEndReached={() => {
-        if (hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      }}
-      onEndReachedThreshold={0.5}
-      ListFooterComponent={() =>
-        isFetchingNextPage ? (
-          <View style={{ paddingVertical: 20 }}>
-            <SkeletonCardGrid count={numColumns} />
-          </View>
-        ) : null
-      }
-      initialNumToRender={numColumns * 3}
-      maxToRenderPerBatch={numColumns * 2}
-      windowSize={5}
-    />
+      )}
+
+      {!hasLoadError && !isLoading && !hasAnyItems && (
+        <View style={styles.stateWrap}>
+          <EmptyState
+            icon="cube-outline"
+            title={t("home.empty.title")}
+            description={t("home.empty.description")}
+            actionLabel={t("home.empty.action")}
+            onAction={() => router.push("/addons")}
+          />
+        </View>
+      )}
+
+      <ContinueWatchingRow />
+
+      <HomeRail
+        testID="home-popular-movies"
+        eyebrow="TRENDING"
+        title={t("home.sections.popularMovies")}
+        items={popularMovies}
+        isLoading={movieCatalog.isLoading}
+      />
+
+      <HomeRail
+        testID="home-top-series"
+        eyebrow="SERIES"
+        title={t("home.sections.topTVShows")}
+        items={topSeries}
+        isLoading={seriesCatalog.isLoading}
+      />
+
+      <HomeRail
+        testID="home-recently-added"
+        eyebrow="NEW"
+        title={t("home.sections.recentlyAdded")}
+        items={recentlyAdded}
+        isLoading={isLoading}
+      />
+
+      <HomeProviderRails />
+    </ScrollView>
   );
 }
 
@@ -343,85 +354,45 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  flatList: { flex: 1 },
-  homeHeader: {
-    flex: 1,
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingBottom: 44,
   },
-  // Section header
+  loadingWrap: {
+    paddingTop: 12,
+  },
+  heroSkeleton: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+  },
+  stateWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
   sectionHeader: {
     paddingHorizontal: 16,
-    marginTop: 4,
     marginBottom: 14,
-  },
-  sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: "900",
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: 0,
-  },
-  sourceStatus: {
-    marginHorizontal: 16,
-    marginTop: 0,
-    marginBottom: 20,
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 16,
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 18px 36px rgba(44, 34, 54, 0.12)" }
-      : {}),
-  },
-  sourceStatusItem: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minWidth: 0,
-  },
-  sourceStatusCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  sourceStatusDivider: {
-    width: 1,
-    alignSelf: "stretch",
-    backgroundColor: "rgba(127,111,145,0.18)",
-  },
-  sourceStatusTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  sourceStatusText: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  bridgeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  homeFilterBar: {
-    marginBottom: 8,
-  },
-  providerRailSection: {
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  providerRailHeader: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 16,
   },
-  discoverShortcut: {
+  sectionTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: "900",
+    marginBottom: 4,
+    letterSpacing: 0,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  sectionAction: {
     minHeight: 38,
     borderRadius: 999,
     borderWidth: 1,
@@ -430,8 +401,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  discoverShortcutText: {
+  sectionActionText: {
     fontSize: 13,
     fontWeight: "800",
+  },
+  railContainer: {
+    marginBottom: 26,
+  },
+  railContent: {
+    paddingLeft: 16,
+    gap: 12,
+  },
+  railCard: {
+    marginRight: 12,
+  },
+  railEndSpacer: {
+    width: 4,
+  },
+  railDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+    marginTop: 8,
+    opacity: 0.55,
+  },
+  providerRailSection: {
+    marginTop: 2,
   },
 });

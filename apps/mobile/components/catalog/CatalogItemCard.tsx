@@ -2,7 +2,6 @@ import React, { memo, useCallback } from "react";
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { WatchProgressBar } from "../ui/WatchProgressBar";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
@@ -11,7 +10,6 @@ import { Image } from "expo-image";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 
 const isWeb = Platform.OS === "web";
-const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
 function CatalogCardInner({
   item,
@@ -59,15 +57,12 @@ function CatalogCardInner({
     >
       <View style={styles.imageWrapper}>
         {!imageError ? (
-          <AnimatedExpoImage
+          <Image
             source={item.poster}
             style={styles.cardImage}
             transition={300}
             contentFit="cover"
             cachePolicy="memory-disk"
-            // @ts-ignore
-            sharedTransitionTag={`poster-${item.id}`}
-            entering={FadeIn.duration(300)}
             onError={() => setImageError(true)}
           />
         ) : (
