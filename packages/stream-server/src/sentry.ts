@@ -62,7 +62,6 @@ export function createStreamServerSentryOptionsFromInput(
     input.buildMetadata ||
     createBuildMetadataFromEnv(
       {
-        ...process.env,
         NODE_ENV: input.nodeEnv,
         STREAMER_APP_VERSION: input.packageVersion,
         SENTRY_ENVIRONMENT: input.environment,
