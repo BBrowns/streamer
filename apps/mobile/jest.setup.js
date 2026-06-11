@@ -45,6 +45,15 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
 );
 
+jest.mock("@sentry/react-native", () => ({
+  addBreadcrumb: jest.fn(),
+  captureException: jest.fn(),
+  init: jest.fn(),
+  setContext: jest.fn(),
+  setTags: jest.fn(),
+  wrap: (component) => component,
+}));
+
 const testTranslations = {
   "auth.login.title": "Welcome Back",
   "auth.login.subtitle": "Sign in to continue",

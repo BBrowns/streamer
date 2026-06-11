@@ -35,6 +35,7 @@ import {
   inferPlaybackErrorCodeFromMessages,
 } from "./playback/PlaybackErrors";
 import { redactSensitiveText } from "./redaction";
+import { addMobileBreadcrumb } from "./sentryBreadcrumbs";
 
 export {
   getDownloadEligibility,
@@ -262,6 +263,18 @@ export class DownloadService {
       const verified = await this.verifyLocalUri(localUri);
       if (!verified) {
         const message = "Downloaded file could not be verified on this device.";
+        addMobileBreadcrumb({
+          category: "download",
+          message: "download.verification_failed",
+          level: "warning",
+          data: {
+            taskId: id,
+            sessionId: playbackSession?.sessionId,
+            status: task.status,
+            platform: Platform.OS,
+            hasLocalUri: Boolean(localUri),
+          },
+        });
         useDownloadStore.getState().markFileMissing(id, message);
         this.failSession(id, message, playbackSession);
         return;
@@ -825,6 +838,18 @@ export class DownloadService {
     const task = useDownloadStore.getState().tasks[id];
     if (!task?.localUri) {
       if (task) {
+        addMobileBreadcrumb({
+          category: "download",
+          message: "download.verification_failed",
+          level: "warning",
+          data: {
+            taskId: id,
+            sessionId: task.playbackSession?.sessionId,
+            status: task.status,
+            platform: Platform.OS,
+            hasLocalUri: false,
+          },
+        });
         useDownloadStore
           .getState()
           .markFileMissing(id, "Downloaded file could not be found.");
@@ -840,6 +865,18 @@ export class DownloadService {
     useDownloadStore
       .getState()
       .markFileMissing(id, "Downloaded file could not be found.");
+    addMobileBreadcrumb({
+      category: "download",
+      message: "download.verification_failed",
+      level: "warning",
+      data: {
+        taskId: id,
+        sessionId: task.playbackSession?.sessionId,
+        status: task.status,
+        platform: Platform.OS,
+        hasLocalUri: true,
+      },
+    });
     return false;
   }
 

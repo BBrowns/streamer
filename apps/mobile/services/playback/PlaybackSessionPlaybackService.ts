@@ -22,6 +22,7 @@ import {
   inferPlaybackErrorCodeFromMessages,
 } from "./PlaybackErrors";
 import { toPlaybackSessionError } from "./PlaybackSessionReducer";
+import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
 
 const TERMINAL_STATUSES = new Set<PlaybackSessionStatus>([
   "completed",
@@ -34,6 +35,7 @@ const resolutionBySession = new Map<
   string,
   Promise<PlaybackSessionInternalResolutionResult>
 >();
+const lastGatewayBreadcrumbPhaseBySession = new Map<string, string>();
 
 export interface PlaybackSessionResolutionSuccess {
   ok: true;
@@ -281,6 +283,14 @@ function stopActiveEngine(sessionId: string) {
   engine?.stop?.();
 }
 
+function clearSessionBreadcrumbState(sessionId: string) {
+  for (const key of lastGatewayBreadcrumbPhaseBySession.keys()) {
+    if (key.startsWith(`${sessionId}:`)) {
+      lastGatewayBreadcrumbPhaseBySession.delete(key);
+    }
+  }
+}
+
 function recordGatewayEvent(
   sessionId: string,
   candidateId: string,
@@ -316,6 +326,28 @@ function recordGatewayEvent(
 
   if (!progress.phase || !current || isTerminal(current)) return;
 
+  const breadcrumbKey = `${sessionId}:${candidateId}:${progress.id}`;
+  const lastPhase = lastGatewayBreadcrumbPhaseBySession.get(breadcrumbKey);
+  if (lastPhase !== progress.phase) {
+    lastGatewayBreadcrumbPhaseBySession.set(breadcrumbKey, progress.phase);
+    addMobileBreadcrumb({
+      category: "gateway",
+      message: "gateway.job_phase_changed",
+      data: {
+        sessionId,
+        candidateId,
+        gatewayJobId: progress.id,
+        phase: progress.phase,
+        state: progress.state,
+        peerCount: progress.peerCount,
+        progress:
+          typeof progress.progress === "number"
+            ? Math.round(progress.progress * 100) / 100
+            : undefined,
+      },
+    });
+  }
+
   usePlaybackSessionStore
     .getState()
     .recordGatewayProgress(
@@ -350,6 +382,17 @@ function selectCandidate(
         candidateId,
         reason || "Trying another source automatically.",
       );
+    addMobileBreadcrumb({
+      category: "playback",
+      message: "playback.fallback_triggered",
+      level: "warning",
+      data: {
+        sessionId,
+        fromCandidateId: session.selectedCandidateId,
+        toCandidateId: candidateId,
+        reason,
+      },
+    });
     return;
   }
 
@@ -387,6 +430,21 @@ async function attemptCandidate(
   const attempt = store.startAttempt(sessionId, candidateId);
   const stream = getCandidateStream(sessionId, candidate);
   const unsupportedCodecReason = getUnsupportedWebCodecReason(stream);
+  addMobileBreadcrumb({
+    category: "playback",
+    message: "playback.candidate_attempted",
+    data: {
+      sessionId,
+      action,
+      candidateId,
+      attemptId: attempt.id,
+      candidateRank: candidate.rank,
+      candidateKind: candidate.kind,
+      requiresBridge: candidate.requiresBridge,
+      requiresRemux: candidate.requiresRemux,
+      hasFallback,
+    },
+  });
 
   if (action === "download") {
     try {
@@ -398,6 +456,19 @@ async function attemptCandidate(
         attemptId: attempt.id,
         candidateId,
         error: toPlaybackSessionError(runtimeError),
+      });
+      addMobileBreadcrumb({
+        category: "playback",
+        message: "playback.candidate_failed",
+        level: "warning",
+        data: {
+          sessionId,
+          action,
+          candidateId,
+          attemptId: attempt.id,
+          code: runtimeError.code,
+          shouldFallback: runtimeError.shouldFallback,
+        },
       });
       return { ok: false, sessionId, error: runtimeError };
     }
@@ -415,6 +486,19 @@ async function attemptCandidate(
       candidateId,
       error: toPlaybackSessionError(error),
     });
+    addMobileBreadcrumb({
+      category: "playback",
+      message: "playback.candidate_failed",
+      level: "warning",
+      data: {
+        sessionId,
+        action,
+        candidateId,
+        attemptId: attempt.id,
+        code: error.code,
+        shouldFallback: error.shouldFallback,
+      },
+    });
     return { ok: false, sessionId, error };
   }
 
@@ -429,6 +513,19 @@ async function attemptCandidate(
       attemptId: attempt.id,
       candidateId,
       error: toPlaybackSessionError(error),
+    });
+    addMobileBreadcrumb({
+      category: "playback",
+      message: "playback.candidate_failed",
+      level: "warning",
+      data: {
+        sessionId,
+        action,
+        candidateId,
+        attemptId: attempt.id,
+        code: error.code,
+        shouldFallback: error.shouldFallback,
+      },
     });
     return { ok: false, sessionId, error };
   }
@@ -504,6 +601,19 @@ async function attemptCandidate(
       attemptId: attempt.id,
       candidateId,
     });
+    addMobileBreadcrumb({
+      category: "playback",
+      message: "playback.candidate_ready",
+      data: {
+        sessionId,
+        action,
+        candidateId,
+        attemptId: attempt.id,
+        candidateKind: candidate.kind,
+        requiresBridge: candidate.requiresBridge,
+        requiresRemux: candidate.requiresRemux,
+      },
+    });
 
     return {
       ok: true,
@@ -532,6 +642,19 @@ async function attemptCandidate(
       attemptId: attempt.id,
       candidateId,
       error: toPlaybackSessionError(runtimeError),
+    });
+    addMobileBreadcrumb({
+      category: "playback",
+      message: "playback.candidate_failed",
+      level: "warning",
+      data: {
+        sessionId,
+        action,
+        candidateId,
+        attemptId: attempt.id,
+        code: runtimeError.code,
+        shouldFallback: runtimeError.shouldFallback,
+      },
     });
     stopActiveEngine(sessionId);
     return { ok: false, sessionId, error: runtimeError };
@@ -812,6 +935,7 @@ export function failPlaybackSession(
   error: PlaybackRuntimeError,
 ) {
   stopActiveEngine(sessionId);
+  clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
   if (session && !isTerminal(session)) {
     usePlaybackSessionStore.getState().failSession(sessionId, error);
@@ -820,6 +944,7 @@ export function failPlaybackSession(
 
 export function completePlaybackSession(sessionId: string) {
   stopActiveEngine(sessionId);
+  clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
   if (session && !isTerminal(session)) {
     usePlaybackSessionStore.getState().completeSession(sessionId);
@@ -828,6 +953,7 @@ export function completePlaybackSession(sessionId: string) {
 
 export function cancelPlaybackSession(sessionId: string, reason?: string) {
   stopActiveEngine(sessionId);
+  clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
   if (session && !isTerminal(session)) {
     usePlaybackSessionStore.getState().cancelSession(sessionId, reason);

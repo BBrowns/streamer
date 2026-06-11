@@ -2,7 +2,9 @@ import * as Sentry from "@sentry/node";
 import type { BuildMetadata } from "@streamer/shared";
 import {
   buildMetadataToSentryTags,
+  createStreamerBreadcrumb,
   createBuildMetadataFromEnv,
+  type StreamerBreadcrumbInput,
 } from "@streamer/shared";
 import { env } from "../config/env.js";
 import { redactSensitiveLogValue } from "../utils/redaction.js";
@@ -150,6 +152,10 @@ export function captureServerException(
     }
     Sentry.captureException(error);
   });
+}
+
+export function addServerBreadcrumb(input: StreamerBreadcrumbInput): void {
+  Sentry.addBreadcrumb(createStreamerBreadcrumb(input) as Sentry.Breadcrumb);
 }
 
 export async function flushServerSentry(timeoutMs = 2000): Promise<void> {

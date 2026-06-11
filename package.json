@@ -23,6 +23,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:all": "turbo run test",
     "typecheck:all": "turbo run typecheck",
+    "sentry:release": "node scripts/sentry-release.mjs",
+    "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
     "postinstall": "patch-package",
     "prepare": "husky"
   },

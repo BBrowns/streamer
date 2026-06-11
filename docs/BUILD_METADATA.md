@@ -66,6 +66,9 @@ rather than invented at runtime.
 - Server logs: pino base fields include version, runtime, channel, and short
   SHA.
 
+See [SENTRY_RELEASES.md](./SENTRY_RELEASES.md) for source-map upload,
+release/deploy creation, and privacy-safe breadcrumb policy.
+
 ## Release Names
 
 Default release names use:
