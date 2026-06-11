@@ -168,6 +168,8 @@
     "finish": "Finalizar e Iniciar sesión"
   },
   "settings": {
+    "appearance": "Apariencia",
+    "language": "Idioma",
     "sections": {
       "account": "Cuenta",
       "appearance": "Apariencia",
@@ -176,10 +178,14 @@
       "security": "Seguridad",
       "privacy": "Privacidad y Datos",
       "sourcesDevices": "Fuentes y dispositivos",
+      "sourcesAddons": "Fuentes y complementos",
+      "playbackDownloads": "Reproducción y descargas",
       "advanced": "Avanzado"
     },
     "items": {
       "manageAddons": "Gestionar complementos",
+      "playbackReadiness": "Estado de reproducción",
+      "desktopBridgeCast": "Puente de escritorio y casting",
       "trakt": "Trakt.tv",
       "activeSessions": "Sesiones activas",
       "changePassword": "Cambiar contraseña",
@@ -189,6 +195,9 @@
     },
     "subtitles": {
       "manageAddons": "Instalar y eliminar fuentes de contenido",
+      "playbackReadiness": "Comprueba puente, casting, descargas y estado del stream",
+      "desktopBridgeCast": "URL LAN, estado de casting, motor torrent y reparación",
+      "downloads": "Cola, archivos offline, verificación y almacenamiento",
       "traktConnected": "Conectado",
       "traktDisconnected": "Sincroniza el historial en tus dispositivos",
       "activeSessions": "{{count}} dispositivo conectado",
