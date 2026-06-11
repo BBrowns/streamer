@@ -478,6 +478,7 @@ export function reducePlaybackSession(
     case "session_failed": {
       nextSession.status = "failed";
       nextSession.terminalError = event.error;
+      nextSession.gatewayJobId = undefined;
       break;
     }
 

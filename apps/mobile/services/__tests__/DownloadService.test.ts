@@ -351,6 +351,57 @@ describe("DownloadService session completion", () => {
     });
   });
 
+  it("pauses an interrupted desktop download when the managed bridge job is gone", async () => {
+    window.desktopBridge = {
+      getDownloadJob: jest.fn().mockResolvedValue(null),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore.getState().setStatus("source-1", "Downloading");
+    const service = new DownloadService();
+
+    await service.initialize();
+
+    expect(window.desktopBridge!.getDownloadJob).toHaveBeenCalledWith(
+      "source-1",
+    );
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Paused",
+    });
+  });
+
+  it("does not resurrect a failed download verification during initialization", async () => {
+    window.desktopBridge = {
+      checkFile: jest.fn().mockResolvedValue(true),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    useDownloadStore.getState().addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+    });
+    useDownloadStore
+      .getState()
+      .setStatus("source-1", "Error", undefined, "Verification failed.");
+    const service = new DownloadService();
+
+    await service.initialize();
+
+    expect(window.desktopBridge!.checkFile).not.toHaveBeenCalled();
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      error: "Verification failed.",
+    });
+  });
+
   it("cancels the download session when the queue item is removed", async () => {
     const playbackSession = createDownloadSessionContext();
     useDownloadStore.getState().addTask(

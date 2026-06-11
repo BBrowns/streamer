@@ -240,6 +240,11 @@ describe("playbackSessionStore", () => {
   });
 
   it("drops invalid persisted sessions during rehydration", async () => {
+    usePlaybackSessionStore.getState().clearRuntimeState();
+    usePlaybackSessionStore.setState({
+      sessions: {},
+      activeSessionId: null,
+    });
     await AsyncStorage.setItem(
       "playback-control-sessions",
       JSON.stringify({
@@ -263,6 +268,96 @@ describe("playbackSessionStore", () => {
     await usePlaybackSessionStore.persist.rehydrate();
 
     expect(usePlaybackSessionStore.getState().sessions).toEqual({});
+    expect(usePlaybackSessionStore.getState().activeSessionId).toBeNull();
+  });
+
+  it("marks non-terminal persisted sessions failed instead of restoring stale playback", async () => {
+    const session = usePlaybackSessionStore.getState().createSession({
+      plan: makePlan(),
+      content: { type: "movie", id: "tt-restart" },
+      deviceProfile,
+    });
+    const sessionWithGateway = usePlaybackSessionStore
+      .getState()
+      .dispatchPlaybackEvent(session.id, {
+        type: "gateway_job_attached",
+        gatewayJobId: GATEWAY_JOB_ID,
+        candidateId: session.candidates[0].id,
+      });
+
+    usePlaybackSessionStore.getState().clearRuntimeState();
+    usePlaybackSessionStore.setState({
+      sessions: {},
+      activeSessionId: null,
+    });
+    await AsyncStorage.setItem(
+      "playback-control-sessions",
+      JSON.stringify({
+        state: {
+          sessions: {
+            [session.id]: sessionWithGateway,
+          },
+          activeSessionId: session.id,
+        },
+        version: 1,
+      }),
+    );
+
+    await usePlaybackSessionStore.persist.rehydrate();
+
+    const restored = usePlaybackSessionStore.getState().sessions[session.id];
+    expect(restored).toMatchObject({
+      status: "failed",
+      gatewayJobId: undefined,
+      terminalError: {
+        code: "SOURCE_UNAVAILABLE",
+        retryable: true,
+        shouldFallback: false,
+      },
+    });
+    expect(restored.eventLog[restored.eventLog.length - 1]).toMatchObject({
+      type: "session_failed",
+    });
+    expect(usePlaybackSessionStore.getState().activeSessionId).toBeNull();
+    expect(usePlaybackSessionStore.getState().requiresReplan(session.id)).toBe(
+      false,
+    );
+  });
+
+  it("keeps terminal persisted session history unchanged during rehydration", async () => {
+    const session = usePlaybackSessionStore.getState().createSession({
+      plan: makePlan(),
+      content: { type: "movie", id: "tt-terminal" },
+      deviceProfile,
+    });
+    const cancelled = usePlaybackSessionStore
+      .getState()
+      .cancelSession(session.id, "User left.");
+
+    usePlaybackSessionStore.setState({
+      sessions: {},
+      activeSessionId: null,
+    });
+    await AsyncStorage.setItem(
+      "playback-control-sessions",
+      JSON.stringify({
+        state: {
+          sessions: {
+            [session.id]: cancelled,
+          },
+          activeSessionId: session.id,
+        },
+        version: 1,
+      }),
+    );
+
+    await usePlaybackSessionStore.persist.rehydrate();
+
+    const restored = usePlaybackSessionStore.getState().sessions[session.id];
+    expect(restored.status).toBe("cancelled");
+    expect(
+      restored.eventLog.filter((event) => event.type === "session_failed"),
+    ).toHaveLength(0);
     expect(usePlaybackSessionStore.getState().activeSessionId).toBeNull();
   });
 

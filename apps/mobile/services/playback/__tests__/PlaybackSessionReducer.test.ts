@@ -325,6 +325,55 @@ describe("PlaybackSessionReducer", () => {
     });
   });
 
+  it("clears attached gateway jobs when a session fails", () => {
+    const options = makeOptions(160);
+    const { session: initialSession } = createPlaybackSessionFromPlan(
+      {
+        plan: makeReadyPlan(),
+        content: { type: "movie", id: "tt123" },
+        deviceProfile,
+      },
+      options,
+    );
+    const candidateId = initialSession.candidates[0].id;
+    const withGateway = reducePlaybackSession(
+      initialSession,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "gateway_job_attached",
+          gatewayJobId: GATEWAY_JOB_ID,
+          candidateId,
+        },
+        options,
+      ),
+    );
+
+    const failed = reducePlaybackSession(
+      withGateway,
+      createPlaybackSessionEvent(
+        initialSession.id,
+        {
+          type: "session_failed",
+          error: {
+            code: "PLAYBACK_TIMEOUT",
+            message: "Playback did not start in time.",
+            retryable: true,
+            shouldFallback: false,
+          },
+        },
+        options,
+      ),
+    );
+
+    expect(withGateway.gatewayJobId).toBe(GATEWAY_JOB_ID);
+    expect(failed).toMatchObject({
+      status: "failed",
+      gatewayJobId: undefined,
+      terminalError: { code: "PLAYBACK_TIMEOUT" },
+    });
+  });
+
   it("records persistence-safe download progress and verification events", () => {
     const options = makeOptions(175);
     const { session: initialSession } = createPlaybackSessionFromPlan(
