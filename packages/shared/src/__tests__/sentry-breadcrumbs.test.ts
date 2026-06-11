@@ -53,7 +53,16 @@ describe("Sentry breadcrumbs", () => {
         notes: "x".repeat(300),
       },
       attempts: Array.from({ length: 30 }, (_, index) => index),
-    }) as any;
+    }) as {
+      phase: string;
+      peerCount: number;
+      retryable: boolean;
+      nested: {
+        sourceUrl: string;
+        notes: string;
+      };
+      attempts: number[];
+    };
 
     expect(sanitized.phase).toBe("remuxing");
     expect(sanitized.peerCount).toBe(3);
