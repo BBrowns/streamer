@@ -14,6 +14,17 @@ const {
   toStreamerUri,
 } = require("./download-paths");
 const {
+  INVOKE_IPC_CHANNELS,
+  SEND_IPC_CHANNELS,
+  createContentSecurityPolicy,
+  isAllowedExternalUrl,
+  isAllowedRendererUrl,
+  normalizeDownloadIpcArgs,
+  normalizeHandoffPayload,
+  normalizeIpcId,
+  normalizeLocalUri,
+} = require("./security");
+const {
   resolveBridgeEntrypointPath,
   resolveBridgeWorkingDirectoryPath,
   resolveNodeBinaryCandidatePaths,
@@ -597,6 +608,152 @@ function downloadMediaFile(id, rawUrl, filename) {
   return waitForDownloadJobCompletion(id);
 }
 
+function shouldAllowDevRendererServer() {
+  return (
+    !electron_1.app.isPackaged ||
+    process.env.STREAMER_DESKTOP_ALLOW_DEV_RENDERER === "true"
+  );
+}
+
+function getAllowedRendererFileRoots() {
+  const roots = [path.join(__dirname, "renderer"), path.join(__dirname, "web")];
+  if (process.resourcesPath) {
+    roots.push(
+      path.join(process.resourcesPath, "renderer"),
+      path.join(process.resourcesPath, "web"),
+    );
+  }
+  return roots;
+}
+
+function getRendererSecurityOptions() {
+  return {
+    allowDevServer: shouldAllowDevRendererServer(),
+    allowedFileRoots: getAllowedRendererFileRoots(),
+  };
+}
+
+function isTrustedRendererUrl(url) {
+  return isAllowedRendererUrl(url, getRendererSecurityOptions());
+}
+
+function assertTrustedIpcSender(event) {
+  const senderUrl =
+    event?.senderFrame?.url || event?.sender?.getURL?.() || "about:blank";
+  if (!isTrustedRendererUrl(senderUrl)) {
+    captureDesktopMessage("Blocked IPC from untrusted renderer", {
+      component: "electron-security",
+      action: "ipc-blocked",
+      senderUrl,
+    });
+    throw new Error("Blocked IPC from untrusted renderer");
+  }
+}
+
+function handleTrusted(channel, handler) {
+  if (!INVOKE_IPC_CHANNELS.includes(channel)) {
+    throw new Error(`IPC channel is not allowlisted: ${channel}`);
+  }
+
+  electron_1.ipcMain.handle(channel, async (event, ...args) => {
+    assertTrustedIpcSender(event);
+    return handler(event, ...args);
+  });
+}
+
+function onTrusted(channel, handler) {
+  if (!SEND_IPC_CHANNELS.includes(channel)) {
+    throw new Error(`IPC channel is not allowlisted: ${channel}`);
+  }
+
+  electron_1.ipcMain.on(channel, (event, ...args) => {
+    assertTrustedIpcSender(event);
+    return handler(event, ...args);
+  });
+}
+
+function openSafeExternalUrl(url) {
+  if (!isAllowedExternalUrl(url)) {
+    console.warn("[electron-security] Blocked external URL open");
+    return;
+  }
+
+  electron_1.shell.openExternal(url).catch((error) => {
+    captureDesktopException(error, {
+      component: "electron-security",
+      action: "open-external",
+    });
+  });
+}
+
+function configureElectronSecurity() {
+  electron_1.session.defaultSession.setPermissionRequestHandler(
+    (_webContents, _permission, callback) => callback(false),
+  );
+  electron_1.session.defaultSession.setPermissionCheckHandler(() => false);
+
+  electron_1.session.defaultSession.webRequest.onHeadersReceived(
+    (details, callback) => {
+      const responseHeaders = {
+        ...details.responseHeaders,
+      };
+
+      if (isTrustedRendererUrl(details.url)) {
+        responseHeaders["Content-Security-Policy"] = [
+          createContentSecurityPolicy({
+            allowDevServer: shouldAllowDevRendererServer(),
+          }),
+        ];
+      }
+
+      callback({ responseHeaders });
+    },
+  );
+
+  electron_1.app.on("web-contents-created", (_event, contents) => {
+    contents.on("will-attach-webview", (event, webPreferences) => {
+      delete webPreferences.preload;
+      webPreferences.nodeIntegration = false;
+      webPreferences.contextIsolation = true;
+      webPreferences.sandbox = true;
+      event.preventDefault();
+    });
+
+    contents.on("will-navigate", (event, navigationUrl) => {
+      if (!isTrustedRendererUrl(navigationUrl)) {
+        event.preventDefault();
+      }
+    });
+
+    contents.on("will-redirect", (event, navigationUrl) => {
+      if (!isTrustedRendererUrl(navigationUrl)) {
+        event.preventDefault();
+      }
+    });
+
+    contents.setWindowOpenHandler(({ url }) => {
+      openSafeExternalUrl(url);
+      return { action: "deny" };
+    });
+  });
+}
+
+function getRendererBaseUrl() {
+  return process.env.STREAMER_DESKTOP_RENDERER_URL || "http://localhost:8081";
+}
+
+function buildRendererUrl(pathname = "/", params = {}) {
+  const url = new URL(pathname, getRendererBaseUrl());
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    url.searchParams.set(key, String(value));
+  }
+  if (!isTrustedRendererUrl(url.toString())) {
+    throw new Error("Renderer URL is not allowed by desktop security policy");
+  }
+  return url.toString();
+}
+
 function resolveLanBridgeUrl() {
   const interfaces = os.networkInterfaces();
   for (const entries of Object.values(interfaces)) {
@@ -1144,12 +1301,19 @@ function createWindow() {
     title: "Streamer",
     webPreferences: {
       nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
       contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      experimentalFeatures: false,
+      webviewTag: false,
       preload: path.join(__dirname, "preload.js"),
     },
   });
   // Load the expo web app (assumes it is running on 8081 for dev)
-  mainWindow.loadURL("http://localhost:8081");
+  mainWindow.loadURL(buildRendererUrl("/"));
 
   mainWindow.on("close", (event) => {
     if (!electron_1.app.isQuiting) {
@@ -1189,6 +1353,8 @@ function createTray() {
 }
 
 electron_1.app.whenReady().then(async () => {
+  configureElectronSecurity();
+
   // Register custom protocol to bypass security sandbox for local downloaded files
   electron_1.protocol.registerFileProtocol("streamer", (request, callback) => {
     const filePath = resolveManagedDownloadPath(downloadsPath, request.url);
@@ -1198,14 +1364,19 @@ electron_1.app.whenReady().then(async () => {
   });
 
   // Set up IPC Handlers
-  electron_1.ipcMain.on("handoff-play", (event, data) => {
+  onTrusted("handoff-play", (event, data) => {
+    const payload = normalizeHandoffPayload(data);
     if (mainWindow) {
       console.log(
-        `[handoff] Directing UI to play${data.title ? `: ${data.title}` : ""}`,
+        `[handoff] Directing UI to play${payload.title ? `: ${payload.title}` : ""}`,
       );
 
-      // Construct the player URL with parameters
-      const playerUrl = `http://localhost:8081/player?magnet=${encodeURIComponent(data.magnet)}&startTime=${data.position || 0}&title=${encodeURIComponent(data.title || "")}&itemId=${data.itemId || ""}`;
+      const playerUrl = buildRendererUrl("/player", {
+        magnet: payload.magnet,
+        startTime: payload.position,
+        title: payload.title,
+        itemId: payload.itemId,
+      });
 
       mainWindow.loadURL(playerUrl);
       mainWindow.show();
@@ -1213,13 +1384,19 @@ electron_1.app.whenReady().then(async () => {
     }
   });
 
-  electron_1.ipcMain.handle("check-file", async (event, localUri) => {
-    const filePath = resolveManagedDownloadPath(downloadsPath, localUri);
+  handleTrusted("check-file", async (event, localUri) => {
+    const filePath = resolveManagedDownloadPath(
+      downloadsPath,
+      normalizeLocalUri(localUri),
+    );
     return Boolean(filePath && fs.existsSync(filePath));
   });
 
-  electron_1.ipcMain.handle("delete-file", async (event, localUri) => {
-    const filePath = resolveManagedDownloadPath(downloadsPath, localUri);
+  handleTrusted("delete-file", async (event, localUri) => {
+    const filePath = resolveManagedDownloadPath(
+      downloadsPath,
+      normalizeLocalUri(localUri),
+    );
     if (!filePath) {
       throw new Error("Downloaded file path is not managed by Streamer");
     }
@@ -1228,45 +1405,37 @@ electron_1.app.whenReady().then(async () => {
     }
   });
 
-  electron_1.ipcMain.handle("get-bridge-info", async () =>
-    getBridgeInfoSnapshot(),
-  );
+  handleTrusted("get-bridge-info", async () => getBridgeInfoSnapshot());
 
-  electron_1.ipcMain.handle("restart-bridge", async () =>
-    restartBridgeDaemon(),
-  );
+  handleTrusted("restart-bridge", async () => restartBridgeDaemon());
 
-  electron_1.ipcMain.handle("get-storage-info", async () => getStorageInfo());
+  handleTrusted("get-storage-info", async () => getStorageInfo());
 
-  electron_1.ipcMain.handle(
-    "download-media",
-    async (event, id, url, filename) => {
-      return downloadMediaFile(id, url, filename);
-    },
-  );
+  handleTrusted("download-media", async (event, id, url, filename) => {
+    const request = normalizeDownloadIpcArgs(id, url, filename);
+    return downloadMediaFile(request.id, request.url, request.filename);
+  });
 
-  electron_1.ipcMain.handle(
-    "download-job-start",
-    async (event, id, url, filename) => {
-      return startDownloadJob(id, url, filename);
-    },
-  );
+  handleTrusted("download-job-start", async (event, id, url, filename) => {
+    const request = normalizeDownloadIpcArgs(id, url, filename);
+    return startDownloadJob(request.id, request.url, request.filename);
+  });
 
-  electron_1.ipcMain.handle("download-job-get", async (event, id) => {
-    const job = downloadJobs.get(id);
+  handleTrusted("download-job-get", async (event, id) => {
+    const job = downloadJobs.get(normalizeIpcId(id));
     return job ? snapshotDownloadJob(job) : null;
   });
 
-  electron_1.ipcMain.handle("download-job-pause", async (event, id) => {
-    return pauseDownloadJob(id);
+  handleTrusted("download-job-pause", async (event, id) => {
+    return pauseDownloadJob(normalizeIpcId(id));
   });
 
-  electron_1.ipcMain.handle("download-job-resume", async (event, id) => {
-    return resumeDownloadJob(id);
+  handleTrusted("download-job-resume", async (event, id) => {
+    return resumeDownloadJob(normalizeIpcId(id));
   });
 
-  electron_1.ipcMain.handle("download-job-cancel", async (event, id) => {
-    return cancelDownloadJob(id);
+  handleTrusted("download-job-cancel", async (event, id) => {
+    return cancelDownloadJob(normalizeIpcId(id));
   });
 
   // Start the background P2P stream server outside Electron main so native

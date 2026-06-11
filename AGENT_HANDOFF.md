@@ -120,6 +120,10 @@ Use [docs/ADDON_TRUST_MODEL.md](./docs/ADDON_TRUST_MODEL.md) before changing
 add-on manifest/resource fetching, source URL validation, redirect handling, or
 private-network development exceptions.
 
+Use [docs/ELECTRON_SECURITY.md](./docs/ELECTRON_SECURITY.md) before changing
+Electron `BrowserWindow` settings, preload APIs, IPC handlers, external link
+handling, webview behavior, custom protocols, or desktop local-file access.
+
 ### Player Runtime State
 
 The player now stores and displays typed playback readiness:
