@@ -179,3 +179,18 @@ jobs:
         run: npm run vendor --workspace=@streamer/desktop
       - name: Desktop Package Input Smoke
         run: npm run package:check --workspace=@streamer/desktop
+      - name: Validate Sentry Release Workflow
+        run: npm run sentry:release:dry-run
+        env:
+          STREAMER_GIT_SHA: ${{ github.sha }}
+          STREAMER_BUILD_ENVIRONMENT: test
+      - name: Upload Sentry Release Artifacts
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        run: npm run sentry:release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          STREAMER_GIT_SHA: ${{ github.sha }}
+          STREAMER_BUILD_DATE: ${{ github.event.head_commit.timestamp }}
+          STREAMER_BUILD_ENVIRONMENT: production

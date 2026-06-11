@@ -13,6 +13,7 @@ import {
   cancelPlaybackSession,
   markPlaybackSessionCasting,
 } from "./PlaybackSessionPlaybackService";
+import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
 
 export interface PreparedCastSource {
   sessionId: string;
@@ -87,6 +88,20 @@ export async function startCastSession(
       return { ok: true, ...source };
     } catch (error) {
       const runtimeError = toCastRuntimeError(error);
+      addMobileBreadcrumb({
+        category: "cast",
+        message: "cast.failed",
+        level: "warning",
+        data: {
+          sessionId: source.sessionId,
+          candidateId: source.candidateId,
+          attemptId: source.attemptId,
+          deviceType: device.type,
+          contentType: getCastContentType(source.stream, source.uri),
+          code: runtimeError.code,
+          shouldFallback: runtimeError.shouldFallback,
+        },
+      });
       const fallback = await advanceCastSessionAfterFailure(
         source.sessionId,
         source.candidateId,

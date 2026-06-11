@@ -25,6 +25,7 @@ import {
   getPlaybackRuntimeState,
   mapPlaybackPlanToRuntimeFailure,
 } from "./PlaybackErrors";
+import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
 
 export interface PlaybackOrchestratorInput {
   type: "movie" | "series";
@@ -130,6 +131,7 @@ export async function playBest(
       reason: bridgeDiagnostics.reason,
     },
   });
+  recordSessionStarted("play", input, session.id, plan, bridgeDiagnostics);
 
   if (plan.state !== "ready" || !plan.selectedCandidate) {
     const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
@@ -201,6 +203,7 @@ export async function prepareDownload(
       reason: bridgeDiagnostics.reason,
     },
   });
+  recordSessionStarted("download", input, session.id, plan, bridgeDiagnostics);
 
   if (plan.state !== "ready" || !plan.selectedCandidate) {
     const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
@@ -299,6 +302,7 @@ export async function prepareCast(
     },
     castProfile,
   });
+  recordSessionStarted("cast", input, session.id, plan, bridgeDiagnostics);
 
   if (plan.state !== "ready" || !plan.selectedCandidate) {
     const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
@@ -362,6 +366,40 @@ export async function prepareCast(
     attemptedStreams: attempts.length,
     resolveErrors,
   };
+}
+
+function recordSessionStarted(
+  action: "play" | "download" | "cast",
+  input: PlaybackOrchestratorInput,
+  sessionId: string,
+  plan: PlaybackPlan,
+  bridgeDiagnostics: ReturnType<
+    typeof streamEngineManager.getBridgeDiagnostics
+  >,
+) {
+  addMobileBreadcrumb({
+    category: "playback",
+    message: "playback.session_started",
+    data: {
+      action,
+      sessionId,
+      contentType: input.type,
+      hasEpisode: input.season !== undefined || input.episode !== undefined,
+      season: input.season,
+      episode: input.episode,
+      planState: plan.state,
+      candidateCount:
+        plan.orderedCandidates?.length ??
+        (plan.selectedCandidate
+          ? 1 + (plan.fallbackCandidates?.length ?? 0)
+          : 0),
+      selectedCandidateKind: plan.selectedCandidate?.kind,
+      selectedRequiresBridge: plan.selectedCandidate?.requiresBridge,
+      selectedRequiresRemux: plan.selectedCandidate?.requiresRemux,
+      bridgeStatus: bridgeDiagnostics.status,
+      bridgeReason: bridgeDiagnostics.reason,
+    },
+  });
 }
 
 function buildMediaInfo(

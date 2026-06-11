@@ -12,6 +12,7 @@ import {
   serveTorrentFile,
 } from "./torrent.js";
 import type { FileSelectionHints } from "./torrent.js";
+import { addStreamServerBreadcrumb } from "./sentry.js";
 
 type GatewayJobState = "preparing" | "ready" | "error" | "cancelled";
 type GatewayJobMode = "bridge" | "remux";
@@ -158,6 +159,32 @@ function serializeJob(job: GatewayJob) {
   };
 }
 
+function addGatewayJobBreadcrumb(
+  job: GatewayJob,
+  message: string,
+  level: "debug" | "info" | "warning" | "error" = "info",
+  data: Record<string, unknown> = {},
+) {
+  addStreamServerBreadcrumb({
+    category: "gateway",
+    message,
+    level,
+    data: {
+      jobId: job.id,
+      mode: job.mode,
+      state: job.state,
+      phase: getJobPhase(job),
+      hasInfoHash: Boolean(job.infoHash),
+      hasFileIdx: job.fileIdx !== undefined,
+      hasHints: Boolean(job.hints),
+      peerCount: job.peerCount,
+      retryable: job.retryable,
+      activeStreamCount: job.activeStreamCount,
+      ...data,
+    },
+  });
+}
+
 function parsePositiveInteger(value: unknown) {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return undefined;
@@ -192,6 +219,7 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
   job.error = error;
   job.retryable = false;
   job.updatedAt = Date.now();
+  addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "warning");
 }
 
 function isGatewayJobCancelled(job: GatewayJob) {
@@ -249,6 +277,7 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     job.infoHash = torrent.infoHash || job.infoHash;
     stopProgressTracking = trackGatewayJobProgress(job, torrent);
     job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
 
     await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
     if (isGatewayJobCancelled(job)) return;
@@ -258,12 +287,16 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     job.state = "ready";
     job.retryable = false;
     job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
   } catch (err) {
     if (isGatewayJobCancelled(job)) return;
     job.state = "error";
     job.error = sanitizeGatewayError(err);
     job.retryable = isRetryableGatewayError(err);
     job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
+      error: job.error,
+    });
   } finally {
     stopProgressTracking?.();
   }
@@ -313,16 +346,21 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
     updatedAt: Date.now(),
   };
   jobs.set(job.id, job);
+  addGatewayJobBreadcrumb(job, "gateway.job_created", "info");
 
   try {
     const torrent = await prepareTorrent(job.magnet);
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? 0;
     job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
     void warmGatewayJob(job, torrent);
 
     return res.status(202).json(serializeJob(job));
   } catch (err) {
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
+      error: sanitizeGatewayError(err),
+    });
     jobs.delete(job.id);
     return res.status(503).json({
       error: sanitizeGatewayError(err),
@@ -406,6 +444,7 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
       job.retryable = true;
       job.remuxStartedAt = Date.now();
       job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
       const abortController = new AbortController();
       job.abortController = abortController;
 
@@ -419,10 +458,14 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
         if (!isGatewayJobCancelled(job) && res.statusCode < 400) {
           job.state = "ready";
           job.retryable = false;
+          addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
         } else if (!isGatewayJobCancelled(job) && res.statusCode >= 400) {
           job.state = "error";
           job.error = "Remux preparation failed.";
           job.retryable = true;
+          addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
+            error: job.error,
+          });
         }
         job.updatedAt = Date.now();
         return result;
@@ -438,6 +481,7 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
     job.retryable = false;
     job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
 
     return serveTorrentFile(req, res, torrent, {
       fileIdx: job.fileIdx,
@@ -449,6 +493,9 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
     job.error = error;
     job.retryable = isRetryableGatewayError(err);
     job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
+      error,
+    });
     if (!res.headersSent) {
       return res.status(503).json({ error, retryable: true });
     }

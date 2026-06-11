@@ -3,6 +3,8 @@ import type { BuildMetadata } from "@streamer/shared";
 import {
   buildMetadataToSentryTags,
   createBuildMetadataFromEnv,
+  createStreamerBreadcrumb,
+  type StreamerBreadcrumbInput,
 } from "@streamer/shared";
 import { redactSensitiveValue } from "./redaction.js";
 
@@ -173,6 +175,12 @@ export function captureStreamServerException(
     }
     Sentry.captureException(error);
   });
+}
+
+export function addStreamServerBreadcrumb(
+  input: StreamerBreadcrumbInput,
+): void {
+  Sentry.addBreadcrumb(createStreamerBreadcrumb(input) as Sentry.Breadcrumb);
 }
 
 export async function flushStreamServerSentry(timeoutMs = 2000): Promise<void> {

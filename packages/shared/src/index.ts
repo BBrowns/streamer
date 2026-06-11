@@ -22,6 +22,7 @@ export * from "./schemas/playback.schema";
 export * from "./schemas/playback-session.schema";
 export * from "./schemas/build-metadata.schema";
 export * from "./build-metadata";
+export * from "./sentry-breadcrumbs";
 export {
   catalogLayoutSchema,
   catalogManifestSchema,

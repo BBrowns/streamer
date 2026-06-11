@@ -524,10 +524,40 @@ Known limitations:
 
 - Renderer-process Sentry and session replay remain intentionally unconfigured
   for privacy and scope control.
-- Source-map upload, release creation, release health, and deploy metadata are
-  still release pipeline work.
 - This PR does not enable Sentry by default; production must provide DSNs and
   release/environment env vars.
+
+### PR #92: Sentry Source Maps And Breadcrumbs
+
+Goal: make production Sentry useful for playback debugging without leaking
+source material, tokens, local paths, or watch titles.
+
+Status: **Complete.**
+
+Implemented:
+
+- Adds a shared `createStreamerBreadcrumb()` helper that redacts raw URLs,
+  signed gateway URLs, magnets, info hashes, tokens, and local paths before
+  runtime code calls `Sentry.addBreadcrumb()`.
+- Adds mobile breadcrumbs for playback session start, candidate attempts,
+  automatic fallback, candidate failures/readiness, gateway phase changes,
+  download verification failure, and cast failure.
+- Adds stream-server breadcrumbs for gateway job creation and phase changes.
+- Enables stream-server esbuild source maps.
+- Adds `scripts/sentry-release.mjs` plus root scripts for dry-run and real
+  Sentry release/source-map upload.
+- CI dry-runs the Sentry release workflow during build checks and attempts the
+  real upload on `master`/`main` pushes when Sentry secrets are configured.
+- Documents the Sentry release env vars, source-map workflow, release health
+  expectations, and breadcrumb privacy policy in
+  [docs/SENTRY_RELEASES.md](./docs/SENTRY_RELEASES.md).
+
+Known limitations:
+
+- Renderer-process Sentry and session replay remain intentionally unconfigured.
+- Native mobile/EAS source-map upload may need a platform-specific follow-up if
+  the release pipeline moves from Expo preview builds to store builds.
+- Production must still provide DSNs and Sentry org/project/auth secrets.
 
 ### PR K: Desktop Packaged Sidecar Inputs
 
