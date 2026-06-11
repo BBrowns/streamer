@@ -86,13 +86,12 @@ export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts);
   if (toasts.length === 0) return null;
 
-  const containerProps =
-    Platform.OS === "web" ? {} : ({ pointerEvents: "box-none" } as const);
-
   return (
     <View
-      {...containerProps}
-      style={[styles.container, Platform.OS === "web" && styles.webPassThrough]}
+      style={[
+        styles.container,
+        Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
+      ]}
     >
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} />
@@ -133,6 +132,9 @@ const styles = StyleSheet.create({
   } as any,
   webPassThrough: {
     pointerEvents: "none",
+  },
+  nativeBoxNone: {
+    pointerEvents: "box-none",
   },
   message: {
     flex: 1,

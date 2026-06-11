@@ -26,6 +26,10 @@ describe("PlayerControls", () => {
   const createPlayer = () =>
     ({
       seekBy: jest.fn(),
+      currentTime: 30,
+      duration: 120,
+      muted: false,
+      volume: 0.8,
     }) as any;
 
   it("does not render while hidden", () => {
@@ -90,5 +94,95 @@ describe("PlayerControls", () => {
 
     expect(player.seekBy).toHaveBeenCalledWith(10);
     expect(player.seekBy).toHaveBeenCalledWith(-10);
+  });
+
+  it("disables misleading seek controls for non-seekable streams", () => {
+    const player = createPlayer();
+    const screen = render(
+      <PlayerControls
+        player={player}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        capabilities={{
+          canSeek: false,
+          isLive: false,
+          isRemux: true,
+          canUseVolume: false,
+          canUseFullscreen: false,
+        }}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText("Seek back unavailable"));
+    fireEvent.press(screen.getByLabelText("Seek forward unavailable"));
+    fireEvent(
+      screen.getByLabelText("Playback progress unavailable"),
+      "accessibilityAction",
+      {
+        nativeEvent: { actionName: "increment" },
+      },
+    );
+
+    expect(player.seekBy).not.toHaveBeenCalled();
+    expect(screen.getByText("Preparing compatible stream")).toBeTruthy();
+  });
+
+  it("renders desktop playback actions when callbacks are available", () => {
+    const player = createPlayer();
+    const onToggleMute = jest.fn();
+    const onToggleFullscreen = jest.fn();
+    const onOpenSettings = jest.fn();
+    const onOpenCast = jest.fn();
+    const onRetry = jest.fn();
+
+    const screen = render(
+      <PlayerControls
+        player={player}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        onToggleMute={onToggleMute}
+        onToggleFullscreen={onToggleFullscreen}
+        onOpenSettings={onOpenSettings}
+        onOpenCast={onOpenCast}
+        onRetry={onRetry}
+        volume={0.6}
+        muted={false}
+        sourceLabel="1080p MP4"
+        downloadStatus="Ready offline"
+        castStatus="Living Room"
+        fallbackReason="Trying another source automatically."
+        capabilities={{
+          canSeek: true,
+          isLive: false,
+          isRemux: false,
+          canUseVolume: true,
+          canUseFullscreen: true,
+          hasCaptions: true,
+          canCast: true,
+          canRetry: true,
+        }}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText("Mute"));
+    fireEvent.press(screen.getByLabelText("Fullscreen"));
+    fireEvent.press(screen.getByLabelText("Audio, subtitles, and source"));
+    fireEvent.press(screen.getByLabelText("Cast"));
+    fireEvent.press(screen.getByLabelText("Retry source"));
+
+    expect(screen.getByText("1080p MP4")).toBeTruthy();
+    expect(screen.getByText("Ready offline")).toBeTruthy();
+    expect(screen.getByText("Living Room")).toBeTruthy();
+    expect(onToggleMute).toHaveBeenCalledTimes(1);
+    expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(onOpenCast).toHaveBeenCalledTimes(1);
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

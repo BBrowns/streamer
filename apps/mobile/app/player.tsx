@@ -23,6 +23,10 @@ import { useTranslation } from "react-i18next";
 import { useTheme } from "../hooks/useTheme";
 import { usePlayerStore } from "../stores/playerStore";
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
+import {
+  isTaskOfflinePlayable,
+  useDownloadStore,
+} from "../stores/downloadStore";
 import { usePlayerHotkeys } from "../hooks/usePlayerHotkeys";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { usePlayerController } from "../hooks/usePlayerController";
@@ -89,12 +93,26 @@ export default function PlayerScreen() {
   const activeCast = useCastStore((s) => s.activeCast);
   const setActiveCast = useCastStore((s) => s.setActiveCast);
   const clearActiveCast = useCastStore((s) => s.clearActiveCast);
+  const downloadTask = useDownloadStore((s) => {
+    if (!mediaInfo) return null;
+    return (
+      Object.values(s.tasks).find(
+        (task) =>
+          task.mediaInfo.itemId === mediaInfo.itemId &&
+          task.mediaInfo.type === mediaInfo.type &&
+          task.mediaInfo.season === mediaInfo.season &&
+          task.mediaInfo.episode === mediaInfo.episode,
+      ) || null
+    );
+  });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [castModalOpen, setCastModalOpen] = useState(false);
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
     null,
@@ -590,11 +608,194 @@ export default function PlayerScreen() {
     showControls,
   });
 
+  const selectedSessionCandidate = useMemo(() => {
+    const candidateId =
+      activeSession?.selectedCandidateId || playbackCandidateId;
+    if (!activeSession || !candidateId) return null;
+    return (
+      activeSession.candidates.find(
+        (candidate) => candidate.id === candidateId,
+      ) || null
+    );
+  }, [activeSession, playbackCandidateId]);
+
+  const playerDuration = player?.duration || 0;
+  const hasKnownDuration =
+    Number.isFinite(playerDuration) && playerDuration > 0;
+  const isRemuxPlayback = Boolean(
+    currentStream?.behaviorHints?.remuxToMp4 ||
+    selectedSessionCandidate?.requiresRemux,
+  );
+  const isLivePlayback = Boolean(
+    !isRemuxPlayback &&
+    currentStream?.url?.toLowerCase().includes(".m3u8") &&
+    !hasKnownDuration,
+  );
+  const canSeekPlayback = Boolean(
+    !activeCast && !isRemuxPlayback && hasKnownDuration && !isLivePlayback,
+  );
+  const sourceLabel = useMemo(() => {
+    if (!currentStream && activeCast) {
+      return t("player.controls.remoteCast", { defaultValue: "Remote cast" });
+    }
+    if (!currentStream) return undefined;
+
+    const parts = [
+      currentStream.resolution || selectedSessionCandidate?.quality,
+      selectedSessionCandidate?.container?.toUpperCase(),
+      currentStream.infoHash
+        ? t("player.controls.torrent", { defaultValue: "Torrent" })
+        : currentStream.url?.toLowerCase().includes(".m3u8")
+          ? "HLS"
+          : t("player.controls.direct", { defaultValue: "Direct" }),
+      isRemuxPlayback
+        ? t("player.controls.remux", { defaultValue: "Remux" })
+        : undefined,
+    ].filter(Boolean);
+
+    return parts.join(" · ");
+  }, [activeCast, currentStream, isRemuxPlayback, selectedSessionCandidate, t]);
+  const downloadStatus = useMemo(() => {
+    if (!downloadTask) return null;
+    if (isTaskOfflinePlayable(downloadTask)) {
+      return t("player.controls.downloadReady", {
+        defaultValue: "Ready offline",
+      });
+    }
+    if (
+      downloadTask.status === "Downloading" ||
+      downloadTask.status === "Preparing" ||
+      downloadTask.status === "Verifying"
+    ) {
+      return t("player.controls.downloadActive", {
+        defaultValue: "Download active",
+      });
+    }
+    if (downloadTask.status === "Error") {
+      return t("player.controls.downloadFailed", {
+        defaultValue: "Download failed",
+      });
+    }
+    return null;
+  }, [downloadTask, t]);
+  const castStatus = activeCast
+    ? t("player.controls.castingTo", {
+        defaultValue: "Casting to {{name}}",
+        name: activeCast.device.name,
+      })
+    : null;
+  const playerCapabilities = useMemo(
+    () => ({
+      canSeek: canSeekPlayback,
+      isLive: isLivePlayback,
+      isRemux: isRemuxPlayback,
+      canUseVolume: Platform.OS === "web" && !activeCast,
+      canUseFullscreen: !activeCast,
+      hasCaptions: subtitles.length > 0,
+      canCast: Platform.OS === "web" && Boolean(mediaInfo) && !activeCast,
+      canRetry: Boolean(playbackSessionId && (runtimeError || fallbackReason)),
+    }),
+    [
+      activeCast,
+      canSeekPlayback,
+      fallbackReason,
+      isLivePlayback,
+      isRemuxPlayback,
+      mediaInfo,
+      playbackSessionId,
+      runtimeError,
+      subtitles.length,
+    ],
+  );
+
   useEffect(() => {
     if (player && player.playbackRate !== playbackRate) {
       player.playbackRate = playbackRate;
     }
   }, [player, playbackRate]);
+
+  useEffect(() => {
+    if (!player) return;
+    setMuted(Boolean(player.muted));
+    setVolume(
+      Number.isFinite(player.volume)
+        ? Math.min(1, Math.max(0, player.volume))
+        : 1,
+    );
+
+    const volumeSub = player.addListener?.("volumeChange", ({ volume }: any) =>
+      setVolume(Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1),
+    );
+    const mutedSub = player.addListener?.("mutedChange", ({ muted }: any) =>
+      setMuted(Boolean(muted)),
+    );
+
+    return () => {
+      volumeSub?.remove?.();
+      mutedSub?.remove?.();
+    };
+  }, [player]);
+
+  const handleSeekBy = useCallback(
+    (seconds: number) => {
+      if (!canSeekPlayback) return;
+      player?.seekBy(seconds);
+      showControls();
+    },
+    [canSeekPlayback, player, showControls],
+  );
+
+  const handleSeekTo = useCallback(
+    (seconds: number) => {
+      if (!canSeekPlayback || !player) return;
+      player.currentTime = seconds;
+      showControls();
+    },
+    [canSeekPlayback, player, showControls],
+  );
+
+  const handleToggleMute = useCallback(() => {
+    if (!player) return;
+    const nextMuted = !player.muted;
+    player.muted = nextMuted;
+    setMuted(nextMuted);
+    showControls();
+  }, [player, showControls]);
+
+  const handleVolumeChange = useCallback(
+    (nextVolume: number) => {
+      if (!player) return;
+      const normalized = Math.min(1, Math.max(0, nextVolume));
+      player.volume = normalized;
+      setVolume(normalized);
+      if (normalized > 0 && player.muted) {
+        player.muted = false;
+        setMuted(false);
+      }
+      showControls();
+    },
+    [player, showControls],
+  );
+
+  const handleToggleFullscreen = useCallback(() => {
+    try {
+      if (Platform.OS === "web") {
+        const videoElement = document.querySelector("video");
+        if (videoElement) {
+          if (!document.fullscreenElement) {
+            videoElement.requestFullscreen().catch(console.error);
+          } else {
+            document.exitFullscreen().catch(console.error);
+          }
+        }
+      } else if (videoViewRef.current?.enterFullscreen) {
+        videoViewRef.current.enterFullscreen().catch(console.error);
+      }
+      showControls();
+    } catch (e) {
+      console.warn("Fullscreen failed", e);
+    }
+  }, [showControls]);
 
   usePlayerHotkeys({
     player,
@@ -602,6 +803,9 @@ export default function PlayerScreen() {
     setSeekFeedback,
     seekFeedbackTimer,
     SEEK_SECONDS,
+    canSeek: canSeekPlayback,
+    onToggleFullscreen: handleToggleFullscreen,
+    onToggleMute: handleToggleMute,
   });
 
   const stopCasting = async () => {
@@ -631,7 +835,8 @@ export default function PlayerScreen() {
         lastTap.side === side
       ) {
         if (waitingTapTimer.current) clearTimeout(waitingTapTimer.current);
-        player?.seekBy(side === "right" ? SEEK_SECONDS : -SEEK_SECONDS);
+        if (!canSeekPlayback) return;
+        handleSeekBy(side === "right" ? SEEK_SECONDS : -SEEK_SECONDS);
         setSeekFeedback(side);
         if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
         seekFeedbackTimer.current = setTimeout(
@@ -648,7 +853,7 @@ export default function PlayerScreen() {
         }, DOUBLE_TAP_DELAY);
       }
     },
-    [player, toggleControls],
+    [canSeekPlayback, handleSeekBy, toggleControls],
   );
 
   const handleTogglePiP = useCallback(() => {
@@ -821,9 +1026,24 @@ export default function PlayerScreen() {
           <PlayerControls
             player={player}
             currentTime={player?.currentTime || 0}
-            duration={player?.duration || 0}
+            duration={playerDuration}
             isVisible={controlsVisible && !activeCast}
             isPlaying={player?.playing ?? false}
+            capabilities={playerCapabilities}
+            sourceLabel={sourceLabel}
+            castStatus={castStatus}
+            downloadStatus={downloadStatus}
+            fallbackReason={fallbackReason}
+            muted={muted}
+            volume={volume}
+            onSeekBy={handleSeekBy}
+            onSeekTo={handleSeekTo}
+            onToggleMute={handleToggleMute}
+            onVolumeChange={handleVolumeChange}
+            onToggleFullscreen={handleToggleFullscreen}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenCast={() => setCastModalOpen(true)}
+            onRetry={handleRetryPlayback}
             onPlayPause={() => {
               if (player?.playing) player.pause();
               else player?.play();
