@@ -6,6 +6,8 @@ This matrix tracks real target validation for Streamer playback, downloads,
 casting, bridge health, and remux behavior. A target is not considered supported
 until a run is recorded here or linked from `docs/qa-runs/`.
 
+CI release gates are documented in [CI_RELEASE_GATES.md](./CI_RELEASE_GATES.md).
+
 ## Status Legend
 
 | Status  | Meaning                                             |

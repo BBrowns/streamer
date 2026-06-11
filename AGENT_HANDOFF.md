@@ -559,6 +559,35 @@ Known limitations:
   the release pipeline moves from Expo preview builds to store builds.
 - Production must still provide DSNs and Sentry org/project/auth secrets.
 
+### PR #93: CI Release Gates And Artifacts
+
+Goal: make release readiness enforceable in CI rather than implicit in agent
+handoffs.
+
+Status: **Complete.**
+
+Implemented:
+
+- Adds `npm run release:gate`, a static gate that verifies required CI commands,
+  release artifacts, QA docs, production-safe defaults, and redaction/security
+  test coverage.
+- Adds a dedicated shared test job.
+- Adds per-job Markdown CI summary artifacts so future agents can inspect what
+  each CI job validated without reading raw logs first.
+- Adds a macOS desktop package directory job and uploads
+  `desktop-macos-package-dir` as an unsigned smoke/review artifact.
+- Keeps Sentry release dry-run validation in build checks and real upload on
+  `master`/`main` pushes when secrets exist.
+- Documents the release-gate policy in
+  [docs/CI_RELEASE_GATES.md](./docs/CI_RELEASE_GATES.md).
+
+Known limitations:
+
+- The desktop package artifact is unsigned and not notarized; distribution is
+  still PR #101 work.
+- CI does not replace the real-device QA matrix. Unknown targets in
+  [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) remain release blockers.
+
 ### PR K: Desktop Packaged Sidecar Inputs
 
 Goal: make the desktop bridge packaging path explicit and smoke-testable before
