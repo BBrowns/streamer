@@ -1,4 +1,3 @@
-import axios from "axios";
 import https from "https";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
@@ -6,7 +5,7 @@ import { resilienceRegistry } from "./resilience.js";
 import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver.js";
 import type { ResolvedStream } from "../debrid/ports/debrid.ports.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
-import { validateSafeUrl } from "../../utils/security.js";
+import { fetchSafeAddonJson, safeUrlForLog } from "../addon/addon-fetcher.js";
 import {
   catalogResponseSchema,
   metaResponseSchema,
@@ -25,53 +24,6 @@ const secureAgent = new https.Agent({
   maxSockets: 50,
   keepAlive: true,
 });
-
-const MAX_ADDON_REDIRECTS = 3;
-
-function isRedirectStatus(status: number) {
-  return [301, 302, 303, 307, 308].includes(status);
-}
-
-function safeUrlForLog(urlString: string) {
-  try {
-    const parsed = new URL(urlString);
-    return {
-      protocol: parsed.protocol,
-      hostname: parsed.hostname,
-      pathname: parsed.pathname,
-    };
-  } catch {
-    return { invalid: true };
-  }
-}
-
-async function fetchSafeAddonJson(url: string, redirects = 0): Promise<any> {
-  if (redirects > MAX_ADDON_REDIRECTS) {
-    throw new Error("Too many add-on redirects");
-  }
-
-  await validateSafeUrl(url);
-
-  const response = await axios.get(url, {
-    timeout: 5000,
-    httpsAgent: secureAgent,
-    maxRedirects: 0,
-    maxContentLength: 1024 * 1024, // 1MB limit for sanitation
-    validateStatus: (status) =>
-      (status >= 200 && status < 300) || isRedirectStatus(status),
-  });
-
-  if (isRedirectStatus(response.status)) {
-    const location = response.headers.location;
-    if (typeof location !== "string" || location.trim().length === 0) {
-      throw new Error("Add-on redirect missing Location header");
-    }
-
-    return fetchSafeAddonJson(new URL(location, url).toString(), redirects + 1);
-  }
-
-  return response.data;
-}
 
 export function buildCatalogPath(
   type: string,
@@ -111,7 +63,10 @@ async function resilientFetch<T>(
         "Fetching from add-on",
       );
 
-      const data = await fetchSafeAddonJson(url);
+      const data = await fetchSafeAddonJson(url, {
+        kind: "resource",
+        axiosOptions: { httpsAgent: secureAgent },
+      });
 
       // Strict Sanitation: Validate against expected Zod schema
       const parsed = schema.safeParse(data);

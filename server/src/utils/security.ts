@@ -9,11 +9,15 @@ export interface SafeUrlValidationOptions {
 const LOCAL_HOSTNAMES = new Set([
   "localhost",
   "ip6-localhost",
+  "metadata",
   "metadata.google.internal",
 ]);
 
 function normalizeHostname(hostname: string) {
-  return hostname.trim().toLowerCase();
+  return hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[(.*)\]$/, "$1");
 }
 
 function isPrivateOrReservedIpv4(ip: string) {
@@ -93,14 +97,8 @@ export async function validateSafeUrl(
     throw new Error("URL credentials are not allowed");
   }
 
-  if (
-    parsedUrl.protocol !== "https:" &&
-    parsedUrl.protocol !== "http:" &&
-    !options.allowHttp
-  ) {
-    throw new Error(
-      `Insecure protocol: ${parsedUrl.protocol}. HTTPS required.`,
-    );
+  if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+    throw new Error(`Unsupported URL protocol: ${parsedUrl.protocol}`);
   }
 
   const hostname = normalizeHostname(parsedUrl.hostname);

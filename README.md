@@ -174,16 +174,17 @@ npm run test:e2e --workspace=apps/mobile
 
 ## Environment Variables
 
-| Variable             | Default                 | Required | Description                            |
-| -------------------- | ----------------------- | -------- | -------------------------------------- |
-| `DATABASE_URL`       | —                       | ✅       | PostgreSQL connection string           |
-| `JWT_SECRET`         | —                       | ✅       | HS256 signing secret (≥ 32 chars)      |
-| `JWT_ACCESS_EXPIRY`  | `15m`                   |          | Access token lifetime                  |
-| `JWT_REFRESH_EXPIRY` | `7d`                    |          | Refresh token lifetime                 |
-| `PORT`               | `3001`                  |          | API server port                        |
-| `NODE_ENV`           | `development`           |          | Set to `test` to disable rate limiting |
-| `CORS_ORIGINS`       | `http://localhost:8081` |          | Comma-separated allowed origins        |
-| `ADDON_TIMEOUT_MS`   | `5000`                  |          | Per-add-on HTTP request timeout        |
+| Variable                       | Default                 | Required | Description                                                       |
+| ------------------------------ | ----------------------- | -------- | ----------------------------------------------------------------- |
+| `DATABASE_URL`                 | —                       | ✅       | PostgreSQL connection string                                      |
+| `JWT_SECRET`                   | —                       | ✅       | HS256 signing secret (≥ 32 chars)                                 |
+| `JWT_ACCESS_EXPIRY`            | `15m`                   |          | Access token lifetime                                             |
+| `JWT_REFRESH_EXPIRY`           | `7d`                    |          | Refresh token lifetime                                            |
+| `PORT`                         | `3001`                  |          | API server port                                                   |
+| `NODE_ENV`                     | `development`           |          | Set to `test` to disable rate limiting                            |
+| `CORS_ORIGINS`                 | `http://localhost:8081` |          | Comma-separated allowed origins                                   |
+| `ADDON_TIMEOUT_MS`             | `5000`                  |          | Per-add-on HTTP request timeout                                   |
+| `ADDON_ALLOW_PRIVATE_NETWORKS` | `false`                 |          | Dev/test opt-in for local/private add-ons; keep off in production |
 
 ---
 
