@@ -24,7 +24,14 @@ export interface StreamStats {
 
 export interface GatewayJobProgress {
   id?: string;
-  state?: "preparing" | "ready" | "error" | "cancelled";
+  state?:
+    | "preparing"
+    | "ready"
+    | "no_peers"
+    | "stalled"
+    | "error"
+    | "cancelled"
+    | "expired";
   phase?: PlaybackGatewayPhase;
   progress?: number | null;
   peerCount?: number | null;

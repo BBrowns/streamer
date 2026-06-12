@@ -510,6 +510,76 @@ describe("TorrentEngine", () => {
     expect(bridge.bridgeStatus).toBe("no-peers");
   });
 
+  it("maps explicit gateway no_peers status to the local bridge no-peers state", async () => {
+    const bridge = {
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    };
+    engine = new TorrentEngine(bridge as any);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "no_peers",
+          phase: "no_peers",
+          error: "Torrent metadata timed out. No peers found in 2 minutes.",
+          retryable: true,
+          playbackUrl: null,
+        }),
+      });
+
+    await expect(
+      engine.getPlaybackUri({ infoHash: "deadbeef" }),
+    ).rejects.toThrow("No peers found");
+    expect(bridge.bridgeStatus).toBe("no-peers");
+  });
+
+  it("surfaces stalled gateway status without marking the bridge as no-peers", async () => {
+    const bridge = {
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    };
+    engine = new TorrentEngine(bridge as any);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "stalled",
+          phase: "stalled",
+          error: "Gateway job stalled while checking piece availability.",
+          retryable: true,
+          playbackUrl: null,
+        }),
+      });
+
+    await expect(
+      engine.getPlaybackUri({ infoHash: "deadbeef" }),
+    ).rejects.toThrow("stalled");
+    expect(bridge.bridgeStatus).toBe("available");
+  });
+
   it("should identify itself as torrent engine", () => {
     expect(engine.getEngineType()).toBe("torrent");
   });

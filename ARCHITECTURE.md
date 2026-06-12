@@ -209,8 +209,8 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
 
 1. The mobile client asks the server playback planner for a `PlaybackPlan`.
 2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`.
-3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `phase`, `progress`, `peerCount`, elapsed time, and timeout metadata through `GET /api/gateway/jobs/:id`.
-4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, and `preparing_metadata`.
+3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `state`, `phase`, `progress`, `peerCount`, elapsed time, retryability, and timeout metadata through `GET /api/gateway/jobs/:id`.
+4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, `preparing_metadata`, `remuxing`, and `cancelled`. Explicit gateway `no_peers` and `stalled` responses are terminal for the current candidate so Play Best can fall back instead of waiting indefinitely.
 5. Once ready, the player receives a signed
    `/api/gateway/jobs/:id/stream?expires=...&signature=...` URL. The URL is
    header-free for `expo-video` and cast devices, but the bridge validates the
@@ -312,7 +312,10 @@ StreamEngineManager
 - `getPlaybackUri(stream)` → `Promise<string | null>`
 - audio/subtitle track enumeration
 - stream statistics (speed, peers)
-- gateway job progress events (`creating_gateway_job`, `finding_peers`, `preparing_metadata`, `ready`, `cancelled`)
+- gateway job progress events (`creating_gateway_job`, `finding_peers`,
+  `no_peers`, `preparing_metadata`, `fetching_metadata`, `selecting_file`,
+  `checking_piece_availability`, `remuxing`, `ready`, `stalled`, `error`,
+  `cancelled`, `expired`)
 
 The player (`app/player.tsx`) calls `streamEngineManager.resolveEngine(currentStream)` and gets back the appropriate engine. This means adding a new stream type only requires implementing `IStreamEngine` and registering it — the player is oblivious to the delivery mechanism.
 

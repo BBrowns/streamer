@@ -14,15 +14,28 @@ import {
 import type { FileSelectionHints } from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
 
-type GatewayJobState = "preparing" | "ready" | "error" | "cancelled";
+type GatewayJobState =
+  | "preparing"
+  | "ready"
+  | "no_peers"
+  | "stalled"
+  | "error"
+  | "cancelled"
+  | "expired";
 type GatewayJobMode = "bridge" | "remux";
 type GatewayJobPhase =
   | "finding_peers"
+  | "no_peers"
   | "preparing_metadata"
+  | "fetching_metadata"
+  | "selecting_file"
+  | "checking_piece_availability"
   | "remuxing"
   | "ready"
+  | "stalled"
   | "error"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
 
 interface GatewayJob {
   id: string;
@@ -51,6 +64,7 @@ const UNUSED_READY_JOB_TTL_MS = 5 * 60 * 1000;
 const CONSUMED_READY_JOB_TTL_MS = 15 * 60 * 1000;
 const JOB_PRUNE_INTERVAL_MS = 60 * 1000;
 const GATEWAY_READY_TIMEOUT_MS = 120_000;
+const GATEWAY_STALLED_AFTER_MS = 60_000;
 const jobs = new Map<string, GatewayJob>();
 
 function parseInfoHash(magnet: string) {
@@ -76,6 +90,15 @@ function isRetryableGatewayError(error: unknown) {
   );
 }
 
+function isNoPeersGatewayError(error: unknown) {
+  const message = sanitizeGatewayError(error).toLowerCase();
+  return (
+    message.includes("no peers") ||
+    message.includes("metadata timed out") ||
+    message.includes("torrent ready timeout")
+  );
+}
+
 function shouldPruneJob(job: GatewayJob, now: number) {
   if (job.activeStreamCount > 0) return false;
 
@@ -88,7 +111,10 @@ function shouldPruneJob(job: GatewayJob, now: number) {
   }
 
   const ttl =
-    job.state === "error" || job.state === "cancelled"
+    job.state === "error" ||
+    job.state === "no_peers" ||
+    job.state === "cancelled" ||
+    job.state === "expired"
       ? TERMINAL_JOB_TTL_MS
       : JOB_TTL_MS;
   return now - job.updatedAt > ttl;
@@ -107,16 +133,38 @@ const pruneTimer = setInterval(pruneJobs, JOB_PRUNE_INTERVAL_MS);
 pruneTimer.unref?.();
 
 function getJobPhase(job: GatewayJob): GatewayJobPhase {
+  if (job.state === "no_peers") return "no_peers";
+  if (job.state === "stalled") return "stalled";
   if (job.state === "ready") return "ready";
   if (job.state === "error") return "error";
   if (job.state === "cancelled") return "cancelled";
+  if (job.state === "expired") return "expired";
   if (job.mode === "remux" && job.remuxStartedAt) return "remuxing";
   return (job.peerCount ?? 0) > 0 ? "preparing_metadata" : "finding_peers";
 }
 
+function getEffectiveJobState(job: GatewayJob): GatewayJobState {
+  if (
+    job.state === "preparing" &&
+    job.mode !== "remux" &&
+    (job.peerCount ?? 0) > 0 &&
+    Date.now() - job.createdAt > GATEWAY_STALLED_AFTER_MS
+  ) {
+    return "stalled";
+  }
+  return job.state;
+}
+
 function getJobProgress(job: GatewayJob, elapsedMs: number) {
-  if (job.state === "ready") return 1;
-  if (job.state === "error" || job.state === "cancelled") return null;
+  const state = getEffectiveJobState(job);
+  if (state === "ready") return 1;
+  if (
+    state === "error" ||
+    state === "no_peers" ||
+    state === "cancelled" ||
+    state === "expired"
+  )
+    return null;
   if (job.mode === "remux" && job.remuxStartedAt) {
     const remuxElapsed = Date.now() - job.remuxStartedAt;
     return Math.min(
@@ -131,16 +179,18 @@ function getJobProgress(job: GatewayJob, elapsedMs: number) {
 
 function serializeJob(job: GatewayJob) {
   const elapsedMs = Math.max(0, Date.now() - job.createdAt);
+  const state = getEffectiveJobState(job);
   return {
     id: job.id,
-    state: job.state,
-    phase: getJobPhase(job),
+    state,
+    phase: state === "stalled" ? "stalled" : getJobPhase(job),
     mode: job.mode,
     infoHash: job.infoHash,
     fileIdx: job.fileIdx,
     error: job.error,
     retryable:
-      job.retryable ?? (job.state === "preparing" || job.state === "error"),
+      job.retryable ??
+      (state === "preparing" || state === "stalled" || state === "error"),
     peerCount: job.peerCount ?? null,
     activeStreamCount: job.activeStreamCount,
     lastStreamAccessAt: job.lastStreamAccessAt
@@ -150,7 +200,9 @@ function serializeJob(job: GatewayJob) {
     elapsedMs,
     readyTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
     playbackUrl:
-      job.state === "cancelled" ? null : createSignedGatewayStreamPath(job.id),
+      state === "cancelled" || state === "no_peers" || state === "expired"
+        ? null
+        : createSignedGatewayStreamPath(job.id),
     metricsUrl: job.infoHash
       ? `/api/torrent/${encodeURIComponent(job.infoHash)}/metrics`
       : null,
@@ -290,8 +342,8 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
   } catch (err) {
     if (isGatewayJobCancelled(job)) return;
-    job.state = "error";
     job.error = sanitizeGatewayError(err);
+    job.state = isNoPeersGatewayError(err) ? "no_peers" : "error";
     job.retryable = isRetryableGatewayError(err);
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
