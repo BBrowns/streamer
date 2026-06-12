@@ -54,6 +54,9 @@ test("IPC channels are registered through trusted wrappers", () => {
   for (const channel of [
     "get-bridge-info",
     "restart-bridge",
+    "get-update-status",
+    "check-for-updates",
+    "open-update-page",
     "download-job-start",
     "download-job-cancel",
     "handoff-play",
@@ -63,6 +66,14 @@ test("IPC channels are registered through trusted wrappers", () => {
       new RegExp(`(?:handleTrusted|onTrusted)\\("${channel}"`),
     );
   }
+});
+
+test("desktop updater uses manual checks without automatic download or install", () => {
+  assert.match(mainSource, /autoUpdater\.autoDownload = false/);
+  assert.match(mainSource, /autoUpdater\.autoInstallOnAppQuit = false/);
+  assert.doesNotMatch(mainSource, /checkForUpdatesAndNotify\(/);
+  assert.match(mainSource, /handleTrusted\("check-for-updates"/);
+  assert.match(mainSource, /handleTrusted\("open-update-page"/);
 });
 
 test("shell.openExternal remains behind the external URL allowlist", () => {

@@ -98,6 +98,7 @@ function checkDocs() {
     "docs/SENTRY_RELEASES.md",
     "docs/BUILD_METADATA.md",
     "docs/MACOS_RELEASE.md",
+    "docs/DESKTOP_UPDATES.md",
   ];
 
   for (const relativePath of checkedDocs) {
@@ -169,6 +170,26 @@ function checkSecurityCoverage() {
     "raw media URL redaction policy",
   );
   requireText("docs/SENTRY_RELEASES.md", "magnets", "magnet redaction policy");
+  requireText(
+    "docs/DESKTOP_UPDATES.md",
+    "autoUpdater.autoDownload = false",
+    "manual update download policy",
+  );
+  requireText(
+    "docs/DESKTOP_UPDATES.md",
+    "manual update notices only",
+    "manual update strategy",
+  );
+  requirePattern(
+    "apps/desktop/src/main.js",
+    /autoUpdater\.autoDownload\s*=\s*false/,
+    "desktop updates do not auto-download",
+  );
+  requirePattern(
+    "apps/desktop/src/main.js",
+    /autoUpdater\.autoInstallOnAppQuit\s*=\s*false/,
+    "desktop updates do not auto-install on quit",
+  );
 }
 
 function writeSummary() {

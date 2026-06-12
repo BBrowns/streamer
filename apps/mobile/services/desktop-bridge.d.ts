@@ -108,6 +108,26 @@ export interface DesktopBridgeInfo {
   };
 }
 
+export type DesktopUpdateStatus =
+  | "idle"
+  | "checking"
+  | "current"
+  | "available"
+  | "downloaded"
+  | "unsupported"
+  | "error";
+
+export interface DesktopUpdateState {
+  status: DesktopUpdateStatus;
+  currentVersion: string;
+  latestVersion?: string | null;
+  releaseName?: string | null;
+  releaseDate?: string | null;
+  error?: string | null;
+  checkedAt?: number | null;
+  releasesUrl: string;
+}
+
 export interface DesktopBridge {
   /**
    * Starts downloading a remote URL to the local disk.
@@ -165,6 +185,26 @@ export interface DesktopBridge {
    * Returns device storage information (total, free, and optional app usage bytes).
    */
   getStorageInfo(): Promise<{ total: number; free: number; appUsage?: number }>;
+
+  /**
+   * Reads the current desktop update status without starting a new check.
+   */
+  getUpdateStatus?(): Promise<DesktopUpdateState>;
+
+  /**
+   * Manually checks for desktop updates. Does not download or install updates.
+   */
+  checkForUpdates?(): Promise<DesktopUpdateState>;
+
+  /**
+   * Opens the configured release page in the system browser.
+   */
+  openUpdatePage?(): Promise<DesktopUpdateState>;
+
+  /**
+   * Subscribes to desktop update state changes.
+   */
+  onUpdateStatus?(callback: (data: DesktopUpdateState) => void): () => void;
 }
 
 declare global {
