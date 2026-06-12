@@ -116,6 +116,10 @@ Use [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) as the canonical record for
 real-target playback, download, cast, bridge, and remux validation. Local unit
 tests are not enough to mark a runtime supported.
 
+Use [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) before cutting or validating
+a release candidate. The checklist is intentionally conservative and should not
+be marked complete without real target evidence.
+
 Use [docs/ADDON_TRUST_MODEL.md](./docs/ADDON_TRUST_MODEL.md) before changing
 add-on manifest/resource fetching, source URL validation, redirect handling, or
 private-network development exceptions.

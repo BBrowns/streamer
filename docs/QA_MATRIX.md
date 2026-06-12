@@ -7,6 +7,8 @@ casting, bridge health, and remux behavior. A target is not considered supported
 until a run is recorded here or linked from `docs/qa-runs/`.
 
 CI release gates are documented in [CI_RELEASE_GATES.md](./CI_RELEASE_GATES.md).
+Release candidate validation is tracked with
+[RC_CHECKLIST.md](./RC_CHECKLIST.md).
 
 ## Status Legend
 
