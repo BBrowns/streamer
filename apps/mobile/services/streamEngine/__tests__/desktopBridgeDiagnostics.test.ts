@@ -97,4 +97,43 @@ describe("diagnosticsFromDesktopBridge", () => {
       },
     });
   });
+
+  it("preserves remux runtime and cache diagnostics from bridge health", () => {
+    expect(
+      diagnosticsFromDesktopBridge({
+        available: true,
+        localUrl: "http://localhost:11470",
+        lanUrl: "http://192.168.1.10:11470",
+        diagnostics: {
+          status: "running",
+          health: {
+            torrentEngine: {
+              available: true,
+            },
+            remuxRuntime: {
+              available: false,
+              state: "unavailable",
+              reason: "ffmpeg-not-found",
+              message: "FFmpeg binary was not found.",
+            },
+            remuxCache: {
+              entryCount: 2,
+              pendingCount: 1,
+              totalBytes: 1024,
+              maxBytes: 2048,
+            },
+          },
+        },
+      }),
+    ).toMatchObject({
+      remuxRuntime: {
+        available: false,
+        reason: "ffmpeg-not-found",
+      },
+      remuxCache: {
+        entryCount: 2,
+        pendingCount: 1,
+      },
+    });
+  });
 });

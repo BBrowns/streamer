@@ -149,6 +149,23 @@ export interface BridgeDiagnostics {
   platform?: string;
   selfTest?: BridgeSelfTest;
   repair?: BridgeRepairPlan;
+  remuxRuntime?: {
+    available?: boolean;
+    state?: string;
+    binaryPath?: string;
+    version?: string;
+    reason?: string;
+    message?: string;
+    processArch?: string;
+    platform?: string;
+  };
+  remuxCache?: {
+    entryCount?: number;
+    pendingCount?: number;
+    totalBytes?: number;
+    maxBytes?: number;
+    ttlMs?: number;
+  };
   checkedAt?: number;
 }
 
