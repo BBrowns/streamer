@@ -106,6 +106,54 @@ describe("gateway jobs", () => {
     });
   });
 
+  it("reports no_peers instead of a generic error when peer discovery times out", async () => {
+    (ensureTorrentReady as any).mockRejectedValueOnce(
+      new Error("Torrent ready timeout"),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "no_peers",
+        phase: "no_peers",
+        retryable: true,
+        progress: null,
+        error: "Torrent metadata timed out. No peers found in 2 minutes.",
+      });
+    });
+  });
+
+  it("reports stalled while metadata warmup has peers but no progress for a long period", async () => {
+    vi.useFakeTimers();
+    try {
+      (ensureTorrentReady as any).mockReturnValueOnce(new Promise(() => {}));
+
+      const created = await request(app)
+        .post("/api/gateway/jobs")
+        .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+      await vi.advanceTimersByTimeAsync(61_000);
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+
+      expect(status.body).toMatchObject({
+        state: "stalled",
+        phase: "stalled",
+        retryable: true,
+        peerCount: 1,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("cancels a preparing gateway job", async () => {
     (ensureTorrentReady as any).mockReturnValueOnce(new Promise(() => {}));
 

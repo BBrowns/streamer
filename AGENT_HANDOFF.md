@@ -178,19 +178,35 @@ The player now stores and displays typed playback readiness:
 
 The stream-server gateway has moved closer to production behavior:
 
-- Gateway jobs expose `phase`, `progress`, `peerCount`, `elapsedMs`, and timeout metadata.
-- Gateway jobs support `cancelled` state.
+- Gateway jobs expose `state`, `phase`, `progress`, `peerCount`, `elapsedMs`,
+  retryability, and timeout metadata.
+- Gateway jobs support explicit `no_peers`, `stalled`, `cancelled`, and
+  `expired` states instead of collapsing every non-ready result into generic
+  `error`.
 - Authenticated cancellation exists:
   `DELETE /api/gateway/jobs/:id`.
 - Cancelled streams return `410`.
 - Late warmup completion cannot overwrite cancellation.
-- Mobile `TorrentEngine` emits gateway progress and cancels active jobs on stop/timeout.
-- Player controller maps gateway phases into runtime states:
+- Mobile `TorrentEngine` emits gateway progress, treats `no_peers` and
+  `stalled` as terminal for the current candidate, maps `no_peers` to bridge
+  status, and cancels active jobs on stop/timeout.
+- Gateway progress events can carry these phases; the player maps active
+  preparation phases into user-facing copy, while terminal phases drive
+  fallback or failure:
   - `creating_gateway_job`
   - `finding_peers`
+  - `no_peers`
   - `preparing_metadata`
+  - `fetching_metadata`
+  - `selecting_file`
+  - `checking_piece_availability`
+  - `stalled`
+  - `remuxing`
+  - `ready`
+  - `error`
   - `buffering`
   - `cancelled`
+  - `expired`
 
 ### Bridge Diagnostics And Security
 

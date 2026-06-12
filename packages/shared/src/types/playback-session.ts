@@ -47,6 +47,7 @@ export type PlaybackAttemptStatus =
 export type PlaybackGatewayPhase =
   | "creating_gateway_job"
   | "finding_peers"
+  | "no_peers"
   | "preparing_metadata"
   | "fetching_metadata"
   | "selecting_file"
@@ -55,7 +56,8 @@ export type PlaybackGatewayPhase =
   | "ready"
   | "stalled"
   | "error"
-  | "cancelled";
+  | "cancelled"
+  | "expired";
 
 export interface PlaybackSessionContent {
   type: "movie" | "series";

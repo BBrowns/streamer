@@ -54,6 +54,7 @@ export const playbackAttemptStatusSchema = z.enum([
 export const playbackGatewayPhaseSchema = z.enum([
   "creating_gateway_job",
   "finding_peers",
+  "no_peers",
   "preparing_metadata",
   "fetching_metadata",
   "selecting_file",
@@ -63,6 +64,7 @@ export const playbackGatewayPhaseSchema = z.enum([
   "stalled",
   "error",
   "cancelled",
+  "expired",
 ]);
 
 export const playbackSessionContentSchema = z

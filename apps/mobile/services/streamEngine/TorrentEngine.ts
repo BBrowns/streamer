@@ -9,7 +9,14 @@ import type {
 import { api } from "../api";
 import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "../bridgeAuth";
 
-type GatewayJobState = "preparing" | "ready" | "error" | "cancelled";
+type GatewayJobState =
+  | "preparing"
+  | "ready"
+  | "no_peers"
+  | "stalled"
+  | "error"
+  | "cancelled"
+  | "expired";
 
 interface GatewayJobResponse extends GatewayJobProgress {
   id?: string;
@@ -155,6 +162,18 @@ export class TorrentEngine implements IStreamEngine {
       throw new Error(initialJob.error || "Stream gateway could not prepare");
     }
 
+    if (initialJob.state === "no_peers") {
+      this.bridge.bridgeStatus = "no-peers";
+      throw new Error(initialJob.error || "No peers found.");
+    }
+
+    if (initialJob.state === "stalled") {
+      throw new Error(
+        initialJob.error ||
+          "Stream gateway stalled while preparing this source.",
+      );
+    }
+
     if (initialJob.state === "cancelled") {
       if (this.activeGatewayJob?.id !== initialJob.id) {
         return initialJob;
@@ -198,6 +217,21 @@ export class TorrentEngine implements IStreamEngine {
           this.markBridgeNoPeersIfRelevant(job.error);
           const err = new Error(
             job.error || "Stream gateway could not prepare",
+          );
+          (err as any).isTerminal = true;
+          throw err;
+        }
+
+        if (job.state === "no_peers") {
+          this.bridge.bridgeStatus = "no-peers";
+          const err = new Error(job.error || "No peers found.");
+          (err as any).isTerminal = true;
+          throw err;
+        }
+
+        if (job.state === "stalled") {
+          const err = new Error(
+            job.error || "Stream gateway stalled while preparing this source.",
           );
           (err as any).isTerminal = true;
           throw err;
