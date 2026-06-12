@@ -324,7 +324,19 @@ stream-server can remux the torrent file to MP4 using FFmpeg and serve the
 materialized output through the gateway. This is necessary because iOS's
 `AVPlayer` (underlying `expo-video`) does not support MKV containers natively.
 The current implementation has timeout and cancellation behavior, but cache
-limits/runtime discovery are still productization work.
+limits, runtime discovery, and health diagnostics are now explicit:
+
+- `STREAMER_FFMPEG_PATH` can point the bridge at a packaged or system FFmpeg
+  binary. The bridge health endpoint probes this runtime and reports
+  availability/version.
+- `STREAMER_REMUX_CACHE_DIR` can pin the remux cache location; otherwise the
+  bridge uses an OS temp directory.
+- `STREAMER_REMUX_CACHE_MAX_BYTES` bounds completed remux output and evicts the
+  least recently used completed files when exceeded.
+- `STREAMER_REMUX_CACHE_TTL_MS` controls stale completed-file cleanup.
+- Gateway job responses include media metadata (`remuxed`, `container`,
+  `seekable`, `cacheStatus`) so clients do not have to infer remux seek
+  capability from source shape alone.
 
 ### 6.4 Playback Planning And Runtime State
 
@@ -706,6 +718,11 @@ packaged-app QA before claiming production desktop distribution.
 | `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE`  | `false` in packaged desktop  |          | Allows packaged desktop apps to fall back to system Node for bridge repair/debugging.                                                       |
 | `STREAMER_GATEWAY_STREAM_SECRET`     | per-process random fallback  |          | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
 | `STREAMER_GATEWAY_STREAM_URL_TTL_MS` | `7200000`                    |          | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
+| `STREAMER_FFMPEG_PATH`               | `ffmpeg`                     |          | FFmpeg binary used for MP4 remux jobs and health probing. Packaged desktop builds can point this at a bundled runtime.                      |
+| `STREAMER_REMUX_CACHE_DIR`           | OS temp dir                  |          | Optional fixed remux cache directory. The bridge removes stale `.partial.mp4` files on startup.                                             |
+| `STREAMER_REMUX_CACHE_MAX_BYTES`     | `5368709120`                 |          | Maximum bytes for completed remux cache entries before least-recently-used eviction.                                                        |
+| `STREAMER_REMUX_CACHE_TTL_MS`        | `1800000`                    |          | TTL for completed remux cache entries.                                                                                                      |
+| `REMUX_READY_TIMEOUT_MS`             | `90000`                      |          | Timeout budget for an individual FFmpeg remux readiness operation.                                                                          |
 | `STREAMER_APP_VERSION`               | package/app fallback         |          | Product version exposed in build metadata, health endpoints, diagnostics, logs, and Sentry release names.                                   |
 | `STREAMER_GIT_SHA`                   | CI fallback or `unknown`     |          | Full commit SHA exposed as build metadata.                                                                                                  |
 | `STREAMER_BUILD_DATE`                | CI fallback or `unknown`     |          | ISO build timestamp exposed as build metadata.                                                                                              |

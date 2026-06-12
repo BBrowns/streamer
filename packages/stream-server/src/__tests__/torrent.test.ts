@@ -7,7 +7,9 @@
  */
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "events";
-import { writeFile } from "fs/promises";
+import { access, mkdtemp, rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
 import type { Request, Response } from "express";
 import {
   handleTorrent,
@@ -21,6 +23,10 @@ import {
   getSelectedFile,
   serveTorrentFile,
 } from "../torrent.js";
+
+const previousFfmpegPath = process.env.STREAMER_FFMPEG_PATH;
+const previousRemuxCacheMaxBytes = process.env.STREAMER_REMUX_CACHE_MAX_BYTES;
+const previousRemuxCacheDir = process.env.STREAMER_REMUX_CACHE_DIR;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -116,6 +122,24 @@ function makeHangingFfmpegSpawner() {
 }
 
 afterEach(async () => {
+  if (previousFfmpegPath === undefined) {
+    delete process.env.STREAMER_FFMPEG_PATH;
+  } else {
+    process.env.STREAMER_FFMPEG_PATH = previousFfmpegPath;
+  }
+
+  if (previousRemuxCacheMaxBytes === undefined) {
+    delete process.env.STREAMER_REMUX_CACHE_MAX_BYTES;
+  } else {
+    process.env.STREAMER_REMUX_CACHE_MAX_BYTES = previousRemuxCacheMaxBytes;
+  }
+
+  if (previousRemuxCacheDir === undefined) {
+    delete process.env.STREAMER_REMUX_CACHE_DIR;
+  } else {
+    process.env.STREAMER_REMUX_CACHE_DIR = previousRemuxCacheDir;
+  }
+
   await __resetRemuxCacheForTests();
 });
 
@@ -376,6 +400,79 @@ describe("serveTorrentFile", () => {
       "Content-Length": 4,
     });
     expect(range.res.end).toHaveBeenCalled();
+  });
+
+  it("uses the configured FFmpeg binary path for remux jobs", async () => {
+    process.env.STREAMER_FFMPEG_PATH = "/opt/streamer/bin/ffmpeg";
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    const spawner = makeSuccessfulFfmpegSpawner(remuxedBytes);
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+
+    const { req, res } = makeReqRes({}, {}, "HEAD");
+    await serveTorrentFile(req, res, torrent);
+
+    expect(spawner).toHaveBeenCalledWith(
+      "/opt/streamer/bin/ffmpeg",
+      expect.any(Array),
+    );
+  });
+
+  it("evicts the oldest completed remux file when the cache exceeds its size limit", async () => {
+    process.env.STREAMER_REMUX_CACHE_MAX_BYTES = "24";
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    const spawner = makeSuccessfulFfmpegSpawner(remuxedBytes);
+    __setFfmpegSpawnerForTests(spawner);
+
+    const firstFile = makeFakeFile("first.mkv", 5_000_000);
+    const firstTorrent = makeTorrent([firstFile]);
+    firstTorrent.infoHash = "first-hash";
+
+    const secondFile = makeFakeFile("second.mkv", 5_000_000);
+    const secondTorrent = makeTorrent([secondFile]);
+    secondTorrent.infoHash = "second-hash";
+
+    const firstWarm = makeReqRes({}, {}, "HEAD");
+    await serveTorrentFile(firstWarm.req, firstWarm.res, firstTorrent);
+
+    const secondWarm = makeReqRes({}, {}, "HEAD");
+    await serveTorrentFile(secondWarm.req, secondWarm.res, secondTorrent);
+
+    const firstAfterEviction = makeReqRes({}, {}, "HEAD");
+    await serveTorrentFile(
+      firstAfterEviction.req,
+      firstAfterEviction.res,
+      firstTorrent,
+    );
+
+    expect(spawner).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not delete a configured remux cache root during cleanup", async () => {
+    const cacheRoot = await mkdtemp(
+      path.join(tmpdir(), "streamer-remux-test-"),
+    );
+    process.env.STREAMER_REMUX_CACHE_DIR = cacheRoot;
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    const spawner = makeSuccessfulFfmpegSpawner(remuxedBytes);
+    __setFfmpegSpawnerForTests(spawner);
+
+    try {
+      const file = makeFakeFile("film.mkv", 5_000_000);
+      const torrent = makeTorrent([file]);
+      torrent.infoHash = "movie-hash";
+
+      const { req, res } = makeReqRes({}, {}, "HEAD");
+      await serveTorrentFile(req, res, torrent);
+      await __resetRemuxCacheForTests();
+
+      await expect(access(cacheRoot)).resolves.toBeUndefined();
+    } finally {
+      await rm(cacheRoot, { recursive: true, force: true });
+    }
   });
 
   it("times out a remux that never becomes ready", async () => {

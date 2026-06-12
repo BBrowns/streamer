@@ -12,7 +12,7 @@
 import { createHash } from "crypto";
 import { spawn as nodeSpawn } from "child_process";
 import { createReadStream } from "fs";
-import { mkdtemp, rename, rm, stat } from "fs/promises";
+import { mkdir, mkdtemp, readdir, rename, rm, stat } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { Request, Response } from "express";
@@ -120,23 +120,103 @@ interface RemuxCacheEntry {
   partialPath: string;
   promise: Promise<RemuxedFile>;
   pending: boolean;
+  size?: number;
   createdAt: number;
   lastAccessAt: number;
   abortController: AbortController;
 }
 
-const REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
-const REMUX_READY_TIMEOUT_MS = Number.parseInt(
-  process.env.REMUX_READY_TIMEOUT_MS || "90000",
-  10,
-);
+export interface RemuxRuntimeStatus {
+  available: boolean;
+  state: "ready" | "unavailable";
+  binaryPath: string;
+  version?: string;
+  reason?: "ffmpeg-unavailable" | "ffmpeg-probe-failed";
+  message?: string;
+  processArch: NodeJS.Architecture;
+  platform: NodeJS.Platform;
+}
+
+export interface RemuxCacheStatus {
+  rootDir?: string;
+  entryCount: number;
+  pendingCount: number;
+  totalBytes: number;
+  maxBytes: number;
+  ttlMs: number;
+}
+
+const DEFAULT_REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_REMUX_CACHE_MAX_BYTES = 5 * 1024 * 1024 * 1024;
+const DEFAULT_REMUX_READY_TIMEOUT_MS = 90_000;
 const remuxCache = new Map<string, RemuxCacheEntry>();
 let remuxRootPromise: Promise<string> | null = null;
 let spawnFfmpeg: FfmpegSpawner = nodeSpawn;
 
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getFfmpegBinaryPath() {
+  return process.env.STREAMER_FFMPEG_PATH?.trim() || "ffmpeg";
+}
+
+function getRemuxCacheTtlMs() {
+  return readPositiveIntegerEnv(
+    "STREAMER_REMUX_CACHE_TTL_MS",
+    DEFAULT_REMUX_CACHE_TTL_MS,
+  );
+}
+
+function getRemuxCacheMaxBytes() {
+  return readPositiveIntegerEnv(
+    "STREAMER_REMUX_CACHE_MAX_BYTES",
+    DEFAULT_REMUX_CACHE_MAX_BYTES,
+  );
+}
+
+function getRemuxReadyTimeoutMs() {
+  return readPositiveIntegerEnv(
+    "REMUX_READY_TIMEOUT_MS",
+    DEFAULT_REMUX_READY_TIMEOUT_MS,
+  );
+}
+
+async function cleanupRemuxRoot(root: string) {
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const now = Date.now();
+  const ttlMs = getRemuxCacheTtlMs();
+
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const filePath = path.join(root, entry.name);
+        if (entry.name.endsWith(".partial.mp4")) {
+          await rm(filePath, { force: true });
+          return;
+        }
+
+        if (!entry.name.endsWith(".mp4")) return;
+        const stats = await stat(filePath).catch(() => null);
+        if (stats && now - stats.mtimeMs > ttlMs) {
+          await rm(filePath, { force: true });
+        }
+      }),
+  );
+}
+
 function getRemuxRootDir() {
   if (!remuxRootPromise) {
-    remuxRootPromise = mkdtemp(path.join(tmpdir(), "streamer-remux-"));
+    const configuredRoot = process.env.STREAMER_REMUX_CACHE_DIR?.trim();
+    remuxRootPromise = configuredRoot
+      ? (async () => {
+          await mkdir(configuredRoot, { recursive: true });
+          await cleanupRemuxRoot(configuredRoot);
+          return configuredRoot;
+        })()
+      : mkdtemp(path.join(tmpdir(), "streamer-remux-"));
   }
   return remuxRootPromise;
 }
@@ -151,9 +231,23 @@ function removeRemuxEntryFiles(entry: RemuxCacheEntry) {
 function pruneRemuxCache(now = Date.now()) {
   for (const [key, entry] of remuxCache) {
     if (entry.pending) continue;
-    if (now - entry.lastAccessAt <= REMUX_CACHE_TTL_MS) continue;
+    if (now - entry.lastAccessAt <= getRemuxCacheTtlMs()) continue;
 
     remuxCache.delete(key);
+    void removeRemuxEntryFiles(entry).catch(() => undefined);
+  }
+
+  let totalBytes = getRemuxCacheTotalBytes();
+  const maxBytes = getRemuxCacheMaxBytes();
+  const completedEntries = [...remuxCache.values()]
+    .filter((entry) => !entry.pending)
+    .sort((a, b) => a.lastAccessAt - b.lastAccessAt);
+
+  for (const entry of completedEntries) {
+    if (totalBytes <= maxBytes) break;
+
+    remuxCache.delete(entry.key);
+    totalBytes -= entry.size ?? 0;
     void removeRemuxEntryFiles(entry).catch(() => undefined);
   }
 }
@@ -169,7 +263,13 @@ async function clearRemuxCache() {
   if (remuxRootPromise) {
     const root = await remuxRootPromise.catch(() => undefined);
     remuxRootPromise = null;
-    if (root) await rm(root, { recursive: true, force: true });
+    const configuredRoot = process.env.STREAMER_REMUX_CACHE_DIR?.trim();
+    if (
+      root &&
+      (!configuredRoot || path.resolve(root) !== path.resolve(configuredRoot))
+    ) {
+      await rm(root, { recursive: true, force: true });
+    }
   }
 }
 
@@ -191,6 +291,13 @@ function getRemuxCacheKey(
   });
 
   return createHash("sha256").update(sourceIdentity).digest("hex").slice(0, 32);
+}
+
+function getRemuxCacheTotalBytes() {
+  return [...remuxCache.values()].reduce(
+    (total, entry) => total + (entry.pending ? 0 : (entry.size ?? 0)),
+    0,
+  );
 }
 
 class RemuxAbortError extends Error {
@@ -216,7 +323,7 @@ function runFfmpegRemuxToFile(
   signal?: AbortSignal,
 ): Promise<RemuxedFile> {
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawnFfmpeg("ffmpeg", [
+    const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), [
       "-hide_banner",
       "-loglevel",
       "warning",
@@ -393,7 +500,9 @@ async function getOrCreateSeekableRemux(
   })()
     .then((remuxed) => {
       entry.pending = false;
+      entry.size = remuxed.size;
       entry.lastAccessAt = Date.now();
+      pruneRemuxCache();
       return remuxed;
     })
     .catch(async (err) => {
@@ -531,7 +640,7 @@ async function serveSeekableRemuxedFile(
 ) {
   const timeout = createRemuxTimeoutSignal(
     options.signal,
-    options.remuxTimeoutMs ?? REMUX_READY_TIMEOUT_MS,
+    options.remuxTimeoutMs ?? getRemuxReadyTimeoutMs(),
   );
   const abortOnClose = () => {
     if (!timeout.signal.aborted) {
@@ -590,6 +699,115 @@ export function __setFfmpegSpawnerForTests(spawner: FfmpegSpawner) {
 export async function __resetRemuxCacheForTests() {
   spawnFfmpeg = nodeSpawn;
   await clearRemuxCache();
+}
+
+export function getRemuxCacheStatus(): RemuxCacheStatus {
+  return {
+    rootDir: process.env.STREAMER_REMUX_CACHE_DIR?.trim() || undefined,
+    entryCount: remuxCache.size,
+    pendingCount: [...remuxCache.values()].filter((entry) => entry.pending)
+      .length,
+    totalBytes: getRemuxCacheTotalBytes(),
+    maxBytes: getRemuxCacheMaxBytes(),
+    ttlMs: getRemuxCacheTtlMs(),
+  };
+}
+
+export async function getRemuxRuntimeStatus(
+  timeoutMs = 1_500,
+): Promise<RemuxRuntimeStatus> {
+  const binaryPath = getFfmpegBinaryPath();
+
+  return new Promise((resolve) => {
+    let output = "";
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (status: RemuxRuntimeStatus) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      resolve(status);
+    };
+
+    try {
+      const child = spawnFfmpeg(binaryPath, ["-version"]);
+      timeout = setTimeout(() => {
+        try {
+          child.kill?.("SIGTERM");
+        } catch {}
+        finish({
+          available: false,
+          state: "unavailable",
+          binaryPath,
+          reason: "ffmpeg-probe-failed",
+          message: "FFmpeg probe timed out.",
+          processArch: process.arch,
+          platform: process.platform,
+        });
+      }, timeoutMs);
+      timeout.unref?.();
+
+      child.stdout?.on?.("data", (data: Buffer) => {
+        output = `${output}${data.toString()}`.slice(0, 1_000);
+      });
+      child.stderr?.on?.("data", (data: Buffer) => {
+        output = `${output}${data.toString()}`.slice(0, 1_000);
+      });
+      child.on?.("error", (err: Error) => {
+        finish({
+          available: false,
+          state: "unavailable",
+          binaryPath,
+          reason: "ffmpeg-unavailable",
+          message: err.message || "FFmpeg executable is unavailable.",
+          processArch: process.arch,
+          platform: process.platform,
+        });
+      });
+      child.on?.("close", (code: number | null) => {
+        const versionLine =
+          output
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .find(Boolean) || undefined;
+
+        if (code === 0) {
+          finish({
+            available: true,
+            state: "ready",
+            binaryPath,
+            version: versionLine,
+            processArch: process.arch,
+            platform: process.platform,
+          });
+          return;
+        }
+
+        finish({
+          available: false,
+          state: "unavailable",
+          binaryPath,
+          reason: "ffmpeg-probe-failed",
+          message:
+            versionLine ||
+            `FFmpeg probe exited with code ${code ?? "unknown"}.`,
+          processArch: process.arch,
+          platform: process.platform,
+        });
+      });
+    } catch (err) {
+      finish({
+        available: false,
+        state: "unavailable",
+        binaryPath,
+        reason: "ffmpeg-unavailable",
+        message: (err as Error | undefined)?.message || String(err),
+        processArch: process.arch,
+        platform: process.platform,
+      });
+    }
+  });
 }
 
 function isNodeDataChannelLoadError(err: unknown) {
