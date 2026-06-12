@@ -13,6 +13,7 @@ export interface PlaybackRuntimeFailure {
 
 const CODE_TO_STATE: Record<PlaybackErrorCode, PlaybackRuntimeState> = {
   NO_SOURCES: "failed_no_sources",
+  NO_PLAYABLE_SOURCE: "failed_no_playable_source",
   NO_PEERS: "failed_no_peers",
   BRIDGE_UNAVAILABLE: "failed_bridge_unavailable",
   BRIDGE_UNSUPPORTED: "failed_bridge_unsupported",
@@ -26,6 +27,7 @@ const CODE_TO_STATE: Record<PlaybackErrorCode, PlaybackRuntimeState> = {
 
 const DEFAULT_MESSAGES: Record<PlaybackErrorCode, string> = {
   NO_SOURCES: "No playable sources were found for this title.",
+  NO_PLAYABLE_SOURCE: "No playable source worked for this title.",
   NO_PEERS: "This source did not find enough peers to start playback.",
   BRIDGE_UNAVAILABLE:
     "Open the desktop bridge or connect this device to a bridge URL.",
@@ -40,6 +42,7 @@ const DEFAULT_MESSAGES: Record<PlaybackErrorCode, string> = {
 };
 
 const RETRYABLE_CODES = new Set<PlaybackErrorCode>([
+  "NO_PLAYABLE_SOURCE",
   "NO_PEERS",
   "GATEWAY_TIMEOUT",
   "SOURCE_UNAVAILABLE",

@@ -5,6 +5,7 @@ export const playbackActionSchema = z.enum(["play", "download", "cast"]);
 
 export const playbackErrorCodeSchema = z.enum([
   "NO_SOURCES",
+  "NO_PLAYABLE_SOURCE",
   "NO_PEERS",
   "BRIDGE_UNAVAILABLE",
   "BRIDGE_UNSUPPORTED",

@@ -566,6 +566,49 @@ describe("PlaybackSessionPlaybackService", () => {
     });
   });
 
+  it("uses a terminal no-playable-source error after mixed candidate failures", async () => {
+    const primary = { infoHash: "abc123", title: "Torrent" } as Stream;
+    const fallback = {
+      url: "https://cdn.example.test/fallback.mp4",
+      title: "Broken direct fallback",
+    } as Stream;
+    const primaryEngine = makeEngine(async () => {
+      throw new Error("No peers found");
+    });
+    const fallbackEngine = makeEngine(async () => {
+      throw new Error("Source did not return a playback URL.");
+    });
+    resolveEngine.mockImplementation((stream) =>
+      stream.infoHash ? primaryEngine : fallbackEngine,
+    );
+    const session = createSession(primary, fallback);
+
+    const result = await resolvePlaybackSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "NO_PLAYABLE_SOURCE",
+        message: "No playable source worked for this title.",
+        shouldFallback: false,
+      },
+    });
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id],
+    ).toMatchObject({
+      status: "failed",
+      terminalError: {
+        code: "NO_PLAYABLE_SOURCE",
+        message: "No playable source worked for this title.",
+        shouldFallback: false,
+      },
+      attempts: [
+        { status: "failed", error: { code: "NO_PEERS" } },
+        { status: "failed", error: { code: "SOURCE_UNAVAILABLE" } },
+      ],
+    });
+  });
+
   it("enforces the planner timeout budget and stops a stalled engine", async () => {
     jest.useFakeTimers();
     try {

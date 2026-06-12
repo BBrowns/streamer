@@ -29,6 +29,7 @@ export type PlaybackRuntimeState =
   | "playing"
   | "trying_fallback"
   | "failed_no_sources"
+  | "failed_no_playable_source"
   | "failed_no_peers"
   | "failed_bridge_unavailable"
   | "failed_bridge_unsupported"
@@ -40,6 +41,7 @@ export type PlaybackRuntimeState =
 
 export type PlaybackErrorCode =
   | "NO_SOURCES"
+  | "NO_PLAYABLE_SOURCE"
   | "NO_PEERS"
   | "BRIDGE_UNAVAILABLE"
   | "BRIDGE_UNSUPPORTED"
