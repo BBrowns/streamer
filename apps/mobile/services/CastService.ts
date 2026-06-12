@@ -16,6 +16,21 @@ export type CastContentType =
   | "application/vnd.apple.mpegurl"
   | "application/x-mpegURL";
 
+function isLocalhostPlaybackUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
 class CastService {
   getBridgeUrl(): string {
     return streamEngineManager.getBridgeUrl();
@@ -47,6 +62,10 @@ class CastService {
     title: string,
     contentType: CastContentType = "video/mp4",
   ): Promise<void> {
+    if (isLocalhostPlaybackUrl(url)) {
+      throw new Error("Cast devices cannot access localhost playback URLs.");
+    }
+
     const res = await fetch(`${this.getBridgeUrl()}/api/cast/play`, {
       method: "POST",
       headers: withBridgeJsonHeaders(),

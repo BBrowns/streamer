@@ -146,7 +146,10 @@ Primary Cast now creates and resolves a `PlaybackSession` through
 `PlaybackOrchestrator`. The cast dialog prepares a cast-ready source before
 device selection when possible, records readiness and fallback through
 `PlaybackSessionPlaybackService`, and keeps bridge-backed sessions active while
-the remote display is playing. Manual advanced-source casts remain separate.
+the remote display is playing. Manual advanced-source casts remain separate,
+but the client still preflights cast URLs and rejects localhost-only playback
+URLs before sending the bridge request because remote displays cannot reach the
+app device loopback interface.
 
 The intended migration sequence is:
 
