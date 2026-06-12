@@ -28,7 +28,6 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
 import { Ionicons } from "@expo/vector-icons";
-import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useTheme } from "../../hooks/useTheme";
 import { useAddons } from "../../hooks/useAddons";
 import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
@@ -312,8 +311,6 @@ function HomeContent() {
           />
         </View>
       )}
-
-      <ContinueWatchingRow />
 
       <HomeRail
         testID="home-popular-movies"
