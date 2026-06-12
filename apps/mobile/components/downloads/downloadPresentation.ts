@@ -4,11 +4,17 @@ import {
 } from "../../stores/downloadStore";
 
 export type DownloadQueueGroup = "active" | "attention" | "ready";
-export type DownloadPrimaryAction = "pause" | "resume" | "play" | "retry";
+export type DownloadPrimaryAction =
+  | "pause"
+  | "resume"
+  | "play"
+  | "retry"
+  | "verify";
 
 export function getDownloadQueueGroup(task: DownloadTask): DownloadQueueGroup {
   if (task.status === "Error") return "attention";
   if (isTaskOfflinePlayable(task)) return "ready";
+  if (task.status === "Completed") return "attention";
   return "active";
 }
 
@@ -19,6 +25,7 @@ export function getDownloadPrimaryAction(
   if (task.status === "Downloading") return "pause";
   if (task.status === "Paused") return "resume";
   if (task.status === "Error") return "retry";
+  if (task.status === "Completed" && task.localUri) return "verify";
   return null;
 }
 
@@ -37,7 +44,7 @@ export function getDownloadStatusKey(task: DownloadTask) {
     case "Paused":
       return "paused";
     case "Completed":
-      return "checking";
+      return "needsVerification";
     case "Error":
       return "error";
   }
@@ -91,6 +98,9 @@ export function getDownloadQueueSummary(tasks: DownloadTask[]) {
         summary.readyBytes +=
           task.totalBytesExpectedToWrite || task.totalBytesWritten || 0;
       }
+      if (task.status === "Completed" && !isTaskOfflinePlayable(task)) {
+        summary.needsVerification += 1;
+      }
       return summary;
     },
     {
@@ -98,6 +108,7 @@ export function getDownloadQueueSummary(tasks: DownloadTask[]) {
       attention: 0,
       ready: 0,
       readyBytes: 0,
+      needsVerification: 0,
     },
   );
 }

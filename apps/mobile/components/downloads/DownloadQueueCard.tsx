@@ -27,6 +27,7 @@ interface DownloadQueueCardProps {
   onPause: () => void;
   onResume: () => void;
   onRetry: () => void;
+  onVerify: () => void;
   onDelete: () => void;
 }
 
@@ -37,6 +38,7 @@ const STATUS_DEFAULTS: Record<string, string> = {
   verifying: "Verifying",
   paused: "Paused",
   checking: "Checking file",
+  needsVerification: "Needs verification",
   readyOffline: "Ready offline",
   error: "Needs attention",
 };
@@ -48,6 +50,7 @@ export function DownloadQueueCard({
   onPause,
   onResume,
   onRetry,
+  onVerify,
   onDelete,
 }: DownloadQueueCardProps) {
   const { t } = useTranslation();
@@ -101,6 +104,7 @@ export function DownloadQueueCard({
     if (primaryAction === "pause") onPause();
     if (primaryAction === "resume") onResume();
     if (primaryAction === "retry") onRetry();
+    if (primaryAction === "verify") onVerify();
     if (primaryAction === "play") onOpen();
   };
 
@@ -111,13 +115,17 @@ export function DownloadQueueCard({
         ? t("downloads.actions.resume", { defaultValue: "Resume" })
         : primaryAction === "retry"
           ? t("downloads.actions.retry", { defaultValue: "Retry" })
-          : t("downloads.actions.play", { defaultValue: "Play" });
+          : primaryAction === "verify"
+            ? t("downloads.actions.verify", { defaultValue: "Verify" })
+            : t("downloads.actions.play", { defaultValue: "Play" });
   const primaryIcon: keyof typeof Ionicons.glyphMap =
     primaryAction === "pause"
       ? "pause"
       : primaryAction === "retry"
         ? "refresh"
-        : "play";
+        : primaryAction === "verify"
+          ? "shield-checkmark-outline"
+          : "play";
   const deleteActionLabel = t("downloads.actions.delete", {
     defaultValue: "Delete",
   });

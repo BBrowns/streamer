@@ -42,8 +42,8 @@ describe("downloadPresentation", () => {
       offlineVerifiedAt: "2026-06-04T10:05:00.000Z",
     });
 
-    expect(getDownloadQueueGroup(unverified)).toBe("active");
-    expect(getDownloadStatusKey(unverified)).toBe("checking");
+    expect(getDownloadQueueGroup(unverified)).toBe("attention");
+    expect(getDownloadStatusKey(unverified)).toBe("needsVerification");
     expect(getDownloadQueueGroup(verified)).toBe("ready");
     expect(getDownloadStatusKey(verified)).toBe("readyOffline");
   });
@@ -60,6 +60,14 @@ describe("downloadPresentation", () => {
     expect(
       getDownloadPrimaryAction(makeTask("error", { status: "Error" })),
     ).toBe("retry");
+    expect(
+      getDownloadPrimaryAction(
+        makeTask("unverified", {
+          status: "Completed",
+          localUri: "file:///downloads/unverified.mp4",
+        }),
+      ),
+    ).toBe("verify");
     expect(
       getDownloadPrimaryAction(
         makeTask("ready", {
@@ -83,15 +91,21 @@ describe("downloadPresentation", () => {
         offlineVerifiedAt: "2026-06-04T10:05:00.000Z",
         totalBytesExpectedToWrite: 2 * 1024 ** 3,
       }),
+      makeTask("unverified", {
+        status: "Completed",
+        localUri: "file:///downloads/unverified.mp4",
+        totalBytesExpectedToWrite: 1024 ** 2,
+      }),
       makeTask("error", { status: "Error" }),
     ];
 
     expect(formatBytes(2 * 1024 ** 3)).toBe("2 GB");
     expect(getDownloadQueueSummary(tasks)).toEqual({
       active: 1,
-      attention: 1,
+      attention: 2,
       ready: 1,
       readyBytes: 2 * 1024 ** 3,
+      needsVerification: 1,
     });
   });
 
