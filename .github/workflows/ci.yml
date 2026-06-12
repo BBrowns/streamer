@@ -268,6 +268,8 @@ jobs:
         run: npm run vendor --workspace=@streamer/desktop
       - name: Desktop Package Input Smoke
         run: npm run package:check --workspace=@streamer/desktop
+      - name: Desktop Release Config Smoke
+        run: npm run release:check --workspace=@streamer/desktop
       - name: Validate Sentry Release Workflow
         run: npm run sentry:release:dry-run
         env:

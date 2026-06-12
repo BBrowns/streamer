@@ -65,6 +65,10 @@ function checkCiWorkflow() {
       "mobile Jest tests",
     ],
     ["npm run package:check --workspace=@streamer/desktop", "desktop smoke"],
+    [
+      "npm run release:check --workspace=@streamer/desktop",
+      "desktop release config smoke",
+    ],
     ["npm run release:gate", "release gate"],
     ["ci-summaries", "test summary artifacts"],
     ["apps/desktop/release", "desktop package artifact"],
@@ -93,6 +97,7 @@ function checkDocs() {
     "docs/QA_RUNBOOK.md",
     "docs/SENTRY_RELEASES.md",
     "docs/BUILD_METADATA.md",
+    "docs/MACOS_RELEASE.md",
   ];
 
   for (const relativePath of checkedDocs) {

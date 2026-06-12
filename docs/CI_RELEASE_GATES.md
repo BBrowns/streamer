@@ -16,6 +16,8 @@ The release gate expects the workflow to run:
 - mobile Jest tests: `npm run test --workspace=apps/mobile -- --runInBand`
 - desktop package input smoke:
   `npm run package:check --workspace=@streamer/desktop`
+- desktop release signing/notarization config smoke:
+  `npm run release:check --workspace=@streamer/desktop`
 - Sentry release dry-run: `npm run sentry:release:dry-run`
 - release gate: `npm run release:gate`
 
@@ -28,8 +30,10 @@ CI uploads:
 - `desktop-macos-package-dir`, an unsigned macOS Electron package directory
 
 The desktop artifact is a smoke/review artifact, not a distributable release.
-Signing, notarization, DMG/ZIP publishing, and update feeds remain separate
-release work.
+Signing and notarization config is validated by CI, but the pull-request
+artifact remains unsigned. Real DMG/ZIP release publishing requires Apple
+secrets and follows [MACOS_RELEASE.md](./MACOS_RELEASE.md). Update feeds remain
+separate release work.
 
 ## Gate Policy
 
