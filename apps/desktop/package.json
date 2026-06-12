@@ -8,10 +8,13 @@
     "build": "node scripts/build.cjs",
     "vendor": "node scripts/vendor-node.js",
     "package:check": "node scripts/validate-package-inputs.cjs",
+    "release:check": "node scripts/validate-release-config.cjs",
     "prepackage:dir": "npm run build --workspace=@streamer/stream-server && npm run build && npm run vendor",
     "package:dir": "electron-builder --dir --config electron-builder.json",
     "prepackage:mac": "npm run build --workspace=@streamer/stream-server && npm run build && npm run vendor",
     "package:mac": "electron-builder --mac --config electron-builder.json",
+    "prepackage:mac:release": "npm run build --workspace=@streamer/stream-server && npm run build && npm run vendor && npm run release:check",
+    "package:mac:release": "electron-builder --mac --config electron-builder.release.json",
     "predev": "npm run build --workspace=@streamer/stream-server && npm run build",
     "dev": "electron dist/main.js",
     "prestart": "npm run build --workspace=@streamer/stream-server && npm run build",
@@ -19,6 +22,7 @@
     "test": "node --test src/*.test.js"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
     "electron": "40.10.1",
     "electron-builder": "^26.8.1"
   },

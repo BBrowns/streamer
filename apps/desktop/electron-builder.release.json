@@ -1,0 +1,21 @@
+{
+  "extends": "./electron-builder.json",
+  "afterSign": "scripts/notarize.cjs",
+  "mac": {
+    "category": "public.app-category.entertainment",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "entitlements/entitlements.mac.plist",
+    "entitlementsInherit": "entitlements/entitlements.mac.inherit.plist",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["arm64", "x64"]
+      },
+      {
+        "target": "zip",
+        "arch": ["arm64", "x64"]
+      }
+    ]
+  }
+}
