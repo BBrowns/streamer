@@ -43,6 +43,20 @@ interface Props {
 
 type SourceReadiness = "idle" | "preparing" | "ready" | "failed";
 
+function getDeviceCapabilitySummary(device: CastDevice) {
+  const capabilities = device.capabilities;
+  if (!capabilities) return device.type;
+
+  const formats = [
+    capabilities.supportsMp4 !== false ? "MP4" : null,
+    capabilities.supportsHls ? "HLS" : null,
+    capabilities.supportsMkv ? "MKV" : null,
+    capabilities.remuxAllowed !== false ? "Remux" : null,
+  ].filter((label): label is string => Boolean(label));
+
+  return formats.length > 0 ? formats.join(" · ") : device.type;
+}
+
 export function DesktopCastModal({
   visible,
   orchestratorInput,
@@ -365,7 +379,7 @@ export function DesktopCastModal({
                         >
                           {isCasting
                             ? "Connecting to display..."
-                            : `Available · ${item.type}`}
+                            : `Available · ${getDeviceCapabilitySummary(item)}`}
                         </Text>
                       </View>
                     </View>

@@ -40,6 +40,9 @@ The intended UX is closer to Netflix, Disney+, Prime Video, Infuse, and Plex tha
 - Playback should show clear readiness states instead of endless buffering.
 - Downloads should be honestly offline-playable only when a real local file exists.
 - Casting should use configured bridge/device state, not hard-coded localhost behavior.
+- Cast devices cannot consume localhost-only playback URLs; client and bridge
+  paths must preflight loopback URLs and prefer LAN-reachable bridge URLs or
+  compatible remote sources.
 - Real-Debrid remains optional, paid-service aware, disabled by default, and absent from first-run onboarding.
 
 ## Current Architecture
@@ -277,6 +280,12 @@ Casting now uses the playback session control plane for the primary flow:
 - Configured bridge URLs are used for discovery, playback, and control.
 - Bridge-backed cast sessions remain active until the user stops casting so
   their gateway jobs are not cancelled early.
+- Cast device capabilities include HLS/MP4/MKV support, codec hints, localhost
+  reachability, remote-URL requirement, and remux allowance. The desktop cast
+  modal surfaces the most important format/remux hints in the device list.
+- Manual advanced-source casting is allowed only after client-side preflight;
+  localhost, `127.0.0.1`, IPv6 loopback, and `.localhost` playback URLs are
+  rejected before the bridge cast request is sent.
 
 Still open:
 
@@ -362,7 +371,9 @@ UI polish in one PR.
    with verified local-file badges, queue polish, storage UI, retry/delete
    rules, and honest unsupported-source handling.
 6. **PR #111: Cast capabilities v2.** Add device/source preflight, capability
-   explanations, fallback/remux decisions, and cast diagnostics.
+   explanations, fallback/remux decisions, and cast diagnostics. The client now
+   blocks localhost-only manual cast URLs and shows device format/remux hints;
+   real-device Chromecast/AirPlay validation remains in the QA matrix.
 7. **PR #112: Desktop runtime repair flow.** Make bridge/runtime/native
    engine/FFmpeg problems understandable and repairable from Settings.
 

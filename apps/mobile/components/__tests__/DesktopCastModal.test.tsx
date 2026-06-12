@@ -308,6 +308,35 @@ describe("DesktopCastModal", () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
+  it("shows cast device capability hints in the device list", async () => {
+    getDevices.mockResolvedValueOnce([
+      {
+        id: "living-room",
+        name: "Living Room",
+        type: "chromecast",
+        capabilities: {
+          supportsMp4: true,
+          supportsHls: false,
+          supportsMkv: false,
+          remuxAllowed: true,
+        },
+      },
+    ]);
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        playbackUri="https://cdn.example.test/manual.mp4"
+        title="Example Movie"
+        onClose={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Available · MP4 · Remux")).toBeTruthy();
+    });
+  });
+
   it("cancels a prepared session when the dialog closes before casting starts", async () => {
     const screen = render(
       <DesktopCastModal

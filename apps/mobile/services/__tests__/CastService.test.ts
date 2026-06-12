@@ -76,6 +76,23 @@ describe("CastService", () => {
     );
   });
 
+  it("rejects localhost-only playback URLs before sending a cast request", async () => {
+    const localhostUrls = [
+      "http://localhost:11470/api/gateway/jobs/current/stream",
+      "http://127.0.0.1:11470/movie.mp4",
+      "http://[::1]:11470/movie.mp4",
+      "http://bridge.localhost:11470/movie.mp4",
+    ];
+
+    for (const url of localhostUrls) {
+      await expect(
+        castService.play("living-room", url, "Movie"),
+      ).rejects.toThrow("Cast devices cannot access localhost playback URLs.");
+    }
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it("does not send cast requests to an untrusted public bridge URL", async () => {
     useAuthStore.setState({
       streamServerUrl: "https://bridge.example.com",
