@@ -83,10 +83,32 @@ function checkCiWorkflow() {
 function checkDocs() {
   requireFile("docs/QA_MATRIX.md");
   requireFile("docs/QA_RUNBOOK.md");
+  requireFile("docs/RC_CHECKLIST.md");
+  requireFile("docs/RELEASE_NOTES_TEMPLATE.md");
   requireFile("AGENT_HANDOFF.md");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
+  requireText(
+    "AGENT_HANDOFF.md",
+    "docs/RC_CHECKLIST.md",
+    "RC checklist link",
+  );
   requireText("docs/QA_MATRIX.md", "## Release Blockers", "release blockers");
   requireText("docs/QA_MATRIX.md", "Unknown", "unknown target states");
+  requireText(
+    "docs/RC_CHECKLIST.md",
+    "Decision: pending.",
+    "pending RC decision",
+  );
+  requireText(
+    "docs/RC_CHECKLIST.md",
+    "No new product features after the RC branch is cut.",
+    "feature freeze rule",
+  );
+  requireText(
+    "docs/RELEASE_NOTES_TEMPLATE.md",
+    "## QA Evidence",
+    "release notes QA evidence section",
+  );
 
   const releaseClaimPattern =
     /(release\s*ready\s*:\s*(yes|true)|status\s*:\s*release[- ]ready|go\/no-go\s*:\s*go)/i;
@@ -99,6 +121,8 @@ function checkDocs() {
     "docs/BUILD_METADATA.md",
     "docs/MACOS_RELEASE.md",
     "docs/DESKTOP_UPDATES.md",
+    "docs/RC_CHECKLIST.md",
+    "docs/RELEASE_NOTES_TEMPLATE.md",
   ];
 
   for (const relativePath of checkedDocs) {

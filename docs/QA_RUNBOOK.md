@@ -64,3 +64,5 @@ If a test fails:
 Create a dated run record under `docs/qa-runs/` using the template in
 [QA_MATRIX.md](./QA_MATRIX.md). Do not mark a runtime as supported unless the
 result is recorded with build, device, source fixture, and pass/fail notes.
+When preparing a release candidate, complete [RC_CHECKLIST.md](./RC_CHECKLIST.md)
+and link every required target run from the checklist.

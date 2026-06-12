@@ -12,6 +12,7 @@ Torrent streams work on all platforms, including iOS, via a local P2P daemon tha
 > **Current handoff:** See [AGENT_HANDOFF.md](./AGENT_HANDOFF.md) for the latest playback/bridge/UI roadmap and next recommended PRs.
 > **Playback control plane:** See [PLAYBACK.md](./PLAYBACK.md) for `PlaybackSession` persistence and event rules.
 > **UI direction:** See [UI.md](./UI.md) for the pastel glass cinema design direction and current UX guardrails.
+> **Release candidates:** See [RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) for release freeze and validation requirements.
 
 ---
 
