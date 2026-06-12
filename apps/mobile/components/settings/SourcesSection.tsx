@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -30,6 +30,10 @@ import {
   clientBuildMetadata,
   formatBuildLabel,
 } from "../../services/buildMetadata";
+import {
+  createDebugBundle,
+  exportDebugBundle,
+} from "../../services/debugBundle";
 
 function formatBridgeReason(reason: string) {
   switch (reason) {
@@ -59,6 +63,16 @@ function formatSelfTestStatus(status: string) {
     default:
       return status;
   }
+}
+
+function formatRemuxRuntimeStatus(runtime: BridgeDiagnostics["remuxRuntime"]) {
+  if (!runtime) return null;
+  return runtime.available ? "Available" : "Unavailable";
+}
+
+function formatRemuxCacheStatus(cache: BridgeDiagnostics["remuxCache"]) {
+  if (!cache) return null;
+  return `${cache.entryCount ?? 0} files · ${cache.pendingCount ?? 0} pending`;
 }
 
 type CapabilityTone = "success" | "warning" | "error" | "neutral" | "info";
@@ -157,29 +171,41 @@ export function SourcesSection({
     streamEngineManager.getBridgeDiagnostics(),
   );
   const [isRestartingBridge, setIsRestartingBridge] = useState(false);
+  const [isCopyingDiagnostics, setIsCopyingDiagnostics] = useState(false);
   const [showConnectionSettings, setShowConnectionSettings] = useState(false);
   const [showAdvancedDiagnostics, setShowAdvancedDiagnostics] = useState(false);
+
+  const refreshDesktopBridgeInfo = useCallback(
+    async (isCancelled?: () => boolean) => {
+      if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) {
+        return null;
+      }
+
+      try {
+        const info = await window.desktopBridge.getBridgeInfo();
+        if (!isCancelled?.()) {
+          setBridgeInfo(info);
+          if (info.pairingToken) {
+            setTempStreamToken(info.pairingToken);
+          }
+          if (info.lanUrl) {
+            setTempStream((current) => current || info.lanUrl);
+          }
+        }
+        return info;
+      } catch {
+        if (!isCancelled?.()) setBridgeInfo(null);
+        return null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     const refreshBridge = async () => {
-      if (Platform.OS === "web" && window.desktopBridge?.getBridgeInfo) {
-        window.desktopBridge
-          .getBridgeInfo()
-          .then((info) => {
-            if (!cancelled) {
-              setBridgeInfo(info);
-              if (info.pairingToken) {
-                setTempStreamToken(info.pairingToken);
-              }
-            }
-          })
-          .catch(() => {
-            if (!cancelled) setBridgeInfo(null);
-          });
-      }
-
+      await refreshDesktopBridgeInfo(() => cancelled);
       await streamEngineManager.detectBridge();
       if (!cancelled) {
         setBridgeStatus(streamEngineManager.bridgeStatus);
@@ -206,7 +232,7 @@ export function SourcesSection({
       cancelled = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [refreshDesktopBridgeInfo]);
 
   const handleSave = async () => {
     setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
@@ -249,6 +275,15 @@ export function SourcesSection({
 
   const handleCheckBridge = async () => {
     hapticSelection();
+    await refreshDesktopBridgeInfo();
+    await streamEngineManager.detectBridge();
+    setBridgeStatus(streamEngineManager.bridgeStatus);
+    setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+  };
+
+  const handleRecheckRuntime = async () => {
+    hapticSelection();
+    await refreshDesktopBridgeInfo();
     await streamEngineManager.detectBridge();
     setBridgeStatus(streamEngineManager.bridgeStatus);
     setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
@@ -305,6 +340,11 @@ export function SourcesSection({
   const desktopBuildMetadata =
     bridgeInfo?.build || bridgeInfo?.diagnostics?.build || null;
   const bridgeBuildMetadata = bridgeInfo?.diagnostics?.health?.build || null;
+  const remuxRuntime = effectiveBridgeDiagnostics.remuxRuntime;
+  const remuxRuntimeStatus = formatRemuxRuntimeStatus(remuxRuntime);
+  const remuxCacheStatus = formatRemuxCacheStatus(
+    effectiveBridgeDiagnostics.remuxCache,
+  );
   const bridgeRepairSteps = bridgeRepair?.steps ?? [];
   const bridgeRepairTitle = bridgeRepair?.title || "Bridge repair steps";
   const bridgeRepairDetail = bridgeRepair?.detail || bridgePresentation.detail;
@@ -345,6 +385,31 @@ export function SourcesSection({
         : bridgeRepairDetail;
 
     Alert.alert(bridgeRepairTitle, body);
+  };
+
+  const handleCopyDiagnostics = async () => {
+    setIsCopyingDiagnostics(true);
+    try {
+      const result = await exportDebugBundle(
+        createDebugBundle({
+          context: {
+            screen: "sources-devices",
+            bridgeStatus: effectiveBridgeStatus,
+            bridgeReason: effectiveBridgeDiagnostics.reason,
+          },
+        }),
+      );
+      Alert.alert(
+        "Diagnostics copied",
+        result.method === "clipboard"
+          ? "A safe debug bundle was copied to the clipboard."
+          : "A safe debug bundle was exported.",
+      );
+    } catch {
+      Alert.alert("Diagnostics unavailable", "Could not export diagnostics.");
+    } finally {
+      setIsCopyingDiagnostics(false);
+    }
   };
 
   return (
@@ -397,6 +462,15 @@ export function SourcesSection({
             variant="ghost"
             onPress={handleCheckBridge}
           />
+          {Platform.OS === "web" && window.desktopBridge?.getBridgeInfo && (
+            <AppButton
+              label="Re-check runtime"
+              icon="pulse-outline"
+              size="small"
+              variant="ghost"
+              onPress={handleRecheckRuntime}
+            />
+          )}
           {bridgeRepair?.required && (
             <AppButton
               label="Repair steps"
@@ -432,6 +506,15 @@ export function SourcesSection({
               loading={isRestartingBridge}
             />
           )}
+          <AppButton
+            label={isCopyingDiagnostics ? "Copying..." : "Copy diagnostics"}
+            icon="document-text-outline"
+            size="small"
+            variant="ghost"
+            onPress={handleCopyDiagnostics}
+            disabled={isCopyingDiagnostics}
+            loading={isCopyingDiagnostics}
+          />
         </View>
       </Surface>
 
@@ -730,6 +813,39 @@ export function SourcesSection({
                 {effectiveBridgeDiagnostics.nativeArch
                   ? ` · Native: ${effectiveBridgeDiagnostics.nativeArch}`
                   : ""}
+              </Text>
+            )}
+            {!!remuxRuntimeStatus && (
+              <Text
+                selectable
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                FFmpeg: {remuxRuntimeStatus}
+              </Text>
+            )}
+            {!!remuxRuntime?.message && (
+              <Text
+                selectable
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {remuxRuntime.message}
+              </Text>
+            )}
+            {!!remuxCacheStatus && (
+              <Text
+                selectable
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Remux cache: {remuxCacheStatus}
               </Text>
             )}
           </View>

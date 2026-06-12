@@ -23,6 +23,23 @@ type HealthRecord = {
   };
   selfTest?: BridgeSelfTest;
   repair?: BridgeRepairPlan;
+  remuxRuntime?: {
+    available?: boolean;
+    state?: string;
+    binaryPath?: string;
+    version?: string;
+    reason?: string;
+    message?: string;
+    processArch?: string;
+    platform?: string;
+  };
+  remuxCache?: {
+    entryCount?: number;
+    pendingCount?: number;
+    totalBytes?: number;
+    maxBytes?: number;
+    ttlMs?: number;
+  };
 };
 
 function asHealthRecord(value: unknown): HealthRecord | null {
@@ -170,6 +187,8 @@ export function diagnosticsFromDesktopBridge(
       torrentEngine?.platform || runtime?.platform || diagnostics.platform,
     selfTest,
     repair,
+    remuxRuntime: health?.remuxRuntime,
+    remuxCache: health?.remuxCache,
     checkedAt: diagnostics.updatedAt || selfTest?.checkedAt,
   };
 }

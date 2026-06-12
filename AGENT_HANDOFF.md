@@ -219,6 +219,9 @@ Bridge behavior is safer and more explicit:
 - Bridge auth is supported through bearer token or `x-streamer-bridge-token`.
 - Gateway, metrics, stream, stats, and cast/control routes are covered by auth tests where relevant.
 - CPU/native architecture mismatch is surfaced as unsupported bridge health instead of silently appearing available.
+- Sources & Devices exposes bridge restart, runtime re-check, repair steps,
+  FFmpeg/remux runtime diagnostics, remux cache status, and a safe redacted
+  diagnostics export for support.
 - Server, mobile, desktop, and stream-server logs now have a baseline redaction
   pass for bridge tokens, bearer tokens, reset tokens, signed gateway URLs,
   magnets, source URLs, local file URIs, and torrent info hashes in the touched
@@ -375,7 +378,9 @@ UI polish in one PR.
    blocks localhost-only manual cast URLs and shows device format/remux hints;
    real-device Chromecast/AirPlay validation remains in the QA matrix.
 7. **PR #112: Desktop runtime repair flow.** Make bridge/runtime/native
-   engine/FFmpeg problems understandable and repairable from Settings.
+   engine/FFmpeg problems understandable and repairable from Settings. Sources
+   & Devices now supports runtime re-check, restart, repair steps, FFmpeg/remux
+   diagnostics, remux cache status, and safe diagnostics export.
 
 ### Phase 3: Release Engineering And Security
 
