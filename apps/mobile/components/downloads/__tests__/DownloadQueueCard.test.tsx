@@ -57,6 +57,7 @@ function renderCard(task: DownloadTask) {
     onPause: jest.fn(),
     onResume: jest.fn(),
     onRetry: jest.fn(),
+    onVerify: jest.fn(),
     onDelete: jest.fn(),
   };
   return {
@@ -114,5 +115,21 @@ describe("DownloadQueueCard", () => {
     fireEvent.press(getByLabelText("Play"));
 
     expect(callbacks.onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers verification for a completed file that is not offline-verified yet", () => {
+    const { getByLabelText, getByText, callbacks } = renderCard(
+      makeTask("unverified", {
+        status: "Completed",
+        localUri: "file:///downloads/unverified.mp4",
+      }),
+    );
+
+    expect(getByText("Needs verification")).toBeTruthy();
+
+    fireEvent.press(getByLabelText("Verify"));
+
+    expect(callbacks.onVerify).toHaveBeenCalledTimes(1);
+    expect(callbacks.onOpen).not.toHaveBeenCalled();
   });
 });

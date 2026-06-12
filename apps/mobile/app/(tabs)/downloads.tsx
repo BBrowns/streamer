@@ -369,8 +369,15 @@ export default function DownloadsScreen() {
                 color={colors.success}
               />
               <SummaryItem
+                label={t("downloads.summary.needsVerification", {
+                  defaultValue: "Needs check",
+                })}
+                value={String(summary.needsVerification)}
+                color={colors.warning}
+              />
+              <SummaryItem
                 label={t("downloads.summary.storage", {
-                  defaultValue: "Offline storage",
+                  defaultValue: "Verified storage",
                 })}
                 value={readySize || "—"}
                 color={colors.warning}
@@ -416,6 +423,17 @@ export default function DownloadsScreen() {
               void runTaskOperation(item.id, () =>
                 downloadService.resumeDownload(item.id),
               )
+            }
+            onVerify={() =>
+              void runTaskOperation(item.id, async () => {
+                const verified = await downloadService.verifyTask(item.id);
+                return {
+                  ok: verified,
+                  error: verified
+                    ? undefined
+                    : "Downloaded file could not be verified.",
+                };
+              })
             }
             onDelete={() => confirmDelete(item)}
           />

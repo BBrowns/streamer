@@ -244,8 +244,10 @@ The main download queue and persistence pass is complete:
 - Download sessions record bridge/gateway preparation, coarse URL-free
   progress, failure, cancellation, local-file verification, and completion.
 - The Downloads screen presents active, attention, and ready-offline groups
-  with visible pause, resume, retry, play, delete, filter, storage, and error
-  states.
+  with visible pause, resume, retry, verify, play, delete, filter, storage, and
+  error states. Completed-but-unverified files are shown as "Needs
+  verification" and remain outside the ready-offline group until local-file
+  verification succeeds.
 - Offline badges and library filtering use one verified-local-file invariant.
 - Electron persists managed download-job metadata and restores interrupted jobs
   as recoverable paused items after restart.
