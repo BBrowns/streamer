@@ -249,6 +249,38 @@ function getCandidateTimeoutMs(
   return Math.min(candidateBudgetMs, remainingMs);
 }
 
+function createAllCandidatesFailedError(
+  session: PlaybackSession | null,
+  action: SessionResolutionAction,
+): PlaybackRuntimeError {
+  const failedAttempts =
+    session?.attempts.filter((attempt) => attempt.status === "failed") ?? [];
+  const lastAttemptError = failedAttempts.at(-1)?.error;
+
+  if (failedAttempts.length <= 1 && lastAttemptError) {
+    return { ...lastAttemptError, shouldFallback: false };
+  }
+
+  const debugMessage =
+    failedAttempts
+      .map((attempt) => `${attempt.sourceType}:${attempt.error?.code}`)
+      .join("; ") || undefined;
+
+  return createPlaybackRuntimeError(
+    "NO_PLAYABLE_SOURCE",
+    getActionMessage(action, {
+      play: "No playable source worked for this title.",
+      download: "No downloadable source worked for this title.",
+      cast: "No castable source worked for this title.",
+    }),
+    {
+      retryable: true,
+      shouldFallback: false,
+      debugMessage,
+    },
+  );
+}
+
 function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -739,13 +771,10 @@ async function resolveCandidateChain(
     if (isTerminal(getSession(sessionId))) return result;
   }
 
-  const error =
-    getSession(sessionId)?.attempts.at(-1)?.error ||
-    createPlaybackRuntimeError("SOURCE_UNAVAILABLE", undefined, {
-      retryable: true,
-      shouldFallback: false,
-    });
-  const terminalError = { ...error, shouldFallback: false };
+  const terminalError = createAllCandidatesFailedError(
+    getSession(sessionId),
+    action,
+  );
   if (!isTerminal(getSession(sessionId))) {
     store.failSession(sessionId, terminalError);
   }

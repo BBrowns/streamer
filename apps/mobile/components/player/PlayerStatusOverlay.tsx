@@ -241,6 +241,13 @@ function getErrorTitle(
   if (!runtimeError) return t("player.status.errorTitle");
 
   if (
+    runtimeError.code === "NO_SOURCES" ||
+    runtimeError.code === "NO_PLAYABLE_SOURCE"
+  ) {
+    return t("player.status.noSourcesTitle");
+  }
+
+  if (
     runtimeError.code === "BRIDGE_UNAVAILABLE" ||
     runtimeError.code === "BRIDGE_UNSUPPORTED"
   ) {

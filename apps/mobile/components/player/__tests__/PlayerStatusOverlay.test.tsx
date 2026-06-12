@@ -179,4 +179,27 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.getByText("player.status.noPeersTitle")).toBeTruthy();
     expect(screen.getByText("No peers were available.")).toBeTruthy();
   });
+
+  it("uses the no-sources title when every planned candidate failed", () => {
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="error"
+        streamMetrics={null}
+        isBuffering={false}
+        errorMessage={null}
+        runtimeError={{
+          code: "NO_PLAYABLE_SOURCE",
+          message: "No playable source worked for this title.",
+          retryable: true,
+          shouldFallback: false,
+        }}
+        onBack={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("player.status.noSourcesTitle")).toBeTruthy();
+    expect(
+      screen.getByText("No playable source worked for this title."),
+    ).toBeTruthy();
+  });
 });

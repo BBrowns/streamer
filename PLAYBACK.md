@@ -166,6 +166,14 @@ known failure cases, gateway state model v2, remux runtime/cache limits,
 real-device download/cast/gateway tests, release evidence, and a more polished
 player readiness UI.
 
+Current terminal playback errors include specific source causes such as
+`NO_PEERS`, `BRIDGE_UNAVAILABLE`, `BRIDGE_UNSUPPORTED`, `UNSUPPORTED_CODEC`,
+`PLAYBACK_TIMEOUT`, and a chain-level `NO_PLAYABLE_SOURCE` when multiple
+planned candidates were attempted and none worked. Single-candidate failures
+should preserve the specific cause; mixed multi-candidate failures should end
+with `NO_PLAYABLE_SOURCE` so the player can stop buffering and show a clear
+"no source worked" state.
+
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.
 
