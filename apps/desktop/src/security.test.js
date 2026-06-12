@@ -13,6 +13,7 @@ const {
   normalizeIpcId,
   normalizeLocalUri,
 } = require("./security");
+const { INVOKE_IPC_CHANNELS } = require("./security");
 
 test("allows only explicit renderer origins", () => {
   assert.equal(
@@ -121,4 +122,10 @@ test("normalizes handoff payloads without exposing arbitrary fields", () => {
       itemId: "tt123",
     },
   );
+});
+
+test("allowlists update IPC channels explicitly", () => {
+  assert.equal(INVOKE_IPC_CHANNELS.includes("get-update-status"), true);
+  assert.equal(INVOKE_IPC_CHANNELS.includes("check-for-updates"), true);
+  assert.equal(INVOKE_IPC_CHANNELS.includes("open-update-page"), true);
 });

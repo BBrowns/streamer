@@ -28,5 +28,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   getBridgeInfo: () => safeInvoke("get-bridge-info"),
   restartBridge: () => safeInvoke("restart-bridge"),
   getStorageInfo: () => safeInvoke("get-storage-info"),
+  getUpdateStatus: () => safeInvoke("get-update-status"),
+  checkForUpdates: () => safeInvoke("check-for-updates"),
+  openUpdatePage: () => safeInvoke("open-update-page"),
   onDownloadProgress: (callback) => subscribe("download-progress", callback),
+  onUpdateStatus: (callback) => subscribe("update-status-changed", callback),
 });

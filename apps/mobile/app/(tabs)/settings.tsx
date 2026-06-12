@@ -28,12 +28,34 @@ import { EditProfileModal } from "../../components/settings/EditProfileModal";
 import { ActiveSessionsModal } from "../../components/settings/ActiveSessionsModal";
 import { useAccount } from "../../hooks/useAccount";
 import { hapticSelection, hapticWarning } from "../../lib/haptics";
+import type { DesktopUpdateState } from "../../services/desktop-bridge";
 
 // Modular components
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
 import { LanguageSection } from "../../components/settings/LanguageSection";
 import { SourcesSection } from "../../components/settings/SourcesSection";
+
+function formatDesktopUpdateStatus(state: DesktopUpdateState | null) {
+  if (!state) return "Update status is not loaded yet.";
+
+  switch (state.status) {
+    case "checking":
+      return "Checking for updates...";
+    case "available":
+      return `Version ${state.latestVersion || "latest"} is available.`;
+    case "current":
+      return `Streamer is up to date (${state.currentVersion}).`;
+    case "unsupported":
+      return "Update checks are available in packaged desktop builds.";
+    case "error":
+      return state.error || "Update check failed.";
+    case "downloaded":
+      return "An update was downloaded by the desktop updater.";
+    default:
+      return `Current version: ${state.currentVersion}`;
+  }
+}
 
 function SettingsContent() {
   const { user, isAuthenticated } = useAuthStore();
@@ -75,9 +97,16 @@ function SettingsContent() {
   // Desktop specific state
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
+  const desktopBridgeApi =
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? window.desktopBridge
+      : undefined;
   const [activePane, setActivePane] = useState<
     "sources" | "profile" | "password" | "sessions" | null
   >("sources");
+  const [desktopUpdateState, setDesktopUpdateState] =
+    useState<DesktopUpdateState | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -93,6 +122,50 @@ function SettingsContent() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      typeof window === "undefined" ||
+      !desktopBridgeApi?.getUpdateStatus
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    desktopBridgeApi
+      .getUpdateStatus()
+      .then((state) => {
+        if (!cancelled) setDesktopUpdateState(state);
+      })
+      .catch(() => null);
+
+    const unsubscribe = desktopBridgeApi.onUpdateStatus?.((state) => {
+      setDesktopUpdateState(state);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [desktopBridgeApi]);
+
+  const handleCheckForDesktopUpdates = async () => {
+    if (!desktopBridgeApi?.checkForUpdates) return;
+    hapticSelection();
+    setCheckingUpdates(true);
+    try {
+      setDesktopUpdateState(await desktopBridgeApi.checkForUpdates());
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
+  const handleOpenDesktopUpdatePage = async () => {
+    if (!desktopBridgeApi?.openUpdatePage) return;
+    hapticSelection();
+    setDesktopUpdateState(await desktopBridgeApi.openUpdatePage());
+  };
 
   const handleToggleBiometrics = async (value: boolean) => {
     if (value) {
@@ -680,6 +753,131 @@ function SettingsContent() {
             {t("settings.language")}
           </Text>
           <LanguageSection />
+
+          {desktopBridgeApi?.getUpdateStatus && (
+            <>
+              <View
+                style={[
+                  styles.divider,
+                  {
+                    backgroundColor: colors.border,
+                    marginLeft: 0,
+                    marginVertical: 16,
+                  },
+                ]}
+              />
+
+              <Text
+                style={[styles.innerLabel, { color: colors.textSecondary }]}
+              >
+                Desktop updates
+              </Text>
+              <View
+                style={[
+                  styles.updateCard,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.04)"
+                      : "rgba(124,58,237,0.06)",
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: "rgba(124, 58, 237, 0.14)" },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      desktopUpdateState?.status === "available"
+                        ? "arrow-up-circle-outline"
+                        : "sparkles-outline"
+                    }
+                    size={20}
+                    color="#a78bfa"
+                  />
+                </View>
+                <View style={styles.updateContent}>
+                  <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                    Manual updates
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemSubtitle,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {formatDesktopUpdateStatus(desktopUpdateState)}
+                  </Text>
+                  {desktopUpdateState?.releaseName ? (
+                    <Text
+                      style={[
+                        styles.menuItemSubtitle,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {desktopUpdateState.releaseName}
+                    </Text>
+                  ) : null}
+                  <View style={styles.updateActions}>
+                    <Pressable
+                      style={[
+                        styles.updateButton,
+                        { borderColor: colors.border },
+                        checkingUpdates && styles.opacity50,
+                      ]}
+                      onPress={handleCheckForDesktopUpdates}
+                      disabled={checkingUpdates}
+                    >
+                      {checkingUpdates ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={colors.textSecondary}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="refresh-outline"
+                          size={16}
+                          color={colors.text}
+                        />
+                      )}
+                      <Text
+                        style={[
+                          styles.updateButtonText,
+                          { color: colors.text },
+                        ]}
+                      >
+                        Check
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.updateButton,
+                        { borderColor: colors.border },
+                      ]}
+                      onPress={handleOpenDesktopUpdatePage}
+                    >
+                      <Ionicons
+                        name="open-outline"
+                        size={16}
+                        color={colors.text}
+                      />
+                      <Text
+                        style={[
+                          styles.updateButtonText,
+                          { color: colors.text },
+                        ]}
+                      >
+                        Releases
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         {hasCheckedBiometry && biometrySupported && (
@@ -1026,6 +1224,40 @@ const styles = StyleSheet.create({
   bridgeInfoText: {
     fontSize: 12,
     lineHeight: 17,
+  },
+  updateCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  updateContent: {
+    flex: 1,
+    gap: 4,
+  },
+  updateActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  updateButton: {
+    minHeight: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  updateButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  opacity50: {
+    opacity: 0.5,
   },
   bridgeUrlText: {
     fontSize: 11,

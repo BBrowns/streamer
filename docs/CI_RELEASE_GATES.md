@@ -47,6 +47,8 @@ separate release work.
   CORS, or development Sentry capture
 - redaction/Sentry/security tests that guard raw URLs, magnets, local paths, and
   tokens still exist
+- desktop updates remain manual unless the release docs and tests are updated
+  together
 
 The gate is intentionally conservative. If a future PR makes the app genuinely
 release-ready, update the QA matrix and release gate together with the evidence

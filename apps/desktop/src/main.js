@@ -40,6 +40,9 @@ const {
 const { createDesktopBuildMetadata } = require("./build-metadata");
 
 const { autoUpdater } = require("electron-updater");
+const RELEASES_URL =
+  process.env.STREAMER_RELEASES_URL ||
+  "https://github.com/BBrowns/streamer/releases";
 
 const desktopBuildMetadata = createDesktopBuildMetadata(process.env, {
   appVersion: electron_1.app.getVersion(),
@@ -74,6 +77,17 @@ let bridgeState = {
   pid: null,
 };
 const downloadJobs = new Map();
+let updateCheckPromise = null;
+let updateState = {
+  status: "idle",
+  currentVersion: desktopBuildMetadata.appVersion,
+  latestVersion: null,
+  releaseName: null,
+  releaseDate: null,
+  error: null,
+  checkedAt: null,
+  releasesUrl: RELEASES_URL,
+};
 
 process.on("uncaughtExceptionMonitor", (error) => {
   captureDesktopException(error, {
@@ -82,30 +96,101 @@ process.on("uncaughtExceptionMonitor", (error) => {
   });
 });
 
-// Configure auto-updater
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+// Updates are intentionally manual for the first production release path.
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
-function checkUpdates() {
-  autoUpdater.checkForUpdatesAndNotify();
+function snapshotUpdateState() {
+  return { ...updateState };
+}
 
-  autoUpdater.on("update-available", () => {
+function publishUpdateState(patch) {
+  updateState = {
+    ...updateState,
+    ...patch,
+    currentVersion: desktopBuildMetadata.appVersion,
+    releasesUrl: RELEASES_URL,
+  };
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update-status-changed", snapshotUpdateState());
+  }
+}
+
+function updateStateFromInfo(status, info) {
+  publishUpdateState({
+    status,
+    latestVersion: info?.version || null,
+    releaseName: info?.releaseName || null,
+    releaseDate: info?.releaseDate || null,
+    error: null,
+    checkedAt: Date.now(),
+  });
+}
+
+function configureUpdateChecks() {
+  autoUpdater.on("checking-for-update", () => {
+    publishUpdateState({ status: "checking", error: null });
+  });
+
+  autoUpdater.on("update-available", (info) => {
     console.log("[updater] Update available.");
+    updateStateFromInfo("available", info);
+  });
+
+  autoUpdater.on("update-not-available", (info) => {
+    console.log("[updater] No update available.");
+    updateStateFromInfo("current", info);
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    console.log("[updater] Update downloaded; will install on quit");
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("update-ready", info);
-    }
+    updateStateFromInfo("downloaded", info);
   });
 
   autoUpdater.on("error", (err) => {
     captureDesktopException(err, { component: "auto-updater" });
+    publishUpdateState({
+      status: "error",
+      error: redactSensitiveText(err?.message || err),
+      checkedAt: Date.now(),
+    });
     console.error(
-      "[updater] Error in auto-updater: " + redactSensitiveText(err),
+      "[updater] Error in update check: " + redactSensitiveText(err),
     );
   });
+}
+
+async function checkForDesktopUpdates() {
+  if (!electron_1.app.isPackaged) {
+    publishUpdateState({
+      status: "unsupported",
+      error: "Update checks are available in packaged desktop builds.",
+      checkedAt: Date.now(),
+    });
+    return snapshotUpdateState();
+  }
+
+  if (updateCheckPromise) return updateCheckPromise;
+
+  updateCheckPromise = autoUpdater
+    .checkForUpdates()
+    .then((result) => {
+      if (result?.updateInfo) {
+        const isAvailable =
+          result.updateInfo.version &&
+          result.updateInfo.version !== desktopBuildMetadata.appVersion;
+        updateStateFromInfo(
+          isAvailable ? "available" : "current",
+          result.updateInfo,
+        );
+      }
+      return snapshotUpdateState();
+    })
+    .finally(() => {
+      updateCheckPromise = null;
+    });
+
+  return updateCheckPromise;
 }
 
 // Ensure download directory exists
@@ -1411,6 +1496,15 @@ electron_1.app.whenReady().then(async () => {
 
   handleTrusted("get-storage-info", async () => getStorageInfo());
 
+  handleTrusted("get-update-status", async () => snapshotUpdateState());
+
+  handleTrusted("check-for-updates", async () => checkForDesktopUpdates());
+
+  handleTrusted("open-update-page", async () => {
+    openSafeExternalUrl(RELEASES_URL);
+    return snapshotUpdateState();
+  });
+
   handleTrusted("download-media", async (event, id, url, filename) => {
     const request = normalizeDownloadIpcArgs(id, url, filename);
     return downloadMediaFile(request.id, request.url, request.filename);
@@ -1498,7 +1592,7 @@ electron_1.app.whenReady().then(async () => {
   }
   createWindow();
   createTray();
-  checkUpdates();
+  configureUpdateChecks();
 
   electron_1.app.on("activate", function () {
     if (electron_1.BrowserWindow.getAllWindows().length === 0) createWindow();
