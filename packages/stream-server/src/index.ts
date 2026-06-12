@@ -1,7 +1,13 @@
 import express from "express";
 import cors from "cors";
 import { pathToFileURL } from "url";
-import { streamRequest, getClient, getTorrentEngineStatus } from "./torrent.js";
+import {
+  streamRequest,
+  getClient,
+  getRemuxCacheStatus,
+  getRemuxRuntimeStatus,
+  getTorrentEngineStatus,
+} from "./torrent.js";
 import { getStats } from "./stats.js";
 import { castRouter } from "./cast.js";
 import { metricsHandler } from "./metrics.js";
@@ -127,9 +133,11 @@ function repairPlanForReason(reason?: string): BridgeRepairPlan {
 function buildBridgeSelfTest(input: {
   runtime: ReturnType<typeof getBridgeRuntimeInfo>;
   torrentEngine: ReturnType<typeof getTorrentEngineStatus>;
+  remuxRuntime: Awaited<ReturnType<typeof getRemuxRuntimeStatus>>;
   engineCheckErrorMessage?: string;
 }) {
-  const { runtime, torrentEngine, engineCheckErrorMessage } = input;
+  const { runtime, torrentEngine, remuxRuntime, engineCheckErrorMessage } =
+    input;
   const repairReason =
     torrentEngine.available === false
       ? torrentEngine.reason || "torrent-engine-unavailable"
@@ -165,6 +173,23 @@ function buildBridgeSelfTest(input: {
         reason: torrentEngine.reason,
         processArch: torrentEngine.processArch,
         platform: torrentEngine.platform,
+      },
+    },
+    {
+      name: "ffmpeg-remux",
+      status: remuxRuntime.available ? "pass" : "warn",
+      message: remuxRuntime.available
+        ? `FFmpeg remux runtime is ready${
+            remuxRuntime.version ? ` (${remuxRuntime.version})` : ""
+          }.`
+        : remuxRuntime.message ||
+          "FFmpeg remux runtime is unavailable. MKV remux playback may be unsupported.",
+      details: {
+        state: remuxRuntime.state,
+        reason: remuxRuntime.reason,
+        binaryPath: remuxRuntime.binaryPath,
+        processArch: remuxRuntime.processArch,
+        platform: remuxRuntime.platform,
       },
     },
   ];
@@ -215,15 +240,20 @@ export function createStreamServerApp() {
 
     const runtime = getBridgeRuntimeInfo();
     const torrentEngine = getTorrentEngineStatus();
+    const remuxRuntime = await getRemuxRuntimeStatus();
+    const remuxCache = getRemuxCacheStatus();
     const { selfTest, repair } = buildBridgeSelfTest({
       runtime,
       torrentEngine,
+      remuxRuntime,
       engineCheckErrorMessage,
     });
 
     res.json({
       status: "active",
       torrentEngine,
+      remuxRuntime,
+      remuxCache,
       runtime,
       selfTest,
       repair,

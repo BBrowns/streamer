@@ -80,6 +80,12 @@ describe("gateway jobs", () => {
         /^\/api\/gateway\/jobs\/.+\/stream\?expires=\d+&signature=.+$/,
       ),
       metricsUrl: "/api/torrent/abcdef123456/metrics",
+      media: {
+        remuxed: true,
+        container: "mp4",
+        seekable: false,
+        cacheStatus: "pending",
+      },
     });
   });
 

@@ -177,6 +177,29 @@ function getJobProgress(job: GatewayJob, elapsedMs: number) {
   return Math.min(0.95, Math.max(peerProgress, elapsedProgress));
 }
 
+function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
+  if (job.mode !== "remux") {
+    return {
+      remuxed: false,
+      container: "unknown",
+      seekable: true,
+      cacheStatus: "not_applicable",
+    };
+  }
+
+  return {
+    remuxed: true,
+    container: "mp4",
+    seekable: state === "ready",
+    cacheStatus:
+      state === "ready"
+        ? "ready"
+        : state === "error" || state === "cancelled" || state === "expired"
+          ? "unavailable"
+          : "pending",
+  };
+}
+
 function serializeJob(job: GatewayJob) {
   const elapsedMs = Math.max(0, Date.now() - job.createdAt);
   const state = getEffectiveJobState(job);
@@ -206,6 +229,7 @@ function serializeJob(job: GatewayJob) {
     metricsUrl: job.infoHash
       ? `/api/torrent/${encodeURIComponent(job.infoHash)}/metrics`
       : null,
+    media: getJobMediaMetadata(job, state),
     createdAt: new Date(job.createdAt).toISOString(),
     updatedAt: new Date(job.updatedAt).toISOString(),
   };

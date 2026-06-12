@@ -296,10 +296,11 @@ Gateway lifecycle exists now, but these are still open:
 - Consider persistent gateway/download metadata for recoverability.
 - Unused ready jobs are now pruned periodically, while jobs with active stream
   consumers are protected from cleanup.
-- FFmpeg remux output is materialized into temporary MP4 cache files before
+- FFmpeg remux output is materialized into bounded MP4 cache files before
   range seeking. Remux preparation now supports timeout, explicit cancellation,
-  and gateway `remuxing` status. Real large-file playback and seek behavior still
-  need device validation.
+  gateway `remuxing` status, configurable FFmpeg path, cache TTL/size limits,
+  health diagnostics, and gateway media capability metadata. Real large-file
+  playback and seek behavior still need device validation.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
 ### 4. UI/UX Revamp Is Still Incomplete

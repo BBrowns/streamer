@@ -30,7 +30,8 @@ For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
 - **Note:** MKV remux output is materialized to a temporary MP4 before byte-range
   seeking is reliable. During materialization the player should show a
   `remuxing`/preparing state, allow cancellation, and avoid pretending seeking
-  is ready before the remuxed file exists.
+  is ready before the remuxed file exists. Bridge health should also show
+  FFmpeg runtime status and remux cache limits.
 
 ### 3. Fallback
 

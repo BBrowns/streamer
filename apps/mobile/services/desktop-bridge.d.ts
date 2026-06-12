@@ -74,6 +74,24 @@ export interface DesktopBridgeHealthPayload {
     processArch?: string;
     platform?: string;
   };
+  remuxRuntime?: {
+    available?: boolean;
+    state?: string;
+    binaryPath?: string;
+    version?: string;
+    reason?: string;
+    message?: string;
+    processArch?: string;
+    platform?: string;
+  };
+  remuxCache?: {
+    rootDir?: string;
+    entryCount?: number;
+    pendingCount?: number;
+    totalBytes?: number;
+    maxBytes?: number;
+    ttlMs?: number;
+  };
   runtime?: DesktopBridgeRuntimeInfo;
   selfTest?: DesktopBridgeSelfTest;
   repair?: DesktopBridgeRepairPlan;
