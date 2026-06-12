@@ -20,6 +20,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useTheme } from "../../hooks/useTheme";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 import { DetailActionPanel } from "./DetailActionPanel";
+import { SourceInspectorPanel } from "./SourceInspectorPanel";
 
 const { height } = Dimensions.get("window");
 const BACKDROP_HEIGHT = height * 0.55;
@@ -259,46 +260,60 @@ export function MobileDetailLayout({
               {sourcesOpen && streamsLoading ? (
                 <ActivityIndicator color={colors.tint} />
               ) : sourcesOpen && availableResolutions.length > 0 ? (
-                <View style={styles.resContainer}>
-                  {availableResolutions.map((res) => (
-                    <Pressable
-                      key={res}
-                      style={[
-                        styles.resBubble,
-                        {
-                          backgroundColor: softSurfaceColor,
-                          borderColor: colors.border,
-                        },
-                        selectedResolution === res && {
-                          backgroundColor: colors.tint,
-                          borderColor: colors.tint,
-                        },
-                      ]}
-                      onPress={() => {
-                        hapticImpactLight();
-                        setSelectedResolution(res);
-                      }}
-                    >
-                      <Text
+                <>
+                  <SourceInspectorPanel
+                    contentType={castType}
+                    contentId={id}
+                    title={meta.name}
+                  />
+                  <View style={styles.resContainer}>
+                    {availableResolutions.map((res) => (
+                      <Pressable
+                        key={res}
                         style={[
-                          styles.resText,
-                          { color: colors.textSecondary },
+                          styles.resBubble,
+                          {
+                            backgroundColor: softSurfaceColor,
+                            borderColor: colors.border,
+                          },
                           selectedResolution === res && {
-                            color: primaryTextColor,
+                            backgroundColor: colors.tint,
+                            borderColor: colors.tint,
                           },
                         ]}
+                        onPress={() => {
+                          hapticImpactLight();
+                          setSelectedResolution(res);
+                        }}
                       >
-                        {res === "2160p" ? "4K" : res.toUpperCase()}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                        <Text
+                          style={[
+                            styles.resText,
+                            { color: colors.textSecondary },
+                            selectedResolution === res && {
+                              color: primaryTextColor,
+                            },
+                          ]}
+                        >
+                          {res === "2160p" ? "4K" : res.toUpperCase()}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
               ) : sourcesOpen ? (
-                <Text
-                  style={[styles.emptyText, { color: colors.textSecondary }]}
-                >
-                  No streams available. Install more add-ons.
-                </Text>
+                <>
+                  <SourceInspectorPanel
+                    contentType={castType}
+                    contentId={id}
+                    title={meta.name}
+                  />
+                  <Text
+                    style={[styles.emptyText, { color: colors.textSecondary }]}
+                  >
+                    No streams available. Install more add-ons.
+                  </Text>
+                </>
               ) : null}
             </View>
           )}

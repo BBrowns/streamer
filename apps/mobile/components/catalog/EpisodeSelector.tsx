@@ -15,6 +15,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { StreamItem } from "../detail/StreamItem";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
+import { SourceInspectorPanel } from "../detail/SourceInspectorPanel";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
 
@@ -269,6 +270,13 @@ function EpisodeStreamList({
         More sources ·{" "}
         {t("detail.episodesList.streamsLabel", { season, episode })}
       </Text>
+      <SourceInspectorPanel
+        contentType="series"
+        contentId={seriesId}
+        title={episodeTitle}
+        season={season}
+        episode={episode}
+      />
       {streams.map((stream, i) => {
         const key = `${stream.infoHash || stream.url || "stream"}-${i}`;
 

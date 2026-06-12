@@ -22,7 +22,12 @@ function CatalogCardInner({
 }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const [imageError, setImageError] = React.useState(!item.poster);
+  const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
+  const [imageError, setImageError] = React.useState(!posterUri);
+
+  React.useEffect(() => {
+    setImageError(!posterUri);
+  }, [item.id, posterUri]);
 
   const handlePress = useCallback(() => {
     hapticImpactLight();
@@ -56,13 +61,15 @@ function CatalogCardInner({
       }
     >
       <View style={styles.imageWrapper}>
-        {!imageError ? (
+        {!imageError && posterUri ? (
           <Image
-            source={item.poster}
+            source={{ uri: posterUri }}
             style={styles.cardImage}
             transition={300}
             contentFit="cover"
             cachePolicy="memory-disk"
+            recyclingKey={`${item.id}-${posterUri}`}
+            accessibilityLabel={`${item.name} poster`}
             onError={() => setImageError(true)}
           />
         ) : (
