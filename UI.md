@@ -21,6 +21,16 @@ The current UI is an improved baseline, not the final Netflix/Disney+/Prime
 quality product. Future UI work should be screenshot-driven and should preserve
 the now-central playback architecture.
 
+Current UI phase:
+
+- Keep the existing Expo/React Native stack.
+- Continue with constrained primitives and screen-by-screen improvements.
+- Do not start a full Tamagui migration or broad visual rewrite.
+- Prioritize reliability-facing UX first: player states, Sources & Devices,
+  More Sources/debug information, downloads, cast, and settings setup clarity.
+- Larger Home/Search/Onboarding polish should build on the design-system pilot
+  after playback/gateway/offline/cast states are clear.
+
 Primary hierarchy:
 
 1. `Play Best` is the main action.

@@ -1,9 +1,33 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-11.
+> Last updated: 2026-06-12.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
+
+## Current Project Phase
+
+The macro playback architecture is complete enough for the next phase. Do not
+restart the project around a different control plane.
+
+Current phase:
+
+- Architecture complete enough: `PlaybackSession`, Planner v2, session-driven
+  Play Best, downloads, cast, gateway/range hardening, security baseline,
+  Sentry/build metadata, desktop sidecar/package inputs, manual update policy,
+  and first UI primitives are already present.
+- Reliability/productization phase: the next work should harden playback
+  failures, gateway states, remux runtime/cache behavior, offline library,
+  casting capabilities, desktop repair UX, release automation, security pass 2,
+  observability evidence, and focused UX polish.
+- QA and release evidence still open: real-device QA and release-candidate
+  evidence are required before making production-ready or release-ready claims.
+
+The active roadmap starts at **PR #106**. Earlier roadmap items that introduced
+PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
+baseline, security baseline, CI gates, packaging inputs, macOS signing config,
+manual updates, More Sources/debug bundle, and RC checklist docs should be
+treated as complete unless new code contradicts this document.
 
 ## Product North Star
 
@@ -293,402 +317,83 @@ Before this can be considered production-ready:
 - Privacy export/delete flows should be verified end-to-end.
 - Golden path tests should cover browse -> Play Best -> fallback -> download -> cast.
 
-## Recommended Next PR Sequence
-
-Use small reviewable PRs. Do not combine UX redesign, download architecture, gateway internals, and CI in one PR.
-
-### PR A: Route Download Through Playback Sessions
-
-Goal: make Download use the same inspectable session lifecycle as Play Best.
-
-Status: **Complete.**
-
-Implemented:
-
-- Creates a Download `PlaybackSession` from the existing action-aware
-  orchestrator.
-- Records bridge/gateway preparation, URL-free progress, failure,
-  cancellation, and local-file verification events.
-- Prevents new fake offline completion.
-- Covers direct file, bridge torrent, browser fallback, HLS unsupported, and
-  Electron local URI behavior in tests.
-
-### PR B: Download Queue UX And Persistence
-
-Goal: make Downloads feel like a real streaming-app queue.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds visible active, attention, and ready-offline queue sections with direct
-  actions, filters, progress, storage totals, and persisted safe error text.
-- Makes pause, resume, retry, delete, and delete-all operate through
-  `DownloadService` instead of clearing UI state without deleting files.
-- Requires a verified local URI before any download is shown as offline
-  playable across Downloads, Library, Detail, and source cards.
-- Reconciles persisted mobile queue state with Electron jobs and local files.
-- Persists Electron download-job metadata for restart recovery and constrains
-  `streamer://` local-file access to managed offline media.
-- Adds mobile queue/service/component tests and desktop path-boundary tests.
-
-### PR C: Route Cast Through Playback Sessions
-
-Goal: Cast should not bypass the session control plane.
-
-Status: **Complete.**
-
-- Create a Cast `PlaybackSession` from the existing `cast` plan.
-- Show cast readiness/failure inline.
-- Use configured bridge URL and device capability where available.
-- Add tests that configured bridge URL is used and localhost is not hard-coded.
-
-### PR D: Real-Device Gateway And Player Validation
-
-Goal: validate production behavior beyond mocked readiness tests.
-
-Status: **Merged in PR #73.**
-
-Implemented:
-
-- Adds strict single byte-range handling for direct gateway streams, including
-  open-ended, suffix, clamped, `HEAD`, and unsatisfiable requests.
-- Adds periodic cleanup for unused ready jobs without pruning active stream
-  consumers.
-- Add golden-path coverage for candidate timeout -> fallback -> first frame.
-
-Still open:
-
-- Validate seeking, cancellation, and cleanup with real torrents and direct
-  streams on desktop, phone, and web.
-- Validate temp-file remux seek behavior with real large MKV torrents before
-  claiming production support.
-
-### PR E: Security Baseline And Trust Boundaries
-
-Goal: harden the production trust boundaries before deeper observability work.
-
-Status: **Complete.**
-
-Implemented:
-
-- Add-on manifest/catalog/meta/stream fetches validate every outbound target,
-  block private/internal/reserved IP ranges by default, and validate redirect
-  targets before following them.
-- Local/private add-ons require explicit `ADDON_ALLOW_PRIVATE_NETWORKS=true`
-  opt-in for tests or development.
-- Mobile bridge URLs are constrained to trusted local/LAN URLs before playback
-  and cast services use them.
-- Source-bearing logs were reduced: resolved stream URLs, local download URIs,
-  raw magnets, and torrent info hashes are no longer emitted by the touched
-  playback/bridge paths.
-- Adds focused server and mobile tests for SSRF, redirects, configured bridge
-  URLs, and cast bridge routing.
-
-Follow-ups moved to the next security hardening PRs.
-
-### PR F: Signed Gateway Stream URLs
-
-Goal: keep native player and cast URLs header-free while preventing unsigned
-gateway stream URL reuse.
-
-Status: **Merged in PR #74.**
-
-Implemented:
-
-- Gateway job responses now return signed
-  `/api/gateway/jobs/:id/stream?expires=...&signature=...` URLs.
-- The stream route validates the HMAC signature and expiry before preparing or
-  serving torrent bytes.
-- Signing uses `STREAMER_GATEWAY_STREAM_SECRET` when configured, otherwise
-  falls back to `STREAMER_BRIDGE_TOKEN`, then a per-process random secret.
-- Status polling renews the signed playback URL while the job can stream.
-- Expired URLs are accepted only when they match the same signature already
-  used by the active stream and stay inside a short grace window, so ongoing
-  byte-range requests do not fail mid-playback.
-- Adds stream-server tests for unsigned, tampered, expired, renewed, and
-  active-grace stream URLs.
-
-Follow-ups:
-
-- Do a follow-up Sentry/error-reporting pass that verifies breadcrumbs and
-  exceptions do not contain source URLs, signed stream URLs, bridge tokens, or
-  magnets.
-- Add release/build pipeline coverage and golden-path telemetry.
-
-### PR G: Observability Redaction And Secret Hygiene
-
-Goal: make logs and app-controlled telemetry safer before production
-observability is expanded.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds a central server log redaction hook that recursively redacts sensitive
-  object keys, bearer tokens, bridge tokens, reset/verification query tokens,
-  signed gateway stream URLs, magnets, source/download URLs, local URIs, and
-  info hashes before Pino emits log entries.
-- Removes explicit password reset token logging and redacts development email
-  debug output while preserving enough context to debug email delivery.
-- Adds stream-server redaction for WebTorrent, FFmpeg, cast, subtitle, handoff,
-  and gateway-stream construction errors, and removes raw info hash/magnet
-  lifecycle logs from the touched bridge paths.
-- Adds mobile redaction for ErrorBoundary console/Sentry payloads and
-  DownloadService error/local-URI logs.
-- Adds focused server, stream-server, and mobile redaction tests.
-
-Known limitations:
-
-- This does not configure full production Sentry sampling, release health,
-  breadcrumb policy, or source-map upload.
-- The non-production forgot-password response still returns a reset token for
-  local UI flow compatibility; it is no longer logged.
-- Subtitle URLs can still carry an encoded magnet as part of the current API
-  response contract; they should be moved to opaque/signed identifiers in a
-  later bridge API hardening pass.
-
-### PR H: Mobile Production Sentry Baseline
-
-Goal: configure mobile Sentry intentionally now that app-controlled telemetry
-redaction exists.
-
-Status: **Complete.**
-
-Implemented:
-
-- Mobile Sentry initialization now uses explicit environment, release, error
-  sample rate, and trace sample rate settings.
-- Sentry remains disabled without `EXPO_PUBLIC_SENTRY_DSN`, disabled in tests,
-  and disabled in development unless `EXPO_PUBLIC_SENTRY_ENABLE_DEV=true`.
-- Default tracing is conservative in production and off in development.
-- `sendDefaultPii` is disabled.
-- `beforeSend` and `beforeBreadcrumb` recursively redact bridge tokens, bearer
-  tokens, signed gateway URLs, magnets, source/download URLs, local URIs, and
-  info hashes.
-- Expo Router's global error boundary captures and renders redacted errors.
-
-Known limitations:
-
-- Server, desktop, and stream-server Sentry/observability integrations are not
-  added in this PR. Add those in a separate dependency-bearing PR.
-- Sentry source-map upload still depends on real organization/project/env
-  configuration in the release pipeline.
-- Session replay remains intentionally unconfigured for privacy.
-
-### PR I: Server And Bridge Sentry Baseline
-
-Goal: add production-safe Sentry capture for backend and local bridge failures
-without weakening the existing redaction baseline.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds `@sentry/node` to the server and stream-server workspaces.
-- Server Sentry initialization is disabled without `SENTRY_DSN`, disabled in
-  tests, and disabled in development unless `SENTRY_ENABLE_DEV=true`.
-- Stream-server Sentry initialization supports bridge-specific env vars first
-  (`STREAMER_BRIDGE_SENTRY_*`) and common `SENTRY_*` fallbacks.
-- Server Hono unhandled 500 errors, startup errors, and stream-server
-  supervisor startup failures are captured with sanitized context.
-- Stream-server Express route errors and listen errors are captured with
-  sanitized context.
-- Both services use conservative production tracing, no default PII, and
-  redacted `beforeSend`/`beforeBreadcrumb` hooks.
-- Adds focused server and stream-server tests for enablement, sampling, PII
-  handling, and signed URL/magnet/token redaction.
-
-Known limitations:
-
-- Source-map upload, release creation, and deploy metadata are still release
-  pipeline work.
-- This PR does not enable Sentry by default; production must provide DSNs and
-  release/environment env vars.
-
-### PR J: Electron Main-Process Sentry Baseline
-
-Goal: add production-safe Sentry capture for Electron main-process failures
-without enabling renderer telemetry or changing crash semantics.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds `@sentry/electron` to the desktop workspace and copies the Sentry helper
-  into `dist` during the desktop build.
-- Electron main-process Sentry initialization supports desktop-specific env vars
-  first (`STREAMER_DESKTOP_SENTRY_*`) and common `SENTRY_*` fallbacks.
-- Sentry remains disabled without a DSN, disabled in tests, and disabled in
-  development unless `STREAMER_DESKTOP_SENTRY_ENABLE_DEV=true` or
-  `SENTRY_ENABLE_DEV=true`.
-- Captures auto-updater errors, bridge daemon spawn/exit/start failures,
-  Bonjour discovery failures, system tray creation failures, download
-  persistence/restore errors, and uncaught exceptions through
-  `uncaughtExceptionMonitor` so normal Node/Electron crash behavior is not
-  swallowed.
-- Uses conservative production tracing, no default PII, and redacted
-  `beforeSend`/`beforeBreadcrumb` hooks for bearer tokens, signed gateway URLs,
-  magnets, source/download URLs, local URIs, info hashes, and common secret
-  keys.
-
-Known limitations:
-
-- Renderer-process Sentry and session replay remain intentionally unconfigured
-  for privacy and scope control.
-- This PR does not enable Sentry by default; production must provide DSNs and
-  release/environment env vars.
-
-### PR #92: Sentry Source Maps And Breadcrumbs
-
-Goal: make production Sentry useful for playback debugging without leaking
-source material, tokens, local paths, or watch titles.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds a shared `createStreamerBreadcrumb()` helper that redacts raw URLs,
-  signed gateway URLs, magnets, info hashes, tokens, and local paths before
-  runtime code calls `Sentry.addBreadcrumb()`.
-- Adds mobile breadcrumbs for playback session start, candidate attempts,
-  automatic fallback, candidate failures/readiness, gateway phase changes,
-  download verification failure, and cast failure.
-- Adds stream-server breadcrumbs for gateway job creation and phase changes.
-- Enables stream-server esbuild source maps.
-- Adds `scripts/sentry-release.mjs` plus root scripts for dry-run and real
-  Sentry release/source-map upload.
-- CI dry-runs the Sentry release workflow during build checks and attempts the
-  real upload on `master`/`main` pushes when Sentry secrets are configured.
-- Documents the Sentry release env vars, source-map workflow, release health
-  expectations, and breadcrumb privacy policy in
-  [docs/SENTRY_RELEASES.md](./docs/SENTRY_RELEASES.md).
-
-Known limitations:
-
-- Renderer-process Sentry and session replay remain intentionally unconfigured.
-- Native mobile/EAS source-map upload may need a platform-specific follow-up if
-  the release pipeline moves from Expo preview builds to store builds.
-- Production must still provide DSNs and Sentry org/project/auth secrets.
-
-### PR #93: CI Release Gates And Artifacts
-
-Goal: make release readiness enforceable in CI rather than implicit in agent
-handoffs.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds `npm run release:gate`, a static gate that verifies required CI commands,
-  release artifacts, QA docs, production-safe defaults, and redaction/security
-  test coverage.
-- Adds a dedicated shared test job.
-- Adds per-job Markdown CI summary artifacts so future agents can inspect what
-  each CI job validated without reading raw logs first.
-- Adds a macOS desktop package directory job and uploads
-  `desktop-macos-package-dir` as an unsigned smoke/review artifact.
-- Keeps Sentry release dry-run validation in build checks and real upload on
-  `master`/`main` pushes when secrets exist.
-- Documents the release-gate policy in
-  [docs/CI_RELEASE_GATES.md](./docs/CI_RELEASE_GATES.md).
-
-Known limitations:
-
-- The desktop package artifact is unsigned and not notarized; distribution is
-  still PR #101 work.
-- CI does not replace the real-device QA matrix. Unknown targets in
-  [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) remain release blockers.
-
-### PR #94: Crash Recovery And Session Cleanup
-
-Goal: make restart/crash recovery deterministic so stale playback, download,
-cast, and gateway state does not come back as if it were still live.
-
-Status: **In review.**
-
-Implemented:
-
-- Rehydrated non-terminal `PlaybackSession` records are marked failed with a
-  retryable "prepare again" error instead of becoming the active session again
-  without their runtime candidate map.
-- `session_failed` now clears `gatewayJobId`, matching cancellation/completion
-  cleanup and preventing terminal sessions from advertising stale gateway work.
-- Player state already persists preferences only, so resolved playback URLs and
-  transient streams are not restored after restart.
-- Cast state remains runtime-only and is not persisted; the app does not falsely
-  resume an active cast session after restart.
-- Download recovery tests now cover interrupted desktop jobs that disappeared
-  after restart and failed verification states that must remain failed.
-- Gateway tests now cover terminal cancelled-job TTL pruning.
-
-Known limitations:
-
-- App restart can make active Play/Download/Cast sessions require a fresh plan;
-  this is intentional because resolved source URLs and candidate runtime maps
-  are transient and must not be reconstructed from persisted state.
-- Gateway jobs are still in-memory with TTL cleanup. Persistent gateway job
-  metadata remains future work if cross-process recovery becomes necessary.
-- Real crash/restart QA on packaged desktop, iPhone, Android, and browser still
-  belongs in [docs/QA_MATRIX.md](./docs/QA_MATRIX.md).
-
-### PR K: Desktop Packaged Sidecar Inputs
-
-Goal: make the desktop bridge packaging path explicit and smoke-testable before
-full signing/notarization release work.
-
-Status: **Complete.**
-
-Implemented:
-
-- Adds an `electron-builder` config and desktop package scripts for a packaged
-  desktop app directory.
-- Builds the stream-server sidecar as a mostly bundled Node ESM entrypoint so
-  the packaged helper does not rely on a full repository `node_modules` tree.
-- Copies explicit sidecar resources into the packaged app:
-  `stream-server/index.js`, macOS arm64/x64 vendor Node runtimes, and the
-  `node-datachannel` native binding.
-- Moves bridge entrypoint, vendor runtime, native binary, and working directory
-  resolution into a testable desktop helper.
-- Packaged desktop runtime resolution prefers packaged resources over system
-  Node. `STREAMER_BRIDGE_NODE` is only considered in packaged apps when
-  `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE=1`.
-- Adds CI smoke coverage for desktop package inputs after stream-server,
-  desktop, and vendor runtime builds.
-
-Known limitations:
-
-- This is not yet a signed/notarized desktop release pipeline.
-- The packaged runtime target is macOS arm64/x64. Windows and Linux sidecar
-  packaging still need platform-specific vendor runtime support.
-- The desktop shell still loads the dev Expo web URL; production web asset
-  packaging remains separate release work.
-- App icon, signing identity, notarization, updater feed, and release upload are
-  still open.
-
-### PR L: Docs Sync And Agent Guardrails
-
-Goal: keep future agents aligned with the actual post-session, post-packaging
-architecture.
-
-Status: **In review.**
-
-Implemented:
-
-- Syncs README, playback, UI, architecture, and handoff docs with the current
-  Play/Download/Cast session control plane.
-- Documents that PR K packaged sidecar inputs are complete.
-- Clarifies desktop bridge ownership, CI package checks, and remaining
-  production release gaps.
-- Adds explicit "do not do" guardrails for raw URL persistence, source-picker
-  regressions, fake offline downloads, optional Real-Debrid, XState, Tamagui,
-  and broad UI rewrites.
-
-Known limitations:
-
-- This PR is documentation-only. It does not change runtime behavior.
-- The next implementation PR should start with a focused design-system pilot,
-  then continue into screenshot-driven Home/Detail/Player polish.
+## Active Roadmap Starting At PR #106
+
+Use small reviewable PRs. Do not combine playback core, gateway internals,
+offline library, cast, desktop repair, release automation, security, and broad
+UI polish in one PR.
+
+### Phase 1: Truth Sync And Reliability
+
+1. **PR #106: Docs truth-sync and roadmap cleanup.** Align docs with current
+   code, remove stale in-review claims, clarify remux/seek behavior, document
+   the manual update policy, and make the new roadmap start at #106.
+2. **PR #107: Playback reliability hardening.** Harden session-first Play Best
+   for direct, torrent, bridge-unavailable, timeout, no-peers, remux-required,
+   fallback, and all-candidates-failed cases.
+3. **PR #108: Gateway state model v2.** Make gateway/torrent/remux phases more
+   explicit for UX, logging, Sentry breadcrumbs, diagnostics, and tests.
+4. **PR #109: Remux runtime and cache productization.** Define FFmpeg discovery,
+   cache size/TTL/location/cleanup, seekability metadata, unsupported runtime
+   errors, and packaged desktop behavior.
+
+### Phase 2: Offline, Cast, And Desktop Productization
+
+5. **PR #110: Offline Library v2.** Turn downloads into a clear offline library
+   with verified local-file badges, queue polish, storage UI, retry/delete
+   rules, and honest unsupported-source handling.
+6. **PR #111: Cast capabilities v2.** Add device/source preflight, capability
+   explanations, fallback/remux decisions, and cast diagnostics.
+7. **PR #112: Desktop runtime repair flow.** Make bridge/runtime/native
+   engine/FFmpeg problems understandable and repairable from Settings.
+
+### Phase 3: Release Engineering And Security
+
+8. **PR #113: Release automation v2.** Produce reproducible macOS release
+   artifacts, draft releases, release notes, artifact validation, and explicit
+   Windows status.
+9. **PR #114: Security baseline v2.** Tighten bridge auth defaults, SSRF
+   bypass tests, Electron boundaries, logging/Sentry redaction, and dependency
+   tooling.
+10. **PR #115: Observability and RC evidence bundle.** Tie Sentry/release
+    health, source maps, privacy-safe breadcrumbs, failure buckets, CI summary,
+    QA matrix links, known issues, and release blockers together.
+
+### Phase 4: Design System And UX Polish
+
+11. **PR #116: Design system pilot v2.** Introduce constrained primitives for
+    buttons, surfaces, status pills, sheets, empty/error states, focus states,
+    spacing, radius, and typography without a full UI migration.
+12. **PR #117: Player UX v3.** Build premium, capability-aware player controls
+    and typed playback copy for finding source, peers, remux preparation,
+    fallback, and terminal errors.
+13. **PR #118: Home v2 and Continue Watching.** Improve hero, continue
+    watching, provider rails, recently added, trending/popular rails, skeletons,
+    empty states, and retry states.
+14. **PR #119: Search and discovery v2.** Add unified search, recent searches,
+    suggestions, filters, consistent result cards, and no-results handling.
+15. **PR #120: Settings and onboarding v2.** Make setup, Sources & Add-ons,
+    Devices & Cast, Playback, Downloads, Privacy & Security, Advanced
+    Diagnostics, About, version, and update information understandable.
+
+### Phase 5: Focused Extra Features
+
+16. **PR #121: More Sources and safe debug bundle v2.** Keep advanced source
+    inspection collapsed, redacted, and useful for support without making it the
+    primary UX.
+17. **PR #122: Smart Downloads.** Add opt-in next-episode, storage-limit,
+    Wi-Fi-only, quality, and per-series download rules after Offline Library v2.
+18. **PR #123: Personalization and profiles light.** Add local preferences for
+    quality, subtitles, audio language, autoplay, preferred providers, and watch
+    history improvements.
+19. **PR #124: Delight features.** Add small, separately testable polish such
+    as seek previews, resume prompts, ambient backdrops, PiP, keyboard shortcut
+    overlay, haptics, and cast mini-controller after reliability work.
+
+Do not reintroduce completed roadmap items as new standalone work:
+`PlaybackSession`, Planner v2, Play Best via sessions, downloads via sessions,
+cast via sessions, broad Plex/Jellyfin replacement, central transcoding farm,
+or a full Tamagui migration.
 
 ## Engineering Rules For Future Agents
 
