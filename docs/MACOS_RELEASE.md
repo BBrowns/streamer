@@ -75,5 +75,11 @@ Expected results:
 
 ## Current Limits
 
-This PR adds the signing/notarization release path and validation. It does not
-add auto-update publishing, Windows signing, or App Store distribution.
+The repository has a signing/notarization configuration path and validation
+script, but distribution still depends on loaded Apple secrets, artifact
+publishing, GitHub Release drafting/upload, production web asset packaging, and
+packaged-app QA evidence.
+
+This path does not add silent auto-update publishing, Windows signing, or App
+Store distribution. Desktop updates currently remain manual notices only; see
+[DESKTOP_UPDATES.md](./DESKTOP_UPDATES.md).

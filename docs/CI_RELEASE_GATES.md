@@ -41,6 +41,8 @@ separate release work.
 
 - required CI commands and artifact uploads are still present
 - `AGENT_HANDOFF.md` links to the QA matrix
+- `AGENT_HANDOFF.md` names the current project phase and starts the active
+  roadmap at PR #106
 - `docs/QA_MATRIX.md` still carries explicit release blockers while real-device
   coverage is incomplete
 - production defaults do not enable development bridge supervision, development

@@ -86,6 +86,21 @@ function checkDocs() {
   requireFile("docs/RC_CHECKLIST.md");
   requireFile("docs/RELEASE_NOTES_TEMPLATE.md");
   requireFile("AGENT_HANDOFF.md");
+  requireText(
+    "AGENT_HANDOFF.md",
+    "## Current Project Phase",
+    "current project phase",
+  );
+  requireText(
+    "AGENT_HANDOFF.md",
+    "Architecture complete enough",
+    "architecture-complete phase statement",
+  );
+  requireText(
+    "AGENT_HANDOFF.md",
+    "The active roadmap starts at **PR #106**",
+    "roadmap starts at PR #106",
+  );
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
   requireText(
     "AGENT_HANDOFF.md",
@@ -127,12 +142,19 @@ function checkDocs() {
 
   for (const relativePath of checkedDocs) {
     if (!exists(relativePath)) continue;
-    if (releaseClaimPattern.test(read(relativePath))) {
+    const content = read(relativePath);
+    if (releaseClaimPattern.test(content)) {
       fail(
         `${relativePath} appears to claim release-ready status; record RC evidence before making that claim`,
       );
     } else {
       pass(`${relativePath} has no explicit release-ready claim`);
+    }
+
+    if (/Status:\s*\*\*In review\.\*\*/i.test(content)) {
+      fail(`${relativePath} contains stale in-review roadmap status`);
+    } else {
+      pass(`${relativePath} has no stale in-review roadmap status`);
     }
   }
 }

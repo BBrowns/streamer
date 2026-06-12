@@ -1,6 +1,6 @@
 # Playback QA Matrix
 
-Last updated: 2026-06-11.
+Last updated: 2026-06-12.
 
 This matrix tracks real target validation for Streamer playback, downloads,
 casting, bridge health, and remux behavior. A target is not considered supported
@@ -9,6 +9,11 @@ until a run is recorded here or linked from `docs/qa-runs/`.
 CI release gates are documented in [CI_RELEASE_GATES.md](./CI_RELEASE_GATES.md).
 Release candidate validation is tracked with
 [RC_CHECKLIST.md](./RC_CHECKLIST.md).
+
+Current project phase: architecture complete enough; reliability,
+productization, real-device QA, and release evidence are still open. This
+matrix is intentionally conservative and should not be backfilled from unit
+tests alone.
 
 ## Status Legend
 

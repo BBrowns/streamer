@@ -7,8 +7,10 @@ title, presses Play, and the app handles source selection, bridge preparation,
 fallback, download preparation, and cast preparation without exposing source
 complexity by default.
 
-The playback control plane is being introduced incrementally. The first shared
-contract is `PlaybackSession` in `@streamer/shared`.
+The playback control plane is now session-first for the primary Play, Download,
+and Cast flows. The shared contract is `PlaybackSession` in `@streamer/shared`.
+Future work should harden reliability, typed terminal states, gateway progress,
+and UX copy around this model instead of replacing it.
 
 ## Runtime Plans Versus Persisted Sessions
 
@@ -158,10 +160,11 @@ The intended migration sequence is:
    **Complete.**
 7. Route cast through the same session model. **Complete.**
 
-Current status: steps 1 through 7 are complete. Remaining work is validation
-and production hardening: real-device download/cast/gateway tests, release
-pipeline coverage, production telemetry/source-map configuration, and a more
-polished player readiness UI.
+Current status: steps 1 through 7 are complete. Remaining work is reliability
+and productization: stronger typed terminal states, no infinite buffering in
+known failure cases, gateway state model v2, remux runtime/cache limits,
+real-device download/cast/gateway tests, release evidence, and a more polished
+player readiness UI.
 
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.

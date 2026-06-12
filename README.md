@@ -134,17 +134,25 @@ least one add-on.
 
 ## Current Product Guardrails
 
+- Current phase: architecture complete enough; reliability/productization and
+  QA/release evidence are still open.
 - The primary playback UX is **Play Best**. Source picking is an advanced
   fallback and should not become the default flow again.
 - `PlaybackSession` is the persistence-safe source of truth for Play,
   Download, and Cast. Do not persist raw media URLs, magnets, info hashes, or
   bridge URLs.
+- Remuxed gateway output is materialized to a temporary MP4 before range
+  serving, but real-device remux seek behavior, cache limits, and FFmpeg
+  runtime handling still need validation/productization.
 - Downloads are offline-playable only after a real local file URI is verified.
   Do not show fake offline completion.
 - Real-Debrid is optional, disabled by default, paid-service aware, and absent
   from first-run onboarding.
 - In the desktop flow, Electron owns the bridge sidecar. The API server bridge
   supervisor is opt-in through `STREAMER_BRIDGE_SUPERVISOR=true`.
+- Desktop updates are manual notices only. Do not enable silent downloads or
+  installs until signing, release publishing, rollback, and packaged-app QA are
+  proven.
 
 ---
 

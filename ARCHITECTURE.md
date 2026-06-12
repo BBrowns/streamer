@@ -6,6 +6,21 @@
 
 ---
 
+## Current Project Phase
+
+Streamer is in the reliability and productization phase. The shared
+`PlaybackSession` control plane, Planner v2, Play Best, downloads, cast,
+gateway/range hardening, bridge security baseline, observability baseline, and
+desktop sidecar/package inputs exist. Future work should harden those flows and
+produce release evidence, not replace them with a new macro architecture.
+
+Do not claim production-ready or release-ready status from architecture alone.
+Real-device QA and release-candidate evidence remain open and are tracked in
+[docs/QA_MATRIX.md](./docs/QA_MATRIX.md) and
+[docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md).
+
+---
+
 ## 1. Why This Exists
 
 Stremio is an excellent concept — a media player that delegates content discovery and streaming entirely to third-party "add-ons" via a well-defined JSON manifest API. However, Stremio itself is a closed, desktop-only binary. **Streamer** reimplements the same add-on protocol from scratch as an open-source, cross-platform system:
@@ -212,10 +227,13 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
 
 The legacy `/stream?magnet=<encoded>&fileIndex=0` endpoint still exists for compatibility, but new torrent playback should prefer gateway jobs because they provide readiness state, cancellation, progress, and future remux/transcode hooks.
 
-FFmpeg remux output is currently a sequential chunked MP4 response. It does not
-support byte-range seeking; production-grade seek for remuxed sources requires
-a packaged or persistent remux output rather than byte offsets into the source
-container.
+FFmpeg remux output is now materialized into a temporary MP4 cache file before
+serving bytes. Once materialization succeeds, the bridge can answer `HEAD` and
+single byte-range requests from the cached MP4 instead of pretending that a
+sequential FFmpeg pipe is seekable. This is a production direction, not a
+support claim: large-file remux, cache cleanup, disk limits, unsupported
+FFmpeg/runtime cases, and real-device seek behavior still need the PR #109
+productization pass and QA evidence.
 
 **Chromecast:** The `castv2-client` library (running inside the daemon) communicates directly with Chromecast devices discovered via `bonjour-service` (mDNS). The `/api/cast` router handles device discovery and playback control. This avoids requiring the mobile client to implement the Chromecast protocol natively.
 
@@ -298,7 +316,12 @@ StreamEngineManager
 
 The player (`app/player.tsx`) calls `streamEngineManager.resolveEngine(currentStream)` and gets back the appropriate engine. This means adding a new stream type only requires implementing `IStreamEngine` and registering it — the player is oblivious to the delivery mechanism.
 
-**FFmpeg remuxing:** On desktop (Electron) and when receiving MKV container torrents, the stream-server can pipe the torrent stream through an FFmpeg process to produce fragmented MP4 (`fMP4`) on the fly. This is necessary because iOS's `AVPlayer` (underlying `expo-video`) does not support MKV containers natively.
+**FFmpeg remuxing:** When a target cannot play an MKV container directly, the
+stream-server can remux the torrent file to MP4 using FFmpeg and serve the
+materialized output through the gateway. This is necessary because iOS's
+`AVPlayer` (underlying `expo-video`) does not support MKV containers natively.
+The current implementation has timeout and cancellation behavior, but cache
+limits/runtime discovery are still productization work.
 
 ### 6.4 Playback Planning And Runtime State
 
@@ -345,9 +368,10 @@ planner candidate IDs. A module-local runtime map connects those IDs to
 `PlannedMediaCandidate` values for the current app process; after restart the
 missing mapping intentionally requires a new plan.
 
-The existing planner/orchestrator/player flow remains backwards compatible
-while later work moves Play, Download, and Cast onto the shared session model.
-See [PLAYBACK.md](./PLAYBACK.md) for the contract rules and migration sequence.
+Primary Play, Download, and Cast flows now run through the shared session
+model. Some compatibility wrappers and manual advanced-source paths remain, but
+new primary-flow work should use the session contracts in
+[PLAYBACK.md](./PLAYBACK.md).
 
 ### 6.5 Download Service
 
@@ -357,11 +381,12 @@ See [PLAYBACK.md](./PLAYBACK.md) for the contract rules and migration sequence.
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | iOS/Android    | `expo-file-system` `DownloadResumable` — supports true pause/resume via server-side byte-range headers. Resume data is persisted to `downloadStore` (Zustand + AsyncStorage) so downloads survive app restarts. |
 | Web (Electron) | `window.desktopBridge.downloadMedia()` — calls into Electron's main process to perform the download natively in Node.js, with progress events bridged back via IPC.                                             |
-| Web (browser)  | Anchor element click — no progress tracking; immediately marked complete.                                                                                                                                       |
+| Web (browser)  | Anchor element click — no progress tracking; treated as external/browser-only and not verified offline unless a local URI is returned by a trusted runtime.                                                     |
 
 **HLS downloads are explicitly blocked** with a user-facing `Alert`: HLS is an adaptive streaming format split into many `.ts` segment files and is not meaningfully downloadable to a single file using this approach.
 
-After completion, the service fires a `POST /api/notifications` to create a server-side notification, which can then sync to other devices.
+After a verified completion, the service fires a `POST /api/notifications` to
+create a server-side notification, which can then sync to other devices.
 
 ### 6.6 Key Zustand Stores
 
@@ -646,12 +671,14 @@ The desktop app and server-side supervisor have improved bridge startup/diagnost
 
 Integration tests currently spin up one Postgres container per test file, sequentially. `vitest`'s `--pool=threads` with Testcontainers can run multiple containers in parallel, but requires unique port assignment and careful `beforeAll`/`afterAll` scoping. Worth investigating to cut CI time as the test suite grows.
 
-#### 12. Electron Release And Auto-Update Pipeline
+#### 12. Electron Release And Manual Update Pipeline
 
-The desktop app has `electron-updater` hooks and packaged sidecar inputs, but
-it does not yet have a complete signed/notarized release pipeline, update feed,
-release upload, or production web asset packaging. Finish those pieces before
-claiming production desktop distribution.
+The desktop app has `electron-updater` hooks, packaged sidecar inputs, and a
+signed/notarized macOS release configuration path. The current update policy is
+manual update notices only: update checks do not auto-download or auto-install.
+Release automation still needs reproducible artifact publishing, release notes,
+GitHub Release draft/upload behavior, production web asset packaging, and real
+packaged-app QA before claiming production desktop distribution.
 
 ---
 
