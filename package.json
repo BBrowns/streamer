@@ -24,6 +24,8 @@
     "test:all": "turbo run test",
     "typecheck:all": "turbo run typecheck",
     "release:gate": "node scripts/release-gate.mjs",
+    "rc:evidence": "node scripts/rc-evidence.mjs",
+    "rc:evidence:test": "node --test scripts/rc-evidence.test.mjs",
     "sentry:release": "node scripts/sentry-release.mjs",
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
     "postinstall": "patch-package",

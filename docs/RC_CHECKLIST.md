@@ -47,6 +47,7 @@ Confirm CI artifacts exist:
 - per-job CI summaries
 - desktop macOS package directory
 - release gate summary
+- RC evidence bundle (`rc-evidence-bundle`)
 
 ## Manual QA Gates
 
@@ -100,6 +101,18 @@ Every remaining issue needs:
 
 Use [RELEASE_NOTES_TEMPLATE.md](./RELEASE_NOTES_TEMPLATE.md) for public-facing
 known limitations.
+
+## Evidence Bundle
+
+Generate or download the RC evidence bundle before making the final decision:
+
+```bash
+npm run rc:evidence
+```
+
+Use the generated `artifacts/rc-evidence/rc-evidence.md` together with dated QA
+runs. The bundle summarizes automated evidence and observability readiness; it
+does not replace manual target validation.
 
 ## Decision Record
 
