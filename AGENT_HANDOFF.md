@@ -392,7 +392,10 @@ UI polish in one PR.
    Windows remains deferred.
 9. **PR #114: Security baseline v2.** Tighten bridge auth defaults, SSRF
    bypass tests, Electron boundaries, logging/Sentry redaction, and dependency
-   tooling.
+   tooling. This PR makes stream-server bridge control fail closed in
+   production when `STREAMER_BRIDGE_TOKEN` is missing, keeps local development
+   permissive, adds release-gate coverage for that invariant, and documents the
+   bridge trust boundary.
 10. **PR #115: Observability and RC evidence bundle.** Tie Sentry/release
     health, source maps, privacy-safe breadcrumbs, failure buckets, CI summary,
     QA matrix links, known issues, and release blockers together.

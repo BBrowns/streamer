@@ -61,6 +61,17 @@ Out of scope:
   not fetched by the API server during catalog aggregation.
 - Native bridge gateway media streaming has its own bridge/cast URL policy.
 
+## Bridge Trust Boundary
+
+Bridge control and gateway routes require `STREAMER_BRIDGE_TOKEN` whenever the
+token is configured. In production, those routes fail closed if the token is
+missing instead of falling back to the permissive local-development mode.
+
+Local development can still run without a token so the desktop app and stream
+server remain easy to start from source. Production builds must create or pass a
+pairing token before exposing bridge control, gateway job, torrent metric, or
+cast routes.
+
 ## User-Facing Behavior
 
 Unsafe add-on URLs fail installation with

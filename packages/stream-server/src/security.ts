@@ -62,6 +62,10 @@ function getConfiguredBridgeToken() {
   return process.env.STREAMER_BRIDGE_TOKEN?.trim() || "";
 }
 
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production";
+}
+
 function getGatewayStreamSigningSecret() {
   return (
     process.env.STREAMER_GATEWAY_STREAM_SECRET?.trim() ||
@@ -104,6 +108,14 @@ export function requireBridgeAuth(
 ) {
   const expectedToken = getConfiguredBridgeToken();
   if (!expectedToken) {
+    if (isProductionRuntime()) {
+      res.status(503).json({
+        error: "Bridge authentication is not configured",
+        code: "BRIDGE_AUTH_NOT_CONFIGURED",
+      });
+      return;
+    }
+
     next();
     return;
   }
