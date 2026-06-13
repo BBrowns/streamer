@@ -594,6 +594,7 @@ export default function PlayerScreen() {
     stats,
     engine,
     showResumePrompt,
+    resumePromptTimeSeconds,
     handleResumeResponse,
     showNextEpisodeOverlay,
     setShowNextEpisodeOverlay,
@@ -1066,6 +1067,7 @@ export default function PlayerScreen() {
           <ResumePrompt
             onResponse={handleResumeResponse}
             title={mediaInfo?.title || ""}
+            resumeTimeSeconds={resumePromptTimeSeconds}
           />
         )}
 

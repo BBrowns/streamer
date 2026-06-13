@@ -464,7 +464,12 @@ UI polish in one PR.
     parental controls, or recommendation algorithms yet.
 19. **PR #124: Delight features.** Add small, separately testable polish such
     as seek previews, resume prompts, ambient backdrops, PiP, keyboard shortcut
-    overlay, haptics, and cast mini-controller after reliability work.
+    overlay, haptics, and cast mini-controller after reliability work. Current
+    implementation keeps scope small: the resume prompt can show a formatted
+    `Resume from mm:ss?` position, and desktop/web player controls expose a
+    keyboard shortcut helper for the shortcuts already supported by
+    `usePlayerHotkeys`. Seek previews, ambient backdrops, cast mini-controller,
+    and richer PiP polish remain deferred.
 
 Do not reintroduce completed roadmap items as new standalone work:
 `PlaybackSession`, Planner v2, Play Best via sessions, downloads via sessions,
