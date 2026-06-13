@@ -367,6 +367,7 @@ Renders the visible playback control surface:
   playback.
 - Desktop/web volume, settings, cast, retry, and fullscreen actions when those
   capabilities are available.
+- Desktop/web keyboard shortcut helper for the currently supported hotkeys.
 - Web pointer pass-through so the overlay can remain visible without blocking
   unrelated video-surface interactions.
 
@@ -379,15 +380,14 @@ non-seekable.
 
 Extracted hook for keyboard shortcuts on web/desktop. Handles:
 
-| Key           | Action                                  |
-| ------------- | --------------------------------------- |
-| `Space` / `K` | Play/Pause                              |
-| `←` / `→`     | Seek ±10s                               |
-| `↑` / `↓`     | Volume ±10% (mocked via visual overlay) |
-| `F`           | Toggle fullscreen                       |
-| `M`           | Toggle mute                             |
-| `[` / `]`     | Decrease / increase playback speed      |
-| `Escape`      | Close player                            |
+| Key           | Action                  |
+| ------------- | ----------------------- |
+| `Space` / `K` | Play/Pause              |
+| `J` / `←`     | Seek back 10 seconds    |
+| `L` / `→`     | Seek forward 10 seconds |
+| `F`           | Toggle fullscreen       |
+| `M`           | Toggle mute             |
+| `1`-`9`       | Jump to 10%-90%         |
 
 All listeners are added to `document` (web only — guarded by `Platform.OS === "web"`). Listeners are cleaned up in the `useEffect` return to avoid leaks.
 

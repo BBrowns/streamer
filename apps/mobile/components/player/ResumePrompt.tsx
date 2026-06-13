@@ -6,14 +6,23 @@ import { useTheme } from "../../hooks/useTheme";
 interface ResumePromptProps {
   onResponse: (resume: boolean) => void;
   title: string;
+  resumeTimeSeconds?: number | null;
 }
 
 export const ResumePrompt: React.FC<ResumePromptProps> = ({
   onResponse,
   title,
+  resumeTimeSeconds = null,
 }) => {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const resumeTitle =
+    typeof resumeTimeSeconds === "number" && resumeTimeSeconds > 0
+      ? t("player.resume.resumeFrom", {
+          defaultValue: `Resume from ${formatResumeTime(resumeTimeSeconds)}?`,
+          time: formatResumeTime(resumeTimeSeconds),
+        })
+      : t("player.resume.title", { defaultValue: "Resume playback?" });
 
   return (
     <View
@@ -33,7 +42,7 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
         ]}
       >
         <Text style={[styles.resumeTitle, { color: colors.text }]}>
-          {t("player.resume.title")}
+          {resumeTitle}
         </Text>
         <Text style={[styles.resumeSub, { color: colors.textSecondary }]}>
           {title}
@@ -51,7 +60,7 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
             onPress={() => onResponse(false)}
           >
             <Text style={[styles.resumeBtnGhostText, { color: colors.text }]}>
-              {t("player.resume.startOver")}
+              {t("player.resume.startOver", { defaultValue: "Start over" })}
             </Text>
           </Pressable>
           <Pressable
@@ -64,7 +73,7 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
                 { color: isDark ? "#000" : "#fff" },
               ]}
             >
-              {t("player.resume.resume")}
+              {t("player.resume.resume", { defaultValue: "Resume" })}
             </Text>
           </Pressable>
         </View>
@@ -72,6 +81,20 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
     </View>
   );
 };
+
+function formatResumeTime(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+  const paddedSeconds = String(remainingSeconds).padStart(2, "0");
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${paddedSeconds}`;
+  }
+
+  return `${minutes}:${paddedSeconds}`;
+}
 
 const styles = StyleSheet.create({
   resumeOverlay: {

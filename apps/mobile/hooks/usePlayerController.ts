@@ -339,6 +339,7 @@ export function usePlayerController({
     stats,
     engine,
     showResumePrompt,
+    resumePromptTimeSeconds: previousProgress?.currentTime ?? null,
     handleResumeResponse,
     showNextEpisodeOverlay,
     setShowNextEpisodeOverlay,
