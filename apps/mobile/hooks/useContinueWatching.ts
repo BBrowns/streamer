@@ -1,10 +1,10 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
 import type { WatchProgress, UpdateProgressRequest } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
 
 /** Query key factory */
-const progressKeys = {
+export const progressKeys = {
   all: ["progress"] as const,
   continueWatching: () => [...progressKeys.all, "continue"] as const,
 };
@@ -40,6 +40,44 @@ export function useUpdateProgress() {
     // Don't show errors for background progress reporting
     onError: (err: unknown) => {
       console.warn("Failed to sync watch progress:", err);
+    },
+  });
+}
+
+/** Remove one title from Continue Watching. */
+export function useRemoveProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      await api.delete("/api/library/progress", { data: { itemId } });
+    },
+    onMutate: async (itemId) => {
+      await queryClient.cancelQueries({
+        queryKey: progressKeys.continueWatching(),
+      });
+
+      const previousItems = queryClient.getQueryData<WatchProgress[]>(
+        progressKeys.continueWatching(),
+      );
+
+      queryClient.setQueryData<WatchProgress[]>(
+        progressKeys.continueWatching(),
+        (old) => old?.filter((item) => item.itemId !== itemId) ?? [],
+      );
+
+      return { previousItems };
+    },
+    onError: (_err, _itemId, context) => {
+      if (context?.previousItems) {
+        queryClient.setQueryData(
+          progressKeys.continueWatching(),
+          context.previousItems,
+        );
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: progressKeys.all });
     },
   });
 }

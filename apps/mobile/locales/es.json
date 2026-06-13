@@ -18,6 +18,26 @@
       "recentlyAdded": "Añadido recientemente",
       "fromProviders": "De tus proveedores"
     },
+    "continueWatching": {
+      "eyebrow": "Reanudar",
+      "title": "Continuar viendo",
+      "movie": "Película",
+      "series": "Serie",
+      "resume": "Reanudar",
+      "remaining": "{{minutes}}m restantes · {{progress}}%",
+      "emptyTitle": "Nada en progreso",
+      "emptyDescription": "Empieza una película o episodio y aparecerá aquí.",
+      "resumeA11y": "Reanudar {{title}}, quedan {{minutes}} minutos",
+      "removeA11y": "Quitar {{title}} de Continuar viendo"
+    },
+    "shortcuts": {
+      "discover": "Descubrir",
+      "discoverDetail": "Explora catálogos de proveedores",
+      "library": "Biblioteca",
+      "libraryDetail": "Títulos guardados e historial",
+      "downloads": "Descargas",
+      "downloadsDetail": "Archivos sin conexión verificados"
+    },
     "filters": {
       "movies": "Películas",
       "series": "Series"

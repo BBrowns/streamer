@@ -39,3 +39,4 @@ libraryRouter.get("/check/:itemId", (c) => libraryController.isInLibrary(c));
 // Watch Progress / Continue Watching
 libraryRouter.get("/progress", (c) => libraryController.getContinueWatching(c));
 libraryRouter.post("/progress", (c) => libraryController.updateProgress(c));
+libraryRouter.delete("/progress", (c) => libraryController.removeProgress(c));

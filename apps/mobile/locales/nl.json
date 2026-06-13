@@ -18,6 +18,26 @@
       "recentlyAdded": "Nieuw toegevoegd",
       "fromProviders": "Van je providers"
     },
+    "continueWatching": {
+      "eyebrow": "Verder kijken",
+      "title": "Verder kijken",
+      "movie": "Film",
+      "series": "Serie",
+      "resume": "Hervatten",
+      "remaining": "{{minutes}}m over · {{progress}}%",
+      "emptyTitle": "Nog niets gestart",
+      "emptyDescription": "Start een film of aflevering en hij verschijnt hier.",
+      "resumeA11y": "Hervat {{title}}, nog {{minutes}} minuten",
+      "removeA11y": "Verwijder {{title}} uit Verder kijken"
+    },
+    "shortcuts": {
+      "discover": "Ontdekken",
+      "discoverDetail": "Blader door provider-catalogi",
+      "library": "Bibliotheek",
+      "libraryDetail": "Opgeslagen titels en geschiedenis",
+      "downloads": "Downloads",
+      "downloadsDetail": "Geverifieerde offline bestanden"
+    },
     "filters": {
       "movies": "Films",
       "series": "TV-series"

@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import {
   addToLibrarySchema,
   updateProgressSchema,
-  removeFromLibrarySchema,
+  removeProgressSchema,
 } from "@streamer/shared";
 import type { LibraryService } from "../domain/library.service.js";
 
@@ -63,5 +63,13 @@ export class LibraryController {
     const user = c.get("user");
     const items = await this.service.getContinueWatching(user.userId, limit);
     return c.json({ items });
+  }
+
+  async removeProgress(c: Context) {
+    const body = await c.req.json();
+    const data = removeProgressSchema.parse(body);
+    const user = c.get("user");
+    await this.service.removeProgress(user.userId, data.itemId);
+    return new Response(null, { status: 204 });
   }
 }

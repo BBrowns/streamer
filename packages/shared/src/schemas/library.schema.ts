@@ -24,6 +24,11 @@ export const removeFromLibrarySchema = z.object({
   itemId: z.string().min(1),
 });
 
+/** Request to remove a watch-progress entry from Continue Watching */
+export const removeProgressSchema = z.object({
+  itemId: z.string().min(1),
+});
+
 /** Zod schema for watch progress */
 export const watchProgressSchema = z.object({
   id: z.string().uuid(),
