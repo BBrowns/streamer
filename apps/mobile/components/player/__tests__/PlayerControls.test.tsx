@@ -98,6 +98,7 @@ describe("PlayerControls", () => {
 
   it("disables misleading seek controls for non-seekable streams", () => {
     const player = createPlayer();
+    const onSeekBy = jest.fn();
     const screen = render(
       <PlayerControls
         player={player}
@@ -106,6 +107,7 @@ describe("PlayerControls", () => {
         isVisible
         isPlaying
         onPlayPause={jest.fn()}
+        onSeekBy={onSeekBy}
         capabilities={{
           canSeek: false,
           isLive: false,
@@ -127,7 +129,35 @@ describe("PlayerControls", () => {
     );
 
     expect(player.seekBy).not.toHaveBeenCalled();
+    expect(onSeekBy).not.toHaveBeenCalled();
     expect(screen.getByText("Preparing compatible stream")).toBeTruthy();
+    expect(
+      screen.getByText("Seeking unlocks when the compatible stream is ready"),
+    ).toBeTruthy();
+  });
+
+  it("routes seek controls through the provided guarded seek callback", () => {
+    const player = createPlayer();
+    const onSeekBy = jest.fn();
+    const screen = render(
+      <PlayerControls
+        player={player}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        onSeekBy={onSeekBy}
+        capabilities={{ canSeek: true }}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText("Seek back 10 seconds"));
+    fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
+
+    expect(onSeekBy).toHaveBeenCalledWith(-10);
+    expect(onSeekBy).toHaveBeenCalledWith(10);
+    expect(player.seekBy).not.toHaveBeenCalled();
   });
 
   it("renders desktop playback actions when callbacks are available", () => {

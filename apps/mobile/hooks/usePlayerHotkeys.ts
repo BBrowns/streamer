@@ -13,6 +13,8 @@ interface UsePlayerHotkeysArgs {
   canSeek?: boolean;
   onToggleFullscreen?: () => void;
   onToggleMute?: () => void;
+  onSeekBy?: (seconds: number) => void;
+  onSeekPercent?: (percent: number) => void;
 }
 
 export function usePlayerHotkeys({
@@ -24,6 +26,8 @@ export function usePlayerHotkeys({
   canSeek = true,
   onToggleFullscreen,
   onToggleMute,
+  onSeekBy,
+  onSeekPercent,
 }: UsePlayerHotkeysArgs) {
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -61,7 +65,8 @@ export function usePlayerHotkeys({
         case "j":
           e.preventDefault();
           if (!canSeek) break;
-          player?.seekBy(-SEEK_SECONDS);
+          if (onSeekBy) onSeekBy(-SEEK_SECONDS);
+          else player?.seekBy(-SEEK_SECONDS);
           setSeekFeedback("left");
           if (seekFeedbackTimer.current)
             clearTimeout(seekFeedbackTimer.current);
@@ -75,7 +80,8 @@ export function usePlayerHotkeys({
         case "l":
           e.preventDefault();
           if (!canSeek) break;
-          player?.seekBy(SEEK_SECONDS);
+          if (onSeekBy) onSeekBy(SEEK_SECONDS);
+          else player?.seekBy(SEEK_SECONDS);
           setSeekFeedback("right");
           if (seekFeedbackTimer.current)
             clearTimeout(seekFeedbackTimer.current);
@@ -97,7 +103,8 @@ export function usePlayerHotkeys({
           e.preventDefault();
           if (canSeek && player && player.duration) {
             const percent = parseInt(e.key) * 10;
-            player.currentTime = (player.duration * percent) / 100;
+            if (onSeekPercent) onSeekPercent(percent);
+            else player.currentTime = (player.duration * percent) / 100;
             showControls();
           }
           break;
@@ -115,5 +122,7 @@ export function usePlayerHotkeys({
     canSeek,
     onToggleFullscreen,
     onToggleMute,
+    onSeekBy,
+    onSeekPercent,
   ]);
 }

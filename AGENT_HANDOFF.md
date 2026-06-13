@@ -412,7 +412,10 @@ UI polish in one PR.
     PlaybackStatusPanel, DownloadQueueCard, and desktop cast dialog pilots.
 12. **PR #117: Player UX v3.** Build premium, capability-aware player controls
     and typed playback copy for finding source, peers, remux preparation,
-    fallback, and terminal errors.
+    fallback, and terminal errors. This PR tightens `PlayerControls` with
+    explicit remux/live/unknown-duration seek copy and routes button, scrubber,
+    accessibility, and desktop hotkey seeking through the same guarded
+    capability callbacks.
 13. **PR #118: Home v2 and Continue Watching.** Improve hero, continue
     watching, provider rails, recently added, trending/popular rails, skeletons,
     empty states, and retry states.
