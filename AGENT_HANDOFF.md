@@ -236,8 +236,10 @@ Known useful direction:
 - Keep the provider grouping on Discover; the user specifically likes provider/provider-like rails.
 - Move primary flows toward visually calm, pastel glass, cinematic layouts.
 - Avoid exposing source complexity as the default path.
-- Settings needs a clearer structure:
-  Account, Sources & Devices, Playback, Downloads, Advanced.
+- Settings is now clearer but still not final. It groups Sources & Add-ons,
+  Playback & Downloads, Account & Sync, Application, About & Updates, and
+  Privacy & Data. Sources & Devices remains the detailed readiness/diagnostics
+  surface.
 
 ## Current Known Gaps
 
@@ -431,7 +433,10 @@ UI polish in one PR.
     of the primary search result UI.
 15. **PR #120: Settings and onboarding v2.** Make setup, Sources & Add-ons,
     Devices & Cast, Playback, Downloads, Privacy & Security, Advanced
-    Diagnostics, About, version, and update information understandable.
+    Diagnostics, About, version, and update information understandable. This
+    PR adds a first-run setup checklist that explains source/device readiness
+    without mentioning Real-Debrid, and exposes About/build/update information
+    in Settings without requiring Advanced Diagnostics.
 
 ### Phase 5: Focused Extra Features
 

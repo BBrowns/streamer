@@ -443,17 +443,31 @@ For series, it additionally renders the `EpisodeSelector` component to let the u
 
 ## 8. Settings Screen (`app/(tabs)/settings.tsx`)
 
-The settings screen is divided into sections using `CollapsibleSection` components:
+The settings screen is divided into user-facing sections with
+`SettingsSection` and shared UI primitives:
 
-- **Profile** — display name, avatar, email, biometric lock toggle
-- **Appearance** — theme selector (System / Light / Dark)
-- **Add-ons** — shortcut to `/addons` management screen
-- **Trakt.tv** — OAuth connect/disconnect, sync status
-- **Active Sessions** — list of current device sessions with logout-individual option
-- **Notifications** — list of in-app notifications
-- **About** — app version, privacy policy, terms
+- **Sources & Add-ons** — playback readiness and add-on management.
+- **Playback & Downloads** — desktop bridge/cast readiness and Downloads.
+- **Account & Sync** — profile, Trakt, active sessions, and password.
+- **Application** — appearance, language, biometrics, and desktop update card
+  when the Electron bridge API is available.
+- **About & Updates** — app/build/runtime/channel label and manual desktop
+  update check when supported.
+- **Privacy & Data** — export data and delete account.
 
-The Trakt OAuth flow uses `expo-web-browser` to open the Trakt authorization URL, then captures the redirect via deep link.
+On desktop, the left pane stays as a section list and the right pane renders
+Sources & Devices or inline account modals. On mobile, Sources & Devices opens
+as its own screen. Keep scary diagnostics inside Sources & Devices/Advanced
+surfaces; the main Settings list should answer whether the app is ready to play
+and where the user should go next.
+
+The Trakt OAuth flow uses `expo-web-browser` to open the Trakt authorization
+URL, then captures the redirect via deep link.
+
+First-run onboarding now includes a setup checklist before theme/add-on
+selection. It explains sources/metadata, desktop bridge, downloads/cast, and
+privacy at a product level. Do not add Real-Debrid to onboarding; it remains an
+optional paid resolver configured later.
 
 ---
 

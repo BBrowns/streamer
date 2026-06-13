@@ -193,6 +193,18 @@
     "terms": "Terms",
     "and": "and",
     "privacy": "Privacy Policy",
+    "setupCheck": {
+      "title": "Check setup",
+      "subtitle": "Streamer should feel simple, but playback still depends on your sources and device readiness.",
+      "sources": "Sources & metadata",
+      "sourcesBody": "Install Cinemeta now; add streaming add-ons later from Settings.",
+      "bridge": "Desktop bridge",
+      "bridgeBody": "Desktop can prepare torrent/remux playback and share its LAN URL.",
+      "offlineCast": "Downloads & cast",
+      "offlineCastBody": "Offline and casting become available only when a source supports it.",
+      "privacy": "Privacy",
+      "privacyBody": "Raw stream URLs, magnets, and tokens are not included in diagnostics."
+    },
     "finish": "Finish & Sign In"
   },
   "settings": {
@@ -208,6 +220,7 @@
       "sourcesDevices": "Sources & Devices",
       "sourcesAddons": "Sources & Add-ons",
       "playbackDownloads": "Playback & Downloads",
+      "about": "About & Updates",
       "advanced": "Advanced"
     },
     "items": {
@@ -247,6 +260,10 @@
       "apply": "Apply Changes",
       "successTitle": "Settings Saved",
       "successMessage": "Your server and bridge settings have been updated."
+    },
+    "about": {
+      "releasePolicy": "Desktop updates are checked manually until the release pipeline is fully validated.",
+      "checkUpdates": "Check for updates"
     },
     "alerts": {
       "deleteAccountTitle": "Delete Account",

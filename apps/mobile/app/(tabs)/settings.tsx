@@ -35,6 +35,10 @@ import { SettingsSection } from "../../components/settings/SettingsSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
 import { LanguageSection } from "../../components/settings/LanguageSection";
 import { SourcesSection } from "../../components/settings/SourcesSection";
+import {
+  clientBuildMetadata,
+  formatBuildLabel,
+} from "../../services/buildMetadata";
 
 function formatDesktopUpdateStatus(state: DesktopUpdateState | null) {
   if (!state) return "Update status is not loaded yet.";
@@ -925,6 +929,92 @@ function SettingsContent() {
         )}
       </SettingsSection>
 
+      {/* About & Updates */}
+      <SettingsSection
+        title={t("settings.sections.about", {
+          defaultValue: "About & Updates",
+        })}
+      >
+        <View style={styles.aboutCard}>
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: "rgba(216,180,254,0.14)" },
+            ]}
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color="#d8b4fe"
+            />
+          </View>
+          <View style={styles.menuItemTextContainer}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+              Streamer
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {formatBuildLabel(clientBuildMetadata)}
+            </Text>
+            <Text
+              style={[styles.menuItemSubtitle, { color: colors.textSecondary }]}
+            >
+              {t("settings.about.releasePolicy", {
+                defaultValue:
+                  "Desktop updates are checked manually until the release pipeline is fully validated.",
+              })}
+            </Text>
+          </View>
+        </View>
+
+        {desktopBridgeApi?.getUpdateStatus && (
+          <>
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
+            <Pressable
+              style={styles.menuItem}
+              onPress={handleCheckForDesktopUpdates}
+              disabled={checkingUpdates}
+            >
+              <View
+                style={[
+                  styles.iconContainer,
+                  { backgroundColor: "rgba(124, 58, 237, 0.14)" },
+                ]}
+              >
+                <Ionicons name="refresh-outline" size={20} color="#a78bfa" />
+              </View>
+              <View style={styles.menuItemTextContainer}>
+                <Text style={[styles.menuItemTitle, { color: colors.text }]}>
+                  {t("settings.about.checkUpdates", {
+                    defaultValue: "Check for updates",
+                  })}
+                </Text>
+                <Text
+                  style={[
+                    styles.menuItemSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {formatDesktopUpdateStatus(desktopUpdateState)}
+                </Text>
+              </View>
+              {checkingUpdates ? (
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              )}
+            </Pressable>
+          </>
+        )}
+      </SettingsSection>
+
       {/* Privacy & Danger Zone */}
       <SettingsSection title={t("settings.sections.privacy")}>
         <Pressable
@@ -1106,6 +1196,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     minHeight: 64,
+  },
+  aboutCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    minHeight: 80,
   },
   menuItemActive: {
     backgroundColor: "rgba(216,180,254,0.14)",

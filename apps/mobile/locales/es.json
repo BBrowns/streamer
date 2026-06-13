@@ -185,6 +185,18 @@
     "terms": "Términos",
     "and": "y",
     "privacy": "Política de privacidad",
+    "setupCheck": {
+      "title": "Comprobar configuración",
+      "subtitle": "Streamer debe sentirse simple, pero la reproducción depende de tus fuentes y del estado del dispositivo.",
+      "sources": "Fuentes y metadatos",
+      "sourcesBody": "Instala Cinemeta ahora; añade complementos de streaming más tarde desde Ajustes.",
+      "bridge": "Bridge de escritorio",
+      "bridgeBody": "El escritorio puede preparar reproducción torrent/remux y compartir su URL LAN.",
+      "offlineCast": "Descargas y cast",
+      "offlineCastBody": "Offline y cast solo estarán disponibles cuando una fuente lo admita.",
+      "privacy": "Privacidad",
+      "privacyBody": "Las URL de streams, magnets y tokens sin procesar no se incluyen en diagnósticos."
+    },
     "finish": "Finalizar e Iniciar sesión"
   },
   "settings": {
@@ -200,6 +212,7 @@
       "sourcesDevices": "Fuentes y dispositivos",
       "sourcesAddons": "Fuentes y complementos",
       "playbackDownloads": "Reproducción y descargas",
+      "about": "Acerca de y actualizaciones",
       "advanced": "Avanzado"
     },
     "items": {
@@ -239,6 +252,10 @@
       "apply": "Aplicar cambios",
       "successTitle": "Ajustes guardados",
       "successMessage": "Tus ajustes de servidor y puente se han actualizado."
+    },
+    "about": {
+      "releasePolicy": "Las actualizaciones de escritorio se comprueban manualmente hasta validar completamente el pipeline de releases.",
+      "checkUpdates": "Comprobar actualizaciones"
     },
     "alerts": {
       "deleteAccountTitle": "Eliminar cuenta",
