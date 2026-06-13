@@ -386,7 +386,10 @@ UI polish in one PR.
 
 8. **PR #113: Release automation v2.** Produce reproducible macOS release
    artifacts, draft releases, release notes, artifact validation, and explicit
-   Windows status.
+   Windows status. The manual `Desktop Release` workflow now builds signed
+   macOS DMG/ZIP artifacts, writes release notes, uploads artifacts, and can
+   create a draft GitHub Release when Apple/GitHub secrets are configured;
+   Windows remains deferred.
 9. **PR #114: Security baseline v2.** Tighten bridge auth defaults, SSRF
    bypass tests, Electron boundaries, logging/Sentry redaction, and dependency
    tooling.

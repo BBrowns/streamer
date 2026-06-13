@@ -1,0 +1,140 @@
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Git tag or release name, for example v0.1.0-rc.1"
+        required: true
+        type: string
+      build_channel:
+        description: "Build channel"
+        required: true
+        default: "rc"
+        type: choice
+        options:
+          - rc
+          - production
+      notarize:
+        description: "Run Apple notarization after signing"
+        required: true
+        default: false
+        type: boolean
+      draft_release:
+        description: "Create or update a draft GitHub Release"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  macos-release:
+    name: macOS Release Artifact
+    runs-on: macos-latest
+    env:
+      STREAMER_BUILD_CHANNEL: ${{ inputs.build_channel }}
+      STREAMER_BUILD_ENVIRONMENT: production
+      STREAMER_GIT_SHA: ${{ github.sha }}
+      STREAMER_NOTARIZE: ${{ inputs.notarize }}
+      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+      CSC_NAME: ${{ secrets.MACOS_CSC_NAME }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Stamp build metadata
+        run: |
+          echo "STREAMER_APP_VERSION=$(node -p \"require('./package.json').version\")" >> "$GITHUB_ENV"
+          echo "STREAMER_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - name: Validate release configuration
+        run: npm run release:check --workspace=@streamer/desktop
+
+      - name: Validate signing and notarization secrets
+        run: |
+          if [ -z "$CSC_LINK" ] && [ -z "$CSC_NAME" ]; then
+            echo "::error::MACOS_CSC_LINK or MACOS_CSC_NAME is required for a desktop release build."
+            exit 1
+          fi
+
+          if [ "$STREAMER_NOTARIZE" = "true" ]; then
+            if [ -n "$APPLE_API_KEY" ] && [ -n "$APPLE_API_KEY_ID" ] && [ -n "$APPLE_API_ISSUER" ]; then
+              exit 0
+            fi
+            if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+              exit 0
+            fi
+            echo "::error::Notarization requires Apple API key secrets or Apple ID app-specific password secrets."
+            exit 1
+          fi
+
+      - name: Build signed macOS release artifacts
+        run: npm run package:mac:release --workspace=@streamer/desktop
+
+      - name: Validate release artifact inventory
+        run: |
+          test -d apps/desktop/release
+          find apps/desktop/release -maxdepth 2 -type f \( -name "*.dmg" -o -name "*.zip" \) -print | tee artifacts.txt
+          test -s artifacts.txt
+
+      - name: Write release notes draft
+        run: |
+          mkdir -p artifacts/release
+          cat > artifacts/release/release-notes.md <<EOF
+          # Streamer Desktop ${{ inputs.tag_name }}
+
+          - Version: ${STREAMER_APP_VERSION}
+          - Git SHA: ${STREAMER_GIT_SHA}
+          - Build date: ${STREAMER_BUILD_DATE}
+          - Channel: ${STREAMER_BUILD_CHANNEL}
+          - macOS artifacts: DMG and ZIP from \`apps/desktop/release\`
+          - Notarization requested: ${STREAMER_NOTARIZE}
+
+          ## QA Evidence
+
+          Complete the QA matrix and RC checklist before marking this release ready.
+
+          - docs/QA_MATRIX.md
+          - docs/RC_CHECKLIST.md
+          EOF
+
+      - name: Upload macOS release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamer-desktop-macos-release
+          path: |
+            apps/desktop/release/**/*.dmg
+            apps/desktop/release/**/*.zip
+            artifacts/release/release-notes.md
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create draft GitHub Release
+        if: ${{ inputs.draft_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: Streamer Desktop ${{ inputs.tag_name }}
+          draft: true
+          prerelease: ${{ inputs.build_channel != 'production' }}
+          body_path: artifacts/release/release-notes.md
+          files: |
+            apps/desktop/release/**/*.dmg
+            apps/desktop/release/**/*.zip
