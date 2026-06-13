@@ -418,7 +418,10 @@ UI polish in one PR.
     capability callbacks.
 13. **PR #118: Home v2 and Continue Watching.** Improve hero, continue
     watching, provider rails, recently added, trending/popular rails, skeletons,
-    empty states, and retry states.
+    empty states, and retry states. This PR gives Home a session-oriented
+    hierarchy with a persistent Continue Watching row, resume/remove actions,
+    clear empty progress copy, and library/discover/download shortcuts while
+    keeping source complexity hidden.
 14. **PR #119: Search and discovery v2.** Add unified search, recent searches,
     suggestions, filters, consistent result cards, and no-results handling.
 15. **PR #120: Settings and onboarding v2.** Make setup, Sources & Add-ons,

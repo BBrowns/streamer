@@ -167,6 +167,16 @@ export class LibraryService {
     return inProgress.map((r) => this.toWatchProgress(r));
   }
 
+  /** Remove an item from Continue Watching without touching the library. */
+  async removeProgress(userId: string, itemId: string): Promise<void> {
+    await this.progressRepo.delete(userId, itemId);
+    logger.info({ userId, itemId }, "Watch progress removed");
+    syncService.broadcast(userId, "PROGRESS_UPDATE", {
+      action: "remove",
+      itemId,
+    });
+  }
+
   private toLibraryItem(record: LibraryItemRecord): LibraryItem {
     return {
       id: record.id,

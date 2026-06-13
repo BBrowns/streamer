@@ -285,4 +285,31 @@ describe("Integration: Watch Progress", () => {
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].title).toBe("In Progress Movie");
   });
+
+  it("should remove watch progress from continue watching", async () => {
+    await request(app)
+      .post("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "movie",
+        itemId: "tt0111161",
+        currentTime: 3600,
+        duration: 8520,
+        title: "The Shawshank Redemption",
+      });
+
+    const deleteRes = await request(app)
+      .delete("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ itemId: "tt0111161" });
+
+    expect(deleteRes.status).toBe(204);
+
+    const listRes = await request(app)
+      .get("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.items).toHaveLength(0);
+  });
 });

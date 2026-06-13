@@ -265,11 +265,26 @@ The primary content card. Renders a poster image (`Image` with `resizeMode="cove
 
 The card uses `aspectRatio: 2/3` (standard movie poster ratio) to ensure consistent sizing regardless of image dimensions.
 
-**Intricacy:** Poster images come from external add-on APIs and have unpredictable dimensions and CDN availability. The `Image` component does not have an automatic fallback — if the poster URL is 404, a broken image renders. An `onError` fallback to a placeholder image is missing.
+**Intricacy:** Poster images come from external add-on APIs and have
+unpredictable dimensions and CDN availability. `CatalogItemCard` now trims
+poster URLs, resets image-error state when a refetch supplies a poster, uses
+`expo-image` memory/disk caching, and falls back to a title card on image
+failure. If popular rails show placeholders, debug whether the add-on catalog
+is returning empty/invalid poster URLs before changing the card UI.
 
 ### 5.2 `ContinueWatchingRow`
 
-A horizontal `FlatList` of in-progress content from `useContinueWatching`. Only rendered when there is at least one item with progress > 0 and < 100%. Each item shows the poster and a `WatchProgressBar` at the bottom.
+A horizontal `FlatList` of in-progress content from `useContinueWatching`.
+Home can request a useful empty state; Discover and Library can keep the row
+hidden when there is no progress. Cards show poster/fallback artwork, episode
+label when available, remaining time, progress percentage, a primary Resume
+action, and a separate remove action. The remove action calls
+`DELETE /api/library/progress` and only removes watch progress; it does not
+delete the title from the user's library.
+
+Avoid nesting `Pressable` or `AppButton` inside another `Pressable` in this
+component. React Native Web renders those as nested `<button>` elements and
+will warn in development.
 
 ### 5.3 `EpisodeSelector`
 
@@ -279,7 +294,14 @@ A compound component for TV show episode navigation. Displays a season picker (s
 
 ### 5.4 `HeroBanner` / `HomeHeroBanner`
 
-Full-bleed hero image with a gradient overlay, title, genre tags, and action buttons (Play, Add to Library). `HomeHeroBanner` is the desktop-only variant on the home screen; `HeroBanner` is used on the detail screen for both mobile and desktop.
+Full-bleed hero image with a gradient overlay, title, metadata, and primary
+actions. `HomeHeroBanner` is used at the top of Home on phone and desktop with
+responsive sizing; `HeroBanner` is used on Discover/detail contexts where the
+component is fed by a specific add-on catalog.
+
+PR #118 gives Home this hierarchy: hero, Continue Watching, library shortcuts,
+popular movies, top TV shows, recently added, and provider rails. Home must
+stay consumer-facing: do not expose source selection or add-on internals there.
 
 ---
 

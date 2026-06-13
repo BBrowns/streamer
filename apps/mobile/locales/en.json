@@ -18,6 +18,26 @@
       "recentlyAdded": "Recently Added",
       "fromProviders": "From Your Providers"
     },
+    "continueWatching": {
+      "eyebrow": "Resume",
+      "title": "Continue Watching",
+      "movie": "Movie",
+      "series": "Series",
+      "resume": "Resume",
+      "remaining": "{{minutes}}m left · {{progress}}%",
+      "emptyTitle": "Nothing in progress",
+      "emptyDescription": "Start a movie or episode and it will appear here.",
+      "resumeA11y": "Resume {{title}}, {{minutes}} minutes remaining",
+      "removeA11y": "Remove {{title}} from Continue Watching"
+    },
+    "shortcuts": {
+      "discover": "Discover",
+      "discoverDetail": "Browse provider catalogs",
+      "library": "Library",
+      "libraryDetail": "Saved titles and history",
+      "downloads": "Downloads",
+      "downloadsDetail": "Verified offline files"
+    },
     "filters": {
       "movies": "Movies",
       "series": "TV Shows"
