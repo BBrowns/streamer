@@ -424,6 +424,11 @@ UI polish in one PR.
     keeping source complexity hidden.
 14. **PR #119: Search and discovery v2.** Add unified search, recent searches,
     suggestions, filters, consistent result cards, and no-results handling.
+    This PR should keep backend search unchanged unless needed; the current
+    implementation centralizes `/search` and `/search/results?q=...`, adds
+    type/year filtering over returned metadata, unifies desktop command palette
+    and overlay recent-search storage, and keeps source/provider complexity out
+    of the primary search result UI.
 15. **PR #120: Settings and onboarding v2.** Make setup, Sources & Add-ons,
     Devices & Cast, Playback, Downloads, Privacy & Security, Advanced
     Diagnostics, About, version, and update information understandable.
