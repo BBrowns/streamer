@@ -754,6 +754,15 @@ export default function PlayerScreen() {
     [canSeekPlayback, player, showControls],
   );
 
+  const handleSeekPercent = useCallback(
+    (percent: number) => {
+      if (!canSeekPlayback || !player || !player.duration) return;
+      player.currentTime = (player.duration * percent) / 100;
+      showControls();
+    },
+    [canSeekPlayback, player, showControls],
+  );
+
   const handleToggleMute = useCallback(() => {
     if (!player) return;
     const nextMuted = !player.muted;
@@ -806,6 +815,8 @@ export default function PlayerScreen() {
     canSeek: canSeekPlayback,
     onToggleFullscreen: handleToggleFullscreen,
     onToggleMute: handleToggleMute,
+    onSeekBy: handleSeekBy,
+    onSeekPercent: handleSeekPercent,
   });
 
   const stopCasting = async () => {

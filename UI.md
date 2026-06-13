@@ -313,8 +313,17 @@ Renders the visible playback control surface:
 - Bottom pastel glass progress tray with current time, duration, and progress.
 - Accessible progress control using `accessibilityRole="adjustable"`,
   `accessibilityActions`, and ±10s seek actions.
+- Capability-aware timeline copy for direct, remux, live, and unknown-duration
+  playback.
+- Desktop/web volume, settings, cast, retry, and fullscreen actions when those
+  capabilities are available.
 - Web pointer pass-through so the overlay can remain visible without blocking
   unrelated video-surface interactions.
+
+PR #117 routes button, scrubber, accessibility, and desktop hotkey seeking
+through the same guarded callbacks. Keyboard shortcuts must not bypass
+`canSeekPlayback` or seek while remux/live/unknown-duration streams are marked
+non-seekable.
 
 ### 6.4 `usePlayerHotkeys`
 
@@ -331,6 +340,9 @@ Extracted hook for keyboard shortcuts on web/desktop. Handles:
 | `Escape`      | Close player                            |
 
 All listeners are added to `document` (web only — guarded by `Platform.OS === "web"`). Listeners are cleaned up in the `useEffect` return to avoid leaks.
+
+Seek shortcuts should use the callback props from `PlayerScreen` rather than
+mutating `player.currentTime` directly when a guarded callback is available.
 
 ### 6.5 Progress Reporting
 

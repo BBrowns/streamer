@@ -13,6 +13,7 @@ import { useTheme } from "../../hooks/useTheme";
 import type { VideoPlayer } from "expo-video";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
+import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -107,6 +108,17 @@ export function PlayerControls({
   const seekDisabledLabel = t("player.controls.seekUnavailable", {
     defaultValue: "Seek unavailable",
   });
+  const seekUnavailableDetail = capabilities?.isRemux
+    ? t("player.controls.seekRemuxUnavailable", {
+        defaultValue: "Seeking unlocks when the compatible stream is ready",
+      })
+    : isLive
+      ? t("player.controls.seekLiveUnavailable", {
+          defaultValue: "Live streams use the live edge",
+        })
+      : t("player.controls.seekDurationUnavailable", {
+          defaultValue: "Timeline is unavailable until duration is known",
+        });
   const progressLabel = hasTimeline
     ? t("player.controls.progress", { defaultValue: "Playback progress" })
     : t("player.controls.progressUnavailable", {
@@ -320,7 +332,7 @@ export function PlayerControls({
                 now: Math.round(progressPercent),
                 text: hasTimeline
                   ? `${currentTimeLabel} of ${durationLabel}`
-                  : seekDisabledLabel,
+                  : seekUnavailableDetail,
               }}
               disabled={!hasTimeline}
               onPress={handleScrubberPress}
@@ -378,6 +390,13 @@ export function PlayerControls({
               {durationLabel}
             </Text>
           </View>
+          {!hasTimeline ? (
+            <Text
+              style={[styles.timelineHint, { color: colors.textSecondary }]}
+            >
+              {seekUnavailableDetail}
+            </Text>
+          ) : null}
 
           <View style={styles.actionRow}>
             {capabilities?.canUseVolume && onToggleMute ? (
@@ -613,12 +632,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     flexDirection: "row",
-    gap: 16,
+    gap: uiSpacing.lg,
   },
   playPauseBtn: {
     width: 82,
     height: 82,
-    borderRadius: 41,
+    borderRadius: uiRadii.pill,
     backgroundColor: "rgba(0,0,0,0.6)",
     borderWidth: 1,
     justifyContent: "center",
@@ -627,7 +646,7 @@ const styles = StyleSheet.create({
   skipButton: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -643,38 +662,38 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.04 }],
   },
   bottomControls: {
-    paddingHorizontal: 20,
+    paddingHorizontal: uiSpacing.xl,
     paddingBottom: 42,
-    paddingTop: 20,
+    paddingTop: uiSpacing.xl,
   },
   bottomTray: {
-    borderRadius: 26,
+    borderRadius: uiRadii.xl + 2,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
+    paddingHorizontal: uiSpacing.lg - 2,
+    paddingVertical: uiSpacing.md,
+    gap: uiSpacing.sm + 2,
   },
   statusRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: 8,
+    gap: uiSpacing.sm,
   },
   statusPill: {
     minHeight: 28,
     maxWidth: 280,
-    borderRadius: 14,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: uiSpacing.xs + 2,
   },
   statusPillText: {
     flexShrink: 1,
+    ...uiTypography.caption,
     fontSize: 11,
     fontWeight: "800",
-    letterSpacing: 0,
   },
   timelineRow: {
     minHeight: 40,
@@ -693,7 +712,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     justifyContent: "center",
-    marginHorizontal: 10,
+    marginHorizontal: uiSpacing.sm + 2,
   },
   scrubberTrack: {
     height: 7,
@@ -723,12 +742,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 8,
+    gap: uiSpacing.sm,
   },
   actionButton: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -736,24 +755,29 @@ const styles = StyleSheet.create({
   compactActionButton: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: uiRadii.pill,
     justifyContent: "center",
     alignItems: "center",
   },
   volumeCluster: {
     height: 38,
-    borderRadius: 19,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     paddingHorizontal: 5,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: uiSpacing.xs,
   },
   volumeText: {
     minWidth: 28,
     textAlign: "center",
-    fontSize: 12,
+    ...uiTypography.caption,
     fontWeight: "800",
     fontVariant: ["tabular-nums"],
+  },
+  timelineHint: {
+    ...uiTypography.caption,
+    textAlign: "center",
+    marginTop: -2,
   },
 });
