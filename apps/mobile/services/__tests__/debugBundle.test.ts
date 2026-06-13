@@ -161,4 +161,42 @@ describe("debugBundle", () => {
       "bridge_unavailable",
     );
   });
+
+  it("includes privacy-safe app, device, session, planner, bridge, and download snapshots", () => {
+    const bundle = createDebugBundle({
+      plan: createPlan(),
+      context: {
+        screen: "detail",
+      },
+    });
+
+    const parsed = JSON.parse(serializeDebugBundle(bundle));
+
+    expect(parsed.app).toMatchObject({
+      version: expect.any(String),
+      buildChannel: expect.any(String),
+      environment: expect.any(String),
+      runtime: expect.any(String),
+    });
+    expect(parsed.device).toMatchObject({
+      platform: expect.any(String),
+      profile: {
+        platform: expect.any(String),
+        supports: expect.any(Object),
+        maxQuality: expect.any(String),
+      },
+    });
+    expect(parsed.bridge).toEqual(expect.any(Object));
+    expect(parsed.session).toBeDefined();
+    expect(parsed.planner.orderedCandidates[0]).toMatchObject({
+      candidateId: "candidate-1",
+      rank: 1,
+      sourceType: "torrent",
+      actionEligibility: {
+        action: "play",
+        eligible: true,
+      },
+    });
+    expect(parsed.downloads).toEqual(expect.any(Array));
+  });
 });

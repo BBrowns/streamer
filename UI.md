@@ -437,7 +437,7 @@ For series, it additionally renders the `EpisodeSelector` component to let the u
 
 **Primary flow:** The default action is `Play Best`. It calls `PlaybackOrchestrator.playBest()`, which requests a server playback plan, resolves only the selected source, and passes remaining planned fallbacks into `playerStore`.
 
-**Advanced source display:** Streams are still grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). This should remain collapsed as `More Sources`, not the main user flow. Tapping a manual stream remains an advanced path and should not bypass the session-driven primary Play Best path.
+**Advanced source display:** Streams are still grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). This should remain collapsed as `More Sources`, not the main user flow. Tapping a manual stream remains an advanced path and should not bypass the session-driven primary Play Best path. The advanced inspector shows action-specific Play/Download/Cast eligibility, candidate ranking, selected/fallback compatibility hints, rejected-source reasons, and a safe debug-bundle export for support.
 
 ---
 
