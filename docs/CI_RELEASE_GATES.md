@@ -32,8 +32,11 @@ CI uploads:
 The desktop artifact is a smoke/review artifact, not a distributable release.
 Signing and notarization config is validated by CI, but the pull-request
 artifact remains unsigned. Real DMG/ZIP release publishing requires Apple
-secrets and follows [MACOS_RELEASE.md](./MACOS_RELEASE.md). Update feeds remain
-separate release work.
+secrets and follows [MACOS_RELEASE.md](./MACOS_RELEASE.md). The manual
+`Desktop Release` workflow validates the release config, runs
+`npm run package:mac:release --workspace=@streamer/desktop`, checks DMG/ZIP
+inventory, uploads `streamer-desktop-macos-release`, writes release notes, and
+can create a draft GitHub Release. Update feeds remain separate release work.
 
 ## Gate Policy
 

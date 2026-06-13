@@ -21,6 +21,12 @@ electron-builder signing mechanisms, for example:
 - `CSC_KEY_PASSWORD`
 - `CSC_NAME` when multiple signing identities are available
 
+The GitHub release workflow maps repository secrets into these variables:
+
+- `MACOS_CSC_LINK` -> `CSC_LINK`
+- `MACOS_CSC_KEY_PASSWORD` -> `CSC_KEY_PASSWORD`
+- `MACOS_CSC_NAME` -> `CSC_NAME`
+
 Notarization is opt-in. Set `STREAMER_NOTARIZE=true` and provide one of these
 credential sets:
 
@@ -56,6 +62,27 @@ Build signed release artifacts after loading signing and notarization secrets:
 STREAMER_NOTARIZE=true npm run package:mac:release --workspace=@streamer/desktop
 ```
 
+## GitHub Release Workflow
+
+Use **Desktop Release** (`.github/workflows/release-desktop.yml`) from GitHub
+Actions when you want a reproducible macOS release artifact. The workflow is
+manual-only (`workflow_dispatch`) and requires:
+
+- `tag_name`: release tag or RC tag, for example `v0.1.0-rc.1`
+- `build_channel`: `rc` or `production`
+- `notarize`: whether to run Apple notarization after signing
+- `draft_release`: whether to create/update a draft GitHub Release
+
+The workflow injects build metadata, validates the release config, runs:
+
+```bash
+npm run package:mac:release --workspace=@streamer/desktop
+```
+
+Then it validates that DMG/ZIP artifacts exist, uploads
+`streamer-desktop-macos-release`, writes a release-notes draft, and optionally
+creates a draft GitHub Release with those artifacts attached.
+
 ## Artifact Validation
 
 After building a signed app, inspect the `.app` before distribution:
@@ -76,10 +103,9 @@ Expected results:
 ## Current Limits
 
 The repository has a signing/notarization configuration path and validation
-script, but distribution still depends on loaded Apple secrets, artifact
-publishing, GitHub Release drafting/upload, production web asset packaging, and
-packaged-app QA evidence.
+script plus a manual GitHub release workflow. Distribution still depends on
+loaded Apple secrets and packaged-app QA evidence.
 
-This path does not add silent auto-update publishing, Windows signing, or App
-Store distribution. Desktop updates currently remain manual notices only; see
-[DESKTOP_UPDATES.md](./DESKTOP_UPDATES.md).
+Windows packaging/signing is explicitly deferred. This path does not add silent
+auto-update publishing or App Store distribution. Desktop updates currently
+remain manual notices only; see [DESKTOP_UPDATES.md](./DESKTOP_UPDATES.md).

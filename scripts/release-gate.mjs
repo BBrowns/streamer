@@ -33,6 +33,10 @@ function requireFile(relativePath) {
 }
 
 function requireText(relativePath, needle, label = needle) {
+  if (!exists(relativePath)) {
+    fail(`${relativePath} is missing`);
+    return;
+  }
   const content = read(relativePath);
   if (content.includes(needle)) {
     pass(`${relativePath} contains ${label}`);
@@ -42,6 +46,10 @@ function requireText(relativePath, needle, label = needle) {
 }
 
 function requirePattern(relativePath, pattern, label) {
+  if (!exists(relativePath)) {
+    fail(`${relativePath} is missing`);
+    return;
+  }
   const content = read(relativePath);
   if (pattern.test(content)) {
     pass(`${relativePath} matches ${label}`);
@@ -77,6 +85,20 @@ function checkCiWorkflow() {
 
   for (const [needle, label] of requiredSnippets) {
     requireText(workflow, needle, label);
+  }
+
+  const releaseWorkflow = ".github/workflows/release-desktop.yml";
+  requireFile(releaseWorkflow);
+  for (const [needle, label] of [
+    [
+      "npm run package:mac:release --workspace=@streamer/desktop",
+      "macOS release package command",
+    ],
+    ["STREAMER_NOTARIZE", "notarization gate"],
+    ["softprops/action-gh-release", "GitHub Release draft action"],
+    ["actions/upload-artifact@v4", "release artifact upload"],
+  ]) {
+    requireText(releaseWorkflow, needle, label);
   }
 }
 
