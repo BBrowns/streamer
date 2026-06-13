@@ -5,6 +5,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { AppButton } from "./AppButton";
 import { StatusPill } from "./StatusPill";
 import { Surface } from "./Surface";
+import { getSoftOverlayColor, uiSpacing, uiTypography } from "./designSystem";
 
 type PlaybackStatusTone = "loading" | "warning" | "error";
 
@@ -46,14 +47,7 @@ export function PlaybackStatusPanel({
 
   return (
     <View
-      style={[
-        styles.overlay,
-        {
-          backgroundColor: isDark
-            ? "rgba(0,0,0,0.84)"
-            : "rgba(255,255,255,0.9)",
-        },
-      ]}
+      style={[styles.overlay, { backgroundColor: getSoftOverlayColor(isDark) }]}
     >
       <Surface style={styles.panel}>
         <View style={styles.iconShell}>
@@ -119,13 +113,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 30,
-    padding: 24,
+    padding: uiSpacing.xxl,
   },
   panel: {
     width: "100%",
     maxWidth: 440,
     alignItems: "center",
-    gap: 12,
+    gap: uiSpacing.md,
   },
   iconShell: {
     minHeight: 42,
@@ -133,22 +127,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 20,
-    fontWeight: "900",
+    ...uiTypography.title,
     textAlign: "center",
-    letterSpacing: 0,
   },
   message: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "600",
+    ...uiTypography.body,
     textAlign: "center",
     maxWidth: 340,
   },
   detail: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "700",
+    ...uiTypography.caption,
     textAlign: "center",
     maxWidth: 340,
   },
@@ -156,8 +144,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 10,
-    marginTop: 4,
+    gap: uiSpacing.sm + 2,
+    marginTop: uiSpacing.xs,
   },
   actionButton: {
     minWidth: 128,

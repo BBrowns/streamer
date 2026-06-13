@@ -19,6 +19,7 @@ import {
 import { AppButton } from "../ui/AppButton";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
+import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
 
 interface DownloadQueueCardProps {
   task: DownloadTask;
@@ -272,7 +273,7 @@ export function DownloadQueueCard({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: uiRadii.md,
     overflow: "hidden",
     minHeight: 162,
   },
@@ -295,13 +296,13 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
     minWidth: 0,
-    padding: 14,
-    gap: 12,
+    padding: uiSpacing.lg - 2,
+    gap: uiSpacing.md,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    gap: uiSpacing.md,
   },
   titleGroup: {
     flex: 1,
@@ -315,13 +316,11 @@ const styles = StyleSheet.create({
   },
   metadata: {
     marginTop: 5,
-    fontSize: 12,
-    lineHeight: 16,
+    ...uiTypography.caption,
     fontWeight: "600",
-    letterSpacing: 0,
   },
   progressArea: {
-    gap: 6,
+    gap: uiSpacing.xs + 2,
   },
   progressTrack: {
     height: 5,
@@ -341,28 +340,26 @@ const styles = StyleSheet.create({
   errorBox: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 7,
-    borderRadius: 6,
-    paddingHorizontal: 9,
-    paddingVertical: 8,
+    gap: uiSpacing.sm - 1,
+    borderRadius: uiRadii.xs,
+    paddingHorizontal: uiSpacing.sm + 1,
+    paddingVertical: uiSpacing.sm,
   },
   errorText: {
     flex: 1,
     minWidth: 0,
-    fontSize: 12,
-    lineHeight: 16,
+    ...uiTypography.caption,
     fontWeight: "600",
-    letterSpacing: 0,
   },
   actions: {
     minHeight: 52,
     borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: uiSpacing.sm + 2,
   },
   actionsCompact: {
     minHeight: 48,
@@ -371,11 +368,9 @@ const styles = StyleSheet.create({
     minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: uiSpacing.sm,
   },
   workingText: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0,
+    ...uiTypography.caption,
   },
 });

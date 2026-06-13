@@ -406,7 +406,10 @@ UI polish in one PR.
 
 11. **PR #116: Design system pilot v2.** Introduce constrained primitives for
     buttons, surfaces, status pills, sheets, empty/error states, focus states,
-    spacing, radius, and typography without a full UI migration.
+    spacing, radius, and typography without a full UI migration. This PR adds a
+    shared `components/ui/designSystem.ts` token layer and applies it to the
+    existing Surface, AppButton, StatusPill, SettingsSection,
+    PlaybackStatusPanel, DownloadQueueCard, and desktop cast dialog pilots.
 12. **PR #117: Player UX v3.** Build premium, capability-aware player controls
     and typed playback copy for finding source, peers, remux preparation,
     fallback, and terminal errors.

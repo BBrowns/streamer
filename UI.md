@@ -64,6 +64,9 @@ Useful future primitives:
 
 Current pilot primitives:
 
+- `components/ui/designSystem.ts` for shared spacing, radii, typography,
+  surface tone, status tone, and overlay tokens. Use this before adding local
+  hardcoded control geometry.
 - `components/ui/AppButton.tsx` for primary, secondary, ghost, and danger
   actions with consistent sizing, icon support, loading state, and accessibility
   state.
@@ -85,6 +88,11 @@ The downloads queue now uses `AppButton`, `Surface`, and `StatusPill` for
 queue cards, destructive actions, summary metrics, and verified-offline status.
 This keeps download readiness aligned with Sources, Detail, and Player without
 changing download service behaviour.
+
+PR #116 tightened the pilot by moving `Surface`, `AppButton`, `StatusPill`,
+`SettingsSection`, `PlaybackStatusPanel`, `DownloadQueueCard`, and the desktop
+cast dialog toward shared spacing/radius/type tokens. The goal is consistency
+and lower styling drift, not a full visual migration.
 
 Do not do:
 

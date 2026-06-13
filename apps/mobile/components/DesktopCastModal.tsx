@@ -26,6 +26,7 @@ import {
   getChromecastDeviceProfile,
   type CastDeviceCapabilities,
 } from "../services/playback/deviceProfile";
+import { uiRadii, uiSpacing, uiTypography } from "./ui/designSystem";
 
 export interface CastStartDetails {
   sessionId?: string;
@@ -434,8 +435,8 @@ const styles = StyleSheet.create({
   },
   container: {
     backgroundColor: "rgba(24, 24, 36, 0.94)",
-    borderRadius: 16,
-    padding: 22,
+    borderRadius: uiRadii.lg,
+    padding: uiSpacing.xl + 2,
     width: "100%",
     maxWidth: 440,
     maxHeight: "80%",
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: uiSpacing.xl - 2,
   },
   headerTextContainer: {
     flexDirection: "row",
@@ -455,23 +456,24 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   headerIcon: {
-    marginRight: 10,
+    marginRight: uiSpacing.sm + 2,
   },
   title: {
     color: "#ffffff",
-    fontSize: 20,
-    fontWeight: "700",
+    ...uiTypography.title,
+    fontWeight: "800",
   },
   subtitle: {
     color: "#a8a4b8",
     fontSize: 13,
+    lineHeight: 18,
     marginTop: 2,
     maxWidth: 300,
   },
   closeBtnWrapper: {
     backgroundColor: "rgba(255, 255, 255, 0.08)",
-    padding: 7,
-    borderRadius: 8,
+    padding: uiSpacing.sm - 1,
+    borderRadius: uiRadii.xs,
   },
   pressed: {
     opacity: 0.72,
@@ -479,14 +481,14 @@ const styles = StyleSheet.create({
   readiness: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: uiSpacing.sm,
     backgroundColor: "rgba(134, 239, 172, 0.08)",
     borderWidth: 1,
     borderColor: "rgba(134, 239, 172, 0.18)",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    borderRadius: uiRadii.xs,
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm + 2,
+    marginBottom: uiSpacing.md,
   },
   readinessFailed: {
     backgroundColor: "rgba(253, 164, 175, 0.08)",
@@ -494,6 +496,7 @@ const styles = StyleSheet.create({
   },
   readinessText: {
     color: "#dedbea",
+    ...uiTypography.caption,
     fontSize: 13,
     fontWeight: "600",
     flex: 1,
@@ -502,7 +505,7 @@ const styles = StyleSheet.create({
     color: "#fda4af",
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 12,
+    marginBottom: uiSpacing.md,
   },
   emptyText: {
     color: "#a8a4b8",
@@ -516,15 +519,15 @@ const styles = StyleSheet.create({
     paddingVertical: 34,
   },
   deviceList: {
-    gap: 10,
+    gap: uiSpacing.sm + 2,
   },
   deviceItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "rgba(255, 255, 255, 0.045)",
-    padding: 15,
-    borderRadius: 8,
+    padding: uiSpacing.lg - 1,
+    borderRadius: uiRadii.xs,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.07)",
   },
@@ -538,7 +541,7 @@ const styles = StyleSheet.create({
   deviceInfoContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: uiSpacing.lg - 2,
     flex: 1,
     minWidth: 0,
   },
@@ -565,19 +568,19 @@ const styles = StyleSheet.create({
     color: "#ede9fe",
   },
   refreshBtn: {
-    marginTop: 18,
-    padding: 12,
+    marginTop: uiSpacing.xl - 2,
+    padding: uiSpacing.md,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
   refreshIcon: {
-    marginRight: 8,
+    marginRight: uiSpacing.sm,
   },
   refreshText: {
     color: "#d8d4e3",
-    fontWeight: "600",
-    fontSize: 14,
+    ...uiTypography.control,
+    fontWeight: "700",
   },
   refreshDisabled: {
     color: "#777386",
