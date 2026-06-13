@@ -53,6 +53,10 @@ function formatSize(sizeBytes?: number) {
   return sizeBytes ? formatBytes(sizeBytes) : null;
 }
 
+function formatAction(action: PlaybackAction) {
+  return action.charAt(0).toUpperCase() + action.slice(1);
+}
+
 function CandidateRow({
   candidate,
   selected,
@@ -62,6 +66,7 @@ function CandidateRow({
 }) {
   const { colors, isDark } = useTheme();
   const size = formatSize(candidate.sizeBytes);
+  const actionLabel = formatAction(candidate.actionEligibility.action);
   const eligibilityTone = candidate.actionEligibility.eligible
     ? "success"
     : "warning";
@@ -81,7 +86,7 @@ function CandidateRow({
       <View style={styles.candidateHeader}>
         <View style={styles.rankBubble}>
           <Text style={[styles.rankText, { color: colors.tint }]}>
-            #{candidate.rank}
+            #{candidate.rank + 1}
           </Text>
         </View>
         <View style={styles.candidateTitleWrap}>
@@ -102,7 +107,11 @@ function CandidateRow({
 
       <View style={styles.pillRow}>
         <StatusPill
-          label={candidate.actionEligibility.eligible ? "Eligible" : "Blocked"}
+          label={
+            candidate.actionEligibility.eligible
+              ? `${actionLabel} eligible`
+              : `${actionLabel} blocked`
+          }
           tone={eligibilityTone}
         />
         {selected ? <StatusPill label="Selected" tone="info" /> : null}
@@ -133,6 +142,7 @@ function CandidateRow({
 
 function RejectedRow({ candidate }: { candidate: RejectedCandidate }) {
   const { colors, isDark } = useTheme();
+  const actionLabel = formatAction(candidate.actionEligibility.action);
 
   return (
     <View
@@ -157,6 +167,7 @@ function RejectedRow({ candidate }: { candidate: RejectedCandidate }) {
       {candidate.requiresBridge ? (
         <StatusPill label="Bridge" tone="warning" />
       ) : null}
+      <StatusPill label={`${actionLabel} blocked`} tone="warning" />
     </View>
   );
 }
@@ -406,11 +417,11 @@ export function SourceInspectorPanel({
           onPress={handleExport}
           disabled={exporting}
           accessibilityRole="button"
-          accessibilityLabel="Copy debug bundle"
+          accessibilityLabel="Copy safe debug bundle"
         >
           <Ionicons name="bug-outline" size={16} color={colors.textSecondary} />
           <Text style={[styles.footerButtonText, { color: colors.text }]}>
-            {exporting ? "Exporting..." : "Debug bundle"}
+            {exporting ? "Exporting..." : "Copy safe debug bundle"}
           </Text>
         </Pressable>
       </View>

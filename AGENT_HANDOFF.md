@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-12.
+> Last updated: 2026-06-13.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -442,7 +442,11 @@ UI polish in one PR.
 
 16. **PR #121: More Sources and safe debug bundle v2.** Keep advanced source
     inspection collapsed, redacted, and useful for support without making it the
-    primary UX.
+    primary UX. The current implementation exposes action-specific candidate
+    eligibility, user-facing candidate ranks, rejected-source reasons, and a
+    safe debug bundle containing app/build, device profile, bridge, session,
+    planner, and download snapshots without raw URLs, magnets, tokens, or local
+    paths.
 17. **PR #122: Smart Downloads.** Add opt-in next-episode, storage-limit,
     Wi-Fi-only, quality, and per-series download rules after Offline Library v2.
 18. **PR #123: Personalization and profiles light.** Add local preferences for

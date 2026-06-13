@@ -16,6 +16,8 @@ import {
 } from "../stores/downloadStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import { redactSensitiveText } from "./redaction";
+import { clientBuildMetadata } from "./buildMetadata";
+import { getDeviceProfile } from "./playback/deviceProfile";
 
 const cacheDirectory = (FileSystem as any).cacheDirectory;
 const REDACTED = "[redacted]";
@@ -38,10 +40,12 @@ export interface DebugBundleInput {
 export interface DebugBundle {
   schemaVersion: 1;
   createdAt: string;
+  app: JsonValue;
+  device: JsonValue;
   platform: string;
   context?: JsonValue;
   bridge: JsonValue;
-  session?: JsonValue;
+  session: JsonValue;
   planner?: JsonValue;
   downloads: JsonValue[];
 }
@@ -205,8 +209,27 @@ export function createSafePlaybackPlanSnapshot(plan?: PlaybackPlan | null) {
 }
 
 function safePlaybackSessionSnapshot(session?: PlaybackSession | null) {
-  if (!session) return undefined;
+  if (!session) return null;
   return sanitizeDebugValue(session);
+}
+
+function safeAppSnapshot() {
+  return sanitizeDebugValue({
+    version: clientBuildMetadata.appVersion,
+    gitShaShort: clientBuildMetadata.gitShaShort,
+    buildDate: clientBuildMetadata.buildDate,
+    buildChannel: clientBuildMetadata.buildChannel,
+    environment: clientBuildMetadata.environment,
+    runtime: clientBuildMetadata.runtimeType,
+    release: clientBuildMetadata.release,
+  });
+}
+
+function safeDeviceSnapshot() {
+  return sanitizeDebugValue({
+    platform: Platform.OS,
+    profile: getDeviceProfile(),
+  });
 }
 
 function safeBridgeSnapshot() {
@@ -261,10 +284,12 @@ export function createDebugBundle(input: DebugBundleInput = {}): DebugBundle {
   return {
     schemaVersion: 1,
     createdAt: new Date().toISOString(),
+    app: safeAppSnapshot() ?? {},
+    device: safeDeviceSnapshot() ?? {},
     platform: Platform.OS,
     context: sanitizeDebugValue(input.context),
     bridge: safeBridgeSnapshot(),
-    session: safePlaybackSessionSnapshot(session),
+    session: safePlaybackSessionSnapshot(session) ?? null,
     planner: createSafePlaybackPlanSnapshot(plan),
     downloads: downloads
       .map(safeDownloadTask)
