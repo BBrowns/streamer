@@ -35,6 +35,7 @@ import { SettingsSection } from "../../components/settings/SettingsSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
 import { LanguageSection } from "../../components/settings/LanguageSection";
 import { SourcesSection } from "../../components/settings/SourcesSection";
+import { PersonalizationSection } from "../../components/settings/PersonalizationSection";
 import { SmartDownloadsPanel } from "../../components/downloads/SmartDownloadsPanel";
 import {
   clientBuildMetadata,
@@ -557,6 +558,12 @@ function SettingsContent() {
             color={colors.textSecondary}
           />
         </Pressable>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.smartDownloadsSettingsPanel}>
+          <PersonalizationSection framed={false} />
+        </View>
       </SettingsSection>
 
       {/* Account & Sync */}
