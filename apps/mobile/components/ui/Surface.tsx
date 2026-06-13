@@ -1,8 +1,9 @@
 import React from "react";
 import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import { getSurfaceColors, uiRadii, uiSpacing } from "./designSystem";
 
-type SurfaceVariant = "default" | "accent" | "warning" | "plain";
+type SurfaceVariant = "default" | "accent" | "warning" | "danger" | "plain";
 
 type SurfaceProps = {
   children: React.ReactNode;
@@ -18,25 +19,11 @@ export function Surface({
   style,
 }: SurfaceProps) {
   const { colors, isDark } = useTheme();
-  const backgroundColor =
-    variant === "accent"
-      ? "rgba(216,180,254,0.10)"
-      : variant === "warning"
-        ? "rgba(251, 191, 36, 0.09)"
-        : variant === "plain"
-          ? "transparent"
-          : isDark
-            ? "rgba(255,255,255,0.05)"
-            : colors.card;
+  const surfaceColors = getSurfaceColors(colors, isDark, variant);
 
   return (
     <View
-      style={[
-        styles.surface,
-        padded && styles.padded,
-        { backgroundColor, borderColor: colors.border },
-        style,
-      ]}
+      style={[styles.surface, padded && styles.padded, surfaceColors, style]}
     >
       {children}
     </View>
@@ -45,10 +32,10 @@ export function Surface({
 
 const styles = StyleSheet.create({
   surface: {
-    borderRadius: 16,
+    borderRadius: uiRadii.md,
     borderWidth: 1,
   },
   padded: {
-    padding: 16,
+    padding: uiSpacing.lg,
   },
 });

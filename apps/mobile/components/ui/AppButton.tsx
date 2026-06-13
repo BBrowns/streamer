@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { uiRadii, uiSpacing, uiTypography } from "./designSystem";
 
 type AppButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type AppButtonSize = "small" | "medium" | "large";
@@ -105,34 +106,33 @@ export function AppButton({
 const styles = StyleSheet.create({
   button: {
     minHeight: 44,
-    borderRadius: 14,
+    borderRadius: uiRadii.sm,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: uiSpacing.sm,
   },
   small: {
     minHeight: 36,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm,
+    borderRadius: uiRadii.lg,
   },
   medium: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.md,
   },
   large: {
     minHeight: 52,
-    paddingHorizontal: 18,
-    paddingVertical: 15,
+    paddingHorizontal: uiSpacing.xl,
+    paddingVertical: uiSpacing.lg,
   },
   fullWidth: {
     flex: 1,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "800",
+    ...uiTypography.control,
   },
   labelSmall: {
     fontSize: 12,

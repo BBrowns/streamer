@@ -1,6 +1,8 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import { Surface } from "../ui/Surface";
+import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
 
 interface SettingsSectionProps {
   title?: string;
@@ -25,14 +27,9 @@ export function SettingsSection({
         </Text>
       )}
       {framed ? (
-        <View
-          style={[
-            styles.sectionGroupContent,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
+        <Surface padded={false} style={styles.sectionGroupContent}>
           {children}
-        </View>
+        </Surface>
       ) : (
         <View style={styles.sectionGroupPlain}>{children}</View>
       )}
@@ -42,18 +39,15 @@ export function SettingsSection({
 
 const styles = StyleSheet.create({
   sectionGroup: {
-    marginBottom: 28,
+    marginBottom: uiSpacing.xxl + uiSpacing.xs,
   },
   sectionGroupTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0,
-    marginBottom: 8,
-    marginLeft: 8,
+    ...uiTypography.sectionLabel,
+    marginBottom: uiSpacing.sm,
+    marginLeft: uiSpacing.sm,
   },
   sectionGroupContent: {
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: uiRadii.md,
     overflow: "hidden",
   },
   sectionGroupPlain: {},

@@ -2,8 +2,13 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
-
-type StatusTone = "success" | "warning" | "error" | "neutral" | "info";
+import {
+  getToneColor,
+  type StatusTone,
+  uiRadii,
+  uiSpacing,
+  uiTypography,
+} from "./designSystem";
 
 type StatusPillProps = {
   label: string;
@@ -13,16 +18,7 @@ type StatusPillProps = {
 
 export function StatusPill({ label, tone = "neutral", icon }: StatusPillProps) {
   const { colors } = useTheme();
-  const toneColor =
-    tone === "success"
-      ? colors.success
-      : tone === "warning"
-        ? colors.warning
-        : tone === "error"
-          ? colors.error
-          : tone === "info"
-            ? colors.tint
-            : colors.textSecondary;
+  const toneColor = getToneColor(colors, tone);
 
   return (
     <View
@@ -46,15 +42,15 @@ const styles = StyleSheet.create({
   pill: {
     alignSelf: "flex-start",
     minHeight: 28,
-    borderRadius: 999,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: uiSpacing.xs + 2,
   },
   label: {
-    fontSize: 12,
+    ...uiTypography.caption,
     fontWeight: "800",
   },
 });
