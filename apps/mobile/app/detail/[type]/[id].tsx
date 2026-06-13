@@ -35,6 +35,8 @@ import {
 } from "../../../services/playback/PlaybackOrchestrator";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 import { useCastStore } from "../../../stores/castStore";
+import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
+import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -293,6 +295,31 @@ export default function DetailScreen() {
     router.push("/player");
   };
 
+  const maybePlanNextEpisode = (
+    downloadedSeason?: number,
+    downloadedEpisode?: number,
+  ) => {
+    const smartDownloads = useSmartDownloadStore.getState();
+    if (
+      castType !== "series" ||
+      !smartDownloads.preferences.enabled ||
+      !smartDownloads.preferences.autoDownloadNextEpisode ||
+      typeof downloadedSeason !== "number" ||
+      typeof downloadedEpisode !== "number"
+    ) {
+      return;
+    }
+
+    const plan = createNextEpisodePlan({
+      seriesId: id || "unknown",
+      title: meta?.name,
+      videos: meta?.videos || [],
+      downloadedSeason,
+      downloadedEpisode,
+    });
+    if (plan) smartDownloads.planNextEpisode(plan);
+  };
+
   const handleDownloadStream = async (
     stream?: Stream,
     episodeTitle?: string,
@@ -345,6 +372,7 @@ export default function DetailScreen() {
               attemptId: result.attemptId,
             },
           });
+          maybePlanNextEpisode(season, episode);
           return;
         } finally {
           setPlanningAction(null);
@@ -363,6 +391,7 @@ export default function DetailScreen() {
         season,
         episode,
       });
+      maybePlanNextEpisode(season, episode);
     } catch (e) {
       showPlanMessage(null, t("detail.errors.downloadFailed"), "download");
     }

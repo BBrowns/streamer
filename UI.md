@@ -446,6 +446,10 @@ For series, it additionally renders the `EpisodeSelector` component to let the u
 The settings screen is divided into user-facing sections with
 `SettingsSection` and shared UI primitives:
 
+Smart Downloads is shown as an opt-in Downloads setting. It must stay disabled
+by default, must state that HLS offline remains unsupported, and must present
+planned next episodes as planned intents rather than completed offline files.
+
 - **Sources & Add-ons** — playback readiness and add-on management.
 - **Playback & Downloads** — desktop bridge/cast readiness and Downloads.
 - **Account & Sync** — profile, Trakt, active sessions, and password.

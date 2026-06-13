@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DownloadQueueCard } from "../../components/downloads/DownloadQueueCard";
+import { SmartDownloadsPanel } from "../../components/downloads/SmartDownloadsPanel";
 import {
   formatBytes,
   getDownloadQueueGroup,
@@ -290,19 +291,22 @@ export default function DownloadsScreen() {
   if (tasks.length === 0 && !refreshing) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <EmptyState
-          size="large"
-          icon="cloud-download-outline"
-          title={t("downloads.empty.title", { defaultValue: "No downloads" })}
-          description={t("downloads.empty.description", {
-            defaultValue:
-              "Movies and shows you save for offline viewing will appear here.",
-          })}
-          actionLabel={t("downloads.empty.action", {
-            defaultValue: "Browse movies and shows",
-          })}
-          onAction={() => router.push("/discover")}
-        />
+        <View style={styles.emptyContent}>
+          <EmptyState
+            size="large"
+            icon="cloud-download-outline"
+            title={t("downloads.empty.title", { defaultValue: "No downloads" })}
+            description={t("downloads.empty.description", {
+              defaultValue:
+                "Movies and shows you save for offline viewing will appear here.",
+            })}
+            actionLabel={t("downloads.empty.action", {
+              defaultValue: "Browse movies and shows",
+            })}
+            onAction={() => router.push("/discover")}
+          />
+          <SmartDownloadsPanel />
+        </View>
       </View>
     );
   }
@@ -390,6 +394,10 @@ export default function DownloadsScreen() {
               onChange={setFilter}
               containerStyle={styles.filters}
             />
+
+            <View style={styles.smartDownloadsPanel}>
+              <SmartDownloadsPanel />
+            </View>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -514,6 +522,15 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 18,
   },
+  emptyContent: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+    justifyContent: "center",
+    gap: 18,
+    padding: 18,
+  },
   headerTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -573,6 +590,9 @@ const styles = StyleSheet.create({
     marginTop: 15,
     marginBottom: 0,
     marginHorizontal: -16,
+  },
+  smartDownloadsPanel: {
+    marginTop: 16,
   },
   sectionHeader: {
     marginTop: 10,
