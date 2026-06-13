@@ -275,6 +275,8 @@ jobs:
         env:
           STREAMER_GIT_SHA: ${{ github.sha }}
           STREAMER_BUILD_ENVIRONMENT: test
+      - name: Validate RC evidence generator
+        run: npm run rc:evidence:test
       - name: Upload Sentry Release Artifacts
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: npm run sentry:release
@@ -366,10 +368,24 @@ jobs:
           node-version: "24"
       - name: Run release gate
         run: npm run release:gate
+      - name: Generate RC evidence bundle
+        run: npm run rc:evidence
+        env:
+          STREAMER_GIT_SHA: ${{ github.sha }}
+          STREAMER_BUILD_DATE: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+          STREAMER_BUILD_CHANNEL: ci
+          STREAMER_BUILD_ENVIRONMENT: test
       - name: Upload release gate summary
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ci-summary-release-gate
           path: artifacts/ci-summaries/release-gate.md
+          retention-days: 14
+      - name: Upload RC evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc-evidence-bundle
+          path: artifacts/rc-evidence/rc-evidence.md
           retention-days: 14

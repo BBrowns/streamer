@@ -398,7 +398,9 @@ UI polish in one PR.
    bridge trust boundary.
 10. **PR #115: Observability and RC evidence bundle.** Tie Sentry/release
     health, source maps, privacy-safe breadcrumbs, failure buckets, CI summary,
-    QA matrix links, known issues, and release blockers together.
+    QA matrix links, known issues, and release blockers together. This PR adds
+    an `rc:evidence` generator, CI artifact upload, release-gate checks, and an
+    explicit shared failure-bucket taxonomy for release-candidate review.
 
 ### Phase 4: Design System And UX Polish
 

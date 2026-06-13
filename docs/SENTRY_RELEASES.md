@@ -104,6 +104,24 @@ Use `createStreamerBreadcrumb()` from `@streamer/shared` before calling
 `Sentry.addBreadcrumb()` in any runtime. Runtime-specific Sentry
 `beforeBreadcrumb` hooks are still kept as a second redaction layer.
 
+## Failure Buckets
+
+Release-candidate evidence tracks these top-level failure buckets so support,
+QA, and Sentry triage use the same vocabulary:
+
+- `no_peers`
+- `timeout`
+- `bridge_unavailable`
+- `unsupported_codec`
+- `remux_unavailable`
+- `cast_unreachable`
+- `download_verification_failed`
+- `security_policy_blocked`
+
+These buckets are intentionally coarse. Detailed session, planner, gateway,
+download, or cast context belongs in privacy-safe breadcrumbs and debug bundles,
+not in raw logs.
+
 ## Release Health
 
 Mobile and Electron SDKs can report release/session health when their Sentry
@@ -111,3 +129,15 @@ SDK supports it and the runtime is configured with DSN, release, and
 environment metadata. Node server and stream-server health is represented
 through release-tagged errors, breadcrumbs, deploy metadata, and health
 endpoints rather than user-session tracking.
+
+## RC Evidence Bundle
+
+CI generates `artifacts/rc-evidence/rc-evidence.md` through:
+
+```bash
+npm run rc:evidence
+```
+
+The artifact summarizes build metadata, required CI jobs, Sentry/source-map
+status, failure buckets, QA links, known release blockers, and privacy checks.
+It is evidence for go/no-go review, not an automatic release-ready claim.

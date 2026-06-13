@@ -77,8 +77,12 @@ function checkCiWorkflow() {
       "npm run release:check --workspace=@streamer/desktop",
       "desktop release config smoke",
     ],
+    ["npm run sentry:release:dry-run", "Sentry release dry-run"],
+    ["npm run rc:evidence:test", "RC evidence generator test"],
+    ["npm run rc:evidence", "RC evidence generation"],
     ["npm run release:gate", "release gate"],
     ["ci-summaries", "test summary artifacts"],
+    ["rc-evidence-bundle", "RC evidence artifact"],
     ["apps/desktop/release", "desktop package artifact"],
     ["actions/upload-artifact@v4", "artifact upload"],
   ];
@@ -248,6 +252,18 @@ function checkSecurityCoverage() {
     "raw media URL redaction policy",
   );
   requireText("docs/SENTRY_RELEASES.md", "magnets", "magnet redaction policy");
+  requireFile("scripts/rc-evidence.mjs");
+  requireFile("scripts/rc-evidence.test.mjs");
+  requireText(
+    "scripts/rc-evidence.mjs",
+    "failureBuckets",
+    "RC evidence failure bucket taxonomy",
+  );
+  requireText(
+    "scripts/rc-evidence.mjs",
+    "rc-evidence.md",
+    "RC evidence artifact path",
+  );
   requireText(
     "docs/DESKTOP_UPDATES.md",
     "autoUpdater.autoDownload = false",
