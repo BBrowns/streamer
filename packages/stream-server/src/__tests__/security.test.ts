@@ -15,6 +15,7 @@ import { getSafeCastContentType } from "../cast.js";
 const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
 const previousGatewayStreamSecret = process.env.STREAMER_GATEWAY_STREAM_SECRET;
 const previousGatewayStreamTtl = process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
+const previousNodeEnv = process.env.NODE_ENV;
 
 function protectedApp() {
   const app = express();
@@ -120,6 +121,12 @@ describe("Bridge auth", () => {
     } else {
       process.env.STREAMER_BRIDGE_TOKEN = previousBridgeToken;
     }
+
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 
   it("keeps bridge auth disabled by default for local development", async () => {
@@ -129,6 +136,19 @@ describe("Bridge auth", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  it("fails closed in production when bridge auth is not configured", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.STREAMER_BRIDGE_TOKEN;
+
+    const res = await request(protectedApp()).get("/protected");
+
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({
+      error: "Bridge authentication is not configured",
+      code: "BRIDGE_AUTH_NOT_CONFIGURED",
+    });
   });
 
   it("requires a bearer token when bridge auth is configured", async () => {

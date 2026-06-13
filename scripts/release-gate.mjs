@@ -207,6 +207,16 @@ function checkProductionDefaults() {
     /Boolean\(dsn\)\s*&&\s*nodeEnv\s*!==\s*"test"\s*&&\s*\(nodeEnv\s*===\s*"production"\s*\|\|\s*enableDev\)/,
     "desktop Sentry disabled in dev by default",
   );
+  requireText(
+    "packages/stream-server/src/security.ts",
+    'process.env.NODE_ENV === "production"',
+    "bridge auth distinguishes production from local development",
+  );
+  requireText(
+    "packages/stream-server/src/security.ts",
+    "BRIDGE_AUTH_NOT_CONFIGURED",
+    "production bridge auth fails closed when token is missing",
+  );
 }
 
 function checkSecurityCoverage() {
