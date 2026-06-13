@@ -456,7 +456,12 @@ UI polish in one PR.
     reliable across mobile platforms yet.
 18. **PR #123: Personalization and profiles light.** Add local preferences for
     quality, subtitles, audio language, autoplay, preferred providers, and watch
-    history improvements.
+    history improvements. Current implementation keeps this intentionally
+    local and lightweight: playback quality, subtitle language, audio language,
+    and autoplay-next preferences live in `playerStore`, are exposed in
+    Settings, and the Play Best planner request uses the selected quality as
+    the maximum playback quality. It does not introduce account profiles,
+    parental controls, or recommendation algorithms yet.
 19. **PR #124: Delight features.** Add small, separately testable polish such
     as seek previews, resume prompts, ambient backdrops, PiP, keyboard shortcut
     overlay, haptics, and cast mini-controller after reliability work.

@@ -8,7 +8,24 @@ import type {
 import { playbackPlanSchema } from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import { usePlayerStore } from "../../stores/playerStore";
 import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
+
+function applyLocalPlaybackPreferences(
+  deviceProfile: DeviceProfile,
+  action: PlaybackAction,
+): DeviceProfile {
+  const { preferredQuality } = usePlayerStore.getState();
+
+  if (action !== "play" || preferredQuality === "auto") {
+    return deviceProfile;
+  }
+
+  return {
+    ...deviceProfile,
+    maxQuality: preferredQuality,
+  };
+}
 
 export async function createPlaybackPlan(
   input: Pick<PlaybackPlanRequest, "type" | "id" | "season" | "episode"> & {
@@ -17,11 +34,15 @@ export async function createPlaybackPlan(
   },
 ): Promise<PlaybackPlan> {
   const { deviceProfile: requestedDeviceProfile, ...request } = input;
-  const deviceProfile =
+  const baseDeviceProfile =
     requestedDeviceProfile ??
     (input.action === "cast"
       ? getChromecastDeviceProfile()
       : getDeviceProfile());
+  const deviceProfile = applyLocalPlaybackPreferences(
+    baseDeviceProfile,
+    input.action,
+  );
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
 
   const { data } = await api.post<PlaybackPlan>("/api/playback/plan", {

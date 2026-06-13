@@ -450,8 +450,15 @@ Smart Downloads is shown as an opt-in Downloads setting. It must stay disabled
 by default, must state that HLS offline remains unsupported, and must present
 planned next episodes as planned intents rather than completed offline files.
 
+Personalization is local-only in the current implementation. Playback quality,
+subtitle language, audio language, and autoplay-next preferences are exposed in
+Settings and persisted in `playerStore`. Play Best uses the selected playback
+quality as the maximum planner quality; subtitles/audio remain player
+preferences until richer track selection is available.
+
 - **Sources & Add-ons** — playback readiness and add-on management.
-- **Playback & Downloads** — desktop bridge/cast readiness and Downloads.
+- **Playback & Downloads** — desktop bridge/cast readiness, Downloads, Smart
+  Downloads, and Personalization.
 - **Account & Sync** — profile, Trakt, active sessions, and password.
 - **Application** — appearance, language, biometrics, and desktop update card
   when the Electron bridge API is available.

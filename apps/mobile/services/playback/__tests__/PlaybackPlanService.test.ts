@@ -1,5 +1,6 @@
 import { api } from "../../api";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
+import { usePlayerStore } from "../../../stores/playerStore";
 import {
   makePlaybackPlan,
   makePlannedMediaCandidate,
@@ -51,6 +52,37 @@ describe("PlaybackPlanService", () => {
       status: "available",
       url: "http://bridge.test",
     });
+    usePlayerStore.setState({
+      preferredQuality: "auto",
+      preferredAudioLang: null,
+      preferredSubtitleLang: null,
+      autoPlayNext: true,
+    });
+  });
+
+  it("applies the local playback quality preference to planner device profiles", async () => {
+    usePlayerStore.setState({ preferredQuality: "720p" });
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate(),
+          fallbackCandidates: [],
+        },
+      }),
+    });
+
+    await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/playback/plan",
+      expect.objectContaining({
+        deviceProfile: expect.objectContaining({
+          maxQuality: "720p",
+        }),
+      }),
+    );
   });
 
   it("includes bridge diagnostics when requesting a playback plan", async () => {
