@@ -35,6 +35,41 @@ const STARTER_ADDONS = [
   },
 ];
 
+const SETUP_CHECKS = [
+  {
+    icon: "albums-outline" as const,
+    titleKey: "onboarding.setupCheck.sources",
+    fallbackTitle: "Sources & metadata",
+    bodyKey: "onboarding.setupCheck.sourcesBody",
+    fallbackBody:
+      "Install Cinemeta now; add streaming add-ons later from Settings.",
+  },
+  {
+    icon: "desktop-outline" as const,
+    titleKey: "onboarding.setupCheck.bridge",
+    fallbackTitle: "Desktop bridge",
+    bodyKey: "onboarding.setupCheck.bridgeBody",
+    fallbackBody:
+      "Desktop can prepare torrent/remux playback and share its LAN URL.",
+  },
+  {
+    icon: "cloud-download-outline" as const,
+    titleKey: "onboarding.setupCheck.offlineCast",
+    fallbackTitle: "Downloads & cast",
+    bodyKey: "onboarding.setupCheck.offlineCastBody",
+    fallbackBody:
+      "Offline and casting become available only when a source supports it.",
+  },
+  {
+    icon: "shield-checkmark-outline" as const,
+    titleKey: "onboarding.setupCheck.privacy",
+    fallbackTitle: "Privacy",
+    bodyKey: "onboarding.setupCheck.privacyBody",
+    fallbackBody:
+      "Raw stream URLs, magnets, and tokens are not included in diagnostics.",
+  },
+];
+
 export default function OnboardingSetup() {
   const router = useRouter();
   const theme = useAuthStore((s) => s.theme);
@@ -83,6 +118,66 @@ export default function OnboardingSetup() {
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             {t("onboarding.subtitle")}
           </Text>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.setupHeader}>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={22}
+              color={colors.tint}
+            />
+            <View style={styles.setupHeaderCopy}>
+              <Text style={[styles.sectionLabel, { color: colors.text }]}>
+                {t("onboarding.setupCheck.title", {
+                  defaultValue: "Check setup",
+                })}
+              </Text>
+              <Text
+                style={[styles.sectionDesc, { color: colors.textSecondary }]}
+              >
+                {t("onboarding.setupCheck.subtitle", {
+                  defaultValue:
+                    "Streamer should feel simple, but playback still depends on your sources and device readiness.",
+                })}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.setupList}>
+            {SETUP_CHECKS.map((item) => (
+              <View
+                key={item.titleKey}
+                style={[
+                  styles.setupItem,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.035)"
+                      : "rgba(0,0,0,0.025)",
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.setupIcon,
+                    { backgroundColor: `${colors.tint}18` },
+                  ]}
+                >
+                  <Ionicons name={item.icon} size={18} color={colors.tint} />
+                </View>
+                <View style={styles.setupCopy}>
+                  <Text style={[styles.setupTitle, { color: colors.text }]}>
+                    {t(item.titleKey, { defaultValue: item.fallbackTitle })}
+                  </Text>
+                  <Text
+                    style={[styles.setupBody, { color: colors.textSecondary }]}
+                  >
+                    {t(item.bodyKey, { defaultValue: item.fallbackBody })}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
 
         {/* Theme Selection */}
@@ -264,6 +359,46 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionDesc: { fontSize: 13, marginBottom: 16 },
+  setupHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 14,
+  },
+  setupHeaderCopy: {
+    flex: 1,
+  },
+  setupList: {
+    gap: 10,
+  },
+  setupItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  setupIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  setupCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  setupTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  setupBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
   themeRow: { flexDirection: "row", gap: 12 },
   themeOption: {
     flex: 1,

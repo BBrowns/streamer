@@ -187,6 +187,18 @@
     "terms": "Voorwaarden",
     "and": "en",
     "privacy": "Privacybeleid",
+    "setupCheck": {
+      "title": "Setup controleren",
+      "subtitle": "Streamer moet simpel voelen, maar afspelen hangt nog steeds af van je bronnen en apparaatstatus.",
+      "sources": "Bronnen & metadata",
+      "sourcesBody": "Installeer Cinemeta nu; voeg streaming-add-ons later toe via Instellingen.",
+      "bridge": "Desktop bridge",
+      "bridgeBody": "Desktop kan torrent/remux-afspelen voorbereiden en zijn LAN-URL delen.",
+      "offlineCast": "Downloads & casten",
+      "offlineCastBody": "Offline en casten zijn alleen beschikbaar wanneer een bron dit ondersteunt.",
+      "privacy": "Privacy",
+      "privacyBody": "Ruwe stream-URL's, magnets en tokens worden niet opgenomen in diagnostiek."
+    },
     "finish": "Voltooien & Inloggen"
   },
   "settings": {
@@ -202,6 +214,7 @@
       "sourcesDevices": "Bronnen & apparaten",
       "sourcesAddons": "Bronnen & add-ons",
       "playbackDownloads": "Afspelen & downloads",
+      "about": "Over & updates",
       "advanced": "Geavanceerd"
     },
     "items": {
@@ -241,6 +254,10 @@
       "apply": "Wijzigingen toepassen",
       "successTitle": "Instellingen opgeslagen",
       "successMessage": "Je server- en bridge-instellingen zijn bijgewerkt."
+    },
+    "about": {
+      "releasePolicy": "Desktop-updates worden handmatig gecontroleerd totdat de release-pipeline volledig is gevalideerd.",
+      "checkUpdates": "Controleer op updates"
     },
     "alerts": {
       "deleteAccountTitle": "Account verwijderen",
