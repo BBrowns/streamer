@@ -449,6 +449,11 @@ UI polish in one PR.
     paths.
 17. **PR #122: Smart Downloads.** Add opt-in next-episode, storage-limit,
     Wi-Fi-only, quality, and per-series download rules after Offline Library v2.
+    Current implementation keeps automation disabled by default, stores local
+    smart-download preferences and planned next-episode intents, shows those
+    controls on Downloads and Settings, and only records a next-episode plan
+    after a series download starts. It does not claim background downloads are
+    reliable across mobile platforms yet.
 18. **PR #123: Personalization and profiles light.** Add local preferences for
     quality, subtitles, audio language, autoplay, preferred providers, and watch
     history improvements.

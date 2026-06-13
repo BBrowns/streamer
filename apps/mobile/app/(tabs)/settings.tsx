@@ -35,6 +35,7 @@ import { SettingsSection } from "../../components/settings/SettingsSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
 import { LanguageSection } from "../../components/settings/LanguageSection";
 import { SourcesSection } from "../../components/settings/SourcesSection";
+import { SmartDownloadsPanel } from "../../components/downloads/SmartDownloadsPanel";
 import {
   clientBuildMetadata,
   formatBuildLabel,
@@ -465,6 +466,12 @@ function SettingsContent() {
             color={colors.textSecondary}
           />
         </Pressable>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.smartDownloadsSettingsPanel}>
+          <SmartDownloadsPanel framed={false} />
+        </View>
       </SettingsSection>
 
       {/* Playback & Downloads */}
@@ -1202,6 +1209,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     minHeight: 80,
+  },
+  smartDownloadsSettingsPanel: {
+    padding: 12,
   },
   menuItemActive: {
     backgroundColor: "rgba(216,180,254,0.14)",
