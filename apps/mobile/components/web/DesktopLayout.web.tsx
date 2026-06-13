@@ -47,9 +47,12 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
 
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
-    if (text.length > 0 && pathname !== "/search") {
+    if (text.trim().length > 0) {
       searchTimeoutRef.current = setTimeout(() => {
-        router.push("/search" as any);
+        router.push({
+          pathname: "/search",
+          params: { q: text.trim() },
+        } as any);
       }, 300); // 300ms debounce
     }
   };

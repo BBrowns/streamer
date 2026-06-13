@@ -1,13 +1,38 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const RECENT_SEARCHES_KEY = "RECENT_SEARCHES";
+const LEGACY_SEARCHES_KEY = "@search_history";
 const MAX_RECENT_SEARCHES = 10;
+
+function parseSearches(value: string | null): string[] {
+  if (!value) return [];
+  const parsed = JSON.parse(value);
+  return Array.isArray(parsed)
+    ? parsed.filter((item): item is string => typeof item === "string")
+    : [];
+}
 
 export const SearchService = {
   async getRecentSearches(): Promise<string[]> {
     try {
       const data = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
-      return data ? JSON.parse(data) : [];
+      const current = parseSearches(data);
+      if (current.length > 0) return current;
+
+      const legacy = parseSearches(
+        await AsyncStorage.getItem(LEGACY_SEARCHES_KEY),
+      );
+      if (legacy.length > 0) {
+        const migrated = legacy.slice(0, MAX_RECENT_SEARCHES);
+        await AsyncStorage.setItem(
+          RECENT_SEARCHES_KEY,
+          JSON.stringify(migrated),
+        );
+        await AsyncStorage.removeItem(LEGACY_SEARCHES_KEY);
+        return migrated;
+      }
+
+      return [];
     } catch (e) {
       console.error("Failed to load recent searches", e);
       return [];

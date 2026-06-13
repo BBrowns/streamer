@@ -233,7 +233,10 @@ export default function HomeScreen() {
 
 ### 4.4 `FilterChipBar`
 
-A horizontal scrollable row of toggle chips. Used on the home screen to switch between Movies and Series. Implemented with `ScrollView horizontal` — not `FlatList` — because the number of options is always small and known.
+A horizontal scrollable row of toggle chips. Used for compact filter sets such
+as Discover type, Downloads queue state, and Search type/year filters.
+Implemented with `ScrollView horizontal` — not `FlatList` — because these
+option lists are small and known.
 
 ### 4.5 `OfflineBanner`
 
@@ -245,7 +248,32 @@ A thin horizontal progress bar rendered below catalog cards to indicate watch pr
 
 ### 4.7 `CommandPalette`
 
-A keyboard-driven search overlay (web/desktop). Triggered by `⌘K`. Renders a modal with a text input and live search results using `useGlobalSearch`. Uses `KeyboardAvoidingView` and handles `Escape` key to dismiss.
+A keyboard-driven search overlay (web/desktop). Triggered by `⌘K`. Renders a
+modal with a text input and live search results using `useGlobalSearch`; Enter
+opens the unified `/search/results?q=...` route. Recent searches use
+`SearchService`, the same storage used by the mobile/Discover search overlay
+and `/search`.
+
+### 4.7.1 Unified Search Screen
+
+`app/search/index.tsx` and `app/search/results.tsx` render the same search
+experience. `/search` supports an optional `q` param, and
+`/search/results?q=...` remains a compatibility route for existing callers.
+The screen provides:
+
+- editable search input
+- recent searches
+- a search suggestion when typed text has not been submitted
+- skeleton loading
+- retryable error state
+- no-results state
+- type filters (`All`, `Movies`, `Series`)
+- year filters derived from returned metadata
+
+Search filters are intentionally applied client-side over `/api/search?q=...`
+results. Add-on search support is not uniform enough to make provider/genre/
+quality filtering a reliable backend contract yet. Do not expose source picking
+as the primary search UX.
 
 ### 4.8 `DesktopLayout`
 

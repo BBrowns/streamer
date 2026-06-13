@@ -15,9 +15,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useGlobalSearch } from "../../hooks/useGlobalSearch";
 import type { MetaPreview } from "@streamer/shared";
+import { SearchService } from "../../services/SearchService";
 
 interface Props {
   visible: boolean;
@@ -39,37 +39,21 @@ export function CommandPalette({ visible, onClose }: Props) {
   // Load recent searches on mount
   useEffect(() => {
     const loadRecent = async () => {
-      try {
-        const stored = await AsyncStorage.getItem("@search_history");
-        if (stored) setRecentSearches(JSON.parse(stored));
-      } catch (e) {
-        console.error("Failed to load search history", e);
-      }
+      setRecentSearches(await SearchService.getRecentSearches());
     };
     loadRecent();
   }, [visible]);
 
-  const saveSearch = useCallback(
-    async (text: string) => {
-      if (!text || text.trim().length === 0) return;
-      const clean = text.trim();
-      const updated = [
-        clean,
-        ...recentSearches.filter((s) => s !== clean),
-      ].slice(0, 5);
-      setRecentSearches(updated);
-      try {
-        await AsyncStorage.setItem("@search_history", JSON.stringify(updated));
-      } catch (e) {
-        console.error("Failed to save search history", e);
-      }
-    },
-    [recentSearches],
-  );
+  const saveSearch = useCallback(async (text: string) => {
+    if (!text || text.trim().length === 0) return;
+    const clean = text.trim();
+    await SearchService.addRecentSearch(clean);
+    setRecentSearches(await SearchService.getRecentSearches());
+  }, []);
 
   const clearHistory = async () => {
+    await SearchService.clearRecentSearches();
     setRecentSearches([]);
-    await AsyncStorage.removeItem("@search_history");
   };
 
   useEffect(() => {
@@ -103,6 +87,14 @@ export function CommandPalette({ visible, onClose }: Props) {
     },
     [onClose, router, query, saveSearch],
   );
+
+  const handleSubmit = useCallback(async () => {
+    const clean = query.trim();
+    if (!clean) return;
+    await saveSearch(clean);
+    onClose();
+    router.push({ pathname: "/search/results", params: { q: clean } });
+  }, [onClose, query, router, saveSearch]);
 
   return (
     <Modal
@@ -148,6 +140,7 @@ export function CommandPalette({ visible, onClose }: Props) {
               autoCorrect={false}
               autoCapitalize="none"
               returnKeyType="search"
+              onSubmitEditing={handleSubmit}
             />
             {isFetching && (
               <ActivityIndicator size="small" color={colors.tint} />
