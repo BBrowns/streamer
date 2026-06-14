@@ -18,7 +18,7 @@ interface PlayerSettingsModalProps {
   onClose: () => void;
   audioTracks: AudioTrack[];
   subtitles: SubtitleTrack[];
-  onSelectAudio: (id: string) => void;
+  onSelectAudio: (id: string | null) => void;
   onSelectSubtitle: (id: string | null) => void;
   playbackRate: number;
   onSelectPlaybackRate: (rate: number) => void;

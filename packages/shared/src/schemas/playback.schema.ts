@@ -91,6 +91,12 @@ export const playbackPlanRequestSchema = z.object({
   preferences: z
     .object({
       preferredAudioLanguage: z.string().min(2).max(12).nullable().optional(),
+      preferredSubtitleLanguage: z
+        .string()
+        .min(2)
+        .max(12)
+        .nullable()
+        .optional(),
     })
     .optional(),
   bridge: z
@@ -101,6 +107,20 @@ export const playbackPlanRequestSchema = z.object({
     })
     .optional(),
 });
+
+export const audioLanguageSchema = z.enum([
+  "en",
+  "nl",
+  "es",
+  "de",
+  "fr",
+  "it",
+  "pt",
+  "ru",
+  "hi",
+  "multi",
+  "unknown",
+]);
 
 export const playbackActionEligibilitySchema = z
   .object({
@@ -159,6 +179,7 @@ export const mediaCandidateSchema = z
     container: z.enum(["mp4", "mkv", "hls", "unknown"]).optional(),
     videoCodec: z.enum(["h264", "h265", "av1", "unknown"]).optional(),
     audioCodec: z.enum(["aac", "ac3", "eac3", "unknown"]).optional(),
+    audioLanguage: audioLanguageSchema.optional(),
     hdr: z.enum(["sdr", "hdr10", "dolby-vision", "unknown"]).optional(),
     seeders: z.number().optional(),
     sizeBytes: z.number().nonnegative().optional(),
