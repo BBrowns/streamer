@@ -45,6 +45,11 @@ import {
   createPlaybackRuntimeError,
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
+import {
+  buildTrackRows,
+  findPlayerTrackByRowId,
+  findPreferredPlayerTrack,
+} from "../services/playback/trackSelection";
 import { playBest } from "../services/playback/PlaybackOrchestrator";
 import {
   advancePlaybackSessionAfterFailure,
@@ -79,6 +84,8 @@ export default function PlayerScreen() {
   const playbackAttemptId = usePlayerStore((s) => s.playbackAttemptId);
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const preferredAudioLang = usePlayerStore((s) => s.preferredAudioLang);
+  const preferredSubtitleLang = usePlayerStore((s) => s.preferredSubtitleLang);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setBuffering = usePlayerStore((s) => s.setBuffering);
@@ -124,6 +131,7 @@ export default function PlayerScreen() {
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoViewRef = useRef<any>(null);
   const fallbackInFlightRef = useRef(false);
+  const appliedTrackPreferencesRef = useRef<string | null>(null);
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -609,6 +617,112 @@ export default function PlayerScreen() {
     showControls,
   });
 
+  const refreshPlayerTracks = useCallback(() => {
+    if (!player) return;
+
+    const availableAudioTracks = player.availableAudioTracks || [];
+    const availableSubtitleTracks = player.availableSubtitleTracks || [];
+
+    if (availableAudioTracks.length > 0) {
+      setAudioTracks(buildTrackRows(availableAudioTracks, player.audioTrack));
+    } else if (engine) {
+      setAudioTracks(engine.getAudioTracks());
+    } else {
+      setAudioTracks([]);
+    }
+
+    if (availableSubtitleTracks.length > 0) {
+      setSubtitles(
+        buildTrackRows(availableSubtitleTracks, player.subtitleTrack),
+      );
+    } else if (engine) {
+      setSubtitles(engine.getSubtitles());
+    } else {
+      setSubtitles([]);
+    }
+  }, [engine, player, setAudioTracks, setSubtitles]);
+
+  useEffect(() => {
+    appliedTrackPreferencesRef.current = null;
+    setAudioTracks(engine?.getAudioTracks() || []);
+    setSubtitles(engine?.getSubtitles() || []);
+  }, [engine, playbackUri, setAudioTracks, setSubtitles]);
+
+  useEffect(() => {
+    if (!player) return;
+
+    refreshPlayerTracks();
+
+    const audioListSub = player.addListener?.(
+      "availableAudioTracksChange",
+      refreshPlayerTracks,
+    );
+    const audioTrackSub = player.addListener?.(
+      "audioTrackChange",
+      refreshPlayerTracks,
+    );
+    const subtitleListSub = player.addListener?.(
+      "availableSubtitleTracksChange",
+      refreshPlayerTracks,
+    );
+    const subtitleTrackSub = player.addListener?.(
+      "subtitleTrackChange",
+      refreshPlayerTracks,
+    );
+    const sourceLoadSub = player.addListener?.(
+      "sourceLoad",
+      refreshPlayerTracks,
+    );
+
+    return () => {
+      audioListSub?.remove?.();
+      audioTrackSub?.remove?.();
+      subtitleListSub?.remove?.();
+      subtitleTrackSub?.remove?.();
+      sourceLoadSub?.remove?.();
+    };
+  }, [player, refreshPlayerTracks]);
+
+  useEffect(() => {
+    if (!player || !playbackUri) return;
+    if (appliedTrackPreferencesRef.current === playbackUri) return;
+
+    const availableAudioTracks = player.availableAudioTracks || [];
+    const availableSubtitleTracks = player.availableSubtitleTracks || [];
+    const waitingForPreferredAudio =
+      Boolean(preferredAudioLang) && availableAudioTracks.length === 0;
+    const waitingForPreferredSubtitles =
+      Boolean(preferredSubtitleLang) && availableSubtitleTracks.length === 0;
+    if (waitingForPreferredAudio || waitingForPreferredSubtitles) return;
+
+    const audioTrack = findPreferredPlayerTrack(
+      availableAudioTracks,
+      preferredAudioLang,
+    );
+    if (audioTrack) {
+      player.audioTrack = audioTrack;
+    }
+
+    const subtitleTrack = findPreferredPlayerTrack(
+      availableSubtitleTracks,
+      preferredSubtitleLang,
+    );
+    if (subtitleTrack) {
+      player.subtitleTrack = subtitleTrack;
+    }
+
+    appliedTrackPreferencesRef.current = playbackUri;
+    refreshPlayerTracks();
+  }, [
+    player,
+    playbackUri,
+    audioTracks.length,
+    preferredAudioLang,
+    preferredSubtitleLang,
+    refreshPlayerTracks,
+    subtitles.length,
+  ]);
+
   const selectedSessionCandidate = useMemo(() => {
     const candidateId =
       activeSession?.selectedCandidateId || playbackCandidateId;
@@ -1092,12 +1206,26 @@ export default function PlayerScreen() {
             audioTracks={audioTracks}
             subtitles={subtitles}
             onSelectAudio={(id: string | null) => {
-              if (id) engine?.setAudioTrack(id);
-              if (engine) setAudioTracks(engine.getAudioTracks());
+              if (id && player?.availableAudioTracks?.length) {
+                const track = findPlayerTrackByRowId(
+                  player.availableAudioTracks,
+                  id,
+                );
+                if (track) player.audioTrack = track;
+              } else if (id) {
+                engine?.setAudioTrack(id);
+              }
+              refreshPlayerTracks();
             }}
             onSelectSubtitle={(id: string | null) => {
-              if (id) engine?.setSubtitle(id);
-              if (engine) setSubtitles(engine.getSubtitles());
+              if (player?.availableSubtitleTracks?.length) {
+                player.subtitleTrack = id
+                  ? findPlayerTrackByRowId(player.availableSubtitleTracks, id)
+                  : null;
+              } else {
+                engine?.setSubtitle(id);
+              }
+              refreshPlayerTracks();
             }}
             playbackRate={playbackRate}
             onSelectPlaybackRate={setPlaybackRate}

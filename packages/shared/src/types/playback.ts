@@ -109,9 +109,23 @@ export interface PlaybackPlanRequest {
   deviceProfile: DeviceProfile;
   preferences?: {
     preferredAudioLanguage?: string | null;
+    preferredSubtitleLanguage?: string | null;
   };
   bridge?: BridgeHealthHint;
 }
+
+export type AudioLanguage =
+  | "en"
+  | "nl"
+  | "es"
+  | "de"
+  | "fr"
+  | "it"
+  | "pt"
+  | "ru"
+  | "hi"
+  | "multi"
+  | "unknown";
 
 export interface MediaCandidate {
   /** Opaque runtime identifier. Do not derive or persist it as source identity. */
@@ -122,6 +136,7 @@ export interface MediaCandidate {
   container?: "mp4" | "mkv" | "hls" | "unknown";
   videoCodec?: "h264" | "h265" | "av1" | "unknown";
   audioCodec?: "aac" | "ac3" | "eac3" | "unknown";
+  audioLanguage?: AudioLanguage;
   hdr?: "sdr" | "hdr10" | "dolby-vision" | "unknown";
   seeders?: number;
   sizeBytes?: number;

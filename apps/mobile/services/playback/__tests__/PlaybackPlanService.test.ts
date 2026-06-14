@@ -119,7 +119,10 @@ describe("PlaybackPlanService", () => {
   });
 
   it("includes the local audio language preference when requesting a playback plan", async () => {
-    usePlayerStore.setState({ preferredAudioLang: "es" });
+    usePlayerStore.setState({
+      preferredAudioLang: "es",
+      preferredSubtitleLang: "nl",
+    });
     (api.post as jest.Mock).mockResolvedValueOnce({
       data: makePlaybackPlan({
         state: "ready",
@@ -138,6 +141,7 @@ describe("PlaybackPlanService", () => {
       expect.objectContaining({
         preferences: {
           preferredAudioLanguage: "es",
+          preferredSubtitleLanguage: "nl",
         },
       }),
     );

@@ -43,7 +43,8 @@ export async function createPlaybackPlan(
     baseDeviceProfile,
     input.action,
   );
-  const { preferredAudioLang } = usePlayerStore.getState();
+  const { preferredAudioLang, preferredSubtitleLang } =
+    usePlayerStore.getState();
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
 
   const { data } = await api.post<PlaybackPlan>("/api/playback/plan", {
@@ -51,6 +52,7 @@ export async function createPlaybackPlan(
     deviceProfile,
     preferences: {
       preferredAudioLanguage: preferredAudioLang,
+      preferredSubtitleLanguage: preferredSubtitleLang,
     },
     bridge: {
       status: streamEngineManager.bridgeStatus,

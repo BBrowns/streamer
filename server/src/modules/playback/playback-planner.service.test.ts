@@ -243,6 +243,103 @@ describe("PlaybackPlannerService", () => {
     );
   });
 
+  it("exposes detected audio language metadata on ordered candidates", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie-latino.m3u8",
+        title: "🎬 🇲🇽 1080p (Audio Latino)",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie-english.m3u8",
+        title: "🎬 🇬🇧 1080p English",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: iosProfile,
+      },
+      "req-1",
+    );
+
+    expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
+    expect(
+      plan.orderedCandidates.map((candidate) => candidate.audioLanguage),
+    ).toEqual(["en", "es"]);
+  });
+
+  it("prefers multi-audio over a single foreign dubbed source when preferred language is unavailable", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie-latino.m3u8",
+        title: "🎬 1080p Latino Dubbed H264 AAC",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie-multi.m3u8",
+        title: "🎬 1080p MULTi Dual-Audio H264 AAC",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: iosProfile,
+        preferences: { preferredAudioLanguage: "en" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.stream.title).toBe(
+      "🎬 1080p MULTi Dual-Audio H264 AAC",
+    );
+    expect(plan.selectedCandidate?.audioLanguage).toBe("multi");
+  });
+
+  it("does not treat subtitle-only VOST labels as dubbed foreign audio", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie-vostfr.m3u8",
+        title: "🎬 1080p VOSTFR H264 AAC",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie-truefrench.m3u8",
+        title: "🎬 1080p TrueFrench Dubbed H264 AAC",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: iosProfile,
+        preferences: { preferredAudioLanguage: "en" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.stream.title).toBe(
+      "🎬 1080p VOSTFR H264 AAC",
+    );
+    expect(plan.selectedCandidate?.audioLanguage).toBe("unknown");
+  });
+
   it("reports bridgeUnavailable when only torrent sources exist and bridge runtime is unsupported", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {
