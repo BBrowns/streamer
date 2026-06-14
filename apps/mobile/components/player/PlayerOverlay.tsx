@@ -132,6 +132,7 @@ export function PlayerOverlay({
 
       {showInfoBar ? (
         <View
+          testID="player-stream-info"
           style={[
             styles.infoBar,
             {
@@ -140,7 +141,6 @@ export function PlayerOverlay({
                 : "rgba(255,255,255,0.95)",
               borderTopWidth: 1,
               borderTopColor: colors.border,
-              paddingBottom: Platform.OS === "web" ? 20 : 40,
             },
           ]}
         >
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     pointerEvents: "none",
   },
   topBar: {
@@ -212,9 +212,13 @@ const styles = StyleSheet.create({
   },
   infoBar: {
     backgroundColor: "rgba(10,10,26,0.95)",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: 40,
+    alignSelf: "center",
+    width: "94%",
+    maxWidth: 920,
+    marginTop: 10,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     pointerEvents: "auto",
   },
   infoTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 15 },

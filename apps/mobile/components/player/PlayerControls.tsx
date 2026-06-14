@@ -663,10 +663,13 @@ const styles = StyleSheet.create({
   },
   bottomControls: {
     paddingHorizontal: uiSpacing.xl,
-    paddingBottom: 42,
+    paddingBottom: Platform.OS === "web" ? 78 : 56,
     paddingTop: uiSpacing.xl,
   },
   bottomTray: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
     borderRadius: uiRadii.xl + 2,
     borderWidth: 1,
     paddingHorizontal: uiSpacing.lg - 2,
