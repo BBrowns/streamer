@@ -19,6 +19,12 @@ jest.mock("../../api", () => ({
 }));
 
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
+  validateBridgeUrl: jest.fn((url: string | null | undefined) => {
+    if (!url || url.includes("bridge.example.com")) {
+      return { ok: false, reason: "not-local-or-lan" };
+    }
+    return { ok: true, url };
+  }),
   streamEngineManager: {
     bridgeStatus: "available",
     getBridgeUrl: jest.fn(() => "http://bridge.test"),
@@ -142,6 +148,55 @@ describe("PlaybackPlanService", () => {
         preferences: {
           preferredAudioLanguage: "es",
           preferredSubtitleLanguage: "nl",
+        },
+      }),
+    );
+  });
+
+  it("omits empty planner preferences and invalid bridge URLs from requests", async () => {
+    usePlayerStore.setState({
+      preferredAudioLang: null,
+      preferredSubtitleLang: null,
+    });
+    (
+      streamEngineManager.getBridgeUrl as jest.MockedFunction<
+        typeof streamEngineManager.getBridgeUrl
+      >
+    ).mockReturnValue("https://bridge.example.com");
+    (
+      streamEngineManager.getBridgeDiagnostics as jest.MockedFunction<
+        typeof streamEngineManager.getBridgeDiagnostics
+      >
+    ).mockReturnValue({
+      status: "wrong-url",
+      url: "https://bridge.example.com",
+      reason: "not-local-or-lan",
+    });
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate(),
+          fallbackCandidates: [],
+        },
+      }),
+    });
+
+    await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/playback/plan",
+      expect.not.objectContaining({
+        preferences: expect.anything(),
+      }),
+    );
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/playback/plan",
+      expect.objectContaining({
+        bridge: {
+          status: "wrong-url",
+          reason: "not-local-or-lan",
         },
       }),
     );
