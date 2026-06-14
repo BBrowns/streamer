@@ -727,6 +727,91 @@ export async function prepareSeekableRemux(
   }
 }
 
+export function waitForTorrentFileFirstBytes(
+  torrent: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  } = {},
+): Promise<{ fileName: string; bytesRead: number }> {
+  if (!torrent.files || torrent.files.length === 0) {
+    return Promise.reject(new Error("Torrent has no files"));
+  }
+
+  const file = getSelectedFile(torrent, options.fileIdx, options.hints);
+  if (!file?.length || file.length <= 0) {
+    return Promise.reject(new Error("Selected torrent file is empty"));
+  }
+
+  return new Promise((resolve, reject) => {
+    const stream = file.createReadStream({ start: 0, end: 0 });
+    let settled = false;
+    const timeout = setTimeout(() => {
+      fail(new Error("Torrent file first byte timeout"));
+    }, options.timeoutMs ?? 30_000);
+    timeout.unref?.();
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", onAbort);
+      stream.off?.("data", onData);
+      stream.off?.("end", onEnd);
+      stream.off?.("error", onError);
+    };
+
+    const destroyStream = () => {
+      try {
+        stream.destroy?.();
+      } catch {}
+    };
+
+    const finish = (bytesRead: number) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      destroyStream();
+      resolve({ fileName: file.name, bytesRead });
+    };
+
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      destroyStream();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+
+    const onAbort = () => {
+      const reason =
+        options.signal?.reason instanceof Error
+          ? options.signal.reason
+          : new Error("Torrent file first byte probe was cancelled");
+      fail(reason);
+    };
+    const onData = (chunk: Buffer | Uint8Array | string) => {
+      finish(
+        typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length,
+      );
+    };
+    const onEnd = () => {
+      fail(new Error("Torrent file first byte probe ended before data"));
+    };
+    const onError = (err: Error) => fail(err);
+
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
+
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    stream.once?.("data", onData);
+    stream.once?.("end", onEnd);
+    stream.once?.("error", onError);
+  });
+}
+
 export function __setFfmpegSpawnerForTests(spawner: FfmpegSpawner) {
   spawnFfmpeg = spawner;
 }

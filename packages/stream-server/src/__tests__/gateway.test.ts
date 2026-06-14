@@ -12,6 +12,7 @@ import {
   prepareSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
+  waitForTorrentFileFirstBytes,
 } from "../torrent.js";
 
 vi.mock("../torrent.js", () => ({
@@ -20,6 +21,7 @@ vi.mock("../torrent.js", () => ({
   prepareSeekableRemux: vi.fn(),
   prepareTorrent: vi.fn(),
   serveTorrentFile: vi.fn((_req, res) => res.status(204).send()),
+  waitForTorrentFileFirstBytes: vi.fn(),
 }));
 
 const app = express();
@@ -44,6 +46,10 @@ describe("gateway jobs", () => {
     (prepareSeekableRemux as any).mockResolvedValue({
       fileName: "movie.mkv",
       size: 1024,
+    });
+    (waitForTorrentFileFirstBytes as any).mockResolvedValue({
+      fileName: "movie.mkv",
+      bytesRead: 1,
     });
   });
 
@@ -115,6 +121,69 @@ describe("gateway jobs", () => {
       progress: expect.any(Number),
       readyTimeoutMs: 120000,
       elapsedMs: expect.any(Number),
+    });
+  });
+
+  it("keeps bridge jobs checking piece availability until first bytes are readable", async () => {
+    let resolveFirstBytes: (() => void) | undefined;
+    (waitForTorrentFileFirstBytes as any).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirstBytes = () =>
+          resolve({
+            fileName: "movie.mp4",
+            bytesRead: 1,
+          });
+      }),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "preparing",
+        phase: "checking_piece_availability",
+        mode: "bridge",
+        retryable: true,
+      });
+    });
+
+    resolveFirstBytes?.();
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "ready",
+        phase: "ready",
+      });
+    });
+  });
+
+  it("reports stalled when bridge first-byte readiness times out", async () => {
+    (waitForTorrentFileFirstBytes as any).mockRejectedValueOnce(
+      new Error("Torrent file first byte timeout"),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "stalled",
+        phase: "stalled",
+        retryable: true,
+        error: "Torrent stalled while checking piece availability.",
+      });
     });
   });
 
