@@ -255,6 +255,65 @@ function serializeJob(job: GatewayJob) {
   };
 }
 
+function getTerminalStreamResponse(job: GatewayJob) {
+  if (isGatewayJobCancelled(job)) {
+    return {
+      status: 410,
+      body: {
+        error: job.error || "Gateway job cancelled",
+        retryable: false,
+        state: "cancelled",
+      },
+    };
+  }
+
+  if (job.state === "no_peers") {
+    return {
+      status: 503,
+      body: {
+        error: job.error || "No peers found for this torrent.",
+        retryable: true,
+        state: "no_peers",
+      },
+    };
+  }
+
+  if (getEffectiveJobState(job) === "stalled") {
+    return {
+      status: 504,
+      body: {
+        error: job.error || "Torrent stalled while preparing playback.",
+        retryable: true,
+        state: "stalled",
+      },
+    };
+  }
+
+  if (job.state === "expired") {
+    return {
+      status: 410,
+      body: {
+        error: job.error || "Gateway job expired.",
+        retryable: false,
+        state: "expired",
+      },
+    };
+  }
+
+  if (job.state === "error") {
+    return {
+      status: 503,
+      body: {
+        error: job.error || "Gateway job failed",
+        retryable: true,
+        state: "error",
+      },
+    };
+  }
+
+  return null;
+}
+
 function addGatewayJobBreadcrumb(
   job: GatewayJob,
   message: string,
@@ -550,17 +609,9 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
 
   job.activeStreamSignature = getRequestSignature(req);
 
-  if (isGatewayJobCancelled(job)) {
-    return res.status(410).json({
-      error: job.error || "Gateway job cancelled",
-      retryable: false,
-    });
-  }
-  if (job.state === "error") {
-    return res.status(503).json({
-      error: job.error || "Gateway job failed",
-      retryable: true,
-    });
+  const terminalResponse = getTerminalStreamResponse(job);
+  if (terminalResponse) {
+    return res.status(terminalResponse.status).json(terminalResponse.body);
   }
   if (job.mode === "remux" && job.state !== "ready") {
     return res.status(425).json({
