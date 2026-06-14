@@ -22,6 +22,7 @@ import {
   __setFfmpegSpawnerForTests,
   getSelectedFile,
   serveTorrentFile,
+  waitForTorrentFileFirstBytes,
 } from "../torrent.js";
 
 const previousFfmpegPath = process.env.STREAMER_FFMPEG_PATH;
@@ -526,6 +527,37 @@ describe("serveTorrentFile", () => {
         retryable: false,
       }),
     );
+  });
+});
+
+describe("waitForTorrentFileFirstBytes", () => {
+  it("resolves after reading the selected file's first bytes", async () => {
+    const stream = makeFakeStream();
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    file.createReadStream.mockReturnValue(stream);
+    const torrent = makeTorrent([file]);
+
+    const result = waitForTorrentFileFirstBytes(torrent, { timeoutMs: 1000 });
+    stream.emit("data", Buffer.from("x"));
+
+    await expect(result).resolves.toMatchObject({
+      fileName: "film.mp4",
+      bytesRead: 1,
+    });
+    expect(file.createReadStream).toHaveBeenCalledWith({ start: 0, end: 0 });
+    expect(stream.destroy).toHaveBeenCalled();
+  });
+
+  it("rejects and destroys the probe stream when first bytes time out", async () => {
+    const stream = makeFakeStream();
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    file.createReadStream.mockReturnValue(stream);
+    const torrent = makeTorrent([file]);
+
+    await expect(
+      waitForTorrentFileFirstBytes(torrent, { timeoutMs: 5 }),
+    ).rejects.toThrow("first byte timeout");
+    expect(stream.destroy).toHaveBeenCalled();
   });
 });
 

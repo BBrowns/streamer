@@ -11,6 +11,7 @@ import {
   prepareSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
+  waitForTorrentFileFirstBytes,
 } from "./torrent.js";
 import type { FileSelectionHints } from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
@@ -51,6 +52,7 @@ interface GatewayJob {
   retryable?: boolean;
   progressTimer?: ReturnType<typeof setInterval>;
   abortController?: AbortController;
+  firstByteProbeStartedAt?: number;
   remuxStartedAt?: number;
   activeStreamCount: number;
   activeStreamSignature?: string;
@@ -79,6 +81,9 @@ function sanitizeGatewayError(err: unknown) {
   if (message.includes("Torrent ready timeout")) {
     return "Torrent metadata timed out. No peers found in 2 minutes.";
   }
+  if (message.includes("Torrent file first byte timeout")) {
+    return "Torrent stalled while checking piece availability.";
+  }
   return message || "Gateway job failed";
 }
 
@@ -87,7 +92,8 @@ function isRetryableGatewayError(error: unknown) {
   return (
     message.includes("peer") ||
     message.includes("timeout") ||
-    message.includes("metadata")
+    message.includes("metadata") ||
+    message.includes("stalled")
   );
 }
 
@@ -98,6 +104,11 @@ function isNoPeersGatewayError(error: unknown) {
     message.includes("metadata timed out") ||
     message.includes("torrent ready timeout")
   );
+}
+
+function isStalledGatewayError(error: unknown) {
+  const message = sanitizeGatewayError(error).toLowerCase();
+  return message.includes("stalled");
 }
 
 function shouldPruneJob(job: GatewayJob, now: number) {
@@ -141,6 +152,7 @@ function getJobPhase(job: GatewayJob): GatewayJobPhase {
   if (job.state === "cancelled") return "cancelled";
   if (job.state === "expired") return "expired";
   if (job.mode === "remux" && job.remuxStartedAt) return "remuxing";
+  if (job.firstByteProbeStartedAt) return "checking_piece_availability";
   return (job.peerCount ?? 0) > 0 ? "preparing_metadata" : "finding_peers";
 }
 
@@ -171,6 +183,13 @@ function getJobProgress(job: GatewayJob, elapsedMs: number) {
     return Math.min(
       0.98,
       Math.max(0.25, 0.25 + (remuxElapsed / GATEWAY_READY_TIMEOUT_MS) * 0.7),
+    );
+  }
+  if (job.firstByteProbeStartedAt) {
+    const probeElapsed = Date.now() - job.firstByteProbeStartedAt;
+    return Math.min(
+      0.98,
+      Math.max(0.35, 0.35 + (probeElapsed / GATEWAY_READY_TIMEOUT_MS) * 0.55),
     );
   }
   const elapsedProgress = elapsedMs / GATEWAY_READY_TIMEOUT_MS;
@@ -383,6 +402,27 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
         }
       }
       if (isGatewayJobCancelled(job)) return;
+    } else {
+      job.firstByteProbeStartedAt = Date.now();
+      job.retryable = true;
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
+
+      const abortController = new AbortController();
+      job.abortController = abortController;
+      try {
+        await waitForTorrentFileFirstBytes(torrent, {
+          fileIdx: job.fileIdx,
+          hints: job.hints,
+          signal: abortController.signal,
+          timeoutMs: GATEWAY_READY_TIMEOUT_MS,
+        });
+      } finally {
+        if (job.abortController === abortController) {
+          job.abortController = undefined;
+        }
+      }
+      if (isGatewayJobCancelled(job)) return;
     }
 
     job.state = "ready";
@@ -392,7 +432,11 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
   } catch (err) {
     if (isGatewayJobCancelled(job)) return;
     job.error = sanitizeGatewayError(err);
-    job.state = isNoPeersGatewayError(err) ? "no_peers" : "error";
+    job.state = isNoPeersGatewayError(err)
+      ? "no_peers"
+      : isStalledGatewayError(err)
+        ? "stalled"
+        : "error";
     job.retryable = isRetryableGatewayError(err);
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
