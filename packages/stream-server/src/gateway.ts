@@ -8,6 +8,7 @@ import {
 import {
   ensureTorrentReady,
   isTorrentEngineUnavailableError,
+  prepareSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
 } from "./torrent.js";
@@ -360,6 +361,30 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
 
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
+
+    if (job.mode === "remux") {
+      job.remuxStartedAt = Date.now();
+      job.retryable = true;
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
+
+      const abortController = new AbortController();
+      job.abortController = abortController;
+      try {
+        await prepareSeekableRemux(torrent, {
+          fileIdx: job.fileIdx,
+          hints: job.hints,
+          signal: abortController.signal,
+          remuxTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
+        });
+      } finally {
+        if (job.abortController === abortController) {
+          job.abortController = undefined;
+        }
+      }
+      if (isGatewayJobCancelled(job)) return;
+    }
+
     job.state = "ready";
     job.retryable = false;
     job.updatedAt = Date.now();
@@ -493,6 +518,12 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
       retryable: true,
     });
   }
+  if (job.mode === "remux" && job.state !== "ready") {
+    return res.status(425).json({
+      error: "Gateway remux is still preparing.",
+      retryable: true,
+    });
+  }
 
   trackGatewayStream(job, res);
 
@@ -516,11 +547,6 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
       });
     }
     if (job.mode === "remux") {
-      job.state = "preparing";
-      job.retryable = true;
-      job.remuxStartedAt = Date.now();
-      job.updatedAt = Date.now();
-      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
       const abortController = new AbortController();
       job.abortController = abortController;
 

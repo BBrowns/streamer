@@ -692,6 +692,41 @@ async function serveSeekableRemuxedFile(
   }
 }
 
+export async function prepareSeekableRemux(
+  torrent: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+    signal?: AbortSignal;
+    remuxTimeoutMs?: number;
+  } = {},
+) {
+  if (!torrent.files || torrent.files.length === 0) {
+    throw new Error("Torrent has no files");
+  }
+
+  const file = getSelectedFile(torrent, options.fileIdx, options.hints);
+  const timeout = createRemuxTimeoutSignal(
+    options.signal,
+    options.remuxTimeoutMs ?? getRemuxReadyTimeoutMs(),
+  );
+
+  try {
+    const remuxed = await getOrCreateSeekableRemux(torrent, file, {
+      fileIdx: options.fileIdx,
+      hints: options.hints,
+      signal: timeout.signal,
+    });
+
+    return {
+      fileName: file.name,
+      size: remuxed.size,
+    };
+  } finally {
+    timeout.cleanup();
+  }
+}
+
 export function __setFfmpegSpawnerForTests(spawner: FfmpegSpawner) {
   spawnFfmpeg = spawner;
 }

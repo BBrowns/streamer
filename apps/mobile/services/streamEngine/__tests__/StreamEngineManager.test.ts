@@ -387,6 +387,74 @@ describe("TorrentEngine", () => {
     );
   });
 
+  it("waits through remuxing gateway progress before returning the playback URI", async () => {
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    const onGateway = jest.fn();
+    engine.on("gateway", onGateway);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          phase: "preparing_metadata",
+          progress: 0.2,
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+          readyTimeoutMs: 120000,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          phase: "remuxing",
+          progress: 0.55,
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+          media: {
+            remuxed: true,
+            seekable: false,
+            cacheStatus: "pending",
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "ready",
+          phase: "ready",
+          progress: 1,
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+          media: {
+            remuxed: true,
+            seekable: true,
+            cacheStatus: "ready",
+          },
+        }),
+      });
+
+    const uri = await engine.getPlaybackUri({
+      infoHash: "deadbeef",
+      behaviorHints: { remuxToMp4: true },
+    });
+
+    expect(uri).toBe("http://bridge.test/api/gateway/jobs/job-1/stream");
+    expect(onGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: "preparing",
+        phase: "remuxing",
+        progress: 0.55,
+      }),
+    );
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
   it("returns gateway playback immediately for legacy ready responses", async () => {
     engine = new TorrentEngine({
       activeStrategy: "local",
