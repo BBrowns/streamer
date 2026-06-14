@@ -769,15 +769,29 @@ export function SourcesSection({
               </Text>
             )}
             {!!bridgeSelfTest && (
-              <Text
-                selectable
-                style={[
-                  styles.diagnosticsText,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Self-test: {formatSelfTestStatus(bridgeSelfTest.status)}
-              </Text>
+              <>
+                <Text
+                  selectable
+                  style={[
+                    styles.diagnosticsText,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Self-test: {formatSelfTestStatus(bridgeSelfTest.status)}
+                </Text>
+                {bridgeSelfTest.checks?.map((check) => (
+                  <Text
+                    key={check.name}
+                    selectable
+                    style={[
+                      styles.diagnosticsText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {check.name}: {check.message}
+                  </Text>
+                ))}
+              </>
             )}
             {!!effectiveBridgeDiagnostics.reason && (
               <Text

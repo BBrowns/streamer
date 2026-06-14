@@ -188,6 +188,14 @@ describe("bridge health", () => {
           name: "ffmpeg-remux",
           status: "pass",
         }),
+        expect.objectContaining({
+          name: "gateway-readiness",
+          status: "pass",
+          details: expect.objectContaining({
+            remuxReadiness: "cache-before-ready",
+            bridgeReadiness: "first-byte-before-ready",
+          }),
+        }),
       ]),
     );
   });
