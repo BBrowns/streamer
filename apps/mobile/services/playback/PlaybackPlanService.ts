@@ -7,7 +7,10 @@ import type {
 } from "@streamer/shared";
 import { playbackPlanSchema } from "@streamer/shared";
 import { api } from "../api";
-import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import {
+  streamEngineManager,
+  validateBridgeUrl,
+} from "../streamEngine/StreamEngineManager";
 import { usePlayerStore } from "../../stores/playerStore";
 import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
 
@@ -25,6 +28,44 @@ function applyLocalPlaybackPreferences(
     ...deviceProfile,
     maxQuality: preferredQuality,
   };
+}
+
+function buildPlannerPreferences(
+  preferredAudioLanguage?: string | null,
+  preferredSubtitleLanguage?: string | null,
+): PlaybackPlanRequest["preferences"] | undefined {
+  const preferences: NonNullable<PlaybackPlanRequest["preferences"]> = {};
+
+  if (preferredAudioLanguage) {
+    preferences.preferredAudioLanguage = preferredAudioLanguage;
+  }
+
+  if (preferredSubtitleLanguage) {
+    preferences.preferredSubtitleLanguage = preferredSubtitleLanguage;
+  }
+
+  return Object.keys(preferences).length > 0 ? preferences : undefined;
+}
+
+function buildBridgeHint(
+  diagnostics: ReturnType<typeof streamEngineManager.getBridgeDiagnostics>,
+): PlaybackPlanRequest["bridge"] {
+  const bridge: NonNullable<PlaybackPlanRequest["bridge"]> = {
+    status: diagnostics.status || streamEngineManager.bridgeStatus,
+  };
+
+  const bridgeUrl = diagnostics.url || streamEngineManager.getBridgeUrl();
+  const bridgeUrlValidation = validateBridgeUrl(bridgeUrl);
+  if (bridgeUrlValidation.ok && bridgeUrlValidation.url) {
+    bridge.url = bridgeUrlValidation.url;
+  }
+
+  const reason = diagnostics.reason || diagnostics.message;
+  if (reason) {
+    bridge.reason = reason;
+  }
+
+  return bridge;
 }
 
 export async function createPlaybackPlan(
@@ -46,20 +87,20 @@ export async function createPlaybackPlan(
   const { preferredAudioLang, preferredSubtitleLang } =
     usePlayerStore.getState();
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
+  const preferences = buildPlannerPreferences(
+    preferredAudioLang,
+    preferredSubtitleLang,
+  );
+  const bridge = buildBridgeHint(bridgeDiagnostics);
 
-  const { data } = await api.post<PlaybackPlan>("/api/playback/plan", {
+  const payload: PlaybackPlanRequest = {
     ...request,
     deviceProfile,
-    preferences: {
-      preferredAudioLanguage: preferredAudioLang,
-      preferredSubtitleLanguage: preferredSubtitleLang,
-    },
-    bridge: {
-      status: streamEngineManager.bridgeStatus,
-      url: streamEngineManager.getBridgeUrl(),
-      reason: bridgeDiagnostics.reason || bridgeDiagnostics.message,
-    },
-  });
+    ...(preferences ? { preferences } : {}),
+    bridge,
+  };
+
+  const { data } = await api.post<PlaybackPlan>("/api/playback/plan", payload);
 
   return playbackPlanSchema.parse(data);
 }
