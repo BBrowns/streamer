@@ -6,6 +6,7 @@ import {
   getClient,
   getRemuxCacheStatus,
   getRemuxRuntimeStatus,
+  getTorrentCacheStatus,
   getTorrentEngineStatus,
 } from "./torrent.js";
 import { getStats } from "./stats.js";
@@ -252,6 +253,7 @@ export function createStreamServerApp() {
     const torrentEngine = getTorrentEngineStatus();
     const remuxRuntime = await getRemuxRuntimeStatus();
     const remuxCache = getRemuxCacheStatus();
+    const torrentCache = await getTorrentCacheStatus();
     const { selfTest, repair } = buildBridgeSelfTest({
       runtime,
       torrentEngine,
@@ -264,6 +266,7 @@ export function createStreamServerApp() {
       torrentEngine,
       remuxRuntime,
       remuxCache,
+      torrentCache,
       runtime,
       selfTest,
       repair,

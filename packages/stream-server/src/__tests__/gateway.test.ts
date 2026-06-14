@@ -22,6 +22,7 @@ vi.mock("../torrent.js", () => ({
   prepareTorrent: vi.fn(),
   serveTorrentFile: vi.fn((_req, res) => res.status(204).send()),
   waitForTorrentFileFirstBytes: vi.fn(),
+  destroyTorrentByInfoHash: vi.fn(),
 }));
 
 const app = express();
