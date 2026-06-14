@@ -9,6 +9,7 @@ import {
 import { createSignedGatewayStreamPath } from "../security.js";
 import {
   ensureTorrentReady,
+  prepareSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
 } from "../torrent.js";
@@ -16,6 +17,7 @@ import {
 vi.mock("../torrent.js", () => ({
   ensureTorrentReady: vi.fn(),
   isTorrentEngineUnavailableError: vi.fn(() => false),
+  prepareSeekableRemux: vi.fn(),
   prepareTorrent: vi.fn(),
   serveTorrentFile: vi.fn((_req, res) => res.status(204).send()),
 }));
@@ -39,6 +41,10 @@ describe("gateway jobs", () => {
       files: [{ name: "movie.mkv", streamURL: "/webtorrent/file" }],
     });
     (ensureTorrentReady as any).mockResolvedValue(undefined);
+    (prepareSeekableRemux as any).mockResolvedValue({
+      fileName: "movie.mkv",
+      size: 1024,
+    });
   });
 
   afterEach(() => {
@@ -233,6 +239,13 @@ describe("gateway jobs", () => {
       .post("/api/gateway/jobs")
       .send({ magnet: "magnet:?xt=urn:btih:abcdef123456", remux: "mp4" });
 
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
     const streamed = await request(app).get(created.body.playbackUrl);
 
     expect(streamed.status).toBe(204);
@@ -244,22 +257,83 @@ describe("gateway jobs", () => {
     );
   });
 
-  it("reports remuxing status and aborts remux work when the job is cancelled", async () => {
+  it("rejects remux stream requests until preflight remux is ready", async () => {
+    (prepareSeekableRemux as any).mockReturnValueOnce(new Promise(() => {}));
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456", remux: "mp4" });
+    const streamed = await request(app).get(created.body.playbackUrl);
+
+    expect(streamed.status).toBe(425);
+    expect(streamed.body).toMatchObject({
+      error: "Gateway remux is still preparing.",
+      retryable: true,
+    });
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
+  it("keeps remux jobs in remuxing phase until the MP4 cache is ready", async () => {
+    let resolveRemux: (() => void) | undefined;
+    (prepareSeekableRemux as any).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRemux = () =>
+          resolve({
+            fileName: "movie.mkv",
+            size: 1024,
+          });
+      }),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456", remux: "mp4" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "preparing",
+        phase: "remuxing",
+        mode: "remux",
+        media: {
+          remuxed: true,
+          seekable: false,
+          cacheStatus: "pending",
+        },
+      });
+    });
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+
+    resolveRemux?.();
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "ready",
+        phase: "ready",
+        media: {
+          remuxed: true,
+          seekable: true,
+          cacheStatus: "ready",
+        },
+      });
+    });
+  });
+
+  it("reports remuxing status and aborts preflight remux work when the job is cancelled", async () => {
     let remuxSignal: AbortSignal | undefined;
-    (serveTorrentFile as any).mockImplementationOnce(
-      (
-        _req: unknown,
-        res: express.Response,
-        _torrent: unknown,
-        options: { signal?: AbortSignal },
-      ) =>
-        new Promise<void>((resolve) => {
+    (prepareSeekableRemux as any).mockImplementationOnce(
+      (_torrent: unknown, options: { signal?: AbortSignal }) =>
+        new Promise<void>((resolve, reject) => {
           remuxSignal = options.signal;
           options.signal?.addEventListener(
             "abort",
             () => {
-              res.status(410).json({ error: "Gateway job cancelled" });
-              resolve();
+              reject(new Error("Gateway job cancelled"));
             },
             { once: true },
           );
@@ -269,18 +343,14 @@ describe("gateway jobs", () => {
     const created = await request(app)
       .post("/api/gateway/jobs")
       .send({ magnet: "magnet:?xt=urn:btih:abcdef123456", remux: "mp4" });
-    const streamPromise = request(app)
-      .get(created.body.playbackUrl)
-      .then((response) => response);
 
-    await vi.waitFor(() => expect(serveTorrentFile).toHaveBeenCalled());
+    await vi.waitFor(() => expect(prepareSeekableRemux).toHaveBeenCalled());
     const status = await request(app).get(
       `/api/gateway/jobs/${created.body.id}`,
     );
     const cancelled = await request(app).delete(
       `/api/gateway/jobs/${created.body.id}`,
     );
-    const streamed = await streamPromise;
 
     expect(status.body).toMatchObject({
       state: "preparing",
@@ -294,7 +364,6 @@ describe("gateway jobs", () => {
       retryable: false,
     });
     expect(remuxSignal?.aborted).toBe(true);
-    expect(streamed.status).toBe(410);
   });
 
   it("rejects unsigned gateway stream URLs", async () => {

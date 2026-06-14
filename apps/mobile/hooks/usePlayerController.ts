@@ -128,6 +128,20 @@ export function usePlayerController({
         return;
       }
 
+      if (data.phase === "remuxing") {
+        setRuntimeState("preparing_metadata");
+        return;
+      }
+
+      if (
+        data.phase === "fetching_metadata" ||
+        data.phase === "selecting_file" ||
+        data.phase === "checking_piece_availability"
+      ) {
+        setRuntimeState("preparing_metadata");
+        return;
+      }
+
       setRuntimeState("finding_peers");
     };
     engine.on("stats", onStats);
