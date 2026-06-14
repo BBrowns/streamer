@@ -2,6 +2,7 @@ import {
   Alert,
   Platform,
   RefreshControl,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -290,10 +291,13 @@ export default function DownloadsScreen() {
 
   if (tasks.length === 0 && !refreshing) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.emptyContent}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.emptyContent}
+      >
+        <View style={styles.emptyHero}>
           <EmptyState
-            size="large"
+            size="medium"
             icon="cloud-download-outline"
             title={t("downloads.empty.title", { defaultValue: "No downloads" })}
             description={t("downloads.empty.description", {
@@ -305,9 +309,9 @@ export default function DownloadsScreen() {
             })}
             onAction={() => router.push("/discover")}
           />
-          <SmartDownloadsPanel />
         </View>
-      </View>
+        <SmartDownloadsPanel />
+      </ScrollView>
     );
   }
 
@@ -523,13 +527,17 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   emptyContent: {
-    flex: 1,
+    flexGrow: 1,
     width: "100%",
-    maxWidth: 720,
+    maxWidth: 760,
     alignSelf: "center",
-    justifyContent: "center",
-    gap: 18,
-    padding: 18,
+    gap: 24,
+    paddingHorizontal: 18,
+    paddingTop: 44,
+    paddingBottom: 64,
+  },
+  emptyHero: {
+    minHeight: 360,
   },
   headerTitleRow: {
     flexDirection: "row",

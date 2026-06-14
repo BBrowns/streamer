@@ -177,6 +177,72 @@ describe("PlaybackPlannerService", () => {
     expect(plan.selectedCandidate?.stream.url).toContain(".mp4");
   });
 
+  it("does not choose a dubbed foreign-audio source over a neutral same-quality source by default", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie-latino.m3u8",
+        title: "🎬 🇲🇽 1080p (Audio Latino)",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie-english.m3u8",
+        title: "🎬 1080p H264 AAC",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: iosProfile,
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.stream.title).toBe("🎬 1080p H264 AAC");
+    expect(
+      plan.orderedCandidates.map((candidate) => candidate.stream.title),
+    ).toEqual(["🎬 1080p H264 AAC", "🎬 🇲🇽 1080p (Audio Latino)"]);
+  });
+
+  it("honors an explicit Spanish audio preference when ranking same-quality sources", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie-english.m3u8",
+        title: "🎬 1080p H264 AAC English",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie-latino.m3u8",
+        title: "🎬 🇲🇽 1080p (Audio Latino)",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: iosProfile,
+        preferences: { preferredAudioLanguage: "es" },
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.stream.title).toBe(
+      "🎬 🇲🇽 1080p (Audio Latino)",
+    );
+  });
+
   it("reports bridgeUnavailable when only torrent sources exist and bridge runtime is unsupported", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {

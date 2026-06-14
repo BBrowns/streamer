@@ -34,12 +34,6 @@ import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
-import { Surface } from "../../components/ui/Surface";
-import {
-  uiRadii,
-  uiSpacing,
-  uiTypography,
-} from "../../components/ui/designSystem";
 
 function flattenCatalogPages(data: any): MetaPreview[] {
   return (
@@ -187,78 +181,6 @@ function HomeProviderRails() {
   );
 }
 
-function HomeShortcuts() {
-  const router = useRouter();
-  const { t } = useTranslation();
-  const { colors } = useTheme();
-
-  const shortcuts = [
-    {
-      label: t("home.shortcuts.discover"),
-      detail: t("home.shortcuts.discoverDetail"),
-      icon: "compass-outline" as const,
-      onPress: () => router.push("/discover"),
-    },
-    {
-      label: t("home.shortcuts.library"),
-      detail: t("home.shortcuts.libraryDetail"),
-      icon: "bookmark-outline" as const,
-      onPress: () => router.push("/library"),
-    },
-    {
-      label: t("home.shortcuts.downloads"),
-      detail: t("home.shortcuts.downloadsDetail"),
-      icon: "cloud-download-outline" as const,
-      onPress: () => router.push("/downloads"),
-    },
-  ];
-
-  return (
-    <View style={styles.shortcuts}>
-      {shortcuts.map((shortcut) => (
-        <Pressable
-          key={shortcut.label}
-          onPress={shortcut.onPress}
-          accessibilityRole="button"
-          accessibilityLabel={shortcut.label}
-          style={({ pressed, hovered }: any) => [
-            styles.shortcut,
-            Platform.OS === "web" && hovered && { borderColor: colors.tint },
-            pressed && { opacity: 0.78 },
-          ]}
-        >
-          <Surface style={styles.shortcutSurface}>
-            <View
-              style={[
-                styles.shortcutIcon,
-                { backgroundColor: colors.tint + "20" },
-              ]}
-            >
-              <Ionicons name={shortcut.icon} size={20} color={colors.tint} />
-            </View>
-            <View style={styles.shortcutCopy}>
-              <Text style={[styles.shortcutLabel, { color: colors.text }]}>
-                {shortcut.label}
-              </Text>
-              <Text
-                style={[styles.shortcutDetail, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {shortcut.detail}
-              </Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={colors.textSecondary}
-            />
-          </Surface>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 function HomeSkeleton() {
   return (
     <View style={styles.loadingWrap}>
@@ -368,8 +290,6 @@ function HomeContent() {
       {heroItem ? <HomeHeroBanner item={heroItem} /> : <HomeSkeleton />}
 
       <ContinueWatchingRow showEmptyState />
-
-      <HomeShortcuts />
 
       {hasLoadError && (
         <View style={styles.stateWrap}>
@@ -505,37 +425,6 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   providerRailSection: {
-    marginTop: 2,
-  },
-  shortcuts: {
-    paddingHorizontal: uiSpacing.lg,
-    marginBottom: uiSpacing.xxl,
-    gap: uiSpacing.md,
-  },
-  shortcut: {
-    borderRadius: uiRadii.md,
-  },
-  shortcutSurface: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.md,
-  },
-  shortcutIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: uiRadii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shortcutCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  shortcutLabel: {
-    ...uiTypography.control,
-  },
-  shortcutDetail: {
-    ...uiTypography.caption,
     marginTop: 2,
   },
 });

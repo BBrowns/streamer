@@ -107,6 +107,9 @@ export interface PlaybackPlanRequest {
   episode?: number;
   action: PlaybackAction;
   deviceProfile: DeviceProfile;
+  preferences?: {
+    preferredAudioLanguage?: string | null;
+  };
   bridge?: BridgeHealthHint;
 }
 

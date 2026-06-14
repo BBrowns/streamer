@@ -88,6 +88,11 @@ export const playbackPlanRequestSchema = z.object({
   episode: z.number().int().positive().optional(),
   action: playbackActionSchema,
   deviceProfile: deviceProfileSchema,
+  preferences: z
+    .object({
+      preferredAudioLanguage: z.string().min(2).max(12).nullable().optional(),
+    })
+    .optional(),
   bridge: z
     .object({
       status: bridgeStatusSchema,

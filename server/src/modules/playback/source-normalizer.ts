@@ -15,10 +15,91 @@ const QUALITY_SCORE: Record<string, number> = {
   SD: 0,
 };
 
+type AudioLanguage =
+  | "en"
+  | "nl"
+  | "es"
+  | "de"
+  | "fr"
+  | "it"
+  | "pt"
+  | "ru"
+  | "hi"
+  | "multi"
+  | "unknown";
+
+interface CandidateScoringPreferences {
+  preferredAudioLanguage?: string | null;
+}
+
 function sourceText(stream: Stream): string {
   return [stream.title, stream.name, stream.url, stream.externalUrl]
     .filter(Boolean)
     .join(" ");
+}
+
+function normalizePreferredAudioLanguage(value?: string | null): AudioLanguage {
+  const language = value?.trim().toLowerCase();
+  if (!language) return "en";
+
+  if (language.startsWith("en")) return "en";
+  if (language.startsWith("nl") || language.startsWith("du")) return "nl";
+  if (language.startsWith("es") || language.startsWith("spa")) return "es";
+  if (language.startsWith("de") || language.startsWith("ger")) return "de";
+  if (language.startsWith("fr")) return "fr";
+  if (language.startsWith("it")) return "it";
+  if (language.startsWith("pt") || language.startsWith("por")) return "pt";
+  if (language.startsWith("ru")) return "ru";
+  if (language.startsWith("hi")) return "hi";
+
+  return "en";
+}
+
+export function detectAudioLanguage(candidate: MediaCandidate): AudioLanguage {
+  const text = sourceText(candidate.stream);
+
+  if (/\b(?:multi|multi[-\s]?audio|dual[-\s]?audio)\b/i.test(text)) {
+    return "multi";
+  }
+
+  if (
+    /(?:\b(?:audio\s*)?(?:latino|castellano|spanish|espa(?:ñ|n)ol|spa|esp)\b|🇲🇽|🇪🇸)/i.test(
+      text,
+    )
+  ) {
+    return "es";
+  }
+  if (/\b(?:english|eng)\b|🇬🇧|🇺🇸/i.test(text)) return "en";
+  if (/\b(?:nederlands|dutch|vlaams|nl)\b|🇳🇱|🇧🇪/i.test(text)) return "nl";
+  if (/\b(?:german|deutsch|ger)\b|🇩🇪/i.test(text)) return "de";
+  if (/\b(?:french|fran(?:ç|c)ais|truefrench|fre)\b|🇫🇷/i.test(text)) {
+    return "fr";
+  }
+  if (/\b(?:italian|italiano|ita)\b|🇮🇹/i.test(text)) return "it";
+  if (/\b(?:portuguese|brazilian|pt[-\s]?br|dublado|por)\b|🇧🇷|🇵🇹/i.test(text)) {
+    return "pt";
+  }
+  if (/\b(?:russian|rus)\b|🇷🇺/i.test(text)) return "ru";
+  if (/\b(?:hindi|hin)\b|🇮🇳/i.test(text)) return "hi";
+
+  return "unknown";
+}
+
+function audioLanguageScore(
+  candidate: MediaCandidate,
+  preferences?: CandidateScoringPreferences,
+) {
+  const preferred = normalizePreferredAudioLanguage(
+    preferences?.preferredAudioLanguage,
+  );
+  const detected = detectAudioLanguage(candidate);
+
+  if (detected === "multi") return 30;
+  if (detected === preferred) return 220;
+  if (detected === "unknown") return preferred === "en" ? 0 : -40;
+  if (detected === "en") return preferred === "en" ? 220 : -120;
+
+  return -180;
 }
 
 export function normalizeStream(stream: Stream): MediaCandidate {
@@ -232,6 +313,7 @@ export function scoreCandidate(
   action: PlaybackAction,
   deviceProfile: DeviceProfile,
   bridgeAvailable: boolean,
+  preferences?: CandidateScoringPreferences,
 ): number {
   let score = 0;
 
@@ -252,6 +334,7 @@ export function scoreCandidate(
   if (candidateNeedsRemux(candidate, deviceProfile)) score += 40;
 
   score += (QUALITY_SCORE[candidate.quality || "SD"] ?? 0) * 40;
+  score += audioLanguageScore(candidate, preferences);
 
   if (!qualityWithinProfile(candidate, deviceProfile)) score -= 250;
 

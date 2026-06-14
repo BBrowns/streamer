@@ -118,6 +118,31 @@ describe("PlaybackPlanService", () => {
     );
   });
 
+  it("includes the local audio language preference when requesting a playback plan", async () => {
+    usePlayerStore.setState({ preferredAudioLang: "es" });
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate(),
+          fallbackCandidates: [],
+        },
+      }),
+    });
+
+    await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/playback/plan",
+      expect.objectContaining({
+        preferences: {
+          preferredAudioLanguage: "es",
+        },
+      }),
+    );
+  });
+
   it("rejects malformed planner responses at the client boundary", async () => {
     (api.post as jest.Mock).mockResolvedValueOnce({
       data: { state: "ready" },

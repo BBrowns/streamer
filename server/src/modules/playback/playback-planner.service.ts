@@ -328,6 +328,7 @@ function evaluateCandidate(
       request.action,
       request.deviceProfile,
       hasBridge,
+      request.preferences,
     ),
     requiresBridge,
     requiresRemux,
