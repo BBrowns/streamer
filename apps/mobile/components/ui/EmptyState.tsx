@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 
 interface EmptyStateProps {
+  testID?: string;
   icon?: keyof typeof Ionicons.glyphMap;
   emoji?: string;
   title: string;
@@ -17,9 +18,11 @@ interface EmptyStateProps {
   actionLabel?: string;
   onAction?: () => void;
   size?: "small" | "medium" | "large";
+  fill?: boolean;
 }
 
 export function EmptyState({
+  testID,
   icon,
   emoji,
   title,
@@ -27,6 +30,7 @@ export function EmptyState({
   actionLabel,
   onAction,
   size = "medium",
+  fill = true,
 }: EmptyStateProps) {
   const { colors, isDark } = useTheme();
   const { width } = useWindowDimensions();
@@ -37,7 +41,12 @@ export function EmptyState({
 
   return (
     <View
-      style={[styles.container, isLarge && styles.containerLarge]}
+      testID={testID}
+      style={[
+        styles.container,
+        !fill && styles.containerInline,
+        isLarge && styles.containerLarge,
+      ]}
       accessibilityRole="text"
       accessibilityLabel={`${title}. ${description ?? ""}`}
     >
@@ -128,6 +137,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
+  },
+  containerInline: {
+    flex: 0,
   },
   containerLarge: {
     padding: 48,

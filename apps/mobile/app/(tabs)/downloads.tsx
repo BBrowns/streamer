@@ -297,6 +297,8 @@ export default function DownloadsScreen() {
       >
         <View style={styles.emptyHero}>
           <EmptyState
+            testID="downloads-empty-state"
+            fill={false}
             size="medium"
             icon="cloud-download-outline"
             title={t("downloads.empty.title", { defaultValue: "No downloads" })}
@@ -529,15 +531,18 @@ const styles = StyleSheet.create({
   emptyContent: {
     flexGrow: 1,
     width: "100%",
-    maxWidth: 760,
+    maxWidth: 880,
     alignSelf: "center",
-    gap: 24,
+    justifyContent: "center",
+    gap: 32,
     paddingHorizontal: 18,
-    paddingTop: 44,
-    paddingBottom: 64,
+    paddingTop: 56,
+    paddingBottom: 88,
   },
   emptyHero: {
-    minHeight: 360,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
   },
   headerTitleRow: {
     flexDirection: "row",

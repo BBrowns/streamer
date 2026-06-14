@@ -289,7 +289,7 @@ function HomeContent() {
 
       {heroItem ? <HomeHeroBanner item={heroItem} /> : <HomeSkeleton />}
 
-      <ContinueWatchingRow showEmptyState />
+      <ContinueWatchingRow />
 
       {hasLoadError && (
         <View style={styles.stateWrap}>
