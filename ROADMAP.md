@@ -1,6 +1,6 @@
 # Streamer Roadmap
 
-Last updated: 2026-06-11.
+Last updated: 2026-06-14.
 
 This roadmap is the current source of truth for moving Streamer from a mostly
 complete playback architecture to a production-ready streaming application.
@@ -34,20 +34,26 @@ The playback control plane is in place:
 - Bridge runtime diagnostics and native-module mismatch reporting exist.
 - Remuxed MKV output can be materialized to temporary MP4 and served with byte
   ranges.
+- Gateway jobs avoid false-ready states by waiting for remux cache readiness or
+  first-byte readability before handing a source to the player.
 - Download resume now replans safely without persisting raw stream URLs or
   `Stream` objects.
+- Planner output exposes detected source audio language metadata, and the
+  player can use available `expo-video` audio/subtitle tracks once media loads.
 
 The app is still not production-ready because the remaining risk is real target
-validation, release packaging, observability, and final product UX.
+validation, real-world torrent/bridge reliability evidence, and final product
+UX polish.
 
 ## Recent PR State
 
-| PR  | Area                              | Status                   | Remaining risk                                                                   |
-| --- | --------------------------------- | ------------------------ | -------------------------------------------------------------------------------- |
-| #87 | Bridge runtime repair diagnostics | Implemented              | Needs packaged macOS verification and a clearer user-facing repair flow.         |
-| #88 | Seekable remux output             | Implemented and hardened | Needs real large-file playback/seek QA and FFmpeg packaging/licensing decisions. |
-| #89 | Real-device QA matrix             | Infrastructure only      | Real iPhone, Android, desktop package, and browser runs are not complete.        |
-| #90 | Download resume replan            | Implemented and hardened | Needs large-file/device QA and UX copy review for restart edge cases.            |
+| PR        | Area                            | Status      | Remaining risk                                                          |
+| --------- | ------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| #106-#124 | Master roadmap v3               | Implemented | Real-device QA and release-candidate evidence are still incomplete.     |
+| #125      | UI overlap and source ranking   | Implemented | Needs visual QA on real desktop/mobile sizes.                           |
+| #126      | Remux readiness before playback | Implemented | Needs large-file remux QA with real bridge jobs.                        |
+| #127      | Torrent first-byte readiness    | Implemented | Needs real torrent peer/no-peer validation across desktop and mobile.   |
+| #128      | Language and track selection    | Implemented | Track availability depends on runtime/source support from `expo-video`. |
 
 ## Validation Policy
 
@@ -69,93 +75,70 @@ Every release candidate must record:
 Local unit tests are useful regression coverage, but they are not a substitute
 for real-device QA.
 
-## Next PRs
+## Next Follow-Up PRs
 
-### PR #91 - Release Versioning And Build Metadata
+The #106-#124 roadmap is complete. Future PRs should be selected from real
+remaining risk, not by replaying the old roadmap.
 
-Goal: every runtime should know exactly what version/build it is running.
+### PR #129 - Bridge Playback Self-Test And Diagnostics
 
-Scope:
-
-- Shared build metadata contract for app version, git SHA, build date, build
-  channel, runtime type, environment, and release name.
-- API server `/health` build metadata.
-- Stream-server bridge `/api/health` and `/status` build metadata.
-- Desktop bridge diagnostics build metadata.
-- Mobile/desktop renderer diagnostics build metadata.
-- Sentry release names, tags, and build context.
-- Structured server logs with build identifiers.
-
-Acceptance:
-
-- User/support can identify the exact build from diagnostics and health
-  endpoints.
-- Logs include a build id.
-- Sentry events include release/version/channel/runtime tags.
-- Docs explain the version source of truth.
-
-### PR #92 - Security Hardening Round Two
-
-Goal: tighten release trust boundaries.
+Goal: make "bridge is running but playback never starts" diagnosable without
+guessing.
 
 Scope:
 
-- Electron IPC and navigation restrictions.
-- CORS/media delivery checks for bridge and cast paths.
-- Add-on redirect/private-network bypass tests.
-- Production defaults audit.
-- Logging/telemetry redaction checks for URLs, magnets, tokens, info hashes, and
-  local paths.
+- Add a safe bridge self-test that reports runtime, native engine, gateway job,
+  remux, and first-byte readiness separately.
+- Surface the result in Sources & Devices under normal-user copy with advanced
+  details hidden behind disclosure.
+- Keep direct/HLS playback unaffected when torrent support is unavailable.
 
 Acceptance:
 
-- Security checks fail CI for unsafe defaults.
-- Exceptions are explicit and documented.
+- Bridge ready cannot hide an engine, remux, or first-byte failure.
+- User-facing copy says what action to take.
+- Tests cover unavailable engine, no peers/stalled, and first-byte timeout.
 
-### PR #93 - Sentry Releases and Source Maps
+### PR #130 - Real-Target QA Evidence Pass
 
-Goal: make production errors debuggable without leaking sensitive media data.
+Goal: record evidence for the click-and-play paths before making support
+claims.
 
 Scope:
 
-- Shared release/build metadata.
-- Sentry release names and source-map upload.
-- Privacy-safe breadcrumbs for playback, fallback, gateway, downloads, and cast.
-- Redaction tests.
+- Run and document desktop packaged, browser web, iPhone, and Android paths in
+  `docs/QA_MATRIX.md`.
+- Capture direct source, torrent with peers, no peers, remux readiness, direct
+  seek, downloads, cast, and bridge unavailable behavior.
 
 Acceptance:
 
-- Stack traces are readable for mobile/server/desktop where source maps are
-  available.
-- Events do not contain raw media URLs, magnets, tokens, info hashes, or personal
-  local paths.
+- Supported/unsupported/unknown is explicit per runtime.
+- Failures include logs or screenshots.
+- Product claims match recorded evidence.
 
-### PR #94 - Golden-Path E2E and Screenshot QA
+### PR #131 - UX Polish From Recorded QA
 
-Goal: make the click-and-play path continuously verifiable.
+Goal: address visual and interaction issues discovered during QA without
+changing playback architecture.
 
 Scope:
 
-- Browse -> detail -> Play Best direct source.
-- Browse -> detail -> Play Best fallback source.
-- Torrent peers/no-peers paths.
-- Download direct/torrent paths.
-- Cast direct/gateway paths.
-- Desktop and phone screenshots.
+- Fix layout overlap, unreadable states, confusing copy, and missing empty/error
+  states found in screenshots.
+- Keep source complexity hidden behind advanced surfaces.
 
 Acceptance:
 
-- CI or release workflow produces readable artifacts.
-- Known limitations are documented instead of implied as supported.
+- Desktop and phone screenshots show no overlap in primary flows.
+- Player, Downloads, Home, Detail, and Settings remain responsive.
 
 ## Later Work
 
-- Desktop signing, notarization, release artifacts, and update strategy.
 - Mobile EAS Build/Submit automation.
 - Privacy export/delete end-to-end verification.
-- Home/Discover/Detail/Player polish toward a premium streaming UX.
-- Settings and Sources & Devices v2 with normal-user language and advanced
-  diagnostics hidden behind disclosure.
+- Additional desktop signing/notarization hardening if the current release
+  workflow needs production secrets or platform-specific fixes.
 
 ## Rules For Future Agents
 

@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-13.
+> Last updated: 2026-06-14.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -23,11 +23,25 @@ Current phase:
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active roadmap starts at **PR #106**. Earlier roadmap items that introduced
+The active roadmap starts at **PR #106** and has now been implemented through
+**PR #128**. Earlier roadmap items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
 treated as complete unless new code contradicts this document.
+
+Post-roadmap corrective PRs after #124:
+
+- **PR #125:** fixed UI overlap regressions in Home/Downloads/Player, removed
+  the disliked shortcut bars, and tightened source ranking for obvious dubbed
+  labels.
+- **PR #126:** required remux gateway jobs to remain in preparation until the
+  seekable MP4 cache is actually ready to serve.
+- **PR #127:** required non-remux torrent gateway jobs to prove first-byte
+  readability before reporting `ready`, reducing false bridge-ready buffering.
+- **PR #128:** added planner-visible audio language metadata, subtitle
+  preference propagation, and player audio/subtitle track selection through
+  `expo-video` where available.
 
 ## Product North Star
 
