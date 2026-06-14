@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterEach, describe, expect, it } from "vitest";
 import { EventEmitter } from "events";
+import { rm } from "fs/promises";
 import { createStreamServerApp } from "../index.js";
 import {
   __resetRemuxCacheForTests,
@@ -14,6 +15,9 @@ const previousRuntimeArch = process.env.STREAMER_BRIDGE_RUNTIME_ARCH;
 const previousNativeArch = process.env.STREAMER_BRIDGE_NATIVE_ARCH;
 const previousFfmpegPath = process.env.STREAMER_FFMPEG_PATH;
 const previousRemuxCacheMaxBytes = process.env.STREAMER_REMUX_CACHE_MAX_BYTES;
+const previousTorrentCacheDir = process.env.STREAMER_TORRENT_CACHE_DIR;
+const previousTorrentCacheMaxBytes =
+  process.env.STREAMER_TORRENT_CACHE_MAX_BYTES;
 
 function makeSuccessfulFfmpegVersionSpawner() {
   return ((_command: string, _args: string[]) => {
@@ -63,8 +67,22 @@ describe("bridge health", () => {
       process.env.STREAMER_REMUX_CACHE_MAX_BYTES = previousRemuxCacheMaxBytes;
     }
 
+    if (previousTorrentCacheDir === undefined) {
+      delete process.env.STREAMER_TORRENT_CACHE_DIR;
+    } else {
+      process.env.STREAMER_TORRENT_CACHE_DIR = previousTorrentCacheDir;
+    }
+
+    if (previousTorrentCacheMaxBytes === undefined) {
+      delete process.env.STREAMER_TORRENT_CACHE_MAX_BYTES;
+    } else {
+      process.env.STREAMER_TORRENT_CACHE_MAX_BYTES =
+        previousTorrentCacheMaxBytes;
+    }
+
     __resetTorrentEngineForTests();
     await __resetRemuxCacheForTests();
+    await rm("/tmp/streamer-test-webtorrent", { recursive: true, force: true });
   });
 
   it("reports bridge owner, runtime architecture, and a passing self-test", async () => {
@@ -153,6 +171,8 @@ describe("bridge health", () => {
   it("reports FFmpeg runtime and remux cache diagnostics", async () => {
     process.env.STREAMER_FFMPEG_PATH = "/opt/streamer/bin/ffmpeg";
     process.env.STREAMER_REMUX_CACHE_MAX_BYTES = "1048576";
+    process.env.STREAMER_TORRENT_CACHE_DIR = "/tmp/streamer-test-webtorrent";
+    process.env.STREAMER_TORRENT_CACHE_MAX_BYTES = "2097152";
     __setFfmpegSpawnerForTests(makeSuccessfulFfmpegVersionSpawner());
     __setWebTorrentImporterForTests(async () => ({
       default: class FakeWebTorrent {
@@ -179,6 +199,12 @@ describe("bridge health", () => {
     });
     expect(res.body.remuxCache).toMatchObject({
       maxBytes: 1_048_576,
+      entryCount: 0,
+      totalBytes: 0,
+    });
+    expect(res.body.torrentCache).toMatchObject({
+      rootDir: "/tmp/streamer-test-webtorrent",
+      maxBytes: 2_097_152,
       entryCount: 0,
       totalBytes: 0,
     });

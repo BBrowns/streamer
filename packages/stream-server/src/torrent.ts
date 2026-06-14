@@ -24,6 +24,14 @@ import {
 } from "./torrent-helpers.js";
 import type { FileSelectionHints } from "./torrent-helpers.js";
 import { redactSensitiveText } from "./redaction.js";
+import {
+  cleanupTorrentCache,
+  getTorrentCacheDirForKey,
+  getTorrentCacheStatus,
+  markTorrentCacheDirAccessed,
+  removeTorrentCacheDir,
+  resolveTorrentCacheConfig,
+} from "./torrent-cache.js";
 
 // Re-export pure helpers for stats.ts and tests
 export {
@@ -47,6 +55,8 @@ let importWebTorrent = () => import("webtorrent") as Promise<WebTorrentModule>;
 // Shared HTTP server instance (created once via client.createServer())
 let serverInstance: any = null;
 let serverPort: number = 0;
+const torrentCacheDirs = new WeakMap<object, string>();
+const torrentCacheDirsByInfoHash = new Map<string, string>();
 
 export interface TorrentEngineStatus {
   available: boolean;
@@ -145,6 +155,8 @@ export interface RemuxCacheStatus {
   maxBytes: number;
   ttlMs: number;
 }
+
+export { getTorrentCacheStatus } from "./torrent-cache.js";
 
 const DEFAULT_REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_REMUX_CACHE_MAX_BYTES = 5 * 1024 * 1024 * 1024;
@@ -1005,6 +1017,7 @@ export function __setWebTorrentImporterForTests(
   serverInstance = null;
   serverPort = 0;
   lastAccessMap.clear();
+  torrentCacheDirsByInfoHash.clear();
 }
 
 export function __resetTorrentEngineForTests() {
@@ -1014,6 +1027,7 @@ export function __resetTorrentEngineForTests() {
   serverInstance = null;
   serverPort = 0;
   lastAccessMap.clear();
+  torrentCacheDirsByInfoHash.clear();
 }
 
 export function getTorrent(infoHash: string): any {
@@ -1026,6 +1040,35 @@ export function getTorrent(infoHash: string): any {
     return t;
   }
   return null;
+}
+
+function registerTorrentCacheDir(torrent: any, cacheDir: string) {
+  if (torrent && typeof torrent === "object") {
+    torrentCacheDirs.set(torrent, cacheDir);
+  }
+  if (torrent?.infoHash) {
+    torrentCacheDirsByInfoHash.set(
+      String(torrent.infoHash).toLowerCase(),
+      cacheDir,
+    );
+  }
+}
+
+function getActiveTorrentCacheDirs() {
+  const activeDirs = new Set<string>();
+  for (const torrent of client?.torrents ?? []) {
+    const cacheDir =
+      torrentCacheDirs.get(torrent) ||
+      (torrent?.infoHash
+        ? torrentCacheDirsByInfoHash.get(String(torrent.infoHash).toLowerCase())
+        : undefined);
+    if (cacheDir) activeDirs.add(cacheDir);
+  }
+  return activeDirs;
+}
+
+async function cleanupInactiveTorrentCache() {
+  return cleanupTorrentCache({ activeDirs: getActiveTorrentCacheDirs() });
 }
 
 /**
@@ -1046,13 +1089,28 @@ export async function pruneTorrents(client: any) {
   const toRemove = sorted.slice(0, torrents.length - MAX_ACTIVE_TORRENTS + 1);
   for (const t of toRemove) {
     console.log("[stream-server] Pruning inactive torrent");
+    const cacheDir =
+      torrentCacheDirs.get(t) ||
+      (t?.infoHash
+        ? torrentCacheDirsByInfoHash.get(String(t.infoHash).toLowerCase())
+        : undefined);
     await new Promise<void>((resolve) => {
       t.destroy(() => {
         lastAccessMap.delete(t.infoHash);
+        if (t.infoHash) {
+          torrentCacheDirsByInfoHash.delete(String(t.infoHash).toLowerCase());
+        }
         resolve();
       });
     });
+    const freedBytes = await removeTorrentCacheDir(cacheDir);
+    if (freedBytes > 0) {
+      console.log(
+        `[stream-server] Removed pruned torrent cache directory and freed ${freedBytes} bytes.`,
+      );
+    }
   }
+  await cleanupInactiveTorrentCache();
 }
 
 export async function getClient(): Promise<any> {
@@ -1063,6 +1121,11 @@ export async function getClient(): Promise<any> {
   if (!client) {
     try {
       const WebTorrent = (await importWebTorrent()).default;
+      const torrentCache = resolveTorrentCacheConfig();
+      await cleanupTorrentCache();
+      console.log(
+        `[stream-server] WebTorrent cache directory: ${torrentCache.rootDir}`,
+      );
       client = new WebTorrent({
         maxConns: MAX_CONNS,
         utp: false, // Disable UTP to prevent "address not available" bind errors
@@ -1119,6 +1182,7 @@ export async function destroyClient(): Promise<void> {
   await clearRemuxCache();
 
   if (!client) return;
+  const cacheDirsToRemove = getActiveTorrentCacheDirs();
 
   if (serverInstance) {
     try {
@@ -1137,7 +1201,14 @@ export async function destroyClient(): Promise<void> {
         );
       client = null;
       lastAccessMap.clear();
-      resolve();
+      torrentCacheDirsByInfoHash.clear();
+      Promise.all(
+        Array.from(cacheDirsToRemove).map((cacheDir) =>
+          removeTorrentCacheDir(cacheDir),
+        ),
+      )
+        .then(() => cleanupTorrentCache())
+        .finally(resolve);
     });
   });
 }
@@ -1222,6 +1293,13 @@ export async function prepareTorrent(magnet: string): Promise<any> {
   const existing = await torrentClient.get(magnet);
   if (existing) {
     lastAccessMap.set(existing.infoHash, Date.now());
+    const existingCacheDir =
+      torrentCacheDirs.get(existing) ||
+      torrentCacheDirsByInfoHash.get(String(existing.infoHash).toLowerCase());
+    if (existingCacheDir) {
+      registerTorrentCacheDir(existing, existingCacheDir);
+      await markTorrentCacheDirAccessed(existingCacheDir);
+    }
     attachTorrentLogging(existing);
     console.log("[stream-server] Reusing existing torrent");
     return existing;
@@ -1230,13 +1308,39 @@ export async function prepareTorrent(magnet: string): Promise<any> {
   await pruneTorrents(torrentClient);
 
   const enhancedMagnet = enhanceMagnetWithTrackers(magnet);
-  const torrent = torrentClient.add(enhancedMagnet);
-  if (torrent.infoHash) lastAccessMap.set(torrent.infoHash, Date.now());
+  const cacheDir = await getTorrentCacheDirForKey(enhancedMagnet);
+  const torrent = torrentClient.add(enhancedMagnet, { path: cacheDir });
+  registerTorrentCacheDir(torrent, cacheDir);
+  if (torrent.infoHash) {
+    lastAccessMap.set(torrent.infoHash, Date.now());
+    registerTorrentCacheDir(torrent, cacheDir);
+  }
   attachTorrentLogging(torrent);
 
   console.log("[stream-server] Added new torrent");
+  await cleanupInactiveTorrentCache();
 
   return torrent;
+}
+
+export async function destroyTorrentByInfoHash(infoHash?: string) {
+  if (!client || !infoHash) return false;
+  const normalizedInfoHash = infoHash.toLowerCase();
+  const torrent = client.torrents?.find(
+    (t: any) => String(t.infoHash || "").toLowerCase() === normalizedInfoHash,
+  );
+  if (!torrent) return false;
+  const cacheDir =
+    torrentCacheDirs.get(torrent) ||
+    torrentCacheDirsByInfoHash.get(normalizedInfoHash);
+  await new Promise<void>((resolve) => {
+    torrent.destroy(() => resolve());
+  });
+  lastAccessMap.delete(infoHash);
+  torrentCacheDirsByInfoHash.delete(normalizedInfoHash);
+  await removeTorrentCacheDir(cacheDir);
+  await cleanupInactiveTorrentCache();
+  return true;
 }
 
 export async function ensureTorrentReady(
@@ -1248,7 +1352,11 @@ export async function ensureTorrentReady(
   );
   await waitForReady(torrent, timeoutMs);
   validateTorrentFiles(torrent);
-  if (torrent.infoHash) lastAccessMap.set(torrent.infoHash, Date.now());
+  if (torrent.infoHash) {
+    lastAccessMap.set(torrent.infoHash, Date.now());
+    const cacheDir = torrentCacheDirs.get(torrent);
+    if (cacheDir) registerTorrentCacheDir(torrent, cacheDir);
+  }
 }
 
 export async function serveTorrentFile(

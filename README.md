@@ -141,9 +141,12 @@ least one add-on.
 - `PlaybackSession` is the persistence-safe source of truth for Play,
   Download, and Cast. Do not persist raw media URLs, magnets, info hashes, or
   bridge URLs.
+- Torrent payloads use an explicit Streamer-owned WebTorrent cache directory
+  with TTL and size-cap cleanup. Do not rely on WebTorrent's legacy default
+  `/private/tmp/webtorrent` location.
 - Remuxed gateway output is materialized to a temporary MP4 before range
-  serving, but real-device remux seek behavior, cache limits, and FFmpeg
-  runtime handling still need validation/productization.
+  serving, but real-device remux seek behavior and FFmpeg runtime handling
+  still need validation/productization.
 - Downloads are offline-playable only after a real local file URI is verified.
   Do not show fake offline completion.
 - Real-Debrid is optional, disabled by default, paid-service aware, and absent
@@ -183,17 +186,46 @@ npm run test:e2e --workspace=apps/mobile
 
 ## Environment Variables
 
-| Variable                       | Default                 | Required | Description                                                       |
-| ------------------------------ | ----------------------- | -------- | ----------------------------------------------------------------- |
-| `DATABASE_URL`                 | —                       | ✅       | PostgreSQL connection string                                      |
-| `JWT_SECRET`                   | —                       | ✅       | HS256 signing secret (≥ 32 chars)                                 |
-| `JWT_ACCESS_EXPIRY`            | `15m`                   |          | Access token lifetime                                             |
-| `JWT_REFRESH_EXPIRY`           | `7d`                    |          | Refresh token lifetime                                            |
-| `PORT`                         | `3001`                  |          | API server port                                                   |
-| `NODE_ENV`                     | `development`           |          | Set to `test` to disable rate limiting                            |
-| `CORS_ORIGINS`                 | `http://localhost:8081` |          | Comma-separated allowed origins                                   |
-| `ADDON_TIMEOUT_MS`             | `5000`                  |          | Per-add-on HTTP request timeout                                   |
-| `ADDON_ALLOW_PRIVATE_NETWORKS` | `false`                 |          | Dev/test opt-in for local/private add-ons; keep off in production |
+| Variable                           | Default                 | Required | Description                                                                               |
+| ---------------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                     | —                       | ✅       | PostgreSQL connection string                                                              |
+| `JWT_SECRET`                       | —                       | ✅       | HS256 signing secret (≥ 32 chars)                                                         |
+| `JWT_ACCESS_EXPIRY`                | `15m`                   |          | Access token lifetime                                                                     |
+| `JWT_REFRESH_EXPIRY`               | `7d`                    |          | Refresh token lifetime                                                                    |
+| `PORT`                             | `3001`                  |          | API server port                                                                           |
+| `NODE_ENV`                         | `development`           |          | Set to `test` to disable rate limiting                                                    |
+| `CORS_ORIGINS`                     | `http://localhost:8081` |          | Comma-separated allowed origins                                                           |
+| `ADDON_TIMEOUT_MS`                 | `5000`                  |          | Per-add-on HTTP request timeout                                                           |
+| `ADDON_ALLOW_PRIVATE_NETWORKS`     | `false`                 |          | Dev/test opt-in for local/private add-ons; keep off in production                         |
+| `STREAMER_TORRENT_CACHE_DIR`       | platform cache dir      |          | App-owned WebTorrent cache root; macOS defaults to `~/Library/Caches/Streamer/webtorrent` |
+| `STREAMER_TORRENT_CACHE_MAX_BYTES` | `8589934592`            |          | Max WebTorrent cache size before oldest inactive entries are evicted                      |
+| `STREAMER_TORRENT_CACHE_TTL_MS`    | `86400000`              |          | Stale inactive WebTorrent cache TTL before startup/lifecycle cleanup                      |
+| `STREAMER_REMUX_CACHE_MAX_BYTES`   | `5368709120`            |          | Max seekable MP4 remux cache size                                                         |
+| `STREAMER_REMUX_CACHE_TTL_MS`      | `1800000`               |          | Stale remux cache TTL                                                                     |
+
+### Torrent Cache Hygiene
+
+The stream-server bridge configures WebTorrent with an explicit app-owned cache
+path instead of WebTorrent's default temp directory. On macOS development builds
+that path is:
+
+```text
+~/Library/Caches/Streamer/webtorrent
+```
+
+Override it with `STREAMER_TORRENT_CACHE_DIR` when testing. The bridge cleans
+inactive entries on startup, after torrent lifecycle cleanup, and when the
+cache exceeds `STREAMER_TORRENT_CACHE_MAX_BYTES`. Active torrent directories are
+protected while the WebTorrent client still owns them.
+
+If an older development run already filled WebTorrent's legacy default cache,
+you can remove only that stale legacy folder:
+
+```bash
+rm -rf /private/tmp/webtorrent
+```
+
+Do not run broad temp-folder deletes such as `rm -rf /private/tmp/*`.
 
 ---
 

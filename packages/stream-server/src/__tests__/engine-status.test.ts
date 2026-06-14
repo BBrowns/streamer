@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "events";
-import { writeFile } from "fs/promises";
+import { mkdtemp, rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
 import {
   __resetRemuxCacheForTests,
   __resetTorrentEngineForTests,
@@ -121,6 +123,7 @@ describe("torrent lookup", () => {
 
   afterEach(async () => {
     await __resetRemuxCacheForTests();
+    delete process.env.STREAMER_TORRENT_CACHE_DIR;
   });
 
   it("matches info hashes case-insensitively for metrics lookups", async () => {
@@ -146,6 +149,56 @@ describe("torrent lookup", () => {
     expect(getTorrent("ABCDEF123456")).toEqual(
       expect.objectContaining({ infoHash: "abcdef123456" }),
     );
+  });
+
+  it("passes the configured torrent cache directory to WebTorrent add", async () => {
+    const cacheRoot = await mkdtemp(path.join(tmpdir(), "streamer-wt-add-"));
+    process.env.STREAMER_TORRENT_CACHE_DIR = cacheRoot;
+    const add = vi.fn((_magnet: string, _options?: { path?: string }) => ({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [],
+      on: vi.fn(),
+    }));
+
+    class FakeWebTorrent {
+      torrents: any[] = [];
+      on = vi.fn();
+      destroy = (cb: (err: Error | null) => void) => cb(null);
+      get = vi.fn(() => null);
+      add = add;
+      createServer = () => ({
+        close: vi.fn(),
+        server: {
+          listen: (_port: number, _host: string, cb: () => void) => cb(),
+          address: () => ({ port: 3210 }),
+          on: vi.fn(),
+        },
+      });
+    }
+
+    __setWebTorrentImporterForTests(async () => ({
+      default: FakeWebTorrent as any,
+    }));
+
+    await streamRequest(
+      {
+        method: "GET",
+        query: { magnet: "magnet:?xt=urn:btih:abcdef123456" },
+        hostname: "127.0.0.1",
+      } as any,
+      makeRes() as any,
+    );
+
+    expect(add).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        path: expect.stringContaining(cacheRoot),
+      }),
+    );
+    const addOptions = add.mock.calls[0]?.[1] as { path?: string };
+    expect(addOptions.path).not.toContain("/private/tmp/webtorrent");
+    await rm(cacheRoot, { recursive: true, force: true });
   });
 
   it("passes episode hints from direct stream requests into file selection", async () => {

@@ -12,6 +12,7 @@ import {
   prepareTorrent,
   serveTorrentFile,
   waitForTorrentFileFirstBytes,
+  destroyTorrentByInfoHash,
 } from "./torrent.js";
 import type { FileSelectionHints } from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
@@ -375,6 +376,9 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
   job.retryable = false;
   job.updatedAt = Date.now();
   addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "warning");
+  if (job.activeStreamCount === 0) {
+    void destroyTorrentByInfoHash(job.infoHash);
+  }
 }
 
 function isGatewayJobCancelled(job: GatewayJob) {
@@ -501,6 +505,9 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
       error: job.error,
     });
+    if (job.state === "no_peers" || job.state === "stalled") {
+      void destroyTorrentByInfoHash(job.infoHash);
+    }
   } finally {
     stopProgressTracking?.();
   }

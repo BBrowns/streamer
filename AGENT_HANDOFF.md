@@ -204,6 +204,21 @@ The stream-server gateway has moved closer to production behavior:
   `DELETE /api/gateway/jobs/:id`.
 - Cancelled streams return `410`.
 - Late warmup completion cannot overwrite cancellation.
+- WebTorrent now uses an explicit Streamer-owned cache root instead of the
+  library default temp path. Default macOS/dev location is
+  `~/Library/Caches/Streamer/webtorrent`; fallback is
+  `path.join(os.tmpdir(), "streamer", "webtorrent")`.
+- Torrent cache hygiene is controlled by:
+  - `STREAMER_TORRENT_CACHE_DIR`
+  - `STREAMER_TORRENT_CACHE_MAX_BYTES` (default 8 GiB)
+  - `STREAMER_TORRENT_CACHE_TTL_MS` (default 24 hours)
+- The bridge cleans inactive torrent cache entries on startup and lifecycle
+  cleanup, removes pruned/cancelled torrent directories when safe, protects
+  active torrent directories, and exposes `torrentCache` diagnostics from
+  `/api/health`.
+- If an old dev run filled the legacy WebTorrent default cache, remove only
+  that folder with `rm -rf /private/tmp/webtorrent`; do not delete broader
+  temp directories.
 - Mobile `TorrentEngine` emits gateway progress, treats `no_peers` and
   `stalled` as terminal for the current candidate, maps `no_peers` to bridge
   status, and cancels active jobs on stop/timeout.
