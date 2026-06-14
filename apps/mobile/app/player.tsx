@@ -1032,6 +1032,7 @@ export default function PlayerScreen() {
               onWebCast={() => setCastModalOpen(true)}
               onTogglePiP={handleTogglePiP}
               isPiPSupported={true}
+              showInfoBar={false}
             />
           )}
 

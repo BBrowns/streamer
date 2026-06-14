@@ -1,5 +1,4 @@
 import React from "react";
-import { Platform } from "react-native";
 import { fireEvent, render } from "@testing-library/react-native";
 import { PlayerControls } from "../PlayerControls";
 
@@ -215,38 +214,5 @@ describe("PlayerControls", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     expect(onOpenCast).toHaveBeenCalledTimes(1);
     expect(onRetry).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders desktop keyboard shortcut help", () => {
-    const originalPlatform = Platform.OS;
-    Object.defineProperty(Platform, "OS", {
-      configurable: true,
-      value: "web",
-    });
-
-    const screen = render(
-      <PlayerControls
-        player={createPlayer()}
-        currentTime={30}
-        duration={120}
-        isVisible
-        isPlaying
-        onPlayPause={jest.fn()}
-        capabilities={{ canSeek: true, canUseFullscreen: true }}
-        initialShortcutsOpen
-      />,
-    );
-
-    expect(screen.getByTestId("keyboard-shortcuts-button")).toBeTruthy();
-    expect(screen.getByText("Keyboard shortcuts")).toBeTruthy();
-    expect(screen.getByText("Space / K")).toBeTruthy();
-    expect(screen.getByText("Play or pause")).toBeTruthy();
-    expect(screen.getByText("J / ←")).toBeTruthy();
-    expect(screen.getByText("Seek back 10 seconds")).toBeTruthy();
-
-    Object.defineProperty(Platform, "OS", {
-      configurable: true,
-      value: originalPlatform,
-    });
   });
 });

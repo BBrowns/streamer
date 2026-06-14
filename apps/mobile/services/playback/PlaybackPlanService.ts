@@ -43,11 +43,15 @@ export async function createPlaybackPlan(
     baseDeviceProfile,
     input.action,
   );
+  const { preferredAudioLang } = usePlayerStore.getState();
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
 
   const { data } = await api.post<PlaybackPlan>("/api/playback/plan", {
     ...request,
     deviceProfile,
+    preferences: {
+      preferredAudioLanguage: preferredAudioLang,
+    },
     bridge: {
       status: streamEngineManager.bridgeStatus,
       url: streamEngineManager.getBridgeUrl(),

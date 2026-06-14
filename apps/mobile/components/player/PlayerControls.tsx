@@ -48,7 +48,6 @@ interface PlayerControlsProps {
   onOpenSettings?: () => void;
   onOpenCast?: () => void;
   onRetry?: () => void;
-  initialShortcutsOpen?: boolean;
 }
 
 function formatTime(seconds: number) {
@@ -82,12 +81,10 @@ export function PlayerControls({
   onOpenSettings,
   onOpenCast,
   onRetry,
-  initialShortcutsOpen = false,
 }: PlayerControlsProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
   const [scrubberWidth, setScrubberWidth] = useState(0);
-  const [shortcutsOpen, setShortcutsOpen] = useState(initialShortcutsOpen);
 
   if (!isVisible) return null;
 
@@ -483,39 +480,6 @@ export function PlayerControls({
                 isDark={isDark}
               />
             ) : null}
-            {Platform.OS === "web" ? (
-              <Pressable
-                style={({ pressed, hovered }: any) => [
-                  styles.shortcutActionButton,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.07)"
-                      : "rgba(40,34,54,0.07)",
-                    opacity: pressed ? 0.76 : 1,
-                  },
-                  hovered && styles.hoveredButton,
-                ]}
-                onPress={() => setShortcutsOpen((open) => !open)}
-                accessibilityRole="button"
-                accessibilityLabel={t("player.controls.keyboardShortcuts", {
-                  defaultValue: "Keyboard shortcuts",
-                })}
-                testID="keyboard-shortcuts-button"
-              >
-                <Ionicons name="keypad" size={18} color={colors.text} />
-                <Text
-                  style={[
-                    styles.shortcutActionText,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  {t("player.controls.keyboardShortcutsShort", {
-                    defaultValue: "Shortcuts",
-                  })}
-                </Text>
-              </Pressable>
-            ) : null}
             {capabilities?.canUseFullscreen && onToggleFullscreen ? (
               <ActionButton
                 icon="expand"
@@ -528,109 +492,9 @@ export function PlayerControls({
               />
             ) : null}
           </View>
-
-          {shortcutsOpen ? (
-            <KeyboardShortcutsPanel
-              colors={colors}
-              isDark={isDark}
-              onClose={() => setShortcutsOpen(false)}
-            />
-          ) : null}
         </View>
       </View>
     </Animated.View>
-  );
-}
-
-function KeyboardShortcutsPanel({
-  colors,
-  isDark,
-  onClose,
-}: {
-  colors: ReturnType<typeof useTheme>["colors"];
-  isDark: boolean;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const rows = [
-    [
-      "Space / K",
-      t("player.shortcuts.playPause", { defaultValue: "Play or pause" }),
-    ],
-    [
-      "J / ←",
-      t("player.shortcuts.seekBack", {
-        defaultValue: "Seek back 10 seconds",
-      }),
-    ],
-    [
-      "L / →",
-      t("player.shortcuts.seekForward", {
-        defaultValue: "Seek forward 10 seconds",
-      }),
-    ],
-    ["F", t("player.shortcuts.fullscreen", { defaultValue: "Fullscreen" })],
-    ["M", t("player.shortcuts.mute", { defaultValue: "Mute or unmute" })],
-    [
-      "1–9",
-      t("player.shortcuts.seekPercent", {
-        defaultValue: "Jump to 10–90%",
-      }),
-    ],
-  ];
-
-  return (
-    <View
-      style={[
-        styles.shortcutsPanel,
-        {
-          borderColor: colors.border,
-          backgroundColor: isDark
-            ? "rgba(18,18,30,0.88)"
-            : "rgba(255,255,255,0.92)",
-        },
-      ]}
-    >
-      <View style={styles.shortcutsHeader}>
-        <Text style={[styles.shortcutsTitle, { color: colors.text }]}>
-          {t("player.controls.keyboardShortcuts", {
-            defaultValue: "Keyboard shortcuts",
-          })}
-        </Text>
-        <Pressable
-          style={[
-            styles.shortcutsClose,
-            {
-              borderColor: colors.border,
-              backgroundColor: isDark
-                ? "rgba(255,255,255,0.07)"
-                : "rgba(40,34,54,0.07)",
-            },
-          ]}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel={t("player.shortcuts.close", {
-            defaultValue: "Close keyboard shortcuts",
-          })}
-        >
-          <Ionicons name="close" size={16} color={colors.text} />
-        </Pressable>
-      </View>
-      <View style={styles.shortcutsGrid}>
-        {rows.map(([keys, label]) => (
-          <View key={keys} style={styles.shortcutRow}>
-            <Text style={[styles.shortcutKeys, { color: colors.text }]}>
-              {keys}
-            </Text>
-            <Text
-              style={[styles.shortcutLabel, { color: colors.textSecondary }]}
-            >
-              {label}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
   );
 }
 
@@ -879,59 +743,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     gap: uiSpacing.sm,
-  },
-  shortcutsPanel: {
-    borderRadius: uiRadii.lg,
-    borderWidth: 1,
-    padding: uiSpacing.md,
-    gap: uiSpacing.md,
-  },
-  shortcutActionButton: {
-    minHeight: 38,
-    borderRadius: uiRadii.pill,
-    borderWidth: 1,
-    paddingHorizontal: uiSpacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.xs,
-  },
-  shortcutActionText: {
-    ...uiTypography.caption,
-    fontWeight: "800",
-  },
-  shortcutsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: uiSpacing.md,
-  },
-  shortcutsTitle: {
-    ...uiTypography.body,
-    fontWeight: "900",
-  },
-  shortcutsClose: {
-    width: 30,
-    height: 30,
-    borderRadius: uiRadii.pill,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shortcutsGrid: {
-    gap: uiSpacing.sm,
-  },
-  shortcutRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.md,
-  },
-  shortcutKeys: {
-    minWidth: 78,
-    ...uiTypography.control,
-  },
-  shortcutLabel: {
-    flex: 1,
-    ...uiTypography.caption,
   },
   actionButton: {
     width: 38,

@@ -15,6 +15,7 @@ interface PlayerOverlayProps {
   onWebCast?: () => void;
   onTogglePiP?: () => void;
   isPiPSupported?: boolean;
+  showInfoBar?: boolean;
 }
 
 export function PlayerOverlay({
@@ -26,6 +27,7 @@ export function PlayerOverlay({
   onWebCast,
   onTogglePiP,
   isPiPSupported = false,
+  showInfoBar = true,
 }: PlayerOverlayProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
@@ -128,38 +130,41 @@ export function PlayerOverlay({
         </View>
       </View>
 
-      {/* Info Bar (Bottom) */}
-      <View
-        style={[
-          styles.infoBar,
-          {
-            backgroundColor: isDark
-              ? "rgba(10,10,26,0.95)"
-              : "rgba(255,255,255,0.95)",
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-            paddingBottom: Platform.OS === "web" ? 20 : 40,
-          },
-        ]}
-      >
-        <Text style={[styles.infoTitle, { color: colors.text }]}>
-          🎬{" "}
-          {currentStream.title ||
-            currentStream.name ||
-            t("player.controls.nowPlaying")}
-        </Text>
-        <View style={styles.infoSubRow}>
-          <Text style={[styles.engineText, { color: colors.textSecondary }]}>
-            {t("player.controls.engine")}: {engineType}
+      {showInfoBar ? (
+        <View
+          style={[
+            styles.infoBar,
+            {
+              backgroundColor: isDark
+                ? "rgba(10,10,26,0.95)"
+                : "rgba(255,255,255,0.95)",
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingBottom: Platform.OS === "web" ? 20 : 40,
+            },
+          ]}
+        >
+          <Text style={[styles.infoTitle, { color: colors.text }]}>
+            🎬{" "}
+            {currentStream.title ||
+              currentStream.name ||
+              t("player.controls.nowPlaying")}
           </Text>
-          {stats.peers > 0 && (
-            <Text style={[styles.speedText, { color: colors.tint }]}>
-              ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers}{" "}
-              {t("player.controls.peers")}
+          <View style={styles.infoSubRow}>
+            <Text style={[styles.engineText, { color: colors.textSecondary }]}>
+              {t("player.controls.engine")}: {engineType}
             </Text>
-          )}
+            {stats.peers > 0 && (
+              <Text style={[styles.speedText, { color: colors.tint }]}>
+                ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers}{" "}
+                {t("player.controls.peers")}
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
+      ) : (
+        <View />
+      )}
     </View>
   );
 }
