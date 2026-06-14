@@ -210,6 +210,35 @@ describe("gateway jobs", () => {
     });
   });
 
+  it("rejects playback for no-peers jobs without retrying torrent streaming", async () => {
+    (ensureTorrentReady as any).mockRejectedValueOnce(
+      new Error("Torrent ready timeout"),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("no_peers");
+    });
+    vi.clearAllMocks();
+
+    const streamed = await request(app).get(created.body.playbackUrl);
+
+    expect(streamed.status).toBe(503);
+    expect(streamed.body).toMatchObject({
+      error: "Torrent metadata timed out. No peers found in 2 minutes.",
+      retryable: true,
+      state: "no_peers",
+    });
+    expect(prepareTorrent).not.toHaveBeenCalled();
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
   it("reports stalled while metadata warmup has peers but no progress for a long period", async () => {
     vi.useFakeTimers();
     try {
@@ -233,6 +262,35 @@ describe("gateway jobs", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("rejects playback for stalled jobs without retrying torrent streaming", async () => {
+    (waitForTorrentFileFirstBytes as any).mockRejectedValueOnce(
+      new Error("Torrent file first byte timeout"),
+    );
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("stalled");
+    });
+    vi.clearAllMocks();
+
+    const streamed = await request(app).get(created.body.playbackUrl);
+
+    expect(streamed.status).toBe(504);
+    expect(streamed.body).toMatchObject({
+      error: "Torrent stalled while checking piece availability.",
+      retryable: true,
+      state: "stalled",
+    });
+    expect(prepareTorrent).not.toHaveBeenCalled();
+    expect(serveTorrentFile).not.toHaveBeenCalled();
   });
 
   it("cancels a preparing gateway job", async () => {
