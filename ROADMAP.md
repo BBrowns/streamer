@@ -54,6 +54,7 @@ UX polish.
 | #126      | Remux readiness before playback | Implemented | Needs large-file remux QA with real bridge jobs.                        |
 | #127      | Torrent first-byte readiness    | Implemented | Needs real torrent peer/no-peer validation across desktop and mobile.   |
 | #128      | Language and track selection    | Implemented | Track availability depends on runtime/source support from `expo-video`. |
+| #129      | Roadmap truth sync              | Implemented | Future PR numbers should follow this table, not old roadmap entries.    |
 
 ## Validation Policy
 
@@ -80,7 +81,7 @@ for real-device QA.
 The #106-#124 roadmap is complete. Future PRs should be selected from real
 remaining risk, not by replaying the old roadmap.
 
-### PR #129 - Bridge Playback Self-Test And Diagnostics
+### PR #130 - Bridge Playback Self-Test And Diagnostics
 
 Goal: make "bridge is running but playback never starts" diagnosable without
 guessing.
@@ -99,7 +100,7 @@ Acceptance:
 - User-facing copy says what action to take.
 - Tests cover unavailable engine, no peers/stalled, and first-byte timeout.
 
-### PR #130 - Real-Target QA Evidence Pass
+### PR #131 - Real-Target QA Evidence Pass
 
 Goal: record evidence for the click-and-play paths before making support
 claims.
@@ -117,7 +118,7 @@ Acceptance:
 - Failures include logs or screenshots.
 - Product claims match recorded evidence.
 
-### PR #131 - UX Polish From Recorded QA
+### PR #132 - UX Polish From Recorded QA
 
 Goal: address visual and interaction issues discovered during QA without
 changing playback architecture.

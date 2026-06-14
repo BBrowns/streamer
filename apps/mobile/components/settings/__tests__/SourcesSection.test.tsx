@@ -31,6 +31,17 @@ describe("SourcesSection", () => {
         diagnostics: {
           status: "running",
           health: {
+            selfTest: {
+              status: "pass",
+              checks: [
+                {
+                  name: "gateway-readiness",
+                  status: "pass",
+                  message:
+                    "Gateway waits for remux cache or first bytes before ready.",
+                },
+              ],
+            },
             torrentEngine: {
               available: false,
               reason: "native-architecture-mismatch",
@@ -79,6 +90,11 @@ describe("SourcesSection", () => {
     await waitFor(() => {
       expect(screen.getByText("FFmpeg: Unavailable")).toBeTruthy();
       expect(screen.getByText("Remux cache: 2 files · 1 pending")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "gateway-readiness: Gateway waits for remux cache or first bytes before ready.",
+        ),
+      ).toBeTruthy();
     });
 
     fireEvent.press(screen.getByText("Re-check runtime"));

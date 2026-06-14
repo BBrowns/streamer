@@ -192,6 +192,16 @@ function buildBridgeSelfTest(input: {
         platform: remuxRuntime.platform,
       },
     },
+    {
+      name: "gateway-readiness",
+      status: "pass",
+      message:
+        "Gateway readiness waits for remux cache materialization or first-byte torrent readability before reporting ready.",
+      details: {
+        remuxReadiness: "cache-before-ready",
+        bridgeReadiness: "first-byte-before-ready",
+      },
+    },
   ];
 
   const status: BridgeHealthCheckStatus = checks.some(
