@@ -1,6 +1,6 @@
 # Playback QA Matrix
 
-Last updated: 2026-06-12.
+Last updated: 2026-07-13.
 
 This matrix tracks real target validation for Streamer playback, downloads,
 casting, bridge health, and remux behavior. A target is not considered supported
@@ -64,6 +64,20 @@ tests alone.
 | Cast HLS/MP4 source                                | Unknown          | Unknown                        | Unknown | Unknown | Unknown     |
 | Bridge unavailable/unsupported                     | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
 | Desktop bridge diagnostics/repair                  | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
+| Torrent cache bounded storage/cleanup              | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
+
+## Storage And Cache Guardrails
+
+The stream-server now configures WebTorrent with an explicit Streamer-owned
+cache directory instead of the legacy library default `/private/tmp/webtorrent`
+path. Unit tests cover stale-entry cleanup, size-cap eviction, active torrent
+protection, diagnostics, and the configured WebTorrent `add(..., { path })`
+cache path.
+
+Real-device QA still needs to record storage behavior during long torrent,
+remux, cancellation, and app-restart runs. Until those runs exist, bounded
+cache behavior should be treated as code-covered but not yet release-validated
+on physical targets.
 
 ## Release Blockers
 
