@@ -9,7 +9,9 @@ import {
 } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
+import request from "supertest";
 import { afterEach, describe, expect, it } from "vitest";
+import { createStreamServerApp } from "../index.js";
 import {
   cleanupTorrentCache,
   getTorrentCacheStatus,
@@ -149,6 +151,31 @@ describe("torrent cache hygiene", () => {
     expect(status.totalBytes).toBe(512);
     expect(status.entryCount).toBe(1);
     expect(JSON.stringify(status)).not.toContain("movie.mkv");
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("cleans inactive torrent cache entries through the bridge endpoint", async () => {
+    const root = await makeCacheRoot();
+    process.env.STREAMER_TORRENT_CACHE_TTL_MS = "1000";
+    process.env.STREAMER_TORRENT_CACHE_MAX_BYTES = "1000000";
+    const oldDir = path.join(root, "old-cache");
+    await writeSizedFile(path.join(oldDir, "old.mkv"), 1024, Date.now() - 5000);
+
+    const res = await request(createStreamServerApp()).post(
+      "/api/cache/torrent/cleanup",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.cleanup).toMatchObject({
+      removedEntries: 1,
+      freedBytes: 1024,
+    });
+    expect(res.body.torrentCache).toMatchObject({
+      rootDir: root,
+      entryCount: 0,
+      totalBytes: 0,
+    });
+    await expect(stat(oldDir)).rejects.toThrow();
     await rm(root, { recursive: true, force: true });
   });
 });

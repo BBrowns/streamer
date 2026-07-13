@@ -3,6 +3,7 @@ import cors from "cors";
 import { pathToFileURL } from "url";
 import {
   streamRequest,
+  cleanupInactiveTorrentCache,
   getClient,
   getRemuxCacheStatus,
   getRemuxRuntimeStatus,
@@ -297,6 +298,20 @@ export function createStreamServerApp() {
   });
 
   app.get("/api/torrent/:infoHash/metrics", requireBridgeAuth, metricsHandler);
+
+  app.post(
+    "/api/cache/torrent/cleanup",
+    requireBridgeAuth,
+    async (_req, res, next) => {
+      try {
+        const cleanup = await cleanupInactiveTorrentCache();
+        const torrentCache = await getTorrentCacheStatus();
+        res.json({ cleanup, torrentCache });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   app.get("/api/subtitles", requireBridgeAuth, getSubtitlesRequest);
   app.get("/api/subtitles/:id/stream", streamSubtitleRequest);

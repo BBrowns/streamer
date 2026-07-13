@@ -1067,7 +1067,7 @@ function getActiveTorrentCacheDirs() {
   return activeDirs;
 }
 
-async function cleanupInactiveTorrentCache() {
+export async function cleanupInactiveTorrentCache() {
   return cleanupTorrentCache({ activeDirs: getActiveTorrentCacheDirs() });
 }
 

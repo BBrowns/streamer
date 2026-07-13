@@ -50,6 +50,11 @@ For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
 - **Step:** Stop a stream or delete a download.
 - **Verification:** Check the `stream-server` temp/cache directory or the app's offline media folder.
 - **Expectation:** No orphaned `.part` or `.remux` files remain after the session is closed.
+- **Optional bridge check:** Call `POST /api/cache/torrent/cleanup` on the
+  local bridge to force inactive torrent cache cleanup. When bridge auth is
+  configured, include the bridge token. Active torrent directories should be
+  protected and the response should report the cleanup result plus current
+  `torrentCache` status.
 
 ## Log Capture
 

@@ -1,6 +1,9 @@
 import express from "express";
 import request from "supertest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSignedGatewayStreamPath,
   requireBridgeAuth,
@@ -16,6 +19,7 @@ const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
 const previousGatewayStreamSecret = process.env.STREAMER_GATEWAY_STREAM_SECRET;
 const previousGatewayStreamTtl = process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
 const previousNodeEnv = process.env.NODE_ENV;
+const previousTorrentCacheDir = process.env.STREAMER_TORRENT_CACHE_DIR;
 
 function protectedApp() {
   const app = express();
@@ -74,6 +78,26 @@ describe("MalwareShield (validateTorrentFiles)", () => {
 });
 
 describe("Torrent Engine Memory Management (pruneTorrents)", () => {
+  let cacheRoot: string | null = null;
+
+  beforeEach(async () => {
+    cacheRoot = await mkdtemp(path.join(tmpdir(), "streamer-security-cache-"));
+    process.env.STREAMER_TORRENT_CACHE_DIR = cacheRoot;
+  });
+
+  afterEach(async () => {
+    if (previousTorrentCacheDir === undefined) {
+      delete process.env.STREAMER_TORRENT_CACHE_DIR;
+    } else {
+      process.env.STREAMER_TORRENT_CACHE_DIR = previousTorrentCacheDir;
+    }
+
+    if (cacheRoot) {
+      await rm(cacheRoot, { recursive: true, force: true });
+      cacheRoot = null;
+    }
+  });
+
   it("should not prune if under the limit", async () => {
     const torrents = [
       { infoHash: "t1", destroy: vi.fn((cb) => cb()) },
@@ -180,6 +204,7 @@ describe("Bridge auth", () => {
     await request(app).post("/api/gateway/jobs").send({}).expect(401);
     await request(app).get("/api/gateway/jobs/missing").expect(401);
     await request(app).delete("/api/gateway/jobs/missing").expect(401);
+    await request(app).post("/api/cache/torrent/cleanup").expect(401);
     await request(app).get("/api/torrent/abcdef/metrics").expect(401);
     await request(app).get("/stats").expect(401);
   });

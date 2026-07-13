@@ -218,6 +218,16 @@ inactive entries on startup, after torrent lifecycle cleanup, and when the
 cache exceeds `STREAMER_TORRENT_CACHE_MAX_BYTES`. Active torrent directories are
 protected while the WebTorrent client still owns them.
 
+The local bridge also exposes a protected manual cleanup endpoint for inactive
+torrent cache entries:
+
+```http
+POST /api/cache/torrent/cleanup
+```
+
+When `STREAMER_BRIDGE_TOKEN` is configured, call it with either
+`Authorization: Bearer <token>` or `x-streamer-bridge-token: <token>`.
+
 If an older development run already filled WebTorrent's legacy default cache,
 you can remove only that stale legacy folder:
 

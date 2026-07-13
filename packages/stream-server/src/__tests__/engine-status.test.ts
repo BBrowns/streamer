@@ -15,6 +15,8 @@ import {
   streamRequest,
 } from "../torrent.js";
 
+const previousTorrentCacheDir = process.env.STREAMER_TORRENT_CACHE_DIR;
+
 function makeRes() {
   const res = {
     headersSent: false,
@@ -117,13 +119,25 @@ describe("torrent engine native load failures", () => {
 });
 
 describe("torrent lookup", () => {
-  beforeEach(() => {
+  let cacheRoot: string | null = null;
+
+  beforeEach(async () => {
+    cacheRoot = await mkdtemp(path.join(tmpdir(), "streamer-engine-cache-"));
+    process.env.STREAMER_TORRENT_CACHE_DIR = cacheRoot;
     __resetTorrentEngineForTests();
   });
 
   afterEach(async () => {
     await __resetRemuxCacheForTests();
-    delete process.env.STREAMER_TORRENT_CACHE_DIR;
+    if (previousTorrentCacheDir === undefined) {
+      delete process.env.STREAMER_TORRENT_CACHE_DIR;
+    } else {
+      process.env.STREAMER_TORRENT_CACHE_DIR = previousTorrentCacheDir;
+    }
+    if (cacheRoot) {
+      await rm(cacheRoot, { recursive: true, force: true });
+      cacheRoot = null;
+    }
   });
 
   it("matches info hashes case-insensitively for metrics lookups", async () => {
