@@ -166,6 +166,13 @@ export interface BridgeDiagnostics {
     maxBytes?: number;
     ttlMs?: number;
   };
+  torrentCache?: {
+    rootDir?: string;
+    entryCount?: number;
+    totalBytes?: number;
+    maxBytes?: number;
+    ttlMs?: number;
+  };
   checkedAt?: number;
 }
 

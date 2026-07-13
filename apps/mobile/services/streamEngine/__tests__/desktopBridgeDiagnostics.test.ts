@@ -98,7 +98,7 @@ describe("diagnosticsFromDesktopBridge", () => {
     });
   });
 
-  it("preserves remux runtime and cache diagnostics from bridge health", () => {
+  it("preserves remux and torrent cache diagnostics from bridge health", () => {
     expect(
       diagnosticsFromDesktopBridge({
         available: true,
@@ -122,6 +122,13 @@ describe("diagnosticsFromDesktopBridge", () => {
               totalBytes: 1024,
               maxBytes: 2048,
             },
+            torrentCache: {
+              rootDir: "/Users/example/Library/Caches/Streamer/webtorrent",
+              entryCount: 3,
+              totalBytes: 4096,
+              maxBytes: 8192,
+              ttlMs: 86400000,
+            },
           },
         },
       }),
@@ -133,6 +140,11 @@ describe("diagnosticsFromDesktopBridge", () => {
       remuxCache: {
         entryCount: 2,
         pendingCount: 1,
+      },
+      torrentCache: {
+        entryCount: 3,
+        totalBytes: 4096,
+        maxBytes: 8192,
       },
     });
   });

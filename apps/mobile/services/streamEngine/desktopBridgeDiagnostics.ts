@@ -40,6 +40,13 @@ type HealthRecord = {
     maxBytes?: number;
     ttlMs?: number;
   };
+  torrentCache?: {
+    rootDir?: string;
+    entryCount?: number;
+    totalBytes?: number;
+    maxBytes?: number;
+    ttlMs?: number;
+  };
 };
 
 function asHealthRecord(value: unknown): HealthRecord | null {
@@ -189,6 +196,7 @@ export function diagnosticsFromDesktopBridge(
     repair,
     remuxRuntime: health?.remuxRuntime,
     remuxCache: health?.remuxCache,
+    torrentCache: health?.torrentCache,
     checkedAt: diagnostics.updatedAt || selfTest?.checkedAt,
   };
 }

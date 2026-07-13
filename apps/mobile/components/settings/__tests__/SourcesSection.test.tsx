@@ -61,6 +61,13 @@ describe("SourcesSection", () => {
               totalBytes: 1024,
               maxBytes: 2048,
             },
+            torrentCache: {
+              rootDir: "/Users/example/Library/Caches/Streamer/webtorrent",
+              entryCount: 3,
+              totalBytes: 4096,
+              maxBytes: 8192,
+              ttlMs: 86400000,
+            },
           },
         },
       }),
@@ -90,6 +97,9 @@ describe("SourcesSection", () => {
     await waitFor(() => {
       expect(screen.getByText("FFmpeg: Unavailable")).toBeTruthy();
       expect(screen.getByText("Remux cache: 2 files · 1 pending")).toBeTruthy();
+      expect(
+        screen.getByText("Torrent cache: 3 entries · 4 KB / 8 KB"),
+      ).toBeTruthy();
       expect(
         screen.getByText(
           "gateway-readiness: Gateway waits for remux cache or first bytes before ready.",

@@ -92,6 +92,13 @@ export interface DesktopBridgeHealthPayload {
     maxBytes?: number;
     ttlMs?: number;
   };
+  torrentCache?: {
+    rootDir?: string;
+    entryCount?: number;
+    totalBytes?: number;
+    maxBytes?: number;
+    ttlMs?: number;
+  };
   runtime?: DesktopBridgeRuntimeInfo;
   selfTest?: DesktopBridgeSelfTest;
   repair?: DesktopBridgeRepairPlan;
