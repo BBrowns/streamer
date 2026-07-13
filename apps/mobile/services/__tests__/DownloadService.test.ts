@@ -127,15 +127,18 @@ describe("getDownloadEligibility", () => {
 
   it("requires the desktop bridge for torrent downloads", () => {
     const stream: Stream = { infoHash: "abc123" };
+    const getBridgeUrl = jest.spyOn(streamEngineManager, "getBridgeUrl");
 
     expect(getDownloadEligibility(stream)).toMatchObject({
       mode: "bridge-torrent",
       canDownload: false,
       offlinePlayable: false,
     });
+    expect(getBridgeUrl).not.toHaveBeenCalled();
 
     streamEngineManager.bridgeAvailable = true;
     streamEngineManager.bridgeStatus = "available";
+    getBridgeUrl.mockReturnValue("http://localhost:11470");
 
     expect(getDownloadEligibility(stream)).toMatchObject({
       mode: "bridge-torrent",

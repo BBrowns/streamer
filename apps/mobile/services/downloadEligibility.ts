@@ -81,9 +81,9 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
     const bridgeReady =
       streamEngineManager.bridgeAvailable &&
       streamEngineManager.bridgeStatus === "available";
-    const bridgeUrl = streamEngineManager.getBridgeUrl();
     const bridgeReachable =
-      bridgeReady && isBridgeUrlReachableForNativeDownload(bridgeUrl);
+      bridgeReady &&
+      isBridgeUrlReachableForNativeDownload(streamEngineManager.getBridgeUrl());
     return {
       mode: "bridge-torrent",
       canDownload: bridgeReachable,
