@@ -34,6 +34,7 @@ import {
   createDebugBundle,
   exportDebugBundle,
 } from "../../services/debugBundle";
+import { formatBytes } from "../downloads/downloadPresentation";
 
 function formatBridgeReason(reason: string) {
   switch (reason) {
@@ -73,6 +74,14 @@ function formatRemuxRuntimeStatus(runtime: BridgeDiagnostics["remuxRuntime"]) {
 function formatRemuxCacheStatus(cache: BridgeDiagnostics["remuxCache"]) {
   if (!cache) return null;
   return `${cache.entryCount ?? 0} files · ${cache.pendingCount ?? 0} pending`;
+}
+
+function formatTorrentCacheStatus(cache: BridgeDiagnostics["torrentCache"]) {
+  if (!cache) return null;
+  const used = formatBytes(cache.totalBytes ?? 0) ?? "0 B";
+  const max = formatBytes(cache.maxBytes ?? 0);
+  const usage = max ? `${used} / ${max}` : used;
+  return `${cache.entryCount ?? 0} entries · ${usage}`;
 }
 
 type CapabilityTone = "success" | "warning" | "error" | "neutral" | "info";
@@ -344,6 +353,9 @@ export function SourcesSection({
   const remuxRuntimeStatus = formatRemuxRuntimeStatus(remuxRuntime);
   const remuxCacheStatus = formatRemuxCacheStatus(
     effectiveBridgeDiagnostics.remuxCache,
+  );
+  const torrentCacheStatus = formatTorrentCacheStatus(
+    effectiveBridgeDiagnostics.torrentCache,
   );
   const bridgeRepairSteps = bridgeRepair?.steps ?? [];
   const bridgeRepairTitle = bridgeRepair?.title || "Bridge repair steps";
@@ -860,6 +872,17 @@ export function SourcesSection({
                 ]}
               >
                 Remux cache: {remuxCacheStatus}
+              </Text>
+            )}
+            {!!torrentCacheStatus && (
+              <Text
+                selectable
+                style={[
+                  styles.diagnosticsText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Torrent cache: {torrentCacheStatus}
               </Text>
             )}
           </View>

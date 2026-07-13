@@ -25,7 +25,7 @@ Current phase:
 
 The active roadmap starts at **PR #106**. The numbered roadmap items through
 **PR #124** are implemented, and follow-up reliability/productization PRs have
-now landed through **PR #134**. Earlier roadmap items that introduced
+now landed through **PR #136**. Earlier roadmap items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
@@ -59,6 +59,10 @@ Post-roadmap corrective PRs after #124:
   directory with TTL cleanup, size-cap eviction, active torrent protection,
   lifecycle cleanup, health diagnostics, and docs for the legacy
   `/private/tmp/webtorrent` cleanup path.
+- **PR #135:** refreshed handoff and QA docs after the cache hygiene work so
+  the active roadmap reflects merged work through #134.
+- **PR #136:** surfaces torrent cache diagnostics from bridge health into
+  Sources & Devices advanced diagnostics, next to FFmpeg/remux cache status.
 
 ## Product North Star
 
