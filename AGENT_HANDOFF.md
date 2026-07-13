@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-06-14.
+> Last updated: 2026-07-13.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -23,8 +23,9 @@ Current phase:
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active roadmap starts at **PR #106** and has now been implemented through
-**PR #128**. Earlier roadmap items that introduced
+The active roadmap starts at **PR #106**. The numbered roadmap items through
+**PR #124** are implemented, and follow-up reliability/productization PRs have
+now landed through **PR #134**. Earlier roadmap items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
@@ -42,6 +43,22 @@ Post-roadmap corrective PRs after #124:
 - **PR #128:** added planner-visible audio language metadata, subtitle
   preference propagation, and player audio/subtitle track selection through
   `expo-video` where available.
+- **PR #129:** synced docs after the playback follow-up work so future agents
+  start from the implemented architecture rather than the older plan.
+- **PR #130:** added a bridge playback readiness self-test that can prove the
+  bridge can prepare and expose playback-ready streams instead of only reporting
+  process health.
+- **PR #131:** sanitized playback planner request payloads so client-only fields
+  do not trigger server-side `400` responses.
+- **PR #132:** converted terminal gateway bridge states such as `no_peers` and
+  `stalled` into typed terminal playback states instead of streams that sit in
+  endless buffering.
+- **PR #133:** polished Home, Downloads, and Player overlap regressions after
+  the UX passes, including removal of the disliked empty Home shortcut area.
+- **PR #134:** moved WebTorrent storage into an explicit Streamer-owned cache
+  directory with TTL cleanup, size-cap eviction, active torrent protection,
+  lifecycle cleanup, health diagnostics, and docs for the legacy
+  `/private/tmp/webtorrent` cleanup path.
 
 ## Product North Star
 
