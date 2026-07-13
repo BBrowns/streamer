@@ -11,7 +11,8 @@ This document provides step-by-step instructions for performing manual playback 
     - Web (Localhost or Staging)
 2.  **Bridge:** Ensure the desktop bridge is running and reachable from your mobile devices.
     Native mobile torrent downloads require the desktop bridge LAN URL, not
-    `localhost` or `127.0.0.1`.
+    `localhost` or `127.0.0.1`. Sources & Devices should show a LAN URL
+    warning when a native device is configured with a loopback bridge URL.
 3.  **Authentication:** Log in to the same account on all devices.
 
 ## Test Procedure
