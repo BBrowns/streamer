@@ -25,7 +25,7 @@ Current phase:
 
 The active roadmap starts at **PR #106**. The numbered roadmap items through
 **PR #124** are implemented, and follow-up reliability/productization PRs have
-now landed through **PR #140**. Earlier roadmap items that introduced
+now landed through **PR #141**. Earlier roadmap items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
@@ -73,6 +73,8 @@ Post-roadmap corrective PRs after #124:
 - **PR #140:** surfaces the same native loopback bridge URL problem directly in
   Sources & Devices so mobile users know to paste the desktop LAN URL before
   torrent playback, downloads, or casting.
+- **PR #141:** keeps download eligibility side-effect-light by avoiding bridge
+  URL resolution when the bridge is already unavailable.
 
 ## Product North Star
 
