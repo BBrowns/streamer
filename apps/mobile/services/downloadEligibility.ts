@@ -41,7 +41,7 @@ function isLocalIosSimulator() {
   return isLoopbackHost(host);
 }
 
-function isBridgeUrlReachableForNativeDownload(bridgeUrl: string) {
+export function isBridgeUrlReachableForNativeDownload(bridgeUrl: string) {
   if (Platform.OS === "web") return true;
 
   let parsed: URL;

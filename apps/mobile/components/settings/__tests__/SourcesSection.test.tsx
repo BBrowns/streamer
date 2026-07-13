@@ -154,4 +154,30 @@ describe("SourcesSection", () => {
       );
     });
   });
+
+  it("warns native users when the configured bridge URL is device-local loopback", async () => {
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "ios",
+    });
+    window.desktopBridge = undefined;
+    useAuthStore.setState({
+      streamServerUrl: "http://localhost:11470",
+      streamServerToken: "pairing-token",
+    });
+    jest
+      .spyOn(streamEngineManager, "getBridgeUrl")
+      .mockReturnValue("http://localhost:11470");
+
+    const screen = render(<SourcesSection />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Use the desktop bridge LAN URL")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "localhost only points at this device. Paste the desktop bridge LAN URL before using torrent playback, downloads, or casting here.",
+        ),
+      ).toBeTruthy();
+    });
+  });
 });

@@ -36,6 +36,7 @@ import {
 } from "../../services/debugBundle";
 import { getBridgeAuthHeaders } from "../../services/bridgeAuth";
 import { formatBytes } from "../downloads/downloadPresentation";
+import { isBridgeUrlReachableForNativeDownload } from "../../services/downloadEligibility";
 
 function formatBridgeReason(reason: string) {
   switch (reason) {
@@ -350,6 +351,8 @@ export function SourcesSection({
         : "warning";
   const bridgeUrl =
     bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
+  const bridgeUrlNeedsLan =
+    !!bridgeUrl && !isBridgeUrlReachableForNativeDownload(bridgeUrl);
   const bridgeRuntimeLabel =
     effectiveBridgeDiagnostics.platform &&
     effectiveBridgeDiagnostics.processArch
@@ -589,6 +592,21 @@ export function SourcesSection({
           />
         </View>
       </Surface>
+
+      {bridgeUrlNeedsLan && (
+        <Surface variant="warning" style={styles.warningBox}>
+          <Ionicons name="warning-outline" size={16} color="#fbbf24" />
+          <View style={styles.warningTextContainer}>
+            <Text style={[styles.warningTitle, { color: colors.text }]}>
+              Use the desktop bridge LAN URL
+            </Text>
+            <Text style={styles.warningBodyText}>
+              localhost only points at this device. Paste the desktop bridge LAN
+              URL before using torrent playback, downloads, or casting here.
+            </Text>
+          </View>
+        </Surface>
+      )}
 
       <SettingsSubheading
         title="Sources & add-ons"
@@ -1078,6 +1096,20 @@ const styles = StyleSheet.create({
   warningBox: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  warningTextContainer: {
+    flex: 1,
+    gap: 3,
+    marginLeft: 10,
+  },
+  warningTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  warningBodyText: {
+    color: "#fbbf24",
+    fontSize: 12,
+    lineHeight: 16,
   },
   warningText: {
     color: "#fbbf24",
