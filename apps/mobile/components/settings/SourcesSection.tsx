@@ -34,6 +34,7 @@ import {
   createDebugBundle,
   exportDebugBundle,
 } from "../../services/debugBundle";
+import { getBridgeAuthHeaders } from "../../services/bridgeAuth";
 import { formatBytes } from "../downloads/downloadPresentation";
 
 function formatBridgeReason(reason: string) {
@@ -82,6 +83,16 @@ function formatTorrentCacheStatus(cache: BridgeDiagnostics["torrentCache"]) {
   const max = formatBytes(cache.maxBytes ?? 0);
   const usage = max ? `${used} / ${max}` : used;
   return `${cache.entryCount ?? 0} entries · ${usage}`;
+}
+
+function formatTorrentCacheCleanupResult(cleanup: {
+  removedEntries?: number;
+  freedBytes?: number;
+}) {
+  const removedEntries = cleanup.removedEntries ?? 0;
+  const entryLabel = removedEntries === 1 ? "entry" : "entries";
+  const freed = formatBytes(cleanup.freedBytes ?? 0) ?? "0 B";
+  return `Removed ${removedEntries} inactive cache ${entryLabel} and freed ${freed}.`;
 }
 
 type CapabilityTone = "success" | "warning" | "error" | "neutral" | "info";
@@ -180,6 +191,7 @@ export function SourcesSection({
     streamEngineManager.getBridgeDiagnostics(),
   );
   const [isRestartingBridge, setIsRestartingBridge] = useState(false);
+  const [isCleaningTorrentCache, setIsCleaningTorrentCache] = useState(false);
   const [isCopyingDiagnostics, setIsCopyingDiagnostics] = useState(false);
   const [showConnectionSettings, setShowConnectionSettings] = useState(false);
   const [showAdvancedDiagnostics, setShowAdvancedDiagnostics] = useState(false);
@@ -424,6 +436,43 @@ export function SourcesSection({
     }
   };
 
+  const handleCleanTorrentCache = async () => {
+    if (!bridgeUrl) return;
+
+    hapticSelection();
+    setIsCleaningTorrentCache(true);
+    try {
+      const res = await fetch(
+        `${bridgeUrl.replace(/\/$/, "")}/api/cache/torrent/cleanup`,
+        {
+          method: "POST",
+          headers: getBridgeAuthHeaders(),
+        },
+      );
+      if (!res.ok) {
+        throw new Error(`Torrent cache cleanup failed (${res.status})`);
+      }
+
+      const data = await res.json();
+      await refreshDesktopBridgeInfo();
+      await streamEngineManager.detectBridge();
+      setBridgeStatus(streamEngineManager.bridgeStatus);
+      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+      hapticSuccess();
+      Alert.alert(
+        "Torrent cache cleaned",
+        formatTorrentCacheCleanupResult(data.cleanup ?? {}),
+      );
+    } catch {
+      Alert.alert(
+        "Cache cleanup failed",
+        "Could not clean inactive torrent cache entries.",
+      );
+    } finally {
+      setIsCleaningTorrentCache(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {showHeader && (
@@ -516,6 +565,17 @@ export function SourcesSection({
               onPress={handleRestartBridge}
               disabled={isRestartingBridge}
               loading={isRestartingBridge}
+            />
+          )}
+          {!!torrentCacheStatus && (
+            <AppButton
+              label={isCleaningTorrentCache ? "Cleaning..." : "Clean cache"}
+              icon="trash-outline"
+              size="small"
+              variant="ghost"
+              onPress={handleCleanTorrentCache}
+              disabled={isCleaningTorrentCache}
+              loading={isCleaningTorrentCache}
             />
           )}
           <AppButton

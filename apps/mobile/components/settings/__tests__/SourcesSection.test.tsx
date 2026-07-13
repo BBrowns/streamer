@@ -1,8 +1,9 @@
 import React from "react";
-import { Platform } from "react-native";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Alert, Platform } from "react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { SourcesSection } from "../SourcesSection";
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
+import { useAuthStore } from "../../../stores/authStore";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -13,6 +14,15 @@ describe("SourcesSection", () => {
   const originalDesktopBridge = window.desktopBridge;
 
   beforeEach(() => {
+    useAuthStore.setState({ streamServerToken: "pairing-token" });
+    jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        cleanup: { removedEntries: 1, freedBytes: 4096 },
+        torrentCache: { entryCount: 2, totalBytes: 2048, maxBytes: 8192 },
+      }),
+    }) as any;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "web",
@@ -77,6 +87,10 @@ describe("SourcesSection", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    act(() => {
+      useAuthStore.setState({ streamServerToken: null });
+    });
+    global.fetch = undefined as any;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: originalPlatform,
@@ -111,6 +125,33 @@ describe("SourcesSection", () => {
 
     await waitFor(() => {
       expect(window.desktopBridge?.getBridgeInfo).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("cleans inactive torrent cache through the configured bridge", async () => {
+    const screen = render(<SourcesSection />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Clean cache")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Clean cache"));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://192.168.1.25:11470/api/cache/torrent/cleanup",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            Authorization: "Bearer pairing-token",
+          }),
+        }),
+      );
+      expect(window.desktopBridge?.getBridgeInfo).toHaveBeenCalledTimes(2);
+      expect(Alert.alert).toHaveBeenCalledWith(
+        "Torrent cache cleaned",
+        "Removed 1 inactive cache entry and freed 4 KB.",
+      );
     });
   });
 });
