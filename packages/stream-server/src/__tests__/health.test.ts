@@ -1,7 +1,9 @@
 import request from "supertest";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EventEmitter } from "events";
-import { rm } from "fs/promises";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
 import { createStreamServerApp } from "../index.js";
 import {
   __resetRemuxCacheForTests,
@@ -36,6 +38,13 @@ function makeSuccessfulFfmpegVersionSpawner() {
 }
 
 describe("bridge health", () => {
+  let cacheRoot: string | null = null;
+
+  beforeEach(async () => {
+    cacheRoot = await mkdtemp(path.join(tmpdir(), "streamer-health-cache-"));
+    process.env.STREAMER_TORRENT_CACHE_DIR = cacheRoot;
+  });
+
   afterEach(async () => {
     if (previousBridgeOwner === undefined) {
       delete process.env.STREAMER_BRIDGE_OWNER;
@@ -82,6 +91,10 @@ describe("bridge health", () => {
 
     __resetTorrentEngineForTests();
     await __resetRemuxCacheForTests();
+    if (cacheRoot) {
+      await rm(cacheRoot, { recursive: true, force: true });
+      cacheRoot = null;
+    }
     await rm("/tmp/streamer-test-webtorrent", { recursive: true, force: true });
   });
 

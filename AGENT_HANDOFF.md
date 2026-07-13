@@ -25,7 +25,7 @@ Current phase:
 
 The active roadmap starts at **PR #106**. The numbered roadmap items through
 **PR #124** are implemented, and follow-up reliability/productization PRs have
-now landed through **PR #136**. Earlier roadmap items that introduced
+now landed through **PR #137**. Earlier roadmap items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
@@ -63,6 +63,8 @@ Post-roadmap corrective PRs after #124:
   the active roadmap reflects merged work through #134.
 - **PR #136:** surfaces torrent cache diagnostics from bridge health into
   Sources & Devices advanced diagnostics, next to FFmpeg/remux cache status.
+- **PR #137:** adds a protected bridge endpoint for manual inactive torrent
+  cache cleanup and isolates stream-server cache tests from the real app cache.
 
 ## Product North Star
 
