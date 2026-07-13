@@ -90,9 +90,19 @@ function createDownloadSessionContext() {
 }
 
 describe("getDownloadEligibility", () => {
+  const originalPlatform = Platform.OS;
+
   beforeEach(() => {
+    jest.restoreAllMocks();
+    setPlatform("web");
     streamEngineManager.bridgeAvailable = false;
     streamEngineManager.bridgeStatus = "unreachable";
+    streamEngineManager.bridgeUrl = "http://localhost:11470";
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    setPlatform(originalPlatform);
   });
 
   it("does not mark HLS streams offline-playable", () => {
@@ -126,6 +136,40 @@ describe("getDownloadEligibility", () => {
 
     streamEngineManager.bridgeAvailable = true;
     streamEngineManager.bridgeStatus = "available";
+
+    expect(getDownloadEligibility(stream)).toMatchObject({
+      mode: "bridge-torrent",
+      canDownload: true,
+      offlinePlayable: true,
+    });
+  });
+
+  it("blocks native torrent downloads when the bridge URL is device-local loopback", () => {
+    const stream: Stream = { infoHash: "abc123" };
+    setPlatform("ios");
+    streamEngineManager.bridgeAvailable = true;
+    streamEngineManager.bridgeStatus = "available";
+    jest
+      .spyOn(streamEngineManager, "getBridgeUrl")
+      .mockReturnValue("http://localhost:11470");
+
+    expect(getDownloadEligibility(stream)).toMatchObject({
+      mode: "bridge-torrent",
+      canDownload: false,
+      offlinePlayable: false,
+      reason:
+        "Torrent downloads on this device need the desktop bridge LAN URL.",
+    });
+  });
+
+  it("allows native torrent downloads when the bridge URL is LAN-reachable", () => {
+    const stream: Stream = { infoHash: "abc123" };
+    setPlatform("ios");
+    streamEngineManager.bridgeAvailable = true;
+    streamEngineManager.bridgeStatus = "available";
+    jest
+      .spyOn(streamEngineManager, "getBridgeUrl")
+      .mockReturnValue("http://192.168.1.25:11470");
 
     expect(getDownloadEligibility(stream)).toMatchObject({
       mode: "bridge-torrent",
@@ -283,6 +327,7 @@ describe("DownloadService session completion", () => {
 
   it("removes browser fallback tasks instead of marking them offline-playable", async () => {
     const playbackSession = createDownloadSessionContext();
+    jest.spyOn(console, "info").mockImplementation(() => undefined);
     const click = jest.fn();
     const appendChild = jest.fn();
     const removeChild = jest.fn();
@@ -553,6 +598,7 @@ describe("DownloadService session completion", () => {
   });
 
   it("keeps failed deletions visible with a safe retryable error", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     window.desktopBridge = {
       cancelDownloadJob: jest.fn().mockResolvedValue(null),
       deleteFile: jest
