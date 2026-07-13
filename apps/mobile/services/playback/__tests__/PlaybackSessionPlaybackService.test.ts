@@ -33,6 +33,7 @@ jest.mock("expo-crypto", () => ({
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
     resolveEngine: jest.fn(),
+    getBridgeUrl: jest.fn(() => "http://192.168.1.25:11470"),
     bridgeAvailable: true,
     bridgeStatus: "available",
   },

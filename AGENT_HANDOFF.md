@@ -25,7 +25,7 @@ Current phase:
 
 The active roadmap starts at **PR #106**. The numbered roadmap items through
 **PR #124** are implemented, and follow-up reliability/productization PRs have
-now landed through **PR #138**. Earlier roadmap items that introduced
+now landed through **PR #139**. Earlier roadmap items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
@@ -67,6 +67,9 @@ Post-roadmap corrective PRs after #124:
   cache cleanup and isolates stream-server cache tests from the real app cache.
 - **PR #138:** adds a Sources & Devices action that calls the protected torrent
   cache cleanup endpoint with bridge auth and refreshes bridge diagnostics.
+- **PR #139:** prevents native torrent downloads from appearing offline-eligible
+  when the configured bridge URL is device-local loopback instead of a
+  LAN-reachable desktop bridge URL.
 
 ## Product North Star
 

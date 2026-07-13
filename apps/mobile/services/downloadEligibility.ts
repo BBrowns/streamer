@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import type { Stream } from "@streamer/shared";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 
@@ -13,6 +14,53 @@ export interface DownloadEligibility {
   canDownload: boolean;
   offlinePlayable: boolean;
   reason?: string;
+}
+
+function normalizeHost(host: string) {
+  const normalized = host.trim().toLowerCase();
+  return normalized.startsWith("[") && normalized.endsWith("]")
+    ? normalized.slice(1, -1)
+    : normalized;
+}
+
+function isLoopbackHost(host: string) {
+  const normalized = normalizeHost(host);
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized === "::1" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::" ||
+    normalized.startsWith("127.")
+  );
+}
+
+function isLocalIosSimulator() {
+  const host = Constants.expoConfig?.hostUri?.split(":")[0];
+  if (!host) return false;
+  return isLoopbackHost(host);
+}
+
+function isBridgeUrlReachableForNativeDownload(bridgeUrl: string) {
+  if (Platform.OS === "web") return true;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(bridgeUrl);
+  } catch {
+    return false;
+  }
+
+  const host = normalizeHost(parsed.hostname);
+  if (Platform.OS === "android" && host === "10.0.2.2") {
+    return true;
+  }
+
+  if (Platform.OS === "ios" && isLoopbackHost(host)) {
+    return isLocalIosSimulator();
+  }
+
+  return !isLoopbackHost(host);
 }
 
 export function getDownloadEligibility(stream: Stream): DownloadEligibility {
@@ -33,13 +81,18 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
     const bridgeReady =
       streamEngineManager.bridgeAvailable &&
       streamEngineManager.bridgeStatus === "available";
+    const bridgeUrl = streamEngineManager.getBridgeUrl();
+    const bridgeReachable =
+      bridgeReady && isBridgeUrlReachableForNativeDownload(bridgeUrl);
     return {
       mode: "bridge-torrent",
-      canDownload: bridgeReady,
-      offlinePlayable: bridgeReady,
-      reason: bridgeReady
+      canDownload: bridgeReachable,
+      offlinePlayable: bridgeReachable,
+      reason: bridgeReachable
         ? undefined
-        : "Torrent downloads need the desktop stream bridge.",
+        : bridgeReady
+          ? "Torrent downloads on this device need the desktop bridge LAN URL."
+          : "Torrent downloads need the desktop stream bridge.",
     };
   }
 
