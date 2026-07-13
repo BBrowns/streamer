@@ -54,7 +54,8 @@ For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
   local bridge to force inactive torrent cache cleanup. When bridge auth is
   configured, include the bridge token. Active torrent directories should be
   protected and the response should report the cleanup result plus current
-  `torrentCache` status.
+  `torrentCache` status. The same cleanup can be triggered from
+  Settings -> Sources & Devices -> Advanced Diagnostics -> Clean cache.
 
 ## Log Capture
 
