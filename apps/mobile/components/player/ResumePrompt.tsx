@@ -15,7 +15,7 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
   resumeTimeSeconds = null,
 }) => {
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const resumeTitle =
     typeof resumeTimeSeconds === "number" && resumeTimeSeconds > 0
       ? t("player.resume.resumeFrom", {
@@ -25,20 +25,14 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
       : t("player.resume.title", { defaultValue: "Resume playback?" });
 
   return (
-    <View
-      style={[
-        styles.resumeOverlay,
-        {
-          backgroundColor: isDark
-            ? "rgba(0,0,0,0.85)"
-            : "rgba(255,255,255,0.85)",
-        },
-      ]}
-    >
+    <View style={[styles.resumeOverlay, { backgroundColor: colors.scrim }]}>
       <View
         style={[
           styles.resumeBox,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+          },
         ]}
       >
         <Text style={[styles.resumeTitle, { color: colors.text }]}>
@@ -51,11 +45,7 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
           <Pressable
             style={[
               styles.resumeBtnGhost,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(0,0,0,0.05)",
-              },
+              { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             onPress={() => onResponse(false)}
           >
@@ -68,10 +58,7 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
             onPress={() => onResponse(true)}
           >
             <Text
-              style={[
-                styles.resumeBtnPrimaryText,
-                { color: isDark ? "#000" : "#fff" },
-              ]}
+              style={[styles.resumeBtnPrimaryText, { color: colors.onTint }]}
             >
               {t("player.resume.resume", { defaultValue: "Resume" })}
             </Text>
@@ -128,6 +115,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
+    borderWidth: 1,
   },
   resumeBtnGhostText: {
     fontWeight: "600",

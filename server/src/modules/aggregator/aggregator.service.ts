@@ -18,6 +18,17 @@ import {
 import { z } from "zod";
 import { StreamParser } from "./domain/stream-parser.js";
 
+export interface SearchProviderFacet {
+  id: string;
+  name: string;
+}
+
+export interface SearchWithProvenanceResult {
+  metas: MetaPreview[];
+  providers: SearchProviderFacet[];
+  providersByContent: Record<string, string[]>;
+}
+
 // Per-addon policy registry is now handled by resilienceRegistry
 
 const secureAgent = new https.Agent({
@@ -312,6 +323,15 @@ export class AggregatorService {
     query: string,
     requestId: string,
   ): Promise<MetaPreview[]> {
+    return (await this.searchWithProvenance(userId, query, requestId)).metas;
+  }
+
+  /** Search while preserving which installed providers returned each title. */
+  async searchWithProvenance(
+    userId: string,
+    query: string,
+    requestId: string,
+  ): Promise<SearchWithProvenanceResult> {
     const addons = await this.getUserAddons(userId);
     const contentTypes = ["movie", "series"];
 
@@ -323,7 +343,13 @@ export class AggregatorService {
         )
         .map(async (type) => {
           const catalogId = this.findCatalogId(addon.manifest, type);
-          if (!catalogId) return [];
+          if (!catalogId) {
+            return {
+              addonId: addon.id,
+              addonName: addon.manifest.name,
+              metas: [] as MetaPreview[],
+            };
+          }
 
           const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
           const data = await resilientFetch(
@@ -333,7 +359,11 @@ export class AggregatorService {
             requestId,
             catalogResponseSchema,
           );
-          return data.metas || [];
+          return {
+            addonId: addon.id,
+            addonName: addon.manifest.name,
+            metas: data.metas || [],
+          };
         }),
     );
 
@@ -342,19 +372,34 @@ export class AggregatorService {
     // Merge and deduplicate by ID
     const seen = new Set<string>();
     const merged: MetaPreview[] = [];
+    const providers = new Map<string, SearchProviderFacet>();
+    const providersByContent = new Map<string, Set<string>>();
 
     for (const result of results) {
       if (result.status === "fulfilled") {
-        for (const meta of result.value) {
-          if (!seen.has(meta.id)) {
-            seen.add(meta.id);
+        const { addonId, addonName, metas } = result.value;
+        providers.set(addonId, { id: addonId, name: addonName });
+        for (const meta of metas) {
+          const contentKey = `${meta.type}:${meta.id}`;
+          const contentProviders =
+            providersByContent.get(contentKey) ?? new Set<string>();
+          contentProviders.add(addonId);
+          providersByContent.set(contentKey, contentProviders);
+          if (!seen.has(contentKey)) {
+            seen.add(contentKey);
             merged.push(meta);
           }
         }
       }
     }
 
-    return merged;
+    return {
+      metas: merged,
+      providers: Array.from(providers.values()),
+      providersByContent: Object.fromEntries(
+        Array.from(providersByContent, ([key, ids]) => [key, Array.from(ids)]),
+      ),
+    };
   }
 
   /** Get installed add-ons for user, with manifests */

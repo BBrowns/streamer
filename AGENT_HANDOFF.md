@@ -22,9 +22,10 @@ Current phase:
   accessibility/responsive visual-quality pass are in place.
 - Adaptive cinematic redesign phase: the unreleased worktree/branch introduces
   semantic dark/light tokens, window classes, four primary destinations,
-  stable Home composition, unified Search/discovery, Undo foundations, and
-  initial PiP/background/cast continuity. Treat this as an active milestone,
-  not a completed full-app redesign.
+  stable Home composition, provider-aware Search/discovery, Undo foundations,
+  visible media-language state, and synchronized PiP/background/cast
+  continuity. Treat this as an active milestone, not a completed full-app
+  redesign.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
@@ -446,16 +447,17 @@ Gateway lifecycle exists now, but these are still open:
 
 ### 4. UI/UX Revamp Is Still Incomplete
 
-The new shell, Home composition, Search/discovery flow, Undo notifications, and
-player continuity foundation are implemented, but the full visual/product
-redesign remains active:
+The new shell, Home composition, provider-aware Search/discovery flow, Undo
+notifications, semantic Detail/auth/onboarding surfaces, visible player track
+state, and synchronized cast mini-controller are implemented. The full
+visual/product redesign remains active:
 
-- Migrate Detail/Series, Library, Downloads, Settings, auth, and onboarding to
-  the semantic theme and shared window-class contract.
-- Deduplicate provider rails against Home's hero and other primary rails.
-- Expand Search with reliable provider/genre/language/availability facets only
-  after the server returns trustworthy provenance/facet metadata.
-- Complete cast time/status/seek synchronization and an expanded controller.
+- Finish the long-tail Settings/diagnostics token migration and validate
+  Downloads, Series episode lists, and settings panels under large text.
+- Search provider provenance is reliable and implemented. Add genre, language,
+  quality, or availability facets only when the upstream metadata is reliable.
+- Keep destructive download-file deletion confirm-first; add Undo only to
+  operations whose underlying file mutation can actually be reversed.
 - Complete caption-safe layout, visible subtitle/audio state, large-text, and
   focus-not-obscured validation.
 - Add authenticated desktop and compact browser screenshots; keep native PiP,

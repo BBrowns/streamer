@@ -116,19 +116,26 @@ Implemented in the current draft phase:
   released-date labeling.
 - One Search/discovery destination with URL-restorable type/year/sort state and
   a responsive advanced-filter surface.
+- Search provenance returned by the server, canonical `type:id` deduplication,
+  and a URL-restorable provider facet.
 - Undo for Library and Continue Watching removal.
 - PiP/background configuration, accessible player status announcements, and a
-  cast session that survives route navigation with mini-controller pause/play.
+  cast session that survives route navigation with synchronized status,
+  progress, pause/play, and seek controls.
+- Detail, Library, auth, onboarding, player sheets, and core media controls now
+  consume semantic tokens and the shared window-class contract; active audio
+  and subtitle choices are visible in the player controls.
+- Provider rails exclude titles already claimed by the hero, Continue Watching,
+  and primary Home rails.
 
 Remaining before this redesign milestone is complete:
 
-- Migrate Detail/Series, Library, Downloads, Settings, auth, and onboarding off
-  legacy hardcoded styling and local breakpoint logic.
-- Deduplicate provider rails against the rest of Home and add scalable search
-  facets/provenance when server metadata supports them.
+- Finish the long-tail Settings and diagnostics token migration and validate
+  Downloads at large text and all supported window classes.
+- Add genre/language/availability facets only when providers return reliable
+  metadata for those fields; do not infer them from labels.
 - Add recoverable bulk/download actions where the underlying file operation is
   reversible; retain confirmation where it is not.
-- Complete cast status/time/seek synchronization and expanded-controller UX.
 - Finish media accessibility for subtitle visibility, caption-safe layout,
   alternate/audio-description labeling, large text, and focus-not-obscured.
 - Add authenticated browser golden paths and record native PiP, lock-screen,

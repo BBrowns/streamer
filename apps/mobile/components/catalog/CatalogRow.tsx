@@ -8,7 +8,6 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAddonCatalog } from "../../hooks/useAddonCatalog";
@@ -21,6 +20,7 @@ import { CatalogItemCard } from "./CatalogItemCard";
 import { useTheme } from "../../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
 import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 const CARD_WIDTH_MOBILE = 140;
 const CARD_WIDTH_DESKTOP = 200;
@@ -29,15 +29,17 @@ const CARD_GAP = 12;
 function CatalogRowInner({
   catalog,
   addon,
+  excludeContentKeys,
 }: {
   catalog: CatalogDefinition;
   addon: InstalledAddon;
+  excludeContentKeys?: ReadonlySet<string>;
 }) {
   const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
     useAddonCatalog(addon.id, catalog);
-  const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { colors } = useTheme();
+  const { isExpanded, isLarge } = useWindowClass();
+  const isDesktop = isExpanded || isLarge;
   const flatListRef = useRef<FlatList>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
   const router = useRouter();
@@ -54,7 +56,17 @@ function CatalogRowInner({
     flatListRef.current?.scrollToOffset({ offset: newOffset, animated: true });
   };
 
-  const flattenedData = data?.pages.flat() || [];
+  const flattenedData = (data?.pages.flat() || []).filter(
+    (item, index, items) => {
+      const key = `${item.type}:${item.id}`;
+      return (
+        !excludeContentKeys?.has(key) &&
+        items.findIndex(
+          (candidate) => `${candidate.type}:${candidate.id}` === key,
+        ) === index
+      );
+    },
+  );
 
   const { selectedIndex } = useKeyboardNavigation({
     itemCount: flattenedData.length,
@@ -110,15 +122,11 @@ function CatalogRowInner({
               style={({ pressed, hovered }: any) => [
                 styles.arrowBtn,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.05)",
+                  backgroundColor: colors.card,
                   borderColor: colors.border,
                 },
                 hovered && {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.12)"
-                    : "rgba(0,0,0,0.1)",
+                  backgroundColor: colors.surfaceElevated,
                 },
                 pressed && { opacity: 0.7 },
               ]}
@@ -135,15 +143,11 @@ function CatalogRowInner({
               style={({ pressed, hovered }: any) => [
                 styles.arrowBtn,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.05)",
+                  backgroundColor: colors.card,
                   borderColor: colors.border,
                 },
                 hovered && {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.12)"
-                    : "rgba(0,0,0,0.1)",
+                  backgroundColor: colors.surfaceElevated,
                 },
                 pressed && { opacity: 0.7 },
               ]}

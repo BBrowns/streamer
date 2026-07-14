@@ -24,13 +24,13 @@ import { useTheme } from "../../hooks/useTheme";
 import * as Haptics from "expo-haptics";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 export interface OnboardingStep {
   id: string;
   title: string;
   description: string;
   image: ImageSourcePropType;
-  colors: [string, string];
 }
 
 interface OnboardingCarouselProps {
@@ -129,6 +129,7 @@ function OnboardingItem({
               : Math.min(width * 0.5, 280),
             maxWidth: Math.min(width - padding * 2, isDesktop ? 720 : 340),
             marginBottom: isDesktop ? 60 : 36,
+            borderColor: colors.border,
           },
           animatedImageStyle,
         ]}
@@ -181,6 +182,7 @@ function PaginationDot({
   active,
   reducedMotion,
 }: PaginationDotProps) {
+  const { colors } = useTheme();
   const animatedDotStyle = useAnimatedStyle(() => {
     if (reducedMotion) {
       return {
@@ -223,7 +225,9 @@ function PaginationDot({
       accessibilityLabel={`Onboarding step ${index + 1}`}
       accessibilityState={{ selected: active }}
     >
-      <Animated.View style={[styles.dot, animatedDotStyle]} />
+      <Animated.View
+        style={[styles.dot, { backgroundColor: colors.tint }, animatedDotStyle]}
+      />
     </Pressable>
   );
 }
@@ -233,12 +237,13 @@ export function OnboardingCarousel({
   onComplete,
 }: OnboardingCarouselProps) {
   const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
+  const { isExpanded, isLarge } = useWindowClass();
+  const { colors } = useTheme();
   const scrollX = useSharedValue(0);
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const reducedMotion = useReducedMotion();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const isDesktop = isExpanded || isLarge;
   const itemPadding = isDesktop ? 32 : 24;
 
   const onScroll = useAnimatedScrollHandler({
@@ -282,11 +287,7 @@ export function OnboardingCarousel({
 
   return (
     <LinearGradient
-      colors={
-        isDark
-          ? ["#11121c", "#171423", "#231727"]
-          : ["#fff9f6", "#f7f0ff", "#ecfbf3"]
-      }
+      colors={[colors.background, colors.surfaceElevated, colors.background]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -390,10 +391,10 @@ export function OnboardingCarousel({
             accessibilityLabel={isLastStep ? "Get started" : "Next step"}
           >
             <LinearGradient
-              colors={["#f2d7ff", "#c5e9d5"]}
+              colors={[colors.tint, colors.tint]}
               style={styles.gradient}
             >
-              <Text style={styles.buttonText}>
+              <Text style={[styles.buttonText, { color: colors.onTint }]}>
                 {isLastStep ? "Get Started" : "Next Step"}
               </Text>
             </LinearGradient>
@@ -407,7 +408,6 @@ export function OnboardingCarousel({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#050614",
   },
   stepContainer: {
     flex: 1,
@@ -421,7 +421,6 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
   },
   image: {
     width: "100%",
@@ -435,13 +434,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: "900",
-    color: "#f8fafc",
     textAlign: "center",
     letterSpacing: 0,
   },
   description: {
     fontSize: 16,
-    color: "#94a3b8",
     textAlign: "center",
     lineHeight: 24,
     opacity: 0.9,
@@ -472,7 +469,6 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#d8b4fe",
     marginHorizontal: 4,
   },
   button: {
@@ -496,7 +492,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buttonText: {
-    color: "#2c1738",
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: 0,

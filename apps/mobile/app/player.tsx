@@ -1188,6 +1188,15 @@ export default function PlayerScreen() {
             castStatus={castStatus}
             downloadStatus={downloadStatus}
             fallbackReason={fallbackReason}
+            audioStatus={
+              audioTracks.find((track) => track.active)?.label || null
+            }
+            subtitleStatus={
+              subtitles.find((track) => track.active)?.label ||
+              (subtitles.length > 0
+                ? t("player.settings.off", { defaultValue: "Subtitles off" })
+                : null)
+            }
             muted={muted}
             volume={volume}
             onSeekBy={handleSeekBy}

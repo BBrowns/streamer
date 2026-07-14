@@ -1,12 +1,5 @@
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Platform,
-  useWindowDimensions,
-} from "react-native";
+import React, { useCallback, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRemoteControl } from "../../hooks/useRemoteControl";
 import { useTheme } from "../../hooks/useTheme";
@@ -21,14 +14,39 @@ import { useRouter } from "expo-router";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useCastStore } from "../../stores/castStore";
 import { castService } from "../../services/CastService";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+
+function formatCastTime(seconds = 0) {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
 
 export function RemoteControlBar() {
   const { otherActiveSessions, sendCommand } = useRemoteControl();
   const activeCast = useCastStore((state) => state.activeCast);
   const setCastPaused = useCastStore((state) => state.setCastPaused);
+  const setCastStatus = useCastStore((state) => state.setCastStatus);
   const { colors, isDark } = useTheme();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { isCompact } = useWindowClass();
+  const reducedMotion = useReducedMotion();
+
+  const refreshCastStatus = useCallback(async () => {
+    if (!activeCast) return;
+    try {
+      setCastStatus(await castService.getStatus(activeCast.device.id));
+    } catch {
+      // Keep the last known state while the bridge or display reconnects.
+    }
+  }, [activeCast, setCastStatus]);
+
+  useEffect(() => {
+    if (!activeCast) return;
+    void refreshCastStatus();
+    const timer = setInterval(() => void refreshCastStatus(), 5000);
+    return () => clearInterval(timer);
+  }, [activeCast, refreshCastStatus]);
 
   if (otherActiveSessions.length === 0 && !activeCast) return null;
 
@@ -71,11 +89,36 @@ export function RemoteControlBar() {
     }
   };
 
+  const handleSeek = async (delta: number) => {
+    if (!activeCast) return;
+    hapticImpactLight();
+    const nextPosition = Math.min(
+      activeCast.duration || Number.POSITIVE_INFINITY,
+      Math.max(0, (activeCast.currentTime || 0) + delta),
+    );
+    await castService.control(activeCast.device.id, "seek", nextPosition);
+    await refreshCastStatus();
+  };
+
+  const castProgress =
+    activeCast?.duration && activeCast.duration > 0
+      ? Math.min(
+          100,
+          ((activeCast.currentTime || 0) / activeCast.duration) * 100,
+        )
+      : 0;
+
   return (
     <Animated.View
-      entering={SlideInDown.duration(400).springify()}
-      exiting={SlideOutDown.duration(300)}
-      style={[styles.wrapper, width > 600 && styles.wrapperWide]}
+      entering={
+        reducedMotion
+          ? FadeIn.duration(120)
+          : SlideInDown.duration(400).springify()
+      }
+      exiting={
+        reducedMotion ? FadeOut.duration(120) : SlideOutDown.duration(300)
+      }
+      style={[styles.wrapper, !isCompact && styles.wrapperWide]}
     >
       <BlurView
         intensity={90}
@@ -106,13 +149,59 @@ export function RemoteControlBar() {
                 session.itemTitle ||
                 "Unknown Content"}
             </Text>
+            {activeCast?.duration ? (
+              <View style={styles.progressRow}>
+                <View
+                  style={[
+                    styles.progressTrack,
+                    { backgroundColor: colors.disabled },
+                  ]}
+                  accessibilityRole="progressbar"
+                  accessibilityValue={{
+                    min: 0,
+                    max: Math.round(activeCast.duration),
+                    now: Math.round(activeCast.currentTime || 0),
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${castProgress}%`,
+                        backgroundColor: colors.tint,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text
+                  style={[styles.timeText, { color: colors.textSecondary }]}
+                >
+                  {formatCastTime(activeCast.currentTime)} /{" "}
+                  {formatCastTime(activeCast.duration)}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
         <View style={styles.right}>
+          {activeCast ? (
+            <Pressable
+              onPress={() => handleSeek(-10)}
+              style={[styles.seekBtn, { backgroundColor: colors.card }]}
+              accessibilityRole="button"
+              accessibilityLabel="Seek cast back 10 seconds"
+            >
+              <Ionicons name="play-back" size={18} color={colors.text} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={handleTogglePlay}
             style={[styles.controlBtn, { backgroundColor: colors.tint + "15" }]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isPaused ? "Resume remote playback" : "Pause remote playback"
+            }
           >
             <Ionicons
               name={isPaused ? "play" : "pause"}
@@ -120,13 +209,21 @@ export function RemoteControlBar() {
               color={colors.text}
             />
           </Pressable>
+          {activeCast ? (
+            <Pressable
+              onPress={() => handleSeek(10)}
+              style={[styles.seekBtn, { backgroundColor: colors.card }]}
+              accessibilityRole="button"
+              accessibilityLabel="Seek cast forward 10 seconds"
+            >
+              <Ionicons name="play-forward" size={18} color={colors.text} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={handleTakeOver}
             style={[styles.takeOverBtn, { backgroundColor: colors.tint }]}
           >
-            <Text
-              style={[styles.takeOverText, { color: isDark ? "#000" : "#fff" }]}
-            >
+            <Text style={[styles.takeOverText, { color: colors.onTint }]}>
               {activeCast ? "Open player" : "Take Over"}
             </Text>
           </Pressable>
@@ -145,11 +242,11 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   wrapperWide: {
-    maxWidth: 500,
+    maxWidth: 680,
     alignSelf: "center",
     left: "auto",
     right: "auto",
-    width: 500,
+    width: 680,
   },
   container: {
     flexDirection: "row",
@@ -159,7 +256,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
     ...(Platform.OS === "web"
       ? { boxShadow: "0 4px 10px rgba(0, 0, 0, 0.3)" }
       : {
@@ -187,6 +283,21 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
   },
+  progressRow: {
+    marginTop: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  progressTrack: {
+    flex: 1,
+    maxWidth: 180,
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: { height: "100%" },
+  timeText: { fontSize: 10, fontVariant: ["tabular-nums"] },
   deviceText: {
     color: "#94a3b8",
     fontSize: 11,
@@ -208,18 +319,22 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  seekBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
   },
   takeOverBtn: {
-    backgroundColor: "#d8b4fe",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 14,
   },
   takeOverText: {
-    color: "#2c1738",
     fontSize: 13,
     fontWeight: "800",
   },

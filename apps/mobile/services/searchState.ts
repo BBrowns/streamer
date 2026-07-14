@@ -5,6 +5,7 @@ export interface SearchRouteState {
   q: string;
   type: SearchTypeFilter;
   year: string;
+  provider: string;
   sort: SearchSort;
   mode?: "discover";
 }
@@ -26,16 +27,20 @@ export function parseSearchRouteState(
     year: /^\d{4}$/.test(first(params.year) ?? "")
       ? first(params.year)!
       : "all",
+    provider: first(params.provider)?.trim() || "all",
     sort: sort === "title" || sort === "year" ? sort : "relevance",
     mode: mode === "discover" ? "discover" : undefined,
   };
 }
 
-export function searchRouteParams(state: SearchRouteState) {
+export function searchRouteParams(
+  state: Omit<SearchRouteState, "provider"> & { provider?: string },
+) {
   return {
     q: state.q || undefined,
     type: state.type === "all" ? undefined : state.type,
     year: state.year === "all" ? undefined : state.year,
+    provider: state.provider === "all" ? undefined : state.provider,
     sort: state.sort === "relevance" ? undefined : state.sort,
     mode: state.mode,
   };

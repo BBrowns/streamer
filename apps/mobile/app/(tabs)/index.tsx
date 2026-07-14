@@ -145,7 +145,11 @@ function HomeRail({
   );
 }
 
-function HomeProviderRails() {
+function HomeProviderRails({
+  excludeContentKeys,
+}: {
+  excludeContentKeys: ReadonlySet<string>;
+}) {
   const router = useRouter();
   const { t } = useTranslation();
   const { data: addons } = useAddons();
@@ -184,6 +188,7 @@ function HomeProviderRails() {
           key={`home-${addon.id}-${catalog.type}-${catalog.id}`}
           catalog={catalog}
           addon={addon}
+          excludeContentKeys={excludeContentKeys}
         />
       ))}
     </View>
@@ -241,6 +246,17 @@ function HomeContent() {
   const finalRail = homeFeed.rails.find(
     (rail) => rail.key === "recently_added" || rail.key === "more_to_watch",
   );
+  const claimedContentKeys = useMemo(() => {
+    const claimed = new Set<string>();
+    if (heroItem) claimed.add(`${heroItem.type}:${heroItem.id}`);
+    continueWatchingItems.forEach((item) =>
+      claimed.add(`${item.type}:${item.id}`),
+    );
+    homeFeed.rails.forEach((rail) =>
+      rail.items.forEach((item) => claimed.add(`${item.type}:${item.id}`)),
+    );
+    return claimed;
+  }, [continueWatchingItems, heroItem, homeFeed.rails]);
 
   const isLoading =
     !isHydrated || movieCatalog.isLoading || seriesCatalog.isLoading;
@@ -354,7 +370,7 @@ function HomeContent() {
         isLoading={isLoading}
       />
 
-      <HomeProviderRails />
+      <HomeProviderRails excludeContentKeys={claimedContentKeys} />
     </ScrollView>
   );
 }

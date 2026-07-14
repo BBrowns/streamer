@@ -54,7 +54,7 @@ export default function LoginScreen() {
             ]}
           >
             <Ionicons name="alert-circle" size={18} color={colors.error} />
-            <Text style={styles.errorText}>
+            <Text style={[styles.errorText, { color: colors.error }]}>
               {localError || extractErrorMessage(error)}
             </Text>
           </View>
@@ -105,11 +105,13 @@ export default function LoginScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#2c1738" />
+            <ActivityIndicator color={colors.onTint} />
           ) : (
             <>
-              <Ionicons name="log-in-outline" size={19} color="#2c1738" />
-              <Text style={styles.primaryButtonText}>
+              <Ionicons name="log-in-outline" size={19} color={colors.onTint} />
+              <Text
+                style={[styles.primaryButtonText, { color: colors.onTint }]}
+              >
                 {t("auth.login.button")}
               </Text>
             </>
@@ -160,7 +162,7 @@ const styles = StyleSheet.create({
     gap: 10,
     alignItems: "center",
   },
-  errorText: { color: "#ff9ba6", fontSize: 14, fontWeight: "700", flex: 1 },
+  errorText: { fontSize: 14, fontWeight: "700", flex: 1 },
   input: {
     borderRadius: 16,
     paddingHorizontal: 16,
@@ -181,7 +183,6 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.6 },
   primaryButtonText: {
-    color: "#2c1738",
     fontWeight: "900",
     fontSize: 16,
     letterSpacing: 0,

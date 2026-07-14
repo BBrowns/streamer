@@ -36,12 +36,15 @@ Current UI phase (unreleased redesign work):
 - Compact navigation exposes Home, Search, Library, and Downloads; medium,
   expanded, and large windows adapt to a rail/sidebar.
 - Home uses one canonical `type:id` identity for hero and primary rails, with
-  Continue Watching excluded from repeated recommendations.
+  Continue Watching excluded from repeated recommendations. Provider rails
+  also exclude content already claimed by those primary surfaces.
 - Search is the single discovery destination. The old Discover route redirects
   to Search discovery mode, while `/search/results` remains a compatibility
-  route for result links.
-- Continue with constrained primitives and screen-by-screen migration of
-  Detail, Series, Library, Downloads, Settings, auth, and onboarding.
+  route for result links. Search responses retain installed-provider
+  provenance and expose a shareable provider facet alongside type/year/sort.
+- Detail, Library, auth, onboarding, player sheets, and primary media controls
+  have joined the semantic token/window-class system. Continue the constrained
+  migration through Settings diagnostics and other long-tail surfaces.
 - Do not start a full Tamagui migration or broad visual rewrite.
 - Preserve the session-driven playback architecture and progressive disclosure
   of source/device complexity.
@@ -85,7 +88,7 @@ Current pilot primitives:
 - `components/ui/AppButton.tsx` for primary, secondary, ghost, and danger
   actions with consistent sizing, icon support, loading state, and accessibility
   state.
-- `components/ui/Surface.tsx` for bordered pastel glass panels.
+- `components/ui/Surface.tsx` for semantic bordered/elevated panels.
 - `components/ui/StatusPill.tsx` for bridge/playback/download readiness labels.
 - `components/ui/TextField.tsx` for themed form inputs.
 - `components/ui/PlaybackStatusPanel.tsx` for centered player readiness and

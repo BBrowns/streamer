@@ -16,7 +16,13 @@ export interface CastDevice {
   capabilities?: CastDeviceCapabilities;
 }
 
-export type CastControlAction = "play" | "pause" | "stop";
+export type CastControlAction = "play" | "pause" | "stop" | "seek";
+export interface CastPlaybackStatus {
+  currentTime: number;
+  duration: number;
+  isPaused: boolean;
+  playerState: string;
+}
 export type CastContentType =
   | "video/mp4"
   | "application/vnd.apple.mpegurl"
@@ -138,7 +144,11 @@ class CastService {
     }
   }
 
-  async control(deviceId: string, action: CastControlAction): Promise<void> {
+  async control(
+    deviceId: string,
+    action: CastControlAction,
+    position?: number,
+  ): Promise<void> {
     requireActionPreflight(
       preflightBridgeAction("cast", { sourceKind: "direct" }),
     );
@@ -147,7 +157,7 @@ class CastService {
       res = await fetch(`${this.getBridgeUrl()}/api/cast/control`, {
         method: "POST",
         headers: withBridgeJsonHeaders(),
-        body: JSON.stringify({ deviceId, action }),
+        body: JSON.stringify({ deviceId, action, position }),
       });
     } catch {
       throw new CastServiceError(
@@ -163,6 +173,32 @@ class CastService {
         res.status,
       );
     }
+  }
+
+  async getStatus(deviceId: string): Promise<CastPlaybackStatus> {
+    requireActionPreflight(
+      preflightBridgeAction("cast", { sourceKind: "direct" }),
+    );
+    let res: Response;
+    try {
+      res = await fetch(
+        `${this.getBridgeUrl()}/api/cast/status/${encodeURIComponent(deviceId)}`,
+        { headers: getBridgeAuthHeaders() },
+      );
+    } catch {
+      throw new CastServiceError(
+        "CAST_DEVICE_UNREACHABLE",
+        "The selected display status could not be reached.",
+      );
+    }
+    if (!res.ok) {
+      throw new CastServiceError(
+        res.status === 404 ? "CAST_DEVICE_UNREACHABLE" : "CAST_FAILED",
+        await getCastResponseError(res, "Cast status could not be loaded."),
+        res.status,
+      );
+    }
+    return res.json();
   }
 }
 

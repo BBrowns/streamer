@@ -34,7 +34,7 @@ export function PlayerSettingsModal({
   playbackRate,
   onSelectPlaybackRate,
 }: PlayerSettingsModalProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
   return (
@@ -44,17 +44,12 @@ export function PlayerSettingsModal({
       transparent
       onRequestClose={onClose}
     >
-      <View
-        style={[
-          styles.modalBg,
-          { backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.3)" },
-        ]}
-      >
+      <View style={[styles.modalBg, { backgroundColor: colors.scrim }]}>
         <View
           style={[
             styles.sheetContent,
             {
-              backgroundColor: colors.card,
+              backgroundColor: colors.surfaceElevated,
               borderTopColor: colors.border,
               borderTopWidth: 1,
             },
@@ -86,15 +81,17 @@ export function PlayerSettingsModal({
                 style={[
                   styles.speedBtn,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.05)",
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
                   },
                   playbackRate === rate && {
                     backgroundColor: colors.tint + "15",
                   },
                 ]}
                 onPress={() => onSelectPlaybackRate(rate)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: playbackRate === rate }}
+                accessibilityLabel={`${rate}x playback speed`}
               >
                 <Text
                   style={[
@@ -137,7 +134,8 @@ export function PlayerSettingsModal({
                     item.active && { backgroundColor: colors.tint + "15" },
                   ]}
                   onPress={() => onSelectAudio(item.id)}
-                  accessibilityRole="button"
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: !!item.active }}
                   accessibilityLabel={`Audio: ${item.label}${item.active ? ", selected" : ""}`}
                 >
                   <Text style={[styles.trackLabel, { color: colors.text }]}>
@@ -181,7 +179,10 @@ export function PlayerSettingsModal({
                   },
                 ]}
                 onPress={() => onSelectSubtitle(null)}
-                accessibilityRole="button"
+                accessibilityRole="radio"
+                accessibilityState={{
+                  checked: subtitles.every((subtitle) => !subtitle.active),
+                }}
                 accessibilityLabel={t("player.settings.off")}
               >
                 <Text style={[styles.trackLabel, { color: colors.text }]}>
@@ -199,7 +200,8 @@ export function PlayerSettingsModal({
                       item.active && { backgroundColor: colors.tint + "15" },
                     ]}
                     onPress={() => onSelectSubtitle(item.id)}
-                    accessibilityRole="button"
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: !!item.active }}
                     accessibilityLabel={`Subtitle: ${item.label}${item.active ? ", selected" : ""}`}
                   >
                     <Text style={[styles.trackLabel, { color: colors.text }]}>
@@ -232,12 +234,10 @@ export function PlayerSettingsModal({
 const styles = StyleSheet.create({
   modalBg: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "flex-end",
     zIndex: 50,
   },
   sheetContent: {
-    backgroundColor: "#0d0d24",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -250,15 +250,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  title: { color: "#f8fafc", fontSize: 18, fontWeight: "bold" },
-  doneText: { color: "#818cf8", fontWeight: "bold", fontSize: 15 },
+  title: { fontSize: 18, fontWeight: "bold" },
+  doneText: { fontWeight: "bold", fontSize: 15 },
   sectionTitle: {
-    color: "#f8fafc",
     fontSize: 14,
     fontWeight: "bold",
     marginBottom: 8,
   },
-  emptyText: { color: "#a1a1aa", fontSize: 12, fontStyle: "italic" },
+  emptyText: { fontSize: 12, fontStyle: "italic" },
   trackRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -268,10 +267,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     minHeight: 44,
   },
-  trackRowActive: { backgroundColor: "rgba(129,140,248,0.15)" },
-  trackLabel: { color: "#f8fafc", fontSize: 14, flex: 1 },
-  trackLang: { color: "#a1a1aa", fontSize: 12, marginRight: 8 },
-  checkIcon: { color: "#818cf8", fontWeight: "bold", fontSize: 16 },
+  trackLabel: { fontSize: 14, flex: 1 },
+  trackLang: { fontSize: 12, marginRight: 8 },
+  checkIcon: { fontWeight: "bold", fontSize: 16 },
   speedRow: {
     flexDirection: "row",
     gap: 8,
@@ -281,18 +279,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  speedBtnActive: {
-    backgroundColor: "rgba(129,140,248,0.15)",
+    borderWidth: 1,
   },
   speedBtnText: {
-    color: "#a1a1aa",
     fontSize: 14,
     fontWeight: "600",
-  },
-  speedBtnTextActive: {
-    color: "#818cf8",
-    fontWeight: "bold",
   },
 });

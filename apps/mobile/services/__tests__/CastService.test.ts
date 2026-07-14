@@ -167,4 +167,43 @@ describe("CastService", () => {
       code: "CAST_DEVICE_UNREACHABLE",
     });
   });
+
+  it("sends seek positions through the configured bridge", async () => {
+    await castService.control("living-room", "seek", 84);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.25:11470/api/cast/control",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          deviceId: "living-room",
+          action: "seek",
+          position: 84,
+        }),
+      }),
+    );
+  });
+
+  it("loads normalized playback status from the selected display", async () => {
+    jest.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        currentTime: 42,
+        duration: 120,
+        isPaused: false,
+        playerState: "PLAYING",
+      }),
+    } as Response);
+
+    await expect(castService.getStatus("living-room:8009")).resolves.toEqual({
+      currentTime: 42,
+      duration: 120,
+      isPaused: false,
+      playerState: "PLAYING",
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.25:11470/api/cast/status/living-room%3A8009",
+      { headers: {} },
+    );
+  });
 });

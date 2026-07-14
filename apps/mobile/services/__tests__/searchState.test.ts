@@ -7,12 +7,14 @@ describe("search route state", () => {
         q: " Dune ",
         type: "movie",
         year: "2024",
+        provider: "addon-1",
         sort: "year",
       }),
     ).toEqual({
       q: "Dune",
       type: "movie",
       year: "2024",
+      provider: "addon-1",
       sort: "year",
       mode: undefined,
     });
@@ -25,6 +27,7 @@ describe("search route state", () => {
       q: "",
       type: "all",
       year: "all",
+      provider: "all",
       sort: "relevance",
       mode: undefined,
     });
@@ -36,12 +39,14 @@ describe("search route state", () => {
         q: "Alien",
         type: "all",
         year: "all",
+        provider: "all",
         sort: "relevance",
       }),
     ).toEqual({
       q: "Alien",
       type: undefined,
       year: undefined,
+      provider: undefined,
       sort: undefined,
       mode: undefined,
     });

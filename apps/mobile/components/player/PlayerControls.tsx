@@ -46,6 +46,8 @@ interface PlayerControlsProps {
   castStatus?: string | null;
   downloadStatus?: string | null;
   fallbackReason?: string | null;
+  audioStatus?: string | null;
+  subtitleStatus?: string | null;
   muted?: boolean;
   volume?: number;
   onSeekBy?: (seconds: number) => void;
@@ -79,6 +81,8 @@ export function PlayerControls({
   castStatus,
   downloadStatus,
   fallbackReason,
+  audioStatus,
+  subtitleStatus,
   muted = false,
   volume = 1,
   onSeekBy,
@@ -90,7 +94,7 @@ export function PlayerControls({
   onOpenCast,
   onRetry,
 }: PlayerControlsProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { isCompact } = useWindowClass();
   const reducedMotion = useReducedMotion();
@@ -221,7 +225,6 @@ export function PlayerControls({
           label={seekBackLabel}
           onPress={() => seekBy(-SEEK_STEP_SECONDS)}
           colors={colors}
-          isDark={isDark}
           disabled={!hasTimeline}
         />
         <Pressable
@@ -229,9 +232,7 @@ export function PlayerControls({
             styles.playPauseBtn,
             Platform.OS === "web" && styles.webInteractive,
             {
-              backgroundColor: isDark
-                ? "rgba(18,18,30,0.76)"
-                : "rgba(255,255,255,0.82)",
+              backgroundColor: colors.surfaceOverlay,
               borderColor: colors.border,
               opacity: pressed ? 0.82 : 1,
             },
@@ -254,7 +255,6 @@ export function PlayerControls({
           label={seekForwardLabel}
           onPress={() => seekBy(SEEK_STEP_SECONDS)}
           colors={colors}
-          isDark={isDark}
           disabled={!hasTimeline}
         />
       </View>
@@ -271,37 +271,24 @@ export function PlayerControls({
             styles.bottomTray,
             compactLayout && styles.bottomTrayCompact,
             {
-              backgroundColor: isDark
-                ? "rgba(18,18,30,0.78)"
-                : "rgba(255,255,255,0.88)",
+              backgroundColor: colors.surfaceOverlay,
               borderColor: colors.border,
             },
           ]}
         >
           <View style={styles.statusRow} accessibilityLiveRegion="polite">
             {sourceLabel ? (
-              <StatusPill
-                icon="sparkles"
-                label={sourceLabel}
-                colors={colors}
-                isDark={isDark}
-              />
+              <StatusPill icon="sparkles" label={sourceLabel} colors={colors} />
             ) : null}
             {downloadStatus ? (
               <StatusPill
                 icon="cloud-done"
                 label={downloadStatus}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
             {castStatus ? (
-              <StatusPill
-                icon="tv"
-                label={castStatus}
-                colors={colors}
-                isDark={isDark}
-              />
+              <StatusPill icon="tv" label={castStatus} colors={colors} />
             ) : null}
             {fallbackReason ? (
               <StatusPill
@@ -310,7 +297,6 @@ export function PlayerControls({
                   defaultValue: "Trying fallback",
                 })}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
             {capabilityMessage ? (
@@ -318,8 +304,17 @@ export function PlayerControls({
                 icon={capabilities?.isRemux ? "construct" : "radio"}
                 label={capabilityMessage}
                 colors={colors}
-                isDark={isDark}
               />
+            ) : null}
+            {audioStatus ? (
+              <StatusPill
+                icon="volume-high"
+                label={audioStatus}
+                colors={colors}
+              />
+            ) : null}
+            {subtitleStatus ? (
+              <StatusPill icon="text" label={subtitleStatus} colors={colors} />
             ) : null}
           </View>
 
@@ -373,9 +368,7 @@ export function PlayerControls({
                 style={[
                   styles.scrubberTrack,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.13)"
-                      : "rgba(40,34,54,0.12)",
+                    backgroundColor: colors.disabled,
                     opacity: hasTimeline ? 1 : 0.58,
                   },
                 ]}
@@ -396,9 +389,7 @@ export function PlayerControls({
                       {
                         left: `${progressPercent}%`,
                         backgroundColor: colors.text,
-                        borderColor: isDark
-                          ? "rgba(255,255,255,0.24)"
-                          : "rgba(40,34,54,0.16)",
+                        borderColor: colors.border,
                       },
                     ]}
                   />
@@ -429,7 +420,6 @@ export function PlayerControls({
                 label={volumeLabel}
                 onPress={onToggleMute}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
             {capabilities?.canUseVolume && onVolumeChange ? (
@@ -438,9 +428,7 @@ export function PlayerControls({
                   styles.volumeCluster,
                   {
                     borderColor: colors.border,
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(40,34,54,0.06)",
+                    backgroundColor: colors.card,
                   },
                 ]}
               >
@@ -451,7 +439,6 @@ export function PlayerControls({
                   })}
                   onPress={() => setVolume(normalizedVolume - 0.1)}
                   colors={colors}
-                  isDark={isDark}
                   compact
                 />
                 <Text style={[styles.volumeText, { color: colors.text }]}>
@@ -464,7 +451,6 @@ export function PlayerControls({
                   })}
                   onPress={() => setVolume(normalizedVolume + 0.1)}
                   colors={colors}
-                  isDark={isDark}
                   compact
                 />
               </View>
@@ -477,7 +463,6 @@ export function PlayerControls({
                 })}
                 onPress={onOpenSettings}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
             {capabilities?.canCast && onOpenCast ? (
@@ -486,7 +471,6 @@ export function PlayerControls({
                 label={t("player.controls.cast", { defaultValue: "Cast" })}
                 onPress={onOpenCast}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
             {capabilities?.canRetry && onRetry ? (
@@ -497,7 +481,6 @@ export function PlayerControls({
                 })}
                 onPress={onRetry}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
             {capabilities?.canUseFullscreen && onToggleFullscreen ? (
@@ -508,7 +491,6 @@ export function PlayerControls({
                 })}
                 onPress={onToggleFullscreen}
                 colors={colors}
-                isDark={isDark}
               />
             ) : null}
           </View>
@@ -523,14 +505,12 @@ function ControlButton({
   label,
   onPress,
   colors,
-  isDark,
   disabled = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>["colors"];
-  isDark: boolean;
   disabled?: boolean;
 }) {
   return (
@@ -539,9 +519,7 @@ function ControlButton({
         styles.skipButton,
         Platform.OS === "web" && styles.webInteractive,
         {
-          backgroundColor: isDark
-            ? "rgba(18,18,30,0.66)"
-            : "rgba(255,255,255,0.76)",
+          backgroundColor: colors.surfaceOverlay,
           borderColor: colors.border,
           opacity: disabled ? 0.38 : pressed ? 0.78 : 1,
         },
@@ -567,14 +545,12 @@ function ActionButton({
   label,
   onPress,
   colors,
-  isDark,
   compact = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>["colors"];
-  isDark: boolean;
   compact?: boolean;
 }) {
   return (
@@ -582,9 +558,7 @@ function ActionButton({
       style={({ pressed, hovered, focused }: any) => [
         compact ? styles.compactActionButton : styles.actionButton,
         {
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.07)"
-            : "rgba(40,34,54,0.07)",
+          backgroundColor: colors.card,
           borderColor: colors.border,
           opacity: pressed ? 0.76 : 1,
         },
@@ -605,12 +579,10 @@ function StatusPill({
   icon,
   label,
   colors,
-  isDark,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   colors: ReturnType<typeof useTheme>["colors"];
-  isDark: boolean;
 }) {
   return (
     <View
@@ -618,9 +590,7 @@ function StatusPill({
         styles.statusPill,
         {
           borderColor: colors.border,
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.07)"
-            : "rgba(40,34,54,0.07)",
+          backgroundColor: colors.card,
         },
       ]}
     >
@@ -664,7 +634,6 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: uiRadii.pill,
-    backgroundColor: "rgba(0,0,0,0.6)",
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -741,7 +710,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   timeText: {
-    color: "#f8fafc",
     width: 54,
     fontSize: 13,
     fontWeight: "700",
@@ -764,7 +732,6 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#818cf8",
     borderRadius: 3,
   },
   scrubberThumb: {
@@ -774,7 +741,6 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 1,
-    backgroundColor: "#fff",
     transform: [{ translateX: -9 }],
   },
   actionRow: {

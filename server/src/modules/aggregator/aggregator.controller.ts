@@ -135,13 +135,13 @@ export class AggregatorController {
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
-    const metas = await aggregatorService.search(
+    const result = await aggregatorService.searchWithProvenance(
       user.userId,
       q.trim(),
       requestId,
     );
 
-    return c.json({ metas });
+    return c.json(result);
   }
 
   async getResilienceMetrics(c: Context) {

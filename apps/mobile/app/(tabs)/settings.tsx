@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Platform,
   ScrollView,
-  useWindowDimensions,
   Switch,
 } from "react-native";
 import type { ComponentProps } from "react";
@@ -43,15 +42,19 @@ import {
   formatBuildLabel,
 } from "../../services/buildMetadata";
 import { getWebFocusStyle } from "../../components/ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 function Pressable(props: ComponentProps<typeof NativePressable>) {
+  const { colors } = useTheme();
   return (
     <NativePressable
       {...props}
       accessibilityRole={props.accessibilityRole ?? "button"}
       style={(state: any) => [
         typeof props.style === "function" ? props.style(state) : props.style,
-        Platform.OS === "web" && state.focused && getWebFocusStyle("#a78bfa"),
+        Platform.OS === "web" &&
+          state.focused &&
+          getWebFocusStyle(colors.focus),
       ]}
     />
   );
@@ -116,8 +119,8 @@ function SettingsContent() {
   const [hasCheckedBiometry, setHasCheckedBiometry] = useState(false);
 
   // Desktop specific state
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { isExpanded, isLarge } = useWindowClass();
+  const isDesktop = isExpanded || isLarge;
   const desktopBridgeApi =
     Platform.OS === "web" && typeof window !== "undefined"
       ? window.desktopBridge
@@ -374,10 +377,14 @@ function SettingsContent() {
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: "rgba(129,140,248,0.15)" },
+                { backgroundColor: colors.tint + "20" },
               ]}
             >
-              <Ionicons name="play-circle-outline" size={20} color="#818cf8" />
+              <Ionicons
+                name="play-circle-outline"
+                size={20}
+                color={colors.tint}
+              />
             </View>
             <View style={styles.menuItemTextContainer}>
               <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -414,10 +421,10 @@ function SettingsContent() {
             <View
               style={[
                 styles.iconContainer,
-                { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+                { backgroundColor: colors.warning + "20" },
               ]}
             >
-              <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+              <Ionicons name="radio-outline" size={20} color={colors.warning} />
             </View>
             <View style={styles.menuItemTextContainer}>
               <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -457,13 +464,13 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(216,180,254,0.14)" },
+              { backgroundColor: colors.tint + "20" },
             ]}
           >
             <Ionicons
               name="extension-puzzle-outline"
               size={20}
-              color="#d8b4fe"
+              color={colors.tint}
             />
           </View>
           <View style={styles.menuItemTextContainer}>
@@ -499,7 +506,10 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop && activePane === "sources" && styles.menuItemActive,
+            isDesktop &&
+              activePane === "sources" && {
+                backgroundColor: colors.tint + "18",
+              },
           ]}
           onPress={() => {
             hapticSelection();
@@ -510,10 +520,10 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(245, 158, 11, 0.14)" },
+              { backgroundColor: colors.warning + "20" },
             ]}
           >
-            <Ionicons name="radio-outline" size={20} color="#f3b96b" />
+            <Ionicons name="radio-outline" size={20} color={colors.warning} />
           </View>
           <View style={styles.menuItemTextContainer}>
             <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -549,10 +559,14 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(56, 189, 248, 0.12)" },
+              { backgroundColor: colors.tint + "18" },
             ]}
           >
-            <Ionicons name="cloud-download-outline" size={20} color="#38bdf8" />
+            <Ionicons
+              name="cloud-download-outline"
+              size={20}
+              color={colors.tint}
+            />
           </View>
           <View style={styles.menuItemTextContainer}>
             <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -590,17 +604,20 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop && activePane === "profile" && styles.menuItemActive,
+            isDesktop &&
+              activePane === "profile" && {
+                backgroundColor: colors.tint + "18",
+              },
           ]}
           onPress={handleProfilePress}
         >
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(129,140,248,0.15)" },
+              { backgroundColor: colors.tint + "20" },
             ]}
           >
-            <Ionicons name="person-outline" size={20} color="#818cf8" />
+            <Ionicons name="person-outline" size={20} color={colors.tint} />
           </View>
           <View style={styles.menuItemTextContainer}>
             <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -677,7 +694,7 @@ function SettingsContent() {
             <Ionicons
               name={connected ? "checkmark-circle" : "chevron-forward"}
               size={18}
-              color={connected ? "#10b981" : colors.textSecondary}
+              color={connected ? colors.success : colors.textSecondary}
             />
           )}
         </Pressable>
@@ -687,20 +704,23 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop && activePane === "sessions" && styles.menuItemActive,
+            isDesktop &&
+              activePane === "sessions" && {
+                backgroundColor: colors.tint + "18",
+              },
           ]}
           onPress={handleSessionsPress}
         >
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(52, 211, 153, 0.1)" },
+              { backgroundColor: colors.success + "18" },
             ]}
           >
             <Ionicons
               name="shield-checkmark-outline"
               size={20}
-              color="#34d399"
+              color={colors.success}
             />
           </View>
           <View style={styles.menuItemTextContainer}>
@@ -729,17 +749,20 @@ function SettingsContent() {
         <Pressable
           style={[
             styles.menuItem,
-            isDesktop && activePane === "password" && styles.menuItemActive,
+            isDesktop &&
+              activePane === "password" && {
+                backgroundColor: colors.tint + "18",
+              },
           ]}
           onPress={handlePasswordPress}
         >
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(129, 140, 248, 0.1)" },
+              { backgroundColor: colors.tint + "18" },
             ]}
           >
-            <Ionicons name="lock-closed" size={20} color="#818cf8" />
+            <Ionicons name="lock-closed" size={20} color={colors.tint} />
           </View>
           <View style={styles.menuItemTextContainer}>
             <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -810,16 +833,14 @@ function SettingsContent() {
                   styles.updateCard,
                   {
                     borderColor: colors.border,
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.04)"
-                      : "rgba(124,58,237,0.06)",
+                    backgroundColor: colors.card,
                   },
                 ]}
               >
                 <View
                   style={[
                     styles.iconContainer,
-                    { backgroundColor: "rgba(124, 58, 237, 0.14)" },
+                    { backgroundColor: colors.tint + "20" },
                   ]}
                 >
                   <Ionicons
@@ -829,7 +850,7 @@ function SettingsContent() {
                         : "sparkles-outline"
                     }
                     size={20}
-                    color="#a78bfa"
+                    color={colors.tint}
                   />
                 </View>
                 <View style={styles.updateContent}>
@@ -922,13 +943,13 @@ function SettingsContent() {
               <View
                 style={[
                   styles.iconContainer,
-                  { backgroundColor: "rgba(168, 85, 247, 0.15)" },
+                  { backgroundColor: colors.tint + "20" },
                 ]}
               >
                 <Ionicons
                   name="finger-print-outline"
                   size={20}
-                  color="#c084fc"
+                  color={colors.tint}
                 />
               </View>
               <View style={styles.menuItemTextContainer}>
@@ -948,10 +969,10 @@ function SettingsContent() {
                 value={biometricEnabled}
                 onValueChange={handleToggleBiometrics}
                 trackColor={{
-                  false: isDark ? "#374151" : "#e2e8f0",
+                  false: colors.disabled,
                   true: colors.tint,
                 }}
-                thumbColor={biometricEnabled ? "#fff" : "#f1f5f9"}
+                thumbColor={colors.onTint}
               />
             </View>
           </>
@@ -968,13 +989,13 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(216,180,254,0.14)" },
+              { backgroundColor: colors.tint + "20" },
             ]}
           >
             <Ionicons
               name="information-circle-outline"
               size={20}
-              color="#d8b4fe"
+              color={colors.tint}
             />
           </View>
           <View style={styles.menuItemTextContainer}>
@@ -1010,10 +1031,14 @@ function SettingsContent() {
               <View
                 style={[
                   styles.iconContainer,
-                  { backgroundColor: "rgba(124, 58, 237, 0.14)" },
+                  { backgroundColor: colors.tint + "20" },
                 ]}
               >
-                <Ionicons name="refresh-outline" size={20} color="#a78bfa" />
+                <Ionicons
+                  name="refresh-outline"
+                  size={20}
+                  color={colors.tint}
+                />
               </View>
               <View style={styles.menuItemTextContainer}>
                 <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -1057,10 +1082,10 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(56, 189, 248, 0.1)" },
+              { backgroundColor: colors.tint + "18" },
             ]}
           >
-            <Ionicons name="download-outline" size={20} color="#38bdf8" />
+            <Ionicons name="download-outline" size={20} color={colors.tint} />
           </View>
           <View style={styles.menuItemTextContainer}>
             <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -1093,10 +1118,10 @@ function SettingsContent() {
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(239, 68, 68, 0.1)" },
+              { backgroundColor: colors.error + "18" },
             ]}
           >
-            <Ionicons name="trash-outline" size={20} color="#f87171" />
+            <Ionicons name="trash-outline" size={20} color={colors.error} />
           </View>
           <View style={styles.menuItemTextContainer}>
             <Text style={[styles.menuItemTitle, { color: colors.text }]}>
@@ -1122,14 +1147,22 @@ function SettingsContent() {
 
       {/* Logout */}
       <Pressable
-        style={styles.logoutButton}
+        style={[
+          styles.logoutButton,
+          {
+            backgroundColor: colors.error + "18",
+            borderColor: colors.error + "4d",
+          },
+        ]}
         onPress={() => {
           logout();
           queryClient.clear();
           clearQueryCache();
         }}
       >
-        <Text style={styles.logoutText}>{t("settings.auth.signOut")}</Text>
+        <Text style={[styles.logoutText, { color: colors.error }]}>
+          {t("settings.auth.signOut")}
+        </Text>
       </Pressable>
 
       {!isDesktop && renderModals()}
@@ -1235,9 +1268,6 @@ const styles = StyleSheet.create({
   smartDownloadsSettingsPanel: {
     padding: 12,
   },
-  menuItemActive: {
-    backgroundColor: "rgba(216,180,254,0.14)",
-  },
   divider: {
     height: 1,
     marginLeft: 56, // Align with text
@@ -1271,9 +1301,7 @@ const styles = StyleSheet.create({
   spacer: { height: 8 },
   flexSpacer: { flex: 1 },
   logoutButton: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
     borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.3)",
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",
@@ -1281,7 +1309,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoutText: {
-    color: "#ef4444",
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,

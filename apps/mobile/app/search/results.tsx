@@ -116,6 +116,7 @@ export default function SearchResultsScreen() {
     q?: string;
     type?: string;
     year?: string;
+    provider?: string;
     sort?: string;
     mode?: string;
   }>();
@@ -132,6 +133,7 @@ export default function SearchResultsScreen() {
     routeState.type,
   );
   const [yearFilter, setYearFilter] = useState<YearFilter>(routeState.year);
+  const [providerFilter, setProviderFilter] = useState(routeState.provider);
   const [sort, setSort] = useState<SearchSort>(routeState.sort);
   const [searchFocused, setSearchFocused] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -139,10 +141,27 @@ export default function SearchResultsScreen() {
 
   const results = data ?? [];
   const years = useMemo(() => uniqueYears(results), [results]);
+  const providers = useMemo(() => {
+    const options = new Map<string, string>();
+    results.forEach((item) =>
+      item.providerIds.forEach((id, index) =>
+        options.set(id, item.providerNames[index] ?? id),
+      ),
+    );
+    return Array.from(options, ([value, label]) => ({ value, label })).sort(
+      (left, right) => left.label.localeCompare(right.label),
+    );
+  }, [results]);
   const filteredResults = useMemo(() => {
     const filtered = results.filter((item) => {
       if (typeFilter !== "all" && item.type !== typeFilter) return false;
       if (yearFilter !== "all" && extractYear(item) !== yearFilter) {
+        return false;
+      }
+      if (
+        providerFilter !== "all" &&
+        !item.providerIds.includes(providerFilter)
+      ) {
         return false;
       }
       return true;
@@ -159,7 +178,7 @@ export default function SearchResultsScreen() {
       );
     }
     return filtered;
-  }, [results, sort, typeFilter, yearFilter]);
+  }, [providerFilter, results, sort, typeFilter, yearFilter]);
 
   const loadRecent = useCallback(async () => {
     setRecentSearches(await SearchService.getRecentSearches());
@@ -174,8 +193,15 @@ export default function SearchResultsScreen() {
     setSubmittedQuery(initialQuery);
     setTypeFilter(routeState.type);
     setYearFilter(routeState.year);
+    setProviderFilter(routeState.provider);
     setSort(routeState.sort);
-  }, [initialQuery, routeState.sort, routeState.type, routeState.year]);
+  }, [
+    initialQuery,
+    routeState.provider,
+    routeState.sort,
+    routeState.type,
+    routeState.year,
+  ]);
 
   const syncRoute = useCallback(
     (overrides: Partial<Parameters<typeof searchRouteParams>[0]>) => {
@@ -184,18 +210,28 @@ export default function SearchResultsScreen() {
           q: submittedQuery,
           type: typeFilter,
           year: yearFilter,
+          provider: providerFilter,
           sort,
           mode: routeState.mode,
           ...overrides,
         }) as any,
       );
     },
-    [routeState.mode, router, sort, submittedQuery, typeFilter, yearFilter],
+    [
+      providerFilter,
+      routeState.mode,
+      router,
+      sort,
+      submittedQuery,
+      typeFilter,
+      yearFilter,
+    ],
   );
 
   useEffect(() => {
     if (yearFilter !== "all" && !years.includes(yearFilter)) {
       setYearFilter("all");
+      setProviderFilter("all");
     }
   }, [yearFilter, years]);
 
@@ -210,7 +246,13 @@ export default function SearchResultsScreen() {
       setYearFilter("all");
       await SearchService.addRecentSearch(clean);
       await loadRecent();
-      syncRoute({ q: clean, type: "all", year: "all", sort: "relevance" });
+      syncRoute({
+        q: clean,
+        type: "all",
+        year: "all",
+        provider: "all",
+        sort: "relevance",
+      });
     },
     [loadRecent, syncRoute],
   );
@@ -242,6 +284,10 @@ export default function SearchResultsScreen() {
     { label: "A–Z", value: "title" as const },
     { label: "Newest", value: "year" as const },
   ];
+  const providerOptions = [
+    { label: "All providers", value: "all" },
+    ...providers,
+  ];
 
   const showSuggestions =
     inputValue.trim().length > 0 && inputValue.trim() !== submittedQuery.trim();
@@ -251,7 +297,9 @@ export default function SearchResultsScreen() {
   const showFilters = submittedQuery.trim().length > 0 && results.length > 0;
   const showInlineFilterPanel = isExpanded || isLarge;
   const activeAdvancedFilterCount =
-    Number(yearFilter !== "all") + Number(sort !== "relevance");
+    Number(yearFilter !== "all") +
+    Number(providerFilter !== "all") +
+    Number(sort !== "relevance");
 
   const advancedFilterControls = (
     <>
@@ -292,6 +340,18 @@ export default function SearchResultsScreen() {
           accessibilityLabel="Filter search results by year"
         />
       )}
+      {providers.length > 1 && (
+        <FilterChipBar
+          options={providerOptions}
+          value={providerFilter}
+          onChange={(value) => {
+            setProviderFilter(value);
+            syncRoute({ provider: value });
+          }}
+          containerStyle={styles.filterBar}
+          accessibilityLabel="Filter search results by provider"
+        />
+      )}
       <FilterChipBar
         options={sortOptions}
         value={sort}
@@ -308,8 +368,9 @@ export default function SearchResultsScreen() {
         size="small"
         onPress={() => {
           setYearFilter("all");
+          setProviderFilter("all");
           setSort("relevance");
-          syncRoute({ year: "all", sort: "relevance" });
+          syncRoute({ year: "all", provider: "all", sort: "relevance" });
         }}
       />
     </>
@@ -357,11 +418,13 @@ export default function SearchResultsScreen() {
                     setSubmittedQuery("");
                     setTypeFilter("all");
                     setYearFilter("all");
+                    setProviderFilter("all");
                     setSort("relevance");
                     syncRoute({
                       q: "",
                       type: "all",
                       year: "all",
+                      provider: "all",
                       sort: "relevance",
                     });
                   }}

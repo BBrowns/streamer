@@ -49,7 +49,7 @@ export default function LibraryScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { data: items, isLoading } = useLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
   const addToLibrary = useAddToLibrary();
@@ -59,7 +59,7 @@ export default function LibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const numColumns = useResponsiveColumns();
   const [activeFilter, setActiveFilter] = useState<
-    "all" | "movie" | "show" | "offline"
+    "all" | "movie" | "series" | "offline"
   >("all");
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -147,6 +147,8 @@ export default function LibraryScreen() {
           style: "destructive",
           onPress: () => {
             const idsArray = Array.from(selectedIds);
+            const removedItems =
+              items?.filter((item) => selectedIds.has(item.itemId)) ?? [];
 
             // Delete offline downloads if necessary
             idsArray.forEach((id) => {
@@ -166,13 +168,35 @@ export default function LibraryScreen() {
                 hapticSuccess();
                 setIsSelectionMode(false);
                 setSelectedIds(new Set());
+                if (removedItems.length > 0) {
+                  useToastStore
+                    .getState()
+                    .show(
+                      `${removedItems.length} ${removedItems.length === 1 ? "title" : "titles"} removed from Library`,
+                      "info",
+                      {
+                        actionLabel: "Restore",
+                        onAction: () =>
+                          Promise.all(
+                            removedItems.map((item) =>
+                              addToLibrary.mutateAsync({
+                                type: item.type,
+                                itemId: item.itemId,
+                                title: item.title,
+                                poster: item.poster ?? undefined,
+                              }),
+                            ),
+                          ),
+                      },
+                    );
+                }
               },
             });
           },
         },
       ],
     );
-  }, [selectedIds, tasks, bulkRemoveFromLibrary]);
+  }, [addToLibrary, bulkRemoveFromLibrary, items, selectedIds, t, tasks]);
 
   const filteredItems = useMemo(() => {
     if (activeFilter === "offline") {
@@ -203,11 +227,6 @@ export default function LibraryScreen() {
         />
       </View>
     );
-  }
-
-  // Simple helper for button text contrast
-  function takesInverseColor(hex: string) {
-    return isDark ? "#000000" : "#ffffff";
   }
 
   if (isLoading) {
@@ -242,7 +261,7 @@ export default function LibraryScreen() {
               options={[
                 { label: t("library.filters.all"), value: "all" },
                 { label: t("library.filters.movies"), value: "movie" },
-                { label: t("library.filters.series"), value: "show" },
+                { label: t("library.filters.series"), value: "series" },
                 { label: t("library.filters.offline"), value: "offline" },
               ]}
               value={activeFilter}
@@ -274,8 +293,8 @@ export default function LibraryScreen() {
               await queryClient.invalidateQueries({ queryKey: ["progress"] });
               setRefreshing(false);
             }}
-            tintColor="#d8b4fe"
-            colors={["#d8b4fe"]}
+            tintColor={colors.tint}
+            colors={[colors.tint]}
           />
         }
         renderItem={({ item }) => (
@@ -290,8 +309,11 @@ export default function LibraryScreen() {
       />
 
       {isSelectionMode && (
-        <View style={styles.floatingActionBar}>
-          <Text style={styles.fabText}>
+        <View
+          style={[styles.floatingActionBar, { backgroundColor: colors.error }]}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={[styles.fabText, { color: colors.onTint }]}>
             {t("library.fab.selected", { count: selectedIds.size })}
           </Text>
           <Pressable
@@ -305,12 +327,14 @@ export default function LibraryScreen() {
             <Ionicons
               name="trash-outline"
               size={20}
-              color={selectedIds.size === 0 ? "#6b7280" : "#ffffff"}
+              color={selectedIds.size === 0 ? colors.disabled : colors.onTint}
             />
             <Text
               style={[
                 styles.fabButtonText,
+                { color: colors.onTint },
                 selectedIds.size === 0 && styles.fabButtonTextDisabled,
+                selectedIds.size === 0 && { color: colors.disabled },
               ]}
             >
               {t("library.fab.delete")}
@@ -329,26 +353,11 @@ const styles = StyleSheet.create({
   },
   columnWrapper: { paddingHorizontal: 12, gap: 10, marginBottom: 10 },
   listContent: { paddingBottom: 24 },
-  filterContainer: { marginTop: 12, marginBottom: 16 },
-  filterScroll: { paddingHorizontal: 16, gap: 8 },
-  filterChip: {
-    backgroundColor: "rgba(0, 242, 255, 0.1)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(0, 242, 255, 0.2)",
-  },
-  filterChipActive: { backgroundColor: "#d8b4fe", borderColor: "#d8b4fe" },
-  filterChipText: { fontSize: 13, fontWeight: "800" },
-  filterChipTextActive: { color: "#000000" },
-
   floatingActionBar: {
     position: "absolute",
     bottom: Platform.OS === "ios" ? 24 : 16,
     left: 16,
     right: 16,
-    backgroundColor: "#ef4444",
     borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -358,7 +367,7 @@ const styles = StyleSheet.create({
     ...(Platform.OS === "web"
       ? { boxShadow: "0 4px 8px rgba(239, 68, 68, 0.3)" }
       : {
-          shadowColor: "#ef4444",
+          shadowColor: "#000000",
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.3,
           shadowRadius: 8,
@@ -366,7 +375,6 @@ const styles = StyleSheet.create({
     elevation: 8,
   } as any,
   fabText: {
-    color: "#ffffff",
     fontSize: 16,
     fontWeight: "800",
   },
@@ -383,11 +391,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.1)",
   },
   fabButtonText: {
-    color: "#ffffff",
     fontWeight: "700",
     fontSize: 14,
   },
-  fabButtonTextDisabled: {
-    color: "#6b7280",
-  },
+  fabButtonTextDisabled: {},
 });

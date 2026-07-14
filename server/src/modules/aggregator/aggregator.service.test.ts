@@ -86,6 +86,48 @@ describe("AggregatorService", () => {
     });
   });
 
+  describe("search provenance", () => {
+    it("deduplicates by type and id while retaining provider facets", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue(
+        ["Alpha", "Beta"].map((name, index) => ({
+          id: `addon-${index + 1}`,
+          userId: "user-1",
+          transportUrl: `https://${name.toLowerCase()}.example/manifest.json`,
+          installedAt: new Date(),
+          manifest: {
+            id: `com.example.${name.toLowerCase()}`,
+            version: "1.0.0",
+            name,
+            description: `${name} catalog`,
+            resources: ["catalog"],
+            types: ["movie"],
+            catalogs: [{ type: "movie", id: "top", name: "Top" }],
+          },
+        })) as any,
+      );
+      vi.mocked(axios.get).mockResolvedValue({
+        data: {
+          metas: [{ id: "tt1", type: "movie", name: "Shared Movie" }],
+        },
+      });
+
+      const result = await service.searchWithProvenance(
+        "user-1",
+        "shared",
+        "req-1",
+      );
+
+      expect(result.metas).toHaveLength(1);
+      expect(result.providers).toEqual([
+        { id: "addon-1", name: "Alpha" },
+        { id: "addon-2", name: "Beta" },
+      ]);
+      expect(result.providersByContent).toEqual({
+        "movie:tt1": ["addon-1", "addon-2"],
+      });
+    });
+  });
+
   describe("getStreams", () => {
     it("attaches type and id context to streams returned from add-ons", async () => {
       vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
