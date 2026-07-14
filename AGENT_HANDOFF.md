@@ -24,7 +24,7 @@ Current phase:
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active implementation roadmap continues at **PR #146** in
+The active implementation roadmap continues at **PR #147** in
 [ROADMAP.md](./ROADMAP.md). PR #142 is the roadmap truth-sync that defined this
 post-#141 phase.
 
@@ -35,7 +35,7 @@ version-pinned. See [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md)
 Deterministic renderer regression coverage is documented in
 [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up
-reliability/productization PRs have landed through **PR #145**. Earlier roadmap
+reliability/productization PRs have landed through **PR #146**. Earlier roadmap
 items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
@@ -96,6 +96,10 @@ Post-roadmap corrective PRs after #124:
   readiness in a shared, side-effect-light preflight contract with typed
   reasons for URL scope, reachability, auth, runtime, gateway, torrent, remux,
   and cast capability failures.
+- **PR #146:** established stable Expo/native application identity, validated
+  API/Sentry/build/update app configuration, explicit EAS build environments
+  and channels, and a credential-free mobile configuration check in CI. Real
+  EAS builds and store credentials remain release evidence, not completed QA.
 
 ## Product North Star
 
