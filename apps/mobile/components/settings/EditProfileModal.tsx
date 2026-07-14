@@ -7,12 +7,15 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../services/api";
 import { AxiosError } from "axios";
 import { useAuthStore } from "../../stores/authStore";
+import { useTheme } from "../../hooks/useTheme";
 
 interface EditProfileModalProps {
   visible: boolean;
@@ -26,6 +29,7 @@ export function EditProfileModal({
   inline,
 }: EditProfileModalProps) {
   const { user, setAuth } = useAuthStore();
+  const { colors } = useTheme();
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [profileLoading, setProfileLoading] = useState(false);
 
@@ -66,30 +70,60 @@ export function EditProfileModal({
   };
 
   const content = (
-    <View style={inline ? styles.inlineContent : styles.modalBg}>
-      <View style={inline ? styles.inlineCard : styles.modalContent}>
+    <View
+      style={[
+        inline ? styles.inlineContent : styles.modalBg,
+        !inline && { backgroundColor: colors.scrim },
+      ]}
+    >
+      <View
+        style={[
+          inline ? styles.inlineCard : styles.modalContent,
+          !inline && {
+            backgroundColor: colors.surfaceOverlay,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
         <View style={styles.modalHeader}>
           <View style={styles.modalTitleRow}>
-            <Ionicons name="pencil-outline" size={20} color="#d8b4fe" />
-            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <Ionicons name="pencil-outline" size={20} color={colors.tint} />
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Edit Profile
+            </Text>
           </View>
           {!inline && (
             <Pressable onPress={onClose}>
-              <Text style={styles.modalCancel}>Cancel</Text>
+              <Text
+                style={[styles.modalCancel, { color: colors.textSecondary }]}
+              >
+                Cancel
+              </Text>
             </Pressable>
           )}
         </View>
         <TextInput
-          style={styles.modalInput}
+          style={[
+            styles.modalInput,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="Display name"
-          placeholderTextColor="#6b7280"
+          placeholderTextColor={colors.textSecondary}
           value={displayName}
           onChangeText={setDisplayName}
           accessibilityLabel="Display name"
           autoComplete="name"
         />
         <Pressable
-          style={[styles.modalButton, profileLoading && styles.opacity50]}
+          style={[
+            styles.modalButton,
+            { backgroundColor: colors.tint },
+            profileLoading && styles.opacity50,
+          ]}
           onPress={handleUpdateProfile}
           disabled={profileLoading}
           accessibilityRole="button"
@@ -97,9 +131,11 @@ export function EditProfileModal({
           accessibilityState={{ disabled: profileLoading }}
         >
           {profileLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.onTint} />
           ) : (
-            <Text style={styles.modalButtonText}>Save</Text>
+            <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
+              Save
+            </Text>
           )}
         </Pressable>
       </View>
@@ -118,7 +154,12 @@ export function EditProfileModal({
       transparent
       onRequestClose={onClose}
     >
-      {content}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        {content}
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -126,18 +167,16 @@ export function EditProfileModal({
 const styles = StyleSheet.create({
   modalBg: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#0d0d0d",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 50,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
   },
+  keyboardAvoider: { flex: 1 },
   inlineContent: {
     flex: 1,
   },
@@ -151,32 +190,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  modalTitle: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
+  modalTitle: { fontSize: 20, fontWeight: "900" },
   modalTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  modalCancel: { color: "#888888", fontWeight: "800", fontSize: 15 },
+  modalCancel: { fontWeight: "800", fontSize: 15 },
   modalInput: {
-    backgroundColor: "#121212",
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: "#ffffff",
     fontSize: 15,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
   modalButton: {
-    backgroundColor: "#d8b4fe",
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 12,
     minHeight: 52,
   },
-  modalButtonText: { color: "#000000", fontWeight: "900", fontSize: 16 },
+  modalButtonText: { fontWeight: "900", fontSize: 16 },
   opacity50: { opacity: 0.5 },
 });

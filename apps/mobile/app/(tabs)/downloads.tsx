@@ -38,6 +38,7 @@ import {
   downloadService,
   type DownloadOperationResult,
 } from "../../services/DownloadService";
+import { useToastStore } from "../../stores/toastStore";
 
 type QueueFilter = "all" | DownloadQueueGroup;
 
@@ -47,6 +48,9 @@ interface DownloadSection {
   subtitle: string;
   data: DownloadTask[];
 }
+
+const pendingDeletionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const DELETE_GRACE_MS = 7000;
 
 export default function DownloadsScreen() {
   const router = useRouter();
@@ -123,10 +127,25 @@ export default function DownloadsScreen() {
       const title =
         task.mediaInfo.title ||
         t("downloads.unknownTitle", { defaultValue: "Download" });
-      const deleteTask = () =>
-        void runTaskOperation(task.id, () =>
-          downloadService.deleteDownload(task.id),
-        );
+      const deleteTask = () => {
+        if (pendingDeletionTimers.has(task.id)) return;
+        const timer = setTimeout(() => {
+          pendingDeletionTimers.delete(task.id);
+          void runTaskOperation(task.id, () =>
+            downloadService.deleteDownload(task.id),
+          );
+        }, DELETE_GRACE_MS);
+        pendingDeletionTimers.set(task.id, timer);
+        useToastStore.getState().show(`Deleting “${title}”…`, "info", {
+          actionLabel: "Undo",
+          duration: DELETE_GRACE_MS,
+          onAction: () => {
+            const pending = pendingDeletionTimers.get(task.id);
+            if (pending) clearTimeout(pending);
+            pendingDeletionTimers.delete(task.id);
+          },
+        });
+      };
 
       if (Platform.OS === "web") {
         if (
@@ -173,6 +192,25 @@ export default function DownloadsScreen() {
     }
   }, []);
 
+  const scheduleDeleteAll = useCallback(() => {
+    const key = "__all__";
+    if (pendingDeletionTimers.has(key)) return;
+    const timer = setTimeout(() => {
+      pendingDeletionTimers.delete(key);
+      void deleteAll();
+    }, DELETE_GRACE_MS);
+    pendingDeletionTimers.set(key, timer);
+    useToastStore.getState().show("Deleting all downloads…", "info", {
+      actionLabel: "Undo",
+      duration: DELETE_GRACE_MS,
+      onAction: () => {
+        const pending = pendingDeletionTimers.get(key);
+        if (pending) clearTimeout(pending);
+        pendingDeletionTimers.delete(key);
+      },
+    });
+  }, [deleteAll]);
+
   const confirmClearAll = useCallback(() => {
     if (Platform.OS === "web") {
       if (
@@ -183,7 +221,7 @@ export default function DownloadsScreen() {
           }),
         )
       ) {
-        void deleteAll();
+        scheduleDeleteAll();
       }
       return;
     }
@@ -206,11 +244,11 @@ export default function DownloadsScreen() {
             defaultValue: "Delete all",
           }),
           style: "destructive",
-          onPress: () => void deleteAll(),
+          onPress: scheduleDeleteAll,
         },
       ],
     );
-  }, [deleteAll, t]);
+  }, [scheduleDeleteAll, t]);
 
   const manageStorage = useCallback(() => {
     if (summary.ready > 0) {

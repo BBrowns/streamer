@@ -31,3 +31,17 @@ browser renderer. Real-device QA remains deferred.
 - TalkBack on Android.
 - Native touch-target and safe-area checks on iPhone and Android.
 - Player controls with a real direct stream, remux stream, and cast session.
+
+## Adaptive redesign continuation
+
+An interactive in-app browser smoke check covered the unauthenticated shell and
+setup flow after the adaptive redesign continuation.
+
+| Surface          | Compact web | Large web  | Horizontal overflow | App shell hidden |
+| ---------------- | ----------- | ---------- | ------------------- | ---------------- |
+| Login            | 390 x 844   | 1440 x 900 | Pass                | Pass             |
+| Onboarding setup | 390 x 844   | 1440 x 900 | Pass                | Pass             |
+
+The check also verified that login no longer renders a duplicate native header.
+These browser results do not replace VoiceOver, TalkBack, native keyboard,
+caption-safe, PiP, lock-screen, download, or Chromecast validation.

@@ -36,7 +36,7 @@ export function LibraryCard({
   onToggleSelect: (id: string) => void;
 }) {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = React.useState(false);
   const [contextMenu, setContextMenu] = React.useState<{
@@ -165,6 +165,7 @@ export function LibraryCard({
         },
         isSelectionMode && isSelected && styles.cardSelected,
         isWeb && isKeyboardFocused && styles.cardFocused,
+        isWeb && isKeyboardFocused && { outlineColor: colors.focus },
       ]}
       onPress={handlePress}
       onLongPress={handleLongPress}
@@ -192,7 +193,7 @@ export function LibraryCard({
             <Ionicons
               name={isSelected ? "checkmark-circle" : "ellipse-outline"}
               size={28}
-              color={isSelected ? colors.tint : "rgba(255,255,255,0.7)"}
+              color={isSelected ? colors.tint : colors.onTint}
             />
           </View>
         )}
@@ -204,17 +205,8 @@ export function LibraryCard({
               style={[styles.hoverPlayBtn, { backgroundColor: colors.tint }]}
               onPress={handlePress}
             >
-              <Ionicons
-                name="play"
-                size={14}
-                color={isDark ? "#000" : "#fff"}
-              />
-              <Text
-                style={[
-                  styles.hoverPlayText,
-                  { color: isDark ? "#000" : "#fff" },
-                ]}
-              >
+              <Ionicons name="play" size={14} color={colors.onTint} />
+              <Text style={[styles.hoverPlayText, { color: colors.onTint }]}>
                 Play
               </Text>
             </Pressable>
@@ -243,9 +235,7 @@ export function LibraryCard({
             style={[
               styles.progressContainer,
               {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(0,0,0,0.08)",
+                backgroundColor: colors.disabled,
               },
             ]}
           >
@@ -259,8 +249,14 @@ export function LibraryCard({
         )}
         {isCompleted && (
           <View style={styles.downloadBadge}>
-            <Ionicons name="arrow-down-circle" size={13} color="#4ade80" />
-            <Text style={styles.downloadBadgeText}>Offline</Text>
+            <Ionicons
+              name="arrow-down-circle"
+              size={13}
+              color={colors.success}
+            />
+            <Text style={[styles.downloadBadgeText, { color: colors.success }]}>
+              Offline
+            </Text>
           </View>
         )}
       </View>
@@ -271,7 +267,7 @@ export function LibraryCard({
             {
               top: contextMenu?.y ?? 0,
               left: contextMenu?.x ?? 0,
-              backgroundColor: isDark ? "#1f1f1f" : "#fff",
+              backgroundColor: colors.surfaceElevated,
               borderColor: colors.border,
             },
           ]}
@@ -279,11 +275,7 @@ export function LibraryCard({
           <Pressable
             style={({ hovered }: any) => [
               styles.contextMenuItem,
-              hovered && {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(0,0,0,0.05)",
-              },
+              hovered && { backgroundColor: colors.card },
             ]}
             onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
           >
@@ -307,16 +299,12 @@ export function LibraryCard({
           <Pressable
             style={({ hovered }: any) => [
               styles.contextMenuItem,
-              hovered && {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.1)"
-                  : "rgba(0,0,0,0.05)",
-              },
+              hovered && { backgroundColor: colors.card },
             ]}
             onPress={() => onRemove(itemId, !!task)}
           >
-            <Ionicons name="trash-outline" size={16} color="#ef4444" />
-            <Text style={[styles.contextMenuText, { color: "#ef4444" }]}>
+            <Ionicons name="trash-outline" size={16} color={colors.error} />
+            <Text style={[styles.contextMenuText, { color: colors.error }]}>
               {task
                 ? t("library.actions.removeDownload", {
                     defaultValue: "Remove Download",
@@ -353,7 +341,6 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     outlineStyle: "solid",
     outlineWidth: 2,
-    outlineColor: "#a78bfa",
     outlineOffset: 3,
   } as any,
   cardImage: {
@@ -408,7 +395,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   downloadBadgeText: {
-    color: "#4ade80",
     fontSize: 10,
     fontWeight: "700",
   },

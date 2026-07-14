@@ -7,12 +7,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { Stack } from "expo-router";
 
 interface AuthScaffoldProps {
   title: string;
@@ -29,94 +30,91 @@ export function AuthScaffold({
   image,
   icon = "play",
 }: AuthScaffoldProps) {
-  const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
-  const isWide = Platform.OS === "web" && width >= 900;
+  const { colors } = useTheme();
+  const { isExpanded, isLarge } = useWindowClass();
+  const isWide = isExpanded || isLarge;
 
   return (
-    <LinearGradient
-      colors={
-        isDark
-          ? ["#11121c", "#171423", "#231727"]
-          : ["#fff9f6", "#f7f0ff", "#ecfbf3"]
-      }
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gradient}
-    >
-      <KeyboardAvoidingView
-        style={styles.keyboard}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        enabled={Platform.OS !== "web"}
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <LinearGradient
+        colors={[colors.background, colors.surfaceElevated, colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            isWide ? styles.scrollWide : styles.scrollNarrow,
-          ]}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          style={styles.keyboard}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          enabled={Platform.OS !== "web"}
         >
-          <View style={[styles.shell, isWide && styles.shellWide]}>
-            <View style={[styles.previewPane, isWide && styles.previewWide]}>
-              <Image source={image} style={styles.previewImage} />
+          <ScrollView
+            contentContainerStyle={[
+              styles.scroll,
+              isWide ? styles.scrollWide : styles.scrollNarrow,
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={[styles.shell, isWide && styles.shellWide]}>
+              <View style={[styles.previewPane, isWide && styles.previewWide]}>
+                <Image source={image} style={styles.previewImage} />
+                <View
+                  style={[
+                    styles.previewGlass,
+                    {
+                      backgroundColor: colors.surfaceOverlay,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.iconBadge,
+                      { backgroundColor: colors.tint + "28" },
+                    ]}
+                  >
+                    <Ionicons name={icon} size={18} color={colors.tint} />
+                  </View>
+                  <View style={styles.previewTextGroup}>
+                    <Text style={[styles.previewTitle, { color: colors.text }]}>
+                      Streamer
+                    </Text>
+                    <Text
+                      style={[
+                        styles.previewSubtitle,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Your cinematic library
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
               <View
                 style={[
-                  styles.previewGlass,
+                  styles.formPane,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.08)"
-                      : "rgba(255,255,255,0.7)",
+                    backgroundColor: colors.surfaceOverlay,
                     borderColor: colors.border,
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.iconBadge,
-                    { backgroundColor: colors.tint + "28" },
-                  ]}
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {title}
+                </Text>
+                <Text
+                  style={[styles.subtitle, { color: colors.textSecondary }]}
                 >
-                  <Ionicons name={icon} size={18} color={colors.tint} />
-                </View>
-                <View style={styles.previewTextGroup}>
-                  <Text style={[styles.previewTitle, { color: colors.text }]}>
-                    Streamer
-                  </Text>
-                  <Text
-                    style={[
-                      styles.previewSubtitle,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Pastel cinema
-                  </Text>
-                </View>
+                  {subtitle}
+                </Text>
+                {children}
               </View>
             </View>
-
-            <View
-              style={[
-                styles.formPane,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(255,255,255,0.74)",
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.title, { color: colors.text }]}>
-                {title}
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {subtitle}
-              </Text>
-              {children}
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </>
   );
 }
 
@@ -153,7 +151,6 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
   },
   previewWide: {
     flex: 1,

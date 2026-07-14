@@ -621,7 +621,9 @@ export default function PlayerScreen() {
     const availableSubtitleTracks = player.availableSubtitleTracks || [];
 
     if (availableAudioTracks.length > 0) {
-      setAudioTracks(buildTrackRows(availableAudioTracks, player.audioTrack));
+      setAudioTracks(
+        buildTrackRows(availableAudioTracks, player.audioTrack, "audio"),
+      );
     } else if (engine) {
       setAudioTracks(engine.getAudioTracks());
     } else {
@@ -630,7 +632,11 @@ export default function PlayerScreen() {
 
     if (availableSubtitleTracks.length > 0) {
       setSubtitles(
-        buildTrackRows(availableSubtitleTracks, player.subtitleTrack),
+        buildTrackRows(
+          availableSubtitleTracks,
+          player.subtitleTrack,
+          "subtitle",
+        ),
       );
     } else if (engine) {
       setSubtitles(engine.getSubtitles());
@@ -1367,7 +1373,7 @@ const createStyles = (colors: any, isDark: boolean) =>
       top: "40%",
       paddingHorizontal: 20,
       paddingVertical: 10,
-      backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.8)",
+      backgroundColor: colors.surfaceOverlay,
       borderRadius: 24,
       zIndex: 20,
     },
@@ -1389,7 +1395,7 @@ const createStyles = (colors: any, isDark: boolean) =>
     },
     castCard: {
       alignItems: "center",
-      backgroundColor: isDark ? "rgba(20,20,35,0.6)" : "rgba(255,255,255,0.9)",
+      backgroundColor: colors.surfaceOverlay,
       padding: 40,
       borderRadius: 32,
       borderWidth: 1,
@@ -1426,52 +1432,4 @@ const createStyles = (colors: any, isDark: boolean) =>
       borderColor: colors.error + "30",
     },
     stopCastText: { color: colors.error, fontWeight: "600", fontSize: 15 },
-    resumeOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 50,
-    },
-    resumeBox: {
-      backgroundColor: colors.card,
-      padding: 30,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: "center",
-      maxWidth: 340,
-    },
-    resumeTitle: {
-      color: colors.text,
-      fontSize: 20,
-      fontWeight: "bold",
-      marginBottom: 8,
-    },
-    resumeSub: {
-      color: colors.textSecondary,
-      fontSize: 15,
-      marginBottom: 24,
-    },
-    resumeBtns: {
-      flexDirection: "row",
-      gap: 12,
-    },
-    resumeBtnGhost: {
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 12,
-      backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
-    },
-    resumeBtnGhostText: { color: colors.text, fontWeight: "600" },
-    resumeBtnPrimary: {
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 12,
-      backgroundColor: colors.tint,
-    },
-    resumeBtnPrimaryText: {
-      color: isDark ? "#000" : "#fff",
-      fontWeight: "bold",
-    },
   });

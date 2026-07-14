@@ -445,21 +445,23 @@ Gateway lifecycle exists now, but these are still open:
   playback and seek behavior still need device validation.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
-### 4. UI/UX Revamp Is Still Incomplete
+### 4. UI/UX Implementation Is Complete; Evidence Gates Remain
 
 The new shell, Home composition, provider-aware Search/discovery flow, Undo
 notifications, semantic Detail/auth/onboarding surfaces, visible player track
-state, and synchronized cast mini-controller are implemented. The full
-visual/product redesign remains active:
+state, synchronized cast mini-controller, full-viewport unauthenticated routes,
+and semantic Settings account/session surfaces are implemented. Single and
+bulk download deletion retain confirmation, then defer the underlying mutation
+for seven seconds while Undo is available. Common AD/SDH/CC media-track labels
+are expanded for assistive clarity.
 
-- Finish the long-tail Settings/diagnostics token migration and validate
-  Downloads, Series episode lists, and settings panels under large text.
+The remaining work is validation or depends on trustworthy upstream metadata:
+
 - Search provider provenance is reliable and implemented. Add genre, language,
   quality, or availability facets only when the upstream metadata is reliable.
-- Keep destructive download-file deletion confirm-first; add Undo only to
-  operations whose underlying file mutation can actually be reversed.
-- Complete caption-safe layout, visible subtitle/audio state, large-text, and
-  focus-not-obscured validation.
+- Validate Downloads, Series episode lists, settings panels, caption-safe
+  layout, visible subtitle/audio state, large text, and focus-not-obscured
+  behavior on native targets.
 - Add authenticated desktop and compact browser screenshots; keep native PiP,
   lock-screen, download, and Chromecast support marked unproven until tested.
 

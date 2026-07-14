@@ -65,7 +65,9 @@ export default function ResetPasswordScreen() {
             ]}
           >
             <Ionicons name="alert-circle" size={18} color={colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {error}
+            </Text>
           </View>
         ) : null}
 
@@ -111,11 +113,17 @@ export default function ResetPasswordScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#2c1738" />
+            <ActivityIndicator color={colors.onTint} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={18} color="#2c1738" />
-              <Text style={styles.primaryButtonText}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={colors.onTint}
+              />
+              <Text
+                style={[styles.primaryButtonText, { color: colors.onTint }]}
+              >
                 {t("auth.resetPassword.submit")}
               </Text>
             </>
@@ -148,7 +156,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    color: "#ff9ba6",
     fontSize: 14,
     fontWeight: "700",
     flex: 1,
@@ -175,7 +182,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: "#2c1738",
     fontWeight: "900",
     fontSize: 16,
     letterSpacing: 0,

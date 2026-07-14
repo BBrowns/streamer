@@ -87,6 +87,9 @@ jest.mock("react-i18next", () => ({
 
 // Mock expo-router
 jest.mock("expo-router", () => ({
+  Stack: {
+    Screen: () => null,
+  },
   useRouter: () => ({
     push: jest.fn(),
     replace: jest.fn(),

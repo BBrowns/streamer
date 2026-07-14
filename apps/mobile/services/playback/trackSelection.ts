@@ -6,6 +6,7 @@ import type { AudioTrack, SubtitleTrack } from "../streamEngine/IStreamEngine";
 
 type ExpoTrack = ExpoAudioTrack | ExpoSubtitleTrack;
 type TrackRow = AudioTrack | SubtitleTrack;
+type TrackKind = "audio" | "subtitle";
 
 function trackId(track: ExpoTrack, index: number) {
   return track.id || `${track.language || "unknown"}:${track.label || index}`;
@@ -29,9 +30,30 @@ export function normalizeTrackLanguage(value?: string | null) {
   return primary || "unknown";
 }
 
+export function formatMediaTrackLabel(label: string, kind?: TrackKind) {
+  if (
+    kind === "audio" &&
+    /\b(ad|descriptive audio|audio desc(?:ription)?)\b/i.test(label) &&
+    !/audio description/i.test(label)
+  ) {
+    return `${label} (Audio description)`;
+  }
+
+  if (
+    kind === "subtitle" &&
+    /\b(sdh|cc|closed captions?|hearing impaired)\b/i.test(label) &&
+    !/(deaf|hard of hearing|closed captions?)/i.test(label)
+  ) {
+    return `${label} (Captions for deaf and hard of hearing)`;
+  }
+
+  return label;
+}
+
 export function buildTrackRows<T extends ExpoTrack>(
   tracks: T[],
   activeTrack?: T | null,
+  kind?: TrackKind,
 ): TrackRow[] {
   const activeLanguage = normalizeTrackLanguage(activeTrack?.language);
   const activeLabel = activeTrack?.label || activeTrack?.name;
@@ -40,10 +62,11 @@ export function buildTrackRows<T extends ExpoTrack>(
   return tracks.map((track, index) => {
     const id = trackId(track, index);
     const language = normalizeTrackLanguage(track.language);
-    const label =
+    const rawLabel =
       track.label ||
       track.name ||
       (language === "unknown" ? "Unknown" : language.toUpperCase());
+    const label = formatMediaTrackLabel(rawLabel, kind);
 
     return {
       id,

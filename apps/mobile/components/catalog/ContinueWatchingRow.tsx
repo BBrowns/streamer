@@ -6,7 +6,6 @@ import {
   FlatList,
   Pressable,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +29,7 @@ import {
   uiSpacing,
   uiTypography,
 } from "../ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 type ContinueWatchingRowProps = {
   showEmptyState?: boolean;
@@ -47,16 +47,14 @@ function episodeLabel(item: WatchProgress) {
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
   const pct = total > 0 ? Math.min((current / total) * 100, 100) : 0;
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
         styles.progressTrack,
         {
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.14)"
-            : "rgba(30,25,45,0.12)",
+          backgroundColor: colors.disabled,
         },
       ]}
     >
@@ -82,8 +80,8 @@ function ContinueWatchingCard({
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { isExpanded, isLarge } = useWindowClass();
+  const isDesktop = isExpanded || isLarge;
   const cardWidth = isDesktop ? 360 : 286;
   const posterWidth = isDesktop ? 142 : 112;
   const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
@@ -107,6 +105,8 @@ function ContinueWatchingCard({
         styles.card,
         { width: cardWidth },
         Platform.OS === "web" && isKeyboardFocused && styles.cardFocused,
+        Platform.OS === "web" &&
+          isKeyboardFocused && { outlineColor: colors.focus },
       ]}
     >
       <Pressable
@@ -132,9 +132,7 @@ function ContinueWatchingCard({
             styles.posterFrame,
             {
               width: posterWidth,
-              backgroundColor: isDark
-                ? "rgba(216,180,254,0.12)"
-                : "rgba(167,139,250,0.12)",
+              backgroundColor: colors.tint + "18",
             },
           ]}
         >
@@ -349,7 +347,6 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     outlineStyle: "solid",
     outlineWidth: 2,
-    outlineColor: "#a78bfa",
     outlineOffset: 3,
   } as any,
   resumeArea: {

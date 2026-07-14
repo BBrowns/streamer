@@ -154,11 +154,17 @@ export default function VerifyEmailScreen() {
           disabled={isVerifying}
         >
           {isVerifying ? (
-            <ActivityIndicator color="#2c1738" />
+            <ActivityIndicator color={colors.onTint} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={18} color="#2c1738" />
-              <Text style={styles.primaryButtonText}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={colors.onTint}
+              />
+              <Text
+                style={[styles.primaryButtonText, { color: colors.onTint }]}
+              >
                 {t("auth.verifyEmail.verifyButton")}
               </Text>
             </>
@@ -246,7 +252,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: "#2c1738",
     fontWeight: "900",
     fontSize: 16,
     letterSpacing: 0,

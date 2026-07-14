@@ -22,7 +22,7 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { forgotPassword } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -78,7 +78,9 @@ export default function ForgotPasswordScreen() {
             ]}
           >
             <Ionicons name="alert-circle" size={18} color={colors.error} />
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {error}
+            </Text>
           </View>
         ) : null}
 
@@ -86,19 +88,10 @@ export default function ForgotPasswordScreen() {
           <View
             style={[
               styles.messageBoxLarge,
-              {
-                backgroundColor: isDark
-                  ? "rgba(166, 227, 161, 0.1)"
-                  : "rgba(34, 197, 94, 0.1)",
-              },
+              { backgroundColor: colors.success + "18" },
             ]}
           >
-            <Text
-              style={[
-                styles.successText,
-                { color: isDark ? "#a6e3a1" : "#166534" },
-              ]}
-            >
+            <Text style={[styles.successText, { color: colors.success }]}>
               {successMessage}
             </Text>
             <Pressable
@@ -115,8 +108,10 @@ export default function ForgotPasswordScreen() {
                   : router.push("/reset-password")
               }
             >
-              <Ionicons name="arrow-forward" size={18} color="#2c1738" />
-              <Text style={styles.primaryButtonText}>
+              <Ionicons name="arrow-forward" size={18} color={colors.onTint} />
+              <Text
+                style={[styles.primaryButtonText, { color: colors.onTint }]}
+              >
                 {t("auth.resetPassword.submit")}
               </Text>
             </Pressable>
@@ -150,11 +145,17 @@ export default function ForgotPasswordScreen() {
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#2c1738" />
+                <ActivityIndicator color={colors.onTint} />
               ) : (
                 <>
-                  <Ionicons name="mail-outline" size={18} color="#2c1738" />
-                  <Text style={styles.primaryButtonText}>
+                  <Ionicons
+                    name="mail-outline"
+                    size={18}
+                    color={colors.onTint}
+                  />
+                  <Text
+                    style={[styles.primaryButtonText, { color: colors.onTint }]}
+                  >
                     {t("auth.forgot.button")}
                   </Text>
                 </>
@@ -189,7 +190,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    color: "#ff9ba6",
     fontSize: 14,
     fontWeight: "700",
     flex: 1,
@@ -200,7 +200,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   successText: {
-    color: "#a6e3a1",
     fontSize: 15,
     lineHeight: 22,
     fontWeight: "600",
@@ -227,7 +226,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: "#2c1738",
     fontWeight: "900",
     fontSize: 16,
     letterSpacing: 0,

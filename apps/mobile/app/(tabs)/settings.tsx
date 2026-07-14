@@ -666,7 +666,7 @@ function SettingsContent() {
               {
                 backgroundColor: connected
                   ? "rgba(237, 28, 36, 0.1)"
-                  : "rgba(255,255,255,0.05)",
+                  : colors.surfaceElevated,
               },
             ]}
           >
@@ -1272,15 +1272,6 @@ const styles = StyleSheet.create({
     height: 1,
     marginLeft: 56, // Align with text
   },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#6366f1",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: { color: "#ffffff", fontSize: 24, fontWeight: "900" },
   menuItemTextContainer: { flex: 1, marginLeft: 12 },
   menuItemTitle: { fontWeight: "bold", fontSize: 16 },
   menuItemSubtitle: { fontSize: 12, marginTop: 2 },
@@ -1336,31 +1327,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 3,
     lineHeight: 17,
-  },
-  manageAddonsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: "rgba(216,180,254,0.08)",
-    padding: 14,
-    marginBottom: 14,
-  },
-  bridgeInfoCard: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    marginBottom: 18,
-    gap: 8,
-  },
-  optionalServiceCard: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: "rgba(242,215,255,0.08)",
-    marginBottom: 20,
-    gap: 8,
   },
   bridgeInfoHeader: {
     flexDirection: "row",
@@ -1451,50 +1417,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
-  inputLabel: {
-    color: "#94a3b8",
-    fontSize: 12,
-    marginBottom: 8,
-    fontWeight: "600",
-  },
-  textInput: {
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-    fontSize: 14,
-  },
-  warningBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(251, 191, 36, 0.05)",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  warningText: { color: "#fbbf24", fontSize: 12, marginLeft: 8, flex: 1 },
-  advancedBtns: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  resetBtn: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#374151",
-    alignItems: "center",
-  },
-  resetBtnText: { color: "#94a3b8", fontWeight: "600", fontSize: 13 },
-  saveBtn: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#f59e0b",
-    alignItems: "center",
-  },
-  saveBtnText: { color: "#000", fontWeight: "bold", fontSize: 13 },
   appearanceGrid: {
     flexDirection: "row",
     padding: 8,

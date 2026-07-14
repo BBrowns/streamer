@@ -3,7 +3,7 @@ import {
   Text,
   Pressable,
   Modal,
-  FlatList,
+  ScrollView,
   StyleSheet,
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
@@ -70,139 +70,79 @@ export function PlayerSettingsModal({
             </Pressable>
           </View>
 
-          {/* Playback Speed */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            ⏩ {t("player.settings.speed")}
-          </Text>
-          <View style={styles.speedRow}>
-            {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
-              <Pressable
-                key={rate}
-                style={[
-                  styles.speedBtn,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                  },
-                  playbackRate === rate && {
-                    backgroundColor: colors.tint + "15",
-                  },
-                ]}
-                onPress={() => onSelectPlaybackRate(rate)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: playbackRate === rate }}
-                accessibilityLabel={`${rate}x playback speed`}
-              >
-                <Text
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Playback Speed */}
+            <Text
+              style={[styles.sectionTitle, { color: colors.textSecondary }]}
+            >
+              ⏩ {t("player.settings.speed")}
+            </Text>
+            <View style={styles.speedRow}>
+              {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
+                <Pressable
+                  key={rate}
                   style={[
-                    styles.speedBtnText,
-                    { color: colors.textSecondary },
+                    styles.speedBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
                     playbackRate === rate && {
-                      color: colors.tint,
-                      fontWeight: "bold",
+                      backgroundColor: colors.tint + "15",
                     },
                   ]}
-                >
-                  {rate}x
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Audio Tracks */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.textSecondary, marginTop: 20 },
-            ]}
-          >
-            🔊 {t("player.settings.audio")}
-          </Text>
-          {audioTracks.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t("player.settings.noAudio")}
-            </Text>
-          ) : (
-            <FlatList
-              data={audioTracks}
-              keyExtractor={(t) => t.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={[
-                    styles.trackRow,
-                    item.active && { backgroundColor: colors.tint + "15" },
-                  ]}
-                  onPress={() => onSelectAudio(item.id)}
+                  onPress={() => onSelectPlaybackRate(rate)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: !!item.active }}
-                  accessibilityLabel={`Audio: ${item.label}${item.active ? ", selected" : ""}`}
+                  accessibilityState={{ checked: playbackRate === rate }}
+                  accessibilityLabel={`${rate}x playback speed`}
                 >
-                  <Text style={[styles.trackLabel, { color: colors.text }]}>
-                    {item.label}
-                  </Text>
                   <Text
-                    style={[styles.trackLang, { color: colors.textSecondary }]}
+                    style={[
+                      styles.speedBtnText,
+                      { color: colors.textSecondary },
+                      playbackRate === rate && {
+                        color: colors.tint,
+                        fontWeight: "bold",
+                      },
+                    ]}
                   >
-                    {item.language}
+                    {rate}x
                   </Text>
-                  {item.active && (
-                    <Text style={[styles.checkIcon, { color: colors.tint }]}>
-                      ✓
-                    </Text>
-                  )}
                 </Pressable>
-              )}
-            />
-          )}
+              ))}
+            </View>
 
-          {/* Subtitles */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.textSecondary, marginTop: 20 },
-            ]}
-          >
-            💬 {t("player.settings.subtitles")}
-          </Text>
-          {subtitles.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t("player.settings.noSubtitles")}
+            {/* Audio Tracks */}
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.textSecondary, marginTop: 20 },
+              ]}
+            >
+              🔊 {t("player.settings.audio")}
             </Text>
-          ) : (
-            <>
-              <Pressable
-                style={[
-                  styles.trackRow,
-                  subtitles.every((s) => !s.active) && {
-                    backgroundColor: colors.tint + "15",
-                  },
-                ]}
-                onPress={() => onSelectSubtitle(null)}
-                accessibilityRole="radio"
-                accessibilityState={{
-                  checked: subtitles.every((subtitle) => !subtitle.active),
-                }}
-                accessibilityLabel={t("player.settings.off")}
-              >
-                <Text style={[styles.trackLabel, { color: colors.text }]}>
-                  {t("player.settings.off")}
-                </Text>
-              </Pressable>
-              <FlatList
-                data={subtitles}
-                keyExtractor={(t) => t.id}
-                scrollEnabled={false}
-                renderItem={({ item }) => (
+            {audioTracks.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t("player.settings.noAudio")}
+              </Text>
+            ) : (
+              <View accessibilityRole="radiogroup">
+                {audioTracks.map((item) => (
                   <Pressable
+                    key={item.id}
                     style={[
                       styles.trackRow,
                       item.active && { backgroundColor: colors.tint + "15" },
                     ]}
-                    onPress={() => onSelectSubtitle(item.id)}
+                    onPress={() => onSelectAudio(item.id)}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: !!item.active }}
-                    accessibilityLabel={`Subtitle: ${item.label}${item.active ? ", selected" : ""}`}
+                    accessibilityLabel={`Audio: ${item.label}${item.active ? ", selected" : ""}`}
                   >
                     <Text style={[styles.trackLabel, { color: colors.text }]}>
                       {item.label}
@@ -221,10 +161,80 @@ export function PlayerSettingsModal({
                       </Text>
                     )}
                   </Pressable>
-                )}
-              />
-            </>
-          )}
+                ))}
+              </View>
+            )}
+
+            {/* Subtitles */}
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.textSecondary, marginTop: 20 },
+              ]}
+            >
+              💬 {t("player.settings.subtitles")}
+            </Text>
+            {subtitles.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t("player.settings.noSubtitles")}
+              </Text>
+            ) : (
+              <>
+                <Pressable
+                  style={[
+                    styles.trackRow,
+                    subtitles.every((s) => !s.active) && {
+                      backgroundColor: colors.tint + "15",
+                    },
+                  ]}
+                  onPress={() => onSelectSubtitle(null)}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    checked: subtitles.every((subtitle) => !subtitle.active),
+                  }}
+                  accessibilityLabel={t("player.settings.off")}
+                >
+                  <Text style={[styles.trackLabel, { color: colors.text }]}>
+                    {t("player.settings.off")}
+                  </Text>
+                </Pressable>
+                <View accessibilityRole="radiogroup">
+                  {subtitles.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      style={[
+                        styles.trackRow,
+                        item.active && { backgroundColor: colors.tint + "15" },
+                      ]}
+                      onPress={() => onSelectSubtitle(item.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: !!item.active }}
+                      accessibilityLabel={`Subtitle: ${item.label}${item.active ? ", selected" : ""}`}
+                    >
+                      <Text style={[styles.trackLabel, { color: colors.text }]}>
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.trackLang,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {item.language}
+                      </Text>
+                      {item.active && (
+                        <Text
+                          style={[styles.checkIcon, { color: colors.tint }]}
+                        >
+                          ✓
+                        </Text>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -241,8 +251,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    paddingBottom: 40,
-    maxHeight: "60%",
+    maxHeight: "80%",
   },
   header: {
     flexDirection: "row",
@@ -250,6 +259,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+  scroll: { flexShrink: 1 },
+  scrollContent: { paddingBottom: 40 },
   title: { fontSize: 18, fontWeight: "bold" },
   doneText: { fontWeight: "bold", fontSize: 15 },
   sectionTitle: {

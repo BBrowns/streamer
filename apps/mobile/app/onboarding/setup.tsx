@@ -7,7 +7,6 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { getWebFocusStyle } from "../../components/ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 const STARTER_ADDONS = [
   {
@@ -79,8 +79,7 @@ export default function OnboardingSetup() {
   const setPendingAddons = useAuthStore((s) => s.setPendingAddons);
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
-  const compact = width < 600;
+  const { isCompact: compact } = useWindowClass();
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
 
   const handleToggleTheme = (t: "light" | "dark" | "system") => {
@@ -158,9 +157,7 @@ export default function OnboardingSetup() {
                 style={[
                   styles.setupItem,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.035)"
-                      : "rgba(0,0,0,0.025)",
+                    backgroundColor: colors.card,
                     borderColor: colors.border,
                   },
                 ]}
@@ -200,9 +197,7 @@ export default function OnboardingSetup() {
                 style={({ pressed, focused }: any) => [
                   styles.themeOption,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.04)",
+                    backgroundColor: colors.card,
                     borderColor:
                       theme === themeOption ? colors.tint : colors.border,
                   },
@@ -265,9 +260,7 @@ export default function OnboardingSetup() {
               style={({ pressed, focused }: any) => [
                 styles.addonCard,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.03)"
-                    : "rgba(0,0,0,0.02)",
+                  backgroundColor: colors.card,
                   borderColor: selectedUrls.includes(addon.url)
                     ? colors.tint
                     : colors.border,
@@ -300,9 +293,7 @@ export default function OnboardingSetup() {
                   {
                     backgroundColor: selectedUrls.includes(addon.url)
                       ? colors.tint
-                      : isDark
-                        ? "rgba(255,255,255,0.06)"
-                        : "rgba(0,0,0,0.04)",
+                      : colors.surfaceElevated,
                   },
                 ]}
               >
@@ -310,7 +301,9 @@ export default function OnboardingSetup() {
                   name={selectedUrls.includes(addon.url) ? "checkmark" : "add"}
                   size={16}
                   color={
-                    selectedUrls.includes(addon.url) ? "#fff" : colors.tint
+                    selectedUrls.includes(addon.url)
+                      ? colors.onTint
+                      : colors.tint
                   }
                 />
               </View>
@@ -352,24 +345,15 @@ export default function OnboardingSetup() {
           accessibilityLabel={t("onboarding.finish")}
         >
           <LinearGradient
-            colors={isDark ? ["#f2d7ff", "#c5e9d5"] : ["#d8b4fe", "#ffc8dd"]}
+            colors={[colors.tint, colors.tint]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.finishGradient}
           >
-            <Text
-              style={[
-                styles.finishBtnText,
-                { color: isDark ? "#2c1738" : "#fff" },
-              ]}
-            >
+            <Text style={[styles.finishBtnText, { color: colors.onTint }]}>
               {t("onboarding.finish")}
             </Text>
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color={isDark ? "#2c1738" : "#fff"}
-            />
+            <Ionicons name="arrow-forward" size={18} color={colors.onTint} />
           </LinearGradient>
         </Pressable>
       </ScrollView>

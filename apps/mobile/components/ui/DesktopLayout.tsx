@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { isFullScreenRoute } from "./desktopShellRoutes";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -45,8 +46,7 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
   const isLarge = windowClass === "large";
   const isExpanded = windowClass === "expanded";
   const sideWindowClass = windowClass === "compact" ? "medium" : windowClass;
-  const isImmersiveRoute =
-    pathname.startsWith("/detail/") || pathname.startsWith("/player");
+  const isImmersiveRoute = isFullScreenRoute(pathname);
 
   if (!hasSideNavigation) return <>{children}</>;
 

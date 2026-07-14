@@ -6,13 +6,13 @@ import {
   Alert,
   StyleSheet,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
+import { useWindowClass } from "../../hooks/useWindowClass";
 import {
   streamEngineManager,
   type BridgeDiagnostics,
@@ -137,8 +137,7 @@ function CapabilityRow({
   tone?: CapabilityTone;
 }) {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
-  const isNarrow = width < 460;
+  const { isCompact: isNarrow } = useWindowClass();
 
   return (
     <View style={styles.capabilityRow}>
@@ -611,12 +610,12 @@ export function SourcesSection({
 
       {bridgeUrlNeedsLan && (
         <Surface variant="warning" style={styles.warningBox}>
-          <Ionicons name="warning-outline" size={16} color="#fbbf24" />
+          <Ionicons name="warning-outline" size={16} color={colors.warning} />
           <View style={styles.warningTextContainer}>
             <Text style={[styles.warningTitle, { color: colors.text }]}>
               Use the desktop bridge LAN URL
             </Text>
-            <Text style={styles.warningBodyText}>
+            <Text style={[styles.warningBodyText, { color: colors.warning }]}>
               localhost only points at this device. Paste the desktop bridge LAN
               URL before using torrent playback, downloads, or casting here.
             </Text>
@@ -639,13 +638,13 @@ export function SourcesSection({
           <View
             style={[
               styles.iconContainer,
-              { backgroundColor: "rgba(216,180,254,0.14)" },
+              { backgroundColor: colors.tint + "20" },
             ]}
           >
             <Ionicons
               name="extension-puzzle-outline"
               size={20}
-              color="#d8b4fe"
+              color={colors.tint}
             />
           </View>
           <View style={styles.textContainer}>
@@ -802,8 +801,12 @@ export function SourcesSection({
             />
 
             <Surface variant="warning" style={styles.warningBox}>
-              <Ionicons name="warning-outline" size={16} color="#fbbf24" />
-              <Text style={styles.warningText}>
+              <Ionicons
+                name="warning-outline"
+                size={16}
+                color={colors.warning}
+              />
+              <Text style={[styles.warningText, { color: colors.warning }]}>
                 {t("settings.advanced.warning")}
               </Text>
             </Surface>
@@ -1131,12 +1134,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   warningBodyText: {
-    color: "#fbbf24",
     fontSize: 12,
     lineHeight: 16,
   },
   warningText: {
-    color: "#fbbf24",
     fontSize: 12,
     marginLeft: 10,
     flex: 1,

@@ -30,7 +30,7 @@ export function PlayerOverlay({
   isPiPSupported = false,
   showInfoBar = true,
 }: PlayerOverlayProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
   return (
@@ -40,9 +40,7 @@ export function PlayerOverlay({
         style={[
           styles.topBar,
           {
-            backgroundColor: isDark
-              ? "rgba(0,0,0,0.8)"
-              : "rgba(255,255,255,0.85)",
+            backgroundColor: colors.surfaceOverlay,
             paddingTop: Platform.OS === "web" ? 20 : 60,
           },
         ]}
@@ -143,9 +141,7 @@ export function PlayerOverlay({
           style={[
             styles.infoBar,
             {
-              backgroundColor: isDark
-                ? "rgba(10,10,26,0.95)"
-                : "rgba(255,255,255,0.95)",
+              backgroundColor: colors.surfaceOverlay,
               borderTopWidth: 1,
               borderTopColor: colors.border,
             },
@@ -194,11 +190,9 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    backgroundColor: "rgba(0,0,0,0.8)",
     pointerEvents: "auto",
   },
   closeButton: {
-    backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 24,
@@ -207,10 +201,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  closeButtonText: { color: "#f8fafc", fontWeight: "600", fontSize: 14 },
+  closeButtonText: { fontWeight: "600", fontSize: 14 },
   topControls: { flexDirection: "row", alignItems: "center", gap: 12 },
   iconButton: {
-    backgroundColor: "rgba(255,255,255,0.1)",
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -218,7 +211,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   infoBar: {
-    backgroundColor: "rgba(10,10,26,0.95)",
     alignSelf: "center",
     width: "94%",
     maxWidth: 920,
@@ -228,13 +220,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     pointerEvents: "auto",
   },
-  infoTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 15 },
+  infoTitle: { fontWeight: "bold", fontSize: 15 },
   infoSubRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginTop: 4,
   },
-  engineText: { color: "#a1a1aa", fontSize: 11 },
-  speedText: { color: "#818cf8", fontSize: 11, fontWeight: "600" },
+  engineText: { fontSize: 11 },
+  speedText: { fontSize: 11, fontWeight: "600" },
 });

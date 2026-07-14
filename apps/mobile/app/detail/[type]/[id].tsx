@@ -2,9 +2,7 @@ import {
   View,
   Text,
   ActivityIndicator,
-  Platform,
   Pressable,
-  useWindowDimensions,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,6 +35,8 @@ import { DesktopCastModal } from "../../../components/DesktopCastModal";
 import { useCastStore } from "../../../stores/castStore";
 import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
 import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
+import { useWindowClass } from "../../../hooks/useWindowClass";
+import { useTheme } from "../../../hooks/useTheme";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -55,8 +55,9 @@ export default function DetailScreen() {
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
   const setSessionStream = usePlayerStore((s) => s.setSessionStream);
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { isExpanded, isLarge } = useWindowClass();
+  const { colors } = useTheme();
+  const isDesktop = isExpanded || isLarge;
 
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
     null,
@@ -143,23 +144,34 @@ export default function DetailScreen() {
 
   if (metaLoading) {
     return (
-      <View style={styles.cinemaCentered}>
-        <ActivityIndicator size="large" color="#d8b4fe" />
+      <View
+        style={[styles.cinemaCentered, { backgroundColor: colors.background }]}
+      >
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }
 
   if (!meta) {
     return (
-      <View style={styles.cinemaCentered}>
+      <View
+        style={[styles.cinemaCentered, { backgroundColor: colors.background }]}
+      >
         <Pressable
-          style={styles.errorBackButton}
+          style={[
+            styles.errorBackButton,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
           onPress={() => goBackOrReplace(router)}
         >
-          <Ionicons name="chevron-back" size={20} color="#f2d7ff" />
-          <Text style={styles.errorBackText}>Back</Text>
+          <Ionicons name="chevron-back" size={20} color={colors.tint} />
+          <Text style={[styles.errorBackText, { color: colors.tint }]}>
+            Back
+          </Text>
         </Pressable>
-        <Text style={styles.errorText}>{t("detail.errors.notFound")}</Text>
+        <Text style={[styles.errorText, { color: colors.error }]}>
+          {t("detail.errors.notFound")}
+        </Text>
       </View>
     );
   }
@@ -514,7 +526,6 @@ export default function DetailScreen() {
 const styles = StyleSheet.create({
   cinemaCentered: {
     flex: 1,
-    backgroundColor: "#11121c",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -528,13 +539,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
   },
   errorBackText: {
-    color: "#f2d7ff",
     fontWeight: "800",
   },
-  errorText: { color: "#ff9ba6" },
+  errorText: {},
 });

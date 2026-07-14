@@ -7,11 +7,14 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../services/api";
 import { AxiosError } from "axios";
+import { useTheme } from "../../hooks/useTheme";
 
 interface ChangePasswordModalProps {
   visible: boolean;
@@ -27,6 +30,7 @@ export function ChangePasswordModal({
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
+  const { colors } = useTheme();
 
   const handleChangePassword = async () => {
     if (!currentPw || newPw.length < 8) {
@@ -64,23 +68,53 @@ export function ChangePasswordModal({
   };
 
   const content = (
-    <View style={inline ? styles.inlineContent : styles.modalBg}>
-      <View style={inline ? styles.inlineCard : styles.modalContent}>
+    <View
+      style={[
+        inline ? styles.inlineContent : styles.modalBg,
+        !inline && { backgroundColor: colors.scrim },
+      ]}
+    >
+      <View
+        style={[
+          inline ? styles.inlineCard : styles.modalContent,
+          !inline && {
+            backgroundColor: colors.surfaceOverlay,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
         <View style={styles.modalHeader}>
           <View style={styles.modalTitleRow}>
-            <Ionicons name="lock-closed-outline" size={20} color="#818cf8" />
-            <Text style={styles.modalTitle}>Change Password</Text>
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color={colors.tint}
+            />
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Change Password
+            </Text>
           </View>
           {!inline && (
             <Pressable onPress={handleClose}>
-              <Text style={styles.modalCancel}>Cancel</Text>
+              <Text
+                style={[styles.modalCancel, { color: colors.textSecondary }]}
+              >
+                Cancel
+              </Text>
             </Pressable>
           )}
         </View>
         <TextInput
-          style={styles.modalInput}
+          style={[
+            styles.modalInput,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="Current password"
-          placeholderTextColor="#6b7280"
+          placeholderTextColor={colors.textSecondary}
           value={currentPw}
           onChangeText={setCurrentPw}
           secureTextEntry
@@ -88,9 +122,16 @@ export function ChangePasswordModal({
           autoComplete="current-password"
         />
         <TextInput
-          style={styles.modalInput}
+          style={[
+            styles.modalInput,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+          ]}
           placeholder="New password (min 8 chars)"
-          placeholderTextColor="#6b7280"
+          placeholderTextColor={colors.textSecondary}
           value={newPw}
           onChangeText={setNewPw}
           secureTextEntry
@@ -98,7 +139,11 @@ export function ChangePasswordModal({
           autoComplete="new-password"
         />
         <Pressable
-          style={[styles.modalButton, pwLoading && styles.opacity50]}
+          style={[
+            styles.modalButton,
+            { backgroundColor: colors.tint },
+            pwLoading && styles.opacity50,
+          ]}
           onPress={handleChangePassword}
           disabled={pwLoading}
           accessibilityRole="button"
@@ -106,9 +151,11 @@ export function ChangePasswordModal({
           accessibilityState={{ disabled: pwLoading }}
         >
           {pwLoading ? (
-            <ActivityIndicator color="#000" />
+            <ActivityIndicator color={colors.onTint} />
           ) : (
-            <Text style={styles.modalButtonText}>Update Password</Text>
+            <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
+              Update Password
+            </Text>
           )}
         </Pressable>
       </View>
@@ -127,7 +174,12 @@ export function ChangePasswordModal({
       transparent
       onRequestClose={handleClose}
     >
-      {content}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        {content}
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -135,18 +187,16 @@ export function ChangePasswordModal({
 const styles = StyleSheet.create({
   modalBg: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#0d0d0d",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 50,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
   },
+  keyboardAvoider: { flex: 1 },
   inlineContent: {
     flex: 1,
   },
@@ -160,32 +210,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  modalTitle: { color: "#ffffff", fontSize: 20, fontWeight: "900" },
+  modalTitle: { fontSize: 20, fontWeight: "900" },
   modalTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  modalCancel: { color: "#888888", fontWeight: "800", fontSize: 15 },
+  modalCancel: { fontWeight: "800", fontSize: 15 },
   modalInput: {
-    backgroundColor: "#121212",
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: "#ffffff",
     fontSize: 15,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
   modalButton: {
-    backgroundColor: "#d8b4fe",
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 12,
     minHeight: 52,
   },
-  modalButtonText: { color: "#000000", fontWeight: "900", fontSize: 16 },
+  modalButtonText: { fontWeight: "900", fontSize: 16 },
   opacity50: { opacity: 0.5 },
 });

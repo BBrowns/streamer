@@ -125,19 +125,26 @@ Implemented in the current draft phase:
 - Detail, Library, auth, onboarding, player sheets, and core media controls now
   consume semantic tokens and the shared window-class contract; active audio
   and subtitle choices are visible in the player controls.
+- Auth, account, onboarding, and legal routes own the full viewport instead of
+  appearing inside authenticated desktop navigation. Compact and large web
+  checks show no horizontal overflow.
+- Player sheets scroll under large text, native controls respect safe areas,
+  and common `AD`, `SDH`, and `CC` track labels expand to understandable
+  accessibility descriptions.
+- Confirmed single and bulk download deletion now waits seven seconds before
+  mutating files and exposes Undo during that grace period.
+- Settings account/session surfaces and their profile/password modals use the
+  semantic surface, scrim, contrast, disabled, and focus contracts.
 - Provider rails exclude titles already claimed by the hero, Continue Watching,
   and primary Home rails.
 
-Remaining before this redesign milestone is complete:
+Remaining evidence and upstream-data gates:
 
-- Finish the long-tail Settings and diagnostics token migration and validate
-  Downloads at large text and all supported window classes.
 - Add genre/language/availability facets only when providers return reliable
   metadata for those fields; do not infer them from labels.
-- Add recoverable bulk/download actions where the underlying file operation is
-  reversible; retain confirmation where it is not.
-- Finish media accessibility for subtitle visibility, caption-safe layout,
-  alternate/audio-description labeling, large text, and focus-not-obscured.
+- Validate Downloads, episode lists, settings panels, subtitle visibility,
+  caption-safe layout, large text, and focus-not-obscured behavior on native
+  iPhone and Android targets.
 - Add authenticated browser golden paths and record native PiP, lock-screen,
   download, and Chromecast evidence without converting unknowns into claims.
 

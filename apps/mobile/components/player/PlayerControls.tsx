@@ -22,6 +22,7 @@ import {
 } from "../ui/designSystem";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -98,6 +99,7 @@ export function PlayerControls({
   const { t } = useTranslation();
   const { isCompact } = useWindowClass();
   const reducedMotion = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const compactLayout = isCompact;
   const [scrubberWidth, setScrubberWidth] = useState(0);
 
@@ -263,6 +265,14 @@ export function PlayerControls({
         style={[
           styles.bottomControls,
           compactLayout && styles.bottomControlsCompact,
+          {
+            paddingBottom:
+              Platform.OS === "web"
+                ? compactLayout
+                  ? 74
+                  : 112
+                : Math.max(insets.bottom + (compactLayout ? 12 : 24), 24),
+          },
           Platform.OS === "web" && styles.webInteractive,
         ]}
       >
@@ -658,12 +668,10 @@ const styles = StyleSheet.create({
   },
   bottomControls: {
     paddingHorizontal: uiSpacing.xl,
-    paddingBottom: Platform.OS === "web" ? 112 : 56,
     paddingTop: uiSpacing.xl,
   },
   bottomControlsCompact: {
     paddingHorizontal: uiSpacing.sm,
-    paddingBottom: Platform.OS === "web" ? 74 : 24,
     paddingTop: uiSpacing.sm,
   },
   bottomTray: {

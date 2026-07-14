@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -21,6 +20,7 @@ import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
 import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
 import { getDownloadRecovery } from "../../services/actionRecovery";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 interface DownloadQueueCardProps {
   task: DownloadTask;
@@ -61,8 +61,7 @@ export function DownloadQueueCard({
 }: DownloadQueueCardProps) {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const compact = width < 640;
+  const { isCompact: compact } = useWindowClass();
   const primaryAction = getDownloadPrimaryAction(task);
   const recovery = getDownloadRecovery(task);
   const statusKey = getDownloadStatusKey(task);

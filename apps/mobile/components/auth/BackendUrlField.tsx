@@ -15,7 +15,7 @@ import { useTheme } from "../../hooks/useTheme";
 type Status = "idle" | "checking" | "ok" | "error";
 
 export function BackendUrlField() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const backendUrl = useAuthStore((s) => s.backendUrl);
   const setServerUrls = useAuthStore((s) => s.setServerUrls);
   const [expanded, setExpanded] = useState(false);
@@ -46,9 +46,7 @@ export function BackendUrlField() {
       style={[
         styles.container,
         {
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.06)"
-            : "rgba(255,255,255,0.58)",
+          backgroundColor: colors.card,
           borderColor: colors.border,
         },
       ]}
@@ -127,7 +125,7 @@ export function BackendUrlField() {
               style={[styles.primaryButton, { backgroundColor: colors.tint }]}
               onPress={save}
             >
-              <Text style={[styles.primaryText, { color: "#2c1738" }]}>
+              <Text style={[styles.primaryText, { color: colors.onTint }]}>
                 Gebruik
               </Text>
             </Pressable>
