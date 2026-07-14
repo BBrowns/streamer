@@ -1,5 +1,9 @@
 import type { PlaybackPlan, PlannedMediaCandidate } from "@streamer/shared";
-import { createDebugBundle, serializeDebugBundle } from "../debugBundle";
+import {
+  createDebugBundle,
+  serializeDebugBundle,
+  tryWriteDebugBundleToClipboard,
+} from "../debugBundle";
 
 const rawUrl = "https://cdn.example.test/movie.mp4?token=secret-token";
 const rawGatewayUrl =
@@ -129,6 +133,17 @@ function createPlan(): PlaybackPlan {
 }
 
 describe("debugBundle", () => {
+  it("treats denied clipboard permission as a recoverable export fallback", async () => {
+    const writeText = jest
+      .fn()
+      .mockRejectedValue(new Error("Permission denied"));
+
+    await expect(
+      tryWriteDebugBundleToClipboard("safe payload", { writeText }),
+    ).resolves.toBe(false);
+    expect(writeText).toHaveBeenCalledWith("safe payload");
+  });
+
   it("serializes planner state without raw streams, URLs, magnets, hashes, tokens, or local paths", () => {
     const bundle = createDebugBundle({
       plan: createPlan(),

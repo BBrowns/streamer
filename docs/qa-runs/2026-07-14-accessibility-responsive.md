@@ -46,3 +46,8 @@ now also permanent Playwright golden paths in both browser projects.
 The check also verified that login no longer renders a duplicate native header.
 These browser results do not replace VoiceOver, TalkBack, native keyboard,
 caption-safe, PiP, lock-screen, download, or Chromecast validation.
+
+Player recovery now has compact and desktop-renderer checks for a gateway
+failure, the explicit "Choose another source" route, automatic expansion of the
+advanced source list, and a development-only preview of the real player chrome
+without loading media.

@@ -124,6 +124,7 @@ export default function PlayerScreen() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  const [previewControls, setPreviewControls] = useState(false);
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
     null,
@@ -179,6 +180,26 @@ export default function PlayerScreen() {
     clearPlayer();
     router.replace("/settings");
   }, [clearPlayer, playbackSessionId, router]);
+
+  const handleChooseSource = useCallback(() => {
+    if (!mediaInfo) return;
+    if (playbackSessionId) {
+      cancelPlaybackSession(
+        playbackSessionId,
+        "User chose advanced source selection.",
+      );
+    }
+    const target = {
+      pathname: "/detail/[type]/[id]",
+      params: {
+        type: mediaInfo.type,
+        id: mediaInfo.itemId,
+        sources: "1",
+      },
+    } as const;
+    clearPlayer();
+    router.replace(target as any);
+  }, [clearPlayer, mediaInfo, playbackSessionId, router]);
 
   useEffect(
     () => () => {
@@ -1023,7 +1044,7 @@ export default function PlayerScreen() {
 
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
-  if (currentStream && !playbackUri) {
+  if (currentStream && !playbackUri && !previewControls) {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
@@ -1038,6 +1059,8 @@ export default function PlayerScreen() {
           session={activeSession}
           onBack={handleClose}
           onRetry={handleRetryPlayback}
+          onChooseSource={mediaInfo ? handleChooseSource : undefined}
+          onPreviewPlayer={__DEV__ ? () => setPreviewControls(true) : undefined}
           onOpenSourcesDevices={
             currentStream.infoHash ? handleOpenSourcesDevices : undefined
           }
@@ -1106,16 +1129,20 @@ export default function PlayerScreen() {
             </View>
           ) : (
             <>
-              <VideoView
-                ref={videoViewRef}
-                player={player}
-                style={styles.webVideo}
-                nativeControls={false}
-                contentFit="contain"
-                allowsPictureInPicture={isPiPSupported}
-                startsPictureInPictureAutomatically={false}
-                onFullscreenEnter={() => showControls()}
-              />
+              {previewControls ? (
+                <View style={styles.webVideo} />
+              ) : (
+                <VideoView
+                  ref={videoViewRef}
+                  player={player}
+                  style={styles.webVideo}
+                  nativeControls={false}
+                  contentFit="contain"
+                  allowsPictureInPicture={isPiPSupported}
+                  startsPictureInPictureAutomatically={false}
+                  onFullscreenEnter={() => showControls()}
+                />
+              )}
 
               <View style={styles.interactionLayer}>
                 <Pressable
@@ -1154,16 +1181,22 @@ export default function PlayerScreen() {
           )}
 
           <PlayerStatusOverlay
-            streamState={streamState}
+            streamState={previewControls ? "playing" : streamState}
             runtimeState={runtimeState}
             streamMetrics={streamMetrics}
-            isBuffering={isBuffering}
-            errorMessage={errorMessage}
-            runtimeError={runtimeError}
-            fallbackReason={fallbackReason}
-            session={activeSession}
+            isBuffering={previewControls ? false : isBuffering}
+            errorMessage={previewControls ? null : errorMessage}
+            runtimeError={previewControls ? null : runtimeError}
+            fallbackReason={previewControls ? null : fallbackReason}
+            session={previewControls ? null : activeSession}
             onBack={handleClose}
             onRetry={handleRetryPlayback}
+            onChooseSource={mediaInfo ? handleChooseSource : undefined}
+            onPreviewPlayer={
+              __DEV__ && !previewControls
+                ? () => setPreviewControls(true)
+                : undefined
+            }
             onOpenSourcesDevices={
               currentStream?.infoHash ? handleOpenSourcesDevices : undefined
             }
@@ -1189,11 +1222,15 @@ export default function PlayerScreen() {
             duration={playerDuration}
             isVisible={controlsVisible && !activeCast}
             isPlaying={player?.playing ?? false}
-            capabilities={playerCapabilities}
+            capabilities={
+              previewControls
+                ? { ...playerCapabilities, canRetry: false, canCast: false }
+                : playerCapabilities
+            }
             sourceLabel={sourceLabel}
             castStatus={castStatus}
             downloadStatus={downloadStatus}
-            fallbackReason={fallbackReason}
+            fallbackReason={previewControls ? null : fallbackReason}
             audioStatus={
               audioTracks.find((track) => track.active)?.label || null
             }
@@ -1214,6 +1251,7 @@ export default function PlayerScreen() {
             onOpenCast={() => setCastModalOpen(true)}
             onRetry={handleRetryPlayback}
             onPlayPause={() => {
+              if (previewControls) return;
               if (player?.playing) player.pause();
               else player?.play();
             }}

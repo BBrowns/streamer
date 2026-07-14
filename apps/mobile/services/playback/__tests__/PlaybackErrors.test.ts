@@ -1,6 +1,7 @@
 import {
   createPlaybackRuntimeError,
   getPlaybackRuntimeState,
+  mapPlaybackMessageToRuntimeFailure,
 } from "../PlaybackErrors";
 
 describe("PlaybackErrors", () => {
@@ -16,5 +17,19 @@ describe("PlaybackErrors", () => {
     expect(getPlaybackRuntimeState("NO_PLAYABLE_SOURCE")).toBe(
       "failed_no_playable_source",
     );
+  });
+
+  it("maps a stalled stream gateway to a recoverable gateway timeout", () => {
+    const result = mapPlaybackMessageToRuntimeFailure(
+      "Stream gateway stalled while preparing this source.",
+      "SOURCE_UNAVAILABLE",
+    );
+
+    expect(result.error).toMatchObject({
+      code: "GATEWAY_TIMEOUT",
+      retryable: true,
+      shouldFallback: true,
+    });
+    expect(result.runtimeState).toBe("failed_timeout");
   });
 });

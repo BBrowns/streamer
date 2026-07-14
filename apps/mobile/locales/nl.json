@@ -485,6 +485,7 @@
       "tryingFallback": "Een andere bron proberen...",
       "buffering": "Bufferen...",
       "errorTitle": "Verbinding mislukt",
+      "noSourcesTitle": "Geen afspeelbare bron",
       "bridgeErrorTitle": "Bridge niet gereed",
       "noPeersTitle": "Geen peers gevonden",
       "unsupportedTitle": "Bron niet ondersteund",
@@ -499,6 +500,8 @@
       "playbackTimeout": "De stream leverde binnen 60 seconden geen afspeelbare video. De torrent kan traag, vastgelopen of niet compatibel zijn met deze speler.",
       "unsupportedCodec": "Deze bron lijkt HEVC/H.265 of Dolby Vision te gebruiken. Deze desktop/web-speler kan dat niet betrouwbaar decoderen. Kies een H.264/x264-bron of een lagere MP4-kwaliteit.",
       "openSourcesDevices": "Bronnen & apparaten",
+      "chooseSource": "Kies een andere bron",
+      "previewPlayer": "Voorbeeld van player",
       "goBack": "Ga terug"
     },
     "cast": {

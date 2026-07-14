@@ -37,6 +37,7 @@ import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
 import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
 import { useWindowClass } from "../../../hooks/useWindowClass";
 import { useTheme } from "../../../hooks/useTheme";
+import { mapPlaybackMessageToRuntimeFailure } from "../../../services/playback/PlaybackErrors";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -47,7 +48,15 @@ import {
 } from "../../../components/detail/PlaybackReadinessNotice";
 
 export default function DetailScreen() {
-  const { type, id } = useLocalSearchParams<{ type: string; id: string }>();
+  const {
+    type,
+    id,
+    sources: sourcesParam,
+  } = useLocalSearchParams<{
+    type: string;
+    id: string;
+    sources?: string;
+  }>();
   const castType = type as "movie" | "series";
   const router = useRouter();
   const { t } = useTranslation();
@@ -220,53 +229,26 @@ export default function DetailScreen() {
       return;
     }
 
-    const playbackStream =
-      season && episode
-        ? {
-            ...stream,
-            fileSelectionHints: {
-              ...stream.fileSelectionHints,
-              season,
-              episode,
-            },
-          }
-        : stream;
-    const streamId = stream.infoHash || stream.url;
-    const task = useDownloadStore.getState().tasks[streamId || ""];
+    try {
+      const playbackStream =
+        season && episode
+          ? {
+              ...stream,
+              fileSelectionHints: {
+                ...stream.fileSelectionHints,
+                season,
+                episode,
+              },
+            }
+          : stream;
+      const streamId = stream.infoHash || stream.url;
+      const task = useDownloadStore.getState().tasks[streamId || ""];
 
-    if (isTaskOfflinePlayable(task) && task?.localUri) {
-      if (await downloadService.verifyTask(task.id)) {
-        setPlaybackNotice(null);
-        setStream(
-          { ...playbackStream, url: task.localUri },
-          {
-            type: castType,
-            itemId: id || "unknown",
-            title: episodeTitle
-              ? `${meta?.name} - ${episodeTitle}`
-              : (meta?.name ?? stream.title ?? "Unknown"),
-            poster: meta?.poster,
-            season,
-            episode,
-          },
-        );
-
-        router.push("/player");
-        return;
-      }
-    }
-
-    const uri = await streamEngineManager.getPlaybackUri(playbackStream);
-    const playable = !!uri && uri.length > 0;
-
-    if (!playable && stream.infoHash) {
-      const bridgeUp = await streamEngineManager.detectBridge();
-      if (bridgeUp) {
-        const retryUri =
-          await streamEngineManager.getPlaybackUri(playbackStream);
-        if (retryUri && retryUri.length > 0) {
+      if (isTaskOfflinePlayable(task) && task?.localUri) {
+        if (await downloadService.verifyTask(task.id)) {
+          setPlaybackNotice(null);
           setStream(
-            { ...playbackStream, url: retryUri },
+            { ...playbackStream, url: task.localUri },
             {
               type: castType,
               itemId: id || "unknown",
@@ -278,43 +260,81 @@ export default function DetailScreen() {
               episode,
             },
           );
+
           router.push("/player");
           return;
         }
       }
-    }
 
-    if (!playable) {
-      let msg = t("detail.errors.notPlayable");
-      if (stream.infoHash) {
-        if (streamEngineManager.bridgeStatus === "unsupported") {
-          msg = t("detail.errors.bridgeBroken");
-        } else {
-          msg = t("detail.errors.torrentBridge");
+      const uri = await streamEngineManager.getPlaybackUri(playbackStream);
+      const playable = !!uri && uri.length > 0;
+
+      if (!playable && stream.infoHash) {
+        const bridgeUp = await streamEngineManager.detectBridge();
+        if (bridgeUp) {
+          const retryUri =
+            await streamEngineManager.getPlaybackUri(playbackStream);
+          if (retryUri && retryUri.length > 0) {
+            setStream(
+              { ...playbackStream, url: retryUri },
+              {
+                type: castType,
+                itemId: id || "unknown",
+                title: episodeTitle
+                  ? `${meta?.name} - ${episodeTitle}`
+                  : (meta?.name ?? stream.title ?? "Unknown"),
+                poster: meta?.poster,
+                season,
+                episode,
+              },
+            );
+            router.push("/player");
+            return;
+          }
         }
       }
 
-      showPlanMessage(null, msg, "play");
-      return;
-    }
+      if (!playable) {
+        let msg = t("detail.errors.notPlayable");
+        if (stream.infoHash) {
+          if (streamEngineManager.bridgeStatus === "unsupported") {
+            msg = t("detail.errors.bridgeBroken");
+          } else {
+            msg = t("detail.errors.torrentBridge");
+          }
+        }
 
-    setPlaybackNotice(null);
-    setStream(
-      uri && playbackStream.url !== uri
-        ? { ...playbackStream, url: uri }
-        : playbackStream,
-      {
-        type: castType,
-        itemId: id || "unknown",
-        title: episodeTitle
-          ? `${meta?.name} - ${episodeTitle}`
-          : (meta?.name ?? playbackStream.title ?? "Unknown"),
-        poster: meta?.poster,
-        season,
-        episode,
-      },
-    );
-    router.push("/player");
+        showPlanMessage(null, msg, "play");
+        return;
+      }
+
+      setPlaybackNotice(null);
+      setStream(
+        uri && playbackStream.url !== uri
+          ? { ...playbackStream, url: uri }
+          : playbackStream,
+        {
+          type: castType,
+          itemId: id || "unknown",
+          title: episodeTitle
+            ? `${meta?.name} - ${episodeTitle}`
+            : (meta?.name ?? playbackStream.title ?? "Unknown"),
+          poster: meta?.poster,
+          season,
+          episode,
+        },
+      );
+      router.push("/player");
+    } catch (err: any) {
+      const message = err?.message || t("detail.errors.notPlayable");
+      const failure = mapPlaybackMessageToRuntimeFailure(
+        message,
+        stream.infoHash ? "GATEWAY_TIMEOUT" : "SOURCE_UNAVAILABLE",
+      );
+      setPlaybackNotice(
+        getPlaybackReadinessCopyFromError(failure.error, "play", [message]),
+      );
+    }
   };
 
   const maybePlanNextEpisode = (
@@ -462,6 +482,7 @@ export default function DetailScreen() {
     groupedStreams,
     availableResolutions,
     selectedResolution,
+    initiallyOpenSources: sourcesParam === "1",
     setSelectedResolution,
     inLibrary: !!inLibrary,
     handleToggleLibrary,

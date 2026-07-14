@@ -105,16 +105,54 @@ test("a no-peers torrent automatically falls back to a direct candidate", async 
   expect(controls.plannerRequests[0]?.action).toBe("play");
 });
 
-test("no peers is terminal and never becomes infinite buffering", async ({
+test("no peers is recoverable through advanced source selection", async ({
   page,
-}) => {
+}, testInfo) => {
   const controls = await loginAndOpenFixture(page, "no-peers");
   await page.getByRole("button", { name: "Play Best" }).click();
 
   await expect(page.getByText("No Peers Found")).toBeVisible();
+  const chooseSource = page.getByRole("button", {
+    name: "Choose another source",
+  });
+  await expect(chooseSource).toBeVisible();
   await expect(page.getByRole("button", { name: "Go Back" })).toBeVisible();
   await expect(page).toHaveURL(/\/player$/);
   expect(controls.gatewayJobsCreated()).toBe(1);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`player-recovery-${testInfo.project.name}.png`),
+    animations: "disabled",
+  });
+  await chooseSource.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}\\?sources=1$`),
+  );
+  await expect(
+    page.getByRole("button", { name: "Hide more sources" }),
+  ).toBeVisible();
+});
+
+test("development player preview exposes the real control chrome", async ({
+  page,
+}, testInfo) => {
+  await loginAndOpenFixture(page, "no-peers");
+  await page.getByRole("button", { name: "Play Best" }).click();
+
+  await page.getByRole("button", { name: "Preview player" }).click();
+  await expect(page.getByTestId("player-screen")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play playback" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Audio, subtitles, and source" }),
+  ).toBeVisible();
+  await expect(page.getByText(/empty string/i)).toHaveCount(0);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`player-preview-${testInfo.project.name}.png`),
+    animations: "disabled",
+  });
 });
 
 test("bridge unavailable produces a recoverable detail state", async ({

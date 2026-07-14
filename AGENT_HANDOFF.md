@@ -453,7 +453,9 @@ state, synchronized cast mini-controller, full-viewport unauthenticated routes,
 and semantic Settings account/session surfaces are implemented. Single and
 bulk download deletion retain confirmation, then defer the underlying mutation
 for seven seconds while Undo is available. Common AD/SDH/CC media-track labels
-are expanded for assistive clarity.
+are expanded for assistive clarity. Player failures can return directly to an
+auto-opened advanced source list; gateway stalls are contained as recoverable
+timeouts. Development builds also expose a source-independent player preview.
 
 The remaining work is validation or depends on trustworthy upstream metadata:
 

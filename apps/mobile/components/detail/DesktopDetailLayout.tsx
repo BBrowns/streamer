@@ -28,6 +28,7 @@ export function DesktopDetailLayout({
   groupedStreams,
   availableResolutions,
   selectedResolution,
+  initiallyOpenSources,
   setSelectedResolution,
   inLibrary,
   handleToggleLibrary,
@@ -41,7 +42,7 @@ export function DesktopDetailLayout({
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
-  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(!!initiallyOpenSources);
   const selectedStreams =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
   const streamsData =

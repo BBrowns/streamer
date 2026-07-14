@@ -131,6 +131,9 @@ Implemented in the current draft phase:
 - Player sheets scroll under large text, native controls respect safe areas,
   and common `AD`, `SDH`, and `CC` track labels expand to understandable
   accessibility descriptions.
+- Player failures expose an explicit advanced source choice, stalled gateways
+  remain inside recoverable UI, and development builds can preview the real
+  player chrome without a playable source.
 - Confirmed single and bulk download deletion now waits seven seconds before
   mutating files and exposes Undo during that grace period.
 - Settings account/session surfaces and their profile/password modals use the

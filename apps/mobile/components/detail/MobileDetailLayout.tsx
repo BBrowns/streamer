@@ -31,6 +31,7 @@ export function MobileDetailLayout({
   groupedStreams,
   availableResolutions,
   selectedResolution,
+  initiallyOpenSources,
   setSelectedResolution,
   inLibrary,
   handleToggleLibrary,
@@ -45,7 +46,7 @@ export function MobileDetailLayout({
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
   const { height, isCompact, isLarge } = useWindowClass();
-  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(!!initiallyOpenSources);
   const backdropHeight = Math.min(
     height * (isCompact ? 0.46 : 0.52),
     isLarge ? 520 : 460,

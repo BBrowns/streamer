@@ -474,6 +474,7 @@
       "tryingFallback": "Probando otra fuente...",
       "buffering": "Cargando el búfer...",
       "errorTitle": "Error de conexión",
+      "noSourcesTitle": "No hay una fuente reproducible",
       "bridgeErrorTitle": "El puente no está listo",
       "noPeersTitle": "No se encontraron pares",
       "unsupportedTitle": "Fuente no compatible",
@@ -484,6 +485,8 @@
     "errors": {
       "noStream": "No hay flujo seleccionado",
       "openSourcesDevices": "Fuentes y dispositivos",
+      "chooseSource": "Elegir otra fuente",
+      "previewPlayer": "Vista previa del reproductor",
       "goBack": "Volver"
     },
     "cast": {
