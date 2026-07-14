@@ -93,6 +93,7 @@ export default function LoginScreen() {
         />
 
         <Pressable
+          testID="login-submit"
           style={({ pressed, hovered }: any) => [
             styles.primaryButton,
             { backgroundColor: colors.tint },
