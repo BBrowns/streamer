@@ -240,6 +240,51 @@ jobs:
           path: artifacts/ci-summaries/mobile-tests.md
           retention-days: 14
 
+  test-golden-path:
+    name: Golden Path Browser Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, format-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run deterministic product flows
+        run: npm run test:golden-path
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-browser-report
+          path: |
+            artifacts/playwright-report/
+            artifacts/playwright-results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Write CI summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/golden-path-tests.md <<'EOF'
+          # Golden Path Browser Tests
+
+          - Status: ${{ job.status }}
+          - Command: `npm run test:golden-path`
+          - Scope: deterministic phone-web and desktop-renderer Play Best, fallback, no-peers, bridge, download, and cast product flows.
+          - Evidence boundary: automated renderer regression coverage, not real-device QA.
+          EOF
+      - name: Upload CI summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-summary-golden-path-tests
+          path: artifacts/ci-summaries/golden-path-tests.md
+          retention-days: 14
+
   build-check:
     name: Build Check
     runs-on: ubuntu-latest
@@ -358,6 +403,7 @@ jobs:
       - test-server
       - test-stream-server
       - test-mobile
+      - test-golden-path
       - build-check
       - desktop-package
     steps:

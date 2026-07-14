@@ -9,6 +9,9 @@ until a run is recorded here or linked from `docs/qa-runs/`.
 CI release gates are documented in [CI_RELEASE_GATES.md](./CI_RELEASE_GATES.md).
 Release candidate validation is tracked with
 [RC_CHECKLIST.md](./RC_CHECKLIST.md).
+Automated renderer regression coverage is documented in
+[AUTOMATED_GOLDEN_PATHS.md](./AUTOMATED_GOLDEN_PATHS.md). It does not change the
+`Unknown` status of native or packaged targets below.
 
 Current project phase: architecture complete enough; reliability,
 productization, real-device QA, and release evidence are still open. This

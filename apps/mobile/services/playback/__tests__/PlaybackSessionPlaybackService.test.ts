@@ -567,6 +567,22 @@ describe("PlaybackSessionPlaybackService", () => {
     });
   });
 
+  it("classifies error-like gateway failures across runtime boundaries", async () => {
+    const primary = { infoHash: "abc123", title: "Torrent" } as Stream;
+    const engine = makeEngine(async () => {
+      throw { message: "No peers found" };
+    });
+    resolveEngine.mockReturnValue(engine);
+    const session = createSession(primary);
+
+    const result = await resolvePlaybackSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "NO_PEERS", shouldFallback: false },
+    });
+  });
+
   it("uses a terminal no-playable-source error after mixed candidate failures", async () => {
     const primary = { infoHash: "abc123", title: "Torrent" } as Stream;
     const fallback = {

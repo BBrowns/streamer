@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #141:
+Implemented through PR #144:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -52,6 +52,10 @@ Implemented through PR #141:
   desktop bridge.
 - Desktop packaging, signing configuration, Sentry metadata, release evidence,
   and security baselines exist.
+- Production high/critical dependency findings block CI, and install scripts
+  are constrained by a reviewed allowlist.
+- Deterministic phone-web and desktop-renderer golden paths cover Play Best,
+  fallback, terminal no-peers, bridge guidance, download, and cast eligibility.
 
 Not yet proven:
 
@@ -68,13 +72,12 @@ Not yet proven:
 
 The next priorities are based on observed gaps, not old roadmap numbering:
 
-- `npm audit --omit=dev --audit-level=high` currently reports high and critical
-  findings, while both dependency-audit CI commands are `continue-on-error`.
+- Remaining moderate dependency exceptions are documented and time-bounded;
+  newly introduced high or critical production findings block CI.
 - `apps/mobile/app.json` still uses generic `mobile` identity values, lacks iOS
   and Android application identifiers, and contains Sentry placeholders.
-- CI has strong unit/build coverage but no deterministic browser golden-path
-  suite for the user-visible Play Best, download, cast, and terminal-error
-  flows.
+- CI now proves deterministic renderer flows, while native and packaged target
+  behavior remains intentionally unproven until real-device QA is recorded.
 - Bridge reachability rules have been improved incrementally and should be
   centralized so Play, Download, Cast, Settings, and diagnostics cannot drift.
 - Real-device QA is intentionally deferred for now; work below must preserve
@@ -82,7 +85,7 @@ The next priorities are based on observed gaps, not old roadmap numbering:
 
 ## Active Roadmap
 
-### PR #143 - Dependency Security Remediation And Blocking Audit Gate
+### Completed: PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
 Goal: remove known high/critical production dependency risk and make regression
 visible in CI.
@@ -104,7 +107,7 @@ Acceptance:
   finding.
 - Typecheck, tests, desktop package checks, and release gate stay green.
 
-### PR #144 - Deterministic Golden-Path Browser And Desktop Harness
+### Completed: PR #144 - Deterministic Golden-Path Browser And Desktop Harness
 
 Goal: catch product-flow regressions without waiting for physical-device QA.
 
@@ -258,8 +261,8 @@ of mocks or unit tests.
 
 ## Execution Order
 
-1. PR #143 - dependency security and audit enforcement.
-2. PR #144 - deterministic golden-path automation.
+1. Completed: PR #143 - dependency security and audit enforcement.
+2. Completed: PR #144 - deterministic golden-path automation.
 3. PR #145 - unified action/bridge preflight.
 4. PR #146 - mobile release identity and EAS baseline.
 5. PR #147 - server production runtime hardening.
@@ -267,10 +270,9 @@ of mocks or unit tests.
 7. PR #149 - accessibility and responsive visual quality.
 8. PR #150 - real-target QA and RC evidence when available.
 
-Security comes first because the current CI knowingly tolerates severe findings.
-The automation harness comes next so later behavior changes have product-level
-regression coverage. Shared preflight then removes readiness drift before mobile,
-server, offline, cast, and visual work build on it.
+Dependency enforcement and deterministic renderer automation are complete.
+Shared preflight is next so readiness drift is removed before mobile, server,
+offline, cast, and visual work build on it.
 
 ## Working Rules
 

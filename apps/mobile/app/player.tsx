@@ -1045,7 +1045,7 @@ export default function PlayerScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
+      <View testID="player-screen" style={styles.container}>
         <StatusBar hidden />
         <View style={styles.videoContainer}>
           {activeCast ? (

@@ -30,6 +30,7 @@
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "security:install-scripts": "node scripts/check-install-script-policy.mjs",
+    "test:golden-path": "playwright test --config=playwright.config.ts",
     "postinstall": "patch-package",
     "prepare": "husky"
   },

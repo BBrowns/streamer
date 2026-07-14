@@ -1,0 +1,115 @@
+import { expect, test, type Page } from "@playwright/test";
+import { playbackPlanRequestSchema } from "@streamer/shared";
+import {
+  FIXTURE_MOVIE_ID,
+  installGoldenPathRoutes,
+  type GoldenPathScenario,
+} from "./fixtures";
+
+async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
+  const controls = await installGoldenPathRoutes(page, scenario);
+  await page.goto("/login");
+  await page.getByPlaceholder("Email").fill("qa@example.test");
+  await page.getByPlaceholder("Password").fill("fixture-password");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("home-screen")).toBeVisible();
+  await expect.poll(controls.bridgeProbes).toBeGreaterThan(0);
+  await page
+    .getByRole("button", { name: "Featured: Golden Path Adventure" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
+  );
+  await expect(page.getByRole("button", { name: "Play Best" })).toBeEnabled();
+  return controls;
+}
+
+test("browse to detail and Play Best reaches a direct player", async ({
+  page,
+}) => {
+  const controls = await loginAndOpenFixture(page, "direct");
+  await page.getByRole("button", { name: "Play Best" }).click();
+
+  await expect(page).toHaveURL(/\/player$/);
+  await expect(page.getByTestId("player-screen")).toBeVisible();
+  await expect(page.locator("video")).toBeVisible();
+
+  expect(controls.plannerRequests).toHaveLength(1);
+  expect(
+    playbackPlanRequestSchema.parse(controls.plannerRequests[0]),
+  ).toMatchObject({
+    type: "movie",
+    id: FIXTURE_MOVIE_ID,
+    action: "play",
+    deviceProfile: { platform: "web" },
+  });
+});
+
+test("a no-peers torrent automatically falls back to a direct candidate", async ({
+  page,
+}) => {
+  const controls = await loginAndOpenFixture(page, "torrent-fallback");
+  await page.getByRole("button", { name: "Play Best" }).click();
+
+  await expect(page).toHaveURL(/\/player$/);
+  await expect(page.getByTestId("player-screen")).toBeVisible();
+  expect(controls.gatewayJobsCreated()).toBe(1);
+  expect(controls.plannerRequests[0]?.action).toBe("play");
+});
+
+test("no peers is terminal and never becomes infinite buffering", async ({
+  page,
+}) => {
+  const controls = await loginAndOpenFixture(page, "no-peers");
+  await page.getByRole("button", { name: "Play Best" }).click();
+
+  await expect(page.getByText("No Peers Found")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Go Back" })).toBeVisible();
+  await expect(page).toHaveURL(/\/player$/);
+  expect(controls.gatewayJobsCreated()).toBe(1);
+});
+
+test("bridge unavailable produces a recoverable detail state", async ({
+  page,
+}) => {
+  await loginAndOpenFixture(page, "bridge-unavailable");
+  await page.getByRole("button", { name: "Play Best" }).click();
+
+  await expect(page.getByText("Desktop bridge required")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sources & Devices" }),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/\/player$/);
+});
+
+test("download eligibility uses a planner action", async ({ page }) => {
+  const downloadControls = await loginAndOpenFixture(
+    page,
+    "download-unsupported",
+  );
+  await page.getByRole("button", { name: "Download" }).click();
+  await expect(page.getByText("No compatible source")).toBeVisible();
+  expect(downloadControls.plannerRequests.at(-1)?.action).toBe("download");
+});
+
+test("cast eligibility uses a planner action and lists displays", async ({
+  page,
+}) => {
+  const castControls = await installGoldenPathRoutes(page, "cast-ready");
+  await page.goto("/login");
+  await page.getByPlaceholder("Email").fill("qa@example.test");
+  await page.getByPlaceholder("Password").fill("fixture-password");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("home-screen")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Featured: Golden Path Adventure" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
+  );
+  await page.getByRole("button", { name: "Cast" }).click();
+  await expect(page.getByText("Cast to a display")).toBeVisible();
+  await expect(page.getByText("Source ready. Choose a display.")).toBeVisible();
+  await expect(page.getByText("Fixture Living Room")).toBeVisible();
+  expect(castControls.plannerRequests.at(-1)?.action).toBe("cast");
+});

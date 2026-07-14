@@ -16,14 +16,15 @@ Current phase:
   Play Best, downloads, cast, gateway/range hardening, security baseline,
   Sentry/build metadata, desktop sidecar/package inputs, manual update policy,
   and first UI primitives are already present.
-- Reliability/productization phase: the next work starts with dependency
-  security, deterministic golden-path automation, a unified bridge/action
-  preflight contract, mobile/server release configuration, recoverable
-  offline/cast UX, and focused accessibility/visual polish.
+- Reliability/productization phase: dependency security and deterministic
+  golden-path automation are in place. The next work starts with a unified
+  bridge/action preflight contract, followed by mobile/server release
+  configuration, recoverable offline/cast UX, and focused
+  accessibility/visual polish.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active implementation roadmap starts at **PR #143** in
+The active implementation roadmap starts at **PR #145** in
 [ROADMAP.md](./ROADMAP.md). PR #142 is the roadmap truth-sync that defined this
 post-#141 phase.
 
@@ -31,8 +32,10 @@ PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
 11.18 are the supported toolchain, production high/critical audit findings
 block CI, and every dependency install script must be explicitly reviewed and
 version-pinned. See [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md).
+Deterministic renderer regression coverage is documented in
+[docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up
-reliability/productization PRs have landed through **PR #141**. Earlier roadmap
+reliability/productization PRs have landed through **PR #144**. Earlier roadmap
 items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
@@ -83,6 +86,12 @@ Post-roadmap corrective PRs after #124:
   torrent playback, downloads, or casting.
 - **PR #141:** keeps download eligibility side-effect-light by avoiding bridge
   URL resolution when the bridge is already unavailable.
+- **PR #142:** truth-synced the post-#141 roadmap and current architecture.
+- **PR #143:** established the Node/npm dependency policy, blocking production
+  audit gate, reviewed install-script allowlist, and documented exceptions.
+- **PR #144:** added deterministic phone-web and desktop-renderer golden paths
+  for Play Best, fallback, terminal no-peers, bridge guidance, download, and
+  cast eligibility without claiming native or packaged target evidence.
 
 ## Product North Star
 
