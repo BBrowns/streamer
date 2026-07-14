@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-07-13.
+> Last updated: 2026-07-14.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -16,16 +16,17 @@ Current phase:
   Play Best, downloads, cast, gateway/range hardening, security baseline,
   Sentry/build metadata, desktop sidecar/package inputs, manual update policy,
   and first UI primitives are already present.
-- Reliability/productization phase: the next work should harden playback
-  failures, gateway states, remux runtime/cache behavior, offline library,
-  casting capabilities, desktop repair UX, release automation, security pass 2,
-  observability evidence, and focused UX polish.
+- Reliability/productization phase: the next work starts with dependency
+  security, deterministic golden-path automation, a unified bridge/action
+  preflight contract, mobile/server release configuration, recoverable
+  offline/cast UX, and focused accessibility/visual polish.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active roadmap starts at **PR #106**. The numbered roadmap items through
-**PR #124** are implemented, and follow-up reliability/productization PRs have
-now landed through **PR #141**. Earlier roadmap items that introduced
+The active roadmap now starts at **PR #142** in [ROADMAP.md](./ROADMAP.md).
+The numbered roadmap items through **PR #124** are implemented, and follow-up
+reliability/productization PRs have landed through **PR #141**. Earlier roadmap
+items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
 manual updates, More Sources/debug bundle, and RC checklist docs should be
@@ -412,11 +413,12 @@ Before this can be considered production-ready:
 - Privacy export/delete flows should be verified end-to-end.
 - Golden path tests should cover browse -> Play Best -> fallback -> download -> cast.
 
-## Active Roadmap Starting At PR #106
+## Completed Roadmap Through PR #141
 
-Use small reviewable PRs. Do not combine playback core, gateway internals,
-offline library, cast, desktop repair, release automation, security, and broad
-UI polish in one PR.
+The detailed #106-#124 plan below is retained as implementation history. Do not
+replay it. The active post-#141 work, priorities, acceptance criteria, and the
+explicitly deferred real-device QA phase are maintained in
+[ROADMAP.md](./ROADMAP.md).
 
 ### Phase 1: Truth Sync And Reliability
 
