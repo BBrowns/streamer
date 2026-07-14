@@ -101,6 +101,23 @@ streamer/
 
 ---
 
+### 3.1 Action And Bridge Preflight
+
+`packages/shared/src/action-preflight.ts` is the source of truth for Play,
+Download, and Cast readiness. It classifies bridge endpoints as loopback, LAN,
+remote, invalid, or unknown and combines that with device reachability, bridge
+auth, runtime status, and gateway/torrent/remux/cast capabilities. The server
+planner and mobile action surfaces consume the same typed reasons and safe
+copy, while Sources & Devices presents the same result for diagnostics.
+
+Preflight is intentionally side-effect-light: it evaluates a supplied snapshot
+and must not probe or start the bridge, resolve media, create gateway jobs, or
+persist streams. Those effects remain owned by the playback/download/cast
+orchestrators after readiness succeeds. A failed torrent runtime must not block
+otherwise compatible direct or HLS playback.
+
+---
+
 ## 4. The Server (`server/`)
 
 ### 4.1 Framework & Entry Point

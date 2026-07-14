@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #144:
+Implemented through PR #145:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -56,6 +56,9 @@ Implemented through PR #144:
   are constrained by a reviewed allowlist.
 - Deterministic phone-web and desktop-renderer golden paths cover Play Best,
   fallback, terminal no-peers, bridge guidance, download, and cast eligibility.
+- Play, Download, Cast, Settings, and planner readiness use one shared action
+  preflight contract for bridge URL scope, device reachability, auth, gateway,
+  torrent, remux, and cast capabilities.
 
 Not yet proven:
 
@@ -130,7 +133,7 @@ Acceptance:
 - These tests are described as automated regression coverage, not real-device
   evidence.
 
-### PR #145 - Unified Action And Bridge Preflight Contract
+### Completed: PR #145 - Unified Action And Bridge Preflight Contract
 
 Goal: make Play, Download, Cast, Settings, and diagnostics answer readiness in
 the same way.
@@ -263,16 +266,17 @@ of mocks or unit tests.
 
 1. Completed: PR #143 - dependency security and audit enforcement.
 2. Completed: PR #144 - deterministic golden-path automation.
-3. PR #145 - unified action/bridge preflight.
+3. Completed: PR #145 - unified action/bridge preflight.
 4. PR #146 - mobile release identity and EAS baseline.
 5. PR #147 - server production runtime hardening.
 6. PR #148 - offline and cast recovery UX.
 7. PR #149 - accessibility and responsive visual quality.
 8. PR #150 - real-target QA and RC evidence when available.
 
-Dependency enforcement and deterministic renderer automation are complete.
-Shared preflight is next so readiness drift is removed before mobile, server,
-offline, cast, and visual work build on it.
+Dependency enforcement, deterministic renderer automation, and shared action
+preflight are complete. Mobile release identity is next; later offline, cast,
+and visual work must reuse the shared preflight result instead of adding local
+bridge-readiness conditionals.
 
 ## Working Rules
 
