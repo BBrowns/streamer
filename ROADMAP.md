@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #145:
+Implemented through PR #146:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -59,6 +59,9 @@ Implemented through PR #145:
 - Play, Download, Cast, Settings, and planner readiness use one shared action
   preflight contract for bridge URL scope, device reachability, auth, gateway,
   torrent, remux, and cast capabilities.
+- Mobile development, preview, and production builds have stable native
+  identifiers, validated dynamic Expo configuration, explicit EAS environments
+  and update channels, and credential-free CI smoke coverage.
 
 Not yet proven:
 
@@ -77,8 +80,8 @@ The next priorities are based on observed gaps, not old roadmap numbering:
 
 - Remaining moderate dependency exceptions are documented and time-bounded;
   newly introduced high or critical production findings block CI.
-- `apps/mobile/app.json` still uses generic `mobile` identity values, lacks iOS
-  and Android application identifiers, and contains Sentry placeholders.
+- Mobile identity/configuration is deterministic, while real EAS preview and
+  store builds still require project credentials and recorded device evidence.
 - CI now proves deterministic renderer flows, while native and packaged target
   behavior remains intentionally unproven until real-device QA is recorded.
 - Bridge reachability rules have been improved incrementally and should be
@@ -153,7 +156,7 @@ Acceptance:
 - Preflight does not start a bridge, resolve media, or create a gateway job.
 - User-facing copy maps typed reasons without exposing raw URLs or tokens.
 
-### PR #146 - Mobile Release Identity And EAS Baseline
+### Completed: PR #146 - Mobile Release Identity And EAS Baseline
 
 Goal: make preview and production mobile builds reproducible without claiming
 store readiness.
@@ -267,15 +270,16 @@ of mocks or unit tests.
 1. Completed: PR #143 - dependency security and audit enforcement.
 2. Completed: PR #144 - deterministic golden-path automation.
 3. Completed: PR #145 - unified action/bridge preflight.
-4. PR #146 - mobile release identity and EAS baseline.
+4. Completed: PR #146 - mobile release identity and EAS baseline.
 5. PR #147 - server production runtime hardening.
 6. PR #148 - offline and cast recovery UX.
 7. PR #149 - accessibility and responsive visual quality.
 8. PR #150 - real-target QA and RC evidence when available.
 
-Dependency enforcement, deterministic renderer automation, and shared action
-preflight are complete. Mobile release identity is next; later offline, cast,
-and visual work must reuse the shared preflight result instead of adding local
+Dependency enforcement, deterministic renderer automation, shared action
+preflight, and the credential-free mobile release configuration baseline are
+complete. Server production hardening is next; later offline, cast, and visual
+work must reuse the shared preflight result instead of adding local
 bridge-readiness conditionals.
 
 ## Working Rules

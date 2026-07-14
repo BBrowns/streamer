@@ -23,6 +23,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:all": "turbo run test",
     "typecheck:all": "npm run db:generate --workspace=server && turbo run typecheck",
+    "mobile:config:check": "node scripts/validate-mobile-config.mjs",
     "release:gate": "node scripts/release-gate.mjs",
     "rc:evidence": "node scripts/rc-evidence.mjs",
     "rc:evidence:test": "node --test scripts/rc-evidence.test.mjs",

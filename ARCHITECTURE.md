@@ -281,6 +281,13 @@ productization pass and QA evidence.
 | E2E testing      | Detox (iOS simulator)                                                            |
 | Unit testing     | Jest + `jest-expo` + `@testing-library/react-native`                             |
 
+Native application identity and release configuration are resolved by
+`apps/mobile/app.config.js`. It validates environment-specific API, Sentry,
+build-channel, and EAS Update values before Expo generates native config.
+Development, preview, and production profiles are defined in
+`apps/mobile/eas.json`; the real project ID and credentials stay outside the
+repository. See [docs/MOBILE_RELEASE.md](./docs/MOBILE_RELEASE.md).
+
 ### 6.2 App Routing (File-Based)
 
 ```
