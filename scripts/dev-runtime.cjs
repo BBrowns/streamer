@@ -255,6 +255,54 @@ function resolveNpmCli(nodeExecPath, options = {}) {
   return candidates.find((candidate) => exists(candidate)) || null;
 }
 
+function resolveNpmRunner(nodeExecPath, options = {}) {
+  const exists = options.exists || fs.existsSync;
+  const corepackCli = path.resolve(
+    path.dirname(nodeExecPath),
+    "../lib/node_modules/corepack/dist/corepack.js",
+  );
+  if (exists(corepackCli)) {
+    return { cli: corepackCli, prefixArgs: ["npm"] };
+  }
+
+  const npmCli = resolveNpmCli(nodeExecPath, options);
+  return npmCli ? { cli: npmCli, prefixArgs: [] } : null;
+}
+
+function parseNpmCommandArgs(args) {
+  const separatorIndex = args.indexOf("--");
+  if (separatorIndex < 0) {
+    throw new Error(
+      "The npm runtime command requires `--` before npm arguments.",
+    );
+  }
+
+  const options = args.slice(0, separatorIndex);
+  const npmArgs = args.slice(separatorIndex + 1);
+  let port = null;
+
+  for (let index = 0; index < options.length; index += 1) {
+    const option = options[index];
+    if (option === "--port") {
+      const value = Number(options[index + 1]);
+      if (!Number.isInteger(value) || value < 1 || value > 65535) {
+        throw new Error("`--port` must be a valid TCP port.");
+      }
+      port = value;
+      index += 1;
+      continue;
+    }
+    throw new Error(`Unknown npm runtime option: ${option}`);
+  }
+
+  if (npmArgs.length === 0) {
+    throw new Error(
+      "The npm runtime command requires npm arguments after `--`.",
+    );
+  }
+  return { npmArgs, port };
+}
+
 function findListeningPids(port, options = {}) {
   if ((options.platform || process.platform) === "win32") return [];
   const run = options.spawnSync || spawnSync;
@@ -371,12 +419,38 @@ async function startStreamServer() {
   });
 }
 
+async function runNpmCommand(rawArgs) {
+  const { npmArgs, port } = parseNpmCommandArgs(rawArgs);
+  const runtime = resolveRuntime();
+  const npmRunner = resolveNpmRunner(runtime.execPath);
+  if (!npmRunner) {
+    throw new Error(
+      `Could not find npm next to ${runtime.execPath}. Run \`nvm install\` and \`nvm use\` to install the supported toolchain.`,
+    );
+  }
+  if (port) await stopListeningProcesses(port);
+
+  console.log(
+    `[dev-runtime] Using ${runtime.execPath} (${runtime.version}/${runtime.arch}) for npm.`,
+  );
+  return runForeground(
+    runtime.execPath,
+    [npmRunner.cli, ...npmRunner.prefixArgs, ...npmArgs],
+    {
+      env: {
+        ...process.env,
+        PATH: `${path.dirname(runtime.execPath)}${path.delimiter}${process.env.PATH || ""}`,
+      },
+    },
+  );
+}
+
 async function repairNativeDependencies() {
   const hostArch = detectHostArch();
   const candidates = resolveRuntimeCandidates({ targetArch: hostArch });
   const runtime = selectNodeRuntime(candidates, hostArch);
-  const npmCli = resolveNpmCli(runtime.execPath);
-  if (!npmCli) {
+  const npmRunner = resolveNpmRunner(runtime.execPath);
+  if (!npmRunner) {
     throw new Error(
       `Could not find npm next to ${runtime.execPath}. Run \`nvm use\` followed by \`npm rebuild esbuild node-datachannel\`.`,
     );
@@ -387,7 +461,13 @@ async function repairNativeDependencies() {
   );
   const exitCode = await runForeground(
     runtime.execPath,
-    [npmCli, "rebuild", "esbuild", "node-datachannel"],
+    [
+      npmRunner.cli,
+      ...npmRunner.prefixArgs,
+      "rebuild",
+      "esbuild",
+      "node-datachannel",
+    ],
     {
       env: {
         ...process.env,
@@ -417,6 +497,7 @@ async function repairNativeDependencies() {
 async function main() {
   const command = process.argv[2];
   if (command === "stream-server") return startStreamServer();
+  if (command === "npm") return runNpmCommand(process.argv.slice(3));
   if (command === "repair-native") return repairNativeDependencies();
   throw new Error(`Unknown dev runtime command: ${command || "(missing)"}`);
 }
@@ -439,7 +520,9 @@ module.exports = {
   inspectInstalledNativeArchitectures,
   isSupportedNodeVersion,
   normalizeArch,
+  parseNpmCommandArgs,
   parseNodeVersion,
   resolveNpmCli,
+  resolveNpmRunner,
   selectNodeRuntime,
 };

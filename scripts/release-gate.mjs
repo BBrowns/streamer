@@ -136,8 +136,8 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active implementation roadmap is complete through **PR #150**",
-    "implementation roadmap is complete through PR #150",
+    "The active implementation roadmap is complete through **PR #151**",
+    "implementation roadmap is complete through PR #151",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
