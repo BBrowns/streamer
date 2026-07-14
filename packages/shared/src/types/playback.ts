@@ -1,4 +1,10 @@
 import type { Stream } from "./stream";
+import type {
+  ActionBridgeAuthSnapshot,
+  ActionBridgeCapabilities,
+  ActionBridgeEndpointSnapshot,
+  ActionPreflightReason,
+} from "./action-preflight";
 
 export type PlaybackAction = "play" | "download" | "cast";
 
@@ -98,6 +104,10 @@ export interface BridgeHealthHint {
   status: BridgeStatus;
   url?: string;
   reason?: string;
+  configured?: boolean;
+  endpoint?: ActionBridgeEndpointSnapshot;
+  auth?: ActionBridgeAuthSnapshot;
+  capabilities?: ActionBridgeCapabilities;
 }
 
 export interface PlaybackPlanRequest {
@@ -181,6 +191,7 @@ export interface PlaybackActionEligibility {
   action: PlaybackAction;
   eligible: boolean;
   reason?: PlaybackRejectReason;
+  preflightReason?: ActionPreflightReason;
 }
 
 export interface PlaybackDeviceCompatibility {

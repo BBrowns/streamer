@@ -151,6 +151,14 @@ but the client still preflights cast URLs and rejects localhost-only playback
 URLs before sending the bridge request because remote displays cannot reach the
 app device loopback interface.
 
+Before Play, Download, or Cast performs those effects, readiness is evaluated
+through the shared `evaluateActionPreflight` contract. The contract consumes a
+snapshot of platform, source kind, bridge URL scope, reachability, auth, and
+gateway/torrent/remux/cast capabilities and returns a typed reason plus safe
+user copy. It does not detect or start the bridge, resolve a source, or create a
+gateway job. Direct and HLS playback intentionally remain available when only
+the torrent runtime is broken.
+
 The intended migration sequence is:
 
 1. Add the shared `PlaybackSession` contract.

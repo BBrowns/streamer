@@ -1,7 +1,9 @@
 import { Platform } from "react-native";
-import Constants from "expo-constants";
 import type { Stream } from "@streamer/shared";
-import { streamEngineManager } from "./streamEngine/StreamEngineManager";
+import {
+  buildActionBridgeHint,
+  preflightStreamAction,
+} from "./actionPreflight";
 
 export type DownloadEligibilityMode =
   | "direct-file"
@@ -16,51 +18,10 @@ export interface DownloadEligibility {
   reason?: string;
 }
 
-function normalizeHost(host: string) {
-  const normalized = host.trim().toLowerCase();
-  return normalized.startsWith("[") && normalized.endsWith("]")
-    ? normalized.slice(1, -1)
-    : normalized;
-}
-
-function isLoopbackHost(host: string) {
-  const normalized = normalizeHost(host);
-  return (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized === "::1" ||
-    normalized === "0.0.0.0" ||
-    normalized === "::" ||
-    normalized.startsWith("127.")
-  );
-}
-
-function isLocalIosSimulator() {
-  const host = Constants.expoConfig?.hostUri?.split(":")[0];
-  if (!host) return false;
-  return isLoopbackHost(host);
-}
-
 export function isBridgeUrlReachableForNativeDownload(bridgeUrl: string) {
-  if (Platform.OS === "web") return true;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(bridgeUrl);
-  } catch {
-    return false;
-  }
-
-  const host = normalizeHost(parsed.hostname);
-  if (Platform.OS === "android" && host === "10.0.2.2") {
-    return true;
-  }
-
-  if (Platform.OS === "ios" && isLoopbackHost(host)) {
-    return isLocalIosSimulator();
-  }
-
-  return !isLoopbackHost(host);
+  return (
+    buildActionBridgeHint({ url: bridgeUrl }).endpoint?.deviceReachable === true
+  );
 }
 
 export function getDownloadEligibility(stream: Stream): DownloadEligibility {
@@ -69,30 +30,22 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
   const isHls = url.includes(".m3u8") || externalUrl.includes(".m3u8");
 
   if (isHls) {
+    const preflight = preflightStreamAction("download", stream);
     return {
       mode: "unsupported",
       canDownload: false,
       offlinePlayable: false,
-      reason: "HLS streams are streaming-only in offline v1.",
+      reason: preflight.message,
     };
   }
 
   if (stream.infoHash) {
-    const bridgeReady =
-      streamEngineManager.bridgeAvailable &&
-      streamEngineManager.bridgeStatus === "available";
-    const bridgeReachable =
-      bridgeReady &&
-      isBridgeUrlReachableForNativeDownload(streamEngineManager.getBridgeUrl());
+    const preflight = preflightStreamAction("download", stream);
     return {
       mode: "bridge-torrent",
-      canDownload: bridgeReachable,
-      offlinePlayable: bridgeReachable,
-      reason: bridgeReachable
-        ? undefined
-        : bridgeReady
-          ? "Torrent downloads on this device need the desktop bridge LAN URL."
-          : "Torrent downloads need the desktop stream bridge.",
+      canDownload: preflight.ready,
+      offlinePlayable: preflight.ready,
+      reason: preflight.ready ? undefined : preflight.message,
     };
   }
 

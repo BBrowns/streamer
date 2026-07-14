@@ -1,4 +1,5 @@
 import type {
+  ActionPreflightResult,
   BridgeHealthHint,
   MediaCandidate,
   PlaybackAction,
@@ -14,6 +15,10 @@ import type {
   PlannedMediaCandidate,
   RejectedCandidate,
   Stream,
+} from "@streamer/shared";
+import {
+  classifyActionEndpoint,
+  evaluateActionPreflight,
 } from "@streamer/shared";
 import { aggregatorService } from "../aggregator/aggregator.service.js";
 import {
@@ -92,6 +97,7 @@ interface CandidateEvaluation {
   deviceCompatibility: PlaybackDeviceCompatibility;
   actionEligibility: PlaybackActionEligibility;
   decisionReasons: PlaybackDecisionReasonCode[];
+  preflight: ActionPreflightResult;
   rejectionReason?: PlaybackRejectReason;
 }
 
@@ -104,35 +110,6 @@ function episodeAwareId(request: PlaybackPlanRequest) {
     return `${request.id}:${request.season}:${request.episode}`;
   }
   return request.id;
-}
-
-function bridgeAvailable(bridge?: BridgeHealthHint) {
-  return bridge?.status === "available";
-}
-
-function bridgeActionCopy(action: PlaybackAction) {
-  if (action === "download") {
-    return { unsupportedVerb: "be downloaded", startVerb: "download" };
-  }
-  if (action === "cast") {
-    return { unsupportedVerb: "be cast", startVerb: "cast" };
-  }
-  return { unsupportedVerb: "play", startVerb: "play" };
-}
-
-function bridgeMessage(action: PlaybackAction, bridge?: BridgeHealthHint) {
-  const { unsupportedVerb, startVerb } = bridgeActionCopy(action);
-  if (bridge?.status === "unsupported") {
-    return `Desktop bridge needs repair before torrent sources can ${unsupportedVerb} on this device.`;
-  }
-  if (bridge?.status === "wrong-url") {
-    return "The desktop bridge URL is invalid. Check Sources & Devices.";
-  }
-  return `Start the desktop bridge to ${startVerb} torrent sources on this device.`;
-}
-
-function bridgeRejectReason(bridge?: BridgeHealthHint): PlaybackRejectReason {
-  return bridge ? "bridge_unavailable" : "torrent_no_bridge";
 }
 
 function titleOf(candidate: MediaCandidate) {
@@ -153,7 +130,9 @@ function rejectionMessage(
       return "Source container is not supported by this device profile.";
     case "bridge_unavailable":
     case "torrent_no_bridge":
-      return bridgeMessage(action, bridge);
+      return bridge?.status === "unsupported"
+        ? "The desktop bridge is connected, but its media runtime needs repair."
+        : "Connect the desktop bridge in Sources & Devices to use this source.";
     case "hls_offline_unsupported":
       return "HLS sources are streaming-only in offline v1.";
     case "cast_device_incompatible":
@@ -205,8 +184,47 @@ function actionEligibility(
   action: PlaybackAction,
   eligible: boolean,
   reason?: PlaybackRejectReason,
+  preflightReason?: ActionPreflightResult["reason"],
 ): PlaybackActionEligibility {
-  return { action, eligible, reason };
+  return {
+    action,
+    eligible,
+    ...(reason ? { reason } : {}),
+    ...(preflightReason ? { preflightReason } : {}),
+  };
+}
+
+function rejectionFromPreflight(
+  preflight: ActionPreflightResult,
+  candidate: MediaCandidate,
+  bridge?: BridgeHealthHint,
+): PlaybackRejectReason | undefined {
+  if (preflight.ready) return undefined;
+
+  switch (preflight.reason) {
+    case "hls_offline_unsupported":
+      return "hls_offline_unsupported";
+    case "cast_source_loopback":
+    case "bridge_loopback_unreachable":
+      return preflight.action === "cast"
+        ? "localhost_not_castable"
+        : "bridge_unavailable";
+    case "cast_source_unreachable":
+    case "cast_service_unavailable":
+      return "cast_device_incompatible";
+    case "source_unsupported":
+      return candidate.kind === "external"
+        ? "unknown_stream_type"
+        : "source_missing_url";
+    case "bridge_not_configured":
+      return candidate.kind === "torrent" && !bridge
+        ? "torrent_no_bridge"
+        : "bridge_unavailable";
+    case "ready":
+      return undefined;
+    default:
+      return "bridge_unavailable";
+  }
 }
 
 function remuxCanProvideCodecFallback(
@@ -255,13 +273,27 @@ function evaluateCandidate(
   candidate: MediaCandidate,
   request: PlaybackPlanRequest,
 ): CandidateEvaluation {
-  const hasBridge = bridgeAvailable(request.bridge);
-  const requiresBridge = candidate.kind === "torrent";
   const requiresRemux =
     candidate.kind === "torrent" &&
     candidateNeedsRemux(candidate, request.deviceProfile);
+  const sourceUrl =
+    candidate.kind === "torrent"
+      ? request.bridge?.url
+      : candidate.stream.url || candidate.stream.externalUrl;
+  const preflight = evaluateActionPreflight({
+    action: request.action,
+    platform: request.deviceProfile.platform,
+    source: {
+      kind: candidate.kind,
+      endpoint: classifyActionEndpoint(sourceUrl),
+      requiresRemux,
+    },
+    bridge: request.bridge,
+  });
+  const requiresBridge = preflight.requiresBridge;
+  const hasBridge = preflight.ready;
   const castReachability =
-    request.action === "cast" && (!requiresBridge || hasBridge)
+    request.action === "cast"
       ? getCastSourceReachability(candidate, request.bridge?.url)
       : "reachable";
   const sourceReachable =
@@ -285,17 +317,22 @@ function evaluateCandidate(
   }
 
   let rejectionReason: PlaybackRejectReason | undefined;
+  const preflightRejection = rejectionFromPreflight(
+    preflight,
+    candidate,
+    request.bridge,
+  );
 
   if (candidate.kind === "unknown") {
     rejectionReason = "source_missing_url";
   } else if (candidate.kind === "external") {
     rejectionReason = "unknown_stream_type";
-  } else if (request.action === "download" && candidate.kind === "hls") {
-    rejectionReason = "hls_offline_unsupported";
-  } else if (request.action === "cast" && castReachability === "localhost") {
-    rejectionReason = "localhost_not_castable";
-  } else if (request.action === "cast" && castReachability === "unreachable") {
-    rejectionReason = "cast_device_incompatible";
+  } else if (
+    preflightRejection === "hls_offline_unsupported" ||
+    preflightRejection === "localhost_not_castable" ||
+    preflightRejection === "cast_device_incompatible"
+  ) {
+    rejectionReason = preflightRejection;
   } else if (
     candidateNeedsTranscode(candidate, request.deviceProfile) &&
     !remuxProvidesCodecFallback
@@ -315,8 +352,8 @@ function evaluateCandidate(
     candidate.container !== "mp4"
   ) {
     rejectionReason = "cast_device_incompatible";
-  } else if (requiresBridge && !hasBridge) {
-    rejectionReason = bridgeRejectReason(request.bridge);
+  } else if (preflightRejection) {
+    rejectionReason = preflightRejection;
   } else if (!deviceCompatibility.compatible) {
     rejectionReason = "device_incompatible";
   }
@@ -337,6 +374,7 @@ function evaluateCandidate(
       request.action,
       !rejectionReason,
       rejectionReason,
+      preflight.reason,
     ),
     decisionReasons: rejectionReason
       ? []
@@ -347,6 +385,7 @@ function evaluateCandidate(
           deviceCompatibility,
         ),
     rejectionReason,
+    preflight,
   };
 }
 
@@ -386,11 +425,16 @@ function toRejectedCandidate(
   return {
     candidateId: evaluation.candidate.id,
     title: titleOf(evaluation.candidate),
-    reason: rejectionMessage(
-      reasonCode,
-      evaluation.actionEligibility.action,
-      bridge,
-    ),
+    reason:
+      !evaluation.preflight.ready &&
+      evaluation.actionEligibility.preflightReason ===
+        evaluation.preflight.reason
+        ? evaluation.preflight.message
+        : rejectionMessage(
+            reasonCode,
+            evaluation.actionEligibility.action,
+            bridge,
+          ),
     reasonCode,
     requiresBridge: evaluation.requiresBridge,
     requiresRemux: evaluation.requiresRemux,
@@ -452,6 +496,7 @@ function emptyPlan(
   evaluations: CandidateEvaluation[],
   userMessage: string,
   reason?: PlaybackRejectReason,
+  preflightReason?: ActionPreflightResult["reason"],
 ): PlaybackPlan {
   const leading = [...evaluations].sort(sortEvaluations)[0];
   const requiresBridge = evaluations.some(
@@ -474,7 +519,12 @@ function emptyPlan(
     orderedCandidates: [],
     rejectedCandidates,
     decisionReasons: reasons,
-    actionEligibility: actionEligibility(request.action, false, reason),
+    actionEligibility: actionEligibility(
+      request.action,
+      false,
+      reason,
+      preflightReason,
+    ),
     timeoutBudget: { ...TIMEOUT_BUDGETS[request.action] },
     requiresBridge,
     requiresRemux,
@@ -542,7 +592,12 @@ export class PlaybackPlannerService {
           selectedCandidate,
           fallbackCandidates.length,
         ),
-        actionEligibility: actionEligibility(request.action, true),
+        actionEligibility: actionEligibility(
+          request.action,
+          true,
+          undefined,
+          selectedCandidate.actionEligibility.preflightReason,
+        ),
         timeoutBudget: { ...TIMEOUT_BUDGETS[request.action] },
         requiresBridge: selectedCandidate.requiresBridge,
         requiresRemux: selectedCandidate.requiresRemux,
@@ -570,15 +625,29 @@ export class PlaybackPlannerService {
         candidate.reasonCode === "torrent_no_bridge",
     );
     if (bridgeRejection) {
+      const bridgeEvaluation = evaluations.find(
+        (evaluation) => evaluation.candidate.id === bridgeRejection.candidateId,
+      );
+      const bridgePreflight = bridgeEvaluation?.preflight;
+      const unsupportedBridgeReasons = new Set([
+        "bridge_runtime_unsupported",
+        "gateway_unavailable",
+        "torrent_engine_unavailable",
+        "remux_unavailable",
+        "cast_service_unavailable",
+      ]);
       return emptyPlan(
         request,
-        request.bridge?.status === "unsupported"
+        request.bridge?.status === "unsupported" ||
+          (bridgePreflight &&
+            unsupportedBridgeReasons.has(bridgePreflight.reason))
           ? "bridgeUnavailable"
           : "needsBridge",
         rejectedCandidates,
         evaluations,
-        bridgeMessage(request.action, request.bridge),
+        bridgePreflight?.message || bridgeRejection.reason,
         bridgeRejection.reasonCode,
+        bridgePreflight?.reason,
       );
     }
 

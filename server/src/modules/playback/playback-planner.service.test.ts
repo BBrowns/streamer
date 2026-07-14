@@ -363,13 +363,14 @@ describe("PlaybackPlannerService", () => {
 
     expect(plan.state).toBe("bridgeUnavailable");
     expect(plan.userMessage).toBe(
-      "Desktop bridge needs repair before torrent sources can play on this device.",
+      "The desktop bridge is connected, but its media runtime needs repair.",
     );
     expect(plan.requiresBridge).toBe(true);
     expect(plan.actionEligibility).toEqual({
       action: "play",
       eligible: false,
       reason: "bridge_unavailable",
+      preflightReason: "bridge_runtime_unsupported",
     });
     expect(plan.rejectedCandidates[0].reasonCode).toBe("bridge_unavailable");
   });
@@ -397,8 +398,63 @@ describe("PlaybackPlannerService", () => {
 
     expect(plan.state).toBe("bridgeUnavailable");
     expect(plan.userMessage).toBe(
-      "Desktop bridge needs repair before torrent sources can be downloaded on this device.",
+      "The desktop bridge is connected, but its media runtime needs repair.",
     );
+  });
+
+  it("keeps direct playback ready when only the torrent runtime is unsupported", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie.mp4",
+        title: "Movie.2026.1080p.H264.AAC.mp4",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: webProfile,
+        bridge: {
+          status: "unsupported",
+          capabilities: { gateway: true, torrent: false },
+        },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.kind).toBe("direct");
+    expect(plan.requiresBridge).toBe(false);
+  });
+
+  it("allows a new torrent attempt after a previous job reported no peers", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "new-candidate",
+        title: "Movie.2026.1080p.H264.AAC.mp4",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: webProfile,
+        bridge: {
+          status: "no-peers",
+          capabilities: { gateway: true, torrent: true },
+        },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.kind).toBe("torrent");
   });
 
   it("reports torrent_no_bridge when torrent sources have no bridge configuration", async () => {
@@ -663,6 +719,7 @@ describe("PlaybackPlannerService", () => {
     expect(plan.selectedCandidate?.actionEligibility).toEqual({
       action: "download",
       eligible: true,
+      preflightReason: "ready",
     });
     expect(plan.timeoutBudget.totalMs).toBeGreaterThan(
       plan.timeoutBudget.directProbeMs,
@@ -867,7 +924,11 @@ describe("PlaybackPlannerService", () => {
         id: "tt1",
         action: "cast",
         deviceProfile: castProfile,
-        bridge: { status: "unreachable" },
+        bridge: {
+          status: "available",
+          url: "http://192.168.1.20:11470",
+          capabilities: { gateway: true, cast: true },
+        },
       },
       "req-1",
     );
@@ -877,6 +938,7 @@ describe("PlaybackPlannerService", () => {
     expect(plan.selectedCandidate?.actionEligibility).toEqual({
       action: "cast",
       eligible: true,
+      preflightReason: "ready",
     });
     expect(plan.decisionReasons.map((reason) => reason.code)).toContain(
       "cast_compatible_source_selected",

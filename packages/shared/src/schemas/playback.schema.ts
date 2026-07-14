@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { streamSchema } from "./stream.schema";
+import {
+  actionBridgeAuthSnapshotSchema,
+  actionBridgeCapabilitiesSchema,
+  actionBridgeEndpointSnapshotSchema,
+  actionPreflightReasonSchema,
+} from "./action-preflight.schema";
 
 export const playbackActionSchema = z.enum(["play", "download", "cast"]);
 
@@ -104,6 +110,10 @@ export const playbackPlanRequestSchema = z.object({
       status: bridgeStatusSchema,
       url: z.string().url().optional(),
       reason: z.string().optional(),
+      configured: z.boolean().optional(),
+      endpoint: actionBridgeEndpointSnapshotSchema.optional(),
+      auth: actionBridgeAuthSnapshotSchema.optional(),
+      capabilities: actionBridgeCapabilitiesSchema.optional(),
     })
     .optional(),
 });
@@ -127,6 +137,7 @@ export const playbackActionEligibilitySchema = z
     action: playbackActionSchema,
     eligible: z.boolean(),
     reason: playbackRejectReasonSchema.optional(),
+    preflightReason: actionPreflightReasonSchema.optional(),
   })
   .strict()
   .superRefine((eligibility, ctx) => {

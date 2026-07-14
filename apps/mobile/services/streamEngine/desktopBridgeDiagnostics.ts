@@ -23,6 +23,11 @@ type HealthRecord = {
   };
   selfTest?: BridgeSelfTest;
   repair?: BridgeRepairPlan;
+  auth?: {
+    required?: boolean;
+    configured?: boolean;
+  };
+  capabilities?: BridgeDiagnostics["capabilities"];
   remuxRuntime?: {
     available?: boolean;
     state?: string;
@@ -194,6 +199,8 @@ export function diagnosticsFromDesktopBridge(
       torrentEngine?.platform || runtime?.platform || diagnostics.platform,
     selfTest,
     repair,
+    auth: health?.auth,
+    capabilities: health?.capabilities,
     remuxRuntime: health?.remuxRuntime,
     remuxCache: health?.remuxCache,
     torrentCache: health?.torrentCache,

@@ -7,12 +7,10 @@ import type {
 } from "@streamer/shared";
 import { playbackPlanSchema } from "@streamer/shared";
 import { api } from "../api";
-import {
-  streamEngineManager,
-  validateBridgeUrl,
-} from "../streamEngine/StreamEngineManager";
+import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import { usePlayerStore } from "../../stores/playerStore";
 import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
+import { buildActionBridgeHint } from "../actionPreflight";
 
 function applyLocalPlaybackPreferences(
   deviceProfile: DeviceProfile,
@@ -47,27 +45,6 @@ function buildPlannerPreferences(
   return Object.keys(preferences).length > 0 ? preferences : undefined;
 }
 
-function buildBridgeHint(
-  diagnostics: ReturnType<typeof streamEngineManager.getBridgeDiagnostics>,
-): PlaybackPlanRequest["bridge"] {
-  const bridge: NonNullable<PlaybackPlanRequest["bridge"]> = {
-    status: diagnostics.status || streamEngineManager.bridgeStatus,
-  };
-
-  const bridgeUrl = diagnostics.url || streamEngineManager.getBridgeUrl();
-  const bridgeUrlValidation = validateBridgeUrl(bridgeUrl);
-  if (bridgeUrlValidation.ok && bridgeUrlValidation.url) {
-    bridge.url = bridgeUrlValidation.url;
-  }
-
-  const reason = diagnostics.reason || diagnostics.message;
-  if (reason) {
-    bridge.reason = reason;
-  }
-
-  return bridge;
-}
-
 export async function createPlaybackPlan(
   input: Pick<PlaybackPlanRequest, "type" | "id" | "season" | "episode"> & {
     action: PlaybackAction;
@@ -86,12 +63,13 @@ export async function createPlaybackPlan(
   );
   const { preferredAudioLang, preferredSubtitleLang } =
     usePlayerStore.getState();
-  const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
   const preferences = buildPlannerPreferences(
     preferredAudioLang,
     preferredSubtitleLang,
   );
-  const bridge = buildBridgeHint(bridgeDiagnostics);
+  // Cast compatibility uses the display profile, but bridge reachability is
+  // always evaluated from the controller running this client.
+  const bridge = buildActionBridgeHint({ deviceProfile: getDeviceProfile() });
 
   const payload: PlaybackPlanRequest = {
     ...request,

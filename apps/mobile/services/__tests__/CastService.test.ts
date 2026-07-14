@@ -1,9 +1,14 @@
 import { castService } from "../CastService";
 import { useAuthStore } from "../../stores/authStore";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import { Platform } from "react-native";
 
 describe("CastService", () => {
   beforeEach(() => {
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "web",
+    });
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => [
@@ -57,6 +62,21 @@ describe("CastService", () => {
     ).toBe(true);
   });
 
+  it("allows a local web bridge to control a remote direct source", async () => {
+    useAuthStore.setState({ streamServerUrl: "http://localhost:11470" });
+
+    await castService.play(
+      "living-room",
+      "https://example.test/movie.mp4",
+      "Movie",
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://localhost:11470/api/cast/play",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("sends the optional bridge auth token to protected bridge endpoints", async () => {
     useAuthStore.setState({ streamServerToken: "pairing-token" });
 
@@ -87,7 +107,9 @@ describe("CastService", () => {
     for (const url of localhostUrls) {
       await expect(
         castService.play("living-room", url, "Movie"),
-      ).rejects.toThrow("Cast devices cannot access localhost playback URLs.");
+      ).rejects.toThrow(
+        "The cast device cannot access a source that only exists on localhost.",
+      );
     }
 
     expect(global.fetch).not.toHaveBeenCalled();
@@ -98,14 +120,10 @@ describe("CastService", () => {
       streamServerUrl: "https://bridge.example.com",
     });
 
-    await castService.getDevices();
+    await expect(castService.getDevices()).rejects.toThrow(
+      "The desktop bridge URL is invalid. Check Sources & Devices.",
+    );
 
-    expect(
-      jest
-        .mocked(global.fetch)
-        .mock.calls.every(
-          ([url]) => !String(url).includes("bridge.example.com"),
-        ),
-    ).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

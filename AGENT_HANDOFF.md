@@ -17,14 +17,14 @@ Current phase:
   Sentry/build metadata, desktop sidecar/package inputs, manual update policy,
   and first UI primitives are already present.
 - Reliability/productization phase: dependency security and deterministic
-  golden-path automation are in place. The next work starts with a unified
-  bridge/action preflight contract, followed by mobile/server release
-  configuration, recoverable offline/cast UX, and focused
-  accessibility/visual polish.
+  golden-path automation and a unified bridge/action preflight contract are in
+  place. The next work starts with mobile/server release configuration,
+  followed by recoverable offline/cast UX and focused accessibility/visual
+  polish.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active implementation roadmap starts at **PR #145** in
+The active implementation roadmap continues at **PR #146** in
 [ROADMAP.md](./ROADMAP.md). PR #142 is the roadmap truth-sync that defined this
 post-#141 phase.
 
@@ -35,7 +35,7 @@ version-pinned. See [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md)
 Deterministic renderer regression coverage is documented in
 [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up
-reliability/productization PRs have landed through **PR #144**. Earlier roadmap
+reliability/productization PRs have landed through **PR #145**. Earlier roadmap
 items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
@@ -92,6 +92,10 @@ Post-roadmap corrective PRs after #124:
 - **PR #144:** added deterministic phone-web and desktop-renderer golden paths
   for Play Best, fallback, terminal no-peers, bridge guidance, download, and
   cast eligibility without claiming native or packaged target evidence.
+- **PR #145:** centralized Play, Download, Cast, Settings, and planner bridge
+  readiness in a shared, side-effect-light preflight contract with typed
+  reasons for URL scope, reachability, auth, runtime, gateway, torrent, remux,
+  and cast capability failures.
 
 ## Product North Star
 
@@ -567,6 +571,10 @@ or a full Tamagui migration.
 - Use the `get-api-docs`/Chub skill when implementing against an external API or library whose current docs matter.
 - Keep Real-Debrid optional, disabled by default, and absent from first-run onboarding.
 - Prefer typed planner/orchestrator contracts over stringly typed UI logic.
+- Use `evaluateActionPreflight` for action eligibility. Preflight may inspect a
+  supplied snapshot, but it must never start or probe a bridge, resolve media,
+  create a gateway job, or persist a source. Keep those effects in the action
+  orchestrator or engine after a ready result.
 - Prefer user-facing states over raw alerts for playback/download/cast failures.
 - Do not replace the architecture with Plex/Jellyfin-style library hosting;
   that does not fit the add-on aggregation and dynamic playback-planning goal.
