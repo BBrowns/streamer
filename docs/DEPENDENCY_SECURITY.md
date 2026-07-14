@@ -10,6 +10,13 @@ npm install --global npm@11.18.0
 npm ci
 ```
 
+The root `dev:stream-server` launcher also checks CPU architecture before
+starting the P2P daemon. This matters on Apple Silicon when `/usr/local/bin/node`
+runs under Rosetta while native dependencies were installed as arm64. Use
+`npm run dev:repair-native` to rebuild `esbuild` and `node-datachannel` with the
+host's supported Node 24 runtime; do not copy `node_modules` between CPU
+architectures.
+
 Server development, typecheck, build, and test commands generate Prisma Client
 before execution. This keeps a clean checkout reproducible without relying on a
 previous `node_modules/.prisma` directory.

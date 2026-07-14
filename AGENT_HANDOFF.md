@@ -31,6 +31,10 @@ PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
 11.18 are the supported toolchain, production high/critical audit findings
 block CI, and every dependency install script must be explicitly reviewed and
 version-pinned. See [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md).
+The root `dev:stream-server` command validates native dependency architecture
+and selects a matching Node 24 runtime. If a checkout has mixed Rosetta/arm64
+artifacts, use `npm run dev:repair-native`; do not work around the guard by
+running a bridge with an unavailable torrent engine.
 Deterministic renderer regression coverage is documented in
 [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up

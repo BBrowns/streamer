@@ -183,6 +183,8 @@ jobs:
           node-version-file: ".nvmrc"
           cache: "npm"
       - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - name: Validate Dev Runtime Selection
+        run: npm run dev:runtime:test
       - name: Type Check Stream Server
         run: npx tsc --noEmit --project packages/stream-server/tsconfig.json
       - name: Run Stream Server Tests
@@ -195,8 +197,8 @@ jobs:
           # Stream Server Tests
 
           - Status: ${{ job.status }}
-          - Commands: `npx tsc --noEmit --project packages/stream-server/tsconfig.json`, `npm run test --workspace=@streamer/stream-server`
-          - Scope: bridge health, gateway, range/seek, torrent engine diagnostics, security, Sentry, and subtitle handling.
+          - Commands: `npm run dev:runtime:test`, `npx tsc --noEmit --project packages/stream-server/tsconfig.json`, `npm run test --workspace=@streamer/stream-server`
+          - Scope: dev runtime selection, shared ESM imports, bridge health, gateway, range/seek, torrent engine diagnostics, security, Sentry, and subtitle handling.
           EOF
       - name: Upload CI summary
         if: always()

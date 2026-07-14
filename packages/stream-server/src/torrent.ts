@@ -1213,8 +1213,12 @@ export async function destroyClient(): Promise<void> {
   });
 }
 
+let shutdownInProgress = false;
+
 // Graceful shutdown on process signals
 function handleShutdown(signal: string) {
+  if (shutdownInProgress) return;
+  shutdownInProgress = true;
   console.log(
     `[stream-server] Received ${signal}, shutting down gracefully...`,
   );
