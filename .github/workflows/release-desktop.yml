@@ -29,6 +29,9 @@ on:
 permissions:
   contents: write
 
+env:
+  NPM_VERSION: "11.18.0"
+
 jobs:
   macos-release:
     name: macOS Release Artifact
@@ -53,11 +56,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version-file: ".nvmrc"
           cache: "npm"
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
 
       - name: Stamp build metadata
         run: |

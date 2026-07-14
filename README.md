@@ -33,7 +33,8 @@ streamer/
 
 ## Prerequisites
 
-- **Node.js 24+**
+- **Node.js 24.18 LTS** (see `.nvmrc`; Node 25 is not supported)
+- **npm 11.18**
 - **PostgreSQL** — easiest via Docker:
   ```bash
   docker run --name streamer-db \
@@ -49,8 +50,17 @@ streamer/
 ### 1. Install dependencies
 
 ```bash
-npm install
+nvm install
+nvm use
+npm install --global npm@11.18.0
+npm ci
 ```
+
+Use `npm install` only when intentionally changing dependencies and committing
+the resulting lockfile. Keeping the pinned Node/npm pair is especially
+important for Electron and native bridge modules. See
+[DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md) for the audit and
+install-script policy.
 
 ### 2. Configure the server
 

@@ -78,6 +78,8 @@ function checkCiWorkflow() {
       "desktop release config smoke",
     ],
     ["npm run sentry:release:dry-run", "Sentry release dry-run"],
+    ["security:install-scripts", "dependency install-script policy"],
+    ["security:audit", "production dependency audit"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
     ["npm run release:gate", "release gate"],
@@ -113,6 +115,7 @@ function checkDocs() {
   requireFile("docs/RELEASE_NOTES_TEMPLATE.md");
   requireFile("AGENT_HANDOFF.md");
   requireFile("ROADMAP.md");
+  requireFile("docs/DEPENDENCY_SECURITY.md");
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
@@ -134,6 +137,11 @@ function checkDocs() {
     "AGENT_HANDOFF.md",
     "docs/RC_CHECKLIST.md",
     "RC checklist link",
+  );
+  requireText(
+    "AGENT_HANDOFF.md",
+    "docs/DEPENDENCY_SECURITY.md",
+    "dependency security baseline link",
   );
   requireText("docs/QA_MATRIX.md", "## Release Blockers", "release blockers");
   requireText("docs/QA_MATRIX.md", "Unknown", "unknown target states");
@@ -185,6 +193,58 @@ function checkDocs() {
       pass(`${relativePath} has no stale in-review roadmap status`);
     }
   }
+}
+
+function checkDependencySecurity() {
+  requireFile(".nvmrc");
+  requireFile("patches/castv2+0.1.10.patch");
+  requireFile("scripts/check-install-script-policy.mjs");
+  requireText(".nvmrc", "24.18.0", "supported Node LTS version");
+  requireText(
+    "package.json",
+    '"node": ">=24.18.0 <25"',
+    "Node 24 LTS engine boundary",
+  );
+  requireText(
+    "package.json",
+    '"packageManager": "npm@11.18.0"',
+    "pinned npm version",
+  );
+  requireText(
+    "package.json",
+    '"security:audit": "npm audit --omit=dev --audit-level=high"',
+    "blocking production high/critical audit",
+  );
+  requireText(
+    "package.json",
+    '"security:install-scripts": "node scripts/check-install-script-policy.mjs"',
+    "install-script policy command",
+  );
+  requireText(
+    "docs/DEPENDENCY_SECURITY.md",
+    "Reviewed Transitive Findings",
+    "reviewed dependency exceptions",
+  );
+  requireText(
+    "docs/DEPENDENCY_SECURITY.md",
+    "2026-09-30",
+    "dependency exception review deadline",
+  );
+  requireText(
+    "server/package.json",
+    '"pretest": "prisma generate"',
+    "Prisma generation before server tests",
+  );
+  requireText(
+    "server/package.json",
+    '"prebuild": "prisma generate"',
+    "Prisma generation before server builds",
+  );
+  requireText(
+    "package.json",
+    '"typecheck:all": "npm run db:generate --workspace=server && turbo run typecheck"',
+    "Prisma generation before parallel workspace typechecks",
+  );
 }
 
 function checkProductionDefaults() {
@@ -313,6 +373,7 @@ checkCiWorkflow();
 checkDocs();
 checkProductionDefaults();
 checkSecurityCoverage();
+checkDependencySecurity();
 writeSummary();
 
 if (failures.length > 0) {

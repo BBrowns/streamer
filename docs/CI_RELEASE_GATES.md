@@ -19,6 +19,8 @@ The release gate expects the workflow to run:
 - desktop release signing/notarization config smoke:
   `npm run release:check --workspace=@streamer/desktop`
 - Sentry release dry-run: `npm run sentry:release:dry-run`
+- dependency install-script policy: `npm run security:install-scripts`
+- production high/critical dependency audit: `npm run security:audit`
 - release gate: `npm run release:gate`
 
 ## Artifacts
@@ -45,13 +47,15 @@ can create a draft GitHub Release. Update feeds remain separate release work.
 - required CI commands and artifact uploads are still present
 - `AGENT_HANDOFF.md` links to the QA matrix
 - `AGENT_HANDOFF.md` names the current project phase and starts the active
-  roadmap at PR #106
+  roadmap at PR #143
 - `docs/QA_MATRIX.md` still carries explicit release blockers while real-device
   coverage is incomplete
 - production defaults do not enable development bridge supervision, development
   CORS, or development Sentry capture
 - redaction/Sentry/security tests that guard raw URLs, magnets, local paths, and
   tokens still exist
+- Node/npm versions, install-script review policy, and the blocking production
+  dependency audit remain configured
 - desktop updates remain manual unless the release docs and tests are updated
   together
 

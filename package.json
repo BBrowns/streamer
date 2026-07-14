@@ -18,16 +18,18 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "npm run db:generate --workspace=server && turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:all": "turbo run test",
-    "typecheck:all": "turbo run typecheck",
+    "typecheck:all": "npm run db:generate --workspace=server && turbo run typecheck",
     "release:gate": "node scripts/release-gate.mjs",
     "rc:evidence": "node scripts/rc-evidence.mjs",
     "rc:evidence:test": "node --test scripts/rc-evidence.test.mjs",
     "sentry:release": "node scripts/sentry-release.mjs",
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
+    "security:audit": "npm audit --omit=dev --audit-level=high",
+    "security:install-scripts": "node scripts/check-install-script-policy.mjs",
     "postinstall": "patch-package",
     "prepare": "husky"
   },
@@ -39,35 +41,75 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.3.2",
     "patch-package": "^8.0.1",
-    "prettier": "^3.4.0",
+    "prettier": "3.8.1",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.18.0 <25",
+    "npm": ">=11.18.0 <12"
   },
   "overrides": {
+    "@babel/core": "^7.29.1",
+    "@opentelemetry/core": "^2.8.0",
+    "@opentelemetry/resources": "^2.8.0",
+    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "form-data": "^4.0.6",
+    "hono": "^4.12.30",
+    "js-yaml": "^4.2.1",
+    "nodemailer": "^9.0.3",
     "zod": "^4.3.6",
     "rimraf": "^6.0.1",
     "glob": "^13.0.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "protobufjs": "^7.5.8",
     "ip": "^2.0.1",
-    "uuid": "^11.1.1",
-    "ws": "^8.18.0",
-    "@hono/node-server": "^2.0.4",
-    "vite": "^7.3.2",
+    "vite": "^7.3.4",
     "webtorrent": "^2.8.5",
     "castv2-client": "^1.2.0",
+    "shell-quote": "^1.10.0",
     "brace-expansion": "^1.1.13",
     "castv2": {
-      "protobufjs": "^7.5.8"
+      "protobufjs": "^7.6.5"
     },
-    "ip-set": {
-      "ip": "^2.0.1"
+    "@grpc/proto-loader": {
+      "protobufjs": "^7.6.5"
+    },
+    "dockerode": {
+      "protobufjs": "^7.6.5"
+    },
+    "@hono/node-ws": {
+      "ws": "^8.21.0"
+    },
+    "@expo/cli": {
+      "ws": "^8.21.0"
+    },
+    "@react-native/dev-middleware": {
+      "ws": "7.5.11"
+    },
+    "@thaunknown/simple-websocket": {
+      "ws": "^8.21.0"
     },
     "bittorrent-tracker": {
+      "ip": "^2.0.1",
+      "ws": "^8.21.0"
+    },
+    "detox": {
+      "ws": "7.5.11"
+    },
+    "jsdom": {
+      "ws": "^8.21.0"
+    },
+    "metro": {
+      "ws": "7.5.11"
+    },
+    "react-devtools-core": {
+      "ws": "7.5.11"
+    },
+    "react-native": {
+      "ws": "7.5.11"
+    },
+    "ip-set": {
       "ip": "^2.0.1"
     },
     "http-proxy-agent": {
@@ -80,5 +122,25 @@
       "prettier --write"
     ]
   },
-  "packageManager": "npm@10.9.0"
+  "packageManager": "npm@11.18.0",
+  "allowScripts": {
+    "@prisma/engines@7.8.0": true,
+    "@sentry/cli@2.58.4": true,
+    "fsevents@2.3.3": true,
+    "fsevents@2.3.2": true,
+    "ip-set@3.0.0": true,
+    "prisma@7.8.0": true,
+    "protobufjs@7.6.5": true,
+    "utp-native@2.5.3": true,
+    "bufferutil": false,
+    "cpu-features": false,
+    "dtrace-provider": false,
+    "electron-winstaller": false,
+    "ssh2": false,
+    "utf-8-validate": false,
+    "esbuild@0.28.1": true,
+    "detox@20.51.4": true,
+    "electron@40.10.6": true,
+    "node-datachannel@0.32.3": true
+  }
 }
