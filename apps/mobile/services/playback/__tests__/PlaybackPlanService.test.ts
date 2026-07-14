@@ -19,18 +19,12 @@ jest.mock("../../api", () => ({
 }));
 
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
-  validateBridgeUrl: jest.fn((url: string | null | undefined) => {
-    if (!url || url.includes("bridge.example.com")) {
-      return { ok: false, reason: "not-local-or-lan" };
-    }
-    return { ok: true, url };
-  }),
   streamEngineManager: {
     bridgeStatus: "available",
-    getBridgeUrl: jest.fn(() => "http://bridge.test"),
+    getBridgeUrl: jest.fn(() => "http://192.168.1.25:11470"),
     getBridgeDiagnostics: jest.fn(() => ({
       status: "available",
-      url: "http://bridge.test",
+      url: "http://192.168.1.25:11470",
     })),
     getPlaybackUri: jest.fn(),
   },
@@ -49,14 +43,14 @@ describe("PlaybackPlanService", () => {
       streamEngineManager.getBridgeUrl as jest.MockedFunction<
         typeof streamEngineManager.getBridgeUrl
       >
-    ).mockReturnValue("http://bridge.test");
+    ).mockReturnValue("http://192.168.1.25:11470");
     (
       streamEngineManager.getBridgeDiagnostics as jest.MockedFunction<
         typeof streamEngineManager.getBridgeDiagnostics
       >
     ).mockReturnValue({
       status: "available",
-      url: "http://bridge.test",
+      url: "http://192.168.1.25:11470",
     });
     usePlayerStore.setState({
       preferredQuality: "auto",
@@ -99,7 +93,7 @@ describe("PlaybackPlanService", () => {
       >
     ).mockReturnValue({
       status: "unsupported",
-      url: "http://bridge.test",
+      url: "http://192.168.1.25:11470",
       reason: "native-architecture-mismatch",
       message: "node-datachannel was installed for another arch",
     });
@@ -117,7 +111,7 @@ describe("PlaybackPlanService", () => {
       expect.objectContaining({
         bridge: expect.objectContaining({
           status: "unsupported",
-          url: "http://bridge.test",
+          url: "http://192.168.1.25:11470",
           reason: "native-architecture-mismatch",
         }),
       }),
@@ -194,10 +188,12 @@ describe("PlaybackPlanService", () => {
     expect(api.post).toHaveBeenCalledWith(
       "/api/playback/plan",
       expect.objectContaining({
-        bridge: {
+        bridge: expect.objectContaining({
           status: "wrong-url",
           reason: "not-local-or-lan",
-        },
+          configured: false,
+          endpoint: expect.objectContaining({ scope: "remote" }),
+        }),
       }),
     );
   });

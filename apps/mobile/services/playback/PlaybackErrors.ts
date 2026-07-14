@@ -1,4 +1,5 @@
 import type {
+  ActionPreflightResult,
   PlaybackAction,
   PlaybackErrorCode,
   PlaybackPlan,
@@ -81,6 +82,43 @@ export function getPlaybackRuntimeState(
   code: PlaybackErrorCode,
 ): PlaybackRuntimeState {
   return CODE_TO_STATE[code];
+}
+
+export function runtimeErrorFromActionPreflight(
+  preflight: ActionPreflightResult,
+  shouldFallback = false,
+) {
+  const unsupportedReasons = new Set<ActionPreflightResult["reason"]>([
+    "bridge_runtime_unsupported",
+    "gateway_unavailable",
+    "torrent_engine_unavailable",
+    "remux_unavailable",
+    "cast_service_unavailable",
+  ]);
+  const bridgeReasons = new Set<ActionPreflightResult["reason"]>([
+    "bridge_not_configured",
+    "bridge_checking",
+    "bridge_url_invalid",
+    "bridge_loopback_unreachable",
+    "bridge_unreachable",
+    "bridge_auth_required",
+  ]);
+  const code: PlaybackErrorCode = unsupportedReasons.has(preflight.reason)
+    ? "BRIDGE_UNSUPPORTED"
+    : bridgeReasons.has(preflight.reason)
+      ? "BRIDGE_UNAVAILABLE"
+      : preflight.reason === "hls_offline_unsupported" ||
+          preflight.reason === "source_unsupported" ||
+          preflight.reason === "cast_source_loopback" ||
+          preflight.reason === "cast_source_unreachable"
+        ? "SOURCE_UNAVAILABLE"
+        : "UNKNOWN";
+
+  return createPlaybackRuntimeError(code, preflight.message, {
+    retryable: preflight.retryable,
+    shouldFallback,
+    debugMessage: `preflight:${preflight.reason}`,
+  });
 }
 
 export function inferPlaybackErrorCodeFromMessages(

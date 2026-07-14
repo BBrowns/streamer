@@ -66,6 +66,14 @@ function isProductionRuntime() {
   return process.env.NODE_ENV === "production";
 }
 
+export function getBridgeAuthDiagnostics() {
+  const configured = Boolean(getConfiguredBridgeToken());
+  return {
+    required: isProductionRuntime() || configured,
+    configured,
+  };
+}
+
 function getGatewayStreamSigningSecret() {
   return (
     process.env.STREAMER_GATEWAY_STREAM_SECRET?.trim() ||

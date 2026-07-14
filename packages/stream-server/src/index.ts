@@ -16,7 +16,7 @@ import { metricsHandler } from "./metrics.js";
 import { getSubtitlesRequest, streamSubtitleRequest } from "./subtitles.js";
 import { handoffRouter } from "./handoff.js";
 import { gatewayRouter } from "./gateway.js";
-import { requireBridgeAuth } from "./security.js";
+import { getBridgeAuthDiagnostics, requireBridgeAuth } from "./security.js";
 import { redactSensitiveText } from "./redaction.js";
 import { streamServerBuildMetadata } from "./build-metadata.js";
 import {
@@ -125,6 +125,20 @@ function repairPlanForReason(reason?: string): BridgeRepairPlan {
           "If the issue remains, stop the process using port 11470 and try again.",
         ],
       };
+    case "bridge-auth-not-configured":
+      return {
+        required: true,
+        reason,
+        title: "Bridge pairing is not configured",
+        detail:
+          "The bridge requires authentication, but it has no pairing token configured.",
+        actionLabel: "Configure pairing",
+        steps: [
+          "Restart the desktop app so it can generate a bridge pairing token.",
+          "Open Sources & Devices and copy the pairing token to this device.",
+          "Run the bridge check again.",
+        ],
+      };
     default:
       return {
         required: false,
@@ -136,19 +150,38 @@ function buildBridgeSelfTest(input: {
   runtime: ReturnType<typeof getBridgeRuntimeInfo>;
   torrentEngine: ReturnType<typeof getTorrentEngineStatus>;
   remuxRuntime: Awaited<ReturnType<typeof getRemuxRuntimeStatus>>;
+  auth: ReturnType<typeof getBridgeAuthDiagnostics>;
   engineCheckErrorMessage?: string;
 }) {
-  const { runtime, torrentEngine, remuxRuntime, engineCheckErrorMessage } =
-    input;
+  const {
+    runtime,
+    torrentEngine,
+    remuxRuntime,
+    auth,
+    engineCheckErrorMessage,
+  } = input;
   const repairReason =
-    torrentEngine.available === false
-      ? torrentEngine.reason || "torrent-engine-unavailable"
-      : runtime.architectureMismatch
-        ? "native-architecture-mismatch"
-        : undefined;
+    auth.required && !auth.configured
+      ? "bridge-auth-not-configured"
+      : torrentEngine.available === false
+        ? torrentEngine.reason || "torrent-engine-unavailable"
+        : runtime.architectureMismatch
+          ? "native-architecture-mismatch"
+          : undefined;
   const repair = repairPlanForReason(repairReason);
 
   const checks: BridgeHealthCheck[] = [
+    {
+      name: "bridge-auth",
+      status: auth.required && !auth.configured ? "fail" : "pass",
+      message:
+        auth.required && !auth.configured
+          ? "Bridge authentication is required but not configured."
+          : auth.required
+            ? "Bridge authentication is configured."
+            : "Bridge authentication is optional in this local development runtime.",
+      details: auth,
+    },
     {
       name: "runtime",
       status: runtime.architectureMismatch ? "fail" : "pass",
@@ -253,12 +286,20 @@ export function createStreamServerApp() {
     const runtime = getBridgeRuntimeInfo();
     const torrentEngine = getTorrentEngineStatus();
     const remuxRuntime = await getRemuxRuntimeStatus();
+    const auth = getBridgeAuthDiagnostics();
+    const capabilities = {
+      gateway: true,
+      torrent: torrentEngine.available,
+      remux: remuxRuntime.available,
+      cast: true,
+    };
     const remuxCache = getRemuxCacheStatus();
     const torrentCache = await getTorrentCacheStatus();
     const { selfTest, repair } = buildBridgeSelfTest({
       runtime,
       torrentEngine,
       remuxRuntime,
+      auth,
       engineCheckErrorMessage,
     });
 
@@ -268,6 +309,8 @@ export function createStreamServerApp() {
       remuxRuntime,
       remuxCache,
       torrentCache,
+      auth,
+      capabilities,
       runtime,
       selfTest,
       repair,

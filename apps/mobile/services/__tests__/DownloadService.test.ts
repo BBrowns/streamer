@@ -161,7 +161,7 @@ describe("getDownloadEligibility", () => {
       canDownload: false,
       offlinePlayable: false,
       reason:
-        "Torrent downloads on this device need the desktop bridge LAN URL.",
+        "This device cannot reach a desktop bridge through localhost. Use the desktop LAN URL.",
     });
   });
 

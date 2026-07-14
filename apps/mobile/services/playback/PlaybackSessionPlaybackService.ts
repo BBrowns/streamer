@@ -20,9 +20,15 @@ import { getUnsupportedWebCodecReason } from "../streamEngine/codecSupport";
 import {
   createPlaybackRuntimeError,
   inferPlaybackErrorCodeFromMessages,
+  runtimeErrorFromActionPreflight,
 } from "./PlaybackErrors";
 import { toPlaybackSessionError } from "./PlaybackSessionReducer";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
+import {
+  ActionPreflightError,
+  preflightStreamAction,
+  requireActionPreflight,
+} from "../actionPreflight";
 
 const TERMINAL_STATUSES = new Set<PlaybackSessionStatus>([
   "completed",
@@ -150,6 +156,10 @@ function toSafeRuntimeError(
   candidate: PlannedMediaCandidate | null,
   shouldFallback: boolean,
 ): PlaybackRuntimeError {
+  if (error instanceof ActionPreflightError) {
+    return runtimeErrorFromActionPreflight(error.preflight, shouldFallback);
+  }
+
   if (error instanceof DownloadEligibilityError) {
     const code =
       error.eligibility.mode === "bridge-torrent"
@@ -579,6 +589,12 @@ async function attemptCandidate(
   engine.on("gateway", onGateway);
 
   try {
+    requireActionPreflight(
+      preflightStreamAction(action, stream, {
+        deviceProfile: session.deviceProfile,
+        requiresRemux: candidate.requiresRemux,
+      }),
+    );
     const currentSession = getSession(sessionId);
     if (!currentSession || isTerminal(currentSession)) {
       return {
@@ -613,13 +629,15 @@ async function attemptCandidate(
 
     if (!uri || uri.length === 0) {
       if (candidate.requiresBridge || candidate.kind === "torrent") {
-        if (streamEngineManager.bridgeStatus === "unsupported") {
-          throw new Error("Torrent engine unavailable.");
-        }
+        requireActionPreflight(
+          preflightStreamAction(action, stream, {
+            deviceProfile: session.deviceProfile,
+            requiresRemux: candidate.requiresRemux,
+          }),
+        );
         if (streamEngineManager.bridgeStatus === "no-peers") {
           throw new Error("No peers found.");
         }
-        throw new Error("Desktop bridge unavailable.");
       }
       throw new Error("Source did not return a playback URL.");
     }

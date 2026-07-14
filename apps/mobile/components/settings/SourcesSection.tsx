@@ -36,7 +36,7 @@ import {
 } from "../../services/debugBundle";
 import { getBridgeAuthHeaders } from "../../services/bridgeAuth";
 import { formatBytes } from "../downloads/downloadPresentation";
-import { isBridgeUrlReachableForNativeDownload } from "../../services/downloadEligibility";
+import { preflightBridgeAction } from "../../services/actionPreflight";
 
 function formatBridgeReason(reason: string) {
   switch (reason) {
@@ -343,16 +343,25 @@ export function SourcesSection({
     effectiveBridgeStatus,
     effectiveBridgeDiagnostics,
   );
-  const bridgeTone =
-    bridgePresentation.tone === "success"
-      ? "success"
-      : bridgePresentation.tone === "error"
-        ? "error"
-        : "warning";
   const bridgeUrl =
     bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
+  const torrentPreflight = preflightBridgeAction("play", {
+    diagnostics: effectiveBridgeDiagnostics,
+    url: bridgeUrl,
+    sourceKind: "torrent",
+  });
+  const downloadPreflight = preflightBridgeAction("download", {
+    diagnostics: effectiveBridgeDiagnostics,
+    url: bridgeUrl,
+    sourceKind: "torrent",
+  });
+  const castPreflight = preflightBridgeAction("cast", {
+    diagnostics: effectiveBridgeDiagnostics,
+    url: bridgeUrl,
+    sourceKind: "direct",
+  });
   const bridgeUrlNeedsLan =
-    !!bridgeUrl && !isBridgeUrlReachableForNativeDownload(bridgeUrl);
+    torrentPreflight.reason === "bridge_loopback_unreachable";
   const bridgeRuntimeLabel =
     effectiveBridgeDiagnostics.platform &&
     effectiveBridgeDiagnostics.processArch
@@ -375,16 +384,25 @@ export function SourcesSection({
   const bridgeRepairSteps = bridgeRepair?.steps ?? [];
   const bridgeRepairTitle = bridgeRepair?.title || "Bridge repair steps";
   const bridgeRepairDetail = bridgeRepair?.detail || bridgePresentation.detail;
-  const bridgeReady = effectiveBridgeStatus === "available";
-  const bridgeNeedsRepair = effectiveBridgeStatus === "unsupported";
-  const bridgeUnavailable =
-    effectiveBridgeStatus === "unreachable" ||
-    effectiveBridgeStatus === "wrong-url";
+  const bridgeReady = torrentPreflight.ready;
+  const bridgeNeedsRepair = [
+    "bridge_runtime_unsupported",
+    "gateway_unavailable",
+    "torrent_engine_unavailable",
+    "remux_unavailable",
+  ].includes(torrentPreflight.reason);
+  const bridgeTone: CapabilityTone = bridgeReady
+    ? "success"
+    : bridgeNeedsRepair
+      ? "error"
+      : "warning";
   const torrentCapabilityStatus = bridgeReady
     ? "Ready"
     : bridgeNeedsRepair
       ? "Repair"
-      : "Needs bridge";
+      : torrentPreflight.reason === "bridge_checking"
+        ? "Checking"
+        : "Needs bridge";
   const torrentCapabilityTone: CapabilityTone = bridgeReady
     ? "success"
     : bridgeNeedsRepair
@@ -394,14 +412,12 @@ export function SourcesSection({
     ? "Ready to play"
     : bridgeNeedsRepair
       ? "Bridge needs repair"
-      : bridgeUnavailable
-        ? "Desktop bridge not connected"
-        : bridgePresentation.title;
+      : bridgePresentation.title;
   const bridgeSummary = bridgeReady
     ? "Direct streams, compatible torrent playback, downloads, and cast planning can use this setup."
     : bridgeNeedsRepair
       ? "Direct streams can still work, but torrent playback and bridge-backed downloads need repair first."
-      : "Direct streams can still work. Start the desktop app or paste its LAN URL to enable torrent playback, downloads, and bridge casting.";
+      : `Direct streams can still work. ${torrentPreflight.message}`;
 
   const handleShowBridgeRepairSteps = () => {
     const body =
@@ -666,9 +682,13 @@ export function SourcesSection({
         <CapabilityRow
           icon="radio-outline"
           title="Casting"
-          subtitle="Cast uses the configured bridge and the active playback plan."
-          status={bridgeReady ? "Ready" : "Limited"}
-          tone={bridgeReady ? "success" : "warning"}
+          subtitle={
+            castPreflight.ready
+              ? "Cast uses the configured bridge and the active playback plan."
+              : castPreflight.message
+          }
+          status={castPreflight.ready ? "Ready" : "Limited"}
+          tone={castPreflight.ready ? "success" : "warning"}
         />
       </Surface>
 
@@ -688,7 +708,11 @@ export function SourcesSection({
         <CapabilityRow
           icon="magnet-outline"
           title="Torrent streams"
-          subtitle="Torrents use the desktop bridge for planning, peers, and gateway playback."
+          subtitle={
+            torrentPreflight.ready
+              ? "Torrents use the desktop bridge for planning, peers, and gateway playback."
+              : torrentPreflight.message
+          }
           status={torrentCapabilityStatus}
           tone={torrentCapabilityTone}
         />
@@ -697,8 +721,8 @@ export function SourcesSection({
           icon="cloud-download-outline"
           title="Downloads"
           subtitle="Offline availability is only shown after a verified local file exists."
-          status={bridgeReady ? "Ready" : "Direct only"}
-          tone={bridgeReady ? "success" : "warning"}
+          status={downloadPreflight.ready ? "Ready" : "Direct only"}
+          tone={downloadPreflight.ready ? "success" : "warning"}
         />
       </Surface>
 

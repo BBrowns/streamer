@@ -20,6 +20,7 @@ const previousRemuxCacheMaxBytes = process.env.STREAMER_REMUX_CACHE_MAX_BYTES;
 const previousTorrentCacheDir = process.env.STREAMER_TORRENT_CACHE_DIR;
 const previousTorrentCacheMaxBytes =
   process.env.STREAMER_TORRENT_CACHE_MAX_BYTES;
+const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
 
 function makeSuccessfulFfmpegVersionSpawner() {
   return ((_command: string, _args: string[]) => {
@@ -89,6 +90,12 @@ describe("bridge health", () => {
         previousTorrentCacheMaxBytes;
     }
 
+    if (previousBridgeToken === undefined) {
+      delete process.env.STREAMER_BRIDGE_TOKEN;
+    } else {
+      process.env.STREAMER_BRIDGE_TOKEN = previousBridgeToken;
+    }
+
     __resetTorrentEngineForTests();
     await __resetRemuxCacheForTests();
     if (cacheRoot) {
@@ -138,6 +145,16 @@ describe("bridge health", () => {
     });
     expect(res.body.repair).toMatchObject({
       required: false,
+    });
+    expect(res.body.auth).toEqual({
+      required: false,
+      configured: false,
+    });
+    expect(res.body.capabilities).toEqual({
+      gateway: true,
+      torrent: true,
+      remux: true,
+      cast: true,
     });
   });
 

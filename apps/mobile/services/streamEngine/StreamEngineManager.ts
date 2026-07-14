@@ -1,4 +1,5 @@
-import type { Stream } from "@streamer/shared";
+import { validateActionBridgeUrl } from "@streamer/shared";
+import type { ActionBridgeCapabilities, Stream } from "@streamer/shared";
 import type { IStreamEngine } from "./IStreamEngine";
 import { HLSEngine } from "./HLSEngine";
 import { HttpVideoEngine } from "./HttpVideoEngine";
@@ -36,71 +37,15 @@ function resolveBridgeUrl(): string {
   return "http://localhost:11470";
 }
 
-function normalizeHost(host?: string | null) {
-  const trimmed = (host || "").trim().toLowerCase();
-  return trimmed.startsWith("[") && trimmed.endsWith("]")
-    ? trimmed.slice(1, -1)
-    : trimmed;
-}
-
-function isIpv4PrivateOrLocal(host: string) {
-  const parts = host.split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
-    return false;
-  }
-
-  const [a, b] = parts;
-  return (
-    a === 10 ||
-    a === 127 ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
-  );
-}
-
-function isIpv6PrivateOrLocal(host: string) {
-  return (
-    host === "::1" ||
-    host.startsWith("fe80:") ||
-    host.startsWith("fc") ||
-    host.startsWith("fd")
-  );
-}
-
 export function validateBridgeUrl(rawUrl: string | null | undefined): {
   ok: boolean;
   url?: string;
   reason?: string;
 } {
-  if (!rawUrl || rawUrl.trim().length === 0) {
-    return { ok: false, reason: "missing-url" };
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return { ok: false, reason: "invalid-url" };
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return { ok: false, reason: "invalid-protocol" };
-  }
-
-  if (parsed.username || parsed.password) {
-    return { ok: false, reason: "credentials-not-allowed" };
-  }
-
-  const host = normalizeHost(parsed.hostname);
-  const isLocalHost =
-    host === "localhost" || host.endsWith(".localhost") || host === "10.0.2.2";
-  const isPrivateIp = isIpv4PrivateOrLocal(host) || isIpv6PrivateOrLocal(host);
-
-  if (!isLocalHost && !isPrivateIp) {
-    return { ok: false, reason: "not-local-or-lan" };
-  }
-
-  return { ok: true, url: parsed.toString().replace(/\/$/, "") };
+  const result = validateActionBridgeUrl(rawUrl);
+  return result.ok
+    ? { ok: true, url: result.url }
+    : { ok: false, reason: result.reason };
 }
 
 export type BridgeStatus =
@@ -149,6 +94,11 @@ export interface BridgeDiagnostics {
   platform?: string;
   selfTest?: BridgeSelfTest;
   repair?: BridgeRepairPlan;
+  auth?: {
+    required?: boolean;
+    configured?: boolean;
+  };
+  capabilities?: ActionBridgeCapabilities;
   remuxRuntime?: {
     available?: boolean;
     state?: string;
@@ -330,6 +280,11 @@ export class StreamEngineManager {
         const runtime = data?.runtime;
         const selfTest = data?.selfTest;
         const repair = data?.repair;
+        const auth = data?.auth;
+        const capabilities = data?.capabilities;
+        const remuxRuntime = data?.remuxRuntime;
+        const remuxCache = data?.remuxCache;
+        const torrentCache = data?.torrentCache;
 
         const reason = repair?.reason || torrentEngine?.reason || undefined;
         const message =
@@ -362,6 +317,11 @@ export class StreamEngineManager {
             platform,
             selfTest,
             repair,
+            auth,
+            capabilities,
+            remuxRuntime,
+            remuxCache,
+            torrentCache,
           };
         }
 
@@ -373,6 +333,11 @@ export class StreamEngineManager {
           platform,
           selfTest,
           repair,
+          auth,
+          capabilities,
+          remuxRuntime,
+          remuxCache,
+          torrentCache,
         };
       }
     } catch {

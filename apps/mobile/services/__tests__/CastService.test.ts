@@ -87,7 +87,9 @@ describe("CastService", () => {
     for (const url of localhostUrls) {
       await expect(
         castService.play("living-room", url, "Movie"),
-      ).rejects.toThrow("Cast devices cannot access localhost playback URLs.");
+      ).rejects.toThrow(
+        "The cast device cannot access a source that only exists on localhost.",
+      );
     }
 
     expect(global.fetch).not.toHaveBeenCalled();
@@ -98,14 +100,10 @@ describe("CastService", () => {
       streamServerUrl: "https://bridge.example.com",
     });
 
-    await castService.getDevices();
+    await expect(castService.getDevices()).rejects.toThrow(
+      "The desktop bridge URL is invalid. Check Sources & Devices.",
+    );
 
-    expect(
-      jest
-        .mocked(global.fetch)
-        .mock.calls.every(
-          ([url]) => !String(url).includes("bridge.example.com"),
-        ),
-    ).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

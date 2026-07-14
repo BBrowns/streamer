@@ -2,6 +2,11 @@ import { Platform } from "react-native";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "./bridgeAuth";
 import type { CastDeviceCapabilities } from "./playback/deviceProfile";
+import {
+  preflightBridgeAction,
+  preflightStreamAction,
+  requireActionPreflight,
+} from "./actionPreflight";
 
 export interface CastDevice {
   id: string;
@@ -16,21 +21,6 @@ export type CastContentType =
   | "application/vnd.apple.mpegurl"
   | "application/x-mpegURL";
 
-function isLocalhostPlaybackUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    return (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host === "::1" ||
-      host.endsWith(".localhost")
-    );
-  } catch {
-    return false;
-  }
-}
-
 class CastService {
   getBridgeUrl(): string {
     return streamEngineManager.getBridgeUrl();
@@ -40,6 +30,9 @@ class CastService {
     if (Platform.OS !== "web" && !streamEngineManager.bridgeAvailable) {
       await streamEngineManager.detectBridge();
     }
+    requireActionPreflight(
+      preflightBridgeAction("cast", { sourceKind: "direct" }),
+    );
 
     const authHeaders = getBridgeAuthHeaders();
     const res =
@@ -62,9 +55,12 @@ class CastService {
     title: string,
     contentType: CastContentType = "video/mp4",
   ): Promise<void> {
-    if (isLocalhostPlaybackUrl(url)) {
-      throw new Error("Cast devices cannot access localhost playback URLs.");
-    }
+    requireActionPreflight(
+      preflightStreamAction("cast", {
+        url,
+        title,
+      }),
+    );
 
     const res = await fetch(`${this.getBridgeUrl()}/api/cast/play`, {
       method: "POST",
@@ -78,6 +74,9 @@ class CastService {
   }
 
   async control(deviceId: string, action: CastControlAction): Promise<void> {
+    requireActionPreflight(
+      preflightBridgeAction("cast", { sourceKind: "direct" }),
+    );
     const res = await fetch(`${this.getBridgeUrl()}/api/cast/control`, {
       method: "POST",
       headers: withBridgeJsonHeaders(),
