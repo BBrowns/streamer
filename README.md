@@ -98,6 +98,19 @@ npm run dev:desktop         # Electron shell   — requires mobile web running o
 npm run dev:desktop-all     # Desktop-oriented dev flow: API + Expo web + Electron
 ```
 
+`dev:stream-server` checks the installed native dependencies and automatically
+selects a matching Node 24 runtime (including `.nvm` and the desktop vendor
+runtime on macOS). If dependencies were installed under Rosetta or another CPU
+architecture, repair them with:
+
+```bash
+npm run dev:repair-native
+```
+
+The launcher refuses mixed `esbuild`/`node-datachannel` architectures instead
+of starting a bridge whose torrent engine cannot load. Set `STREAMER_DEV_NODE`
+only when an explicit supported Node 24 binary is required.
+
 The API server does not start the bridge by default. Desktop starts and owns its
 own bridge sidecar so it can choose the correct Node/native-module
 architecture. Set `STREAMER_BRIDGE_SUPERVISOR=true` only when you explicitly
