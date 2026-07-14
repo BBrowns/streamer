@@ -195,8 +195,11 @@ export class StreamEngineManager {
     this.registerEngine(new HttpVideoEngine());
     this.registerEngine(new TorrentEngine(this));
 
-    // Probe for bridge, retry periodically if not found
-    if (process.env.NODE_ENV !== "test") {
+    // Expo Router renders web routes on the server before browser hydration.
+    // The local bridge is a device concern, so only probe from a real client.
+    const canProbeFromRuntime =
+      Platform.OS !== "web" || typeof window !== "undefined";
+    if (process.env.NODE_ENV !== "test" && canProbeFromRuntime) {
       this.detectBridge();
     }
   }

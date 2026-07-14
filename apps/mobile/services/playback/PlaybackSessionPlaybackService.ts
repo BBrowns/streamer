@@ -137,6 +137,14 @@ function getActionMessage(
   return messages[action];
 }
 
+function getErrorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return "";
+
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" ? message : "";
+}
+
 function toSafeRuntimeError(
   error: unknown,
   candidate: PlannedMediaCandidate | null,
@@ -153,12 +161,7 @@ function toSafeRuntimeError(
     });
   }
 
-  const rawMessage =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "";
+  const rawMessage = getErrorMessage(error);
   const fallbackCode =
     candidate?.requiresBridge || candidate?.kind === "torrent"
       ? "BRIDGE_UNAVAILABLE"

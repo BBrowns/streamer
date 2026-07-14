@@ -292,6 +292,7 @@ export function PlaybackReadinessNotice({
         <View style={styles.actions}>
           {!!notice.primaryActionLabel && !!onPrimaryAction && (
             <Pressable
+              accessibilityRole="button"
               style={[styles.primaryAction, { backgroundColor: toneColor }]}
               onPress={onPrimaryAction}
             >
@@ -301,6 +302,7 @@ export function PlaybackReadinessNotice({
             </Pressable>
           )}
           <Pressable
+            accessibilityRole="button"
             style={[styles.dismissAction, { borderColor: colors.border }]}
             onPress={onDismiss}
           >
