@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import type { MetaPreview, SearchResponse } from "@streamer/shared";
 import { api } from "../services/api";
-import type { MetaPreview } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
 
 export interface SearchMetaPreview extends MetaPreview {
@@ -8,31 +8,45 @@ export interface SearchMetaPreview extends MetaPreview {
   providerNames: string[];
 }
 
-interface SearchApiResponse {
-  metas?: MetaPreview[];
-  providers?: Array<{ id: string; name: string }>;
-  providersByContent?: Record<string, string[]>;
+export interface SearchResults extends Omit<
+  SearchResponse,
+  "metas" | "providersByContent"
+> {
+  metas: SearchMetaPreview[];
+  providersByContent: Record<string, string[]>;
 }
+
+const EMPTY_SEARCH_RESULTS: SearchResults = {
+  metas: [],
+  providers: [],
+  providersByContent: {},
+  attemptedProviders: 0,
+  successfulProviders: 0,
+  failedProviderIds: [],
+  partial: false,
+};
 
 export function useSearch(
   query: string,
-  options: { minimumLength?: number } = {},
+  options: { minimumLength?: number; limit?: number } = {},
 ) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const minimumLength = options.minimumLength ?? 1;
+  const cleanQuery = query.trim();
 
-  return useQuery<SearchMetaPreview[]>({
-    queryKey: ["search", query],
-    queryFn: async () => {
-      if (!query || query.trim().length === 0) return [];
+  return useQuery<SearchResults>({
+    queryKey: ["search", cleanQuery, options.limit ?? "all"],
+    queryFn: async ({ signal }) => {
+      if (!cleanQuery) return EMPTY_SEARCH_RESULTS;
 
-      const { data } = await api.get<SearchApiResponse>(
-        `/api/search?q=${encodeURIComponent(query)}`,
+      const { data } = await api.get<SearchResponse>(
+        `/api/search?q=${encodeURIComponent(cleanQuery)}`,
+        { signal },
       );
       const providerNames = new Map(
         (data.providers ?? []).map((provider) => [provider.id, provider.name]),
       );
-      return (data.metas || []).map((meta) => {
+      const metas = (data.metas ?? []).map((meta) => {
         const ids = data.providersByContent?.[`${meta.type}:${meta.id}`] ?? [];
         return {
           ...meta,
@@ -40,9 +54,20 @@ export function useSearch(
           providerNames: ids.map((id) => providerNames.get(id) ?? id),
         };
       });
+
+      return {
+        ...data,
+        metas: options.limit ? metas.slice(0, options.limit) : metas,
+        providers: data.providers ?? [],
+        providersByContent: data.providersByContent ?? {},
+        attemptedProviders: data.attemptedProviders ?? 0,
+        successfulProviders: data.successfulProviders ?? 0,
+        failedProviderIds: data.failedProviderIds ?? [],
+        partial: data.partial ?? false,
+      };
     },
-    enabled: isAuthenticated && query.trim().length >= minimumLength,
-    staleTime: 2 * 60 * 1000, // 2 min cache
+    enabled: isAuthenticated && cleanQuery.length >= minimumLength,
+    staleTime: 2 * 60 * 1000,
     retry: 1,
   });
 }

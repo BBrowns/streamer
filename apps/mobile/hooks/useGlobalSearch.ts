@@ -1,10 +1,32 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  SEARCH_SUGGESTION_LIMIT,
+  createSearchDebouncer,
+} from "../services/searchController";
 import { useSearch } from "./useSearch";
 
-/**
- * Search across all installed add-ons simultaneously.
- * Uses the backend /api/search?q= endpoint which broadcasts
- * to all addons via Promise.allSettled and deduplicates by ID.
- */
+/** Debounced type-ahead search shared by Search and the command palette. */
 export function useGlobalSearch(query: string) {
-  return useSearch(query, { minimumLength: 2 });
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const controller = useMemo(
+    () => createSearchDebouncer(setDebouncedQuery),
+    [],
+  );
+
+  useEffect(() => {
+    controller.update(query);
+    return controller.cancel;
+  }, [controller, query]);
+
+  const result = useSearch(debouncedQuery, {
+    minimumLength: 2,
+    limit: SEARCH_SUGGESTION_LIMIT,
+  });
+
+  return {
+    ...result,
+    debouncedQuery,
+    isDebouncing:
+      query.trim().length >= 2 && query.trim() !== debouncedQuery.trim(),
+  };
 }

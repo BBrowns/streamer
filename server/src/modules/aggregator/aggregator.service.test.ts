@@ -125,6 +125,121 @@ describe("AggregatorService", () => {
       expect(result.providersByContent).toEqual({
         "movie:tt1": ["addon-1", "addon-2"],
       });
+      expect(result).toMatchObject({
+        attemptedProviders: 2,
+        successfulProviders: 2,
+        failedProviderIds: [],
+        partial: false,
+      });
+    });
+
+    it("reports partial provider failures without hiding successful results", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue(
+        ["Alpha", "Beta"].map((name, index) => ({
+          id: `addon-${index + 1}`,
+          userId: "user-1",
+          transportUrl: `https://${name.toLowerCase()}.example/manifest.json`,
+          installedAt: new Date(),
+          manifest: {
+            id: `com.example.${name.toLowerCase()}`,
+            version: "1.0.0",
+            name,
+            description: `${name} catalog`,
+            resources: ["catalog"],
+            types: ["movie"],
+            catalogs: [{ type: "movie", id: "top", name: "Top" }],
+          },
+        })) as any,
+      );
+      vi.mocked(axios.get).mockImplementation(async (url) => {
+        if (String(url).includes("beta.example")) {
+          throw new Error("provider unavailable");
+        }
+        return {
+          data: {
+            metas: [{ id: "tt1", type: "movie", name: "Available Movie" }],
+          },
+        };
+      });
+
+      const result = await service.searchWithProvenance(
+        "user-1",
+        "available",
+        "req-2",
+      );
+
+      expect(result.metas).toHaveLength(1);
+      expect(result).toMatchObject({
+        attemptedProviders: 2,
+        successfulProviders: 1,
+        failedProviderIds: ["addon-2"],
+        partial: true,
+      });
+    });
+
+    it("reports a provider as partial when one supported content type fails", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        {
+          id: "addon-mixed",
+          userId: "user-1",
+          transportUrl: "https://mixed.example/manifest.json",
+          installedAt: new Date(),
+          manifest: {
+            id: "com.example.mixed",
+            version: "1.0.0",
+            name: "Mixed",
+            description: "Movie and series catalog",
+            resources: ["catalog"],
+            types: ["movie", "series"],
+            catalogs: [
+              { type: "movie", id: "movies", name: "Movies" },
+              { type: "series", id: "series", name: "Series" },
+            ],
+          },
+        },
+      ] as any);
+      vi.mocked(axios.get).mockImplementation(async (url) => {
+        if (String(url).includes("catalog/series/")) {
+          throw new Error("series catalog unavailable");
+        }
+        return {
+          data: {
+            metas: [{ id: "tt1", type: "movie", name: "Available Movie" }],
+          },
+        };
+      });
+
+      const result = await service.searchWithProvenance(
+        "user-1",
+        "available",
+        "req-mixed",
+      );
+
+      expect(result.metas).toHaveLength(1);
+      expect(result).toMatchObject({
+        attemptedProviders: 1,
+        successfulProviders: 1,
+        failedProviderIds: ["addon-mixed"],
+        partial: true,
+      });
+    });
+
+    it("reports a no-provider search separately from a provider outage", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([]);
+
+      const result = await service.searchWithProvenance(
+        "user-1",
+        "anything",
+        "req-3",
+      );
+
+      expect(result).toMatchObject({
+        metas: [],
+        attemptedProviders: 0,
+        successfulProviders: 0,
+        failedProviderIds: [],
+        partial: false,
+      });
     });
   });
 
