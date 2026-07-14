@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const { execSync } = require("child_process");
+const { execFileSync, execSync } = require("child_process");
 
-const NODE_VERSION = "24.2.0";
+const NODE_VERSION = "24.18.0";
 const ARCHITECTURES = ["arm64", "x64"];
 const PLATFORM = "darwin"; // Focused on macOS for this fix, easy to expand
 
@@ -37,6 +37,26 @@ function extractTarGz(tarPath, destDir) {
   execSync(`tar -xzf "${tarPath}" -C "${destDir}" --strip-components=1`);
 }
 
+function inspectNodeBinary(binaryPath, execute = execFileSync) {
+  try {
+    const output = execute(
+      binaryPath,
+      [
+        "-p",
+        "JSON.stringify({ version: process.versions.node, arch: process.arch })",
+      ],
+      { encoding: "utf8" },
+    );
+    return JSON.parse(String(output).trim());
+  } catch {
+    return null;
+  }
+}
+
+function isExpectedNodeRuntime(runtime, expectedVersion, expectedArch) {
+  return runtime?.version === expectedVersion && runtime?.arch === expectedArch;
+}
+
 async function vendorNode() {
   console.log(
     `[vendor-node] Starting download of Node ${NODE_VERSION} for ${PLATFORM}...`,
@@ -53,24 +73,47 @@ async function vendorNode() {
     const url = `https://nodejs.org/dist/v${NODE_VERSION}/${tarName}`;
     const destDir = path.join(VENDOR_ROOT, `${PLATFORM}-${arch}`);
     const tarPath = path.join(VENDOR_ROOT, tarName);
+    const tempDir = `${destDir}.tmp-${process.pid}`;
+    const binaryPath = path.join(destDir, "bin/node");
+    const installedRuntime = inspectNodeBinary(binaryPath);
 
-    if (fs.existsSync(path.join(destDir, "bin/node"))) {
+    if (isExpectedNodeRuntime(installedRuntime, NODE_VERSION, arch)) {
       console.log(
-        `[vendor-node] ${PLATFORM}-${arch} already exists, skipping.`,
+        `[vendor-node] ${PLATFORM}-${arch} ${NODE_VERSION} already exists, skipping.`,
       );
       continue;
     }
 
     try {
+      if (installedRuntime) {
+        console.log(
+          `[vendor-node] Replacing ${PLATFORM}-${arch} ${installedRuntime.version}/${installedRuntime.arch}.`,
+        );
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
       console.log(`[vendor-node] Downloading ${arch} from ${url}...`);
       await downloadFile(url, tarPath);
       console.log(`[vendor-node] Extracting ${arch}...`);
-      extractTarGz(tarPath, destDir);
-      fs.unlinkSync(tarPath);
+      extractTarGz(tarPath, tempDir);
+
+      const downloadedRuntime = inspectNodeBinary(
+        path.join(tempDir, "bin/node"),
+      );
+      if (!isExpectedNodeRuntime(downloadedRuntime, NODE_VERSION, arch)) {
+        throw new Error(
+          `Downloaded runtime mismatch: expected ${NODE_VERSION}/${arch}, received ${downloadedRuntime?.version ?? "unknown"}/${downloadedRuntime?.arch ?? "unknown"}`,
+        );
+      }
+
+      fs.rmSync(destDir, { recursive: true, force: true });
+      fs.renameSync(tempDir, destDir);
       console.log(`[vendor-node] ${arch} ready at ${destDir}`);
     } catch (error) {
       failed = true;
       console.error(`[vendor-node] Failed for ${arch}:`, error.message);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      fs.rmSync(tarPath, { force: true });
     }
   }
 
@@ -79,7 +122,15 @@ async function vendorNode() {
   }
 }
 
-vendorNode().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  vendorNode().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  inspectNodeBinary,
+  isExpectedNodeRuntime,
+  vendorNode,
+};

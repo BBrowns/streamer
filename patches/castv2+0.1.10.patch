@@ -1,0 +1,12 @@
+diff --git a/node_modules/castv2/package.json b/node_modules/castv2/package.json
+--- a/node_modules/castv2/package.json
++++ b/node_modules/castv2/package.json
+@@ -9,7 +9,7 @@
+   "main": "index.js",
+   "dependencies": {
+     "debug": "^4.1.1",
+-    "protobufjs": "^6.8.8"
++    "protobufjs": "^6.8.8 || ^7.6.5"
+   },
+   "scripts": {
+     "test": "echo \"Error: no test specified\" && exit 0"
