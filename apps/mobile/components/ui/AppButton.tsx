@@ -1,6 +1,7 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -9,7 +10,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
-import { uiRadii, uiSpacing, uiTypography } from "./designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "./designSystem";
 
 type AppButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type AppButtonSize = "small" | "medium" | "large";
@@ -19,6 +26,7 @@ type AppButtonProps = {
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
   accessibilityLabel?: string;
+  accessibilityHint?: string;
   variant?: AppButtonVariant;
   size?: AppButtonSize;
   disabled?: boolean;
@@ -32,6 +40,7 @@ export function AppButton({
   onPress,
   icon,
   accessibilityLabel,
+  accessibilityHint,
   variant = "secondary",
   size = "medium",
   disabled = false,
@@ -58,7 +67,8 @@ export function AppButton({
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => [
+      accessibilityHint={accessibilityHint}
+      style={({ pressed, focused }: any) => [
         styles.button,
         styles[size],
         fullWidth && styles.fullWidth,
@@ -77,6 +87,7 @@ export function AppButton({
               : colors.border,
           opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
         },
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
         style,
       ]}
     >
@@ -90,7 +101,6 @@ export function AppButton({
         />
       ) : null}
       <Text
-        numberOfLines={1}
         style={[
           styles.label,
           size === "small" && styles.labelSmall,
@@ -105,7 +115,7 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 44,
+    minHeight: uiTouchTarget,
     borderRadius: uiRadii.sm,
     borderWidth: 1,
     alignItems: "center",
@@ -114,7 +124,7 @@ const styles = StyleSheet.create({
     gap: uiSpacing.sm,
   },
   small: {
-    minHeight: 36,
+    minHeight: uiTouchTarget,
     paddingHorizontal: uiSpacing.md,
     paddingVertical: uiSpacing.sm,
     borderRadius: uiRadii.lg,
@@ -133,6 +143,8 @@ const styles = StyleSheet.create({
   },
   label: {
     ...uiTypography.control,
+    flexShrink: 1,
+    textAlign: "center",
   },
   labelSmall: {
     fontSize: 12,

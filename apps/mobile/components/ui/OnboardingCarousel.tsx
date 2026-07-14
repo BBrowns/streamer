@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,13 +17,13 @@ import Animated, {
   Extrapolate,
   SharedValue,
   withSpring,
-  withTiming,
-  useDerivedValue,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import * as Haptics from "expo-haptics";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
 
 export interface OnboardingStep {
   id: string;
@@ -56,6 +56,7 @@ function OnboardingItem({
   isDesktop,
 }: OnboardingItemProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const STEP_WIDTH = width;
   const inputRange = [
     (index - 1) * STEP_WIDTH,
@@ -65,6 +66,7 @@ function OnboardingItem({
 
   // Parallax background effect for the image container
   const animatedImageStyle = useAnimatedStyle(() => {
+    if (reducedMotion) return { opacity: 1 };
     const scale = interpolate(
       scrollX.value,
       inputRange,
@@ -97,6 +99,7 @@ function OnboardingItem({
   });
 
   const animatedTextStyle = useAnimatedStyle(() => {
+    if (reducedMotion) return { opacity: 1 };
     const translateY = interpolate(
       scrollX.value,
       inputRange,
@@ -130,11 +133,17 @@ function OnboardingItem({
           animatedImageStyle,
         ]}
       >
-        <Image source={item.image} style={styles.image} resizeMode="contain" />
+        <Image
+          source={item.image}
+          style={styles.image}
+          resizeMode="contain"
+          accessible={false}
+        />
       </Animated.View>
 
       <Animated.View style={[styles.contentContainer, animatedTextStyle]}>
         <Text
+          accessibilityRole="header"
           style={[
             styles.title,
             {
@@ -160,10 +169,26 @@ interface PaginationDotProps {
   scrollX: SharedValue<number>;
   width: number;
   onPress: () => void;
+  active: boolean;
+  reducedMotion: boolean;
 }
 
-function PaginationDot({ index, scrollX, width, onPress }: PaginationDotProps) {
+function PaginationDot({
+  index,
+  scrollX,
+  width,
+  onPress,
+  active,
+  reducedMotion,
+}: PaginationDotProps) {
   const animatedDotStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return {
+        opacity: active ? 1 : 0.35,
+        width: active ? 24 : 8,
+        transform: [{ scale: 1 }],
+      };
+    }
     const opacity = interpolate(
       scrollX.value,
       [(index - 1) * width, index * width, (index + 1) * width],
@@ -191,7 +216,13 @@ function PaginationDot({ index, scrollX, width, onPress }: PaginationDotProps) {
   });
 
   return (
-    <Pressable onPress={onPress}>
+    <Pressable
+      onPress={onPress}
+      style={styles.dotTarget}
+      accessibilityRole="tab"
+      accessibilityLabel={`Onboarding step ${index + 1}`}
+      accessibilityState={{ selected: active }}
+    >
       <Animated.View style={[styles.dot, animatedDotStyle]} />
     </Pressable>
   );
@@ -206,6 +237,7 @@ export function OnboardingCarousel({
   const scrollX = useSharedValue(0);
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const reducedMotion = useReducedMotion();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const itemPadding = isDesktop ? 32 : 24;
 
@@ -227,7 +259,7 @@ export function OnboardingCarousel({
 
   const scrollToIndex = (index: number) => {
     if (index < 0 || index >= steps.length) return;
-    flatListRef.current?.scrollToIndex({ index, animated: true });
+    flatListRef.current?.scrollToIndex({ index, animated: !reducedMotion });
     setCurrentIndex(index);
   };
 
@@ -245,8 +277,8 @@ export function OnboardingCarousel({
   });
 
   useEffect(() => {
-    buttonScale.value = withSpring(isLastStep ? 1.05 : 1);
-  }, [isLastStep]);
+    buttonScale.value = reducedMotion ? 1 : withSpring(isLastStep ? 1.05 : 1);
+  }, [buttonScale, isLastStep, reducedMotion]);
 
   return (
     <LinearGradient
@@ -291,22 +323,28 @@ export function OnboardingCarousel({
         <>
           {currentIndex > 0 && (
             <Pressable
-              style={[
+              style={({ focused }: any) => [
                 styles.arrowBtn,
                 { left: 40, backgroundColor: colors.card },
+                focused && getWebFocusStyle(colors.tint),
               ]}
               onPress={() => scrollToIndex(currentIndex - 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Previous onboarding step"
             >
               <Ionicons name="chevron-back" size={28} color={colors.text} />
             </Pressable>
           )}
           {!isLastStep && (
             <Pressable
-              style={[
+              style={({ focused }: any) => [
                 styles.arrowBtn,
                 { right: 40, backgroundColor: colors.card },
+                focused && getWebFocusStyle(colors.tint),
               ]}
               onPress={() => scrollToIndex(currentIndex + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Next onboarding step"
             >
               <Ionicons name="chevron-forward" size={28} color={colors.text} />
             </Pressable>
@@ -329,21 +367,27 @@ export function OnboardingCarousel({
               scrollX={scrollX}
               width={width}
               onPress={() => scrollToIndex(index)}
+              active={index === currentIndex}
+              reducedMotion={reducedMotion}
             />
           ))}
         </View>
 
         <Animated.View style={animatedButtonStyle}>
           <Pressable
-            style={[
+            style={({ pressed, focused }: any) => [
               styles.button,
               isDesktop
                 ? { maxWidth: 400, alignSelf: "center" }
                 : { maxWidth: 420, alignSelf: "center" },
+              pressed && { opacity: 0.82 },
+              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
             ]}
             onPress={
               isLastStep ? onComplete : () => scrollToIndex(currentIndex + 1)
             }
+            accessibilityRole="button"
+            accessibilityLabel={isLastStep ? "Get started" : "Next step"}
           >
             <LinearGradient
               colors={["#f2d7ff", "#c5e9d5"]}
@@ -417,7 +461,13 @@ const styles = StyleSheet.create({
   pagination: {
     flexDirection: "row",
     justifyContent: "center",
-    marginBottom: 40,
+    marginBottom: 20,
+  },
+  dotTarget: {
+    minWidth: uiTouchTarget,
+    minHeight: uiTouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
   },
   dot: {
     height: 8,

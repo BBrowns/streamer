@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #148:
+Implemented through PR #150:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -227,7 +227,26 @@ Acceptance:
 - Offline-ready still requires a verified managed file.
 - Cast never sends a loopback-only source to a remote device.
 
-### PR #149 - Accessibility And Responsive Visual Quality Pass
+### Completed: PR #149 - Dev Runtime Architecture Guard
+
+Goal: make local stream-server startup deterministic across native and Rosetta
+Node installations.
+
+Scope:
+
+- Select a supported Node 24 runtime matching installed native dependencies.
+- Detect mixed esbuild/node-datachannel architectures before startup.
+- Provide an explicit native dependency repair command.
+- Make the shared workspace ESM boundary work under the stream-server runtime.
+- Cover runtime selection and shared named imports in CI.
+
+Acceptance:
+
+- An x64 Node 25 parent can launch a healthy arm64 Node 24 bridge.
+- The torrent engine reports ready after a matching install.
+- Architecture mismatch failures provide a concrete repair command.
+
+### Completed: PR #150 - Accessibility And Responsive Visual Quality Pass
 
 Goal: make the existing pastel cinema UI more consistent and usable without a
 framework rewrite.
@@ -248,7 +267,7 @@ Acceptance:
 - Keyboard and screen-reader labels cover primary controls.
 - Screenshot changes are intentional and reviewable.
 
-### PR #150 - RC Evidence And Real-Target QA Resume
+### PR #151 - RC Evidence And Real-Target QA Resume
 
 Goal: perform the work that is intentionally deferred now and make a real
 go/no-go release decision.
@@ -280,13 +299,15 @@ of mocks or unit tests.
 4. Completed: PR #146 - mobile release identity and EAS baseline.
 5. Completed: PR #147 - server production runtime hardening.
 6. Completed: PR #148 - offline and cast recovery UX.
-7. PR #149 - accessibility and responsive visual quality.
-8. PR #150 - real-target QA and RC evidence when available.
+7. Completed: PR #149 - dev runtime architecture guard.
+8. Completed: PR #150 - accessibility and responsive visual quality.
+9. PR #151 - real-target QA and RC evidence when available.
 
 Dependency enforcement, deterministic renderer automation, shared action
 preflight, mobile release configuration, server production hardening, and
-offline/cast recovery UX are complete. Accessibility and responsive visual
-quality are next. Future action surfaces must reuse the shared preflight and
+offline/cast recovery UX, and the accessibility/responsive visual-quality pass
+are complete. PR #151 remains intentionally deferred pending real targets and
+release credentials. Future action surfaces must reuse the shared preflight and
 recovery contracts instead of adding local bridge-readiness conditionals.
 
 ## Working Rules
@@ -299,4 +320,4 @@ recovery contracts instead of adding local bridge-readiness conditionals.
 - Do not add Real-Debrid to onboarding or enable it by default.
 - Do not use mocks or unit tests to claim real-device support.
 - Keep [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) and
-  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until PR #150.
+  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until PR #151.

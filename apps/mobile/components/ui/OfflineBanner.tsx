@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { View, Text, Animated, StyleSheet, Platform } from "react-native";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 /**
  * Offline banner component.
@@ -12,6 +13,7 @@ import { View, Text, Animated, StyleSheet, Platform } from "react-native";
 export function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(false);
   const slideAnim = useRef(new Animated.Value(-50)).current;
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -73,12 +75,16 @@ export function OfflineBanner() {
 
   // Animate banner slide in/out
   useEffect(() => {
+    if (reducedMotion) {
+      slideAnim.setValue(isOffline ? 0 : -50);
+      return;
+    }
     Animated.timing(slideAnim, {
       toValue: isOffline ? 0 : -50,
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [isOffline, slideAnim]);
+  }, [isOffline, reducedMotion, slideAnim]);
 
   if (!isOffline) return null;
 

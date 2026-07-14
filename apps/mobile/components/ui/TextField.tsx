@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Platform,
   StyleProp,
@@ -10,6 +10,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import { getWebFocusStyle } from "./designSystem";
 
 type TextFieldProps = TextInputProps & {
   label: string;
@@ -21,9 +22,13 @@ export function TextField({
   containerStyle,
   style,
   placeholderTextColor,
+  accessibilityLabel,
+  onFocus,
+  onBlur,
   ...props
 }: TextFieldProps) {
   const { colors, isDark } = useTheme();
+  const [focused, setFocused] = useState(false);
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -32,6 +37,15 @@ export function TextField({
       </Text>
       <TextInput
         {...props}
+        accessibilityLabel={accessibilityLabel ?? label}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         style={[
           styles.input,
           {
@@ -41,6 +55,7 @@ export function TextField({
             color: colors.text,
             borderColor: colors.border,
           },
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
           style,
         ]}
         placeholderTextColor={

@@ -1,4 +1,11 @@
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
@@ -9,7 +16,13 @@ import {
 } from "../../stores/smartDownloadStore";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
-import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 
 const QUALITY_OPTIONS: SmartDownloadQuality[] = [
   "best",
@@ -147,7 +160,7 @@ export function SmartDownloadsPanel({ framed = true }: { framed?: boolean }) {
             return (
               <Pressable
                 key={quality}
-                style={[
+                style={({ focused, pressed }: any) => [
                   styles.chip,
                   {
                     borderColor: active ? colors.tint : colors.border,
@@ -157,13 +170,21 @@ export function SmartDownloadsPanel({ framed = true }: { framed?: boolean }) {
                         ? "rgba(255,255,255,0.05)"
                         : "rgba(0,0,0,0.035)",
                   },
+                  pressed && { opacity: 0.78 },
+                  Platform.OS === "web" &&
+                    focused &&
+                    getWebFocusStyle(colors.tint),
                 ]}
                 onPress={() => {
                   hapticImpactLight();
                   updatePreferences({ quality });
                 }}
                 disabled={!preferences.enabled}
-                accessibilityRole="button"
+                accessibilityRole="radio"
+                accessibilityState={{
+                  checked: active,
+                  disabled: !preferences.enabled,
+                }}
                 accessibilityLabel={`Prefer ${quality} smart downloads`}
               >
                 <Text
@@ -341,8 +362,8 @@ const styles = StyleSheet.create({
     gap: uiSpacing.sm,
   },
   chip: {
-    minHeight: 34,
-    borderRadius: 17,
+    minHeight: uiTouchTarget,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     paddingHorizontal: uiSpacing.md,
     alignItems: "center",

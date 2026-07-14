@@ -4,8 +4,9 @@ import {
   Text,
   StyleSheet,
   Image,
+  Platform,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -14,9 +15,7 @@ import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
-
-const { width, height } = Dimensions.get("window");
-const HERO_HEIGHT = height * 0.58;
+import { getWebFocusStyle, uiTouchTarget } from "../ui/designSystem";
 
 function HeroBannerInner({
   catalog,
@@ -27,6 +26,11 @@ function HeroBannerInner({
 }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const heroHeight = isDesktop
+    ? Math.min(500, Math.max(400, height * 0.56))
+    : Math.min(500, Math.max(360, height * 0.52));
   const { data } = useAddonCatalog(addon?.id, catalog);
   const flattenedData = data?.pages.flat() || [];
 
@@ -43,8 +47,18 @@ function HeroBannerInner({
   };
 
   return (
-    <View style={styles.container}>
-      <Pressable onPress={handlePress} style={styles.pressable}>
+    <View style={[styles.container, { height: heroHeight }]}>
+      <Pressable
+        onPress={handlePress}
+        style={({ pressed, focused }: any) => [
+          styles.pressable,
+          pressed && { opacity: 0.94 },
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Featured: ${featuredItem.name}`}
+        accessibilityHint="Opens title details and playback options"
+      >
         <Image
           source={{ uri: featuredItem.poster }}
           style={styles.image}
@@ -112,8 +126,7 @@ export const HeroBanner = memo(HeroBannerInner);
 
 const styles = StyleSheet.create({
   container: {
-    width,
-    height: HERO_HEIGHT,
+    width: "100%",
     backgroundColor: "#15151f",
   },
   pressable: {
@@ -152,6 +165,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   playButton: {
+    minHeight: uiTouchTarget,
     paddingVertical: 12,
     paddingHorizontal: 32,
     borderRadius: 18,
@@ -165,6 +179,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   infoButton: {
+    minHeight: uiTouchTarget,
     backgroundColor: "rgba(255,255,255,0.12)",
     paddingVertical: 12,
     paddingHorizontal: 28,

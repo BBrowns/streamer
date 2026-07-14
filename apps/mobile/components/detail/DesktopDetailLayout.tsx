@@ -210,6 +210,7 @@ export function DesktopDetailLayout({
               accessibilityLabel={
                 sourcesOpen ? "Hide more sources" : "Show more sources"
               }
+              accessibilityState={{ expanded: sourcesOpen }}
             >
               <View style={styles.sectionTitleRowCompact}>
                 <Ionicons name="layers-outline" size={18} color={colors.tint} />
@@ -267,6 +268,11 @@ export function DesktopDetailLayout({
                       onPress={() => {
                         hapticImpactLight();
                         setSelectedResolution(res);
+                      }}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`Filter sources by ${res === "2160p" ? "4K" : res}`}
+                      accessibilityState={{
+                        checked: selectedResolution === res,
                       }}
                     >
                       <Text
@@ -332,7 +338,12 @@ export function DesktopDetailLayout({
           { backgroundColor: colors.tabBar, borderRightColor: colors.border },
         ]}
       >
-        <Pressable style={styles.desktopBackBtn} onPress={onBack}>
+        <Pressable
+          style={styles.desktopBackBtn}
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back to previous screen"
+        >
           <Ionicons
             name="chevron-back"
             size={20}
@@ -433,6 +444,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   desktopBackBtn: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -632,12 +644,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   resBubble: {
+    minHeight: 44,
     backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
+    justifyContent: "center",
   },
   resBubbleActive: {
     backgroundColor: "#d8b4fe",

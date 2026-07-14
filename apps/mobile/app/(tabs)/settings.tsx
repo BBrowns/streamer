@@ -1,7 +1,7 @@
 import {
   View,
   Text,
-  Pressable,
+  Pressable as NativePressable,
   Alert,
   ActivityIndicator,
   StyleSheet,
@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   Switch,
 } from "react-native";
+import type { ComponentProps } from "react";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -41,6 +42,20 @@ import {
   clientBuildMetadata,
   formatBuildLabel,
 } from "../../services/buildMetadata";
+import { getWebFocusStyle } from "../../components/ui/designSystem";
+
+function Pressable(props: ComponentProps<typeof NativePressable>) {
+  return (
+    <NativePressable
+      {...props}
+      accessibilityRole={props.accessibilityRole ?? "button"}
+      style={(state: any) => [
+        typeof props.style === "function" ? props.style(state) : props.style,
+        Platform.OS === "web" && state.focused && getWebFocusStyle("#a78bfa"),
+      ]}
+    />
+  );
+}
 
 function formatDesktopUpdateStatus(state: DesktopUpdateState | null) {
   if (!state) return "Update status is not loaded yet.";

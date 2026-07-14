@@ -566,9 +566,13 @@ episode row actions, stream source rows, and the desktop sidebar nav/search.
 Future passes should extend this to remaining settings/detail controls and
 validate full keyboard-only browse -> detail -> Play Best flows in Electron.
 
-#### 8. Player Seek Bar Accessibility
+#### 8. Player Seek Bar Accessibility (Implemented)
 
-The custom seek bar in `PlayerControls` uses a gesture handler and is not accessible to screen readers or keyboard users. It has no `accessibilityRole`, no `accessibilityValue`, and no keyboard event handling. Replace or augment with an accessible slider that exposes `accessibilityRole="adjustable"` and `accessibilityValue={{ min: 0, max: duration, now: currentTime }}`.
+`PlayerControls` exposes its custom timeline as an adjustable accessibility
+control with a progress value and increment/decrement actions. The same guarded
+seek callbacks back pointer, accessibility, and desktop hotkey input. Streams
+that cannot seek expose a disabled state and explanatory copy rather than a
+misleading interactive timeline.
 
 #### 9. Offline-First Library
 

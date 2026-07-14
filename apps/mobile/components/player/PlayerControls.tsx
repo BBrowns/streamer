@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,7 +14,14 @@ import { useTheme } from "../../hooks/useTheme";
 import type { VideoPlayer } from "expo-video";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -84,6 +92,9 @@ export function PlayerControls({
 }: PlayerControlsProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
+  const compactLayout = width < 700;
   const [scrubberWidth, setScrubberWidth] = useState(0);
 
   if (!isVisible) return null;
@@ -191,8 +202,8 @@ export function PlayerControls({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(200)}
+      entering={reducedMotion ? undefined : FadeIn.duration(200)}
+      exiting={reducedMotion ? undefined : FadeOut.duration(200)}
       style={[
         styles.container,
         Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
@@ -201,6 +212,7 @@ export function PlayerControls({
       <View
         style={[
           styles.centerControls,
+          compactLayout && styles.centerControlsCompact,
           Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
         ]}
       >
@@ -213,7 +225,7 @@ export function PlayerControls({
           disabled={!hasTimeline}
         />
         <Pressable
-          style={({ pressed, hovered }: any) => [
+          style={({ pressed, hovered, focused }: any) => [
             styles.playPauseBtn,
             Platform.OS === "web" && styles.webInteractive,
             {
@@ -224,6 +236,7 @@ export function PlayerControls({
               opacity: pressed ? 0.82 : 1,
             },
             hovered && styles.hoveredButton,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
           ]}
           onPress={onPlayPause}
           accessibilityRole="button"
@@ -249,12 +262,14 @@ export function PlayerControls({
       <View
         style={[
           styles.bottomControls,
+          compactLayout && styles.bottomControlsCompact,
           Platform.OS === "web" && styles.webInteractive,
         ]}
       >
         <View
           style={[
             styles.bottomTray,
+            compactLayout && styles.bottomTrayCompact,
             {
               backgroundColor: isDark
                 ? "rgba(18,18,30,0.78)"
@@ -263,7 +278,7 @@ export function PlayerControls({
             },
           ]}
         >
-          <View style={styles.statusRow}>
+          <View style={styles.statusRow} accessibilityLiveRegion="polite">
             {sourceLabel ? (
               <StatusPill
                 icon="sparkles"
@@ -314,7 +329,12 @@ export function PlayerControls({
             </Text>
 
             <Pressable
-              style={styles.scrubberContainer}
+              style={({ focused }: any) => [
+                styles.scrubberContainer,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.tint),
+              ]}
               accessibilityRole="adjustable"
               accessibilityLabel={progressLabel}
               accessibilityState={{ disabled: !hasTimeline }}
@@ -515,7 +535,7 @@ function ControlButton({
 }) {
   return (
     <Pressable
-      style={({ pressed, hovered }: any) => [
+      style={({ pressed, hovered, focused }: any) => [
         styles.skipButton,
         Platform.OS === "web" && styles.webInteractive,
         {
@@ -526,6 +546,7 @@ function ControlButton({
           opacity: disabled ? 0.38 : pressed ? 0.78 : 1,
         },
         hovered && !disabled && styles.hoveredButton,
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
       ]}
       onPress={onPress}
       disabled={disabled}
@@ -558,7 +579,7 @@ function ActionButton({
 }) {
   return (
     <Pressable
-      style={({ pressed, hovered }: any) => [
+      style={({ pressed, hovered, focused }: any) => [
         compact ? styles.compactActionButton : styles.actionButton,
         {
           backgroundColor: isDark
@@ -568,8 +589,10 @@ function ActionButton({
           opacity: pressed ? 0.76 : 1,
         },
         hovered && styles.hoveredButton,
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
       ]}
       onPress={onPress}
+      hitSlop={compact ? 6 : undefined}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
@@ -634,6 +657,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: uiSpacing.lg,
   },
+  centerControlsCompact: {
+    gap: uiSpacing.md,
+  },
   playPauseBtn: {
     width: 82,
     height: 82,
@@ -663,8 +689,13 @@ const styles = StyleSheet.create({
   },
   bottomControls: {
     paddingHorizontal: uiSpacing.xl,
-    paddingBottom: Platform.OS === "web" ? 78 : 56,
+    paddingBottom: Platform.OS === "web" ? 112 : 56,
     paddingTop: uiSpacing.xl,
+  },
+  bottomControlsCompact: {
+    paddingHorizontal: uiSpacing.sm,
+    paddingBottom: Platform.OS === "web" ? 74 : 24,
+    paddingTop: uiSpacing.sm,
   },
   bottomTray: {
     width: "100%",
@@ -675,6 +706,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: uiSpacing.lg - 2,
     paddingVertical: uiSpacing.md,
     gap: uiSpacing.sm + 2,
+  },
+  bottomTrayCompact: {
+    borderRadius: uiRadii.md,
+    paddingHorizontal: uiSpacing.sm,
+    paddingVertical: uiSpacing.sm,
+    gap: uiSpacing.xs,
   },
   statusRow: {
     flexDirection: "row",
@@ -748,22 +785,22 @@ const styles = StyleSheet.create({
     gap: uiSpacing.sm,
   },
   actionButton: {
-    width: 38,
-    height: 38,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
     borderRadius: uiRadii.pill,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   compactActionButton: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: uiRadii.pill,
     justifyContent: "center",
     alignItems: "center",
   },
   volumeCluster: {
-    height: 38,
+    minHeight: uiTouchTarget,
     borderRadius: uiRadii.pill,
     borderWidth: 1,
     paddingHorizontal: 5,

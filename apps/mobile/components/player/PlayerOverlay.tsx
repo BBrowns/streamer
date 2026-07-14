@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { CastButton, AirPlayButton } from "./castModules";
 import type { StreamStats } from "../../services/streamEngine/IStreamEngine";
 import type { Stream } from "@streamer/shared";
+import { getWebFocusStyle } from "../ui/designSystem";
 
 interface PlayerOverlayProps {
   currentStream: Stream;
@@ -47,13 +48,14 @@ export function PlayerOverlay({
         ]}
       >
         <Pressable
-          style={({ hovered }: any) => [
+          style={({ hovered, focused }: any) => [
             styles.closeButton,
             { backgroundColor: colors.tint + "15" },
             hovered && {
               backgroundColor: colors.tint + "25",
               transform: [{ scale: 1.05 }],
             },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
           ]}
           onPress={onClose}
           accessibilityRole="button"
@@ -76,13 +78,14 @@ export function PlayerOverlay({
           )}
           {Platform.OS === "web" && onWebCast && (
             <Pressable
-              style={({ hovered }: any) => [
+              style={({ hovered, focused }: any) => [
                 styles.iconButton,
                 { backgroundColor: colors.tint + "15" },
                 hovered && {
                   backgroundColor: colors.tint + "25",
                   transform: [{ scale: 1.1 }],
                 },
+                focused && getWebFocusStyle(colors.tint),
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
@@ -93,13 +96,16 @@ export function PlayerOverlay({
           )}
           {isPiPSupported && onTogglePiP && (
             <Pressable
-              style={({ hovered }: any) => [
+              style={({ hovered, focused }: any) => [
                 styles.iconButton,
                 { backgroundColor: colors.tint + "15" },
                 hovered && {
                   backgroundColor: colors.tint + "25",
                   transform: [{ scale: 1.1 }],
                 },
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.tint),
               ]}
               onPress={onTogglePiP}
               accessibilityRole="button"
@@ -113,13 +119,14 @@ export function PlayerOverlay({
             </Pressable>
           )}
           <Pressable
-            style={({ hovered }: any) => [
+            style={({ hovered, focused }: any) => [
               styles.iconButton,
               { backgroundColor: colors.tint + "15" },
               hovered && {
                 backgroundColor: colors.tint + "25",
                 transform: [{ scale: 1.1 }],
               },
+              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
             ]}
             onPress={onSettings}
             accessibilityRole="button"
