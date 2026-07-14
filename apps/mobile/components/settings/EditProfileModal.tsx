@@ -12,10 +12,13 @@ import {
 } from "react-native";
 import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { api } from "../../services/api";
 import { AxiosError } from "axios";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { getWebFocusStyle } from "../ui/designSystem";
 
 interface EditProfileModalProps {
   visible: boolean;
@@ -30,8 +33,11 @@ export function EditProfileModal({
 }: EditProfileModalProps) {
   const { user, setAuth } = useAuthStore();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
+  const { t } = useTranslation();
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [profileLoading, setProfileLoading] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -53,16 +59,20 @@ export function EditProfileModal({
           useAuthStore.getState().refreshToken!,
         );
       }
-      Alert.alert("Success", "Profile updated");
+      Alert.alert(
+        t("settings.accountModals.common.successTitle"),
+        t("settings.accountModals.profile.updated"),
+      );
       onClose();
     } catch (err: unknown) {
       const errorMessage =
         err instanceof AxiosError
           ? err.response?.data?.error
-          : "Failed to update profile";
+          : t("settings.accountModals.profile.updateFailed");
       Alert.alert(
-        "Error",
-        (errorMessage as string) || "Failed to update profile",
+        t("settings.accountModals.common.errorTitle"),
+        (errorMessage as string) ||
+          t("settings.accountModals.profile.updateFailed"),
       );
     } finally {
       setProfileLoading(false);
@@ -89,15 +99,26 @@ export function EditProfileModal({
           <View style={styles.modalTitleRow}>
             <Ionicons name="pencil-outline" size={20} color={colors.tint} />
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Edit Profile
+              {t("settings.accountModals.profile.title")}
             </Text>
           </View>
           {!inline && (
-            <Pressable onPress={onClose}>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.accountModals.common.cancel")}
+              style={({ focused, pressed }: any) => [
+                styles.headerAction,
+                pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
+              ]}
+            >
               <Text
                 style={[styles.modalCancel, { color: colors.textSecondary }]}
               >
-                Cancel
+                {t("settings.accountModals.common.cancel")}
               </Text>
             </Pressable>
           )}
@@ -107,34 +128,38 @@ export function EditProfileModal({
             styles.modalInput,
             {
               backgroundColor: colors.surfaceElevated,
-              borderColor: colors.border,
+              borderColor: inputFocused ? colors.focus : colors.border,
               color: colors.text,
             },
           ]}
-          placeholder="Display name"
+          placeholder={t("settings.accountModals.profile.displayName")}
           placeholderTextColor={colors.textSecondary}
           value={displayName}
           onChangeText={setDisplayName}
-          accessibilityLabel="Display name"
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
+          accessibilityLabel={t("settings.accountModals.profile.displayName")}
           autoComplete="name"
         />
         <Pressable
-          style={[
+          style={({ focused, pressed }: any) => [
             styles.modalButton,
             { backgroundColor: colors.tint },
             profileLoading && styles.opacity50,
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={handleUpdateProfile}
           disabled={profileLoading}
           accessibilityRole="button"
-          accessibilityLabel="Save profile changes"
+          accessibilityLabel={t("settings.accountModals.profile.saveA11y")}
           accessibilityState={{ disabled: profileLoading }}
         >
           {profileLoading ? (
             <ActivityIndicator color={colors.onTint} />
           ) : (
             <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
-              Save
+              {t("settings.accountModals.profile.save")}
             </Text>
           )}
         </Pressable>
@@ -150,7 +175,7 @@ export function EditProfileModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={reducedMotion ? "none" : "slide"}
       transparent
       onRequestClose={onClose}
     >
@@ -197,6 +222,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modalCancel: { fontWeight: "800", fontSize: 15 },
+  headerAction: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
   modalInput: {
     borderRadius: 14,
     paddingHorizontal: 16,
@@ -214,4 +247,5 @@ const styles = StyleSheet.create({
   },
   modalButtonText: { fontWeight: "900", fontSize: 16 },
   opacity50: { opacity: 0.5 },
+  pressed: { opacity: 0.72 },
 });
