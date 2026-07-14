@@ -6,13 +6,24 @@ import {
   type GoldenPathScenario,
 } from "./fixtures";
 
-async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
+async function loginToFixtureShell(
+  page: Page,
+  scenario: GoldenPathScenario = "direct",
+) {
   const controls = await installGoldenPathRoutes(page, scenario);
+  await page.addInitScript(() => {
+    window.localStorage.setItem("HAS_SEEN_ONBOARDING", "true");
+  });
   await page.goto("/login");
   await page.getByPlaceholder("Email").fill("qa@example.test");
   await page.getByPlaceholder("Password").fill("fixture-password");
   await page.getByTestId("login-submit").click();
   await expect(page.getByTestId("home-screen")).toBeVisible();
+  return controls;
+}
+
+async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
+  const controls = await loginToFixtureShell(page, scenario);
   await expect.poll(controls.bridgeProbes).toBeGreaterThan(0);
   await page
     .getByRole("button", { name: "Featured: Golden Path Adventure" })
@@ -30,6 +41,41 @@ async function expectNoHorizontalPageOverflow(page: Page) {
     content: document.documentElement.scrollWidth,
   }));
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport + 1);
+}
+
+async function settleVisualTheme(
+  page: Page,
+  scheme: "dark" | "light",
+  screenTestId: "settings-screen" | "search-screen",
+) {
+  await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+  const expectedBackground =
+    scheme === "dark" ? "rgb(8,9,12)" : "rgb(243,242,239)";
+
+  await expect
+    .poll(() =>
+      page
+        .getByTestId(screenTestId)
+        .evaluate((element) =>
+          getComputedStyle(element).backgroundColor.replace(/\s/g, ""),
+        ),
+    )
+    .toBe(expectedBackground);
+  await settleVisualFrame(page);
+}
+
+async function settleVisualFrame(page: Page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(
+      Array.from(document.images, (image) =>
+        image.decode().catch(() => undefined),
+      ),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  });
 }
 
 test("authentication owns the viewport without duplicate navigation", async ({
@@ -161,7 +207,7 @@ test("bridge unavailable produces a recoverable detail state", async ({
   await loginAndOpenFixture(page, "bridge-unavailable");
   await page.getByRole("button", { name: "Play Best" }).click();
 
-  await expect(page.getByText("Desktop bridge required")).toBeVisible();
+  await expect(page.getByText("Finish playback setup")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Sources & Devices" }),
   ).toBeVisible();
@@ -174,7 +220,7 @@ test("download eligibility uses a planner action", async ({ page }) => {
     "download-unsupported",
   );
   await page.getByRole("button", { name: "Download" }).click();
-  await expect(page.getByText("No compatible source")).toBeVisible();
+  await expect(page.getByText("No compatible viewing option")).toBeVisible();
   expect(downloadControls.plannerRequests.at(-1)?.action).toBe("download");
 });
 
@@ -194,9 +240,13 @@ test("cast eligibility uses a planner action and lists displays", async ({
     new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
   );
   await page.getByRole("button", { name: "Cast" }).click();
-  await expect(page.getByText("Cast to a display")).toBeVisible();
-  await expect(page.getByText("Source ready. Choose a display.")).toBeVisible();
-  await expect(page.getByText("Fixture Living Room")).toBeVisible();
+  const castDialog = page.getByRole("dialog");
+  await expect(castDialog.getByText("Cast", { exact: true })).toBeVisible();
+  await expect(castDialog.getByText("Golden Path Adventure")).toBeVisible();
+  await expect(
+    castDialog.getByText("Source ready. Choose a display."),
+  ).toBeVisible();
+  await expect(castDialog.getByText("Fixture Living Room")).toBeVisible();
   expect(castControls.plannerRequests.at(-1)?.action).toBe("cast");
 });
 
@@ -255,4 +305,302 @@ test("primary surfaces remain responsive and keyboard accessible", async ({
     fullPage: true,
     animations: "disabled",
   });
+});
+
+test("Obsidian Settings uses a calm overview and focused detail panes", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page);
+  await page.goto("/settings");
+
+  await expect(page.getByTestId("settings-screen")).toBeVisible();
+  await settleVisualTheme(page, "dark", "settings-screen");
+  await expectNoHorizontalPageOverflow(page);
+  if (testInfo.project.name === "phone-web") {
+    await expect(page.getByTestId("settings-overview")).toBeVisible();
+  }
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `settings-overview-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("settings-screen")).toBeVisible();
+  await settleVisualTheme(page, "light", "settings-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `settings-overview-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.reload();
+  await settleVisualTheme(page, "dark", "settings-screen");
+
+  await page.getByTestId("settings-category-playback").click();
+  await expect(page).toHaveURL(/\/settings\/playback$/);
+  await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
+  await expectNoHorizontalPageOverflow(page);
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `settings-playback-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
+  await settleVisualTheme(page, "light", "settings-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `settings-playback-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
+test("Obsidian Search keeps discovery and results media-first", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page);
+  await page.goto("/search");
+
+  await expect(page.getByTestId("search-screen")).toBeVisible();
+  await settleVisualTheme(page, "dark", "search-screen");
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
+  await expectNoHorizontalPageOverflow(page);
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-discovery-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  let searchField = page.getByTestId("search-field");
+  await searchField.fill("Golden");
+  await expect(page.getByTestId("search-suggestions")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-suggestions-dark-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
+  await settleVisualTheme(page, "light", "search-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-discovery-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  searchField = page.getByTestId("search-field");
+  await searchField.fill("Golden");
+  await expect(page.getByTestId("search-suggestions")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-suggestions-light-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+
+  await searchField.press("Enter");
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  const resultsBox = await page
+    .getByTestId("search-results-grid")
+    .boundingBox();
+  expect(resultsBox).not.toBeNull();
+  expect(resultsBox!.y).toBeLessThan(
+    testInfo.project.name === "desktop-renderer" ? 360 : 460,
+  );
+  await expectNoHorizontalPageOverflow(page);
+
+  const filterToggle = page.getByTestId("search-filter-toggle");
+  if ((await filterToggle.count()) === 1) {
+    await filterToggle.click();
+  }
+  const lightFilterPanel = page.getByTestId("search-filter-panel");
+  await expect(lightFilterPanel).toBeVisible();
+  await expect(
+    lightFilterPanel.getByText("Filters", { exact: true }),
+  ).toBeVisible();
+  await settleVisualFrame(page);
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-filters-light-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+  await page.reload();
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await settleVisualTheme(page, "light", "search-screen");
+  await settleVisualFrame(page);
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-results-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await settleVisualTheme(page, "dark", "search-screen");
+  await settleVisualFrame(page);
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-results-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+  const darkFilterToggle = page.getByTestId("search-filter-toggle");
+  if ((await darkFilterToggle.count()) === 1) {
+    await darkFilterToggle.click();
+  }
+  const darkFilterPanel = page.getByTestId("search-filter-panel");
+  await expect(darkFilterPanel).toBeVisible();
+  await expect(
+    darkFilterPanel.getByText("Filters", { exact: true }),
+  ).toBeVisible();
+  await settleVisualFrame(page);
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-filters-dark-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+});
+
+test("Settings and Search adapt without overflow at intermediate widths", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "Intermediate resizes run once in the desktop browser project.",
+  );
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page);
+
+  for (const viewport of [
+    { width: 768, height: 1024 },
+    { width: 1024, height: 768 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/settings");
+    await expect(page.getByTestId("settings-screen")).toBeVisible();
+    await expect(page.getByTestId("settings-overview")).toBeVisible();
+    await expect(page.getByTestId("settings-detail-account")).toHaveCount(0);
+    await expectNoHorizontalPageOverflow(page);
+    await page.goto("/settings/playback");
+    await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
+    await expect(page.getByTestId("settings-overview")).toHaveCount(0);
+
+    await page.goto("/search?q=Golden");
+    await expect(page.getByTestId("search-screen")).toBeVisible();
+    await expect(page.getByTestId("search-results-grid")).toBeVisible();
+    await expect(page.getByTestId("search-filter-toggle")).toBeVisible();
+    await expect(page.getByTestId("search-filter-panel")).toHaveCount(0);
+    await expectNoHorizontalPageOverflow(page);
+    await page.getByTestId("search-filter-toggle").click();
+    await expect(page.getByTestId("search-filter-panel")).toBeVisible();
+    await page.getByRole("button", { name: "Close filters" }).last().click();
+  }
+});
+
+test("legacy Settings and Search URLs redirect to canonical routes", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page);
+
+  await page.goto("/sources");
+  await expect(page).toHaveURL(/\/settings\/sources$/);
+  await expect(page.getByTestId("settings-detail-sources")).toBeVisible();
+
+  await page.goto("/settings/not-a-section");
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByTestId("settings-screen")).toBeVisible();
+
+  await page.goto(
+    "/search/results?q=Golden&type=movie&provider=fixture-addon&sort=relevance",
+  );
+  await expect(page).toHaveURL(/\/search\?/);
+  const canonicalUrl = new URL(page.url());
+  expect(canonicalUrl.searchParams.get("q")).toBe("Golden");
+  expect(canonicalUrl.searchParams.get("type")).toBe("movie");
+  expect(canonicalUrl.searchParams.get("provider")).toBe("fixture-addon");
+  expect(canonicalUrl.searchParams.has("sort")).toBe(false);
+});
+
+test("Command Palette supports arrow navigation and Enter", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page);
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+
+  const field = page.getByTestId("command-search-field");
+  await field.fill("Golden");
+  await expect(
+    page.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
+  ).toBeVisible();
+  await field.press("ArrowDown");
+  await field.press("ArrowUp");
+  await field.press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
+  );
+});
+
+test("partial provider failures keep successful Search results visible", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page, "search-partial");
+  await page.goto("/search?q=Golden");
+
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expect(
+    page.getByText(/Some sources could not be reached/i),
+  ).toBeVisible();
+});
+
+test("resetting Search filters clears provider and URL state", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "The persistent large-screen filter sidebar makes URL assertions stable.",
+  );
+  await loginToFixtureShell(page);
+  await page.goto(
+    "/search?q=Golden&type=movie&year=2026&provider=fixture-addon&sort=year",
+  );
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await page.getByRole("button", { name: "Reset filters" }).click();
+
+  await expect
+    .poll(() => {
+      const url = new URL(page.url());
+      return ["type", "year", "provider", "sort"].filter((key) =>
+        url.searchParams.has(key),
+      );
+    })
+    .toEqual([]);
 });
