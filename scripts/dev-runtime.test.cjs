@@ -7,6 +7,8 @@ const {
   determineTargetArch,
   isSupportedNodeVersion,
   normalizeArch,
+  parseNpmCommandArgs,
+  resolveNpmRunner,
   selectNodeRuntime,
 } = require("./dev-runtime.cjs");
 
@@ -102,4 +104,53 @@ test("fails with an actionable message when no runtime matches", () => {
       }),
     /nvm install/,
   );
+});
+
+test("parses guarded npm arguments and an optional listener port", () => {
+  assert.deepEqual(
+    parseNpmCommandArgs([
+      "--port",
+      "3001",
+      "--",
+      "run",
+      "dev",
+      "--workspace=server",
+    ]),
+    {
+      port: 3001,
+      npmArgs: ["run", "dev", "--workspace=server"],
+    },
+  );
+});
+
+test("rejects malformed guarded npm arguments", () => {
+  assert.throws(() => parseNpmCommandArgs(["run", "dev"]), /requires `--`/);
+  assert.throws(
+    () => parseNpmCommandArgs(["--port", "70000", "--", "run", "dev"]),
+    /valid TCP port/,
+  );
+  assert.throws(() => parseNpmCommandArgs(["--"]), /requires npm arguments/);
+});
+
+test("uses Corepack to honor the pinned npm version when available", () => {
+  const runner = resolveNpmRunner("/runtime/bin/node", {
+    exists: (candidate) => candidate.endsWith("corepack/dist/corepack.js"),
+  });
+
+  assert.deepEqual(runner, {
+    cli: "/runtime/lib/node_modules/corepack/dist/corepack.js",
+    prefixArgs: ["npm"],
+  });
+});
+
+test("falls back to the runtime npm CLI when Corepack is unavailable", () => {
+  const runner = resolveNpmRunner("/runtime/bin/node", {
+    env: {},
+    exists: (candidate) => candidate.endsWith("npm/bin/npm-cli.js"),
+  });
+
+  assert.deepEqual(runner, {
+    cli: "/runtime/lib/node_modules/npm/bin/npm-cli.js",
+    prefixArgs: [],
+  });
 });

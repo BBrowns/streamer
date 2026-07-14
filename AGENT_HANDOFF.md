@@ -23,10 +23,10 @@ Current phase:
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active implementation roadmap is complete through **PR #150** in
-[ROADMAP.md](./ROADMAP.md). PR #151 is intentionally deferred until real
-targets and release credentials are available. PR #142 is the roadmap
-truth-sync that defined this post-#141 phase.
+The active implementation roadmap is complete through **PR #151** in
+[ROADMAP.md](./ROADMAP.md). Real-target QA and RC evidence remain intentionally
+deferred until the required targets and release credentials are available. PR
+#142 is the roadmap truth-sync that defined this post-#141 phase.
 
 PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
 11.18 are the supported toolchain, production high/critical audit findings
@@ -39,7 +39,7 @@ running a bridge with an unavailable torrent engine.
 Deterministic renderer regression coverage is documented in
 [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up
-reliability/productization PRs have landed through **PR #150**. Earlier roadmap
+reliability/productization PRs have landed through **PR #151**. Earlier roadmap
 items that introduced
 PlaybackSession, Planner v2, downloads via sessions, cast via sessions, Sentry
 baseline, security baseline, CI gates, packaging inputs, macOS signing config,
@@ -120,6 +120,8 @@ Post-roadmap corrective PRs after #124:
   semantics and reduced-motion behavior; removed nested web buttons; fixed the
   Downloads inline empty-state overlap; and added deterministic phone/desktop
   visual QA artifacts.
+- **PR #151:** routed API, Expo, Expo web, and desktop development entrypoints
+  through the same supported Node/native-architecture guard as the bridge.
 
 ## Product North Star
 

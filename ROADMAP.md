@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #150:
+Implemented through PR #151:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -267,7 +267,27 @@ Acceptance:
 - Keyboard and screen-reader labels cover primary controls.
 - Screenshot changes are intentional and reviewable.
 
-### PR #151 - RC Evidence And Real-Target QA Resume
+### Completed: PR #151 - Consistent Dev Runtime Entry Points
+
+Goal: prevent API, Expo, web, and desktop development commands from bypassing
+the Node/native architecture guard used by the bridge.
+
+Scope:
+
+- Run root API, Expo, Expo web, and desktop commands with the selected Node 24
+  runtime.
+- Keep workspace scripts unchanged for CI and package builds.
+- Reuse graceful listener cleanup for the API port.
+- Add parser and failure-path coverage to the existing runtime tests.
+
+Acceptance:
+
+- Root dev entrypoints no longer inherit an incompatible Node 25/Rosetta
+  runtime.
+- Direct workspace scripts remain available to CI.
+- Runtime selection logic remains covered by the stream-server CI job.
+
+### Deferred Milestone - RC Evidence And Real-Target QA Resume
 
 Goal: perform the work that is intentionally deferred now and make a real
 go/no-go release decision.
@@ -301,14 +321,16 @@ of mocks or unit tests.
 6. Completed: PR #148 - offline and cast recovery UX.
 7. Completed: PR #149 - dev runtime architecture guard.
 8. Completed: PR #150 - accessibility and responsive visual quality.
-9. PR #151 - real-target QA and RC evidence when available.
+9. Completed: PR #151 - consistent dev runtime entrypoints.
+10. Deferred milestone - real-target QA and RC evidence when available.
 
 Dependency enforcement, deterministic renderer automation, shared action
 preflight, mobile release configuration, server production hardening, and
 offline/cast recovery UX, and the accessibility/responsive visual-quality pass
-are complete. PR #151 remains intentionally deferred pending real targets and
-release credentials. Future action surfaces must reuse the shared preflight and
-recovery contracts instead of adding local bridge-readiness conditionals.
+are complete. Real-target QA and RC evidence remain intentionally deferred
+pending real targets and release credentials. Future action surfaces must reuse
+the shared preflight and recovery contracts instead of adding local
+bridge-readiness conditionals.
 
 ## Working Rules
 
@@ -320,4 +342,5 @@ recovery contracts instead of adding local bridge-readiness conditionals.
 - Do not add Real-Debrid to onboarding or enable it by default.
 - Do not use mocks or unit tests to claim real-device support.
 - Keep [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) and
-  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until PR #151.
+  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until real-target
+  QA resumes.
