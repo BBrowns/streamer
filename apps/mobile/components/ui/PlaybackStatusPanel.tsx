@@ -47,6 +47,11 @@ export function PlaybackStatusPanel({
 
   return (
     <View
+      accessibilityLiveRegion={tone === "error" ? "assertive" : "polite"}
+      accessibilityRole={tone === "error" ? "alert" : "none"}
+      accessibilityLabel={[statusLabel, title, message, detail]
+        .filter(Boolean)
+        .join(". ")}
       style={[styles.overlay, { backgroundColor: getSoftOverlayColor(isDark) }]}
     >
       <Surface style={styles.panel}>

@@ -20,6 +20,11 @@ Current phase:
   golden-path automation, unified bridge/action preflight, mobile/server
   release configuration, recoverable offline/cast UX, and the focused
   accessibility/responsive visual-quality pass are in place.
+- Adaptive cinematic redesign phase: the unreleased worktree/branch introduces
+  semantic dark/light tokens, window classes, four primary destinations,
+  stable Home composition, unified Search/discovery, Undo foundations, and
+  initial PiP/background/cast continuity. Treat this as an active milestone,
+  not a completed full-app redesign.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
@@ -338,12 +343,17 @@ Bridge behavior is safer and more explicit:
 
 ### UI/UX Progress
 
-Some pastel glass/cinematic polish has been added, but the app is not yet at the intended Netflix/Disney+/Prime-quality UX. Treat the current UI as an improved baseline, not as the final revamp.
+The active direction is dark cinematic first with a fully supported neutral
+light mode. The earlier pastel-glass identity is legacy guidance. The current
+redesign foundation is substantial but is not yet the final
+Netflix/Disney+/Prime-quality product.
 
 Known useful direction:
 
-- Keep the provider grouping on Discover; the user specifically likes provider/provider-like rails.
-- Move primary flows toward visually calm, pastel glass, cinematic layouts.
+- Keep provider/provider-like rails, now surfaced through Home and Search
+  discovery rather than a primary Discover tab.
+- Move primary flows toward visually calm, dark cinematic layouts with limited
+  translucency and consistent light-mode behavior.
 - Avoid exposing source complexity as the default path.
 - Settings is now clearer but still not final. It groups Sources & Add-ons,
   Playback & Downloads, Account & Sync, Application, About & Updates, and
@@ -436,17 +446,20 @@ Gateway lifecycle exists now, but these are still open:
 
 ### 4. UI/UX Revamp Is Still Incomplete
 
-Home, detail, and settings now have a stronger pastel glass/cinematic baseline,
-but the UI is not yet the full visual/product redesign the user wants:
+The new shell, Home composition, Search/discovery flow, Undo notifications, and
+player continuity foundation are implemented, but the full visual/product
+redesign remains active:
 
-- Continue refining Home around hero, continue watching, provider rails,
-  recommendations, and bridge status.
-- Discover provider grouping should be kept and expanded with provider, genre, quality, and type filtering.
-- Continue refining Detail hierarchy around `Play Best` and collapsed advanced
-  sources.
-- Continue refining the reorganized Settings and Sources & Devices screens.
-- Player controls should feel more professional and less like a generic overlay.
-- Desktop and phone layouts need screenshot-driven QA.
+- Migrate Detail/Series, Library, Downloads, Settings, auth, and onboarding to
+  the semantic theme and shared window-class contract.
+- Deduplicate provider rails against Home's hero and other primary rails.
+- Expand Search with reliable provider/genre/language/availability facets only
+  after the server returns trustworthy provenance/facet metadata.
+- Complete cast time/status/seek synchronization and an expanded controller.
+- Complete caption-safe layout, visible subtitle/audio state, large-text, and
+  focus-not-obscured validation.
+- Add authenticated desktop and compact browser screenshots; keep native PiP,
+  lock-screen, download, and Chromecast support marked unproven until tested.
 
 ### 5. Production Readiness Is Still Open
 

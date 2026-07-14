@@ -1,6 +1,7 @@
 {
   "tabs": {
     "home": "Home",
+    "search": "Search",
     "discover": "Discover",
     "library": "Library",
     "downloads": "Downloads",
@@ -16,6 +17,7 @@
       "popularMovies": "Popular Movies",
       "topTVShows": "Top TV Shows",
       "recentlyAdded": "Recently Added",
+      "moreToWatch": "More to Watch",
       "fromProviders": "From Your Providers"
     },
     "continueWatching": {

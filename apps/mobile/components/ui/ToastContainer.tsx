@@ -44,24 +44,27 @@ function ToastItem({ toast }: { toast: Toast }) {
       enter.start();
     }
 
-    const timer = setTimeout(() => {
-      if (reducedMotion) {
-        dismiss(toast.id);
-        return;
-      }
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: -10,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 3200);
+    const timer = setTimeout(
+      () => {
+        if (reducedMotion) {
+          dismiss(toast.id);
+          return;
+        }
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: -10,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      },
+      Math.max(0, (toast.duration ?? 3500) - 300),
+    );
 
     return () => clearTimeout(timer);
   }, [dismiss, opacity, reducedMotion, toast.id, translateY]);
@@ -80,12 +83,27 @@ function ToastItem({ toast }: { toast: Toast }) {
 
   return (
     <Animated.View
+      accessibilityLiveRegion={toast.type === "error" ? "assertive" : "polite"}
+      accessibilityRole={toast.type === "error" ? "alert" : "none"}
       style={[styles.toast, { opacity, transform: [{ translateY }] }]}
     >
       <Ionicons name={icon[toast.type]} size={20} color={color[toast.type]} />
       <Text style={styles.message} numberOfLines={2}>
         {toast.message}
       </Text>
+      {!!toast.actionLabel && !!toast.onAction && (
+        <Pressable
+          onPress={() => {
+            dismiss(toast.id);
+            void toast.onAction?.();
+          }}
+          style={styles.action}
+          accessibilityRole="button"
+          accessibilityLabel={toast.actionLabel}
+        >
+          <Text style={styles.actionText}>{toast.actionLabel}</Text>
+        </Pressable>
+      )}
       <Pressable
         onPress={() => dismiss(toast.id)}
         hitSlop={8}
@@ -159,5 +177,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,
+  },
+  action: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  actionText: {
+    color: "#c4b5fd",
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

@@ -6,7 +6,6 @@ import {
   SectionList,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,6 +26,7 @@ import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { AppButton } from "../../components/ui/AppButton";
 import { Surface } from "../../components/ui/Surface";
 import { useTheme } from "../../hooks/useTheme";
+import { useWindowClass } from "../../hooks/useWindowClass";
 import { hapticImpactLight } from "../../lib/haptics";
 import {
   isTaskOfflinePlayable,
@@ -52,8 +52,7 @@ export default function DownloadsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
-  const compact = width < 700;
+  const { isCompact: compact } = useWindowClass();
   const tasksDict = useDownloadStore((state) => state.tasks);
   const tasks = useMemo(
     () => sortDownloadTasks(Object.values(tasksDict)),

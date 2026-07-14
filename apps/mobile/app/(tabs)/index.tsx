@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -34,6 +33,9 @@ import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
+import { useContinueWatching } from "../../hooks/useContinueWatching";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { buildHomeFeed } from "../../services/homeFeed";
 import {
   getWebFocusStyle,
   uiTouchTarget,
@@ -78,7 +80,7 @@ function SectionHeader({
             styles.sectionAction,
             { borderColor: colors.border, backgroundColor: colors.card },
             pressed && { opacity: 0.78 },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={onAction}
           accessibilityRole="button"
@@ -108,9 +110,8 @@ function HomeRail({
   testID: string;
 }) {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
-  const cardWidth = isDesktop ? 198 : 142;
+  const { isLarge } = useWindowClass();
+  const cardWidth = isLarge ? 198 : 142;
 
   if (isLoading) {
     return (
@@ -155,13 +156,15 @@ function HomeProviderRails() {
       addon: InstalledAddon;
     }[] = [];
 
-    addons?.forEach((addon) => {
-      addon.manifest.catalogs.forEach((catalog) => {
-        if (catalog.type === "movie" || catalog.type === "series") {
-          rows.push({ catalog, addon });
-        }
+    [...(addons ?? [])]
+      .sort((left, right) => left.installedAt.localeCompare(right.installedAt))
+      .forEach((addon) => {
+        addon.manifest.catalogs.forEach((catalog) => {
+          if (catalog.type === "movie" || catalog.type === "series") {
+            rows.push({ catalog, addon });
+          }
+        });
       });
-    });
 
     return rows.slice(0, 6);
   }, [addons]);
@@ -174,7 +177,7 @@ function HomeProviderRails() {
         eyebrow="PROVIDERS"
         title={t("home.sections.fromProviders")}
         actionLabel={t("tabs.discover")}
-        onAction={() => router.push("/discover")}
+        onAction={() => router.push("/search?mode=discover")}
       />
       {catalogRows.map(({ catalog, addon }) => (
         <CatalogRow
@@ -215,6 +218,7 @@ function HomeContent() {
 
   const movieCatalog = useInfiniteCatalog("movie");
   const seriesCatalog = useInfiniteCatalog("series");
+  const { data: continueWatchingItems = [] } = useContinueWatching();
 
   const movieItems = useMemo(
     () => flattenCatalogPages(movieCatalog.data),
@@ -225,17 +229,18 @@ function HomeContent() {
     [seriesCatalog.data],
   );
 
-  const heroItem = movieItems[0] ?? seriesItems[0];
-  const popularMovies = movieItems.slice(
-    heroItem === movieItems[0] ? 1 : 0,
-    13,
+  const homeFeed = useMemo(
+    () => buildHomeFeed(movieItems, seriesItems, continueWatchingItems),
+    [continueWatchingItems, movieItems, seriesItems],
   );
-  const topSeries = seriesItems.slice(heroItem === seriesItems[0] ? 1 : 0, 13);
-  const recentlyAdded = [...movieItems.slice(1, 7), ...seriesItems.slice(1, 7)]
-    .filter(
-      (item, index, all) => all.findIndex((i) => i.id === item.id) === index,
-    )
-    .slice(0, 12);
+  const heroItem = homeFeed.hero;
+  const popularMovies =
+    homeFeed.rails.find((rail) => rail.key === "popular_movies")?.items ?? [];
+  const topSeries =
+    homeFeed.rails.find((rail) => rail.key === "top_series")?.items ?? [];
+  const finalRail = homeFeed.rails.find(
+    (rail) => rail.key === "recently_added" || rail.key === "more_to_watch",
+  );
 
   const isLoading =
     !isHydrated || movieCatalog.isLoading || seriesCatalog.isLoading;
@@ -338,10 +343,14 @@ function HomeContent() {
       />
 
       <HomeRail
-        testID="home-recently-added"
-        eyebrow="NEW"
-        title={t("home.sections.recentlyAdded")}
-        items={recentlyAdded}
+        testID={`home-${finalRail?.key ?? "more-to-watch"}`}
+        eyebrow={finalRail?.key === "recently_added" ? "NEW" : "FOR YOU"}
+        title={
+          finalRail?.key === "recently_added"
+            ? t("home.sections.recentlyAdded")
+            : t("home.sections.moreToWatch", { defaultValue: "More to Watch" })
+        }
+        items={finalRail?.items ?? []}
         isLoading={isLoading}
       />
 

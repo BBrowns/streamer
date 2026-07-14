@@ -1,6 +1,7 @@
 {
   "tabs": {
     "home": "Home",
+    "search": "Zoeken",
     "discover": "Ontdekken",
     "library": "Bibliotheek",
     "downloads": "Downloads",
@@ -16,6 +17,7 @@
       "popularMovies": "Populaire films",
       "topTVShows": "Top TV-series",
       "recentlyAdded": "Nieuw toegevoegd",
+      "moreToWatch": "Meer om te kijken",
       "fromProviders": "Van je providers"
     },
     "continueWatching": {

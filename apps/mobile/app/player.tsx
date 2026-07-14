@@ -14,7 +14,11 @@ import {
   Image,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { VideoView, useVideoPlayer } from "expo-video";
+import {
+  VideoView,
+  isPictureInPictureSupported,
+  useVideoPlayer,
+} from "expo-video";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -188,17 +192,8 @@ export default function PlayerScreen() {
     [playbackSessionId],
   );
 
-  useEffect(
-    () => () => {
-      const cast = useCastStore.getState().activeCast;
-      if (!cast) return;
-      void stopCastSession(cast.device.id, cast.sessionId).catch((error) =>
-        console.error("Failed to stop cast", error),
-      );
-      useCastStore.getState().clearActiveCast();
-    },
-    [],
-  );
+  // Cast sessions intentionally outlive this route. They only stop after an
+  // explicit stop/close action, so navigation cannot silently end playback.
 
   const handleRetryPlayback = useCallback(async () => {
     if (!currentStream) return;
@@ -440,6 +435,8 @@ export default function PlayerScreen() {
   ]);
 
   const player = useVideoPlayer(playbackUri || "", (p) => {
+    p.staysActiveInBackground = true;
+    p.showNowPlayingNotification = true;
     p.play();
   });
 
@@ -1002,6 +999,22 @@ export default function PlayerScreen() {
     }
   }, []);
 
+  const isPiPSupported = useMemo(() => {
+    if (Platform.OS === "web") {
+      return Boolean(
+        typeof document !== "undefined" &&
+        ((document as any).pictureInPictureEnabled ||
+          (document.createElement("video") as any)
+            .webkitSupportsPresentationMode),
+      );
+    }
+    try {
+      return isPictureInPictureSupported();
+    } catch {
+      return false;
+    }
+  }, []);
+
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   if (currentStream && !playbackUri) {
@@ -1093,6 +1106,8 @@ export default function PlayerScreen() {
                 style={styles.webVideo}
                 nativeControls={false}
                 contentFit="contain"
+                allowsPictureInPicture={isPiPSupported}
+                startsPictureInPictureAutomatically={false}
                 onFullscreenEnter={() => showControls()}
               />
 
@@ -1157,7 +1172,7 @@ export default function PlayerScreen() {
               onSettings={() => setSettingsOpen(true)}
               onWebCast={() => setCastModalOpen(true)}
               onTogglePiP={handleTogglePiP}
-              isPiPSupported={true}
+              isPiPSupported={isPiPSupported}
               showInfoBar={false}
             />
           )}

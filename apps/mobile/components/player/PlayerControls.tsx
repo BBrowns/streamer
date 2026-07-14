@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +21,7 @@ import {
   uiTypography,
 } from "../ui/designSystem";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -92,9 +92,9 @@ export function PlayerControls({
 }: PlayerControlsProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
+  const { isCompact } = useWindowClass();
   const reducedMotion = useReducedMotion();
-  const compactLayout = width < 700;
+  const compactLayout = isCompact;
   const [scrubberWidth, setScrubberWidth] = useState(0);
 
   if (!isVisible) return null;

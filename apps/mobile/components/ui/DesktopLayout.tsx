@@ -1,16 +1,10 @@
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Platform,
-  Pressable,
-  useWindowDimensions,
-} from "react-native";
+import { View, Text, StyleSheet, Platform, Pressable } from "react-native";
 import { Link, usePathname, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -25,10 +19,10 @@ const NAV_ITEMS = [
     label: "Home",
   },
   {
-    href: "/discover",
-    icon: "compass-outline" as const,
-    activeIcon: "compass" as const,
-    label: "Discover",
+    href: "/search",
+    icon: "search-outline" as const,
+    activeIcon: "search" as const,
+    label: "Search",
   },
   {
     href: "/library",
@@ -46,16 +40,27 @@ const NAV_ITEMS = [
 
 export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
   const pathname = usePathname();
-  const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
-  const isDesktop = Platform.OS === "web" && width > 1024;
+  const { windowClass, hasSideNavigation } = useWindowClass();
+  const { colors } = useTheme();
+  const isLarge = windowClass === "large";
+  const isExpanded = windowClass === "expanded";
+  const sideWindowClass = windowClass === "compact" ? "medium" : windowClass;
   const isImmersiveRoute =
     pathname.startsWith("/detail/") || pathname.startsWith("/player");
 
-  if (!isDesktop) return <>{children}</>;
+  if (!hasSideNavigation) return <>{children}</>;
 
   if (isImmersiveRoute) {
-    return <View style={styles.immersiveContainer}>{children}</View>;
+    return (
+      <View
+        style={[
+          styles.immersiveContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        {children}
+      </View>
+    );
   }
 
   return (
@@ -64,6 +69,8 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
       <View
         style={[
           styles.sidebar,
+          windowClass === "medium" && styles.sidebarMedium,
+          isExpanded && styles.sidebarExpanded,
           {
             backgroundColor: colors.tabBar,
             borderRightColor: colors.border,
@@ -73,23 +80,27 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <View style={[styles.logoIconWrap, { backgroundColor: colors.tint }]}>
-            <Ionicons name="play" size={18} color={isDark ? "#000" : "#fff"} />
+            <Ionicons name="play" size={18} color={colors.onTint} />
           </View>
-          <Text style={[styles.logoText, { color: colors.text }]}>
-            Streamer
-          </Text>
+          {isLarge && (
+            <Text style={[styles.logoText, { color: colors.text }]}>
+              Streamer
+            </Text>
+          )}
         </View>
 
         {/* Main nav */}
         <View style={styles.nav}>
-          <Text
-            style={[
-              styles.navSectionLabel,
-              { color: colors.textSecondary + "90" },
-            ]}
-          >
-            MENU
-          </Text>
+          {isLarge && (
+            <Text
+              style={[
+                styles.navSectionLabel,
+                { color: colors.textSecondary + "90" },
+              ]}
+            >
+              MENU
+            </Text>
+          )}
           {NAV_ITEMS.map((item) => {
             const active =
               item.href === "/"
@@ -103,6 +114,7 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
                 activeIcon={item.activeIcon}
                 label={item.label}
                 active={active}
+                windowClass={sideWindowClass}
               />
             );
           })}
@@ -118,9 +130,11 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
             activeIcon="settings"
             label="Settings"
             active={pathname === "/settings"}
+            windowClass={sideWindowClass}
           />
-          {/* Search button */}
-          {!!onSearchOpen && <SearchNavButton onSearchOpen={onSearchOpen} />}
+          {!!onSearchOpen && isLarge && (
+            <SearchNavButton onSearchOpen={onSearchOpen} />
+          )}
         </View>
       </View>
 
@@ -190,12 +204,14 @@ function NavLink({
   activeIcon,
   label,
   active,
+  windowClass,
 }: {
   href: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
   activeIcon: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
   active: boolean;
+  windowClass: "medium" | "expanded" | "large";
 }) {
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -211,6 +227,7 @@ function NavLink({
         {...webPressableProps}
         style={({ pressed }) => [
           styles.navLink,
+          windowClass !== "large" && styles.navLinkRail,
           active && { backgroundColor: colors.tint + "15" },
           isWeb &&
             isHovered &&
@@ -234,24 +251,32 @@ function NavLink({
         {active && (
           <View style={[styles.activeBar, { backgroundColor: colors.tint }]} />
         )}
-        <View style={styles.navLinkInner}>
+        <View
+          style={[
+            styles.navLinkInner,
+            windowClass !== "large" && styles.navLinkInnerRail,
+          ]}
+        >
           <Ionicons
             name={active ? activeIcon : icon}
             size={20}
             color={active ? colors.tint : colors.textSecondary}
           />
-          <Text
-            style={[
-              styles.navLabel,
-              { color: active ? colors.text : colors.textSecondary },
-              active && { fontWeight: "700" },
-              isWeb &&
-                (isHovered || isKeyboardFocused) &&
-                !active && { color: colors.text },
-            ]}
-          >
-            {label}
-          </Text>
+          {windowClass !== "medium" && (
+            <Text
+              style={[
+                styles.navLabel,
+                windowClass === "expanded" && styles.navLabelExpanded,
+                { color: active ? colors.text : colors.textSecondary },
+                active && { fontWeight: "700" },
+                isWeb &&
+                  (isHovered || isKeyboardFocused) &&
+                  !active && { color: colors.text },
+              ]}
+            >
+              {label}
+            </Text>
+          )}
         </View>
       </Pressable>
     </Link>
@@ -263,15 +288,20 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
   },
-  immersiveContainer: {
-    flex: 1,
-    backgroundColor: "#11121c",
-  },
+  immersiveContainer: { flex: 1 },
   sidebar: {
-    width: 220,
+    width: 216,
     borderRightWidth: 1,
     paddingVertical: 28,
     paddingHorizontal: 12,
+  },
+  sidebarMedium: {
+    width: 72,
+    paddingHorizontal: 8,
+  },
+  sidebarExpanded: {
+    width: 88,
+    paddingHorizontal: 8,
   },
   logoContainer: {
     flexDirection: "row",
@@ -312,7 +342,7 @@ const styles = StyleSheet.create({
   navLinkFocused: {
     // @ts-ignore web-only
     outlineStyle: "solid",
-    outlineWidth: 2,
+    outlineWidth: 3,
     outlineColor: "#a78bfa",
     outlineOffset: 2,
   } as any,
@@ -331,9 +361,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
+  navLinkRail: {
+    justifyContent: "center",
+  },
+  navLinkInnerRail: {
+    flexDirection: "column",
+    gap: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+  },
   navLabel: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  navLabelExpanded: {
+    fontSize: 10,
+    textAlign: "center",
   },
   spacer: {
     flex: 1,

@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import {
   getWebFocusStyle,
+  getAccentForeground,
   uiRadii,
   uiSpacing,
   uiTouchTarget,
@@ -48,14 +49,12 @@ export function AppButton({
   fullWidth = false,
   style,
 }: AppButtonProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
   const isGhost = variant === "ghost";
   const foreground = isPrimary
-    ? isDark
-      ? "#000"
-      : "#fff"
+    ? getAccentForeground(colors)
     : isDanger
       ? colors.error
       : colors.tint;

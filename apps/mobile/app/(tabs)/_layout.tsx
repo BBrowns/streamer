@@ -1,23 +1,16 @@
 import { Tabs, Link } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  StyleSheet,
-  Platform,
-  useWindowDimensions,
-  View,
-  Text,
-  Pressable,
-} from "react-native";
+import { StyleSheet, Platform, View, Text, Pressable } from "react-native";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../stores/authStore";
-import { useState } from "react";
-import { useRouter, usePathname } from "expo-router";
+import { useRouter } from "expo-router";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import {
   getWebFocusStyle,
   uiTouchTarget,
 } from "../../components/ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 function NotificationBell() {
   const { unreadCount } = useNotifications();
@@ -63,31 +56,27 @@ function HeaderRight() {
         marginRight: 16,
       }}
     >
+      <NotificationBell />
       <Pressable
-        onPress={() => {
-          // Trigger search overlay via global event
-          const { DeviceEventEmitter } = require("react-native");
-          DeviceEventEmitter.emit("SHOW_SEARCH");
-        }}
+        onPress={() => router.push("/settings")}
         accessibilityRole="button"
-        accessibilityLabel="Search"
+        accessibilityLabel="Profile and settings"
         style={({ focused }: any) => [
           styles.headerIconButton,
-          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         ]}
       >
-        <Ionicons name="search-outline" size={24} color={colors.text} />
+        <Ionicons name="person-circle-outline" size={28} color={colors.text} />
       </Pressable>
-      <NotificationBell />
     </View>
   );
 }
 
 export default function TabLayout() {
-  const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
+  const { isCompact } = useWindowClass();
+  const { colors } = useTheme();
   const { t } = useTranslation();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const hasSideNavigation = !isCompact;
 
   const tabsContent = (
     <Tabs
@@ -103,17 +92,17 @@ export default function TabLayout() {
           letterSpacing: 0,
         },
         // Hide header on desktop — the DesktopLayout sidebar handles navigation
-        headerShown: !isDesktop,
+        headerShown: isCompact,
         tabBarStyle: [
           styles.tabBar,
           {
             backgroundColor: colors.tabBar,
             borderTopColor: colors.border,
           },
-          isDesktop && { display: "none" },
+          hasSideNavigation && { display: "none" },
         ],
         tabBarActiveTintColor: colors.tint,
-        tabBarInactiveTintColor: isDark ? "#555555" : "#94a3b8",
+        tabBarInactiveTintColor: colors.disabled,
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: "800",
@@ -140,7 +129,7 @@ export default function TabLayout() {
         name="discover"
         options={{
           title: t("tabs.discover"),
-          headerRight: () => <HeaderRight />,
+          href: null,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "compass" : "compass-outline"}
@@ -149,6 +138,23 @@ export default function TabLayout() {
             />
           ),
           tabBarAccessibilityLabel: t("tabs.discover"),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: t("tabs.search", { defaultValue: "Search" }),
+          headerRight: () => <HeaderRight />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "search" : "search-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+          tabBarAccessibilityLabel: t("tabs.search", {
+            defaultValue: "Search",
+          }),
         }}
       />
       <Tabs.Screen
@@ -183,6 +189,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: t("tabs.settings"),
+          href: null,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "settings" : "settings-outline"}

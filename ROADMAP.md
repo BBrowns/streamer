@@ -69,6 +69,11 @@ Implemented through PR #151:
   failed download offers one context-specific retry, replan, verify, storage,
   bridge-repair, or remove action, while cast discovery/source/device failures
   offer refresh, fallback, or bridge repair without retrying loopback URLs.
+- The current unreleased UI redesign introduces a semantic dark-cinematic
+  palette with preserved light mode, compact/medium/expanded/large window
+  classes, four primary destinations, deduplicated Home composition, unified
+  Search/discovery state, recoverable removal actions, and PiP/background/cast
+  continuity foundations.
 
 Not yet proven:
 
@@ -97,6 +102,45 @@ The next priorities are based on observed gaps, not old roadmap numbering:
   `unknown` target status until that evidence exists.
 
 ## Active Roadmap
+
+### In Progress: Adaptive Cinematic UI/UX Redesign
+
+Goal: complete the consumer-first redesign without changing the playback
+control plane or exposing source complexity as the default experience.
+
+Implemented in the current draft phase:
+
+- Semantic theme, focus, overlay, disabled, and contrast tokens.
+- Compact bottom navigation and medium/expanded/large rail/sidebar behavior.
+- Stable Home hero/rail composition with canonical deduplication and honest
+  released-date labeling.
+- One Search/discovery destination with URL-restorable type/year/sort state and
+  a responsive advanced-filter surface.
+- Undo for Library and Continue Watching removal.
+- PiP/background configuration, accessible player status announcements, and a
+  cast session that survives route navigation with mini-controller pause/play.
+
+Remaining before this redesign milestone is complete:
+
+- Migrate Detail/Series, Library, Downloads, Settings, auth, and onboarding off
+  legacy hardcoded styling and local breakpoint logic.
+- Deduplicate provider rails against the rest of Home and add scalable search
+  facets/provenance when server metadata supports them.
+- Add recoverable bulk/download actions where the underlying file operation is
+  reversible; retain confirmation where it is not.
+- Complete cast status/time/seek synchronization and expanded-controller UX.
+- Finish media accessibility for subtitle visibility, caption-safe layout,
+  alternate/audio-description labeling, large text, and focus-not-obscured.
+- Add authenticated browser golden paths and record native PiP, lock-screen,
+  download, and Chromecast evidence without converting unknowns into claims.
+
+Acceptance:
+
+- Core consumer flows share one token and window-class contract.
+- Search/back state and Home rail identity remain stable and test-covered.
+- Player features do not regress below platform-standard media expectations.
+- Automated checks and responsive screenshots cover authenticated primary
+  states; native claims remain gated by real-device evidence.
 
 ### Completed: PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
@@ -322,7 +366,8 @@ of mocks or unit tests.
 7. Completed: PR #149 - dev runtime architecture guard.
 8. Completed: PR #150 - accessibility and responsive visual quality.
 9. Completed: PR #151 - consistent dev runtime entrypoints.
-10. Deferred milestone - real-target QA and RC evidence when available.
+10. In progress - adaptive cinematic UI/UX redesign.
+11. Deferred milestone - real-target QA and RC evidence when available.
 
 Dependency enforcement, deterministic renderer automation, shared action
 preflight, mobile release configuration, server production hardening, and

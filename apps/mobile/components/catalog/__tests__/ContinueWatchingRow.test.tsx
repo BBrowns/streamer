@@ -43,6 +43,7 @@ jest.mock("../../../hooks/useWebPressableActivation", () => ({
 jest.mock("../../../hooks/useContinueWatching", () => ({
   useContinueWatching: jest.fn(),
   useRemoveProgress: jest.fn(),
+  useUpdateProgress: jest.fn(),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -81,6 +82,9 @@ describe("ContinueWatchingRow", () => {
     hooks.useRemoveProgress.mockReturnValue({
       mutate: mockRemoveMutate,
       isPending: false,
+    });
+    hooks.useUpdateProgress.mockReturnValue({
+      mutateAsync: jest.fn(),
     });
   });
 
@@ -138,7 +142,10 @@ describe("ContinueWatchingRow", () => {
       screen.getByLabelText("Remove Example Movie from Continue Watching"),
     );
 
-    expect(mockRemoveMutate).toHaveBeenCalledWith("tt0111161");
+    expect(mockRemoveMutate).toHaveBeenCalledWith(
+      "tt0111161",
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 
   it("can show a useful empty state on Home", () => {

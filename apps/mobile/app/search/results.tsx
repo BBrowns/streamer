@@ -7,15 +7,22 @@ import {
   Pressable,
   TextInput,
   Platform,
+  Modal,
 } from "react-native";
-import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import type { MetaPreview } from "@streamer/shared";
+import type {
+  CatalogDefinition,
+  InstalledAddon,
+  MetaPreview,
+} from "@streamer/shared";
 import { useSearch } from "../../hooks/useSearch";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
+import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SkeletonCardGrid } from "../../components/ui/SkeletonLoader";
+import { SkeletonRow } from "../../components/ui/SkeletonLoader";
 import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { Surface } from "../../components/ui/Surface";
 import { AppButton } from "../../components/ui/AppButton";
@@ -27,11 +34,17 @@ import {
   uiTypography,
 } from "../../components/ui/designSystem";
 import { hapticImpactLight } from "../../lib/haptics";
-import { goBackOrReplace } from "../../lib/navigation";
 import { useTheme } from "../../hooks/useTheme";
 import { SearchService } from "../../services/SearchService";
+import { useAddons } from "../../hooks/useAddons";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import {
+  parseSearchRouteState,
+  searchRouteParams,
+  type SearchSort,
+  type SearchTypeFilter,
+} from "../../services/searchState";
 
-type TypeFilter = "all" | "movie" | "series";
 type YearFilter = "all" | string;
 
 function extractYear(item: MetaPreview) {
@@ -53,33 +66,100 @@ function resultSummary(count: number, query: string) {
   return `${count} results for "${query}"`;
 }
 
+function DiscoverCatalogRows({ type }: { type: SearchTypeFilter }) {
+  const { data: addons, isLoading } = useAddons();
+  const { colors } = useTheme();
+  const rows = useMemo(() => {
+    const catalogRows: Array<{
+      catalog: CatalogDefinition;
+      addon: InstalledAddon;
+    }> = [];
+    [...(addons ?? [])]
+      .sort((left, right) => left.installedAt.localeCompare(right.installedAt))
+      .forEach((addon) => {
+        addon.manifest.catalogs.forEach((catalog) => {
+          if (
+            (catalog.type === "movie" || catalog.type === "series") &&
+            (type === "all" || catalog.type === type)
+          ) {
+            catalogRows.push({ addon, catalog });
+          }
+        });
+      });
+    return catalogRows;
+  }, [addons, type]);
+
+  if (isLoading) return <SkeletonRow />;
+  if (rows.length === 0) {
+    return (
+      <Text style={[styles.discoverEmpty, { color: colors.textSecondary }]}>
+        Install a provider to browse its catalogs here.
+      </Text>
+    );
+  }
+
+  return (
+    <View style={styles.discoverRows}>
+      {rows.map(({ addon, catalog }) => (
+        <CatalogRow
+          key={`search-${addon.id}-${catalog.type}-${catalog.id}`}
+          addon={addon}
+          catalog={catalog}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function SearchResultsScreen() {
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  const params = useLocalSearchParams<{
+    q?: string;
+    type?: string;
+    year?: string;
+    sort?: string;
+    mode?: string;
+  }>();
+  const routeState = parseSearchRouteState(params);
   const router = useRouter();
   const numColumns = useResponsiveColumns();
   const { colors, isDark } = useTheme();
-  const initialQuery = typeof q === "string" ? q : "";
+  const { isExpanded, isLarge } = useWindowClass();
+  const initialQuery = routeState.q;
   const [inputValue, setInputValue] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [yearFilter, setYearFilter] = useState<YearFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<SearchTypeFilter>(
+    routeState.type,
+  );
+  const [yearFilter, setYearFilter] = useState<YearFilter>(routeState.year);
+  const [sort, setSort] = useState<SearchSort>(routeState.sort);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { data, isLoading, isError, refetch } = useSearch(submittedQuery);
 
   const results = data ?? [];
   const years = useMemo(() => uniqueYears(results), [results]);
-  const filteredResults = useMemo(
-    () =>
-      results.filter((item) => {
-        if (typeFilter !== "all" && item.type !== typeFilter) return false;
-        if (yearFilter !== "all" && extractYear(item) !== yearFilter) {
-          return false;
-        }
-        return true;
-      }),
-    [results, typeFilter, yearFilter],
-  );
+  const filteredResults = useMemo(() => {
+    const filtered = results.filter((item) => {
+      if (typeFilter !== "all" && item.type !== typeFilter) return false;
+      if (yearFilter !== "all" && extractYear(item) !== yearFilter) {
+        return false;
+      }
+      return true;
+    });
+    if (sort === "title") {
+      return [...filtered].sort((left, right) =>
+        left.name.localeCompare(right.name),
+      );
+    }
+    if (sort === "year") {
+      return [...filtered].sort(
+        (left, right) =>
+          Number(extractYear(right) ?? 0) - Number(extractYear(left) ?? 0),
+      );
+    }
+    return filtered;
+  }, [results, sort, typeFilter, yearFilter]);
 
   const loadRecent = useCallback(async () => {
     setRecentSearches(await SearchService.getRecentSearches());
@@ -92,7 +172,26 @@ export default function SearchResultsScreen() {
   useEffect(() => {
     setInputValue(initialQuery);
     setSubmittedQuery(initialQuery);
-  }, [initialQuery]);
+    setTypeFilter(routeState.type);
+    setYearFilter(routeState.year);
+    setSort(routeState.sort);
+  }, [initialQuery, routeState.sort, routeState.type, routeState.year]);
+
+  const syncRoute = useCallback(
+    (overrides: Partial<Parameters<typeof searchRouteParams>[0]>) => {
+      router.setParams(
+        searchRouteParams({
+          q: submittedQuery,
+          type: typeFilter,
+          year: yearFilter,
+          sort,
+          mode: routeState.mode,
+          ...overrides,
+        }) as any,
+      );
+    },
+    [routeState.mode, router, sort, submittedQuery, typeFilter, yearFilter],
+  );
 
   useEffect(() => {
     if (yearFilter !== "all" && !years.includes(yearFilter)) {
@@ -111,9 +210,9 @@ export default function SearchResultsScreen() {
       setYearFilter("all");
       await SearchService.addRecentSearch(clean);
       await loadRecent();
-      router.setParams({ q: clean });
+      syncRoute({ q: clean, type: "all", year: "all", sort: "relevance" });
     },
-    [loadRecent, router],
+    [loadRecent, syncRoute],
   );
 
   const removeRecent = useCallback(
@@ -138,6 +237,11 @@ export default function SearchResultsScreen() {
     { label: "Any year", value: "all" as const },
     ...years.map((year) => ({ label: year, value: year })),
   ];
+  const sortOptions = [
+    { label: "Relevant", value: "relevance" as const },
+    { label: "A–Z", value: "title" as const },
+    { label: "Newest", value: "year" as const },
+  ];
 
   const showSuggestions =
     inputValue.trim().length > 0 && inputValue.trim() !== submittedQuery.trim();
@@ -145,32 +249,74 @@ export default function SearchResultsScreen() {
   const showEmptyLanding =
     !submittedQuery.trim() && recentSearches.length === 0;
   const showFilters = submittedQuery.trim().length > 0 && results.length > 0;
+  const showInlineFilterPanel = isExpanded || isLarge;
+  const activeAdvancedFilterCount =
+    Number(yearFilter !== "all") + Number(sort !== "relevance");
+
+  const advancedFilterControls = (
+    <>
+      <View style={styles.filterPanelHeader}>
+        <View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Filters
+          </Text>
+          <Text
+            style={[
+              styles.filterPanelSubtitle,
+              { color: colors.textSecondary },
+            ]}
+          >
+            Refine and sort these results
+          </Text>
+        </View>
+        {!showInlineFilterPanel && (
+          <Pressable
+            onPress={() => setFiltersOpen(false)}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel="Close filters"
+          >
+            <Ionicons name="close" size={22} color={colors.text} />
+          </Pressable>
+        )}
+      </View>
+      {years.length > 0 && (
+        <FilterChipBar
+          options={yearOptions}
+          value={yearFilter}
+          onChange={(value) => {
+            setYearFilter(value);
+            syncRoute({ year: value });
+          }}
+          containerStyle={styles.filterBar}
+          accessibilityLabel="Filter search results by year"
+        />
+      )}
+      <FilterChipBar
+        options={sortOptions}
+        value={sort}
+        onChange={(value) => {
+          setSort(value);
+          syncRoute({ sort: value });
+        }}
+        containerStyle={styles.filterBar}
+        accessibilityLabel="Sort search results"
+      />
+      <AppButton
+        label="Reset filters"
+        variant="secondary"
+        size="small"
+        onPress={() => {
+          setYearFilter("all");
+          setSort("relevance");
+          syncRoute({ year: "all", sort: "relevance" });
+        }}
+      />
+    </>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen
-        options={{
-          title: submittedQuery ? `Search: ${submittedQuery}` : "Search",
-          headerShown: true,
-          headerStyle: { backgroundColor: colors.header },
-          headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: "800" },
-          headerLeft: () => (
-            <Pressable
-              onPress={() => {
-                hapticImpactLight();
-                goBackOrReplace(router);
-              }}
-              style={styles.headerBack}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-            >
-              <Ionicons name="chevron-back" size={26} color={colors.text} />
-            </Pressable>
-          ),
-        }}
-      />
-
       <FlatList
         data={filteredResults}
         keyExtractor={(item) => item.id}
@@ -186,7 +332,7 @@ export default function SearchResultsScreen() {
                 styles.searchSurface,
                 Platform.OS === "web" &&
                   searchFocused &&
-                  getWebFocusStyle(colors.tint),
+                  getWebFocusStyle(colors.focus),
               ]}
             >
               <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -211,7 +357,13 @@ export default function SearchResultsScreen() {
                     setSubmittedQuery("");
                     setTypeFilter("all");
                     setYearFilter("all");
-                    router.setParams({ q: "" });
+                    setSort("relevance");
+                    syncRoute({
+                      q: "",
+                      type: "all",
+                      year: "all",
+                      sort: "relevance",
+                    });
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Clear search"
@@ -343,9 +495,41 @@ export default function SearchResultsScreen() {
               </Surface>
             )}
 
+            {routeState.mode === "discover" && !submittedQuery.trim() && (
+              <View style={styles.discoverSection}>
+                <View style={styles.summaryBlock}>
+                  <Text style={[styles.summaryTitle, { color: colors.text }]}>
+                    Browse providers
+                  </Text>
+                  <Text
+                    style={[
+                      styles.summarySubtitle,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Catalog order follows your installed provider order.
+                  </Text>
+                </View>
+                <FilterChipBar
+                  options={typeOptions}
+                  value={typeFilter}
+                  onChange={(value) => {
+                    setTypeFilter(value);
+                    syncRoute({ type: value });
+                  }}
+                  containerStyle={styles.filterBar}
+                  accessibilityLabel="Filter provider catalogs by type"
+                />
+                <DiscoverCatalogRows type={typeFilter} />
+              </View>
+            )}
+
             {submittedQuery.trim().length > 0 && (
               <View style={styles.summaryBlock}>
-                <Text style={[styles.summaryTitle, { color: colors.text }]}>
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[styles.summaryTitle, { color: colors.text }]}
+                >
                   {resultSummary(filteredResults.length, submittedQuery)}
                 </Text>
                 <Text
@@ -364,18 +548,27 @@ export default function SearchResultsScreen() {
                 <FilterChipBar
                   options={typeOptions}
                   value={typeFilter}
-                  onChange={(value) => setTypeFilter(value)}
+                  onChange={(value) => {
+                    setTypeFilter(value);
+                    syncRoute({ type: value });
+                  }}
                   containerStyle={styles.filterBar}
                   accessibilityLabel="Filter search results by type"
                 />
-                {years.length > 0 && (
-                  <FilterChipBar
-                    options={yearOptions}
-                    value={yearFilter}
-                    onChange={(value) => setYearFilter(value)}
-                    containerStyle={styles.filterBar}
-                    accessibilityLabel="Filter search results by year"
-                  />
+                {showInlineFilterPanel ? (
+                  <Surface style={styles.inlineFilterPanel}>
+                    {advancedFilterControls}
+                  </Surface>
+                ) : (
+                  <View style={styles.filterButtonWrap}>
+                    <AppButton
+                      label={`Filters${activeAdvancedFilterCount ? ` (${activeAdvancedFilterCount})` : ""}`}
+                      icon="options-outline"
+                      variant="secondary"
+                      size="small"
+                      onPress={() => setFiltersOpen(true)}
+                    />
+                  </View>
                 )}
               </View>
             )}
@@ -406,9 +599,18 @@ export default function SearchResultsScreen() {
                   <EmptyState
                     icon="search"
                     title="No results found"
-                    description={`Nothing matched "${submittedQuery}". Try another title or provider in Discover.`}
-                    actionLabel="Open Discover"
-                    onAction={() => router.push("/discover")}
+                    description={`Nothing matched "${submittedQuery}". Try another title or clear the filters.`}
+                    actionLabel="Clear search"
+                    onAction={() => {
+                      setInputValue("");
+                      setSubmittedQuery("");
+                      syncRoute({
+                        q: "",
+                        type: "all",
+                        year: "all",
+                        sort: "relevance",
+                      });
+                    }}
                   />
                 </View>
               )}
@@ -426,6 +628,12 @@ export default function SearchResultsScreen() {
                     onAction={() => {
                       setTypeFilter("all");
                       setYearFilter("all");
+                      setSort("relevance");
+                      syncRoute({
+                        type: "all",
+                        year: "all",
+                        sort: "relevance",
+                      });
                     }}
                   />
                 </View>
@@ -438,6 +646,29 @@ export default function SearchResultsScreen() {
           </View>
         )}
       />
+      <Modal
+        visible={filtersOpen && !showInlineFilterPanel}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFiltersOpen(false)}
+      >
+        <Pressable
+          style={[styles.modalScrim, { backgroundColor: colors.scrim }]}
+          onPress={() => setFiltersOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close filters"
+        >
+          <Pressable
+            style={[
+              styles.filterSheet,
+              { backgroundColor: colors.surfaceElevated },
+            ]}
+            onPress={() => {}}
+          >
+            {advancedFilterControls}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -445,13 +676,6 @@ export default function SearchResultsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  headerBack: {
-    width: uiTouchTarget,
-    height: uiTouchTarget,
-    marginLeft: uiSpacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
   },
   listContent: {
     paddingBottom: 48,
@@ -584,6 +808,38 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: uiSpacing.sm,
   },
+  filterButtonWrap: {
+    paddingHorizontal: uiSpacing.lg,
+    alignItems: "flex-start",
+  },
+  inlineFilterPanel: {
+    marginHorizontal: uiSpacing.lg,
+    marginTop: uiSpacing.sm,
+    gap: uiSpacing.sm,
+  },
+  filterPanelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: uiSpacing.md,
+    marginBottom: uiSpacing.sm,
+  },
+  filterPanelSubtitle: {
+    ...uiTypography.caption,
+    marginTop: 2,
+  },
+  modalScrim: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  filterSheet: {
+    borderTopLeftRadius: uiRadii.lg,
+    borderTopRightRadius: uiRadii.lg,
+    padding: uiSpacing.lg,
+    paddingBottom: 40,
+    maxHeight: "80%",
+    gap: uiSpacing.sm,
+  },
   skeletonWrap: {
     paddingHorizontal: uiSpacing.lg,
     marginTop: uiSpacing.md,
@@ -599,5 +855,16 @@ const styles = StyleSheet.create({
   },
   columnWrapper: {
     paddingHorizontal: uiSpacing.sm,
+  },
+  discoverSection: {
+    marginTop: uiSpacing.md,
+  },
+  discoverRows: {
+    gap: uiSpacing.sm,
+  },
+  discoverEmpty: {
+    ...uiTypography.body,
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.xl,
   },
 });

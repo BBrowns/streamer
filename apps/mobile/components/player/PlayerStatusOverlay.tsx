@@ -153,8 +153,12 @@ export function PlayerStatusOverlay({
   // to satisfy the compiler to avoid "condition always false" lints.
   if (isBuffering) {
     return (
-      <View style={styles.bufferingOverlay}>
-        <ActivityIndicator size="large" color="#818cf8" />
+      <View
+        style={styles.bufferingOverlay}
+        accessibilityLiveRegion="polite"
+        accessibilityLabel={t("player.status.buffering")}
+      >
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }

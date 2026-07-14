@@ -16,7 +16,9 @@ import type { WatchProgress } from "@streamer/shared";
 import {
   useContinueWatching,
   useRemoveProgress,
+  useUpdateProgress,
 } from "../../hooks/useContinueWatching";
+import { useToastStore } from "../../stores/toastStore";
 import { useTheme } from "../../hooks/useTheme";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { Surface } from "../ui/Surface";
@@ -216,6 +218,7 @@ export function ContinueWatchingRow({
 }: ContinueWatchingRowProps) {
   const { data: items, isLoading } = useContinueWatching();
   const removeProgress = useRemoveProgress();
+  const updateProgress = useUpdateProgress();
   const { t } = useTranslation();
   const { colors } = useTheme();
 
@@ -277,7 +280,32 @@ export function ContinueWatchingRow({
         renderItem={({ item }) => (
           <MemoizedCard
             item={item}
-            onRemove={(itemId) => removeProgress.mutate(itemId)}
+            onRemove={(itemId) => {
+              const removedItem = items.find(
+                (entry) => entry.itemId === itemId,
+              );
+              removeProgress.mutate(itemId, {
+                onSuccess: () => {
+                  if (!removedItem) return;
+                  useToastStore
+                    .getState()
+                    .show("Removed from Continue Watching", "info", {
+                      actionLabel: "Undo",
+                      onAction: () =>
+                        updateProgress.mutateAsync({
+                          type: removedItem.type,
+                          itemId: removedItem.itemId,
+                          season: removedItem.season ?? undefined,
+                          episode: removedItem.episode ?? undefined,
+                          currentTime: removedItem.currentTime,
+                          duration: removedItem.duration,
+                          title: removedItem.title,
+                          poster: removedItem.poster ?? undefined,
+                        }),
+                    });
+                },
+              });
+            }}
             isRemoving={removeProgress.isPending}
           />
         )}

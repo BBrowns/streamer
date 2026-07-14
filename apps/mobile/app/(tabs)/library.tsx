@@ -17,6 +17,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { useTranslation } from "react-i18next";
 import {
   useLibrary,
+  useAddToLibrary,
   useRemoveFromLibrary,
   useRemoveBulkFromLibrary,
 } from "../../hooks/useLibrary";
@@ -41,6 +42,7 @@ import {
 } from "../../components/ui/SkeletonLoader";
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
 import { FilterChipBar } from "../../components/ui/FilterChipBar";
+import { useToastStore } from "../../stores/toastStore";
 
 export default function LibraryScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -50,6 +52,7 @@ export default function LibraryScreen() {
   const { colors, isDark } = useTheme();
   const { data: items, isLoading } = useLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
+  const addToLibrary = useAddToLibrary();
   const bulkRemoveFromLibrary = useRemoveBulkFromLibrary();
   const { t } = useTranslation();
   const tasks = useDownloadStore((s) => s.tasks);
@@ -91,6 +94,7 @@ export default function LibraryScreen() {
 
   const handleRemove = useCallback(
     (itemId: string, isDownload?: boolean) => {
+      const removedItem = items?.find((item) => item.itemId === itemId);
       if (isDownload) {
         const task = Object.values(tasks).find(
           (t) => t.mediaInfo.itemId === itemId,
@@ -101,9 +105,21 @@ export default function LibraryScreen() {
         }
       }
       removeFromLibrary.mutate(itemId);
+      if (removedItem && !isDownload) {
+        useToastStore.getState().show("Removed from Library", "info", {
+          actionLabel: "Undo",
+          onAction: () =>
+            addToLibrary.mutateAsync({
+              type: removedItem.type,
+              itemId: removedItem.itemId,
+              title: removedItem.title,
+              poster: removedItem.poster ?? undefined,
+            }),
+        });
+      }
       hapticSuccess();
     },
-    [removeFromLibrary, tasks],
+    [addToLibrary, items, removeFromLibrary, tasks],
   );
 
   const toggleSelect = useCallback((itemId: string) => {

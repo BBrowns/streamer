@@ -9,11 +9,19 @@
 
 ## 1. Design Philosophy
 
-The current product direction is **pastel glass cinema**: Apple-inspired, soft, cinematic, and calm enough for repeated media browsing. This is the target direction; some older components still show heavier/darker styling and should be treated as migration candidates.
+The current product direction is **dark cinematic first, light mode preserved**.
+The interface should feel calm, media-led, and familiar to users of professional
+streaming applications. The old pastel-glass direction is no longer the primary
+identity; isolated pastel and hardcoded legacy styles are migration candidates.
 
-- **Pastel glass:** warm mist backgrounds, frosted cards, restrained borders, lavender/blush/mint/peach accents.
-- **Cinematic media hierarchy:** large artwork, clear Play Best action, visible next content, and less source noise.
-- **Consumer-streaming UX:** users should not have to understand torrents, codecs, peers, bridge URLs, or add-on internals to press Play.
+- **Dark cinematic:** near-black neutral backgrounds, restrained violet accent,
+  strong artwork hierarchy, and limited translucency.
+- **Functional light mode:** the same semantic hierarchy and contrast in a
+  neutral light palette; light mode must not be treated as an afterthought.
+- **Cinematic media hierarchy:** large artwork, clear Play Best or Resume action,
+  visible next content, and less source noise.
+- **Consumer-streaming UX:** users should not have to understand torrents,
+  codecs, peers, bridge URLs, or add-on internals to press Play.
 
 The long-term references are closer to Apple TV/Vision Pro-style media surfaces, StreamX-like Apple platform structure, Infuse, Plex, Netflix, Disney+, and Prime Video than to a technical source browser.
 
@@ -21,15 +29,22 @@ The current UI is an improved baseline, not the final Netflix/Disney+/Prime
 quality product. Future UI work should be screenshot-driven and should preserve
 the now-central playback architecture.
 
-Current UI phase:
+Current UI phase (unreleased redesign work):
 
 - Keep the existing Expo/React Native stack.
-- Continue with constrained primitives and screen-by-screen improvements.
+- Use the shared semantic palette and `useWindowClass()` for all new core UI.
+- Compact navigation exposes Home, Search, Library, and Downloads; medium,
+  expanded, and large windows adapt to a rail/sidebar.
+- Home uses one canonical `type:id` identity for hero and primary rails, with
+  Continue Watching excluded from repeated recommendations.
+- Search is the single discovery destination. The old Discover route redirects
+  to Search discovery mode, while `/search/results` remains a compatibility
+  route for result links.
+- Continue with constrained primitives and screen-by-screen migration of
+  Detail, Series, Library, Downloads, Settings, auth, and onboarding.
 - Do not start a full Tamagui migration or broad visual rewrite.
-- Prioritize reliability-facing UX first: player states, Sources & Devices,
-  More Sources/debug information, downloads, cast, and settings setup clarity.
-- Larger Home/Search/Onboarding polish should build on the design-system pilot
-  after playback/gateway/offline/cast states are clear.
+- Preserve the session-driven playback architecture and progressive disclosure
+  of source/device complexity.
 
 Primary hierarchy:
 
@@ -97,7 +112,7 @@ and lower styling drift, not a full visual migration.
 Do not do:
 
 - Do not perform a full visual rewrite in one PR.
-- Do not reintroduce neon/dark-heavy styling as the default app identity.
+- Do not reintroduce neon styling, dense glassmorphism, or a light-only identity.
 - Do not expose raw source complexity as the primary detail-screen flow.
 - Do not add a marketing landing page instead of improving the actual app
   screens.
@@ -111,19 +126,22 @@ Do not do:
 
 The entire colour system is defined in a single `PALETTE` object with two variants:
 
-| Token           | Dark                     | Light                      | Usage                                  |
-| --------------- | ------------------------ | -------------------------- | -------------------------------------- |
-| `background`    | `#11121c`                | `#fbf6f4`                  | Cinematic midnight / soft warm mist    |
-| `card`          | `rgba(255,255,255,0.08)` | `rgba(255,255,255,0.72)`   | Frosted surfaces                       |
-| `text`          | `#fff8ff`                | `#282236`                  | Primary text                           |
-| `textSecondary` | `#c6bfd2`                | `#6f657d`                  | Labels, subtitles                      |
-| `tint`          | `#d8b4fe` (lavender)     | `#a78bfa` (soft violet)    | Accent — buttons, active states, icons |
-| `border`        | `rgba(255,255,255,0.14)` | `rgba(106, 93, 125, 0.16)` | Dividers, glass borders                |
-| `error`         | `#ff9ba6`                | `#df6b7a`                  | Error text, destructive actions        |
-| `success`       | `#a7e8bd`                | `#63b987`                  | Confirmations                          |
-| `warning`       | `#ffd9a8`                | `#d7a15f`                  | Warnings, incomplete states            |
+| Token                 | Dark                     | Light                    | Usage                                |
+| --------------------- | ------------------------ | ------------------------ | ------------------------------------ |
+| `background`          | `#080a0f`                | `#f6f7f9`                | App canvas                           |
+| `card`                | `#11141b`                | `#ffffff`                | Base surfaces                        |
+| `surfaceElevated`     | `#191d27`                | `#eceff3`                | Sheets and elevated controls         |
+| `surfaceOverlay`      | `rgba(17,20,27,0.94)`    | `rgba(255,255,255,0.96)` | Readable overlays                    |
+| `text`                | `#f7f8fa`                | `#151821`                | Primary text                         |
+| `textSecondary`       | `#a7afbd`                | `#606978`                | Labels and supporting copy           |
+| `tint`                | `#8b5cf6`                | `#7157d9`                | Accent, active state, primary action |
+| `onTint`              | `#ffffff`                | `#ffffff`                | Content on accent surfaces           |
+| `focus`               | `#c4b5fd`                | `#6d4aff`                | Visible keyboard focus               |
+| `border`              | `rgba(255,255,255,0.10)` | `rgba(21,24,33,0.12)`    | Dividers and boundaries              |
+| `opaqueGlassFallback` | `#151923`                | `#ffffff`                | Reduced-transparency fallback        |
 
-**Key design decision:** The palette has moved away from neon cyan/dark sci-fi styling toward softer lavender and warm glass. Future UI work should keep that direction and avoid returning to one-note neon or heavy dark-only surfaces.
+Status, scrim, disabled, and overlay tokens are also semantic. New components
+must consume tokens instead of inferring foreground contrast from `isDark`.
 
 ### 2.2 `useTheme()` Hook
 
@@ -135,58 +153,55 @@ Every themed component calls `useTheme()` which:
 
 **Intricacy:** Styles that depend on `isDark` or `colors` must be computed inside the render function — either as a `useMemo(() => StyleSheet.create(...), [colors, isDark])` (pattern used in `player.tsx`) or via inline style objects. Static `StyleSheet.create()` at module level cannot reference theme tokens because `StyleSheet.create` runs once at module load time, before any theme is known. The player screen demonstrates the correct pattern.
 
-### 2.3 Button Text Colour Inversion
+### 2.3 Accent Foreground
 
-Every button in the app uses the pattern:
-
-```tsx
-color: isDark ? "#000" : "#fff";
-```
-
-This is because the tint colour changes between modes and needs different foreground contrast. If the tint changes significantly, verify contrast in both themes instead of blindly keeping this inversion.
+Primary controls use `colors.onTint` through `getAccentForeground(colors)`.
+Do not derive primary-button text from dark/light mode; contrast belongs to the
+palette contract.
 
 ---
 
 ## 3. Cross-Platform Layout Strategy
 
-The app targets five environments from a single codebase: iOS, Android, Web (browser), Web (Electron), and potentially iPad. The layout adapts at two levels.
+The app targets iOS, Android, browser web, Electron, and resizable tablet/foldable
+windows from one codebase. Layout decisions use window size, not device labels.
 
 ### 3.1 Navigation Shell
 
-| Viewport                | Navigation                                        |
-| ----------------------- | ------------------------------------------------- |
-| Mobile (iOS/Android)    | Bottom tab bar (Expo Router `(tabs)/_layout.tsx`) |
-| Desktop web (≥ 1024 px) | Persistent left sidebar (`DesktopLayout.tsx`)     |
+| Window class | Width      | Navigation                     |
+| ------------ | ---------- | ------------------------------ |
+| `compact`    | `< 600`    | Four-item bottom tab bar       |
+| `medium`     | `600–839`  | 72-point icon rail             |
+| `expanded`   | `840–1199` | 88-point labelled/compact rail |
+| `large`      | `≥ 1200`   | 216-point persistent sidebar   |
 
-`DesktopLayout` is a wrapper component used in the root layout. It uses `Platform.OS === "web" && width > 1024` as its guard. On mobile it is a passthrough (`return <>{children}</>`). This means the sidebar and tab bar are **mutually exclusive** — there is no double navigation on large phones in landscape.
+`useWindowClass()` is the shared classification contract. `DesktopLayout` and
+the tabs use the same result, keeping bottom navigation and rail/sidebar
+mutually exclusive during resizing, split screen, and foldable transitions.
 
 The sidebar includes:
 
 - App logo mark (coloured square with a play icon + wordmark)
-- Primary nav items (Home, Discover, Library, Downloads)
+- Primary nav items (Home, Search, Library, Downloads)
 - A spacer that pushes Settings to the bottom
 - A `⌘K` keyboard shortcut badge on the Search item (web-only, rendered conditionally)
 - Hover states using `onPointerEnter`/`onPointerLeave` — web APIs that are no-ops on native
 
 ### 3.2 Responsive Grid (`useResponsiveColumns`)
 
-The catalog grids (`FlatList` with `numColumns`) use `useResponsiveColumns()`:
-
-| Width     | Columns |
-| --------- | ------- |
-| ≥ 1280 px | 6       |
-| ≥ 1024 px | 5       |
-| ≥ 768 px  | 4       |
-| ≥ 480 px  | 3       |
-| < 480 px  | 2       |
-
-This is the only layout breakpoint system in use. There is no CSS media query equivalent — everything flows through `useWindowDimensions()`.
+Catalog grids derive their columns from the same window class: compact 2,
+medium 3, expanded 4, and large 6. Avoid introducing local breakpoint buckets
+for core screen structure.
 
 **Intricacy:** `FlatList` requires a `key` prop change when `numColumns` changes (e.g. `key={`grid-${numColumns}`}`). Without this, React Native throws a warning and the grid does not re-render correctly. This is done correctly in the home screen but is a common pitfall when adding new grids.
 
-### 3.3 Desktop Hero Banner
+### 3.3 Adaptive Hero And Home Feed
 
-On desktop (≥ 1024 px), the home screen shows a `HomeHeroBanner` using the first catalog item. The banner is hidden on mobile to preserve screen real estate. The first item is sliced out of the `FlatList` data array (`movies?.slice(1)`) when the hero is active to avoid duplicating it in the grid below.
+`HomeHeroBanner` renders on compact through large windows with class-specific
+height and poster treatment. `buildHomeFeed()` claims content using canonical
+`type:id` keys so the hero, Continue Watching, and primary rails do not repeat
+the same title. A `Recently Added` rail is used only when enough valid
+`released` metadata exists; otherwise the honest label is `More to Watch`.
 
 ---
 
@@ -256,9 +271,10 @@ and `/search`.
 
 ### 4.7.1 Unified Search Screen
 
-`app/search/index.tsx` and `app/search/results.tsx` render the same search
-experience. `/search` supports an optional `q` param, and
-`/search/results?q=...` remains a compatibility route for existing callers.
+`app/(tabs)/search.tsx` is the single `/search` destination.
+`/search/results?q=...` remains a compatibility route for existing callers and
+older result links. The old Discover tab is hidden and redirects to
+`/search?mode=discover`.
 The screen provides:
 
 - editable search input
@@ -267,8 +283,10 @@ The screen provides:
 - skeleton loading
 - retryable error state
 - no-results state
-- type filters (`All`, `Movies`, `Series`)
-- year filters derived from returned metadata
+- shareable/restorable query, type, year, sort, and discovery mode URL state
+- quick type filters (`All`, `Movies`, `Series`)
+- year and sort controls in a compact/medium sheet or expanded/large panel
+- provider catalog browsing in the zero-query discovery state
 
 Search filters are intentionally applied client-side over `/api/search?q=...`
 results. Add-on search support is not uniform enough to make provider/genre/

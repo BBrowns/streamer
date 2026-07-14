@@ -20,6 +20,12 @@ export const uiRadii = {
 
 export const uiTouchTarget = 44;
 
+export const uiMotion = {
+  fast: 160,
+  standard: 240,
+  slow: 360,
+};
+
 export function getWebFocusStyle(color: string) {
   return {
     outlineStyle: "solid",
@@ -27,6 +33,10 @@ export function getWebFocusStyle(color: string) {
     outlineColor: color,
     outlineOffset: 2,
   } as const;
+}
+
+export function getAccentForeground(colors: ThemeColors) {
+  return colors.onTint;
 }
 
 export const uiTypography = {

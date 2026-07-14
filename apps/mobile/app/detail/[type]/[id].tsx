@@ -88,7 +88,17 @@ export default function DetailScreen() {
     const { show } = useToastStore.getState();
     if (inLibrary) {
       removeFromLibrary.mutate(id, {
-        onSuccess: () => show(t("library.alerts.removed"), "info"),
+        onSuccess: () =>
+          show(t("library.alerts.removed"), "info", {
+            actionLabel: "Undo",
+            onAction: () =>
+              addToLibrary.mutateAsync({
+                type: castType,
+                itemId: id,
+                title: meta.name,
+                poster: meta.poster,
+              }),
+          }),
       });
     } else {
       hapticSuccess();

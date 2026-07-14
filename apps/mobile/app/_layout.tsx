@@ -279,6 +279,7 @@ function RootLayoutNav() {
             options={{ headerShown: false, title: "" }}
           />
           <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />
+          <Stack.Screen name="search/results" options={{ title: "Search" }} />
           <Stack.Screen
             name="player"
             options={{

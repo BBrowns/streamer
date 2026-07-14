@@ -19,20 +19,34 @@ import Animated, {
 } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { hapticImpactLight } from "../../lib/haptics";
+import { useCastStore } from "../../stores/castStore";
+import { castService } from "../../services/CastService";
 
 export function RemoteControlBar() {
   const { otherActiveSessions, sendCommand } = useRemoteControl();
+  const activeCast = useCastStore((state) => state.activeCast);
+  const setCastPaused = useCastStore((state) => state.setCastPaused);
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
 
-  if (otherActiveSessions.length === 0) return null;
+  if (otherActiveSessions.length === 0 && !activeCast) return null;
 
   // For simplicity, take the first active other session
   const session = otherActiveSessions[0];
+  const isPaused = activeCast?.isPaused ?? session?.status !== "playing";
 
-  const handleTogglePlay = () => {
+  const handleTogglePlay = async () => {
     hapticImpactLight();
+    if (activeCast) {
+      const nextPaused = !isPaused;
+      await castService.control(
+        activeCast.device.id,
+        nextPaused ? "pause" : "play",
+      );
+      setCastPaused(nextPaused);
+      return;
+    }
     const newAction = session.status === "playing" ? "pause" : "play";
     sendCommand({
       targetDeviceId: session.deviceId,
@@ -42,6 +56,10 @@ export function RemoteControlBar() {
 
   const handleTakeOver = () => {
     hapticImpactLight();
+    if (activeCast) {
+      router.push("/player");
+      return;
+    }
     if (session.itemId) {
       router.push({
         pathname: "/player",
@@ -75,14 +93,18 @@ export function RemoteControlBar() {
           </View>
           <View style={styles.info}>
             <Text style={[styles.deviceText, { color: colors.textSecondary }]}>
-              Active on {session.deviceName || "Another Device"}
+              {activeCast
+                ? `Casting to ${activeCast.device.name}`
+                : `Active on ${session.deviceName || "Another Device"}`}
             </Text>
             <Text
               style={[styles.itemText, { color: colors.text }]}
               numberOfLines={1}
             >
-              {session.status === "playing" ? "Playing" : "Paused"}:{" "}
-              {session.itemTitle || "Unknown Content"}
+              {isPaused ? "Paused" : "Playing"}:{" "}
+              {activeCast?.mediaInfo.title ||
+                session.itemTitle ||
+                "Unknown Content"}
             </Text>
           </View>
         </View>
@@ -93,7 +115,7 @@ export function RemoteControlBar() {
             style={[styles.controlBtn, { backgroundColor: colors.tint + "15" }]}
           >
             <Ionicons
-              name={session.status === "playing" ? "pause" : "play"}
+              name={isPaused ? "play" : "pause"}
               size={24}
               color={colors.text}
             />
@@ -105,7 +127,7 @@ export function RemoteControlBar() {
             <Text
               style={[styles.takeOverText, { color: isDark ? "#000" : "#fff" }]}
             >
-              Take Over
+              {activeCast ? "Open player" : "Take Over"}
             </Text>
           </Pressable>
         </View>

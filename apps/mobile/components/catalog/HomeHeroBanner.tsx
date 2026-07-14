@@ -6,22 +6,22 @@ import {
   Pressable,
   StyleSheet,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { getWebFocusStyle, uiTouchTarget } from "../ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 const isWeb = Platform.OS === "web";
 
 function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
-  const heroHeight = isDesktop ? 500 : 430;
+  const { isCompact, isLarge, windowClass } = useWindowClass();
+  const showPoster = windowClass === "expanded" || isLarge;
+  const heroHeight = isCompact ? 430 : isLarge ? 520 : 480;
   const handleNavigate = () => router.push(`/detail/${item.type}/${item.id}`);
 
   return (
@@ -29,12 +29,12 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
       style={({ pressed, focused }: any) => [
         styles.hero,
         {
-          backgroundColor: isDark ? "#151622" : "#f5ece9",
+          backgroundColor: colors.card,
           borderColor: colors.border,
           height: heroHeight,
           opacity: pressed ? 0.94 : 1,
         },
-        isWeb && focused && getWebFocusStyle(colors.tint),
+        isWeb && focused && getWebFocusStyle(colors.focus),
       ]}
       onPress={handleNavigate}
       accessibilityRole="button"
@@ -55,8 +55,8 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
             styles.heroOverlay,
             {
               background: isDark
-                ? "linear-gradient(90deg, rgba(17,18,28,0.96) 0%, rgba(17,18,28,0.82) 48%, rgba(17,18,28,0.52) 100%)"
-                : "linear-gradient(90deg, rgba(251,246,244,0.96) 0%, rgba(251,246,244,0.84) 48%, rgba(251,246,244,0.48) 100%)",
+                ? "linear-gradient(90deg, rgba(8,10,15,0.98) 0%, rgba(8,10,15,0.84) 52%, rgba(8,10,15,0.45) 100%)"
+                : "linear-gradient(90deg, rgba(246,247,249,0.98) 0%, rgba(246,247,249,0.84) 52%, rgba(246,247,249,0.45) 100%)",
             },
           ]}
         />
@@ -66,15 +66,15 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
             styles.heroOverlay,
             {
               backgroundColor: isDark
-                ? "rgba(17,18,28,0.78)"
-                : "rgba(251,246,244,0.76)",
+                ? "rgba(8,10,15,0.80)"
+                : "rgba(246,247,249,0.78)",
             },
           ]}
         />
       )}
 
       <View
-        style={[styles.heroContent, isDesktop && styles.heroContentDesktop]}
+        style={[styles.heroContent, showPoster && styles.heroContentDesktop]}
       >
         <View style={styles.heroCopy}>
           <View
@@ -105,8 +105,8 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
               styles.heroTitle,
               {
                 color: colors.text,
-                fontSize: isDesktop ? 48 : 34,
-                lineHeight: isDesktop ? 54 : 39,
+                fontSize: isLarge ? 48 : 34,
+                lineHeight: isLarge ? 54 : 39,
               },
             ]}
             numberOfLines={3}
@@ -138,7 +138,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
           {!!item.description && (
             <Text
               style={[styles.heroDesc, { color: colors.textSecondary }]}
-              numberOfLines={isDesktop ? 3 : 2}
+              numberOfLines={showPoster ? 3 : 2}
             >
               {item.description}
             </Text>
@@ -153,17 +153,8 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
                 },
               ]}
             >
-              <Ionicons
-                name="play"
-                size={18}
-                color={isDark ? "#2c1738" : "#fff"}
-              />
-              <Text
-                style={[
-                  styles.heroPlayText,
-                  { color: isDark ? "#2c1738" : "#fff" },
-                ]}
-              >
+              <Ionicons name="play" size={18} color={colors.onTint} />
+              <Text style={[styles.heroPlayText, { color: colors.onTint }]}>
                 Play
               </Text>
             </View>
@@ -191,7 +182,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
           </View>
         </View>
 
-        {isDesktop && (
+        {showPoster && (
           <View
             style={[
               styles.posterShell,

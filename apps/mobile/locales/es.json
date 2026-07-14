@@ -1,6 +1,7 @@
 {
   "tabs": {
     "home": "Inicio",
+    "search": "Buscar",
     "discover": "Descubrir",
     "library": "Biblioteca",
     "downloads": "Descargas",
@@ -16,6 +17,7 @@
       "popularMovies": "Películas populares",
       "topTVShows": "Series destacadas",
       "recentlyAdded": "Añadido recientemente",
+      "moreToWatch": "Más para ver",
       "fromProviders": "De tus proveedores"
     },
     "continueWatching": {

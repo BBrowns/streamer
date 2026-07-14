@@ -28,6 +28,7 @@ export const metaPreviewSchema = z.object({
     .transform((value) => value ?? ""),
   description: z.string().optional(),
   releaseInfo: optionalStringFromPrimitive,
+  released: z.string().optional(),
   imdbRating: optionalStringFromPrimitive,
 });
 export const videoEntrySchema = z

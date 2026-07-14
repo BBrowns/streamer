@@ -1,7 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../services/api";
-import type { MetaPreview } from "@streamer/shared";
-import { useAuthStore } from "../stores/authStore";
+import { useSearch } from "./useSearch";
 
 /**
  * Search across all installed add-ons simultaneously.
@@ -9,18 +6,5 @@ import { useAuthStore } from "../stores/authStore";
  * to all addons via Promise.allSettled and deduplicates by ID.
  */
 export function useGlobalSearch(query: string) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-
-  return useQuery<MetaPreview[]>({
-    queryKey: ["search", query],
-    queryFn: async () => {
-      const { data } = await api.get(
-        `/api/search?q=${encodeURIComponent(query)}`,
-      );
-      return data.metas ?? [];
-    },
-    enabled: isAuthenticated && query.length >= 2,
-    staleTime: 30 * 1000, // 30s cache for search results
-    retry: 1,
-  });
+  return useSearch(query, { minimumLength: 2 });
 }
