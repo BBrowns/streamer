@@ -1250,6 +1250,10 @@ export default function PlayerScreen() {
             }
             playbackUri={playbackUri || ""}
             title={mediaInfo?.title || ""}
+            onOpenSourcesDevices={() => {
+              setCastModalOpen(false);
+              router.push("/sources" as any);
+            }}
             onCastStart={(device, details) => {
               if (player?.playing) player.pause();
               setActiveCast({

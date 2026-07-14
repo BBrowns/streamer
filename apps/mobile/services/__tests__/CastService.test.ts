@@ -1,4 +1,4 @@
-import { castService } from "../CastService";
+import { castService, CastServiceError } from "../CastService";
 import { useAuthStore } from "../../stores/authStore";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import { Platform } from "react-native";
@@ -125,5 +125,46 @@ describe("CastService", () => {
     );
 
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns a typed recovery error when device discovery cannot reach the bridge", async () => {
+    jest.mocked(global.fetch).mockRejectedValueOnce(new Error("fetch failed"));
+
+    await expect(castService.getDevices()).rejects.toMatchObject({
+      name: "CastServiceError",
+      code: "CAST_DEVICES_UNREACHABLE",
+    });
+  });
+
+  it("returns a typed recovery error when a selected device disappeared", async () => {
+    jest.mocked(global.fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => JSON.stringify({ error: "Device not found" }),
+    } as Response);
+
+    await expect(
+      castService.play(
+        "living-room",
+        "https://example.test/movie.mp4",
+        "Movie",
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<CastServiceError>>({
+        code: "CAST_DEVICE_UNREACHABLE",
+        status: 404,
+      }),
+    );
+  });
+
+  it("returns a typed recovery error when cast control loses the device", async () => {
+    jest.mocked(global.fetch).mockRejectedValueOnce(new Error("fetch failed"));
+
+    await expect(
+      castService.control("living-room", "pause"),
+    ).rejects.toMatchObject({
+      name: "CastServiceError",
+      code: "CAST_DEVICE_UNREACHABLE",
+    });
   });
 });

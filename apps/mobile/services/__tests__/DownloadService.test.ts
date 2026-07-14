@@ -328,6 +328,46 @@ describe("DownloadService session completion", () => {
     });
   });
 
+  it("persists a typed storage recovery reason for a full desktop disk", async () => {
+    window.desktopBridge = {
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-1",
+        status: "Error",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_1.mp4",
+        totalBytesWritten: 500,
+        totalBytesExpectedToWrite: 1000,
+        error: "write failed: ENOSPC",
+      }),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    const service = new DownloadService();
+
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        sourceId: "source-1",
+      } as any,
+      {
+        resolvedUrl: "https://cdn.example.test/movie.mp4",
+        eligibility: {
+          mode: "direct-file",
+          canDownload: true,
+          offlinePlayable: true,
+        },
+      },
+    );
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      failureReason: "storage_pressure",
+      offlineVerifiedAt: undefined,
+    });
+  });
+
   it("removes browser fallback tasks instead of marking them offline-playable", async () => {
     const playbackSession = createDownloadSessionContext();
     jest.spyOn(console, "info").mockImplementation(() => undefined);

@@ -20,6 +20,7 @@ import { AppButton } from "../ui/AppButton";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
 import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
+import { getDownloadRecovery } from "../../services/actionRecovery";
 
 interface DownloadQueueCardProps {
   task: DownloadTask;
@@ -29,6 +30,8 @@ interface DownloadQueueCardProps {
   onResume: () => void;
   onRetry: () => void;
   onVerify: () => void;
+  onRepairBridge: () => void;
+  onManageStorage: () => void;
   onDelete: () => void;
 }
 
@@ -52,6 +55,8 @@ export function DownloadQueueCard({
   onResume,
   onRetry,
   onVerify,
+  onRepairBridge,
+  onManageStorage,
   onDelete,
 }: DownloadQueueCardProps) {
   const { t } = useTranslation();
@@ -59,6 +64,7 @@ export function DownloadQueueCard({
   const { width } = useWindowDimensions();
   const compact = width < 640;
   const primaryAction = getDownloadPrimaryAction(task);
+  const recovery = getDownloadRecovery(task);
   const statusKey = getDownloadStatusKey(task);
   const sizeLabel = getDownloadSizeLabel(task);
   const progressPercent = `${Math.round(task.progress * 100)}%`;
@@ -105,28 +111,39 @@ export function DownloadQueueCard({
     if (primaryAction === "pause") onPause();
     if (primaryAction === "resume") onResume();
     if (primaryAction === "retry") onRetry();
+    if (primaryAction === "replan") onRetry();
     if (primaryAction === "verify") onVerify();
+    if (primaryAction === "repair_bridge") onRepairBridge();
+    if (primaryAction === "free_storage") onManageStorage();
+    if (primaryAction === "remove") onDelete();
     if (primaryAction === "play") onOpen();
   };
 
-  const primaryLabel =
+  const defaultPrimaryLabel =
     primaryAction === "pause"
       ? t("downloads.actions.pause", { defaultValue: "Pause" })
       : primaryAction === "resume"
         ? t("downloads.actions.resume", { defaultValue: "Resume" })
-        : primaryAction === "retry"
+        : primaryAction === "retry" || primaryAction === "replan"
           ? t("downloads.actions.retry", { defaultValue: "Retry" })
           : primaryAction === "verify"
             ? t("downloads.actions.verify", { defaultValue: "Verify" })
             : t("downloads.actions.play", { defaultValue: "Play" });
+  const primaryLabel = recovery?.actionLabel ?? defaultPrimaryLabel;
   const primaryIcon: keyof typeof Ionicons.glyphMap =
     primaryAction === "pause"
       ? "pause"
-      : primaryAction === "retry"
+      : primaryAction === "retry" || primaryAction === "replan"
         ? "refresh"
         : primaryAction === "verify"
           ? "shield-checkmark-outline"
-          : "play";
+          : primaryAction === "repair_bridge"
+            ? "construct-outline"
+            : primaryAction === "free_storage"
+              ? "folder-open-outline"
+              : primaryAction === "remove"
+                ? "trash-outline"
+                : "play";
   const deleteActionLabel = t("downloads.actions.delete", {
     defaultValue: "Delete",
   });
@@ -222,7 +239,7 @@ export function DownloadQueueCard({
                 style={[styles.errorText, { color: colors.error }]}
                 numberOfLines={2}
               >
-                {task.error}
+                {recovery?.message || task.error}
               </Text>
             </View>
           ) : null}
@@ -256,15 +273,17 @@ export function DownloadQueueCard({
           <View />
         )}
 
-        <AppButton
-          label={deleteActionLabel}
-          accessibilityLabel={deleteAccessibilityLabel}
-          icon="trash-outline"
-          variant="danger"
-          size="small"
-          onPress={onDelete}
-          disabled={busy}
-        />
+        {primaryAction !== "remove" ? (
+          <AppButton
+            label={deleteActionLabel}
+            accessibilityLabel={deleteAccessibilityLabel}
+            icon="trash-outline"
+            variant="danger"
+            size="small"
+            onPress={onDelete}
+            disabled={busy}
+          />
+        ) : null}
       </View>
     </Surface>
   );

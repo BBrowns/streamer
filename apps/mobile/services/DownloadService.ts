@@ -14,7 +14,7 @@ import {
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import type { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
-import type { Stream } from "@streamer/shared";
+import type { ActionPreflightReason, Stream } from "@streamer/shared";
 import { api } from "./api";
 import type {
   DesktopDownloadJob,
@@ -36,6 +36,7 @@ import {
 } from "./playback/PlaybackErrors";
 import { redactSensitiveText } from "./redaction";
 import { addMobileBreadcrumb } from "./sentryBreadcrumbs";
+import { classifyDownloadFailure } from "./actionRecovery";
 
 export {
   getDownloadEligibility,
@@ -211,6 +212,21 @@ export class DownloadService {
     );
   }
 
+  private markTaskFailed(
+    id: string,
+    error: unknown,
+    fallback: string,
+    playbackSession?: DownloadPlaybackSessionContext,
+    preflightReason?: ActionPreflightReason,
+  ) {
+    const message = toSafeDownloadErrorMessage(error, fallback);
+    useDownloadStore
+      .getState()
+      .markFailed(id, message, classifyDownloadFailure(error, preflightReason));
+    this.failSession(id, error, playbackSession);
+    return message;
+  }
+
   private cancelSession(
     id: string,
     reason: string,
@@ -351,8 +367,7 @@ export class DownloadService {
         result.error.message,
         "Download needs to be prepared again.",
       );
-      useDownloadStore.getState().setStatus(id, "Error", undefined, message);
-      this.failSession(id, result.error, task.playbackSession);
+      this.markTaskFailed(id, result.error, message, task.playbackSession);
       return undefined;
     }
 
@@ -379,8 +394,7 @@ export class DownloadService {
     if (!prepared) {
       const error =
         "Download needs to be prepared again before it can resume safely.";
-      useDownloadStore.getState().setStatus(id, "Error", undefined, error);
-      this.failSession(id, error);
+      this.markTaskFailed(id, error, error);
       return { ok: false, error };
     }
 
@@ -434,16 +448,22 @@ export class DownloadService {
         if (data.status === "Completed") {
           void this.finalizeCompletedTask(data.id, data.localUri);
         } else if (data.status) {
-          setStatus(
-            data.id,
-            mapDesktopDownloadStatus(data.status),
-            data.localUri,
-            data.error ? toSafeDownloadErrorMessage(data.error) : undefined,
-          );
+          if (data.status === "Error" || data.status === "Canceled") {
+            this.markTaskFailed(
+              data.id,
+              data.error || "Desktop download was interrupted.",
+              "Desktop download failed.",
+              task.playbackSession,
+            );
+          } else {
+            setStatus(
+              data.id,
+              mapDesktopDownloadStatus(data.status),
+              data.localUri,
+            );
+          }
           if (data.status === "Downloading") {
             this.setSessionStatus(task.playbackSession, "downloading");
-          } else if (data.status === "Error") {
-            this.failSession(data.id, data.error || "Desktop download failed.");
           } else if (data.status === "Canceled") {
             this.cancelSession(data.id, "Desktop download was cancelled.");
           }
@@ -481,16 +501,18 @@ export class DownloadService {
       return;
     }
 
-    setStatus(
-      job.id,
-      mapDesktopDownloadStatus(job.status),
-      job.localUri,
-      job.error ? toSafeDownloadErrorMessage(job.error) : undefined,
-    );
+    if (job.status === "Error" || job.status === "Canceled") {
+      this.markTaskFailed(
+        job.id,
+        job.error || "Desktop download was interrupted.",
+        "Desktop download failed.",
+        tasks[job.id].playbackSession,
+      );
+    } else {
+      setStatus(job.id, mapDesktopDownloadStatus(job.status), job.localUri);
+    }
     if (job.status === "Downloading") {
       this.setSessionStatus(tasks[job.id].playbackSession, "downloading");
-    } else if (job.status === "Error") {
-      this.failSession(job.id, job.error || "Desktop download failed.");
     } else if (job.status === "Canceled") {
       this.cancelSession(job.id, "Desktop download was cancelled.");
     }
@@ -611,15 +633,19 @@ export class DownloadService {
         e,
         "Download source could not be resolved.",
       );
-      setStatus(id, "Error", undefined, `Resolution failed: ${message}`);
-      this.failSession(id, e, options.playbackSession);
+      this.markTaskFailed(
+        id,
+        e,
+        `Resolution failed: ${message}`,
+        options.playbackSession,
+      );
       return;
     }
 
     if (!downloadUrl) {
-      setStatus(id, "Error", undefined, "Could not resolve playback URL");
-      this.failSession(
+      this.markTaskFailed(
         id,
+        "Could not resolve playback URL",
         "Could not resolve playback URL",
         options.playbackSession,
       );
@@ -631,11 +657,12 @@ export class DownloadService {
     }
 
     if (downloadUrl.includes(".m3u8")) {
-      setStatus(id, "Error", undefined, "HLS downloads are not supported");
-      this.failSession(
+      this.markTaskFailed(
         id,
         "HLS downloads are not supported",
+        "HLS downloads are not supported",
         options.playbackSession,
+        "hls_offline_unsupported",
       );
       Alert.alert(
         "Unsupported Format",
@@ -666,8 +693,12 @@ export class DownloadService {
             );
             this.applyDesktopJobSnapshot(job);
           } catch (e: any) {
-            setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
-            this.failSession(id, e, options.playbackSession);
+            this.markTaskFailed(
+              id,
+              e,
+              "Desktop download failed.",
+              options.playbackSession,
+            );
           }
           return;
         }
@@ -709,8 +740,12 @@ export class DownloadService {
             console.log("[DownloadService] Desktop download completed");
         } catch (e: any) {
           unsubscribe();
-          setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
-          this.failSession(id, e, options.playbackSession);
+          this.markTaskFailed(
+            id,
+            e,
+            "Desktop download failed.",
+            options.playbackSession,
+          );
         }
         return;
       }
@@ -736,8 +771,12 @@ export class DownloadService {
         );
         removeTask(id);
       } catch (e: any) {
-        setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
-        this.failSession(id, e, options.playbackSession);
+        this.markTaskFailed(
+          id,
+          e,
+          "Browser download failed.",
+          options.playbackSession,
+        );
       }
       return;
     }
@@ -826,8 +865,7 @@ export class DownloadService {
       }
       // If it was cancelled manually, we don't mark as error here usually
       if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
-        setStatus(id, "Error", undefined, toSafeDownloadErrorMessage(e));
-        this.failSession(id, e, options.playbackSession);
+        this.markTaskFailed(id, e, "Download failed.", options.playbackSession);
       }
     } finally {
       delete this.downloadResumables[id];
@@ -940,7 +978,9 @@ export class DownloadService {
             console.warn(
               `[DownloadService] Local file missing for task ${task.id}, marking as error`,
             );
-            setStatus(task.id, "Error", undefined, "Local file vanished");
+            useDownloadStore
+              .getState()
+              .markFileMissing(task.id, "Downloaded file could not be found.");
           }
         } catch (e) {
           // Non-critical background verify failure
@@ -970,7 +1010,7 @@ export class DownloadService {
       const desktopBridge = window.desktopBridge;
       if (!desktopBridge?.pauseDownloadJob) {
         const error = "Desktop download controls are unavailable.";
-        setStatus(id, "Error", undefined, error);
+        this.markTaskFailed(id, error, error, task.playbackSession);
         return { ok: false, error };
       }
 
@@ -996,7 +1036,7 @@ export class DownloadService {
           error,
           "Download could not pause.",
         );
-        setStatus(id, "Error", undefined, message);
+        this.markTaskFailed(id, error, message, task.playbackSession);
         return { ok: false, error: message };
       }
     }
@@ -1017,7 +1057,7 @@ export class DownloadService {
           error,
           "Download could not pause.",
         );
-        setStatus(id, "Error", undefined, message);
+        this.markTaskFailed(id, error, message, task.playbackSession);
         if (__DEV__) console.error("[DownloadService] Pause failed:", error);
         return { ok: false, error: message };
       }
@@ -1042,7 +1082,7 @@ export class DownloadService {
       const desktopBridge = window.desktopBridge;
       if (!desktopBridge?.startDownloadJob) {
         const error = "Open the desktop app to resume this download.";
-        setStatus(id, "Error", undefined, error);
+        this.markTaskFailed(id, error, error, task.playbackSession);
         return { ok: false, error };
       }
 
@@ -1098,7 +1138,7 @@ export class DownloadService {
           error,
           "Download could not resume.",
         );
-        setStatus(id, "Error", undefined, message);
+        this.markTaskFailed(id, error, message, task.playbackSession);
         return { ok: false, error: message };
       }
     }
@@ -1189,8 +1229,7 @@ export class DownloadService {
           "Download could not resume.",
         );
         if (useDownloadStore.getState().tasks[id]?.status !== "Paused") {
-          setStatus(id, "Error", undefined, message);
-          this.failSession(id, error);
+          this.markTaskFailed(id, error, message, task.playbackSession);
         }
         if (__DEV__) console.error("[DownloadService] Resume failed:", error);
         return { ok: false, error: message };
@@ -1208,13 +1247,12 @@ export class DownloadService {
     if (restarted.ok) return restarted;
 
     const error = restarted.error || "Original download URL is missing.";
-    setStatus(id, "Error", undefined, error);
-    this.failSession(id, error);
+    this.markTaskFailed(id, error, error, task.playbackSession);
     return { ok: false, error };
   }
 
   async deleteDownload(id: string): Promise<DownloadOperationResult> {
-    const { tasks, removeTask, setStatus } = useDownloadStore.getState();
+    const { tasks, removeTask, markFailed } = useDownloadStore.getState();
     const task = tasks[id];
     if (!task) return { ok: true };
     this.cancelSession(id, "Download was removed.");
@@ -1239,9 +1277,9 @@ export class DownloadService {
             error,
             "Downloaded file could not be deleted.",
           );
-          setStatus(id, "Error", undefined, message);
+          markFailed(id, message, "failed");
           if (__DEV__)
-            console.error("[DownloadService] Desktop deletion failed:", error);
+            console.warn("[DownloadService] Desktop deletion failed:", message);
           return { ok: false, error: message };
         }
       }
@@ -1264,8 +1302,9 @@ export class DownloadService {
           error,
           "Downloaded file could not be deleted.",
         );
-        setStatus(id, "Error", undefined, message);
-        if (__DEV__) console.error("[DownloadService] Deletion failed:", error);
+        markFailed(id, message, "failed");
+        if (__DEV__)
+          console.warn("[DownloadService] Deletion failed:", message);
         return { ok: false, error: message };
       }
     }

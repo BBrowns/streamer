@@ -14,6 +14,18 @@ jest.mock("@expo/vector-icons", () => ({
   MaterialIcons: () => null,
 }));
 
+jest.mock("../ui/AppButton", () => {
+  const mockReact = require("react");
+  return {
+    AppButton: ({ label, onPress }: { label: string; onPress: () => void }) =>
+      mockReact.createElement(
+        "AppButton",
+        { onPress, accessibilityLabel: label },
+        label,
+      ),
+  };
+});
+
 jest.mock("../../services/CastService", () => ({
   castService: {
     getDevices: jest.fn(),
@@ -139,6 +151,7 @@ describe("DesktopCastModal", () => {
           stream: preparedCast.stream,
           uri: preparedCast.resolvedUrl,
         },
+        expect.objectContaining({ onFallback: expect.any(Function) }),
       );
     });
     expect(play).not.toHaveBeenCalled();
@@ -149,6 +162,7 @@ describe("DesktopCastModal", () => {
   });
 
   it("shows cast preparation failures inline and keeps devices disabled", async () => {
+    const onOpenSourcesDevices = jest.fn();
     prepare.mockResolvedValueOnce({
       ok: false,
       sessionId: "session-1",
@@ -177,17 +191,23 @@ describe("DesktopCastModal", () => {
           title: "Example Movie",
         }}
         onClose={jest.fn()}
+        onOpenSourcesDevices={onOpenSourcesDevices}
       />,
     );
 
     await waitFor(() => {
       expect(
-        screen.getByText("Connect this device to the desktop bridge."),
+        screen.getByText(
+          "Reconnect or repair the desktop bridge before casting again.",
+        ),
       ).toBeTruthy();
     });
 
     fireEvent.press(screen.getByText("Living Room"));
     expect(start).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByLabelText("Repair bridge"));
+    expect(onOpenSourcesDevices).toHaveBeenCalledTimes(1);
   });
 
   it("shows unexpected preparation errors inline", async () => {
@@ -207,7 +227,11 @@ describe("DesktopCastModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Playback planner unavailable")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "The display or prepared source could not start casting.",
+        ),
+      ).toBeTruthy();
     });
     expect(start).not.toHaveBeenCalled();
   });
@@ -259,7 +283,7 @@ describe("DesktopCastModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("No generic cast source is compatible."),
+        screen.getByText("This display cannot play the prepared source."),
       ).toBeTruthy();
     });
     fireEvent.press(screen.getByText("Living Room"));
