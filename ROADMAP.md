@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #147:
+Implemented through PR #148:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -65,6 +65,10 @@ Implemented through PR #147:
 - Production server startup validates secrets, origins, topology, Redis and
   SMTP expectations; rate limiting has explicit single/multi-instance failure
   behavior and liveness is separate from dependency readiness.
+- Offline and cast failures have typed, privacy-safe recovery guidance. A
+  failed download offers one context-specific retry, replan, verify, storage,
+  bridge-repair, or remove action, while cast discovery/source/device failures
+  offer refresh, fallback, or bridge repair without retrying loopback URLs.
 
 Not yet proven:
 
@@ -203,7 +207,7 @@ Acceptance:
 - Rate-limit behavior is explicit for one and multiple instances.
 - Health output is useful without leaking secrets or internal URLs.
 
-### PR #148 - Offline And Cast Recovery UX
+### Completed: PR #148 - Offline And Cast Recovery UX
 
 Goal: improve the two major secondary actions with typed, recoverable states
 that can be tested without real devices.
@@ -275,15 +279,15 @@ of mocks or unit tests.
 3. Completed: PR #145 - unified action/bridge preflight.
 4. Completed: PR #146 - mobile release identity and EAS baseline.
 5. Completed: PR #147 - server production runtime hardening.
-6. PR #148 - offline and cast recovery UX.
+6. Completed: PR #148 - offline and cast recovery UX.
 7. PR #149 - accessibility and responsive visual quality.
 8. PR #150 - real-target QA and RC evidence when available.
 
 Dependency enforcement, deterministic renderer automation, shared action
-preflight, and the credential-free mobile release configuration baseline are
-complete. Server production hardening is next; later offline, cast, and visual
-work must reuse the shared preflight result instead of adding local
-bridge-readiness conditionals.
+preflight, mobile release configuration, server production hardening, and
+offline/cast recovery UX are complete. Accessibility and responsive visual
+quality are next. Future action surfaces must reuse the shared preflight and
+recovery contracts instead of adding local bridge-readiness conditionals.
 
 ## Working Rules
 

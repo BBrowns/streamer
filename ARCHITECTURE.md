@@ -116,6 +116,12 @@ persist streams. Those effects remain owned by the playback/download/cast
 orchestrators after readiness succeeds. A failed torrent runtime must not block
 otherwise compatible direct or HLS playback.
 
+`apps/mobile/services/actionRecovery.ts` is the presentation-side companion to
+preflight. It translates typed preflight and runtime failures into one safe,
+action-specific recovery instruction without probing the bridge or retaining
+source URLs. It is used by the download queue and cast dialog; it does not
+replace the shared readiness contract.
+
 ---
 
 ## 4. The Server (`server/`)
@@ -427,6 +433,11 @@ new primary-flow work should use the session contracts in
 After a verified completion, the service fires a `POST /api/notifications` to
 create a server-side notification, which can then sync to other devices.
 
+Queue failures persist a small typed `failureReason`, never the failed source
+URL. The UI maps that reason to one recovery action such as resume, replan,
+verify, free storage, bridge repair, or removal. A task remains offline-playable
+only when the managed local file has been verified.
+
 ### 6.6 Key Zustand Stores
 
 | Store                  | Contents                                                                                               |
@@ -446,10 +457,21 @@ The `useTraktScrobbler` hook in the player automatically reports watch events to
 
 The server maintains a `TraktSyncQueue` for failed scrobble attempts and retries them via a background scheduler (`traktService.startBackgroundSync()`).
 
-### 6.8 Chromecast
+### 6.8 Casting
 
-- **iOS/Android:** Uses `react-native-google-cast` (Google Cast SDK native module).
-- **Desktop/Web:** The stream-server daemon's Bonjour discovery + `castv2-client` is used. The Electron bridge exposes cast device control to the web client. A `DesktopCastModal` component handles device selection and playback control.
+- **iOS/Android:** Google Cast is loaded only when the optional native module is
+  available; AirPlay is exposed through the player path where its optional
+  native control exists. Presence in dependencies is not a real-device support
+  claim.
+- **Desktop/Web:** The stream-server daemon's Bonjour discovery plus
+  `castv2-client` is used. The Electron bridge exposes cast control to the web
+  client and `DesktopCastModal` handles source preparation, capability hints,
+  device selection, session fallback, and typed recovery actions.
+
+All cast URLs are preflighted before bridge dispatch. Loopback-only media URLs
+are rejected for remote displays, and transport errors are converted to
+privacy-safe device/discovery/source/bridge categories instead of exposing raw
+responses.
 
 ---
 
