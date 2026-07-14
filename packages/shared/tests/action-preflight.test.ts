@@ -114,6 +114,50 @@ describe("action preflight", () => {
     });
   });
 
+  it("allows a local cast controller when a remote direct source is device reachable", () => {
+    const result = evaluateActionPreflight(
+      input({
+        action: "cast",
+        platform: "electron",
+        source: { kind: "direct", endpoint: "remote" },
+        bridge: {
+          configured: true,
+          status: "available",
+          endpoint: {
+            scope: "loopback",
+            deviceReachable: true,
+            castReachable: false,
+          },
+          capabilities: { gateway: true, cast: true },
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({ ready: true, reason: "ready" });
+  });
+
+  it("requires a LAN bridge URL when casting bridge-served torrent media", () => {
+    const result = evaluateActionPreflight(
+      input({
+        action: "cast",
+        platform: "electron",
+        source: { kind: "torrent" },
+        bridge: {
+          configured: true,
+          status: "available",
+          endpoint: {
+            scope: "loopback",
+            deviceReachable: true,
+            castReachable: false,
+          },
+          capabilities: { gateway: true, torrent: true, cast: true },
+        },
+      }),
+    );
+
+    expect(result.reason).toBe("bridge_loopback_unreachable");
+  });
+
   it("rejects loopback bridge URLs for native devices", () => {
     const result = evaluateActionPreflight(
       input({

@@ -239,10 +239,13 @@ export function evaluateActionPreflight(
   }
 
   const nativeTarget = input.platform === "ios" || input.platform === "android";
+  const castNeedsBridgeMedia =
+    input.action === "cast" &&
+    (source.kind === "torrent" || source.requiresRemux === true);
   if (
     endpoint?.deviceReachable === false ||
     (nativeTarget && endpoint?.scope === "loopback") ||
-    (input.action === "cast" &&
+    (castNeedsBridgeMedia &&
       (endpoint?.castReachable === false || endpoint?.scope === "loopback"))
   ) {
     return result(input, "bridge_loopback_unreachable", true);

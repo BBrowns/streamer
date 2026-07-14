@@ -29,6 +29,7 @@ import {
   preflightStreamAction,
   requireActionPreflight,
 } from "../actionPreflight";
+import { getDeviceProfile } from "./deviceProfile";
 
 const TERMINAL_STATUSES = new Set<PlaybackSessionStatus>([
   "completed",
@@ -589,9 +590,11 @@ async function attemptCandidate(
   engine.on("gateway", onGateway);
 
   try {
+    const actionDeviceProfile =
+      action === "cast" ? getDeviceProfile() : session.deviceProfile;
     requireActionPreflight(
       preflightStreamAction(action, stream, {
-        deviceProfile: session.deviceProfile,
+        deviceProfile: actionDeviceProfile,
         requiresRemux: candidate.requiresRemux,
       }),
     );
@@ -631,7 +634,7 @@ async function attemptCandidate(
       if (candidate.requiresBridge || candidate.kind === "torrent") {
         requireActionPreflight(
           preflightStreamAction(action, stream, {
-            deviceProfile: session.deviceProfile,
+            deviceProfile: actionDeviceProfile,
             requiresRemux: candidate.requiresRemux,
           }),
         );

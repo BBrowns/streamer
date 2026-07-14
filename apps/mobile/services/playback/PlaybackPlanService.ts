@@ -67,7 +67,9 @@ export async function createPlaybackPlan(
     preferredAudioLang,
     preferredSubtitleLang,
   );
-  const bridge = buildActionBridgeHint({ deviceProfile });
+  // Cast compatibility uses the display profile, but bridge reachability is
+  // always evaluated from the controller running this client.
+  const bridge = buildActionBridgeHint({ deviceProfile: getDeviceProfile() });
 
   const payload: PlaybackPlanRequest = {
     ...request,

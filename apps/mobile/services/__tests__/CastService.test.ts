@@ -1,9 +1,14 @@
 import { castService } from "../CastService";
 import { useAuthStore } from "../../stores/authStore";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import { Platform } from "react-native";
 
 describe("CastService", () => {
   beforeEach(() => {
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "web",
+    });
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => [
@@ -55,6 +60,21 @@ describe("CastService", () => {
         .mocked(global.fetch)
         .mock.calls.every(([url]) => !String(url).includes("localhost")),
     ).toBe(true);
+  });
+
+  it("allows a local web bridge to control a remote direct source", async () => {
+    useAuthStore.setState({ streamServerUrl: "http://localhost:11470" });
+
+    await castService.play(
+      "living-room",
+      "https://example.test/movie.mp4",
+      "Movie",
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://localhost:11470/api/cast/play",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("sends the optional bridge auth token to protected bridge endpoints", async () => {
