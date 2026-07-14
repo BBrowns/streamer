@@ -72,6 +72,7 @@ function checkCiWorkflow() {
       "npm run test --workspace=apps/mobile -- --runInBand",
       "mobile Jest tests",
     ],
+    ["npm run test:golden-path", "deterministic browser golden paths"],
     ["npm run package:check --workspace=@streamer/desktop", "desktop smoke"],
     [
       "npm run release:check --workspace=@streamer/desktop",
@@ -116,6 +117,9 @@ function checkDocs() {
   requireFile("AGENT_HANDOFF.md");
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
+  requireFile("docs/AUTOMATED_GOLDEN_PATHS.md");
+  requireFile("playwright.config.ts");
+  requireFile("tests/golden-path/golden-path.spec.ts");
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
@@ -128,20 +132,21 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active implementation roadmap starts at **PR #143**",
-    "implementation roadmap starts at PR #143",
+    "The active implementation roadmap starts at **PR #145**",
+    "implementation roadmap starts at PR #145",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
-  requireText(
-    "AGENT_HANDOFF.md",
-    "docs/RC_CHECKLIST.md",
-    "RC checklist link",
-  );
+  requireText("AGENT_HANDOFF.md", "docs/RC_CHECKLIST.md", "RC checklist link");
   requireText(
     "AGENT_HANDOFF.md",
     "docs/DEPENDENCY_SECURITY.md",
     "dependency security baseline link",
+  );
+  requireText(
+    "AGENT_HANDOFF.md",
+    "docs/AUTOMATED_GOLDEN_PATHS.md",
+    "automated golden-path documentation link",
   );
   requireText("docs/QA_MATRIX.md", "## Release Blockers", "release blockers");
   requireText("docs/QA_MATRIX.md", "Unknown", "unknown target states");
