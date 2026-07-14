@@ -35,7 +35,7 @@ import {
   SkeletonRow,
 } from "../../components/ui/SkeletonLoader";
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
-import { FilterChipBar } from "../../components/ui/FilterChipBar";
+import { ContentTabs } from "../../components/ui/ContentTabs";
 import { useToastStore } from "../../stores/toastStore";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { AppButton } from "../../components/ui/AppButton";
@@ -276,7 +276,7 @@ export default function LibraryScreen() {
               />
             ) : null}
             <ContinueWatchingRow />
-            <FilterChipBar
+            <ContentTabs
               options={[
                 { label: t("library.filters.all"), value: "all" },
                 { label: t("library.filters.movies"), value: "movie" },
@@ -285,7 +285,8 @@ export default function LibraryScreen() {
               ]}
               value={activeFilter}
               onChange={(v) => setActiveFilter(v as typeof activeFilter)}
-              containerStyle={{ marginTop: 12, marginBottom: 4 }}
+              style={styles.libraryTabs}
+              accessibilityLabel={t("tabs.library")}
             />
           </>
         }
@@ -401,6 +402,11 @@ const styles = StyleSheet.create({
   pageHeader: {
     paddingHorizontal: uiSpacing.lg,
     paddingTop: uiSpacing.xxxl,
+  },
+  libraryTabs: {
+    marginTop: uiSpacing.md,
+    marginBottom: uiSpacing.xs,
+    marginHorizontal: uiSpacing.lg,
   },
   headerAction: {
     marginRight: uiSpacing.sm,

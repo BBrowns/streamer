@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Modal,
@@ -11,7 +10,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { SearchMetaPreview } from "../../hooks/useSearch";
@@ -20,9 +18,10 @@ import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { SearchService } from "../../services/SearchService";
 import { moveSearchSelection } from "../../services/searchController";
+import { RecentSearches } from "../search/RecentSearches";
 import { SearchResultCard } from "../search/SearchResultCard";
 import { AppButton } from "./AppButton";
-import { getWebFocusStyle } from "./designSystem";
+import { SearchField } from "./SearchField";
 
 interface CommandPaletteProps {
   visible: boolean;
@@ -176,114 +175,29 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
             },
           ]}
         >
-          <Pressable
-            onPress={() => inputRef.current?.focus()}
-            style={styles.inputRow}
-          >
-            <Ionicons name="search" size={20} color={colors.textSecondary} />
-            <TextInput
-              ref={inputRef}
-              testID="command-search-field"
-              style={[styles.input, { color: colors.text }]}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t("search.placeholder")}
-              placeholderTextColor={colors.textSecondary}
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-              onKeyPress={handleKeyPress}
-              onSubmitEditing={submit}
-              accessibilityLabel={t("search.a11y.field")}
-            />
-            {isSearching && (
-              <ActivityIndicator size="small" color={colors.tint} />
-            )}
-            {query.length > 0 && !isSearching && (
-              <Pressable
-                onPress={() => setQuery("")}
-                accessibilityRole="button"
-                accessibilityLabel={t("search.actions.clearSearch")}
-                style={({ pressed, focused }: any) => [
-                  styles.clearButton,
-                  pressed && styles.pressed,
-                  Platform.OS === "web" &&
-                    focused &&
-                    getWebFocusStyle(colors.focus),
-                ]}
-              >
-                <Ionicons name="close" size={18} color={colors.textSecondary} />
-              </Pressable>
-            )}
-          </Pressable>
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <SearchField
+            ref={inputRef}
+            inset
+            testID="command-search-field"
+            value={query}
+            onChangeText={setQuery}
+            onClear={() => setQuery("")}
+            clearAccessibilityLabel={t("search.actions.clearSearch")}
+            loading={isSearching}
+            placeholder={t("search.placeholder")}
+            onKeyPress={handleKeyPress}
+            onSubmitEditing={submit}
+            accessibilityLabel={t("search.a11y.field")}
+            inputStyle={styles.commandInput}
+          />
 
           {!query ? (
-            <View style={styles.history}>
-              <View style={styles.historyHeader}>
-                <Text
-                  style={[styles.historyTitle, { color: colors.textSecondary }]}
-                >
-                  {t("search.recent.title")}
-                </Text>
-                {recentSearches.length > 0 && (
-                  <Pressable
-                    onPress={clearHistory}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("search.recent.clear")}
-                    style={({ pressed, focused }: any) => [
-                      styles.historyClearButton,
-                      pressed && styles.pressed,
-                      Platform.OS === "web" &&
-                        focused &&
-                        getWebFocusStyle(colors.focus),
-                    ]}
-                  >
-                    <Text style={[styles.historyClear, { color: colors.tint }]}>
-                      {t("search.recent.clear")}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-              {recentSearches.length > 0 ? (
-                recentSearches.slice(0, 6).map((item) => (
-                  <Pressable
-                    key={item}
-                    onPress={() => setQuery(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("search.recent.open", {
-                      query: item,
-                    })}
-                    style={({ pressed, focused }: any) => [
-                      styles.historyItem,
-                      pressed && styles.pressed,
-                      Platform.OS === "web" &&
-                        focused &&
-                        getWebFocusStyle(colors.focus),
-                    ]}
-                  >
-                    <Ionicons
-                      name="time-outline"
-                      size={16}
-                      color={colors.textSecondary}
-                    />
-                    <Text
-                      style={[styles.historyItemText, { color: colors.text }]}
-                      numberOfLines={1}
-                    >
-                      {item}
-                    </Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text
-                  style={[styles.hintText, { color: colors.textSecondary }]}
-                >
-                  {t("search.command.noRecent")}
-                </Text>
-              )}
-            </View>
+            <RecentSearches
+              variant="compact"
+              items={recentSearches}
+              onSelect={setQuery}
+              onClear={() => void clearHistory()}
+            />
           ) : query.trim().length < 2 ? (
             <View style={styles.hint}>
               <Text style={[styles.hintText, { color: colors.textSecondary }]}>
@@ -372,59 +286,13 @@ const styles = StyleSheet.create({
       ? { boxShadow: "0 26px 70px rgba(0,0,0,0.46)" }
       : { elevation: 24 }),
   } as any,
-  inputRow: {
-    minHeight: 62,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  input: {
-    flex: 1,
+  commandInput: {
     fontSize: 17,
     lineHeight: 22,
     fontWeight: "600",
-    ...Platform.select({ web: { outlineStyle: "none" } as any }),
   },
-  clearButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  divider: { height: 1 },
   list: { maxHeight: 390, paddingHorizontal: 10 },
   result: { borderRadius: 10, paddingHorizontal: 8 },
-  history: { padding: 18, minHeight: 180 },
-  historyHeader: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  historyTitle: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  historyClearButton: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  historyClear: { fontSize: 12, fontWeight: "700" },
-  historyItem: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 4,
-  },
-  historyItemText: { flex: 1, fontSize: 14, fontWeight: "600" },
   hint: {
     minHeight: 190,
     alignItems: "center",

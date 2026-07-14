@@ -88,6 +88,8 @@ Core Obsidian primitives:
 - `SettingsChoiceRow`
 - `FilterSidebar`
 - `FilterSheet`
+- `ContentTabs`
+- `SearchField`
 - `StatusPill`
 - `PlaybackStatusPanel`
 - `EmptyState`
@@ -105,6 +107,12 @@ Shared primitives in production code:
 - `components/ui/Surface.tsx` for semantic bordered/elevated panels.
 - `components/ui/StatusPill.tsx` for bridge/playback/download readiness labels.
 - `components/ui/TextField.tsx` for themed form inputs.
+- `components/ui/SearchField.tsx` for the canonical search icon, focus line,
+  loading, clear action, and inline keyboard shortcut used by Search and the
+  Command Palette.
+- `components/ui/ContentTabs.tsx` for quiet peer-view navigation such as All,
+  Movies, and Series. It intentionally uses text and a selected underline
+  instead of filter pills.
 - `components/ui/PlaybackStatusPanel.tsx` for centered player readiness and
   error states with consistent status pills and actions.
 
@@ -228,6 +236,13 @@ the same title. A `Recently Added` rail is used only when enough valid
 
 These are the foundational building blocks used across all screens.
 
+This is an app-local component library, not a separate workspace package. That
+is deliberate: mobile, web, and Electron currently render the same Expo app,
+while these primitives depend on app hooks such as `useTheme()` and
+`useWindowClass()`. `@streamer/shared` remains reserved for runtime-independent
+types and contracts. A separate `packages/ui` becomes useful only when a second
+renderer needs the same components without importing the Expo application.
+
 ### 4.1 `EmptyState`
 
 A configurable zero-state component with three sizes (`small`, `medium`, `large`). Supports either an `icon` (Ionicons glyph) or a raw `emoji`, an optional description, and an optional CTA button.
@@ -270,27 +285,49 @@ putting hooks inside the error-boundary class.
 
 ### 4.4 `FilterChipBar`
 
-A horizontal scrollable row of toggle chips. Used for compact filter sets such
-as Discover type, Downloads queue state, and Search type/year filters.
+A horizontal scrollable row of toggle chips. Used for genuine compact facets
+and status filters such as Downloads queue state and secondary Search filters.
 Implemented with `ScrollView horizontal` — not `FlatList` — because these
 option lists are small and known.
 
-### 4.5 `OfflineBanner`
+Do not use `FilterChipBar` for top-level content destinations. Search and
+Library use `ContentTabs` for All, Movies, and Series, so selected state reads
+as navigation rather than a row of oversized buttons.
+
+### 4.5 `ContentTabs`
+
+Quiet horizontal text navigation for peer content views. Every tab keeps a
+44-pixel target, exposes the selected state to assistive technology, and uses a
+two-pixel cobalt indicator instead of a filled pill. Search and Library share
+this primitive.
+
+### 4.6 `SearchField`
+
+The canonical themed search input. It owns search icon placement, focus
+treatment, loading state, clear action, placeholder behaviour, and the optional
+inline `⌘K` hint. Search and `CommandPalette` share it so their interaction and
+accessibility contracts cannot drift.
+
+`components/search/RecentSearches.tsx` complements the input with page and
+compact variants. It renders a restrained divided list rather than a card or
+chip cloud and is shared by Search and the Command Palette.
+
+### 4.7 `OfflineBanner`
 
 Polls `expo-network` for connectivity and shows a persistent top banner when offline. Displayed at the top of the `ListHeaderComponent` in the home screen's `FlatList`.
 
-### 4.6 `WatchProgressBar`
+### 4.8 `WatchProgressBar`
 
 A thin horizontal progress bar rendered below catalog cards to indicate watch progress. Reads from the `WatchProgress` data returned by `useContinueWatching`.
 
-### 4.7 `CommandPalette`
+### 4.9 `CommandPalette`
 
 A keyboard-driven search overlay (web/desktop). Triggered by `⌘K`. Renders a
 modal with a text input and live, keyboard-selectable suggestions using the same
 debounced search controller as `/search`; Enter opens the canonical
 `/search?q=...` route. Recent searches use the shared `SearchService` storage.
 
-### 4.7.1 Unified Search Screen
+### 4.9.1 Unified Search Screen
 
 `app/(tabs)/search.tsx` is the single `/search` destination.
 `/search/results?q=...` remains a compatibility route for existing callers and
@@ -299,12 +336,12 @@ the normal zero-query state rather than a hidden route mode.
 The screen provides:
 
 - a sticky editable search input
-- recent searches and installed-provider catalog rails
+- a restrained recent-search list and installed-provider catalog rails
 - debounced poster/title suggestions from two characters
 - debounced progress plus poster/title suggestions while results load
 - partial-provider, retryable error, no-provider, and no-results states
 - shareable/restorable query, type, year, provider, and sort URL state
-- quick type filters (`All`, `Movies`, `Series`)
+- text-tab type navigation (`All`, `Movies`, `Series`)
 - labelled year/provider/sort controls in a compact-through-expanded sheet
 - a fixed filter sidebar beside results only in the large window class
 
@@ -313,11 +350,11 @@ results. Add-on search support is not uniform enough to make provider/genre/
 quality filtering a reliable backend contract yet. Do not expose source picking
 as the primary search UX.
 
-### 4.8 `DesktopLayout`
+### 4.10 `DesktopLayout`
 
 See Section 3.1 above.
 
-### 4.9 `BiometricLockOverlay`
+### 4.11 `BiometricLockOverlay`
 
 An overlay that gates access to the app behind biometric authentication using `expo-local-authentication`. Activated on app foreground if enabled in settings. Renders over the entire screen using `position: absolute` fill.
 

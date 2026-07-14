@@ -48,10 +48,10 @@ The checked-in dark/light reference captures live under
 [`docs/pr-assets/obsidian-editorial`](./pr-assets/obsidian-editorial/):
 
 - Settings overview and Playback detail at phone and desktop sizes.
-- Search discovery, suggestions, results, and filters at phone and desktop
-  sizes.
+- Search discovery, recent-search history, suggestions, results, and filters at
+  phone and desktop sizes.
 
-Together these provide 24 stable review images. Intermediate widths are covered
+Together these provide 28 stable review images. Intermediate widths are covered
 by layout assertions rather than additional golden files.
 
 ## Evidence Boundary

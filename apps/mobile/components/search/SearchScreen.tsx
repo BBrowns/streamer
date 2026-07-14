@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,10 +29,12 @@ import {
 } from "../../services/searchState";
 import { EmptyState } from "../ui/EmptyState";
 import { ContentBoundary } from "../ui/ContentBoundary";
-import { FilterChipBar } from "../ui/FilterChipBar";
+import { ContentTabs } from "../ui/ContentTabs";
 import { getWebFocusStyle } from "../ui/designSystem";
 import { PageLayout } from "../ui/PageLayout";
+import { SearchField } from "../ui/SearchField";
 import { FilterSheet, FilterSidebar } from "./SearchFilters";
+import { RecentSearches } from "./RecentSearches";
 import { SearchDiscovery } from "./SearchDiscovery";
 import { SearchResultCard } from "./SearchResultCard";
 
@@ -65,7 +66,7 @@ export function SearchScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { width, isLarge } = useWindowClass();
+  const { width, isCompact, isLarge } = useWindowClass();
   const [inputValue, setInputValue] = useState(routeState.q);
   const [submittedQuery, setSubmittedQuery] = useState(routeState.q);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -75,7 +76,6 @@ export function SearchScreen() {
   const [yearFilter, setYearFilter] = useState<YearFilter>(routeState.year);
   const [providerFilter, setProviderFilter] = useState(routeState.provider);
   const [sort, setSort] = useState<SearchSort>(routeState.sort);
-  const [searchFocused, setSearchFocused] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const fullSearch = useSearch(submittedQuery);
@@ -309,117 +309,84 @@ export function SearchScreen() {
                 {t("search.title")}
               </Text>
             </View>
-            {Platform.OS === "web" && (
-              <View style={[styles.shortcut, { backgroundColor: colors.card }]}>
-                <Text
-                  style={[styles.shortcutText, { color: colors.textSecondary }]}
-                >
-                  ⌘K
-                </Text>
-              </View>
-            )}
           </View>
 
-          <View
-            style={[
-              styles.searchField,
-              {
-                backgroundColor: colors.card,
-                borderColor: searchFocused ? colors.focus : "transparent",
-              },
-              Platform.OS === "web" &&
-                searchFocused &&
-                getWebFocusStyle(colors.focus),
-            ]}
-          >
-            <Ionicons name="search" size={20} color={colors.textSecondary} />
-            <TextInput
+          <View style={styles.searchArea}>
+            <SearchField
               testID="search-field"
               value={inputValue}
               onChangeText={setInputValue}
+              onClear={clearSearch}
+              clearAccessibilityLabel={t("search.actions.clearSearch")}
+              loading={
+                inputValue.trim().length >= 2 &&
+                (suggestions.isDebouncing || suggestions.isFetching)
+              }
+              shortcutHint={
+                Platform.OS === "web" && !isCompact && !isLarge
+                  ? "⌘K"
+                  : undefined
+              }
               onSubmitEditing={() => submitSearch(inputValue)}
               placeholder={t("search.placeholder")}
-              placeholderTextColor={colors.textSecondary}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
               accessibilityLabel={t("search.a11y.field")}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              style={[styles.input, { color: colors.text }]}
             />
-            {(suggestions.isDebouncing || suggestions.isFetching) &&
-              inputValue.trim().length >= 2 && (
-                <ActivityIndicator size="small" color={colors.tint} />
-              )}
-            {inputValue.length > 0 && (
-              <Pressable
-                onPress={clearSearch}
-                accessibilityRole="button"
-                accessibilityLabel={t("search.actions.clearSearch")}
-                style={({ pressed, focused }: any) => [
-                  styles.iconButton,
-                  pressed && styles.pressed,
-                  Platform.OS === "web" &&
-                    focused &&
-                    getWebFocusStyle(colors.focus),
-                ]}
-              >
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
-              </Pressable>
-            )}
-          </View>
 
-          {showSuggestions && (
-            <View
-              testID="search-suggestions"
-              style={[
-                styles.suggestions,
-                { backgroundColor: colors.surfaceElevated },
-              ]}
-            >
-              {suggestionResults.map((item) => (
-                <SearchResultCard
-                  key={`${item.type}:${item.id}`}
-                  item={item}
-                  compact
-                  onPress={() => openSuggestion(item)}
-                />
-              ))}
-              {!suggestions.isFetching && suggestionResults.length === 0 && (
-                <Text
-                  style={[
-                    styles.suggestionEmpty,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  {t("search.suggestions.noMatch")}
-                </Text>
-              )}
-              <Pressable
-                onPress={() => submitSearch(inputValue)}
-                accessibilityRole="button"
-                accessibilityLabel={t("search.suggestions.showAll", {
-                  query: inputValue.trim(),
-                })}
-                style={({ pressed, focused }: any) => [
-                  styles.showAll,
-                  { borderTopColor: colors.border },
-                  pressed && styles.pressed,
-                  Platform.OS === "web" &&
-                    focused &&
-                    getWebFocusStyle(colors.focus),
+            {showSuggestions && (
+              <View
+                testID="search-suggestions"
+                style={[
+                  styles.suggestions,
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
-                <Text style={[styles.showAllText, { color: colors.tint }]}>
-                  {t("search.suggestions.showAll", {
+                {suggestionResults.map((item) => (
+                  <SearchResultCard
+                    key={`${item.type}:${item.id}`}
+                    item={item}
+                    compact
+                    onPress={() => openSuggestion(item)}
+                  />
+                ))}
+                {!suggestions.isFetching && suggestionResults.length === 0 && (
+                  <Text
+                    style={[
+                      styles.suggestionEmpty,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {t("search.suggestions.noMatch")}
+                  </Text>
+                )}
+                <Pressable
+                  onPress={() => submitSearch(inputValue)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("search.suggestions.showAll", {
                     query: inputValue.trim(),
                   })}
-                </Text>
-                <Ionicons name="arrow-forward" size={17} color={colors.tint} />
-              </Pressable>
-            </View>
-          )}
+                  style={({ pressed, focused }: any) => [
+                    styles.showAll,
+                    { borderTopColor: colors.border },
+                    pressed && styles.pressed,
+                    Platform.OS === "web" &&
+                      focused &&
+                      getWebFocusStyle(colors.focus),
+                  ]}
+                >
+                  <Text style={[styles.showAllText, { color: colors.tint }]}>
+                    {t("search.suggestions.showAll", {
+                      query: inputValue.trim(),
+                    })}
+                  </Text>
+                  <Ionicons
+                    name="arrow-forward"
+                    size={17}
+                    color={colors.tint}
+                  />
+                </Pressable>
+              </View>
+            )}
+          </View>
         </ContentBoundary>
       </View>
 
@@ -431,91 +398,13 @@ export function SearchScreen() {
         <ContentBoundary padded={false}>
           {!submittedQuery ? (
             <View style={styles.landing}>
-              {recentSearches.length > 0 && (
-                <View style={styles.recentSection}>
-                  <View style={styles.sectionHeading}>
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                      {t("search.recent.title")}
-                    </Text>
-                    <Pressable
-                      onPress={clearRecent}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("search.recent.clear")}
-                      style={({ pressed, focused }: any) => [
-                        styles.textButton,
-                        pressed && styles.pressed,
-                        Platform.OS === "web" &&
-                          focused &&
-                          getWebFocusStyle(colors.focus),
-                      ]}
-                    >
-                      <Text
-                        style={[styles.textButtonLabel, { color: colors.tint }]}
-                      >
-                        {t("search.recent.clear")}
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.recentList}>
-                    {recentSearches.map((query) => (
-                      <View
-                        key={query}
-                        style={[
-                          styles.recentRow,
-                          { backgroundColor: colors.card },
-                        ]}
-                      >
-                        <Pressable
-                          onPress={() => submitSearch(query)}
-                          accessibilityRole="button"
-                          accessibilityLabel={t("search.recent.open", {
-                            query,
-                          })}
-                          style={({ pressed, focused }: any) => [
-                            styles.recentMain,
-                            pressed && styles.pressed,
-                            Platform.OS === "web" &&
-                              focused &&
-                              getWebFocusStyle(colors.focus),
-                          ]}
-                        >
-                          <Ionicons
-                            name="time-outline"
-                            size={17}
-                            color={colors.textSecondary}
-                          />
-                          <Text
-                            style={[styles.recentText, { color: colors.text }]}
-                            numberOfLines={1}
-                          >
-                            {query}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => removeRecent(query)}
-                          accessibilityRole="button"
-                          accessibilityLabel={t("search.recent.remove", {
-                            query,
-                          })}
-                          style={({ pressed, focused }: any) => [
-                            styles.iconButton,
-                            pressed && styles.pressed,
-                            Platform.OS === "web" &&
-                              focused &&
-                              getWebFocusStyle(colors.focus),
-                          ]}
-                        >
-                          <Ionicons
-                            name="close"
-                            size={17}
-                            color={colors.textSecondary}
-                          />
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
+              <RecentSearches
+                items={recentSearches}
+                onSelect={(query) => void submitSearch(query)}
+                onRemove={(query) => void removeRecent(query)}
+                onClear={() => void clearRecent()}
+                style={styles.recentSection}
+              />
 
               <View style={styles.discoveryHeading}>
                 <View>
@@ -531,14 +420,14 @@ export function SearchScreen() {
                     {t("search.discovery.subtitle")}
                   </Text>
                 </View>
-                <FilterChipBar
+                <ContentTabs
                   options={typeOptions}
                   value={typeFilter}
                   onChange={(value) => {
                     setTypeFilter(value);
                     syncRoute({ type: value });
                   }}
-                  containerStyle={styles.discoveryTypeFilter}
+                  style={styles.discoveryTypeFilter}
                   accessibilityLabel={t("search.filters.type")}
                 />
               </View>
@@ -547,14 +436,14 @@ export function SearchScreen() {
           ) : (
             <View style={styles.resultsPage}>
               <View style={styles.toolbar}>
-                <FilterChipBar
+                <ContentTabs
                   options={typeOptions}
                   value={typeFilter}
                   onChange={(value) => {
                     setTypeFilter(value);
                     syncRoute({ type: value });
                   }}
-                  containerStyle={styles.typeFilter}
+                  style={styles.typeFilter}
                   accessibilityLabel={t("search.filters.type")}
                 />
                 {!isLarge && (
@@ -778,7 +667,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 18,
   },
   headingCopy: { gap: 2 },
   eyebrow: {
@@ -794,35 +683,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.7,
   },
-  shortcut: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6 },
-  shortcutText: { fontSize: 11, fontWeight: "800" },
-  searchField: {
-    minHeight: 52,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "600",
-    ...Platform.select({ web: { outlineStyle: "none" } as any }),
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  searchArea: { position: "relative", width: "100%", maxWidth: 760 },
   suggestions: {
     position: "absolute",
-    left: 24,
-    right: 24,
-    top: 143,
+    left: 0,
+    right: 0,
+    top: 56,
     maxHeight: 500,
     borderRadius: 12,
     paddingHorizontal: 14,
@@ -850,14 +716,8 @@ const styles = StyleSheet.create({
   showAllText: { flex: 1, fontSize: 13, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 64 },
-  landing: { gap: 32 },
-  recentSection: { paddingHorizontal: 24, gap: 12 },
-  sectionHeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-  },
+  landing: { gap: 36 },
+  recentSection: { paddingHorizontal: 24 },
   sectionTitle: { fontSize: 20, lineHeight: 25, fontWeight: "800" },
   sectionSubtitle: {
     marginTop: 3,
@@ -865,41 +725,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
   },
-  textButton: {
-    minHeight: 44,
-    paddingHorizontal: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textButtonLabel: { fontSize: 13, fontWeight: "700" },
-  recentList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  recentRow: {
-    minWidth: 220,
-    maxWidth: 360,
-    flexGrow: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-  },
-  recentMain: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    paddingLeft: 14,
-  },
-  recentText: { flex: 1, fontSize: 14, fontWeight: "600" },
   discoveryHeading: {
     paddingHorizontal: 24,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    alignItems: "flex-start",
+    gap: 10,
   },
-  discoveryTypeFilter: { marginVertical: 0 },
+  discoveryTypeFilter: { marginTop: 2 },
   resultsPage: { paddingHorizontal: 24 },
   toolbar: {
     minHeight: 52,
@@ -909,7 +740,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  typeFilter: { marginVertical: 0, marginHorizontal: -16 },
+  typeFilter: { marginVertical: 0 },
   toolbarActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   toolbarButton: {
     minHeight: 44,

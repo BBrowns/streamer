@@ -10,13 +10,14 @@ Search, keyboard interaction, responsive composition, and localized contracts.
 - Projects: phone-web at 390 x 844 and desktop-renderer at 1440 x 1000.
 - Additional widths: 768 x 1024 and 1024 x 768.
 - Visual modes: dark and light with reduced motion.
-- Checked-in captures: 24 PNG files in
+- Checked-in captures: 28 PNG files in
   [`docs/pr-assets/obsidian-editorial`](../pr-assets/obsidian-editorial/).
 
 The Settings captures cover the category overview and Playback detail. Search
-captures cover discovery, suggestions, results, and filter surfaces. The suite
-also verifies canonical redirects, provider partial failures, complete filter
-reset and URL synchronization, and Command Palette arrow/Enter behavior.
+captures cover discovery, recent-search history, suggestions, results, and
+filter surfaces. The suite also verifies canonical redirects, provider partial
+failures, complete filter reset and URL synchronization, and Command Palette
+arrow/Enter behavior.
 
 ## Accessibility and design-system result
 

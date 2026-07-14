@@ -487,6 +487,30 @@ test("Obsidian Search keeps discovery and results media-first", async ({
     ),
     animations: "disabled",
   });
+
+  await page.goto("/search");
+  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByText("Golden", { exact: true })).toBeVisible();
+  await settleVisualTheme(page, "dark", "search-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-recent-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await settleVisualTheme(page, "light", "search-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-recent-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
 });
 
 test("Settings and Search adapt without overflow at intermediate widths", async ({
