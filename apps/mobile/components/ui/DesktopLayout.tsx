@@ -6,6 +6,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { isFullScreenRoute } from "./desktopShellRoutes";
+import { useTranslation } from "react-i18next";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -17,29 +18,34 @@ const NAV_ITEMS = [
     href: "/",
     icon: "home-outline" as const,
     activeIcon: "home" as const,
-    label: "Home",
+    labelKey: "tabs.home",
+    shortcut: undefined,
   },
   {
     href: "/search",
     icon: "search-outline" as const,
     activeIcon: "search" as const,
-    label: "Search",
+    labelKey: "tabs.search",
+    shortcut: "⌘K",
   },
   {
     href: "/library",
     icon: "bookmark-outline" as const,
     activeIcon: "bookmark" as const,
-    label: "Library",
+    labelKey: "tabs.library",
+    shortcut: undefined,
   },
   {
     href: "/downloads",
     icon: "cloud-download-outline" as const,
     activeIcon: "cloud-download" as const,
-    label: "Downloads",
+    labelKey: "tabs.downloads",
+    shortcut: undefined,
   },
 ];
 
-export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
+export function DesktopLayout({ children }: DesktopLayoutProps) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const { windowClass, hasSideNavigation } = useWindowClass();
   const { colors } = useTheme();
@@ -72,15 +78,17 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
           windowClass === "medium" && styles.sidebarMedium,
           isExpanded && styles.sidebarExpanded,
           {
-            backgroundColor: colors.tabBar,
+            backgroundColor: colors.surfaceSubtle,
             borderRightColor: colors.border,
           },
         ]}
       >
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <View style={[styles.logoIconWrap, { backgroundColor: colors.tint }]}>
-            <Ionicons name="play" size={18} color={colors.onTint} />
+          <View
+            style={[styles.logoIconWrap, { backgroundColor: colors.primary }]}
+          >
+            <Ionicons name="play" size={16} color={colors.onPrimary} />
           </View>
           {isLarge && (
             <Text style={[styles.logoText, { color: colors.text }]}>
@@ -98,7 +106,7 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
                 { color: colors.textSecondary + "90" },
               ]}
             >
-              MENU
+              {t("navigation.menu")}
             </Text>
           )}
           {NAV_ITEMS.map((item) => {
@@ -112,9 +120,10 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
                 href={item.href}
                 icon={item.icon}
                 activeIcon={item.activeIcon}
-                label={item.label}
+                label={t(item.labelKey)}
                 active={active}
                 windowClass={sideWindowClass}
+                shortcut={item.shortcut}
               />
             );
           })}
@@ -128,73 +137,16 @@ export function DesktopLayout({ children, onSearchOpen }: DesktopLayoutProps) {
             href="/settings"
             icon="settings-outline"
             activeIcon="settings"
-            label="Settings"
-            active={pathname === "/settings"}
+            label={t("tabs.settings")}
+            active={pathname.startsWith("/settings")}
             windowClass={sideWindowClass}
           />
-          {!!onSearchOpen && isLarge && (
-            <SearchNavButton onSearchOpen={onSearchOpen} />
-          )}
         </View>
       </View>
 
       {/* Main Content Area */}
       <View style={styles.content}>{children}</View>
     </View>
-  );
-}
-
-function SearchNavButton({ onSearchOpen }: { onSearchOpen: () => void }) {
-  const { colors, isDark } = useTheme();
-  const { isKeyboardFocused, webPressableProps } =
-    useWebPressableActivation(onSearchOpen);
-
-  return (
-    <Pressable
-      {...webPressableProps}
-      style={({ pressed }) => [
-        styles.navLink,
-        isKeyboardFocused && styles.navLinkFocused,
-        pressed && {
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.08)"
-            : "rgba(0,0,0,0.05)",
-        },
-      ]}
-      onPress={onSearchOpen}
-      accessibilityRole="button"
-      accessibilityLabel="Search (⌘K)"
-    >
-      <View style={styles.navLinkInner}>
-        <Ionicons
-          name="search-outline"
-          size={20}
-          color={isKeyboardFocused ? colors.text : colors.textSecondary}
-        />
-        <Text
-          style={[
-            styles.navLabel,
-            { color: isKeyboardFocused ? colors.text : colors.textSecondary },
-          ]}
-        >
-          Search
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.kbdHint,
-          {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
-          },
-        ]}
-      >
-        <Text style={[styles.kbdText, { color: colors.textSecondary }]}>
-          ⌘K
-        </Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -205,6 +157,7 @@ function NavLink({
   label,
   active,
   windowClass,
+  shortcut,
 }: {
   href: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
@@ -212,6 +165,7 @@ function NavLink({
   label: string;
   active: boolean;
   windowClass: "medium" | "expanded" | "large";
+  shortcut?: string;
 }) {
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -237,6 +191,7 @@ function NavLink({
                 : "rgba(0,0,0,0.03)",
             },
           isWeb && isKeyboardFocused && styles.navLinkFocused,
+          isWeb && isKeyboardFocused && { outlineColor: colors.focus },
           pressed && {
             backgroundColor: isDark
               ? "rgba(255,255,255,0.08)"
@@ -278,6 +233,22 @@ function NavLink({
             </Text>
           )}
         </View>
+        {!!shortcut && windowClass === "large" && (
+          <View
+            style={[
+              styles.kbdHint,
+              {
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(0,0,0,0.05)",
+              },
+            ]}
+          >
+            <Text style={[styles.kbdText, { color: colors.textSecondary }]}>
+              {shortcut}
+            </Text>
+          </View>
+        )}
       </Pressable>
     </Link>
   );
@@ -290,10 +261,10 @@ const styles = StyleSheet.create({
   },
   immersiveContainer: { flex: 1 },
   sidebar: {
-    width: 216,
+    width: 232,
     borderRightWidth: 1,
-    paddingVertical: 28,
-    paddingHorizontal: 12,
+    paddingVertical: 32,
+    paddingHorizontal: 16,
   },
   sidebarMedium: {
     width: 72,
@@ -307,34 +278,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 36,
-    paddingHorizontal: 8,
+    marginBottom: 44,
+    paddingHorizontal: 6,
   },
   logoIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
   },
   logoText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
-    letterSpacing: 0,
+    letterSpacing: -0.25,
   },
   navSectionLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.5,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
     paddingHorizontal: 12,
     marginBottom: 6,
   },
   nav: {
-    gap: 2,
+    gap: 4,
   },
   navLink: {
     position: "relative",
-    borderRadius: 10,
+    borderRadius: 8,
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
@@ -343,23 +314,25 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     outlineStyle: "solid",
     outlineWidth: 3,
-    outlineColor: "#a78bfa",
+    outlineColor: "transparent",
     outlineOffset: 2,
   } as any,
   activeBar: {
     position: "absolute",
     left: 0,
-    top: 8,
-    bottom: 8,
-    width: 3,
+    top: 10,
+    bottom: 10,
+    width: 2,
     borderRadius: 2,
   },
   navLinkInner: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 46,
   },
   navLinkRail: {
     justifyContent: "center",
@@ -372,7 +345,7 @@ const styles = StyleSheet.create({
   },
   navLabel: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "500",
   },
   navLabelExpanded: {
     fontSize: 10,

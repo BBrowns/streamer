@@ -10,7 +10,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
-import { getWebFocusStyle } from "./designSystem";
+import { getWebFocusStyle, uiRadii, uiTypography } from "./designSystem";
 
 type TextFieldProps = TextInputProps & {
   label: string;
@@ -27,7 +27,7 @@ export function TextField({
   onBlur,
   ...props
 }: TextFieldProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
 
   return (
@@ -49,13 +49,11 @@ export function TextField({
         style={[
           styles.input,
           {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.05)",
+            backgroundColor: colors.surfaceElevated,
             color: colors.text,
-            borderColor: colors.border,
+            borderColor: focused ? colors.tint : "transparent",
           },
-          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           style,
         ]}
         placeholderTextColor={
@@ -71,15 +69,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: 13,
-    fontWeight: "700",
+    ...uiTypography.label,
   },
   input: {
     minHeight: 48,
-    borderRadius: 12,
+    borderRadius: uiRadii.control,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === "ios" ? 13 : 10,
     borderWidth: 1,
-    fontSize: 15,
+    ...uiTypography.body,
   },
 });

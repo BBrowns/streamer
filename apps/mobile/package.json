@@ -13,7 +13,9 @@
     "build:e2e": "detox build --configuration ios.sim.debug"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
+    "@fontsource-variable/inter": "^5.2.8",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.8",
     "@sentry/react-native": "~7.11.0",

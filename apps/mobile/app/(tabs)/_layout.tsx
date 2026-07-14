@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import {
   getWebFocusStyle,
   uiTouchTarget,
+  uiTypography,
 } from "../../components/ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
 
@@ -87,9 +88,7 @@ export default function TabLayout() {
         ],
         headerTintColor: colors.text,
         headerTitleStyle: {
-          fontWeight: "800",
-          fontSize: 24,
-          letterSpacing: 0,
+          ...uiTypography.title,
         },
         // Hide header on desktop — the DesktopLayout sidebar handles navigation
         headerShown: isCompact,
@@ -104,8 +103,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.tint,
         tabBarInactiveTintColor: colors.disabled,
         tabBarLabelStyle: {
+          fontFamily: uiTypography.sectionLabel.fontFamily,
           fontSize: 10,
-          fontWeight: "800",
+          fontWeight: "700",
           textTransform: "uppercase",
         },
       }}
@@ -208,15 +208,11 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: "#11121c",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.05)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
     elevation: 0,
   },
   tabBar: {
-    backgroundColor: "#080808",
-    borderTopColor: "rgba(255,255,255,0.05)",
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     height: Platform.OS === "ios" ? 88 : 64,
     paddingTop: 8,
   },
