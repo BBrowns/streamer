@@ -6,6 +6,7 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +52,8 @@ export default function DownloadsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const compact = width < 700;
   const tasksDict = useDownloadStore((state) => state.tasks);
   const tasks = useMemo(
     () => sortDownloadTasks(Object.values(tasksDict)),
@@ -307,7 +310,10 @@ export default function DownloadsScreen() {
     return (
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.emptyContent}
+        contentContainerStyle={[
+          styles.emptyContent,
+          compact && styles.emptyContentCompact,
+        ]}
       >
         <View style={styles.emptyHero}>
           <EmptyState
@@ -348,7 +354,12 @@ export default function DownloadsScreen() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
+            <View
+              style={[
+                styles.headerTitleRow,
+                compact && styles.headerTitleRowCompact,
+              ]}
+            >
               <View style={styles.headerText}>
                 <Text style={[styles.title, { color: colors.text }]}>
                   {t("downloads.title", { defaultValue: "Downloads" })}
@@ -374,6 +385,7 @@ export default function DownloadsScreen() {
                 size="small"
                 onPress={confirmClearAll}
                 disabled={deletingAll}
+                style={compact ? styles.clearButtonCompact : undefined}
               />
             </View>
 
@@ -413,6 +425,9 @@ export default function DownloadsScreen() {
               value={filter}
               onChange={setFilter}
               containerStyle={styles.filters}
+              accessibilityLabel={t("downloads.filters.label", {
+                defaultValue: "Filter downloads",
+              })}
             />
 
             <View style={styles.smartDownloadsPanel}>
@@ -549,11 +564,16 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 880,
     alignSelf: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 32,
     paddingHorizontal: 18,
     paddingTop: 56,
     paddingBottom: 88,
+  },
+  emptyContentCompact: {
+    gap: 20,
+    paddingTop: 24,
+    paddingBottom: 40,
   },
   emptyHero: {
     width: "100%",
@@ -565,6 +585,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 16,
+  },
+  headerTitleRowCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  clearButtonCompact: {
+    alignSelf: "flex-start",
   },
   headerText: {
     flex: 1,
@@ -591,6 +618,8 @@ const styles = StyleSheet.create({
   },
   summaryItem: {
     minWidth: 132,
+    flexGrow: 1,
+    flexBasis: 150,
     minHeight: 64,
     paddingHorizontal: 13,
     flexDirection: "row",

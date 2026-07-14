@@ -22,6 +22,10 @@ jest.mock("../../../hooks/useTheme", () => ({
   }),
 }));
 
+jest.mock("../../../hooks/useReducedMotion", () => ({
+  useReducedMotion: () => false,
+}));
+
 describe("PlayerControls", () => {
   const createPlayer = () =>
     ({

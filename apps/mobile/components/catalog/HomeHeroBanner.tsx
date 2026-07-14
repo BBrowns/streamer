@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import React, { memo } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { getWebFocusStyle, uiTouchTarget } from "../ui/designSystem";
 
 const isWeb = Platform.OS === "web";
 
@@ -21,24 +22,24 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= 1024;
   const heroHeight = isDesktop ? 500 : 430;
-  const [playHovered, setPlayHovered] = useState(false);
-  const [infoHovered, setInfoHovered] = useState(false);
-
   const handleNavigate = () => router.push(`/detail/${item.type}/${item.id}`);
 
   return (
     <Pressable
-      style={[
+      style={({ pressed, focused }: any) => [
         styles.hero,
         {
           backgroundColor: isDark ? "#151622" : "#f5ece9",
           borderColor: colors.border,
           height: heroHeight,
+          opacity: pressed ? 0.94 : 1,
         },
+        isWeb && focused && getWebFocusStyle(colors.tint),
       ]}
       onPress={handleNavigate}
       accessibilityRole="button"
       accessibilityLabel={`Featured: ${item.name}`}
+      accessibilityHint="Opens title details and playback options"
     >
       <Image
         source={{ uri: item.poster }}
@@ -144,21 +145,13 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
           )}
 
           <View style={styles.heroActions}>
-            <Pressable
-              style={({ pressed }) => [
+            <View
+              style={[
                 styles.heroPlayBtn,
                 {
-                  backgroundColor: playHovered
-                    ? isDark
-                      ? "#e6dbff"
-                      : "#8f72e8"
-                    : colors.tint,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
+                  backgroundColor: colors.tint,
                 },
               ]}
-              onPress={handleNavigate}
-              onPointerEnter={isWeb ? () => setPlayHovered(true) : undefined}
-              onPointerLeave={isWeb ? () => setPlayHovered(false) : undefined}
             >
               <Ionicons
                 name="play"
@@ -173,28 +166,18 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
               >
                 Play
               </Text>
-            </Pressable>
+            </View>
 
-            <Pressable
-              style={({ pressed }) => [
+            <View
+              style={[
                 styles.heroInfoBtn,
                 {
-                  backgroundColor: infoHovered
-                    ? isDark
-                      ? "rgba(255,255,255,0.14)"
-                      : "rgba(255,255,255,0.78)"
-                    : isDark
-                      ? "rgba(255,255,255,0.09)"
-                      : "rgba(255,255,255,0.58)",
-                  borderColor: infoHovered
-                    ? colors.tint
-                    : "rgba(127,111,145,0.2)",
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
+                  backgroundColor: isDark
+                    ? "rgba(255,255,255,0.09)"
+                    : "rgba(255,255,255,0.58)",
+                  borderColor: "rgba(127,111,145,0.2)",
                 },
               ]}
-              onPress={handleNavigate}
-              onPointerEnter={isWeb ? () => setInfoHovered(true) : undefined}
-              onPointerLeave={isWeb ? () => setInfoHovered(false) : undefined}
             >
               <Ionicons
                 name="information-circle-outline"
@@ -204,7 +187,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
               <Text style={[styles.heroInfoText, { color: colors.text }]}>
                 Details
               </Text>
-            </Pressable>
+            </View>
           </View>
         </View>
 
@@ -338,6 +321,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 28,
     paddingVertical: 13,
+    minHeight: uiTouchTarget,
     borderRadius: 999,
     // @ts-ignore web-only
     transition: "background-color 0.15s ease, transform 0.1s ease",
@@ -353,6 +337,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 22,
     paddingVertical: 13,
+    minHeight: uiTouchTarget,
     borderRadius: 999,
     borderWidth: 1,
     // @ts-ignore web-only

@@ -177,6 +177,9 @@ function DiscoverContent() {
         options={filters}
         value={activeFilter}
         onChange={(v) => setActiveFilter(v as FilterType)}
+        accessibilityLabel={t("discover.filters.label", {
+          defaultValue: "Filter provider catalogs",
+        })}
         containerStyle={{
           borderBottomWidth: 1,
           borderBottomColor: colors.border,

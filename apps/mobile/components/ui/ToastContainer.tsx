@@ -13,15 +13,17 @@ import {
   type Toast,
   type ToastType,
 } from "../../stores/toastStore";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 // ─── Individual Toast ─────────────────────────────────────────────────────────
 function ToastItem({ toast }: { toast: Toast }) {
   const { dismiss } = useToastStore();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    Animated.parallel([
+    const enter = Animated.parallel([
       Animated.spring(opacity, {
         toValue: 1,
         useNativeDriver: true,
@@ -34,9 +36,19 @@ function ToastItem({ toast }: { toast: Toast }) {
         tension: 120,
         friction: 10,
       }),
-    ]).start();
+    ]);
+    if (reducedMotion) {
+      opacity.setValue(1);
+      translateY.setValue(0);
+    } else {
+      enter.start();
+    }
 
     const timer = setTimeout(() => {
+      if (reducedMotion) {
+        dismiss(toast.id);
+        return;
+      }
       Animated.parallel([
         Animated.timing(opacity, {
           toValue: 0,
@@ -52,7 +64,7 @@ function ToastItem({ toast }: { toast: Toast }) {
     }, 3200);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [dismiss, opacity, reducedMotion, toast.id, translateY]);
 
   const icon: Record<ToastType, React.ComponentProps<typeof Ionicons>["name"]> =
     {
@@ -74,7 +86,12 @@ function ToastItem({ toast }: { toast: Toast }) {
       <Text style={styles.message} numberOfLines={2}>
         {toast.message}
       </Text>
-      <Pressable onPress={() => dismiss(toast.id)} hitSlop={8}>
+      <Pressable
+        onPress={() => dismiss(toast.id)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss notification"
+      >
         <Ionicons name="close" size={16} color="#6b7280" />
       </Pressable>
     </Animated.View>

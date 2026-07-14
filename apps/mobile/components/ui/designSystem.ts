@@ -18,6 +18,17 @@ export const uiRadii = {
   pill: 999,
 };
 
+export const uiTouchTarget = 44;
+
+export function getWebFocusStyle(color: string) {
+  return {
+    outlineStyle: "solid",
+    outlineWidth: 3,
+    outlineColor: color,
+    outlineOffset: 2,
+  } as const;
+}
+
 export const uiTypography = {
   sectionLabel: {
     fontSize: 12,

@@ -6,6 +6,8 @@ import {
   Pressable,
   ScrollView,
   StatusBar,
+  Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,9 +15,9 @@ import { useAuthStore } from "../../stores/authStore";
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { api } from "../../services/api";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
+import { getWebFocusStyle } from "../../components/ui/designSystem";
 
 const STARTER_ADDONS = [
   {
@@ -77,8 +79,9 @@ export default function OnboardingSetup() {
   const setPendingAddons = useAuthStore((s) => s.setPendingAddons);
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
+  const compact = width < 600;
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
-  const [isInstalling, setIsInstalling] = useState(false);
 
   const handleToggleTheme = (t: "light" | "dark" | "system") => {
     setTheme(t);
@@ -110,7 +113,12 @@ export default function OnboardingSetup() {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          compact && styles.scrollContentCompact,
+        ]}
+      >
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
             {t("onboarding.title")}
@@ -189,7 +197,7 @@ export default function OnboardingSetup() {
             {(["dark", "light", "system"] as const).map((themeOption) => (
               <Pressable
                 key={themeOption}
-                style={[
+                style={({ pressed, focused }: any) => [
                   styles.themeOption,
                   {
                     backgroundColor: isDark
@@ -201,8 +209,15 @@ export default function OnboardingSetup() {
                   theme === themeOption && {
                     backgroundColor: `${colors.tint}15`,
                   },
+                  pressed && { opacity: 0.8 },
+                  Platform.OS === "web" &&
+                    focused &&
+                    getWebFocusStyle(colors.tint),
                 ]}
                 onPress={() => handleToggleTheme(themeOption)}
+                accessibilityRole="radio"
+                accessibilityLabel={`${t(`common.themes.${themeOption}`)} theme`}
+                accessibilityState={{ checked: theme === themeOption }}
               >
                 <Ionicons
                   name={
@@ -247,7 +262,7 @@ export default function OnboardingSetup() {
           {STARTER_ADDONS.map((addon) => (
             <Pressable
               key={addon.name}
-              style={[
+              style={({ pressed, focused }: any) => [
                 styles.addonCard,
                 {
                   backgroundColor: isDark
@@ -257,8 +272,17 @@ export default function OnboardingSetup() {
                     ? colors.tint
                     : colors.border,
                 },
+                pressed && { opacity: 0.8 },
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.tint),
               ]}
               onPress={() => handleInstallAddon(addon.url)}
+              accessibilityRole="checkbox"
+              accessibilityLabel={`${addon.name}. ${addon.description}`}
+              accessibilityState={{
+                checked: selectedUrls.includes(addon.url),
+              }}
             >
               <View style={styles.addonInfo}>
                 <Text style={[styles.addonName, { color: colors.text }]}>
@@ -301,6 +325,7 @@ export default function OnboardingSetup() {
             <Text
               style={[styles.legalLink, { color: colors.tint }]}
               onPress={() => router.push("/terms")}
+              accessibilityRole="link"
             >
               {t("onboarding.terms")}
             </Text>{" "}
@@ -308,6 +333,7 @@ export default function OnboardingSetup() {
             <Text
               style={[styles.legalLink, { color: colors.tint }]}
               onPress={() => router.push("/privacy")}
+              accessibilityRole="link"
             >
               {t("onboarding.privacy")}
             </Text>
@@ -315,7 +341,16 @@ export default function OnboardingSetup() {
           </Text>
         </View>
 
-        <Pressable style={styles.finishBtn} onPress={handleFinish}>
+        <Pressable
+          style={({ pressed, focused }: any) => [
+            styles.finishBtn,
+            pressed && { opacity: 0.82 },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+          ]}
+          onPress={handleFinish}
+          accessibilityRole="button"
+          accessibilityLabel={t("onboarding.finish")}
+        >
           <LinearGradient
             colors={isDark ? ["#f2d7ff", "#c5e9d5"] : ["#d8b4fe", "#ffc8dd"]}
             start={{ x: 0, y: 0 }}
@@ -344,7 +379,19 @@ export default function OnboardingSetup() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { padding: 32, paddingTop: 100, paddingBottom: 60 },
+  scrollContent: {
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center",
+    padding: 32,
+    paddingTop: 72,
+    paddingBottom: 60,
+  },
+  scrollContentCompact: {
+    padding: 18,
+    paddingTop: 36,
+    paddingBottom: 40,
+  },
   header: { marginBottom: 40 },
   title: {
     fontSize: 36,
@@ -399,9 +446,10 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "600",
   },
-  themeRow: { flexDirection: "row", gap: 12 },
+  themeRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   themeOption: {
     flex: 1,
+    minWidth: 96,
     height: 85,
     borderRadius: 20,
     justifyContent: "center",

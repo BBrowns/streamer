@@ -113,3 +113,60 @@ test("cast eligibility uses a planner action and lists displays", async ({
   await expect(page.getByText("Fixture Living Room")).toBeVisible();
   expect(castControls.plannerRequests.at(-1)?.action).toBe("cast");
 });
+
+test("primary surfaces remain responsive and keyboard accessible", async ({
+  page,
+}, testInfo) => {
+  await installGoldenPathRoutes(page, "direct");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/login");
+  await page.getByPlaceholder("Email").fill("qa@example.test");
+  await page.getByPlaceholder("Password").fill("fixture-password");
+  await page.getByTestId("login-submit").click();
+  await expect(page.getByTestId("home-screen")).toBeVisible();
+
+  const hero = page.getByRole("button", {
+    name: "Featured: Golden Path Adventure",
+  });
+  await hero.focus();
+  await expect(hero).toBeFocused();
+  expect(await page.locator("button button").count()).toBe(0);
+  expect(
+    await hero.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).outlineWidth || "0"),
+    ),
+  ).toBeGreaterThanOrEqual(3);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth + 1));
+  await page.screenshot({
+    path: testInfo.outputPath(`home-${testInfo.project.name}.png`),
+    fullPage: true,
+    animations: "disabled",
+  });
+
+  if (testInfo.project.name === "desktop-renderer") {
+    await page.getByRole("link", { name: "Downloads" }).click();
+  } else {
+    await page.getByRole("tab", { name: "Downloads" }).click();
+  }
+  await expect(page).toHaveURL(/\/downloads$/);
+  const emptyAction = page.getByRole("button", {
+    name: "Browse movies and shows",
+  });
+  const smartDownloads = page.getByText("Smart Downloads", { exact: true });
+  await expect(emptyAction).toBeVisible();
+  await expect(smartDownloads).toBeVisible();
+  const actionBox = await emptyAction.boundingBox();
+  const panelTitleBox = await smartDownloads.boundingBox();
+  expect(actionBox).not.toBeNull();
+  expect(panelTitleBox).not.toBeNull();
+  expect(panelTitleBox!.y).toBeGreaterThanOrEqual(
+    actionBox!.y + actionBox!.height,
+  );
+  await page.screenshot({
+    path: testInfo.outputPath(`downloads-${testInfo.project.name}.png`),
+    fullPage: true,
+    animations: "disabled",
+  });
+});

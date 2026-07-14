@@ -1,6 +1,12 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "../../hooks/useTheme";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+} from "./designSystem";
 
 export type SegmentOption<T extends string = string> = {
   label: string;
@@ -17,6 +23,7 @@ type Props<T extends string> = {
   onChange: (value: T) => void;
   /** Render an Ionicons icon if provided. Requires calling component to import Ionicons. */
   renderIcon?: (name: string, active: boolean) => React.ReactNode;
+  accessibilityLabel?: string;
 };
 
 /**
@@ -35,11 +42,13 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   renderIcon,
+  accessibilityLabel,
 }: Props<T>) {
   const { colors, isDark } = useTheme();
 
   return (
     <View
+      accessibilityLabel={accessibilityLabel}
       style={[
         styles.grid,
         { backgroundColor: colors.card, borderColor: colors.border },
@@ -50,12 +59,14 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={opt.value}
-            style={[
+            style={({ pressed, focused }: any) => [
               styles.btn,
               isActive && {
                 backgroundColor: colors.tint + "20",
                 borderColor: colors.tint,
               },
+              pressed && styles.pressed,
+              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
             ]}
             onPress={() => {
               onChange(opt.value);
@@ -71,6 +82,7 @@ export function SegmentedControl<T extends string>({
               opt.icon && renderIcon && renderIcon(opt.icon, isActive)
             )}
             <Text
+              numberOfLines={2}
               style={[
                 styles.label,
                 { color: isActive ? colors.tint : colors.textSecondary },
@@ -88,13 +100,15 @@ export function SegmentedControl<T extends string>({
 const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
-    padding: 8,
-    borderRadius: 16,
+    padding: uiSpacing.sm,
+    borderRadius: uiRadii.md,
     borderWidth: 1,
-    gap: 8,
+    gap: uiSpacing.sm,
   },
   btn: {
     flex: 1,
+    minWidth: 0,
+    minHeight: uiTouchTarget,
     paddingVertical: 12,
     alignItems: "center",
     borderRadius: 10,
@@ -105,8 +119,13 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: "600",
+    textAlign: "center",
+    flexShrink: 1,
   },
   emoji: {
     fontSize: 20,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });

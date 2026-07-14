@@ -9,6 +9,12 @@ import {
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { hapticSelection } from "../../lib/haptics";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+} from "./designSystem";
 
 export interface FilterChipOption<T extends string | null = string> {
   label: string;
@@ -21,6 +27,7 @@ interface FilterChipBarProps<T extends string | null = string> {
   value: T;
   onChange: (value: T) => void;
   containerStyle?: object;
+  accessibilityLabel?: string;
 }
 
 export function FilterChipBar<T extends string | null = string>({
@@ -28,6 +35,7 @@ export function FilterChipBar<T extends string | null = string>({
   value,
   onChange,
   containerStyle,
+  accessibilityLabel = "Filters",
 }: FilterChipBarProps<T>) {
   const { colors, isDark } = useTheme();
   const isWeb = Platform.OS === "web";
@@ -44,6 +52,7 @@ export function FilterChipBar<T extends string | null = string>({
     <View style={[styles.container, containerStyle]}>
       <ScrollView
         horizontal
+        accessibilityLabel={accessibilityLabel}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
@@ -52,7 +61,7 @@ export function FilterChipBar<T extends string | null = string>({
           return (
             <Pressable
               key={String(option.value)}
-              style={({ hovered, pressed }: any) => [
+              style={({ hovered, pressed, focused }: any) => [
                 styles.chip,
                 {
                   backgroundColor: isActive
@@ -70,6 +79,7 @@ export function FilterChipBar<T extends string | null = string>({
                       : "rgba(0,0,0,0.1)",
                   },
                 pressed && { opacity: 0.8 },
+                isWeb && focused && getWebFocusStyle(colors.tint),
               ]}
               onPress={() => handlePress(option)}
               accessibilityRole="button"
@@ -106,12 +116,13 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: 16,
-    gap: 8,
+    gap: uiSpacing.sm,
   },
   chip: {
+    minHeight: uiTouchTarget,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: uiRadii.pill,
     borderWidth: 1,
     // @ts-ignore web-only
     transition: "background-color 0.15s ease",
@@ -120,6 +131,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     fontWeight: "700",
+    textAlign: "center",
   },
   chipTextActive: {
     fontWeight: "800",

@@ -10,6 +10,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { hapticSelection } from "../../lib/haptics";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
 
 interface CollapsibleSectionProps {
   title: string;
@@ -34,16 +36,22 @@ export function CollapsibleSection({
     new Animated.Value(defaultExpanded ? 1 : 0),
   ).current;
   const isWeb = Platform.OS === "web";
+  const reducedMotion = useReducedMotion();
 
   const toggle = () => {
     hapticSelection();
-    Animated.spring(rotateAnim, {
-      toValue: expanded ? 0 : 1,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 12,
-    }).start();
-    setExpanded((prev) => !prev);
+    const nextExpanded = !expanded;
+    if (reducedMotion) {
+      rotateAnim.setValue(nextExpanded ? 1 : 0);
+    } else {
+      Animated.spring(rotateAnim, {
+        toValue: nextExpanded ? 1 : 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 12,
+      }).start();
+    }
+    setExpanded(nextExpanded);
   };
 
   const rotate = rotateAnim.interpolate({
@@ -54,7 +62,7 @@ export function CollapsibleSection({
   return (
     <View style={styles.section}>
       <Pressable
-        style={({ pressed, hovered }: any) => [
+        style={({ pressed, hovered, focused }: any) => [
           styles.header,
           {
             backgroundColor: expanded
@@ -71,6 +79,7 @@ export function CollapsibleSection({
                 : "rgba(0,0,0,0.04)",
             },
           pressed && { opacity: 0.8 },
+          isWeb && focused && getWebFocusStyle(colors.tint),
         ]}
         onPress={toggle}
         accessibilityRole="button"
@@ -111,6 +120,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   header: {
+    minHeight: uiTouchTarget,
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,

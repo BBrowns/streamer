@@ -1033,7 +1033,12 @@ export default function PlayerScreen() {
         <StatusBar style="light" />
         <Text style={styles.errorText}>{t("player.errors.noStream")}</Text>
         <View style={styles.errorActions}>
-          <Pressable style={styles.errorButton} onPress={handleClose}>
+          <Pressable
+            style={styles.errorButton}
+            onPress={handleClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("player.errors.goBack")}
+          >
             <Text style={styles.errorButtonText}>
               {t("player.errors.goBack")}
             </Text>
@@ -1067,7 +1072,12 @@ export default function PlayerScreen() {
                 <Text style={styles.castSubtitle}>
                   {t("player.casting.to", { name: activeCast.device.name })}
                 </Text>
-                <Pressable style={styles.stopCastBtn} onPress={stopCasting}>
+                <Pressable
+                  style={styles.stopCastBtn}
+                  onPress={stopCasting}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("player.casting.stop")}
+                >
                   <Ionicons name="stop-circle" size={24} color={colors.error} />
                   <Text style={styles.stopCastText}>
                     {t("player.casting.stop")}
@@ -1086,24 +1096,26 @@ export default function PlayerScreen() {
                 onFullscreenEnter={() => showControls()}
               />
 
-              <Pressable
-                style={[StyleSheet.absoluteFill, { zIndex: 10 }]}
-                onPress={() => toggleControls()}
-              >
-                <View style={{ flex: 1, flexDirection: "row" }}>
-                  <Pressable
-                    style={{ flex: 1 }}
-                    onLongPress={() => handleTap("left")}
-                    onPress={() => handleTap("left")}
-                  />
-                  <View style={{ width: "20%" }} />
-                  <Pressable
-                    style={{ flex: 1 }}
-                    onLongPress={() => handleTap("right")}
-                    onPress={() => handleTap("right")}
-                  />
-                </View>
-              </Pressable>
+              <View style={styles.interactionLayer}>
+                <Pressable
+                  style={styles.interactionZone}
+                  onPress={() => handleTap("left")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show controls or double tap to seek back"
+                />
+                <Pressable
+                  style={styles.interactionCenter}
+                  onPress={toggleControls}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show or hide player controls"
+                />
+                <Pressable
+                  style={styles.interactionZone}
+                  onPress={() => handleTap("right")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show controls or double tap to seek forward"
+                />
+              </View>
             </>
           )}
 
@@ -1314,6 +1326,18 @@ const createStyles = (colors: any, isDark: boolean) =>
       overflow: "hidden",
     },
     webVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
+    interactionLayer: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 10,
+      flexDirection: "row",
+      pointerEvents: "box-none",
+    },
+    interactionZone: {
+      flex: 1,
+    },
+    interactionCenter: {
+      width: "20%",
+    },
     seekOverlay: {
       position: "absolute",
       top: "40%",

@@ -34,6 +34,10 @@ import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
 import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
+import {
+  getWebFocusStyle,
+  uiTouchTarget,
+} from "../../components/ui/designSystem";
 
 function flattenCatalogPages(data: any): MetaPreview[] {
   return (
@@ -70,9 +74,11 @@ function SectionHeader({
       </View>
       {!!actionLabel && !!onAction && (
         <Pressable
-          style={[
+          style={({ pressed, focused }: any) => [
             styles.sectionAction,
             { borderColor: colors.border, backgroundColor: colors.card },
+            pressed && { opacity: 0.78 },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
           ]}
           onPress={onAction}
           accessibilityRole="button"
@@ -393,7 +399,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   sectionAction: {
-    minHeight: 38,
+    minHeight: uiTouchTarget,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 13,

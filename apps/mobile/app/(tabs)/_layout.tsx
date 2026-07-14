@@ -14,6 +14,10 @@ import { useState } from "react";
 import { useRouter, usePathname } from "expo-router";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
+import {
+  getWebFocusStyle,
+  uiTouchTarget,
+} from "../../components/ui/designSystem";
 
 function NotificationBell() {
   const { unreadCount } = useNotifications();
@@ -28,6 +32,10 @@ function NotificationBell() {
         testID="btn-notifications"
         accessibilityRole="button"
         accessibilityLabel={`Notifications, ${unreadCount} unread`}
+        style={({ focused }: any) => [
+          styles.headerIconButton,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+        ]}
       >
         <Ionicons name="notifications-outline" size={24} color={colors.text} />
         {unreadCount > 0 && (
@@ -63,6 +71,10 @@ function HeaderRight() {
         }}
         accessibilityRole="button"
         accessibilityLabel="Search"
+        style={({ focused }: any) => [
+          styles.headerIconButton,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+        ]}
       >
         <Ionicons name="search-outline" size={24} color={colors.text} />
       </Pressable>
@@ -200,6 +212,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     height: Platform.OS === "ios" ? 88 : 64,
     paddingTop: 8,
+  },
+  headerIconButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
   badge: {
     position: "absolute",

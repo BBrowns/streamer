@@ -1,13 +1,13 @@
 import {
   View,
   Text,
-  Pressable,
   StyleSheet,
   useWindowDimensions,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { AppButton } from "./AppButton";
 
 interface EmptyStateProps {
   testID?: string;
@@ -47,8 +47,6 @@ export function EmptyState({
         !fill && styles.containerInline,
         isLarge && styles.containerLarge,
       ]}
-      accessibilityRole="text"
-      accessibilityLabel={`${title}. ${description ?? ""}`}
     >
       {emoji ? (
         <Text
@@ -82,6 +80,7 @@ export function EmptyState({
       ) : null}
 
       <Text
+        accessibilityRole="header"
         style={[
           styles.title,
           { color: colors.text },
@@ -106,26 +105,13 @@ export function EmptyState({
       ) : null}
 
       {actionLabel && onAction ? (
-        <Pressable
-          style={[
-            styles.button,
-            { backgroundColor: colors.tint },
-            isLarge && styles.buttonLarge,
-          ]}
+        <AppButton
+          label={actionLabel}
           onPress={onAction}
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-        >
-          <Text
-            style={[
-              styles.buttonText,
-              { color: isDark ? "#000" : "#fff" },
-              isLarge && styles.buttonTextLarge,
-            ]}
-          >
-            {actionLabel}
-          </Text>
-        </Pressable>
+          variant="primary"
+          size={isLarge ? "large" : "medium"}
+          style={[styles.button, isLarge && styles.buttonLarge]}
+        />
       ) : null}
     </View>
   );
@@ -139,10 +125,12 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   containerInline: {
-    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: "auto",
   },
   containerLarge: {
-    padding: 48,
+    padding: 40,
     maxWidth: 800,
     alignSelf: "center",
   },
@@ -209,27 +197,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   button: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 14,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
+    minWidth: 180,
   },
   buttonLarge: {
-    paddingHorizontal: 48,
-    paddingVertical: 18,
-    borderRadius: 18,
-  },
-  buttonText: {
-    fontWeight: "900",
-    fontSize: 16,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  buttonTextLarge: {
-    fontSize: 18,
-    letterSpacing: 1,
+    minWidth: 220,
   },
 });

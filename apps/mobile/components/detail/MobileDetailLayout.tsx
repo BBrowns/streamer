@@ -223,6 +223,7 @@ export function MobileDetailLayout({
                 accessibilityLabel={
                   sourcesOpen ? "Hide more sources" : "Show more sources"
                 }
+                accessibilityState={{ expanded: sourcesOpen }}
               >
                 <View style={styles.sectionTitleRowCompact}>
                   <Ionicons
@@ -285,6 +286,11 @@ export function MobileDetailLayout({
                           hapticImpactLight();
                           setSelectedResolution(res);
                         }}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`Filter sources by ${res === "2160p" ? "4K" : res}`}
+                        accessibilityState={{
+                          checked: selectedResolution === res,
+                        }}
                       >
                         <Text
                           style={[
@@ -337,6 +343,8 @@ export function MobileDetailLayout({
           },
         ]}
         onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Back to previous screen"
       >
         <Ionicons
           name="chevron-back"
@@ -513,12 +521,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   resBubble: {
+    minHeight: 44,
     backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.16)",
+    justifyContent: "center",
   },
   resBubbleActive: {
     backgroundColor: "#d8b4fe",

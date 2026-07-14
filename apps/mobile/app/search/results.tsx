@@ -20,8 +20,10 @@ import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { Surface } from "../../components/ui/Surface";
 import { AppButton } from "../../components/ui/AppButton";
 import {
+  getWebFocusStyle,
   uiRadii,
   uiSpacing,
+  uiTouchTarget,
   uiTypography,
 } from "../../components/ui/designSystem";
 import { hapticImpactLight } from "../../lib/haptics";
@@ -62,6 +64,7 @@ export default function SearchResultsScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [yearFilter, setYearFilter] = useState<YearFilter>("all");
+  const [searchFocused, setSearchFocused] = useState(false);
   const { data, isLoading, isError, refetch } = useSearch(submittedQuery);
 
   const results = data ?? [];
@@ -178,7 +181,14 @@ export default function SearchResultsScreen() {
         columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : undefined}
         ListHeaderComponent={
           <View style={styles.headerContent}>
-            <Surface style={styles.searchSurface}>
+            <Surface
+              style={[
+                styles.searchSurface,
+                Platform.OS === "web" &&
+                  searchFocused &&
+                  getWebFocusStyle(colors.tint),
+              ]}
+            >
               <Ionicons name="search" size={20} color={colors.textSecondary} />
               <TextInput
                 value={inputValue}
@@ -189,6 +199,9 @@ export default function SearchResultsScreen() {
                 returnKeyType="search"
                 autoCapitalize="none"
                 autoCorrect={false}
+                accessibilityLabel="Search movies and shows"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
                 style={[styles.input, { color: colors.text }]}
               />
               {inputValue.length > 0 && (
@@ -202,6 +215,7 @@ export default function SearchResultsScreen() {
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Clear search"
+                  style={styles.iconButton}
                 >
                   <Ionicons
                     name="close-circle"
@@ -245,7 +259,12 @@ export default function SearchResultsScreen() {
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
                     Recent searches
                   </Text>
-                  <Pressable onPress={clearRecent} accessibilityRole="button">
+                  <Pressable
+                    onPress={clearRecent}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear recent searches"
+                    style={styles.clearButton}
+                  >
                     <Text style={[styles.clearText, { color: colors.tint }]}>
                       Clear
                     </Text>
@@ -347,6 +366,7 @@ export default function SearchResultsScreen() {
                   value={typeFilter}
                   onChange={(value) => setTypeFilter(value)}
                   containerStyle={styles.filterBar}
+                  accessibilityLabel="Filter search results by type"
                 />
                 {years.length > 0 && (
                   <FilterChipBar
@@ -354,6 +374,7 @@ export default function SearchResultsScreen() {
                     value={yearFilter}
                     onChange={(value) => setYearFilter(value)}
                     containerStyle={styles.filterBar}
+                    accessibilityLabel="Filter search results by year"
                   />
                 )}
               </View>
@@ -426,8 +447,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerBack: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
     marginLeft: uiSpacing.sm,
-    padding: uiSpacing.xs,
+    alignItems: "center",
+    justifyContent: "center",
   },
   listContent: {
     paddingBottom: 48,
@@ -448,6 +472,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: "700",
     ...Platform.select({ web: { outlineStyle: "none" } as any }),
+  },
+  iconButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
   },
   suggestionSurface: {
     marginHorizontal: uiSpacing.lg,
@@ -483,6 +513,12 @@ const styles = StyleSheet.create({
   clearText: {
     ...uiTypography.caption,
   },
+  clearButton: {
+    minWidth: uiTouchTarget,
+    minHeight: uiTouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   recentList: {
     gap: uiSpacing.sm,
   },
@@ -506,8 +542,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   removeRecent: {
-    width: 40,
-    height: 40,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -7,8 +7,10 @@ import Animated, {
   withRepeat,
   withTiming,
   interpolate,
+  cancelAnimation,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 interface SkeletonProps {
   variant?: "card" | "row" | "text" | "circle";
@@ -31,15 +33,22 @@ export function SkeletonLoader({
   style,
 }: SkeletonProps) {
   const { isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const shimmerValue = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) {
+      cancelAnimation(shimmerValue);
+      shimmerValue.value = 0;
+      return;
+    }
     shimmerValue.value = withRepeat(
       withTiming(1, { duration: 1500 }),
       -1,
       false,
     );
-  }, []);
+    return () => cancelAnimation(shimmerValue);
+  }, [reducedMotion, shimmerValue]);
 
   const animatedStyle = useAnimatedStyle(() => {
     const translateX = interpolate(shimmerValue.value, [0, 1], [-150, 150]);
@@ -70,12 +79,14 @@ export function SkeletonLoader({
         style,
       ]}
     >
-      <AnimatedLinearGradient
-        colors={shimmerColors}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={[StyleSheet.absoluteFill, animatedStyle]}
-      />
+      {!reducedMotion ? (
+        <AnimatedLinearGradient
+          colors={shimmerColors}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={[StyleSheet.absoluteFill, animatedStyle]}
+        />
+      ) : null}
     </View>
   );
 }

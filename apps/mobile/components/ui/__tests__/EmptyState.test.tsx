@@ -31,7 +31,15 @@ describe("EmptyState", () => {
     );
 
     expect(screen.getByTestId("downloads-empty-state").props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ flex: 0 })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          flexGrow: 0,
+          flexShrink: 0,
+          flexBasis: "auto",
+        }),
+      ]),
     );
+    expect(screen.getByRole("header").props.children).toBe("No downloads");
+    expect(screen.getByRole("button").props.accessibilityLabel).toBe("Browse");
   });
 });
