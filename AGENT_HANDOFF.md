@@ -23,7 +23,9 @@ Current phase:
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active roadmap now starts at **PR #142** in [ROADMAP.md](./ROADMAP.md).
+The active implementation roadmap starts at **PR #143** in
+[ROADMAP.md](./ROADMAP.md). PR #142 is the roadmap truth-sync that defined this
+post-#141 phase.
 The numbered roadmap items through **PR #124** are implemented, and follow-up
 reliability/productization PRs have landed through **PR #141**. Earlier roadmap
 items that introduced

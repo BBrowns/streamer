@@ -125,8 +125,8 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active roadmap now starts at **PR #142**",
-    "roadmap starts at PR #142",
+    "The active implementation roadmap starts at **PR #143**",
+    "implementation roadmap starts at PR #143",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");

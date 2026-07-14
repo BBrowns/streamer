@@ -82,7 +82,7 @@ The next priorities are based on observed gaps, not old roadmap numbering:
 
 ## Active Roadmap
 
-### PR #142 - Dependency Security Remediation And Blocking Audit Gate
+### PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
 Goal: remove known high/critical production dependency risk and make regression
 visible in CI.
@@ -104,7 +104,7 @@ Acceptance:
   finding.
 - Typecheck, tests, desktop package checks, and release gate stay green.
 
-### PR #143 - Deterministic Golden-Path Browser And Desktop Harness
+### PR #144 - Deterministic Golden-Path Browser And Desktop Harness
 
 Goal: catch product-flow regressions without waiting for physical-device QA.
 
@@ -127,7 +127,7 @@ Acceptance:
 - These tests are described as automated regression coverage, not real-device
   evidence.
 
-### PR #144 - Unified Action And Bridge Preflight Contract
+### PR #145 - Unified Action And Bridge Preflight Contract
 
 Goal: make Play, Download, Cast, Settings, and diagnostics answer readiness in
 the same way.
@@ -147,7 +147,7 @@ Acceptance:
 - Preflight does not start a bridge, resolve media, or create a gateway job.
 - User-facing copy maps typed reasons without exposing raw URLs or tokens.
 
-### PR #145 - Mobile Release Identity And EAS Baseline
+### PR #146 - Mobile Release Identity And EAS Baseline
 
 Goal: make preview and production mobile builds reproducible without claiming
 store readiness.
@@ -170,7 +170,7 @@ Acceptance:
 - A preview build can be started from documented commands once credentials are
   supplied.
 
-### PR #146 - Server Production Runtime Hardening
+### PR #147 - Server Production Runtime Hardening
 
 Goal: turn the API server configuration into a safer single- or multi-instance
 production baseline.
@@ -191,7 +191,7 @@ Acceptance:
 - Rate-limit behavior is explicit for one and multiple instances.
 - Health output is useful without leaking secrets or internal URLs.
 
-### PR #147 - Offline And Cast Recovery UX
+### PR #148 - Offline And Cast Recovery UX
 
 Goal: improve the two major secondary actions with typed, recoverable states
 that can be tested without real devices.
@@ -202,7 +202,7 @@ Scope:
   bridge-repair actions for downloads.
 - Consolidate unreachable-device, incompatible-source, remux-required, and
   fallback states for cast.
-- Reuse the shared preflight contract from PR #144.
+- Reuse the shared preflight contract from PR #145.
 - Do not add background-download or native-cast support claims.
 
 Acceptance:
@@ -211,7 +211,7 @@ Acceptance:
 - Offline-ready still requires a verified managed file.
 - Cast never sends a loopback-only source to a remote device.
 
-### PR #148 - Accessibility And Responsive Visual Quality Pass
+### PR #149 - Accessibility And Responsive Visual Quality Pass
 
 Goal: make the existing pastel cinema UI more consistent and usable without a
 framework rewrite.
@@ -232,7 +232,7 @@ Acceptance:
 - Keyboard and screen-reader labels cover primary controls.
 - Screenshot changes are intentional and reviewable.
 
-### PR #149 - RC Evidence And Real-Target QA Resume
+### PR #150 - RC Evidence And Real-Target QA Resume
 
 Goal: perform the work that is intentionally deferred now and make a real
 go/no-go release decision.
@@ -258,14 +258,14 @@ of mocks or unit tests.
 
 ## Execution Order
 
-1. PR #142 - dependency security and audit enforcement.
-2. PR #143 - deterministic golden-path automation.
-3. PR #144 - unified action/bridge preflight.
-4. PR #145 - mobile release identity and EAS baseline.
-5. PR #146 - server production runtime hardening.
-6. PR #147 - offline and cast recovery UX.
-7. PR #148 - accessibility and responsive visual quality.
-8. PR #149 - real-target QA and RC evidence when available.
+1. PR #143 - dependency security and audit enforcement.
+2. PR #144 - deterministic golden-path automation.
+3. PR #145 - unified action/bridge preflight.
+4. PR #146 - mobile release identity and EAS baseline.
+5. PR #147 - server production runtime hardening.
+6. PR #148 - offline and cast recovery UX.
+7. PR #149 - accessibility and responsive visual quality.
+8. PR #150 - real-target QA and RC evidence when available.
 
 Security comes first because the current CI knowingly tolerates severe findings.
 The automation harness comes next so later behavior changes have product-level
@@ -282,4 +282,4 @@ server, offline, cast, and visual work build on it.
 - Do not add Real-Debrid to onboarding or enable it by default.
 - Do not use mocks or unit tests to claim real-device support.
 - Keep [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) and
-  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until PR #149.
+  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until PR #150.
