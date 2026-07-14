@@ -7,7 +7,12 @@ class EmailService {
   private transporter: nodemailer.Transporter | null = null;
 
   constructor() {
-    if (env.smtp?.host && env.smtp?.user && env.smtp?.pass) {
+    if (
+      env.emailDeliveryMode === "smtp" &&
+      env.smtp?.host &&
+      env.smtp?.user &&
+      env.smtp?.pass
+    ) {
       this.transporter = nodemailer.createTransport({
         host: env.smtp.host,
         port: env.smtp.port,
@@ -20,7 +25,7 @@ class EmailService {
       logger.info("📧 Email Service: SMTP transporter initialized");
     } else {
       logger.warn(
-        "📧 Email Service: SMTP not configured. Emails will be logged to console.",
+        "📧 Email Service: development log delivery is active; emails will not be sent.",
       );
     }
   }
