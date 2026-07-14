@@ -159,6 +159,19 @@ user copy. It does not detect or start the bridge, resolve a source, or create a
 gateway job. Direct and HLS playback intentionally remain available when only
 the torrent runtime is broken.
 
+`apps/mobile/services/actionRecovery.ts` maps those typed preflight/runtime
+failures into one user-facing next action. Download tasks persist only a small
+failure reason and can offer resume, fresh replan, file verification, storage
+management, bridge repair, or removal. Offline readiness still requires a
+verified managed local file.
+
+Cast transport errors are similarly typed as discovery, device, source, or
+bridge failures. The cast dialog exposes refresh, session-driven source
+fallback, or bridge repair and shows when another planned candidate is being
+attempted. It never retries a loopback-only source for a remote display. These
+states are deterministic UX behavior, not evidence of native/background cast
+support on untested devices.
+
 The intended migration sequence is:
 
 1. Add the shared `PlaybackSession` contract.

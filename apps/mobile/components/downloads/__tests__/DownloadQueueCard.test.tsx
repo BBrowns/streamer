@@ -58,6 +58,8 @@ function renderCard(task: DownloadTask) {
     onResume: jest.fn(),
     onRetry: jest.fn(),
     onVerify: jest.fn(),
+    onRepairBridge: jest.fn(),
+    onManageStorage: jest.fn(),
     onDelete: jest.fn(),
   };
   return {
@@ -94,9 +96,11 @@ describe("DownloadQueueCard", () => {
     );
 
     expect(getByText("Needs attention")).toBeTruthy();
-    expect(getByText("Connection was interrupted.")).toBeTruthy();
+    expect(
+      getByText("The transfer stopped before the file was ready offline."),
+    ).toBeTruthy();
 
-    fireEvent.press(getByLabelText("Retry"));
+    fireEvent.press(getByLabelText("Resume"));
 
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
   });
@@ -127,9 +131,41 @@ describe("DownloadQueueCard", () => {
 
     expect(getByText("Needs verification")).toBeTruthy();
 
-    fireEvent.press(getByLabelText("Verify"));
+    fireEvent.press(getByLabelText("Verify file"));
 
     expect(callbacks.onVerify).toHaveBeenCalledTimes(1);
     expect(callbacks.onOpen).not.toHaveBeenCalled();
+  });
+
+  it("routes bridge failures to the bridge repair action", () => {
+    const { getByLabelText, getByText, callbacks } = renderCard(
+      makeTask("bridge", {
+        status: "Error",
+        error: "Desktop bridge unavailable.",
+        failureReason: "bridge_unavailable",
+      }),
+    );
+
+    expect(
+      getByText(
+        "Reconnect or repair the desktop bridge before retrying this download.",
+      ),
+    ).toBeTruthy();
+    fireEvent.press(getByLabelText("Repair bridge"));
+    expect(callbacks.onRepairBridge).toHaveBeenCalledTimes(1);
+    expect(callbacks.onRetry).not.toHaveBeenCalled();
+  });
+
+  it("routes storage pressure to managed storage", () => {
+    const { getByLabelText, callbacks } = renderCard(
+      makeTask("storage", {
+        status: "Error",
+        error: "ENOSPC",
+        failureReason: "storage_pressure",
+      }),
+    );
+
+    fireEvent.press(getByLabelText("Free space"));
+    expect(callbacks.onManageStorage).toHaveBeenCalledTimes(1);
   });
 });

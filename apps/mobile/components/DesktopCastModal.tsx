@@ -27,6 +27,9 @@ import {
   type CastDeviceCapabilities,
 } from "../services/playback/deviceProfile";
 import { uiRadii, uiSpacing, uiTypography } from "./ui/designSystem";
+import { AppButton } from "./ui/AppButton";
+import { getCastRecovery } from "../services/actionRecovery";
+import type { CastRecoveryGuidance } from "../types/actionRecovery";
 
 export interface CastStartDetails {
   sessionId?: string;
@@ -39,10 +42,11 @@ interface Props {
   playbackUri?: string;
   title: string;
   onClose: () => void;
+  onOpenSourcesDevices?: () => void;
   onCastStart?: (device: CastDevice, details: CastStartDetails) => void;
 }
 
-type SourceReadiness = "idle" | "preparing" | "ready" | "failed";
+type SourceReadiness = "idle" | "preparing" | "fallback" | "ready" | "failed";
 
 function getDeviceCapabilitySummary(device: CastDevice) {
   const capabilities = device.capabilities;
@@ -64,6 +68,7 @@ export function DesktopCastModal({
   playbackUri = "",
   title,
   onClose,
+  onOpenSourcesDevices,
   onCastStart,
 }: Props) {
   const [devices, setDevices] = useState<CastDevice[]>([]);
@@ -74,6 +79,8 @@ export function DesktopCastModal({
   const [preparedCast, setPreparedCast] =
     useState<CastOrchestratorSuccess | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<CastRecoveryGuidance | null>(null);
+  const devicesRef = useRef<CastDevice[]>([]);
   const orchestratorInputRef = useRef(orchestratorInput);
   const requestIdRef = useRef(0);
   const preparedSessionIdRef = useRef<string | null>(null);
@@ -82,6 +89,10 @@ export function DesktopCastModal({
   useEffect(() => {
     orchestratorInputRef.current = orchestratorInput;
   }, [orchestratorInput]);
+
+  useEffect(() => {
+    devicesRef.current = devices;
+  }, [devices]);
 
   const cancelPreparedSession = useCallback(() => {
     const sessionId = preparedSessionIdRef.current;
@@ -96,11 +107,16 @@ export function DesktopCastModal({
     try {
       setDevices(await castService.getDevices());
     } catch (error) {
-      console.error("Failed to fetch cast devices:", error);
       setDevices([]);
-      setErrorMessage(
-        "Could not search for displays on the configured bridge.",
-      );
+      const nextRecovery = getCastRecovery(error);
+      if (__DEV__) {
+        console.warn(
+          "[DesktopCastModal] Device discovery failed:",
+          nextRecovery.reason,
+        );
+      }
+      setErrorMessage(nextRecovery.message);
+      setRecovery(nextRecovery);
     } finally {
       setLoading(false);
     }
@@ -116,6 +132,7 @@ export function DesktopCastModal({
 
       setSourceReadiness("preparing");
       setErrorMessage(null);
+      setRecovery(null);
       const deviceProfile = getChromecastDeviceProfile(capabilities);
       let result: Awaited<ReturnType<typeof prepareCast>>;
       try {
@@ -127,7 +144,13 @@ export function DesktopCastModal({
         if (requestId !== requestIdRef.current) return null;
         setPreparedCast(null);
         setSourceReadiness("failed");
-        setErrorMessage(error?.message || "Casting is unavailable right now.");
+        const nextRecovery = getCastRecovery(error, {
+          hasDeviceCapabilities: devicesRef.current.some(
+            (device) => device.capabilities,
+          ),
+        });
+        setErrorMessage(nextRecovery.message);
+        setRecovery(nextRecovery);
         return null;
       }
 
@@ -140,14 +163,21 @@ export function DesktopCastModal({
 
       preparedSessionIdRef.current = result.sessionId || null;
       if (!result.ok) {
+        const nextRecovery = getCastRecovery(result.error, {
+          hasDeviceCapabilities: devicesRef.current.some(
+            (device) => device.capabilities,
+          ),
+        });
         setPreparedCast(null);
         setSourceReadiness("failed");
-        setErrorMessage(result.error.message);
+        setErrorMessage(nextRecovery.message);
+        setRecovery(nextRecovery);
         return null;
       }
 
       setPreparedCast(result);
       setSourceReadiness("ready");
+      setRecovery(null);
       return result;
     },
     [],
@@ -162,6 +192,7 @@ export function DesktopCastModal({
     setCastingTo(null);
     setPreparedCast(null);
     setErrorMessage(null);
+    setRecovery(null);
     void fetchDevices();
 
     if (orchestratorInputRef.current) {
@@ -170,7 +201,11 @@ export function DesktopCastModal({
       setSourceReadiness("ready");
     } else {
       setSourceReadiness("failed");
-      setErrorMessage("No cast-ready source is available.");
+      const nextRecovery = getCastRecovery(
+        new Error("No cast-ready source is available."),
+      );
+      setErrorMessage(nextRecovery.message);
+      setRecovery(nextRecovery);
     }
 
     return () => {
@@ -202,13 +237,20 @@ export function DesktopCastModal({
           throw new Error("No cast-ready source is available.");
         }
 
-        const result = await startCastSession(device, title, {
-          sessionId: source.sessionId,
-          candidateId: source.candidateId,
-          attemptId: source.attemptId,
-          stream: source.stream,
-          uri: source.resolvedUrl,
-        });
+        const result = await startCastSession(
+          device,
+          title,
+          {
+            sessionId: source.sessionId,
+            candidateId: source.candidateId,
+            attemptId: source.attemptId,
+            stream: source.stream,
+            uri: source.resolvedUrl,
+          },
+          {
+            onFallback: () => setSourceReadiness("fallback"),
+          },
+        );
         if (!result.ok) {
           throw result.error;
         }
@@ -239,20 +281,66 @@ export function DesktopCastModal({
       );
       onCastStart?.(device, {});
     } catch (error: any) {
-      console.error("Cast error:", error);
+      const nextRecovery = getCastRecovery(error, {
+        hasDeviceCapabilities: Boolean(device.capabilities),
+      });
+      if (__DEV__) {
+        console.warn("[DesktopCastModal] Cast failed:", nextRecovery.reason);
+      }
       setCastingTo(null);
-      setErrorMessage(error?.message || "Casting is unavailable right now.");
+      setSourceReadiness("failed");
+      setErrorMessage(nextRecovery.message);
+      setRecovery(nextRecovery);
     }
   };
+
+  const handleRecovery = useCallback(() => {
+    if (!recovery) return;
+    if (recovery.action === "repair_bridge") {
+      if (onOpenSourcesDevices) onOpenSourcesDevices();
+      else onClose();
+      return;
+    }
+    if (recovery.action === "refresh_devices") {
+      setErrorMessage(null);
+      setRecovery(null);
+      void fetchDevices();
+      return;
+    }
+    if (
+      recovery.action === "retry" ||
+      recovery.action === "replan" ||
+      recovery.action === "choose_compatible_device"
+    ) {
+      const deviceWithCapabilities = devices.find(
+        (device) => device.capabilities,
+      );
+      const requestId = ++requestIdRef.current;
+      void prepareSource(requestId, deviceWithCapabilities?.capabilities);
+      return;
+    }
+    onClose();
+  }, [
+    devices,
+    fetchDevices,
+    onClose,
+    onOpenSourcesDevices,
+    prepareSource,
+    recovery,
+  ]);
 
   const sourceStatusText =
     sourceReadiness === "preparing"
       ? "Preparing a cast-ready source..."
-      : sourceReadiness === "ready"
-        ? "Source ready. Choose a display."
-        : sourceReadiness === "failed"
-          ? "A cast-ready source could not be prepared."
-          : null;
+      : sourceReadiness === "fallback"
+        ? "Trying another compatible source..."
+        : sourceReadiness === "ready"
+          ? preparedCast?.plan.requiresRemux
+            ? "Compatible stream prepared through the desktop bridge."
+            : "Source ready. Choose a display."
+          : sourceReadiness === "failed"
+            ? "A cast-ready source could not be prepared."
+            : null;
 
   return (
     <Modal
@@ -317,6 +405,20 @@ export function DesktopCastModal({
           )}
 
           {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+          {recovery && recovery.action !== "choose_compatible_device" ? (
+            <AppButton
+              label={recovery.actionLabel}
+              icon={
+                recovery.action === "repair_bridge"
+                  ? "construct-outline"
+                  : "refresh"
+              }
+              variant="secondary"
+              size="small"
+              onPress={handleRecovery}
+              style={styles.recoveryButton}
+            />
+          ) : null}
 
           {loading && devices.length === 0 ? (
             <View style={styles.centerBox}>
@@ -506,6 +608,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: uiSpacing.md,
+  },
+  recoveryButton: {
+    marginBottom: uiSpacing.md,
+    alignSelf: "flex-start",
+    paddingHorizontal: uiSpacing.lg,
   },
   emptyText: {
     color: "#a8a4b8",

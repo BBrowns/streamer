@@ -90,6 +90,28 @@ describe("downloadStore", () => {
     expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(false);
   });
 
+  it("stores only a typed failure reason for recovery presentation", () => {
+    const store = useDownloadStore.getState();
+    store.addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      sourceId: "source-1",
+    });
+
+    store.markFailed(
+      "source-1",
+      "The desktop bridge is unavailable.",
+      "bridge_unavailable",
+    );
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      failureReason: "bridge_unavailable",
+      offlineVerifiedAt: undefined,
+    });
+  });
+
   it("requires old persisted completions to be verified after migration", () => {
     const migrated = migrateDownloadTasks({
       tasks: {

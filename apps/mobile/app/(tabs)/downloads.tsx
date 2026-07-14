@@ -210,6 +210,20 @@ export default function DownloadsScreen() {
     );
   }, [deleteAll, t]);
 
+  const manageStorage = useCallback(() => {
+    if (summary.ready > 0) {
+      setFilter("ready");
+      return;
+    }
+
+    const message = t("downloads.storage.externalCleanup", {
+      defaultValue:
+        "There are no verified offline titles to remove here. Free device storage, then retry the download.",
+    });
+    if (Platform.OS === "web") window.alert(message);
+    else Alert.alert("Free device storage", message);
+  }, [summary.ready, t]);
+
   const sections = useMemo<DownloadSection[]>(() => {
     const groups: Record<DownloadQueueGroup, DownloadTask[]> = {
       active: [],
@@ -449,6 +463,8 @@ export default function DownloadsScreen() {
                 };
               })
             }
+            onRepairBridge={() => router.push("/sources" as any)}
+            onManageStorage={manageStorage}
             onDelete={() => confirmDelete(item)}
           />
         )}

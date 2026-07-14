@@ -72,6 +72,7 @@ export async function startCastSession(
   device: CastDevice,
   title: string,
   prepared: PreparedCastSource,
+  options: { onFallback?: () => void } = {},
 ): Promise<CastSessionStartResult> {
   let source = prepared;
 
@@ -117,6 +118,7 @@ export async function startCastSession(
         };
       }
 
+      options.onFallback?.();
       source = {
         sessionId: fallback.sessionId,
         candidateId: fallback.candidateId,

@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Stream } from "@streamer/shared";
 import type { MediaInfo } from "./playerStore";
 import { useAuthStore } from "./authStore";
+import type { DownloadFailureReason } from "../types/actionRecovery";
 
 export interface DownloadMediaItem extends MediaInfo {
   // Runtime-only. Sanitized out of persisted storage because resolved URLs can
@@ -45,6 +46,7 @@ export interface DownloadTask {
   progress: number; // 0 to 1
   status: DownloadStatus;
   error?: string;
+  failureReason?: DownloadFailureReason;
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
   playbackSession?: DownloadPlaybackSessionContext;
@@ -89,9 +91,14 @@ export interface DownloadState {
   ) => void;
   markVerified: (id: string, localUri: string) => void;
   markFileMissing: (id: string, error: string) => void;
+  markFailed: (
+    id: string,
+    error: string,
+    reason: DownloadFailureReason,
+  ) => void;
 }
 
-export const DOWNLOAD_STORE_VERSION = 3;
+export const DOWNLOAD_STORE_VERSION = 4;
 
 function nowIso() {
   return new Date().toISOString();
@@ -284,6 +291,8 @@ export const useDownloadStore = create<DownloadState>()(
                 status,
                 localUri: localUri ?? task.localUri,
                 error: status === "Error" ? error || task.error : undefined,
+                failureReason:
+                  status === "Error" ? task.failureReason : undefined,
                 resumeData: resumeData ?? task.resumeData,
                 offlineVerifiedAt:
                   status === "Completed" ? task.offlineVerifiedAt : undefined,
@@ -360,6 +369,7 @@ export const useDownloadStore = create<DownloadState>()(
                 localUri,
                 progress: 1,
                 error: undefined,
+                failureReason: undefined,
                 offlineVerifiedAt: timestamp,
                 updatedAt: timestamp,
               },
@@ -377,6 +387,25 @@ export const useDownloadStore = create<DownloadState>()(
                 ...task,
                 status: "Error",
                 error,
+                failureReason: "missing_file",
+                offlineVerifiedAt: undefined,
+                updatedAt: nowIso(),
+              },
+            },
+          };
+        }),
+      markFailed: (id, error, reason) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task) return state;
+          return {
+            tasks: {
+              ...state.tasks,
+              [id]: {
+                ...task,
+                status: "Error",
+                error,
+                failureReason: reason,
                 offlineVerifiedAt: undefined,
                 updatedAt: nowIso(),
               },

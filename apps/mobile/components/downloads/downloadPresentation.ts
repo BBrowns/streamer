@@ -2,6 +2,7 @@ import {
   isTaskOfflinePlayable,
   type DownloadTask,
 } from "../../stores/downloadStore";
+import { getDownloadRecovery } from "../../services/actionRecovery";
 
 export type DownloadQueueGroup = "active" | "attention" | "ready";
 export type DownloadPrimaryAction =
@@ -9,7 +10,11 @@ export type DownloadPrimaryAction =
   | "resume"
   | "play"
   | "retry"
-  | "verify";
+  | "replan"
+  | "verify"
+  | "repair_bridge"
+  | "free_storage"
+  | "remove";
 
 export function getDownloadQueueGroup(task: DownloadTask): DownloadQueueGroup {
   if (task.status === "Error") return "attention";
@@ -23,9 +28,18 @@ export function getDownloadPrimaryAction(
 ): DownloadPrimaryAction | null {
   if (isTaskOfflinePlayable(task)) return "play";
   if (task.status === "Downloading") return "pause";
-  if (task.status === "Paused") return "resume";
-  if (task.status === "Error") return "retry";
-  if (task.status === "Completed" && task.localUri) return "verify";
+  const recovery = getDownloadRecovery(task);
+  if (recovery?.action === "retry" && task.status === "Paused") return "resume";
+  if (
+    recovery?.action === "retry" ||
+    recovery?.action === "replan" ||
+    recovery?.action === "verify" ||
+    recovery?.action === "repair_bridge" ||
+    recovery?.action === "free_storage" ||
+    recovery?.action === "remove"
+  ) {
+    return recovery.action;
+  }
   return null;
 }
 

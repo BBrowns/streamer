@@ -16,15 +16,14 @@ Current phase:
   Play Best, downloads, cast, gateway/range hardening, security baseline,
   Sentry/build metadata, desktop sidecar/package inputs, manual update policy,
   and first UI primitives are already present.
-- Reliability/productization phase: dependency security and deterministic
-  golden-path automation and a unified bridge/action preflight contract are in
-  place. The next work starts with mobile/server release configuration,
-  followed by recoverable offline/cast UX and focused accessibility/visual
-  polish.
+- Reliability/productization phase: dependency security, deterministic
+  golden-path automation, unified bridge/action preflight, mobile/server
+  release configuration, and recoverable offline/cast UX are in place. The
+  next work is the focused accessibility and responsive visual-quality pass.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active implementation roadmap continues at **PR #148** in
+The active implementation roadmap continues at **PR #149** in
 [ROADMAP.md](./ROADMAP.md). PR #142 is the roadmap truth-sync that defined this
 post-#141 phase.
 
@@ -104,6 +103,10 @@ Post-roadmap corrective PRs after #124:
   topology, strong secrets, exact origins, proxy trust, SMTP delivery and Redis
   requirements; enabled global API rate limiting, split liveness/readiness, and
   added bounded shutdown behavior plus deployment documentation.
+- **PR #148:** added typed, privacy-safe recovery reasons and one clear next
+  action for interrupted, missing, storage-constrained, unsupported, expired,
+  and bridge-dependent downloads, plus cast discovery, device, compatibility,
+  loopback, remux, bridge, and fallback failures.
 
 ## Product North Star
 
@@ -355,6 +358,9 @@ The main download queue and persistence pass is complete:
 - Download queue persistence now strips resolved download URLs, resume data, and
   raw `Stream` objects. Restart recovery uses safe content replan metadata or
   runtime-only source data.
+- Failed and paused queue items now derive one context-specific recovery action
+  from a persisted non-sensitive failure reason: resume, replan, verify, free
+  storage, repair the bridge, or remove an unsupported item.
 
 Still open:
 
@@ -382,6 +388,9 @@ Casting now uses the playback session control plane for the primary flow:
 - Manual advanced-source casting is allowed only after client-side preflight;
   localhost, `127.0.0.1`, IPv6 loopback, and `.localhost` playback URLs are
   rejected before the bridge cast request is sent.
+- Discovery, selected-device, incompatible-source, remux, bridge, and generic
+  cast failures now map to explicit refresh, fallback, or repair actions. The
+  dialog also shows when session-driven fallback is trying another candidate.
 
 Still open:
 

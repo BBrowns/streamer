@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import type { Stream } from "@streamer/shared";
+import type { ActionPreflightReason, Stream } from "@streamer/shared";
 import {
   buildActionBridgeHint,
   preflightStreamAction,
@@ -16,6 +16,7 @@ export interface DownloadEligibility {
   canDownload: boolean;
   offlinePlayable: boolean;
   reason?: string;
+  preflightReason?: ActionPreflightReason;
 }
 
 export function isBridgeUrlReachableForNativeDownload(bridgeUrl: string) {
@@ -36,6 +37,7 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
       canDownload: false,
       offlinePlayable: false,
       reason: preflight.message,
+      preflightReason: preflight.reason,
     };
   }
 
@@ -46,6 +48,7 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
       canDownload: preflight.ready,
       offlinePlayable: preflight.ready,
       reason: preflight.ready ? undefined : preflight.message,
+      preflightReason: preflight.ready ? undefined : preflight.reason,
     };
   }
 

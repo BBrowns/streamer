@@ -65,6 +65,7 @@ describe("PlaybackSessionCastService", () => {
   });
 
   it("automatically starts the next resolved candidate when the display rejects a source", async () => {
+    const onFallback = jest.fn();
     play
       .mockRejectedValueOnce(new Error("Media load failed"))
       .mockResolvedValueOnce(undefined);
@@ -88,6 +89,7 @@ describe("PlaybackSessionCastService", () => {
         stream: { url: "https://cdn.example.test/primary.mp4" },
         uri: "https://cdn.example.test/primary.mp4",
       },
+      { onFallback },
     );
 
     expect(advance).toHaveBeenCalledWith(
@@ -106,6 +108,7 @@ describe("PlaybackSessionCastService", () => {
       "Example Movie",
       "video/mp4",
     );
+    expect(onFallback).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       ok: true,
       candidateId: "candidate-2",

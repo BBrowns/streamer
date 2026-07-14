@@ -450,6 +450,12 @@ Smart Downloads is shown as an opt-in Downloads setting. It must stay disabled
 by default, must state that HLS offline remains unsupported, and must present
 planned next episodes as planned intents rather than completed offline files.
 
+Download attention states show exactly one contextual primary recovery action:
+resume, prepare again, verify, free storage, repair bridge, or remove. Cast
+errors use the same principle for display refresh, compatible-source fallback,
+or bridge repair. Raw transport details and source URLs do not belong in these
+surfaces.
+
 Personalization is local-only in the current implementation. Playback quality,
 subtitle language, audio language, and autoplay-next preferences are exposed in
 Settings and persisted in `playerStore`. Play Best uses the selected playback

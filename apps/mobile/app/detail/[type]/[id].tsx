@@ -476,6 +476,10 @@ export default function DetailScreen() {
           playbackUri={manualCastUri || ""}
           title={meta.name}
           onClose={() => setCastModalOpen(false)}
+          onOpenSourcesDevices={() => {
+            setCastModalOpen(false);
+            router.push("/sources" as any);
+          }}
           onCastStart={(device, details) => {
             usePlayerStore.getState().clearPlayer();
             useCastStore.getState().setActiveCast({
