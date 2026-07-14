@@ -145,8 +145,8 @@ Remaining evidence and upstream-data gates:
 - Validate Downloads, episode lists, settings panels, subtitle visibility,
   caption-safe layout, large text, and focus-not-obscured behavior on native
   iPhone and Android targets.
-- Add authenticated browser golden paths and record native PiP, lock-screen,
-  download, and Chromecast evidence without converting unknowns into claims.
+- Record native PiP, lock-screen, download, and Chromecast evidence without
+  converting unknowns into claims.
 
 Acceptance:
 

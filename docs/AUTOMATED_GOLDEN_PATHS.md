@@ -7,12 +7,19 @@ cast hardware, copyrighted media, or a developer account.
 
 ## Covered Flows
 
+- Full-viewport login and onboarding setup without duplicate app navigation or
+  horizontal overflow.
 - Login, catalog loading, detail navigation, and a valid Planner v2 request.
 - Direct Play Best readiness and player navigation.
 - Torrent no-peers fallback to the next direct candidate.
 - Terminal no-peers behavior without indefinite buffering.
 - Bridge-unavailable guidance.
 - Download and cast planner eligibility actions.
+- Authenticated Home and Downloads keyboard focus, responsive layout, overlap,
+  and screenshot checks.
+
+The suite currently runs nine scenarios in both phone-web and
+desktop-renderer projects: 18 tests in total.
 
 Run the suite with:
 

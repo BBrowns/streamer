@@ -462,7 +462,8 @@ The remaining work is validation or depends on trustworthy upstream metadata:
 - Validate Downloads, Series episode lists, settings panels, caption-safe
   layout, visible subtitle/audio state, large text, and focus-not-obscured
   behavior on native targets.
-- Add authenticated desktop and compact browser screenshots; keep native PiP,
+- Authenticated Home/Downloads and unauthenticated login/onboarding screenshots
+  now run in compact and desktop-renderer golden paths. Keep native PiP,
   lock-screen, download, and Chromecast support marked unproven until tested.
 
 ### 5. Production Readiness Is Still Open

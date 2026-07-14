@@ -34,8 +34,9 @@ browser renderer. Real-device QA remains deferred.
 
 ## Adaptive redesign continuation
 
-An interactive in-app browser smoke check covered the unauthenticated shell and
-setup flow after the adaptive redesign continuation.
+An interactive in-app browser smoke check first covered the unauthenticated
+shell and setup flow after the adaptive redesign continuation. These states are
+now also permanent Playwright golden paths in both browser projects.
 
 | Surface          | Compact web | Large web  | Horizontal overflow | App shell hidden |
 | ---------------- | ----------- | ---------- | ------------------- | ---------------- |

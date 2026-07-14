@@ -24,6 +24,54 @@ async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
   return controls;
 }
 
+async function expectNoHorizontalPageOverflow(page: Page) {
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport + 1);
+}
+
+test("authentication owns the viewport without duplicate navigation", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/login");
+
+  await expect(page.getByText("Welcome Back", { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("Email")).toBeVisible();
+  await expect(page.getByPlaceholder("Password")).toBeVisible();
+  await expect(page.getByText("Sign In", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Home" })).toHaveCount(0);
+  await expectNoHorizontalPageOverflow(page);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`login-${testInfo.project.name}.png`),
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
+test("onboarding setup remains shell-free and responsive", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/onboarding/setup");
+
+  await expect(page.getByText("Personalize", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Finish & Sign In" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Home" })).toHaveCount(0);
+  await expectNoHorizontalPageOverflow(page);
+
+  await page.screenshot({
+    path: testInfo.outputPath(`onboarding-${testInfo.project.name}.png`),
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
 test("browse to detail and Play Best reaches a direct player", async ({
   page,
 }) => {
