@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -22,6 +23,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useToastStore } from "../../stores/toastStore";
 import { formatBytes } from "../downloads/downloadPresentation";
 import { StatusPill } from "../ui/StatusPill";
+import { getWebFocusStyle, uiRadii, uiTouchTarget } from "../ui/designSystem";
 
 type SourceInspectorPanelProps = {
   contentType: "movie" | "series";
@@ -258,8 +260,8 @@ export function SourceInspectorPanel({
         styles.container,
         {
           backgroundColor: isDark
-            ? "rgba(255,255,255,0.055)"
-            : "rgba(255,255,255,0.62)",
+            ? "rgba(244,245,247,0.055)"
+            : "rgba(16,18,22,0.035)",
           borderColor: colors.border,
         },
       ]}
@@ -284,31 +286,36 @@ export function SourceInspectorPanel({
           return (
             <Pressable
               key={item.action}
-              style={[
+              style={({ pressed, focused }: any) => [
                 styles.actionButton,
                 {
                   backgroundColor: active
                     ? colors.tint
                     : isDark
-                      ? "rgba(255,255,255,0.06)"
-                      : "rgba(0,0,0,0.04)",
+                      ? "rgba(244,245,247,0.06)"
+                      : "rgba(16,18,22,0.04)",
                   borderColor: active ? colors.tint : colors.border,
                 },
+                pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
               ]}
               onPress={() => setAction(item.action)}
-              accessibilityRole="button"
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
               accessibilityLabel={`Inspect ${item.label} sources`}
             >
               <Ionicons
                 name={item.icon as any}
                 size={16}
-                color={active ? (isDark ? "#2c1738" : "#fff") : colors.text}
+                color={active ? colors.onTint : colors.text}
               />
               <Text
                 style={[
                   styles.actionText,
                   {
-                    color: active ? (isDark ? "#2c1738" : "#fff") : colors.text,
+                    color: active ? colors.onTint : colors.text,
                   },
                 ]}
               >
@@ -401,7 +408,13 @@ export function SourceInspectorPanel({
 
       <View style={styles.footerActions}>
         <Pressable
-          style={[styles.footerButton, { borderColor: colors.border }]}
+          style={({ pressed, focused }: any) => [
+            styles.footerButton,
+            { borderColor: colors.border },
+            pressed && styles.pressed,
+            loading && styles.disabled,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
           onPress={loadPlan}
           disabled={loading}
           accessibilityRole="button"
@@ -413,7 +426,13 @@ export function SourceInspectorPanel({
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.footerButton, { borderColor: colors.border }]}
+          style={({ pressed, focused }: any) => [
+            styles.footerButton,
+            { borderColor: colors.border },
+            pressed && styles.pressed,
+            exporting && styles.disabled,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
           onPress={handleExport}
           disabled={exporting}
           accessibilityRole="button"
@@ -430,6 +449,8 @@ export function SourceInspectorPanel({
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.72 },
+  disabled: { opacity: 0.48 },
   container: {
     borderWidth: 1,
     borderRadius: 18,
@@ -461,7 +482,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   actionButton: {
-    minHeight: 38,
+    minHeight: uiTouchTarget,
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 12,
@@ -516,7 +537,7 @@ const styles = StyleSheet.create({
     minWidth: 34,
     minHeight: 30,
     borderRadius: 10,
-    backgroundColor: "rgba(216,180,254,0.16)",
+    backgroundColor: "rgba(108,121,245,0.14)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 8,
@@ -573,8 +594,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   footerButton: {
-    minHeight: 38,
-    borderRadius: 999,
+    minHeight: uiTouchTarget,
+    borderRadius: uiRadii.control,
     borderWidth: 1,
     paddingHorizontal: 12,
     flexDirection: "row",

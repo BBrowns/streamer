@@ -1,11 +1,4 @@
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +8,8 @@ import { useTheme } from "../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthScaffold } from "../components/auth/AuthScaffold";
 import { BackendUrlField } from "../components/auth/BackendUrlField";
+import { TextField } from "../components/ui/TextField";
+import { AppButton } from "../components/ui/AppButton";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -88,29 +83,17 @@ export default function RegisterScreen() {
           </View>
         )}
 
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
+        <TextField
+          label={t("auth.register.name")}
+          containerStyle={styles.field}
           placeholder={t("auth.register.name")}
           placeholderTextColor={colors.textSecondary + "80"}
           value={displayName}
           onChangeText={setDisplayName}
         />
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
+        <TextField
+          label={t("auth.register.email")}
+          containerStyle={styles.field}
           placeholder={t("auth.register.email")}
           placeholderTextColor={colors.textSecondary + "80"}
           value={email}
@@ -118,15 +101,9 @@ export default function RegisterScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
+        <TextField
+          label={t("auth.register.password")}
+          containerStyle={styles.field}
           placeholder={t("auth.register.password")}
           placeholderTextColor={colors.textSecondary + "80"}
           value={password}
@@ -134,30 +111,17 @@ export default function RegisterScreen() {
           secureTextEntry
         />
 
-        <Pressable
-          style={({ pressed, hovered }: any) => [
-            styles.primaryButton,
-            { backgroundColor: colors.tint },
-            isLoading && styles.disabledButton,
-            hovered && { opacity: 0.9, transform: [{ scale: 1.01 }] },
-            pressed && { transform: [{ scale: 0.98 }] },
-          ]}
+        <AppButton
+          label={t("auth.register.button")}
+          icon="person-add-outline"
+          variant="primary"
+          size="large"
+          fullWidth
+          style={styles.primaryButton}
           onPress={handleRegister}
           disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={colors.onTint} />
-          ) : (
-            <>
-              <Ionicons name="sparkles" size={18} color={colors.onTint} />
-              <Text
-                style={[styles.primaryButtonText, { color: colors.onTint }]}
-              >
-                {t("auth.register.button")}
-              </Text>
-            </>
-          )}
-        </Pressable>
+          loading={isLoading}
+        />
 
         <Pressable
           style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
@@ -189,29 +153,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: { fontSize: 14, fontWeight: "700", flex: 1 },
-  input: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-  },
+  field: { marginBottom: 14 },
   primaryButton: {
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 9,
     marginTop: 12,
     marginBottom: 20,
-  },
-  disabledButton: { opacity: 0.6 },
-  primaryButtonText: {
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 0,
   },
   linkTextCentered: { textAlign: "center", fontSize: 14, fontWeight: "700" },
   linkTextPrimary: { fontWeight: "900" },

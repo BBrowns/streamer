@@ -17,7 +17,7 @@ describe("actionRecovery", () => {
     ).toMatchObject({
       reason: "storage_pressure",
       action: "free_storage",
-      actionLabel: "Free space",
+      actionLabel: "Manage storage",
     });
   });
 

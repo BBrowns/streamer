@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { Stack } from "expo-router";
+import { uiRadii, uiTypography } from "../ui/designSystem";
 
 interface AuthScaffoldProps {
   title: string;
@@ -38,7 +39,7 @@ export function AuthScaffold({
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-        colors={[colors.background, colors.surfaceElevated, colors.background]}
+        colors={[colors.background, colors.surfaceSubtle, colors.background]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
@@ -63,17 +64,17 @@ export function AuthScaffold({
                     styles.previewGlass,
                     {
                       backgroundColor: colors.surfaceOverlay,
-                      borderColor: colors.border,
+                      borderColor: "transparent",
                     },
                   ]}
                 >
                   <View
                     style={[
                       styles.iconBadge,
-                      { backgroundColor: colors.tint + "28" },
+                      { backgroundColor: colors.primary },
                     ]}
                   >
-                    <Ionicons name={icon} size={18} color={colors.tint} />
+                    <Ionicons name={icon} size={18} color={colors.onPrimary} />
                   </View>
                   <View style={styles.previewTextGroup}>
                     <Text style={[styles.previewTitle, { color: colors.text }]}>
@@ -95,8 +96,8 @@ export function AuthScaffold({
                 style={[
                   styles.formPane,
                   {
-                    backgroundColor: colors.surfaceOverlay,
-                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    borderColor: "transparent",
                   },
                 ]}
               >
@@ -148,9 +149,8 @@ const styles = StyleSheet.create({
   },
   previewPane: {
     minHeight: 220,
-    borderRadius: 28,
+    borderRadius: uiRadii.hero,
     overflow: "hidden",
-    borderWidth: 1,
   },
   previewWide: {
     flex: 1,
@@ -167,8 +167,7 @@ const styles = StyleSheet.create({
     left: 18,
     right: 18,
     bottom: 18,
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: uiRadii.card,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -177,7 +176,7 @@ const styles = StyleSheet.create({
   iconBadge: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: uiRadii.control,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -197,29 +196,24 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 460,
     alignSelf: "center",
-    borderRadius: 28,
-    borderWidth: 1,
-    padding: 24,
+    borderRadius: uiRadii.sheet,
+    borderWidth: 0,
+    padding: 28,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 18px 30px rgba(216, 180, 254, 0.18)" }
+      ? { boxShadow: "0 18px 44px rgba(0,0,0,0.16)" }
       : {
-          shadowColor: "#d8b4fe",
+          shadowColor: "#000000",
           shadowOffset: { width: 0, height: 18 },
-          shadowOpacity: 0.18,
-          shadowRadius: 30,
+          shadowOpacity: 0.16,
+          shadowRadius: 32,
         }),
   } as any,
   title: {
-    fontSize: 34,
-    lineHeight: 40,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.headline,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "600",
+    ...uiTypography.body,
     marginBottom: 24,
   },
 });

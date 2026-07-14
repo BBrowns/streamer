@@ -9,6 +9,11 @@ import type {
   DownloadFailureReason,
   DownloadRecoveryGuidance,
 } from "../types/actionRecovery";
+import i18n from "../lib/i18n";
+
+function recoveryCopy(key: string): string {
+  return i18n.t(key) as string;
+}
 
 interface DownloadRecoveryTask {
   status: string;
@@ -127,29 +132,27 @@ export function getDownloadRecovery(
     return {
       reason: "paused",
       action: "retry",
-      title: "Download paused",
-      message: "Continue this download from its saved progress when possible.",
-      actionLabel: "Resume",
+      title: recoveryCopy("downloads.recovery.pausedTitle"),
+      message: recoveryCopy("downloads.recovery.pausedMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.resumeAction"),
     };
   }
   if (task.status === "Completed" && !task.localUri) {
     return {
       reason: "missing_file",
       action: "replan",
-      title: "Offline file is missing",
-      message:
-        "No managed file is available on this device. Prepare a fresh download.",
-      actionLabel: "Download again",
+      title: recoveryCopy("downloads.recovery.missingTitle"),
+      message: recoveryCopy("downloads.recovery.noManagedFileMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.downloadAgainAction"),
     };
   }
   if (task.status === "Completed" && task.localUri && !task.offlineVerifiedAt) {
     return {
       reason: "verification_required",
       action: "verify",
-      title: "File needs verification",
-      message:
-        "Check that the saved file still exists before using it offline.",
-      actionLabel: "Verify file",
+      title: recoveryCopy("downloads.recovery.verificationTitle"),
+      message: recoveryCopy("downloads.recovery.verificationMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.verifyAction"),
     };
   }
   if (task.status !== "Error") return null;
@@ -161,55 +164,51 @@ export function getDownloadRecovery(
     interrupted: {
       reason,
       action: "retry",
-      title: "Download interrupted",
-      message: "The transfer stopped before the file was ready offline.",
-      actionLabel: "Resume",
+      title: recoveryCopy("downloads.recovery.interruptedTitle"),
+      message: recoveryCopy("downloads.recovery.interruptedMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.resumeAction"),
     },
     missing_file: {
       reason,
       action: "replan",
-      title: "Offline file is missing",
-      message:
-        "The saved file is no longer on this device. Prepare a fresh download.",
-      actionLabel: "Download again",
+      title: recoveryCopy("downloads.recovery.missingTitle"),
+      message: recoveryCopy("downloads.recovery.missingFileMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.downloadAgainAction"),
     },
     storage_pressure: {
       reason,
       action: "free_storage",
-      title: "Not enough storage",
-      message:
-        "Remove an offline title or free device storage before retrying.",
-      actionLabel: "Free space",
+      title: recoveryCopy("downloads.recovery.storageTitle"),
+      message: recoveryCopy("downloads.recovery.storageMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.freeSpaceAction"),
     },
     bridge_unavailable: {
       reason,
       action: "repair_bridge",
-      title: "Desktop bridge needs attention",
-      message:
-        "Reconnect or repair the desktop bridge before retrying this download.",
-      actionLabel: "Repair bridge",
+      title: recoveryCopy("downloads.recovery.setupTitle"),
+      message: recoveryCopy("downloads.recovery.setupMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.reviewSetupAction"),
     },
     source_expired: {
       reason,
       action: "replan",
-      title: "Download source expired",
-      message: "Prepare a fresh source instead of reusing the expired address.",
-      actionLabel: "Prepare again",
+      title: recoveryCopy("downloads.recovery.expiredTitle"),
+      message: recoveryCopy("downloads.recovery.expiredMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.prepareAgainAction"),
     },
     source_unsupported: {
       reason,
       action: "remove",
-      title: "Source cannot be saved offline",
-      message:
-        "This source is streaming-only. Remove it from the offline queue.",
-      actionLabel: "Remove",
+      title: recoveryCopy("downloads.recovery.unsupportedTitle"),
+      message: recoveryCopy("downloads.recovery.unsupportedMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.removeAction"),
     },
     failed: {
       reason,
       action: "retry",
-      title: "Download needs attention",
-      message: "Retry the download with a newly prepared source if needed.",
-      actionLabel: "Retry",
+      title: recoveryCopy("downloads.recovery.failedTitle"),
+      message: recoveryCopy("downloads.recovery.failedMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.retryAction"),
     },
   };
   return guidance[reason];
@@ -276,56 +275,55 @@ export function getCastRecovery(
     devices_unreachable: {
       reason,
       action: "refresh_devices",
-      title: "Displays could not be reached",
-      message: "Check the local network and search for displays again.",
-      actionLabel: "Search again",
+      title: recoveryCopy("player.castRecovery.devicesTitle"),
+      message: recoveryCopy("player.castRecovery.devicesMessage"),
+      actionLabel: recoveryCopy("player.castRecovery.searchAgainAction"),
     },
     device_unreachable: {
       reason,
       action: "refresh_devices",
-      title: "Display is no longer reachable",
-      message: "Refresh the device list before trying to cast again.",
-      actionLabel: "Refresh displays",
+      title: recoveryCopy("player.castRecovery.deviceTitle"),
+      message: recoveryCopy("player.castRecovery.deviceMessage"),
+      actionLabel: recoveryCopy("player.castRecovery.refreshAction"),
     },
     source_incompatible: {
       reason,
       action: options.hasDeviceCapabilities
         ? "choose_compatible_device"
         : "replan",
-      title: "Source is not compatible",
-      message: "This display cannot play the prepared source.",
+      title: recoveryCopy("player.castRecovery.incompatibleTitle"),
+      message: recoveryCopy("player.castRecovery.incompatibleMessage"),
       actionLabel: options.hasDeviceCapabilities
-        ? "Choose compatible display"
-        : "Try another source",
+        ? recoveryCopy("player.castRecovery.chooseDisplayAction")
+        : recoveryCopy("player.castRecovery.tryAnotherAction"),
     },
     source_loopback: {
       reason,
       action: "replan",
-      title: "Display cannot reach this source",
-      message: "Prepare a LAN-reachable source instead of sending localhost.",
-      actionLabel: "Prepare another source",
+      title: recoveryCopy("player.castRecovery.sourceReachTitle"),
+      message: recoveryCopy("player.castRecovery.sourceReachMessage"),
+      actionLabel: recoveryCopy("player.castRecovery.prepareAnotherAction"),
     },
     remux_required: {
       reason,
       action: "repair_bridge",
-      title: "Compatible stream cannot be prepared",
-      message:
-        "The desktop bridge needs its remux runtime to convert this source.",
-      actionLabel: "Check bridge",
+      title: recoveryCopy("player.castRecovery.supportTitle"),
+      message: recoveryCopy("player.castRecovery.supportMessage"),
+      actionLabel: recoveryCopy("player.castRecovery.reviewSetupAction"),
     },
     bridge_unavailable: {
       reason,
       action: "repair_bridge",
-      title: "Desktop bridge needs attention",
-      message: "Reconnect or repair the desktop bridge before casting again.",
-      actionLabel: "Repair bridge",
+      title: recoveryCopy("player.castRecovery.setupTitle"),
+      message: recoveryCopy("player.castRecovery.setupMessage"),
+      actionLabel: recoveryCopy("player.castRecovery.reviewSetupAction"),
     },
     failed: {
       reason,
       action: "retry",
-      title: "Casting did not start",
-      message: "The display or prepared source could not start casting.",
-      actionLabel: "Try again",
+      title: recoveryCopy("player.castRecovery.failedTitle"),
+      message: recoveryCopy("player.castRecovery.failedMessage"),
+      actionLabel: recoveryCopy("player.castRecovery.tryAgainAction"),
     },
   };
   return guidance[reason];

@@ -46,11 +46,7 @@ describe("SmartDownloadsPanel", () => {
     expect(screen.getByText("Wi-Fi only")).toBeTruthy();
     expect(screen.getByText("HLS offline remains unsupported")).toBeTruthy();
 
-    fireEvent(
-      screen.getByLabelText("Enable smart downloads"),
-      "valueChange",
-      true,
-    );
+    fireEvent.press(screen.getByLabelText("Enable smart downloads"));
 
     expect(useSmartDownloadStore.getState().preferences.enabled).toBe(true);
     expect(screen.getByText("On")).toBeTruthy();
@@ -59,21 +55,9 @@ describe("SmartDownloadsPanel", () => {
   it("toggles next episode and cleanup preferences only after enabling", () => {
     const screen = render(<SmartDownloadsPanel />);
 
-    fireEvent(
-      screen.getByLabelText("Enable smart downloads"),
-      "valueChange",
-      true,
-    );
-    fireEvent(
-      screen.getByLabelText("Auto-download next episode"),
-      "valueChange",
-      true,
-    );
-    fireEvent(
-      screen.getByLabelText("Auto-delete watched downloads"),
-      "valueChange",
-      true,
-    );
+    fireEvent.press(screen.getByLabelText("Enable smart downloads"));
+    fireEvent.press(screen.getByLabelText("Auto-download next episode"));
+    fireEvent.press(screen.getByLabelText("Auto-delete watched downloads"));
 
     expect(useSmartDownloadStore.getState().preferences).toMatchObject({
       enabled: true,

@@ -54,7 +54,8 @@ jest.mock("react-i18next", () => ({
         "home.continueWatching.title": "Continue Watching",
         "home.continueWatching.movie": "Movie",
         "home.continueWatching.series": "Series",
-        "home.continueWatching.resume": "Resume",
+        "library.actions.viewDetails": "View Details",
+        "search.a11y.openDetails": "Open title details",
         "home.continueWatching.emptyTitle": "Nothing in progress",
         "home.continueWatching.emptyDescription":
           "Start a movie or episode and it will appear here.",
@@ -88,7 +89,7 @@ describe("ContinueWatchingRow", () => {
     });
   });
 
-  it("renders resume cards with progress details", () => {
+  it("opens title details without presenting a direct-play action", () => {
     hooks.useContinueWatching.mockReturnValue({
       isLoading: false,
       data: [
@@ -114,6 +115,13 @@ describe("ContinueWatchingRow", () => {
     expect(screen.getByText("Example Episode")).toBeTruthy();
     expect(screen.getByText("S1 E2")).toBeTruthy();
     expect(screen.getByText("40m left · 33%")).toBeTruthy();
+    expect(screen.getByText("View Details")).toBeTruthy();
+    expect(screen.queryByText("Resume")).toBeNull();
+
+    fireEvent.press(
+      screen.getAllByLabelText("View Details: Example Episode")[0],
+    );
+    expect(mockPush).toHaveBeenCalledWith("/detail/series/tt0903747");
   });
 
   it("removes an item from continue watching", () => {

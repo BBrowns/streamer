@@ -89,7 +89,7 @@ export default function DetailScreen() {
 
   const openSourcesDevices = useCallback(() => {
     setPlaybackNotice(null);
-    router.push("/settings");
+    router.push("/settings/sources");
   }, [router]);
 
   const handleToggleLibrary = useCallback(() => {
@@ -100,7 +100,7 @@ export default function DetailScreen() {
       removeFromLibrary.mutate(id, {
         onSuccess: () =>
           show(t("library.alerts.removed"), "info", {
-            actionLabel: "Undo",
+            actionLabel: t("library.actions.undo"),
             onAction: () =>
               addToLibrary.mutateAsync({
                 type: castType,
@@ -521,7 +521,7 @@ export default function DetailScreen() {
           onClose={() => setCastModalOpen(false)}
           onOpenSourcesDevices={() => {
             setCastModalOpen(false);
-            router.push("/sources" as any);
+            router.push("/settings/sources" as any);
           }}
           onCastStart={(device, details) => {
             usePlayerStore.getState().clearPlayer();

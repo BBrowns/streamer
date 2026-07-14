@@ -18,6 +18,8 @@ import { useTheme } from "../../hooks/useTheme";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 import { DetailActionPanel } from "./DetailActionPanel";
 import { SourceInspectorPanel } from "./SourceInspectorPanel";
+import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
+import { useTranslation } from "react-i18next";
 
 export function DesktopDetailLayout({
   id,
@@ -42,6 +44,7 @@ export function DesktopDetailLayout({
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const [sourcesOpen, setSourcesOpen] = useState(!!initiallyOpenSources);
   const selectedStreams =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
@@ -53,25 +56,31 @@ export function DesktopDetailLayout({
   const primaryTextColor = colors.onTint;
   const surfaceColor = colors.card;
   const softSurfaceColor = colors.surfaceElevated;
-  const warningSurface = colors.warning + (isDark ? "14" : "20");
 
   const renderHeader = () => (
     <View style={styles.headerShell}>
       <View style={styles.eyebrowRow}>
-        <View style={[styles.eyebrowPill, { backgroundColor: colors.tint }]}>
+        <View style={styles.eyebrowPill}>
           <Ionicons
             name={castType === "series" ? "albums-outline" : "film-outline"}
             size={15}
-            color={primaryTextColor}
+            color={colors.tint}
           />
-          <Text style={[styles.eyebrowText, { color: primaryTextColor }]}>
-            {castType === "series" ? "Series" : "Movie"}
+          <Text style={[styles.eyebrowText, { color: colors.tint }]}>
+            {t(
+              castType === "series"
+                ? "common.media.series"
+                : "common.media.movie",
+            )}
           </Text>
         </View>
         <Text style={[styles.sourceCountText, { color: colors.textSecondary }]}>
-          {castType === "series"
-            ? `${sourceCount} episodes`
-            : `${sourceCount} sources`}
+          {t(
+            castType === "series"
+              ? "detail.actionPanel.episodeCount"
+              : "detail.actionPanel.sourceCount",
+            { count: sourceCount },
+          )}
         </Text>
       </View>
 
@@ -86,7 +95,7 @@ export function DesktopDetailLayout({
               styles.metaTag,
               {
                 color: colors.textSecondary,
-                backgroundColor: softSurfaceColor,
+                backgroundColor: "transparent",
               },
             ]}
           >
@@ -99,7 +108,7 @@ export function DesktopDetailLayout({
               styles.metaTag,
               {
                 color: colors.textSecondary,
-                backgroundColor: softSurfaceColor,
+                backgroundColor: "transparent",
               },
             ]}
           >
@@ -112,7 +121,7 @@ export function DesktopDetailLayout({
               styles.ratingTag,
               {
                 color: colors.warning,
-                backgroundColor: colors.warning + "20",
+                backgroundColor: "transparent",
               },
             ]}
           >
@@ -187,7 +196,7 @@ export function DesktopDetailLayout({
       <View
         style={[
           styles.sectionSurface,
-          { backgroundColor: surfaceColor, borderColor: colors.border },
+          { backgroundColor: surfaceColor, borderColor: "transparent" },
         ]}
       >
         {castType === "series" ? (
@@ -195,7 +204,7 @@ export function DesktopDetailLayout({
             <View style={styles.sectionTitleRow}>
               <Ionicons name="list" size={18} color={colors.tint} />
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Episodes
+                {t("detail.sources.episodes")}
               </Text>
             </View>
             <EpisodeSelector
@@ -208,14 +217,25 @@ export function DesktopDetailLayout({
         ) : (
           <>
             <Pressable
-              style={styles.sourceDisclosureHeader}
+              style={({ pressed, focused }: any) => [
+                styles.sourceDisclosureHeader,
+                pressed && {
+                  backgroundColor: softSurfaceColor,
+                  opacity: 0.82,
+                },
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
+              ]}
               onPress={() => {
                 hapticImpactLight();
                 setSourcesOpen((value) => !value);
               }}
               accessibilityRole="button"
               accessibilityLabel={
-                sourcesOpen ? "Hide more sources" : "Show more sources"
+                sourcesOpen
+                  ? t("detail.sources.hide")
+                  : t("detail.sources.show")
               }
               accessibilityState={{ expanded: sourcesOpen }}
             >
@@ -229,7 +249,7 @@ export function DesktopDetailLayout({
                       { color: colors.text },
                     ]}
                   >
-                    More Sources
+                    {t("detail.sources.more")}
                   </Text>
                   <Text
                     style={[
@@ -237,7 +257,7 @@ export function DesktopDetailLayout({
                       { color: colors.textSecondary },
                     ]}
                   >
-                    Advanced fallback · {sourceCount} available
+                    {t("detail.sources.available", { count: sourceCount })}
                   </Text>
                 </View>
               </View>
@@ -261,7 +281,7 @@ export function DesktopDetailLayout({
                   {availableResolutions.map((res) => (
                     <Pressable
                       key={res}
-                      style={[
+                      style={({ pressed, focused }: any) => [
                         styles.resBubble,
                         {
                           backgroundColor: softSurfaceColor,
@@ -271,13 +291,19 @@ export function DesktopDetailLayout({
                           backgroundColor: colors.tint,
                           borderColor: colors.tint,
                         },
+                        pressed && { opacity: 0.76 },
+                        Platform.OS === "web" &&
+                          focused &&
+                          getWebFocusStyle(colors.focus),
                       ]}
                       onPress={() => {
                         hapticImpactLight();
                         setSelectedResolution(res);
                       }}
                       accessibilityRole="radio"
-                      accessibilityLabel={`Filter sources by ${res === "2160p" ? "4K" : res}`}
+                      accessibilityLabel={t("detail.sources.filterByQuality", {
+                        quality: res === "2160p" ? "4K" : res,
+                      })}
                       accessibilityState={{
                         checked: selectedResolution === res,
                       }}
@@ -340,11 +366,14 @@ export function DesktopDetailLayout({
       <View
         style={[
           styles.desktopPosterPanel,
-          { backgroundColor: colors.tabBar, borderRightColor: colors.border },
+          { backgroundColor: "transparent", borderRightColor: "transparent" },
         ]}
       >
         <Pressable
-          style={styles.desktopBackBtn}
+          style={({ focused }: any) => [
+            styles.desktopBackBtn,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Back to previous screen"
@@ -364,7 +393,7 @@ export function DesktopDetailLayout({
           style={[
             styles.posterFrame,
             {
-              borderColor: colors.border,
+              borderColor: "transparent",
               backgroundColor: colors.surfaceElevated,
             },
           ]}
@@ -383,27 +412,6 @@ export function DesktopDetailLayout({
               <Ionicons name="film-outline" size={44} color={colors.tint} />
             </View>
           )}
-        </View>
-        <View
-          style={[
-            styles.deviceHintCard,
-            {
-              borderColor: colors.warning + "55",
-              backgroundColor: warningSurface,
-            },
-          ]}
-        >
-          <Ionicons name="sparkles-outline" size={18} color={colors.warning} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.deviceHintTitle, { color: colors.text }]}>
-              Cinema mode
-            </Text>
-            <Text
-              style={[styles.deviceHintText, { color: colors.textSecondary }]}
-            >
-              Sources stay quiet until you choose play, download, or cast.
-            </Text>
-          </View>
         </View>
       </View>
 
@@ -449,9 +457,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   desktopPosterPanel: {
-    width: 340,
-    borderRightWidth: 1,
-    padding: 28,
+    width: 360,
+    borderRightWidth: 0,
+    padding: 32,
     paddingTop: 24,
     zIndex: 2,
   },
@@ -462,6 +470,8 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 28,
     alignSelf: "flex-start",
+    borderRadius: uiRadii.control,
+    paddingHorizontal: 6,
   },
   desktopBackText: {
     fontSize: 14,
@@ -470,8 +480,8 @@ const styles = StyleSheet.create({
   posterFrame: {
     width: "100%",
     aspectRatio: 2 / 3,
-    borderRadius: 28,
-    borderWidth: 1,
+    borderRadius: uiRadii.card,
+    borderWidth: 0,
     overflow: "hidden",
     ...(Platform.OS === "web"
       ? { boxShadow: "0 20px 28px rgba(0, 0, 0, 0.32)" }
@@ -518,23 +528,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 7,
     alignSelf: "flex-start",
-    borderRadius: 999,
-    paddingHorizontal: 13,
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   eyebrowText: {
-    fontSize: 12,
-    fontWeight: "900",
+    ...uiTypography.sectionLabel,
   },
   sourceCountText: {
     fontSize: 13,
     fontWeight: "700",
   },
   desktopTitle: {
-    fontSize: 48,
-    fontWeight: "900",
+    ...uiTypography.display,
     marginBottom: 14,
-    letterSpacing: 0,
     maxWidth: 1050,
   },
   metaRow: {
@@ -544,16 +549,14 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   metaTag: {
-    fontSize: 13,
-    fontWeight: "600",
-    paddingHorizontal: 12,
+    ...uiTypography.label,
+    paddingHorizontal: 0,
     paddingVertical: 4,
     borderRadius: 8,
   },
   ratingTag: {
-    fontSize: 13,
-    fontWeight: "700",
-    paddingHorizontal: 12,
+    ...uiTypography.label,
+    paddingHorizontal: 0,
     paddingVertical: 4,
     borderRadius: 8,
   },
@@ -586,14 +589,15 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionSurface: {
-    borderWidth: 1,
-    borderRadius: 24,
+    borderWidth: 0,
+    borderRadius: uiRadii.sheet,
     padding: 22,
     marginBottom: 32,
   },
   sectionTitle: {
-    fontWeight: "800",
-    fontSize: 18,
+    ...uiTypography.title,
+    fontSize: 20,
+    lineHeight: 26,
     marginBottom: 20,
     letterSpacing: 0,
   },
@@ -605,6 +609,8 @@ const styles = StyleSheet.create({
   },
   sourceDisclosureHeader: {
     minHeight: 54,
+    borderRadius: uiRadii.control,
+    paddingHorizontal: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -655,21 +661,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 40,
-  },
-  deviceHintCard: {
-    flexDirection: "row",
-    gap: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 14,
-  },
-  deviceHintTitle: {
-    fontSize: 13,
-    fontWeight: "900",
-    marginBottom: 3,
-  },
-  deviceHintText: {
-    fontSize: 12,
-    lineHeight: 17,
   },
 });

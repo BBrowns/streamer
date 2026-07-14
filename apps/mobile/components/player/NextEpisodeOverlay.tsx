@@ -98,11 +98,11 @@ export function NextEpisodeOverlay({
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.watchNowButton, { backgroundColor: colors.tint }]}
+            style={[styles.watchNowButton, { backgroundColor: colors.primary }]}
             onPress={onWatchedNow}
           >
-            <Ionicons name="play" size={20} color={colors.onTint} />
-            <Text style={[styles.watchNowText, { color: colors.onTint }]}>
+            <Ionicons name="play" size={20} color={colors.onPrimary} />
+            <Text style={[styles.watchNowText, { color: colors.onPrimary }]}>
               {t("player.upsell.watchNow", { timeLeft })}
             </Text>
           </Pressable>

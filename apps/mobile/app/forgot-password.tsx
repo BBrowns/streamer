@@ -97,7 +97,7 @@ export default function ForgotPasswordScreen() {
             <Pressable
               style={[
                 styles.primaryButton,
-                { marginTop: 16, backgroundColor: colors.tint },
+                { marginTop: 16, backgroundColor: colors.primary },
               ]}
               onPress={() =>
                 resetToken
@@ -108,9 +108,13 @@ export default function ForgotPasswordScreen() {
                   : router.push("/reset-password")
               }
             >
-              <Ionicons name="arrow-forward" size={18} color={colors.onTint} />
+              <Ionicons
+                name="arrow-forward"
+                size={18}
+                color={colors.onPrimary}
+              />
               <Text
-                style={[styles.primaryButtonText, { color: colors.onTint }]}
+                style={[styles.primaryButtonText, { color: colors.onPrimary }]}
               >
                 {t("auth.resetPassword.submit")}
               </Text>
@@ -138,23 +142,26 @@ export default function ForgotPasswordScreen() {
             <Pressable
               style={[
                 styles.primaryButton,
-                { backgroundColor: colors.tint },
+                { backgroundColor: colors.primary },
                 isLoading && styles.disabledButton,
               ]}
               onPress={handleForgot}
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color={colors.onTint} />
+                <ActivityIndicator color={colors.onPrimary} />
               ) : (
                 <>
                   <Ionicons
                     name="mail-outline"
                     size={18}
-                    color={colors.onTint}
+                    color={colors.onPrimary}
                   />
                   <Text
-                    style={[styles.primaryButtonText, { color: colors.onTint }]}
+                    style={[
+                      styles.primaryButtonText,
+                      { color: colors.onPrimary },
+                    ]}
                   >
                     {t("auth.forgot.button")}
                   </Text>

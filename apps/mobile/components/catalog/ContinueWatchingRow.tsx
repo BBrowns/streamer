@@ -24,9 +24,11 @@ import { Surface } from "../ui/Surface";
 import { AppButton } from "../ui/AppButton";
 import { SkeletonRow } from "../ui/SkeletonLoader";
 import {
+  getWebFocusStyle,
   getSoftOverlayColor,
   uiRadii,
   uiSpacing,
+  uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
@@ -92,11 +94,15 @@ function ContinueWatchingCard({
       : 0;
   const episode = episodeLabel(item);
 
-  const handleResume = () => {
+  const handleOpenDetails = () => {
     router.push(`/detail/${item.type}/${item.itemId}`);
   };
   const { isKeyboardFocused, webPressableProps } =
-    useWebPressableActivation(handleResume);
+    useWebPressableActivation(handleOpenDetails);
+  const detailsLabel = t("library.actions.viewDetails", {
+    defaultValue: "View Details",
+  });
+  const detailsAccessibilityLabel = `${detailsLabel}: ${item.title}`;
 
   return (
     <Surface
@@ -111,13 +117,10 @@ function ContinueWatchingCard({
     >
       <Pressable
         {...webPressableProps}
-        onPress={handleResume}
+        onPress={handleOpenDetails}
         accessibilityRole="button"
-        accessibilityLabel={t("home.continueWatching.resumeA11y", {
-          title: item.title,
-          minutes: remainingMinutes,
-          defaultValue: `Resume ${item.title}, ${remainingMinutes} minutes remaining`,
-        })}
+        accessibilityLabel={detailsAccessibilityLabel}
+        accessibilityHint={t("search.a11y.openDetails")}
         style={({ pressed, hovered }: any) => [
           styles.resumeArea,
           pressed && styles.pressed,
@@ -178,11 +181,12 @@ function ContinueWatchingCard({
       </Pressable>
       <View style={styles.actionRow}>
         <AppButton
-          label={t("home.continueWatching.resume")}
-          icon="play"
+          label={detailsLabel}
+          accessibilityLabel={detailsAccessibilityLabel}
+          icon="arrow-forward"
           size="small"
-          variant="primary"
-          onPress={handleResume}
+          variant="secondary"
+          onPress={handleOpenDetails}
         />
         <Pressable
           onPress={() => onRemove(item.itemId)}
@@ -192,7 +196,7 @@ function ContinueWatchingCard({
             title: item.title,
             defaultValue: `Remove ${item.title} from Continue Watching`,
           })}
-          style={({ pressed, hovered }: any) => [
+          style={({ pressed, hovered, focused }: any) => [
             styles.iconButton,
             {
               borderColor: colors.border,
@@ -200,6 +204,7 @@ function ContinueWatchingCard({
               opacity: isRemoving ? 0.5 : pressed ? 0.72 : 1,
             },
             Platform.OS === "web" && hovered && { borderColor: colors.tint },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
         >
           <Ionicons name="close" size={16} color={colors.textSecondary} />
@@ -238,7 +243,7 @@ export function ContinueWatchingRow({
     return (
       <View style={styles.container}>
         <Surface variant="accent" style={styles.emptySurface}>
-          <Ionicons name="play-circle-outline" size={22} color={colors.tint} />
+          <Ionicons name="time-outline" size={22} color={colors.tint} />
           <View style={styles.emptyCopy}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
               {t("home.continueWatching.emptyTitle")}
@@ -256,15 +261,10 @@ export function ContinueWatchingRow({
     <View style={styles.container} testID="continue-watching-row">
       <View style={styles.headerRow}>
         <View style={styles.titleWithIcon}>
-          <Ionicons name="play-circle-outline" size={22} color={colors.tint} />
-          <View>
-            <Text style={[styles.sectionEyebrow, { color: colors.tint }]}>
-              {t("home.continueWatching.eyebrow")}
-            </Text>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {t("home.continueWatching.title")}
-            </Text>
-          </View>
+          <Ionicons name="time-outline" size={22} color={colors.tint} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {t("home.continueWatching.title")}
+          </Text>
         </View>
       </View>
       <FlatList
@@ -327,11 +327,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: uiSpacing.md,
-  },
-  sectionEyebrow: {
-    ...uiTypography.sectionLabel,
-    fontSize: 10,
-    textTransform: "uppercase",
   },
   sectionTitle: {
     ...uiTypography.title,
@@ -411,8 +406,8 @@ const styles = StyleSheet.create({
     paddingBottom: uiSpacing.md,
   },
   iconButton: {
-    width: 36,
-    height: 36,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
     borderWidth: 1,
     borderRadius: uiRadii.pill,
     alignItems: "center",

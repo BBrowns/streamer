@@ -23,8 +23,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import * as Haptics from "expo-haptics";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
-import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiTouchTarget,
+  uiTypography,
+} from "./designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { useTranslation } from "react-i18next";
 
 export interface OnboardingStep {
   id: string;
@@ -70,13 +76,7 @@ function OnboardingItem({
     const scale = interpolate(
       scrollX.value,
       inputRange,
-      [0.6, 1.1, 0.6],
-      Extrapolate.CLAMP,
-    );
-    const rotate = interpolate(
-      scrollX.value,
-      inputRange,
-      [-15, 0, 15],
+      [0.98, 1, 0.98],
       Extrapolate.CLAMP,
     );
     const opacity = interpolate(
@@ -88,12 +88,12 @@ function OnboardingItem({
     const translateX = interpolate(
       scrollX.value,
       inputRange,
-      [width * 0.4, 0, -width * 0.4],
+      [24, 0, -24],
       Extrapolate.CLAMP,
     );
 
     return {
-      transform: [{ scale }, { rotate: `${rotate}deg` }, { translateX }],
+      transform: [{ scale }, { translateX }],
       opacity,
     };
   });
@@ -103,7 +103,7 @@ function OnboardingItem({
     const translateY = interpolate(
       scrollX.value,
       inputRange,
-      [100, 0, 100],
+      [20, 0, 20],
       Extrapolate.CLAMP,
     );
     const opacity = interpolate(
@@ -183,6 +183,7 @@ function PaginationDot({
   reducedMotion,
 }: PaginationDotProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const animatedDotStyle = useAnimatedStyle(() => {
     if (reducedMotion) {
       return {
@@ -222,7 +223,9 @@ function PaginationDot({
       onPress={onPress}
       style={styles.dotTarget}
       accessibilityRole="tab"
-      accessibilityLabel={`Onboarding step ${index + 1}`}
+      accessibilityLabel={t("onboarding.carousel.stepLabel", {
+        count: index + 1,
+      })}
       accessibilityState={{ selected: active }}
     >
       <Animated.View
@@ -239,6 +242,7 @@ export function OnboardingCarousel({
   const { width } = useWindowDimensions();
   const { isExpanded, isLarge } = useWindowClass();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const scrollX = useSharedValue(0);
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -282,12 +286,12 @@ export function OnboardingCarousel({
   });
 
   useEffect(() => {
-    buttonScale.value = reducedMotion ? 1 : withSpring(isLastStep ? 1.05 : 1);
+    buttonScale.value = reducedMotion ? 1 : withSpring(1);
   }, [buttonScale, isLastStep, reducedMotion]);
 
   return (
     <LinearGradient
-      colors={[colors.background, colors.surfaceElevated, colors.background]}
+      colors={[colors.background, colors.surfaceSubtle, colors.background]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -327,11 +331,11 @@ export function OnboardingCarousel({
               style={({ focused }: any) => [
                 styles.arrowBtn,
                 { left: 40, backgroundColor: colors.card },
-                focused && getWebFocusStyle(colors.tint),
+                focused && getWebFocusStyle(colors.focus),
               ]}
               onPress={() => scrollToIndex(currentIndex - 1)}
               accessibilityRole="button"
-              accessibilityLabel="Previous onboarding step"
+              accessibilityLabel={t("onboarding.carousel.previous")}
             >
               <Ionicons name="chevron-back" size={28} color={colors.text} />
             </Pressable>
@@ -341,11 +345,11 @@ export function OnboardingCarousel({
               style={({ focused }: any) => [
                 styles.arrowBtn,
                 { right: 40, backgroundColor: colors.card },
-                focused && getWebFocusStyle(colors.tint),
+                focused && getWebFocusStyle(colors.focus),
               ]}
               onPress={() => scrollToIndex(currentIndex + 1)}
               accessibilityRole="button"
-              accessibilityLabel="Next onboarding step"
+              accessibilityLabel={t("onboarding.carousel.next")}
             >
               <Ionicons name="chevron-forward" size={28} color={colors.text} />
             </Pressable>
@@ -382,20 +386,28 @@ export function OnboardingCarousel({
                 ? { maxWidth: 400, alignSelf: "center" }
                 : { maxWidth: 420, alignSelf: "center" },
               pressed && { opacity: 0.82 },
-              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
             ]}
             onPress={
               isLastStep ? onComplete : () => scrollToIndex(currentIndex + 1)
             }
             accessibilityRole="button"
-            accessibilityLabel={isLastStep ? "Get started" : "Next step"}
+            accessibilityLabel={
+              isLastStep
+                ? t("onboarding.carousel.getStarted")
+                : t("onboarding.carousel.next")
+            }
           >
             <LinearGradient
-              colors={[colors.tint, colors.tint]}
+              colors={[colors.primary, colors.primary]}
               style={styles.gradient}
             >
-              <Text style={[styles.buttonText, { color: colors.onTint }]}>
-                {isLastStep ? "Get Started" : "Next Step"}
+              <Text style={[styles.buttonText, { color: colors.onPrimary }]}>
+                {isLastStep
+                  ? t("onboarding.carousel.getStarted")
+                  : t("onboarding.carousel.next")}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -418,9 +430,9 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 26,
+    borderRadius: uiRadii.hero,
     overflow: "hidden",
-    borderWidth: 1,
+    borderWidth: 0,
   },
   image: {
     width: "100%",
@@ -433,17 +445,18 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   title: {
-    fontWeight: "900",
+    fontFamily: uiTypography.display.fontFamily,
+    fontWeight: "800",
     textAlign: "center",
-    letterSpacing: 0,
+    letterSpacing: -0.8,
   },
   description: {
+    ...uiTypography.body,
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
     opacity: 0.9,
     width: "100%",
-    fontWeight: "600",
   },
   footer: {
     paddingBottom: 60,
@@ -473,18 +486,9 @@ const styles = StyleSheet.create({
   },
   button: {
     width: "100%",
-    height: 64,
-    borderRadius: 24,
+    height: 52,
+    borderRadius: uiRadii.control,
     overflow: "hidden",
-    elevation: 8,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 6px 16px rgba(216, 180, 254, 0.32)" }
-      : {
-          shadowColor: "#d8b4fe",
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.32,
-          shadowRadius: 16,
-        }),
   } as any,
   gradient: {
     flex: 1,
@@ -492,28 +496,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buttonText: {
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 0,
+    ...uiTypography.control,
+    fontSize: 16,
   },
   arrowBtn: {
     position: "absolute",
     top: "45%",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: uiRadii.control,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
-    borderWidth: 1,
-    borderColor: "rgba(216, 180, 254, 0.35)",
+    borderWidth: 0,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 8px 12px rgba(216, 180, 254, 0.28)" }
+      ? { boxShadow: "0 8px 20px rgba(0,0,0,0.18)" }
       : {
-          shadowColor: "#d8b4fe",
+          shadowColor: "#000000",
           shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.28,
-          shadowRadius: 12,
+          shadowOpacity: 0.18,
+          shadowRadius: 20,
         }),
   } as any,
 });

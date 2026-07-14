@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   text: {
-    color: "#0a0a1a",
+    color: "#101216",
     fontSize: 13,
     fontWeight: "600",
   },

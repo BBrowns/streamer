@@ -2,15 +2,11 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   Pressable,
-  ActivityIndicator,
   RefreshControl,
   StyleSheet,
-  ActionSheetIOS,
   Platform,
   Alert,
-  ScrollView,
 } from "react-native";
 import { useRouter, useNavigation } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
@@ -25,8 +21,6 @@ import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo, useEffect } from "react";
-import type { LibraryItem } from "@streamer/shared";
-import * as Haptics from "expo-haptics";
 import {
   isTaskOfflinePlayable,
   useDownloadStore,
@@ -43,6 +37,16 @@ import {
 import { hapticSelection, hapticSuccess } from "../../lib/haptics";
 import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { useToastStore } from "../../stores/toastStore";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { AppButton } from "../../components/ui/AppButton";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import {
+  getWebFocusStyle,
+  uiLayout,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+} from "../../components/ui/designSystem";
 
 export default function LibraryScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -58,39 +62,37 @@ export default function LibraryScreen() {
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
   const numColumns = useResponsiveColumns();
+  const { isCompact } = useWindowClass();
   const [activeFilter, setActiveFilter] = useState<
     "all" | "movie" | "series" | "offline"
   >("all");
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectionActionLabel = isSelectionMode
+    ? t("library.header.cancel")
+    : t("library.header.select");
+  const toggleSelectionMode = useCallback(() => {
+    hapticSelection();
+    setIsSelectionMode((current) => !current);
+    setSelectedIds(new Set());
+  }, []);
 
   // Setup header button
   useEffect(() => {
     if (!isAuthenticated) return;
     navigation.setOptions({
       headerRight: () => (
-        <Pressable
-          style={{ marginRight: 16 }}
-          onPress={() => {
-            hapticSelection();
-            if (isSelectionMode) {
-              setIsSelectionMode(false);
-              setSelectedIds(new Set());
-            } else {
-              setIsSelectionMode(true);
-            }
-          }}
-        >
-          <Text style={{ color: colors.tint, fontSize: 16, fontWeight: "600" }}>
-            {isSelectionMode
-              ? t("library.header.cancel")
-              : t("library.header.select")}
-          </Text>
-        </Pressable>
+        <AppButton
+          label={selectionActionLabel}
+          variant="ghost"
+          size="small"
+          onPress={toggleSelectionMode}
+          style={styles.headerAction}
+        />
       ),
     });
-  }, [navigation, isSelectionMode, isAuthenticated]);
+  }, [isAuthenticated, navigation, selectionActionLabel, toggleSelectionMode]);
 
   const handleRemove = useCallback(
     (itemId: string, isDownload?: boolean) => {
@@ -106,8 +108,8 @@ export default function LibraryScreen() {
       }
       removeFromLibrary.mutate(itemId);
       if (removedItem && !isDownload) {
-        useToastStore.getState().show("Removed from Library", "info", {
-          actionLabel: "Undo",
+        useToastStore.getState().show(t("library.alerts.removed"), "info", {
+          actionLabel: t("library.actions.undo"),
           onAction: () =>
             addToLibrary.mutateAsync({
               type: removedItem.type,
@@ -119,7 +121,7 @@ export default function LibraryScreen() {
       }
       hapticSuccess();
     },
-    [addToLibrary, items, removeFromLibrary, tasks],
+    [addToLibrary, items, removeFromLibrary, t, tasks],
   );
 
   const toggleSelect = useCallback((itemId: string) => {
@@ -169,26 +171,26 @@ export default function LibraryScreen() {
                 setIsSelectionMode(false);
                 setSelectedIds(new Set());
                 if (removedItems.length > 0) {
-                  useToastStore
-                    .getState()
-                    .show(
-                      `${removedItems.length} ${removedItems.length === 1 ? "title" : "titles"} removed from Library`,
-                      "info",
-                      {
-                        actionLabel: "Restore",
-                        onAction: () =>
-                          Promise.all(
-                            removedItems.map((item) =>
-                              addToLibrary.mutateAsync({
-                                type: item.type,
-                                itemId: item.itemId,
-                                title: item.title,
-                                poster: item.poster ?? undefined,
-                              }),
-                            ),
+                  useToastStore.getState().show(
+                    t("library.actions.bulkRemoved", {
+                      count: removedItems.length,
+                    }),
+                    "info",
+                    {
+                      actionLabel: t("library.actions.restore"),
+                      onAction: () =>
+                        Promise.all(
+                          removedItems.map((item) =>
+                            addToLibrary.mutateAsync({
+                              type: item.type,
+                              itemId: item.itemId,
+                              title: item.title,
+                              poster: item.poster ?? undefined,
+                            }),
                           ),
-                      },
-                    );
+                        ),
+                    },
+                  );
                 }
               },
             });
@@ -256,6 +258,23 @@ export default function LibraryScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
+            {!isCompact ? (
+              <PageHeader
+                title={t("tabs.library")}
+                description={t("library.header.description", {
+                  defaultValue:
+                    "Saved films, series, and everything ready to continue.",
+                })}
+                actions={
+                  <AppButton
+                    label={selectionActionLabel}
+                    variant="secondary"
+                    onPress={toggleSelectionMode}
+                  />
+                }
+                style={styles.pageHeader}
+              />
+            ) : null}
             <ContinueWatchingRow />
             <FilterChipBar
               options={[
@@ -272,14 +291,24 @@ export default function LibraryScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            icon="bookmarks-outline"
-            title={t("library.empty.title")}
+            icon={
+              activeFilter === "offline"
+                ? "cloud-download-outline"
+                : "bookmarks-outline"
+            }
+            title={
+              activeFilter === "offline"
+                ? t("downloads.empty.title")
+                : t("library.empty.title")
+            }
             description={
               activeFilter === "all"
                 ? t("library.empty.description")
                 : activeFilter === "movie"
                   ? t("library.empty.noMovies")
-                  : t("library.empty.noSeries")
+                  : activeFilter === "series"
+                    ? t("library.empty.noSeries")
+                    : t("downloads.empty.description")
             }
           />
         }
@@ -317,12 +346,19 @@ export default function LibraryScreen() {
             {t("library.fab.selected", { count: selectedIds.size })}
           </Text>
           <Pressable
-            style={[
+            style={({ pressed, focused }: any) => [
               styles.fabButton,
               selectedIds.size === 0 && styles.fabButtonDisabled,
+              pressed && { opacity: 0.72 },
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.onTint),
             ]}
             onPress={handleBulkDelete}
             disabled={selectedIds.size === 0}
+            accessibilityRole="button"
+            accessibilityLabel={t("library.fab.delete")}
+            accessibilityState={{ disabled: selectedIds.size === 0 }}
           >
             <Ionicons
               name="trash-outline"
@@ -351,8 +387,24 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
   },
-  columnWrapper: { paddingHorizontal: 12, gap: 10, marginBottom: 10 },
-  listContent: { paddingBottom: 24 },
+  columnWrapper: {
+    paddingHorizontal: uiSpacing.lg,
+    gap: uiSpacing.md,
+    marginBottom: uiSpacing.xl,
+  },
+  listContent: {
+    width: "100%",
+    maxWidth: uiLayout.contentMaxWidth,
+    alignSelf: "center",
+    paddingBottom: uiSpacing.giant,
+  },
+  pageHeader: {
+    paddingHorizontal: uiSpacing.lg,
+    paddingTop: uiSpacing.xxxl,
+  },
+  headerAction: {
+    marginRight: uiSpacing.sm,
+  },
   floatingActionBar: {
     position: "absolute",
     bottom: Platform.OS === "ios" ? 24 : 16,
@@ -379,13 +431,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   fabButton: {
+    minHeight: uiTouchTarget,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     backgroundColor: "rgba(0,0,0,0.2)",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: uiRadii.control,
+    justifyContent: "center",
   },
   fabButtonDisabled: {
     backgroundColor: "rgba(0,0,0,0.1)",

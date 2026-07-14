@@ -39,6 +39,11 @@ import {
   type DownloadOperationResult,
 } from "../../services/DownloadService";
 import { useToastStore } from "../../stores/toastStore";
+import {
+  uiLayout,
+  uiSpacing,
+  uiTypography,
+} from "../../components/ui/designSystem";
 
 type QueueFilter = "all" | DownloadQueueGroup;
 
@@ -366,7 +371,7 @@ export default function DownloadsScreen() {
             actionLabel={t("downloads.empty.action", {
               defaultValue: "Browse movies and shows",
             })}
-            onAction={() => router.push("/discover")}
+            onAction={() => router.push("/search?mode=discover")}
           />
         </View>
         <SmartDownloadsPanel />
@@ -515,7 +520,7 @@ export default function DownloadsScreen() {
                 };
               })
             }
-            onRepairBridge={() => router.push("/sources" as any)}
+            onRepairBridge={() => router.push("/settings/sources" as any)}
             onManageStorage={manageStorage}
             onDelete={() => confirmDelete(item)}
           />
@@ -567,7 +572,7 @@ function SummaryItem({
 }) {
   const { colors } = useTheme();
   return (
-    <Surface padded={false} style={styles.summaryItem}>
+    <Surface variant="plain" padded={false} style={styles.summaryItem}>
       <View style={[styles.summaryMarker, { backgroundColor: color }]} />
       <View>
         <Text style={[styles.summaryValue, { color: colors.text }]}>
@@ -587,7 +592,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     width: "100%",
-    maxWidth: 1040,
+    maxWidth: uiLayout.detailMaxWidth,
     alignSelf: "center",
     paddingHorizontal: 18,
     paddingTop: 22,
@@ -635,20 +640,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.headline,
   },
   subtitle: {
     marginTop: 5,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "600",
-    letterSpacing: 0,
+    ...uiTypography.body,
   },
   summaryRow: {
-    marginTop: 20,
+    marginTop: uiSpacing.xxl,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
@@ -657,7 +656,7 @@ const styles = StyleSheet.create({
     minWidth: 132,
     flexGrow: 1,
     flexBasis: 150,
-    minHeight: 64,
+    minHeight: 54,
     paddingHorizontal: 13,
     flexDirection: "row",
     alignItems: "center",
@@ -669,17 +668,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   summaryValue: {
-    fontSize: 17,
-    lineHeight: 21,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.title,
+    fontSize: 18,
+    lineHeight: 22,
   },
   summaryLabel: {
     marginTop: 2,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-    letterSpacing: 0,
+    ...uiTypography.caption,
   },
   filters: {
     marginTop: 15,
@@ -694,17 +689,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 18,
-    lineHeight: 23,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.title,
+    fontSize: 20,
+    lineHeight: 26,
   },
   sectionSubtitle: {
     marginTop: 2,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "600",
-    letterSpacing: 0,
+    ...uiTypography.caption,
   },
   itemSeparator: {
     height: 12,

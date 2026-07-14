@@ -10,13 +10,22 @@ import {
   useWindowDimensions,
   Platform,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
-import { useSearch } from "../../hooks/useSearch";
-import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
-import { useResponsiveColumns } from "../../hooks/useResponsiveColumns";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { AppButton } from "../../components/ui/AppButton";
+import { ContentBoundary } from "../../components/ui/ContentBoundary";
+import { PageHeader } from "../../components/ui/PageHeader";
+import {
+  getWebFocusStyle,
+  uiLayout,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../../components/ui/designSystem";
 import { api } from "../../services/api";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
@@ -28,12 +37,20 @@ export default function AddonsScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const isCompact = width < 600;
   const [addonUrl, setAddonUrl] = useState("");
+  const [inputFocused, setInputFocused] = useState(false);
+  const normalizedAddonUrl = addonUrl.trim();
 
-  const { data: addons, isLoading } = useQuery<InstalledAddon[]>({
+  const {
+    data: addons,
+    isLoading,
+    isError,
+    isRefetching,
+    refetch,
+  } = useQuery<InstalledAddon[]>({
     queryKey: ["addons"],
     queryFn: async () => {
       const { data } = await api.get("/api/addons");
@@ -77,176 +94,219 @@ export default function AddonsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Install Input */}
-      <View
-        style={[styles.installSection, { borderBottomColor: colors.border }]}
+      <ContentBoundary
+        maxWidth={uiLayout.readingMaxWidth}
+        style={styles.content}
       >
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t("addons.install.title")}
-        </Text>
-        <Text style={[styles.hint, { color: colors.textSecondary }]}>
-          {t("addons.install.hint")}
-        </Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder={t("addons.install.placeholder")}
-            placeholderTextColor={colors.textSecondary + "80"}
-            value={addonUrl}
-            onChangeText={setAddonUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
-          <Pressable
-            style={[
-              styles.installBtn,
-              { backgroundColor: colors.tint },
-              (!addonUrl || installMutation.isPending) && styles.disabledBtn,
-            ]}
-            onPress={() => {
-              hapticImpactLight();
-              addonUrl && installMutation.mutate(addonUrl);
-            }}
-            disabled={!addonUrl || installMutation.isPending}
-          >
-            {installMutation.isPending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={[styles.installBtnText, { color: "#fff" }]}>
-                {t("addons.install.button")}
-              </Text>
-            )}
-          </Pressable>
+        <PageHeader title={t("addons.title")} style={styles.pageHeader} />
+
+        <View
+          style={[styles.installSection, { borderBottomColor: colors.border }]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {t("addons.install.title")}
+          </Text>
+          <Text style={[styles.hint, { color: colors.textSecondary }]}>
+            {t("addons.install.hint")}
+          </Text>
+          <View style={[styles.inputRow, isCompact && styles.inputRowCompact]}>
+            <TextInput
+              accessibilityLabel={t("addons.install.title")}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: inputFocused ? colors.tint : "transparent",
+                  color: colors.text,
+                },
+                Platform.OS === "web" &&
+                  inputFocused &&
+                  getWebFocusStyle(colors.focus),
+                isCompact && styles.inputCompact,
+              ]}
+              placeholder={t("addons.install.placeholder")}
+              placeholderTextColor={colors.textSecondary + "80"}
+              value={addonUrl}
+              onChangeText={setAddonUrl}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              onSubmitEditing={() => {
+                if (!normalizedAddonUrl || installMutation.isPending) return;
+                hapticImpactLight();
+                installMutation.mutate(normalizedAddonUrl);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              returnKeyType="done"
+            />
+            <AppButton
+              label={t("addons.install.button")}
+              icon="add-outline"
+              variant="primary"
+              loading={installMutation.isPending}
+              disabled={!normalizedAddonUrl}
+              onPress={() => {
+                hapticImpactLight();
+                installMutation.mutate(normalizedAddonUrl);
+              }}
+              style={[
+                styles.installButton,
+                isCompact && styles.installButtonCompact,
+              ]}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Installed Add-ons */}
-      <View style={[styles.listSection, isDesktop && styles.desktopContent]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {t("addons.installed.title", { count: addons?.length ?? 0 })}
-        </Text>
+        <View style={styles.listSection}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {t("addons.installed.title", { count: addons?.length ?? 0 })}
+          </Text>
 
-        {isLoading ? (
-          <ActivityIndicator color={colors.tint} style={{ marginTop: 24 }} />
-        ) : (
-          <FlatList
-            data={addons}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ hovered }: any) => [
-                  styles.addonCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                  },
-                  hovered && {
-                    borderColor: colors.tint,
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.03)"
-                      : "rgba(0,0,0,0.02)",
-                    transform: [{ scale: 1.005 }],
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.addonIcon,
-                    {
-                      backgroundColor: isDark
-                        ? "rgba(99, 102, 241, 0.2)"
-                        : colors.tint + "15",
-                    },
-                  ]}
-                >
-                  <Text style={[styles.addonIconText, { color: colors.tint }]}>
-                    {item.manifest.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.addonInfo}>
-                  <Text style={[styles.addonName, { color: colors.text }]}>
-                    {item.manifest.name}
-                  </Text>
-                  <Text
-                    style={[styles.addonDesc, { color: colors.textSecondary }]}
-                    numberOfLines={1}
+          {isLoading || isRefetching ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator color={colors.tint} />
+            </View>
+          ) : isError ? (
+            <EmptyState
+              testID="addons-error-state"
+              icon="cloud-offline-outline"
+              title={t("addons.fetchError.title", {
+                defaultValue: "Add-ons could not load",
+              })}
+              description={t("addons.fetchError.description", {
+                defaultValue: "Check your connection and try again.",
+              })}
+              actionLabel={t("common.retry")}
+              onAction={() => refetch()}
+              size="small"
+              fill={false}
+            />
+          ) : (
+            <FlatList
+              data={addons}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const isRemoving =
+                  uninstallMutation.isPending &&
+                  uninstallMutation.variables === item.id;
+                const localizedTypes = item.manifest.types.map((type) => {
+                  if (type === "movie") return t("search.types.movie");
+                  if (type === "series") return t("search.types.series");
+                  return type;
+                });
+
+                return (
+                  <View
+                    style={[styles.addonCard, { backgroundColor: colors.card }]}
                   >
-                    {item.manifest.description}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.addonMeta,
-                      { color: colors.textSecondary + "90" },
-                    ]}
-                  >
-                    v{item.manifest.version} · {item.manifest.types.join(", ")}{" "}
-                    · {item.manifest.catalogs.length} catalog(s)
-                  </Text>
-                </View>
-                <Pressable
-                  style={({ hovered }: any) => [
-                    styles.removeBtn,
-                    { backgroundColor: "rgba(239, 68, 68, 0.1)" },
-                    hovered && {
-                      backgroundColor: "rgba(239, 68, 68, 0.2)",
-                      transform: [{ scale: 1.1 }],
-                    },
-                  ]}
-                  onPress={() => {
-                    hapticWarning();
-                    Alert.alert(
-                      t("addons.installed.uninstall"),
-                      t("addons.installed.confirmRemove", {
+                    <View
+                      style={[
+                        styles.addonIcon,
+                        { backgroundColor: colors.tint + "12" },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.addonIconText, { color: colors.tint }]}
+                      >
+                        {item.manifest.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.addonInfo}>
+                      <Text style={[styles.addonName, { color: colors.text }]}>
+                        {item.manifest.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.addonDesc,
+                          { color: colors.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.manifest.description}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.addonMeta,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        v{item.manifest.version}
+                        {localizedTypes.length > 0
+                          ? ` · ${localizedTypes.join(" · ")}`
+                          : ""}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t("addons.installed.confirmRemove", {
                         name: item.manifest.name,
-                      }),
-                      [
-                        { text: t("addons.installed.cancel"), style: "cancel" },
+                      })}
+                      accessibilityState={{
+                        disabled: isRemoving,
+                        busy: isRemoving,
+                      }}
+                      disabled={isRemoving}
+                      style={({ hovered, pressed, focused }: any) => [
+                        styles.removeButton,
                         {
-                          text: t("addons.installed.remove"),
-                          style: "destructive",
-                          onPress: () => uninstallMutation.mutate(item.id),
+                          backgroundColor:
+                            colors.error + (hovered ? "20" : "12"),
+                          opacity: pressed ? 0.72 : isRemoving ? 0.48 : 1,
                         },
-                      ],
-                    );
-                  }}
-                >
-                  <Text style={[styles.removeBtnText, { color: "#ef4444" }]}>
-                    ✕
-                  </Text>
-                </Pressable>
-              </Pressable>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>📦</Text>
-                <Text
-                  style={[styles.emptyText, { color: colors.textSecondary }]}
-                >
-                  {t("addons.empty.title")}
-                </Text>
-                <Text
-                  style={[
-                    styles.emptyHint,
-                    { color: colors.textSecondary + "80" },
-                  ]}
-                >
-                  {t("addons.empty.hint")}
-                </Text>
-              </View>
-            }
-          />
-        )}
-      </View>
+                        Platform.OS === "web" &&
+                          focused &&
+                          getWebFocusStyle(colors.focus),
+                      ]}
+                      onPress={() => {
+                        hapticWarning();
+                        Alert.alert(
+                          t("addons.installed.uninstall"),
+                          t("addons.installed.confirmRemove", {
+                            name: item.manifest.name,
+                          }),
+                          [
+                            {
+                              text: t("addons.installed.cancel"),
+                              style: "cancel",
+                            },
+                            {
+                              text: t("addons.installed.remove"),
+                              style: "destructive",
+                              onPress: () => uninstallMutation.mutate(item.id),
+                            },
+                          ],
+                        );
+                      }}
+                    >
+                      {isRemoving ? (
+                        <ActivityIndicator size="small" color={colors.error} />
+                      ) : (
+                        <Ionicons
+                          name="trash-outline"
+                          size={19}
+                          color={colors.error}
+                        />
+                      )}
+                    </Pressable>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <EmptyState
+                  icon="extension-puzzle-outline"
+                  title={t("addons.empty.title")}
+                  description={t("addons.empty.hint")}
+                  size="small"
+                  fill={false}
+                />
+              }
+            />
+          )}
+        </View>
+      </ContentBoundary>
     </View>
   );
 }
@@ -255,133 +315,110 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  desktopContent: {
-    maxWidth: 800,
-    alignSelf: "center",
-    width: "100%",
+  content: {
+    flex: 1,
+    paddingTop: uiSpacing.xxl,
+  },
+  pageHeader: {
+    marginBottom: uiSpacing.xxxl,
   },
   installSection: {
-    padding: 16,
+    paddingBottom: uiSpacing.xxxl,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(129, 140, 248, 0.1)",
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#e0e0ff",
-    marginBottom: 4,
+    ...uiTypography.title,
   },
   hint: {
-    color: "#6b7280",
-    fontSize: 12,
-    marginBottom: 12,
+    ...uiTypography.body,
+    marginTop: uiSpacing.sm,
+    marginBottom: uiSpacing.lg,
   },
   inputRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: uiSpacing.md,
+  },
+  inputRowCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
   },
   input: {
     flex: 1,
-    backgroundColor: "#1a1a3e",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: "#e0e0ff",
-    fontSize: 13,
+    width: "100%",
+    minHeight: 48,
+    borderRadius: uiRadii.control,
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.md,
     borderWidth: 1,
-    borderColor: "rgba(129, 140, 248, 0.2)",
+    ...uiTypography.body,
   },
-  installBtn: {
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    minWidth: 80,
-    alignItems: "center",
+  inputCompact: {
+    flex: 0,
   },
-  disabledBtn: {
-    opacity: 0.5,
+  installButton: {
+    minWidth: 112,
   },
-  installBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
+  installButtonCompact: {
+    width: "100%",
   },
   listSection: {
     flex: 1,
-    padding: 16,
+    paddingTop: uiSpacing.xxxl,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingTop: uiSpacing.md,
+    paddingBottom: uiSpacing.section,
+    gap: uiSpacing.md,
+  },
+  loadingState: {
+    paddingVertical: uiSpacing.huge,
+    alignItems: "center",
   },
   addonCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a3e",
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 10,
-    gap: 12,
+    minHeight: 76,
+    borderRadius: uiRadii.card,
+    padding: uiSpacing.lg,
+    gap: uiSpacing.md,
   },
   addonIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: "rgba(129, 140, 248, 0.2)",
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: uiRadii.control,
     justifyContent: "center",
     alignItems: "center",
   },
   addonIconText: {
-    color: "#818cf8",
+    ...uiTypography.title,
     fontSize: 18,
-    fontWeight: "800",
+    lineHeight: 22,
   },
   addonInfo: {
     flex: 1,
+    minWidth: 0,
   },
   addonName: {
-    color: "#e0e0ff",
-    fontWeight: "700",
+    ...uiTypography.label,
     fontSize: 15,
+    lineHeight: 20,
   },
   addonDesc: {
-    color: "#9ca3af",
-    fontSize: 12,
-    marginTop: 2,
+    ...uiTypography.body,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: uiSpacing.xs,
   },
   addonMeta: {
-    color: "#6b7280",
-    fontSize: 10,
-    marginTop: 3,
+    ...uiTypography.caption,
+    marginTop: uiSpacing.xs,
   },
-  removeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(248, 113, 113, 0.12)",
+  removeButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: uiRadii.control,
     justifyContent: "center",
     alignItems: "center",
-  },
-  removeBtnText: {
-    color: "#f87171",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 40,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: "#9ca3af",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  emptyHint: {
-    color: "#6b7280",
-    fontSize: 11,
-    marginTop: 6,
   },
 });

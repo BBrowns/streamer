@@ -21,6 +21,8 @@ import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 import { DetailActionPanel } from "./DetailActionPanel";
 import { SourceInspectorPanel } from "./SourceInspectorPanel";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
+import { useTranslation } from "react-i18next";
 
 export function MobileDetailLayout({
   id,
@@ -45,6 +47,7 @@ export function MobileDetailLayout({
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const { height, isCompact, isLarge } = useWindowClass();
   const [sourcesOpen, setSourcesOpen] = useState(!!initiallyOpenSources);
   const backdropHeight = Math.min(
@@ -63,8 +66,8 @@ export function MobileDetailLayout({
   const surfaceColor = colors.card;
   const softSurfaceColor = colors.surfaceElevated;
   const heroGradientColors = isDark
-    ? (["transparent", "rgba(8,10,15,0.58)", colors.background] as const)
-    : (["transparent", "rgba(246,247,249,0.52)", colors.background] as const);
+    ? (["transparent", "rgba(8,9,12,0.62)", colors.background] as const)
+    : (["transparent", "rgba(243,242,239,0.54)", colors.background] as const);
 
   const renderHeader = () => (
     <View>
@@ -107,7 +110,7 @@ export function MobileDetailLayout({
                 styles.metaTag,
                 {
                   color: colors.textSecondary,
-                  backgroundColor: softSurfaceColor,
+                  backgroundColor: "transparent",
                 },
               ]}
             >
@@ -120,7 +123,7 @@ export function MobileDetailLayout({
                 styles.metaTag,
                 {
                   color: colors.textSecondary,
-                  backgroundColor: softSurfaceColor,
+                  backgroundColor: "transparent",
                 },
               ]}
             >
@@ -133,7 +136,7 @@ export function MobileDetailLayout({
                 styles.ratingTag,
                 {
                   color: colors.warning,
-                  backgroundColor: colors.warning + "20",
+                  backgroundColor: "transparent",
                 },
               ]}
             >
@@ -226,18 +229,29 @@ export function MobileDetailLayout({
             <View
               style={[
                 styles.sourceDisclosure,
-                { backgroundColor: surfaceColor, borderColor: colors.border },
+                { backgroundColor: surfaceColor, borderColor: "transparent" },
               ]}
             >
               <Pressable
-                style={styles.sourceDisclosureHeader}
+                style={({ pressed, focused }: any) => [
+                  styles.sourceDisclosureHeader,
+                  pressed && {
+                    backgroundColor: softSurfaceColor,
+                    opacity: 0.82,
+                  },
+                  Platform.OS === "web" &&
+                    focused &&
+                    getWebFocusStyle(colors.focus),
+                ]}
                 onPress={() => {
                   hapticImpactLight();
                   setSourcesOpen((value) => !value);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  sourcesOpen ? "Hide more sources" : "Show more sources"
+                  sourcesOpen
+                    ? t("detail.sources.hide")
+                    : t("detail.sources.show")
                 }
                 accessibilityState={{ expanded: sourcesOpen }}
               >
@@ -255,7 +269,7 @@ export function MobileDetailLayout({
                         { color: colors.text },
                       ]}
                     >
-                      More Sources
+                      {t("detail.sources.more")}
                     </Text>
                     <Text
                       style={[
@@ -263,7 +277,9 @@ export function MobileDetailLayout({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      Advanced fallback · {availableResolutions.length} groups
+                      {t("detail.sources.groups", {
+                        count: availableResolutions.length,
+                      })}
                     </Text>
                   </View>
                 </View>
@@ -287,7 +303,7 @@ export function MobileDetailLayout({
                     {availableResolutions.map((res) => (
                       <Pressable
                         key={res}
-                        style={[
+                        style={({ pressed, focused }: any) => [
                           styles.resBubble,
                           {
                             backgroundColor: softSurfaceColor,
@@ -297,13 +313,20 @@ export function MobileDetailLayout({
                             backgroundColor: colors.tint,
                             borderColor: colors.tint,
                           },
+                          pressed && { opacity: 0.76 },
+                          Platform.OS === "web" &&
+                            focused &&
+                            getWebFocusStyle(colors.focus),
                         ]}
                         onPress={() => {
                           hapticImpactLight();
                           setSelectedResolution(res);
                         }}
                         accessibilityRole="radio"
-                        accessibilityLabel={`Filter sources by ${res === "2160p" ? "4K" : res}`}
+                        accessibilityLabel={t(
+                          "detail.sources.filterByQuality",
+                          { quality: res === "2160p" ? "4K" : res },
+                        )}
                         accessibilityState={{
                           checked: selectedResolution === res,
                         }}
@@ -349,12 +372,13 @@ export function MobileDetailLayout({
       <Stack.Screen options={{ headerShown: false }} />
 
       <Pressable
-        style={[
+        style={({ focused }: any) => [
           styles.floatingBack,
           {
             backgroundColor: colors.surfaceOverlay,
             borderColor: colors.border,
           },
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         ]}
         onPress={onBack}
         accessibilityRole="button"
@@ -416,10 +440,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "900",
+    ...uiTypography.headline,
     marginBottom: 12,
-    letterSpacing: 0,
   },
   metaRow: {
     flexDirection: "row",
@@ -428,16 +450,14 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   metaTag: {
-    fontSize: 13,
-    fontWeight: "600",
-    paddingHorizontal: 12,
+    ...uiTypography.label,
+    paddingHorizontal: 0,
     paddingVertical: 4,
     borderRadius: 8,
   },
   ratingTag: {
-    fontSize: 13,
-    fontWeight: "700",
-    paddingHorizontal: 12,
+    ...uiTypography.label,
+    paddingHorizontal: 0,
     paddingVertical: 4,
     borderRadius: 8,
   },
@@ -466,8 +486,9 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    fontWeight: "800",
-    fontSize: 18,
+    ...uiTypography.title,
+    fontSize: 20,
+    lineHeight: 26,
     marginBottom: 20,
     letterSpacing: 0,
   },
@@ -478,12 +499,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sourceDisclosure: {
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: uiRadii.sheet,
+    borderWidth: 0,
     padding: 16,
   },
   sourceDisclosureHeader: {
     minHeight: 52,
+    borderRadius: uiRadii.control,
+    paddingHorizontal: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
