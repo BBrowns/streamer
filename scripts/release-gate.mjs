@@ -84,6 +84,7 @@ function checkCiWorkflow() {
     ["security:audit", "production dependency audit"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
+    ["smoke-server-container.sh", "server production container smoke"],
     ["npm run release:gate", "release gate"],
     ["ci-summaries", "test summary artifacts"],
     ["rc-evidence-bundle", "RC evidence artifact"],
@@ -120,6 +121,7 @@ function checkDocs() {
   requireFile("docs/DEPENDENCY_SECURITY.md");
   requireFile("docs/AUTOMATED_GOLDEN_PATHS.md");
   requireFile("docs/MOBILE_RELEASE.md");
+  requireFile("docs/SERVER_PRODUCTION.md");
   requireFile("playwright.config.ts");
   requireFile("tests/golden-path/golden-path.spec.ts");
   requireText(
@@ -134,8 +136,8 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active implementation roadmap continues at **PR #147**",
-    "implementation roadmap continues at PR #147",
+    "The active implementation roadmap continues at **PR #148**",
+    "implementation roadmap continues at PR #148",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
@@ -291,12 +293,12 @@ function checkDependencySecurity() {
 
 function checkProductionDefaults() {
   requirePattern(
-    "server/src/config/env.ts",
+    "server/src/config/env.validation.ts",
     /STREAMER_BRIDGE_SUPERVISOR:\s*z\.string\(\)\.default\("false"\)/,
     "bridge supervisor disabled by default",
   );
   requirePattern(
-    "server/src/config/env.ts",
+    "server/src/config/env.validation.ts",
     /SENTRY_ENABLE_DEV:\s*z\.string\(\)\.default\("false"\)/,
     "server Sentry dev capture disabled by default",
   );
@@ -325,6 +327,39 @@ function checkProductionDefaults() {
     "BRIDGE_AUTH_NOT_CONFIGURED",
     "production bridge auth fails closed when token is missing",
   );
+  requireText(
+    "server/src/config/env.validation.ts",
+    "SERVER_INSTANCE_MODE must be explicitly set",
+    "explicit production instance topology",
+  );
+  requireText(
+    "server/src/config/env.validation.ts",
+    "REDIS_URL is required for multi-instance production deployments",
+    "multi-instance Redis requirement",
+  );
+  requireText(
+    "server/src/app.ts",
+    'app.use("/api/*", rateLimiter)',
+    "global API rate limiter",
+  );
+  requireText(
+    "server/src/modules/system/system.routes.ts",
+    'path: "/live"',
+    "server liveness endpoint",
+  );
+  requireText(
+    "server/src/modules/system/system.routes.ts",
+    'path: "/ready"',
+    "server readiness endpoint",
+  );
+  requireText("server/Dockerfile", "/live", "container liveness probe");
+  for (const testFile of [
+    "server/tests/env.validation.test.ts",
+    "server/tests/readiness.test.ts",
+    "server/tests/rate-limiter.test.ts",
+  ]) {
+    requireFile(testFile);
+  }
 }
 
 function checkSecurityCoverage() {
