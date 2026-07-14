@@ -303,7 +303,7 @@ jobs:
       - name: Build Shared
         run: npx tsc --project packages/shared/tsconfig.json
       - name: Build Server
-        run: npx tsc --project server/tsconfig.json
+        run: npm run build --workspace=server
       - name: Build Stream Server Sidecar
         run: npm run build --workspace=@streamer/stream-server
       - name: Build Desktop Main Process
@@ -350,6 +350,15 @@ jobs:
           name: ci-summary-build-check
           path: artifacts/ci-summaries/build-check.md
           retention-days: 14
+
+  server-container:
+    name: Server Production Container
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, format-check]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start production server container
+        run: bash scripts/smoke-server-container.sh
 
   desktop-package:
     name: Desktop Package Artifact
@@ -407,6 +416,7 @@ jobs:
       - test-mobile
       - test-golden-path
       - build-check
+      - server-container
       - desktop-package
     steps:
       - uses: actions/checkout@v4

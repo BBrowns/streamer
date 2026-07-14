@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #146:
+Implemented through PR #147:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -62,6 +62,9 @@ Implemented through PR #146:
 - Mobile development, preview, and production builds have stable native
   identifiers, validated dynamic Expo configuration, explicit EAS environments
   and update channels, and credential-free CI smoke coverage.
+- Production server startup validates secrets, origins, topology, Redis and
+  SMTP expectations; rate limiting has explicit single/multi-instance failure
+  behavior and liveness is separate from dependency readiness.
 
 Not yet proven:
 
@@ -179,7 +182,7 @@ Acceptance:
 - A preview build can be started from documented commands once credentials are
   supplied.
 
-### PR #147 - Server Production Runtime Hardening
+### Completed: PR #147 - Server Production Runtime Hardening
 
 Goal: turn the API server configuration into a safer single- or multi-instance
 production baseline.
@@ -271,7 +274,7 @@ of mocks or unit tests.
 2. Completed: PR #144 - deterministic golden-path automation.
 3. Completed: PR #145 - unified action/bridge preflight.
 4. Completed: PR #146 - mobile release identity and EAS baseline.
-5. PR #147 - server production runtime hardening.
+5. Completed: PR #147 - server production runtime hardening.
 6. PR #148 - offline and cast recovery UX.
 7. PR #149 - accessibility and responsive visual quality.
 8. PR #150 - real-target QA and RC evidence when available.

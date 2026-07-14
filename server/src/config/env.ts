@@ -1,115 +1,59 @@
-import { z } from "zod";
 import dotenv from "dotenv";
 import path from "path";
+import {
+  parseServerEnvironment,
+  type ParsedServerEnvironment,
+} from "./env.validation.js";
 
-// Load .env from server directory relative to __dirname
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
-/** Zod-validated environment configuration — no silent failures */
-const envSchema = z.object({
-  PORT: z.string().default("3001").transform(Number),
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
-  LOG_LEVEL: z.string().default("info"),
-
-  // Database
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-
-  // JWT
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
-  JWT_SECRET_PREVIOUS: z.string().optional(),
-  JWT_ACCESS_EXPIRY: z.string().default("15m"),
-  JWT_REFRESH_EXPIRY: z.string().default("7d"),
-
-  // CORS
-  CORS_ORIGINS: z.string().default("http://localhost:8081"),
-
-  // Sessions
-  MAX_CONCURRENT_SESSIONS: z.string().default("2").transform(Number),
-
-  // Redis (Rate Limiting)
-  REDIS_URL: z.string().optional(),
-
-  // Aggregator
-  ADDON_TIMEOUT_MS: z.string().default("5000").transform(Number),
-  ADDON_MAX_CONCURRENT: z.string().default("10").transform(Number),
-
-  // Debrid (optional)
-  RD_API_TOKEN: z.string().optional(),
-
-  // Trakt.tv (optional)
-  TRAKT_CLIENT_ID: z.string().optional(),
-  TRAKT_CLIENT_SECRET: z.string().optional(),
-
-  // Email (SMTP)
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.string().default("587").transform(Number),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default("noreply@streamer.app"),
-
-  // App URLs
-  APP_URL_WEB: z.string().default("http://localhost:8081"),
-  APP_URL_DEEPLINK: z.string().default("streamer://"),
-
-  // Local bridge supervision
-  STREAMER_BRIDGE_SUPERVISOR: z.string().default("false"),
-
-  // Observability
-  SENTRY_DSN: z.string().optional(),
-  SENTRY_ENVIRONMENT: z.string().optional(),
-  SENTRY_RELEASE: z.string().optional(),
-  SENTRY_TRACES_SAMPLE_RATE: z.string().optional(),
-  SENTRY_ERROR_SAMPLE_RATE: z.string().optional(),
-  SENTRY_ENABLE_DEV: z.string().default("false"),
-});
-
-const parsed = envSchema.safeParse(process.env);
-
-if (!parsed.success) {
-  console.error("❌ Invalid environment configuration:");
-  console.error(parsed.error.format());
-  process.exit(1);
+let envData: ParsedServerEnvironment;
+try {
+  envData = parseServerEnvironment(process.env);
+} catch (error) {
+  console.error("Invalid server environment configuration.");
+  throw error;
 }
 
-const envData = parsed.data;
+const parseBoolean = (value: string) =>
+  ["1", "true", "yes", "on"].includes(value.toLowerCase());
 
 export const env = {
   port: envData.PORT,
   nodeEnv: envData.NODE_ENV,
   logLevel: envData.LOG_LEVEL,
 
-  // Database
   databaseUrl: envData.DATABASE_URL,
 
-  // JWT
   jwtSecret: envData.JWT_SECRET,
   jwtSecretPrevious: envData.JWT_SECRET_PREVIOUS,
   jwtAccessExpiry: envData.JWT_ACCESS_EXPIRY,
   jwtRefreshExpiry: envData.JWT_REFRESH_EXPIRY,
 
-  // CORS
-  corsOrigins: envData.CORS_ORIGINS.split(","),
+  corsOrigins: Array.from(
+    new Set(
+      envData.CORS_ORIGINS.split(",")
+        .map((origin) => origin.trim().replace(/\/$/, ""))
+        .filter(Boolean),
+    ),
+  ),
+  trustProxyHops: envData.TRUST_PROXY_HOPS,
+  instanceMode: envData.SERVER_INSTANCE_MODE || "single",
+  shutdownTimeoutMs: envData.SHUTDOWN_TIMEOUT_MS,
+  rateLimitGlobalMax: envData.RATE_LIMIT_GLOBAL_MAX,
 
-  // Sessions
   maxConcurrentSessions: envData.MAX_CONCURRENT_SESSIONS,
-
-  // Redis
   redisUrl: envData.REDIS_URL,
 
-  // Aggregator
   addonTimeoutMs: envData.ADDON_TIMEOUT_MS,
   addonMaxConcurrent: envData.ADDON_MAX_CONCURRENT,
 
-  // Debrid
   rdApiToken: envData.RD_API_TOKEN,
 
-  // Trakt
   traktClientId: envData.TRAKT_CLIENT_ID,
   traktClientSecret: envData.TRAKT_CLIENT_SECRET,
 
-  // Email
+  emailDeliveryMode: envData.EMAIL_DELIVERY_MODE || "log",
   smtp: {
     host: envData.SMTP_HOST,
     port: envData.SMTP_PORT,
@@ -118,24 +62,17 @@ export const env = {
     from: envData.SMTP_FROM,
   },
 
-  // URLs
-  appUrlWeb: envData.APP_URL_WEB,
+  appUrlWeb: envData.APP_URL_WEB.replace(/\/$/, ""),
   appUrlDeepLink: envData.APP_URL_DEEPLINK,
 
-  // Local bridge supervision
-  bridgeSupervisorEnabled: ["1", "true", "yes", "on"].includes(
-    envData.STREAMER_BRIDGE_SUPERVISOR.toLowerCase(),
-  ),
+  bridgeSupervisorEnabled: parseBoolean(envData.STREAMER_BRIDGE_SUPERVISOR),
 
-  // Observability
   sentry: {
     dsn: envData.SENTRY_DSN,
     environment: envData.SENTRY_ENVIRONMENT,
     release: envData.SENTRY_RELEASE,
     tracesSampleRate: envData.SENTRY_TRACES_SAMPLE_RATE,
     errorSampleRate: envData.SENTRY_ERROR_SAMPLE_RATE,
-    enableDev: ["1", "true", "yes", "on"].includes(
-      envData.SENTRY_ENABLE_DEV.toLowerCase(),
-    ),
+    enableDev: parseBoolean(envData.SENTRY_ENABLE_DEV),
   },
 } as const;

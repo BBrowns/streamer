@@ -6,6 +6,8 @@ import { logger } from "./config/logger.js";
 import { prisma } from "./prisma/client.js";
 import { traktService } from "./modules/trakt/adapters/trakt.routes.js";
 import { supervisorService } from "./modules/system/supervisor.service.js";
+import { connectRedis, disconnectRedis } from "./services/redis.js";
+import { markServerShuttingDown } from "./services/readiness.service.js";
 import {
   captureServerException,
   flushServerSentry,
@@ -19,6 +21,19 @@ async function main() {
   try {
     await prisma.$connect();
     logger.info("Database connected");
+
+    const redisStatus = await connectRedis();
+    if (env.instanceMode === "multi" && redisStatus !== "connected") {
+      throw new Error(
+        "Redis must be available before a multi-instance server can start",
+      );
+    }
+    if (env.redisUrl && redisStatus !== "connected") {
+      logger.warn(
+        { instanceMode: env.instanceMode },
+        "Redis is configured but unavailable; readiness will remain unhealthy",
+      );
+    }
 
     // Start Trakt background sync
     traktService.startBackgroundSync();
@@ -34,7 +49,7 @@ async function main() {
       );
     }
   } catch (err) {
-    logger.fatal({ err }, "Failed to connect to database");
+    logger.fatal({ err }, "Required startup dependency check failed");
     process.exit(1);
   }
 
@@ -77,18 +92,57 @@ async function main() {
 
   injectWebSocket(server);
 
-  // Graceful shutdown
-  const shutdown = async (signal: string) => {
-    logger.info({ signal }, "Shutting down gracefully...");
-    supervisorService.stop();
-    traktService.stopBackgroundSync();
-    await prisma.$disconnect();
-    await flushServerSentry();
-    process.exit(0);
+  let shutdownPromise: Promise<void> | null = null;
+  const shutdown = (signal: string) => {
+    if (shutdownPromise) return shutdownPromise;
+
+    shutdownPromise = (async () => {
+      logger.info({ signal }, "Shutting down gracefully...");
+      markServerShuttingDown();
+      supervisorService.stop();
+      traktService.stopBackgroundSync();
+
+      const forceCloseTimer = setTimeout(() => {
+        logger.warn(
+          { timeoutMs: env.shutdownTimeoutMs },
+          "Graceful HTTP shutdown timed out; closing remaining connections",
+        );
+        if (
+          "closeAllConnections" in server &&
+          typeof server.closeAllConnections === "function"
+        ) {
+          server.closeAllConnections();
+        }
+      }, env.shutdownTimeoutMs);
+      forceCloseTimer.unref();
+
+      await new Promise<void>((resolve) => {
+        server.close((error) => {
+          if (error)
+            logger.warn({ error }, "HTTP server close reported an error");
+          resolve();
+        });
+      });
+      clearTimeout(forceCloseTimer);
+
+      const cleanupResults = await Promise.allSettled([
+        disconnectRedis(),
+        prisma.$disconnect(),
+        flushServerSentry(),
+      ]);
+      if (cleanupResults.some((result) => result.status === "rejected")) {
+        logger.warn("One or more shutdown cleanup operations failed");
+        process.exitCode = 1;
+      } else {
+        process.exitCode = 0;
+      }
+    })();
+
+    return shutdownPromise;
   };
 
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
+  process.once("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch(async (err) => {
