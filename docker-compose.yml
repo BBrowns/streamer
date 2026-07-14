@@ -12,7 +12,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U streamer -d streamer_db" ]
+      test: ["CMD-SHELL", "pg_isready -U streamer -d streamer_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -34,6 +34,9 @@ services:
       PORT: 3001
       NODE_ENV: development
       LOG_LEVEL: debug
+      SERVER_INSTANCE_MODE: single
+      TRUST_PROXY_HOPS: 0
+      EMAIL_DELIVERY_MODE: log
       CORS_ORIGINS: http://localhost:8081,http://localhost:19006
     depends_on:
       db:

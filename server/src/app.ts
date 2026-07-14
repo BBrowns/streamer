@@ -6,12 +6,7 @@ import { requestId } from "hono/request-id";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { errorHandler } from "./middleware/error.middleware.js";
-import {
-  rateLimiter,
-  authRateLimiter,
-  catalogRateLimiter,
-} from "./middleware/rateLimiter.middleware.js";
-import { featureFlags } from "./modules/feature-flag/feature-flag.service.js";
+import { rateLimiter } from "./middleware/rateLimiter.middleware.js";
 import { requestContextStorage } from "./utils/request-context.js";
 
 import { authRouter } from "./modules/auth/auth.routes.js";
@@ -68,6 +63,9 @@ export function createApp() {
       maxAge: 600,
     }),
   );
+
+  // Protect every API route. Auth and catalog routes add narrower limits.
+  app.use("/api/*", rateLimiter);
 
   // Custom logger integration with Pino
   app.use("*", async (c, next) => {
