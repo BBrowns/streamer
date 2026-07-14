@@ -2,6 +2,7 @@ import axios from "axios";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { useAuthStore } from "../stores/authStore";
+import { clientRuntimeConfig } from "./runtimeConfig";
 
 /**
  * Resolve the backend URL dynamically so the app works on both the iOS
@@ -14,8 +15,8 @@ import { useAuthStore } from "../stores/authStore";
  * the EXPO_PUBLIC_API_URL env var (or localhost for web).
  */
 function resolveBaseUrl(): string {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+  if (clientRuntimeConfig.apiUrl) {
+    return clientRuntimeConfig.apiUrl;
   }
 
   if (Platform.OS === "web") {

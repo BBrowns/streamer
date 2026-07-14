@@ -6,6 +6,7 @@ import {
   type BuildMetadata,
   type BuildRuntimeType,
 } from "@streamer/shared";
+import { clientRuntimeConfig } from "./runtimeConfig";
 
 function resolveRuntimeType(): BuildRuntimeType {
   if (
@@ -20,10 +21,20 @@ function resolveRuntimeType(): BuildRuntimeType {
 }
 
 export function getClientBuildMetadata(): BuildMetadata {
-  return createBuildMetadataFromEnv(process.env, {
-    runtimeType: resolveRuntimeType(),
-    appVersion: Constants.expoConfig?.version,
-  });
+  return createBuildMetadataFromEnv(
+    {
+      ...process.env,
+      EXPO_PUBLIC_STREAMER_GIT_SHA: clientRuntimeConfig.gitSha,
+      EXPO_PUBLIC_STREAMER_BUILD_DATE: clientRuntimeConfig.buildDate,
+      EXPO_PUBLIC_STREAMER_BUILD_CHANNEL: clientRuntimeConfig.buildChannel,
+      EXPO_PUBLIC_STREAMER_BUILD_ENVIRONMENT:
+        clientRuntimeConfig.buildEnvironment,
+    },
+    {
+      runtimeType: resolveRuntimeType(),
+      appVersion: Constants.expoConfig?.version,
+    },
+  );
 }
 
 export const clientBuildMetadata = getClientBuildMetadata();

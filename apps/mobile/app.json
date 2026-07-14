@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Streamer",
+    "slug": "streamer",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "streamer",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -13,9 +13,13 @@
       "backgroundColor": "#fbf6f4"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bbrowns.streamer",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.bbrowns.streamer",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#fbf6f4"
@@ -31,19 +35,15 @@
       "expo-router",
       "react-native-google-cast",
       "expo-video",
-      [
-        "@sentry/react-native",
-        {
-          "organization": "your-organization",
-          "project": "your-project"
-        }
-      ],
       "expo-font",
       "expo-secure-store",
       "expo-image"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

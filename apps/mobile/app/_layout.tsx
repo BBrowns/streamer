@@ -41,6 +41,7 @@ import {
   clientBuildMetadata,
   clientBuildSentryTags,
 } from "../services/buildMetadata";
+import { clientRuntimeConfig } from "../services/runtimeConfig";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -48,13 +49,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 Sentry.init(
   createMobileSentryConfig({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    dsn: clientRuntimeConfig.sentry.dsn,
     appVersion: Constants.expoConfig?.version,
-    environment: process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT,
-    release: process.env.EXPO_PUBLIC_SENTRY_RELEASE,
-    tracesSampleRate: process.env.EXPO_PUBLIC_SENTRY_TRACES_SAMPLE_RATE,
-    sampleRate: process.env.EXPO_PUBLIC_SENTRY_ERROR_SAMPLE_RATE,
-    enableInDev: process.env.EXPO_PUBLIC_SENTRY_ENABLE_DEV,
+    environment: clientRuntimeConfig.sentry.environment,
+    release: clientRuntimeConfig.sentry.release,
+    tracesSampleRate: clientRuntimeConfig.sentry.tracesSampleRate,
+    sampleRate: clientRuntimeConfig.sentry.errorSampleRate,
+    enableInDev: clientRuntimeConfig.sentry.enableInDev,
     isDev: __DEV__,
     nodeEnv: process.env.NODE_ENV,
     buildMetadata: clientBuildMetadata,
