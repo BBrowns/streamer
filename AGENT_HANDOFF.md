@@ -26,6 +26,11 @@ Current phase:
 The active implementation roadmap starts at **PR #143** in
 [ROADMAP.md](./ROADMAP.md). PR #142 is the roadmap truth-sync that defined this
 post-#141 phase.
+
+PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
+11.18 are the supported toolchain, production high/critical audit findings
+block CI, and every dependency install script must be explicitly reviewed and
+version-pinned. See [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up
 reliability/productization PRs have landed through **PR #141**. Earlier roadmap
 items that introduced
