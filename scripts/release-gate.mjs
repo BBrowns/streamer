@@ -65,6 +65,7 @@ function checkCiWorkflow() {
   const requiredSnippets = [
     ["npm run format:check", "format check"],
     ["npm run typecheck:all", "all-workspace typecheck"],
+    ["npm run mobile:config:check", "mobile release config validation"],
     ["npm run test --workspace=@streamer/shared", "shared tests"],
     ["npm run test --workspace=server -- --coverage", "server coverage tests"],
     ["npm run test --workspace=@streamer/stream-server", "stream-server tests"],
@@ -118,6 +119,7 @@ function checkDocs() {
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
   requireFile("docs/AUTOMATED_GOLDEN_PATHS.md");
+  requireFile("docs/MOBILE_RELEASE.md");
   requireFile("playwright.config.ts");
   requireFile("tests/golden-path/golden-path.spec.ts");
   requireText(
@@ -132,8 +134,8 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active implementation roadmap continues at **PR #146**",
-    "implementation roadmap continues at PR #146",
+    "The active implementation roadmap continues at **PR #147**",
+    "implementation roadmap continues at PR #147",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
@@ -197,6 +199,41 @@ function checkDocs() {
     } else {
       pass(`${relativePath} has no stale in-review roadmap status`);
     }
+  }
+}
+
+function checkMobileReleaseConfig() {
+  requireFile("apps/mobile/app.config.js");
+  requireFile("apps/mobile/config/mobileAppConfig.js");
+  requireFile("apps/mobile/eas.json");
+  requireFile("scripts/validate-mobile-config.mjs");
+  requireText("apps/mobile/app.json", '"slug": "streamer"', "stable Expo slug");
+  requireText(
+    "apps/mobile/app.json",
+    '"bundleIdentifier": "com.bbrowns.streamer"',
+    "stable iOS bundle identifier",
+  );
+  requireText(
+    "apps/mobile/app.json",
+    '"package": "com.bbrowns.streamer"',
+    "stable Android package identifier",
+  );
+  requireText(
+    "apps/mobile/eas.json",
+    '"appVersionSource": "remote"',
+    "remote app version source",
+  );
+  for (const profile of ["development", "preview", "production"]) {
+    requireText(
+      "apps/mobile/eas.json",
+      `"environment": "${profile}"`,
+      `${profile} EAS environment`,
+    );
+    requireText(
+      "apps/mobile/eas.json",
+      `"channel": "${profile}"`,
+      `${profile} update channel`,
+    );
   }
 }
 
@@ -379,6 +416,7 @@ checkDocs();
 checkProductionDefaults();
 checkSecurityCoverage();
 checkDependencySecurity();
+checkMobileReleaseConfig();
 writeSummary();
 
 if (failures.length > 0) {
