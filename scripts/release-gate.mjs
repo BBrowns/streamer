@@ -112,6 +112,7 @@ function checkDocs() {
   requireFile("docs/RC_CHECKLIST.md");
   requireFile("docs/RELEASE_NOTES_TEMPLATE.md");
   requireFile("AGENT_HANDOFF.md");
+  requireFile("ROADMAP.md");
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
@@ -124,9 +125,10 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active roadmap starts at **PR #106**",
-    "roadmap starts at PR #106",
+    "The active implementation roadmap starts at **PR #143**",
+    "implementation roadmap starts at PR #143",
   );
+  requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
   requireText(
     "AGENT_HANDOFF.md",

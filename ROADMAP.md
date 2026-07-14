@@ -1,151 +1,285 @@
 # Streamer Roadmap
 
-Last updated: 2026-06-14.
+Last updated: 2026-07-14.
 
-This roadmap is the current source of truth for moving Streamer from a mostly
-complete playback architecture to a production-ready streaming application.
+This is the current source of truth for work after PR #141. The architecture
+does not need another control-plane rewrite. The next phase is to reduce
+security and release risk, make the existing click-and-play paths easier to
+prove automatically, and continue product polish without claiming real-device
+support before it has been tested.
 
 ## Product Direction
 
-Streamer should behave like a mainstream streaming app: users browse content,
-press one primary action, and the app plans playback, downloads, and casting
-without exposing source mechanics by default.
+Streamer should behave like a mainstream streaming app:
 
-The current architecture remains the right basis:
+- The normal flow is browse -> title -> Play or Resume.
+- Planner and playback sessions choose and fall back between sources.
+- Source selection remains an advanced recovery and diagnostics surface.
+- Downloads are called offline-ready only after a managed local file is
+  verified.
+- Cast and torrent actions preflight device and bridge reachability before
+  promising they will work.
+- Real-Debrid remains optional, disabled by default, and absent from first-run
+  onboarding.
 
-- Expo/React Native client for iOS, Android, web, and desktop renderer.
-- Hono API server for auth, metadata, add-ons, stream planning, library, and sync.
+Keep the current macro architecture:
+
+- Expo/React Native client for iOS, Android, web, and the desktop renderer.
+- Hono API server for auth, metadata, add-ons, planning, library, and sync.
 - Shared playback contracts in `packages/shared`.
-- Local `stream-server` bridge for torrent, gateway, remux, cast, health, and
-  handoff behavior.
-- Electron shell for desktop packaging and bridge sidecar startup.
+- Local stream-server for torrent, gateway, remux, cast, health, and cache
+  behavior.
+- Electron shell for desktop packaging and sidecar ownership.
 
-Do not rewrite this into Plex/Jellyfin, a central transcode farm, or a new
-playback-session architecture.
+Do not replace this with Plex/Jellyfin, a central transcode farm, a new
+playback-session architecture, or a full UI-framework migration.
 
-## Current Status
+## Current State
 
-The playback control plane is in place:
+Implemented through PR #141:
 
-- `PlaybackSession` exists for Play, Download, and Cast.
-- Planner v2 ranks candidates and exposes rejection reasons.
-- Play Best, downloads, and cast run through sessions.
-- Gateway range handling and signed stream URLs exist.
-- Bridge runtime diagnostics and native-module mismatch reporting exist.
-- Remuxed MKV output can be materialized to temporary MP4 and served with byte
-  ranges.
-- Gateway jobs avoid false-ready states by waiting for remux cache readiness or
-  first-byte readability before handing a source to the player.
-- Download resume now replans safely without persisting raw stream URLs or
-  `Stream` objects.
-- Planner output exposes detected source audio language metadata, and the
-  player can use available `expo-video` audio/subtitle tracks once media loads.
+- PlaybackSession, Planner v2, Play Best, downloads, and cast share the
+  session-first control plane.
+- Direct, torrent, remux, no-peers, stalled, bridge-unavailable, and terminal
+  fallback states are typed.
+- Gateway readiness waits for remux output or readable first bytes instead of
+  reporting false readiness.
+- Torrent and remux caches have explicit locations, TTL and size limits,
+  cleanup, diagnostics, and protected manual cleanup.
+- Source audio language participates in ranking and available runtime audio or
+  subtitle tracks can be selected in the player.
+- Native devices are warned when a loopback bridge URL cannot reach the
+  desktop bridge.
+- Desktop packaging, signing configuration, Sentry metadata, release evidence,
+  and security baselines exist.
 
-The app is still not production-ready because the remaining risk is real target
-validation, real-world torrent/bridge reliability evidence, and final product
-UX polish.
+Not yet proven:
 
-## Recent PR State
+- Real-device playback, seek, download, and cast behavior remains unvalidated
+  on the full target matrix.
+- Large-file torrent and remux behavior has code coverage but not release
+  evidence.
+- macOS signing/notarization and mobile store builds have not been demonstrated
+  with production credentials.
+- The app must not be described as production-ready until the QA matrix and RC
+  checklist contain real evidence.
 
-| PR        | Area                            | Status      | Remaining risk                                                          |
-| --------- | ------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| #106-#124 | Master roadmap v3               | Implemented | Real-device QA and release-candidate evidence are still incomplete.     |
-| #125      | UI overlap and source ranking   | Implemented | Needs visual QA on real desktop/mobile sizes.                           |
-| #126      | Remux readiness before playback | Implemented | Needs large-file remux QA with real bridge jobs.                        |
-| #127      | Torrent first-byte readiness    | Implemented | Needs real torrent peer/no-peer validation across desktop and mobile.   |
-| #128      | Language and track selection    | Implemented | Track availability depends on runtime/source support from `expo-video`. |
-| #129      | Roadmap truth sync              | Implemented | Future PR numbers should follow this table, not old roadmap entries.    |
+## Evidence From The Current Repository
 
-## Validation Policy
+The next priorities are based on observed gaps, not old roadmap numbering:
 
-Do not claim a target is supported until it has a recorded run in
-[docs/QA_MATRIX.md](./docs/QA_MATRIX.md).
+- `npm audit --omit=dev --audit-level=high` currently reports high and critical
+  findings, while both dependency-audit CI commands are `continue-on-error`.
+- `apps/mobile/app.json` still uses generic `mobile` identity values, lacks iOS
+  and Android application identifiers, and contains Sentry placeholders.
+- CI has strong unit/build coverage but no deterministic browser golden-path
+  suite for the user-visible Play Best, download, cast, and terminal-error
+  flows.
+- Bridge reachability rules have been improved incrementally and should be
+  centralized so Play, Download, Cast, Settings, and diagnostics cannot drift.
+- Real-device QA is intentionally deferred for now; work below must preserve
+  `unknown` target status until that evidence exists.
 
-Every release candidate must record:
+## Active Roadmap
 
-- environment and build identifier
-- device/runtime
-- fixture/source type
-- first-frame behavior
-- seek behavior
-- fallback behavior
-- cancellation behavior
-- cleanup behavior
-- logs or screenshots when a failure occurs
+### PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
-Local unit tests are useful regression coverage, but they are not a substitute
-for real-device QA.
-
-## Next Follow-Up PRs
-
-The #106-#124 roadmap is complete. Future PRs should be selected from real
-remaining risk, not by replaying the old roadmap.
-
-### PR #130 - Bridge Playback Self-Test And Diagnostics
-
-Goal: make "bridge is running but playback never starts" diagnosable without
-guessing.
+Goal: remove known high/critical production dependency risk and make regression
+visible in CI.
 
 Scope:
 
-- Add a safe bridge self-test that reports runtime, native engine, gateway job,
-  remux, and first-byte readiness separately.
-- Surface the result in Sources & Devices under normal-user copy with advanced
-  details hidden behind disclosure.
-- Keep direct/HLS playback unaffected when torrent support is unavailable.
+- Upgrade or safely override vulnerable direct and transitive dependencies.
+- Treat Hono, Nodemailer, WebSocket, protobuf/cast, Sentry/OpenTelemetry, and
+  build-chain findings according to actual runtime exposure.
+- Avoid blind `npm audit fix --force`; document unavoidable exceptions with an
+  owner, reason, and expiry/review condition.
+- Replace the non-blocking high/critical audit with an enforceable policy.
+- Keep native WebTorrent and Electron architecture compatibility covered.
 
 Acceptance:
 
-- Bridge ready cannot hide an engine, remux, or first-byte failure.
-- User-facing copy says what action to take.
-- Tests cover unavailable engine, no peers/stalled, and first-byte timeout.
+- No unexplained high or critical production finding remains.
+- The security job fails for a newly introduced unapproved high/critical
+  finding.
+- Typecheck, tests, desktop package checks, and release gate stay green.
 
-### PR #131 - Real-Target QA Evidence Pass
+### PR #144 - Deterministic Golden-Path Browser And Desktop Harness
 
-Goal: record evidence for the click-and-play paths before making support
-claims.
+Goal: catch product-flow regressions without waiting for physical-device QA.
 
 Scope:
 
-- Run and document desktop packaged, browser web, iPhone, and Android paths in
-  `docs/QA_MATRIX.md`.
-- Capture direct source, torrent with peers, no peers, remux readiness, direct
-  seek, downloads, cast, and bridge unavailable behavior.
+- Add deterministic fixtures for auth, catalog, detail, planner, direct
+  playback readiness, bridge unavailable, no peers, fallback, download
+  eligibility, and cast eligibility.
+- Add browser smoke tests for browse -> detail -> Play Best and terminal error
+  recovery.
+- Add a packaged/desktop-renderer smoke path where practical without native
+  torrent network traffic.
+- Keep fixtures free of copyrighted media discovery and sensitive URLs.
 
 Acceptance:
 
-- Supported/unsupported/unknown is explicit per runtime.
-- Failures include logs or screenshots.
-- Product claims match recorded evidence.
+- CI exercises the primary click-and-play UI with deterministic data.
+- A planner `400`, infinite buffering regression, or loopback eligibility drift
+  fails the suite.
+- These tests are described as automated regression coverage, not real-device
+  evidence.
 
-### PR #132 - UX Polish From Recorded QA
+### PR #145 - Unified Action And Bridge Preflight Contract
 
-Goal: address visual and interaction issues discovered during QA without
-changing playback architecture.
+Goal: make Play, Download, Cast, Settings, and diagnostics answer readiness in
+the same way.
 
 Scope:
 
-- Fix layout overlap, unreadable states, confusing copy, and missing empty/error
-  states found in screenshots.
-- Keep source complexity hidden behind advanced surfaces.
+- Add a shared, side-effect-light preflight result with typed reason codes.
+- Centralize bridge availability, runtime support, configured URL, loopback,
+  LAN reachability, auth, gateway, torrent engine, and remux capability checks.
+- Remove duplicated platform-specific conditionals from action surfaces.
+- Keep direct/HLS playback available when torrent support is unavailable.
 
 Acceptance:
 
-- Desktop and phone screenshots show no overlap in primary flows.
-- Player, Downloads, Home, Detail, and Settings remain responsive.
+- Identical device/bridge input produces consistent Play, Download, and Cast
+  eligibility.
+- Preflight does not start a bridge, resolve media, or create a gateway job.
+- User-facing copy maps typed reasons without exposing raw URLs or tokens.
 
-## Later Work
+### PR #146 - Mobile Release Identity And EAS Baseline
 
-- Mobile EAS Build/Submit automation.
-- Privacy export/delete end-to-end verification.
-- Additional desktop signing/notarization hardening if the current release
-  workflow needs production secrets or platform-specific fixes.
+Goal: make preview and production mobile builds reproducible without claiming
+store readiness.
 
-## Rules For Future Agents
+Scope:
 
-- Do not expose source picking as the primary UX.
-- Do not persist resolved stream URLs, raw magnets, info hashes, or full `Stream`
-  objects.
-- Do not claim torrent/remux reliability without recorded real-device validation.
-- Do not combine architecture rewrites with UX polish.
-- Do not ship desktop without a documented packaging, signing, and update path.
+- Replace generic app identity with stable slug, scheme, iOS bundle identifier,
+  and Android package identifier.
+- Move environment-specific API, Sentry, build channel, and update values into
+  validated app configuration.
+- Define development, preview, and production EAS profiles and version policy.
+- Add credential-free config validation and build-config smoke checks to CI.
+- Document required Expo, Apple, Google, and Sentry secrets without committing
+  them.
+
+Acceptance:
+
+- Expo config resolves deterministic identifiers for every profile.
+- Placeholder Sentry organization/project values cannot enter production.
+- A preview build can be started from documented commands once credentials are
+  supplied.
+
+### PR #147 - Server Production Runtime Hardening
+
+Goal: turn the API server configuration into a safer single- or multi-instance
+production baseline.
+
+Scope:
+
+- Validate required production environment variables at startup.
+- Replace or explicitly gate the in-memory rate limiter for multi-instance
+  deployment, using the existing Redis direction where appropriate.
+- Separate liveness and dependency readiness where needed.
+- Document reverse-proxy, trusted-origin, database, Redis, mail, and shutdown
+  expectations.
+- Add tests for fail-closed production defaults.
+
+Acceptance:
+
+- Invalid production configuration fails before accepting requests.
+- Rate-limit behavior is explicit for one and multiple instances.
+- Health output is useful without leaking secrets or internal URLs.
+
+### PR #148 - Offline And Cast Recovery UX
+
+Goal: improve the two major secondary actions with typed, recoverable states
+that can be tested without real devices.
+
+Scope:
+
+- Consolidate retry, replan, cancellation, storage-pressure, missing-file, and
+  bridge-repair actions for downloads.
+- Consolidate unreachable-device, incompatible-source, remux-required, and
+  fallback states for cast.
+- Reuse the shared preflight contract from PR #145.
+- Do not add background-download or native-cast support claims.
+
+Acceptance:
+
+- Every non-success state has one clear next action.
+- Offline-ready still requires a verified managed file.
+- Cast never sends a loopback-only source to a remote device.
+
+### PR #149 - Accessibility And Responsive Visual Quality Pass
+
+Goal: make the existing pastel cinema UI more consistent and usable without a
+framework rewrite.
+
+Scope:
+
+- Audit Home, Discover, Detail, Player, Downloads, Search, Settings, and
+  onboarding for focus order, keyboard use, labels, contrast, touch targets,
+  overflow, and reduced-motion behavior.
+- Consolidate remaining one-off spacing, surface, button, status, empty, and
+  error styles into the existing design-system primitives.
+- Add desktop and phone-width browser screenshots for stable primary states.
+- Preserve provider rails and keep More Sources collapsed.
+
+Acceptance:
+
+- Primary flows have no known overlap at supported responsive widths.
+- Keyboard and screen-reader labels cover primary controls.
+- Screenshot changes are intentional and reviewable.
+
+### PR #150 - RC Evidence And Real-Target QA Resume
+
+Goal: perform the work that is intentionally deferred now and make a real
+go/no-go release decision.
+
+Scope:
+
+- Run the QA matrix on packaged macOS, browser web, iPhone, and Android.
+- Validate direct, fallback, torrent peers/no-peers, remux, seek, downloads,
+  cast, bridge repair, cache cleanup, and restart behavior.
+- Run signed/notarized desktop and mobile preview workflows with production-like
+  credentials.
+- Record screenshots, logs, known issues, and release blockers.
+
+Acceptance:
+
+- Support claims match recorded evidence.
+- RC checklist has no silent unknowns.
+- Release decision is evidence-based.
+
+This PR remains deferred until the user can provide or access the required
+devices and credentials. Earlier PRs must not mark it complete on the strength
+of mocks or unit tests.
+
+## Execution Order
+
+1. PR #143 - dependency security and audit enforcement.
+2. PR #144 - deterministic golden-path automation.
+3. PR #145 - unified action/bridge preflight.
+4. PR #146 - mobile release identity and EAS baseline.
+5. PR #147 - server production runtime hardening.
+6. PR #148 - offline and cast recovery UX.
+7. PR #149 - accessibility and responsive visual quality.
+8. PR #150 - real-target QA and RC evidence when available.
+
+Security comes first because the current CI knowingly tolerates severe findings.
+The automation harness comes next so later behavior changes have product-level
+regression coverage. Shared preflight then removes readiness drift before mobile,
+server, offline, cast, and visual work build on it.
+
+## Working Rules
+
+- Use small PRs from updated `master` with `codex/<task-name>` branches.
+- Do not persist or log raw media URLs, magnets, info hashes, bridge tokens,
+  signed gateway URLs, or local file paths.
+- Do not expose source selection as the default experience.
+- Do not call a download offline-ready without local-file verification.
+- Do not add Real-Debrid to onboarding or enable it by default.
+- Do not use mocks or unit tests to claim real-device support.
+- Keep [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) and
+  [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) conservative until PR #150.
