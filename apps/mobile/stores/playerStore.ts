@@ -26,6 +26,10 @@ export interface MediaInfo {
   episode?: number;
 }
 
+export type PlaybackLaunchIntent =
+  | { type: "play" }
+  | { type: "resume"; positionSeconds: number };
+
 export interface StreamMetrics {
   state: "finding_peers" | "connecting" | "downloading" | "ready";
   numPeers: number;
@@ -44,6 +48,7 @@ interface PlayerState {
   playbackSessionId: string | null;
   playbackCandidateId: string | null;
   playbackAttemptId: string | null;
+  playbackLaunchIntent: PlaybackLaunchIntent | null;
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
@@ -78,7 +83,9 @@ interface PlayerState {
     candidateId: string,
     attemptId?: string | null,
     fallbackReason?: string | null,
+    launchIntent?: PlaybackLaunchIntent | null,
   ) => void;
+  consumePlaybackLaunchIntent: () => PlaybackLaunchIntent | null;
   advanceToNextFallback: (reason?: string | null) => Stream | null;
   setPlaying: (playing: boolean) => void;
   setBuffering: (buffering: boolean) => void;
@@ -143,6 +150,7 @@ export const usePlayerStore = create<PlayerState>()(
       playbackSessionId: null,
       playbackCandidateId: null,
       playbackAttemptId: null,
+      playbackLaunchIntent: null,
       isPlaying: false,
       isBuffering: false,
       currentTime: 0,
@@ -176,6 +184,7 @@ export const usePlayerStore = create<PlayerState>()(
           playbackSessionId: null,
           playbackCandidateId: null,
           playbackAttemptId: null,
+          playbackLaunchIntent: null,
           isPlaying: false,
           isBuffering: true,
           streamState: "loading_metrics",
@@ -194,6 +203,7 @@ export const usePlayerStore = create<PlayerState>()(
         candidateId,
         attemptId = null,
         fallbackReason = null,
+        launchIntent,
       ) => {
         const state = get();
         if (state._eventSource) {
@@ -201,6 +211,13 @@ export const usePlayerStore = create<PlayerState>()(
           state._eventSource.close();
         }
         if (state._peerTimeout) clearTimeout(state._peerTimeout);
+
+        const nextLaunchIntent =
+          launchIntent !== undefined
+            ? launchIntent
+            : state.playbackSessionId === sessionId
+              ? state.playbackLaunchIntent
+              : null;
 
         set({
           currentStream: stream,
@@ -210,6 +227,7 @@ export const usePlayerStore = create<PlayerState>()(
           playbackSessionId: sessionId,
           playbackCandidateId: candidateId,
           playbackAttemptId: attemptId,
+          playbackLaunchIntent: nextLaunchIntent,
           isPlaying: false,
           isBuffering: true,
           currentTime: 0,
@@ -222,6 +240,11 @@ export const usePlayerStore = create<PlayerState>()(
           _eventSource: null,
           _peerTimeout: null,
         });
+      },
+      consumePlaybackLaunchIntent: () => {
+        const intent = get().playbackLaunchIntent;
+        set({ playbackLaunchIntent: null });
+        return intent;
       },
       advanceToNextFallback: (reason = null) => {
         const state = get();
@@ -544,6 +567,7 @@ export const usePlayerStore = create<PlayerState>()(
           playbackSessionId: null,
           playbackCandidateId: null,
           playbackAttemptId: null,
+          playbackLaunchIntent: null,
           isPlaying: false,
           isBuffering: false,
           currentTime: 0,

@@ -87,7 +87,9 @@ export function PlayerOverlay({
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
-              accessibilityLabel="Cast to Device"
+              accessibilityLabel={t("common.actions.castToDevice", {
+                defaultValue: "Cast to device",
+              })}
             >
               <MaterialIcons name="cast" size={20} color={colors.text} />
             </Pressable>

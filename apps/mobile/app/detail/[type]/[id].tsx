@@ -28,6 +28,7 @@ import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
 import type { PlaybackAction, PlaybackPlan, Stream } from "@streamer/shared";
 import {
+  playCandidate,
   playBest,
   prepareDownload,
 } from "../../../services/playback/PlaybackOrchestrator";
@@ -362,6 +363,52 @@ export default function DetailScreen() {
     if (plan) smartDownloads.planNextEpisode(plan);
   };
 
+  const handlePlayCandidate = async (
+    plan: PlaybackPlan,
+    candidateId: string,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => {
+    setPlaybackNotice(null);
+    setPlanningAction("play");
+    try {
+      const result = await playCandidate(
+        {
+          type: castType,
+          id: id || "unknown",
+          title: meta.name,
+          poster: meta.poster,
+          episodeTitle,
+          season,
+          episode,
+        },
+        plan,
+        candidateId,
+      );
+      if (!result.ok) {
+        setPlaybackNotice(
+          getPlaybackReadinessCopyFromError(
+            result.error,
+            "play",
+            result.resolveErrors,
+          ),
+        );
+        return;
+      }
+
+      setSessionStream(
+        result.stream,
+        result.mediaInfo,
+        result.sessionId,
+        result.candidateId,
+      );
+      router.push("/player");
+    } finally {
+      setPlanningAction(null);
+    }
+  };
+
   const handleDownloadStream = async (
     stream?: Stream,
     episodeTitle?: string,
@@ -413,6 +460,7 @@ export default function DetailScreen() {
               candidateId: result.candidateId,
               attemptId: result.attemptId,
             },
+            metadataBytes: result.plan.selectedCandidate?.sizeBytes,
           });
           maybePlanNextEpisode(season, episode);
           return;
@@ -487,6 +535,7 @@ export default function DetailScreen() {
     inLibrary: !!inLibrary,
     handleToggleLibrary,
     handlePlayStream,
+    handlePlayCandidate,
     handleDownloadStream,
     handleCastStream,
     planningAction,

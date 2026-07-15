@@ -1,7 +1,6 @@
 import {
   View,
   Text,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -36,6 +35,10 @@ import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRo
 import { useContinueWatching } from "../../hooks/useContinueWatching";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { buildHomeFeed } from "../../services/homeFeed";
+import { playBest } from "../../services/playback/PlaybackOrchestrator";
+import { usePlayerStore } from "../../stores/playerStore";
+import { useToastStore } from "../../stores/toastStore";
+import { MediaRail } from "../../components/ui/MediaRail";
 import {
   getWebFocusStyle,
   uiLayout,
@@ -125,10 +128,17 @@ function HomeRail({
 
   if (isLoading) {
     return (
-      <View style={styles.railContainer}>
-        <SectionHeader eyebrow={eyebrow} title={title} />
-        <SkeletonRow />
-      </View>
+      <MediaRail
+        style={styles.railContainer}
+        title={title}
+        eyebrow={eyebrow}
+        data={[] as MetaPreview[]}
+        cardWidth={cardWidth}
+        keyExtractor={(item) => `${item.type}:${item.id}`}
+        renderItem={(item) => <CatalogItemCard item={item} />}
+        loading
+        loadingContent={<SkeletonRow />}
+      />
     );
   }
 
@@ -136,19 +146,13 @@ function HomeRail({
 
   return (
     <View testID={testID} style={styles.railContainer}>
-      <SectionHeader eyebrow={eyebrow} title={title} />
-      <FlatList
-        horizontal
+      <MediaRail
+        title={title}
+        eyebrow={eyebrow}
         data={items}
-        keyExtractor={(item, index) => `${testID}-${item.id}-${index}`}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.railContent}
-        renderItem={({ item }) => (
-          <View style={[styles.railCard, { width: cardWidth }]}>
-            <CatalogItemCard item={item} />
-          </View>
-        )}
-        ListFooterComponent={<View style={styles.railEndSpacer} />}
+        cardWidth={cardWidth}
+        keyExtractor={(item) => `${testID}-${item.type}:${item.id}`}
+        renderItem={(item) => <CatalogItemCard item={item} />}
       />
       <View style={[styles.railDivider, { backgroundColor: colors.border }]} />
     </View>
@@ -230,6 +234,8 @@ function HomeContent() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const [heroLaunching, setHeroLaunching] = useState(false);
+  const setSessionStream = usePlayerStore((state) => state.setSessionStream);
 
   const movieCatalog = useInfiniteCatalog("movie");
   const seriesCatalog = useInfiniteCatalog("series");
@@ -249,18 +255,18 @@ function HomeContent() {
     [continueWatchingItems, movieItems, seriesItems],
   );
   const heroItem = homeFeed.hero;
-  const popularMovies =
-    homeFeed.rails.find((rail) => rail.key === "popular_movies")?.items ?? [];
-  const topSeries =
-    homeFeed.rails.find((rail) => rail.key === "top_series")?.items ?? [];
-  const finalRail = homeFeed.rails.find(
-    (rail) => rail.key === "recently_added" || rail.key === "more_to_watch",
-  );
+  const heroProgress = homeFeed.heroProgress;
+  const movies =
+    homeFeed.rails.find((rail) => rail.key === "movies")?.items ?? [];
+  const series =
+    homeFeed.rails.find((rail) => rail.key === "series")?.items ?? [];
+  const moreToWatch =
+    homeFeed.rails.find((rail) => rail.key === "more_to_watch")?.items ?? [];
   const claimedContentKeys = useMemo(() => {
     const claimed = new Set<string>();
     if (heroItem) claimed.add(`${heroItem.type}:${heroItem.id}`);
     continueWatchingItems.forEach((item) =>
-      claimed.add(`${item.type}:${item.id}`),
+      claimed.add(`${item.type}:${item.itemId}`),
     );
     homeFeed.rails.forEach((rail) =>
       rail.items.forEach((item) => claimed.add(`${item.type}:${item.id}`)),
@@ -284,6 +290,52 @@ function HomeContent() {
     ]);
     setRefreshing(false);
   }, [queryClient]);
+
+  const handleHeroPlayback = useCallback(async () => {
+    if (!heroItem || heroLaunching) return;
+    setHeroLaunching(true);
+    try {
+      const result = await playBest({
+        type: heroItem.type,
+        id: heroItem.id,
+        title: heroItem.name,
+        poster: heroItem.poster,
+        season: heroProgress?.season ?? undefined,
+        episode: heroProgress?.episode ?? undefined,
+      });
+      if (!result.ok) {
+        useToastStore.getState().show(result.error.message, "error");
+        return;
+      }
+
+      const shouldResume = (heroProgress?.currentTime ?? 0) >= 15;
+      setSessionStream(
+        result.stream,
+        result.mediaInfo,
+        result.sessionId,
+        result.candidateId,
+        null,
+        null,
+        shouldResume
+          ? {
+              type: "resume",
+              positionSeconds: heroProgress!.currentTime,
+            }
+          : { type: "play" },
+      );
+      router.push("/player");
+    } catch (error: any) {
+      useToastStore.getState().show(
+        error?.message ||
+          t("detail.errors.notPlayable", {
+            defaultValue: "Playback is unavailable right now.",
+          }),
+        "error",
+      );
+    } finally {
+      setHeroLaunching(false);
+    }
+  }, [heroItem, heroLaunching, heroProgress, router, setSessionStream, t]);
 
   if (!isHydrated) {
     return (
@@ -324,9 +376,25 @@ function HomeContent() {
     >
       <OfflineBanner />
 
-      {heroItem ? <HomeHeroBanner item={heroItem} /> : <HomeSkeleton />}
+      {heroItem ? (
+        <HomeHeroBanner
+          item={heroItem}
+          progress={heroProgress}
+          launching={heroLaunching}
+          onPrimaryAction={() => void handleHeroPlayback()}
+          onViewDetails={() =>
+            router.push(`/detail/${heroItem.type}/${heroItem.id}`)
+          }
+        />
+      ) : (
+        <HomeSkeleton />
+      )}
 
-      <ContinueWatchingRow />
+      <ContinueWatchingRow
+        excludeContentKey={
+          heroItem ? `${heroItem.type}:${heroItem.id}` : undefined
+        }
+      />
 
       {hasLoadError && (
         <View style={styles.stateWrap}>
@@ -353,30 +421,26 @@ function HomeContent() {
       )}
 
       <HomeRail
-        testID="home-popular-movies"
-        eyebrow="TRENDING"
-        title={t("home.sections.popularMovies")}
-        items={popularMovies}
+        testID="home-movies"
+        eyebrow={t("home.sections.catalogEyebrow")}
+        title={t("home.sections.movies")}
+        items={movies}
         isLoading={movieCatalog.isLoading}
       />
 
       <HomeRail
-        testID="home-top-series"
-        eyebrow="SERIES"
-        title={t("home.sections.topTVShows")}
-        items={topSeries}
+        testID="home-series"
+        eyebrow={t("home.sections.catalogEyebrow")}
+        title={t("home.sections.series")}
+        items={series}
         isLoading={seriesCatalog.isLoading}
       />
 
       <HomeRail
-        testID={`home-${finalRail?.key ?? "more-to-watch"}`}
-        eyebrow={finalRail?.key === "recently_added" ? "NEW" : "FOR YOU"}
-        title={
-          finalRail?.key === "recently_added"
-            ? t("home.sections.recentlyAdded")
-            : t("home.sections.moreToWatch", { defaultValue: "More to Watch" })
-        }
-        items={finalRail?.items ?? []}
+        testID="home-more-to-watch"
+        eyebrow={t("home.sections.exploreEyebrow")}
+        title={t("home.sections.moreToWatch")}
+        items={moreToWatch}
         isLoading={isLoading}
       />
 
@@ -447,16 +511,6 @@ const styles = StyleSheet.create({
   },
   railContainer: {
     marginBottom: uiSpacing.xxxl,
-  },
-  railContent: {
-    paddingLeft: 16,
-    gap: 12,
-  },
-  railCard: {
-    marginRight: 12,
-  },
-  railEndSpacer: {
-    width: 4,
   },
   railDivider: {
     height: StyleSheet.hairlineWidth,

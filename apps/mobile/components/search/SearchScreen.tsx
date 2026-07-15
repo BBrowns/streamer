@@ -407,7 +407,7 @@ export function SearchScreen() {
               />
 
               <View style={styles.discoveryHeading}>
-                <View>
+                <View style={styles.discoveryHeadingCopy}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
                     {t("search.discovery.title")}
                   </Text>
@@ -420,16 +420,30 @@ export function SearchScreen() {
                     {t("search.discovery.subtitle")}
                   </Text>
                 </View>
-                <ContentTabs
-                  options={typeOptions}
-                  value={typeFilter}
-                  onChange={(value) => {
-                    setTypeFilter(value);
-                    syncRoute({ type: value });
-                  }}
-                  style={styles.discoveryTypeFilter}
-                  accessibilityLabel={t("search.filters.type")}
-                />
+                <View style={styles.discoveryTypeControl}>
+                  <Text
+                    style={[
+                      styles.discoveryTypeLabel,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {t("search.filters.contentType", {
+                      defaultValue: "Content type",
+                    })}
+                  </Text>
+                  <ContentTabs
+                    options={typeOptions}
+                    value={typeFilter}
+                    onChange={(value) => {
+                      setTypeFilter(value);
+                      syncRoute({ type: value });
+                    }}
+                    style={styles.discoveryTypeFilter}
+                    accessibilityLabel={t("search.filters.contentType", {
+                      defaultValue: "Content type",
+                    })}
+                  />
+                </View>
               </View>
               <SearchDiscovery type={typeFilter} />
             </View>
@@ -727,10 +741,25 @@ const styles = StyleSheet.create({
   },
   discoveryHeading: {
     paddingHorizontal: 24,
-    alignItems: "flex-start",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  discoveryHeadingCopy: { flexGrow: 1, minWidth: 220 },
+  discoveryTypeControl: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
     gap: 10,
   },
-  discoveryTypeFilter: { marginTop: 2 },
+  discoveryTypeLabel: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  discoveryTypeFilter: { marginTop: 0 },
   resultsPage: { paddingHorizontal: 24 },
   toolbar: {
     minHeight: 52,

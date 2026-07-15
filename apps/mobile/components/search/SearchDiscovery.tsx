@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -20,6 +21,8 @@ import { useTheme } from "../../hooks/useTheme";
 import type { SearchTypeFilter } from "../../services/searchState";
 import { AppButton } from "../ui/AppButton";
 import { EmptyState } from "../ui/EmptyState";
+import { MediaRail } from "../ui/MediaRail";
+import { getWebFocusStyle, uiSpacing, uiTypography } from "../ui/designSystem";
 import { SearchResultCard } from "./SearchResultCard";
 
 function DiscoveryRail({
@@ -51,27 +54,40 @@ function DiscoveryRail({
     return (
       <View
         testID={`search-discovery-rail-error-${addon.id}-${catalog.id}`}
-        style={styles.rail}
+        style={styles.inlineFailure}
       >
-        <View style={styles.railHeader}>
-          <Text style={[styles.railTitle, { color: colors.text }]}>
+        <Ionicons
+          name="cloud-offline-outline"
+          size={18}
+          color={colors.warning}
+        />
+        <View style={styles.inlineFailureCopy}>
+          <Text style={[styles.inlineFailureTitle, { color: colors.text }]}>
             {catalog.name}
           </Text>
-          <Text style={[styles.railProvider, { color: colors.textSecondary }]}>
-            {addon.manifest.name}
+          <Text
+            style={[styles.inlineFailureBody, { color: colors.textSecondary }]}
+          >
+            {t("search.discovery.inlineCatalogError", {
+              defaultValue: "{{provider}} could not load this catalog.",
+              provider: addon.manifest.name,
+            })}
           </Text>
         </View>
-        <View style={[styles.railFailure, { backgroundColor: colors.card }]}>
-          <EmptyState
-            fill={false}
-            size="small"
-            icon="cloud-offline-outline"
-            title={t("search.discovery.catalogErrorTitle")}
-            description={t("search.discovery.catalogErrorDescription")}
-            actionLabel={t("common.retry")}
-            onAction={() => void refetch()}
-          />
-        </View>
+        <Pressable
+          onPress={() => void refetch()}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.retry")}
+          style={({ pressed, focused }: any) => [
+            styles.inlineRetry,
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <Text style={[styles.inlineRetryText, { color: colors.tint }]}>
+            {t("common.retry")}
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -79,34 +95,16 @@ function DiscoveryRail({
   if (!isLoading && items.length === 0) return null;
 
   return (
-    <View style={styles.rail}>
-      <View style={styles.railHeader}>
-        <Text style={[styles.railTitle, { color: colors.text }]}>
-          {catalog.name}
-        </Text>
-        <Text style={[styles.railProvider, { color: colors.textSecondary }]}>
-          {addon.manifest.name}
-        </Text>
-      </View>
-      {isLoading ? (
-        <View style={styles.railLoading}>
-          <ActivityIndicator color={colors.tint} />
-        </View>
-      ) : (
-        <FlatList<MetaPreview>
-          horizontal
-          data={items}
-          keyExtractor={(item) => `${item.type}:${item.id}`}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.railList}
-          renderItem={({ item }) => (
-            <View style={styles.railCard}>
-              <SearchResultCard item={item} />
-            </View>
-          )}
-        />
-      )}
-    </View>
+    <MediaRail<MetaPreview>
+      title={catalog.name}
+      subtitle={addon.manifest.name}
+      data={items}
+      loading={isLoading}
+      cardWidth={154}
+      contentPadding={24}
+      keyExtractor={(item) => `${item.type}:${item.id}`}
+      renderItem={(item) => <SearchResultCard item={item} />}
+    />
   );
 }
 
@@ -224,30 +222,30 @@ export function SearchDiscovery({ type }: { type: SearchTypeFilter }) {
 }
 
 const styles = StyleSheet.create({
-  discovery: { gap: 24 },
+  discovery: { gap: 28 },
   discoveryLoading: {
     minHeight: 180,
     alignItems: "center",
     justifyContent: "center",
   },
   discoveryError: { minHeight: 220, justifyContent: "center" },
-  rail: { gap: 12 },
-  railHeader: { paddingHorizontal: 24, gap: 2 },
-  railTitle: { fontSize: 20, lineHeight: 25, fontWeight: "800" },
-  railProvider: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
-  railLoading: {
-    minHeight: 180,
+  inlineFailure: {
+    minHeight: 64,
+    marginHorizontal: uiSpacing.xxl,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: uiSpacing.md,
   },
-  railFailure: {
-    minHeight: 180,
-    marginHorizontal: 24,
-    borderRadius: 12,
+  inlineFailureCopy: { flex: 1, minWidth: 0 },
+  inlineFailureTitle: { ...uiTypography.label },
+  inlineFailureBody: { ...uiTypography.caption, marginTop: 2 },
+  inlineRetry: {
+    minHeight: 44,
     justifyContent: "center",
+    paddingHorizontal: uiSpacing.sm,
   },
-  railList: { paddingHorizontal: 24, gap: 14 },
-  railCard: { width: 154 },
+  inlineRetryText: { ...uiTypography.control },
+  pressed: { opacity: 0.7 },
   noCatalogs: {
     minHeight: 220,
     marginHorizontal: 24,
