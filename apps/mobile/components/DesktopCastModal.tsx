@@ -10,6 +10,7 @@ import {
   Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { castService, type CastDevice } from "../services/CastService";
 import {
   prepareCast,
@@ -26,10 +27,18 @@ import {
   getChromecastDeviceProfile,
   type CastDeviceCapabilities,
 } from "../services/playback/deviceProfile";
-import { uiRadii, uiSpacing, uiTypography } from "./ui/designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "./ui/designSystem";
 import { AppButton } from "./ui/AppButton";
 import { getCastRecovery } from "../services/actionRecovery";
 import type { CastRecoveryGuidance } from "../types/actionRecovery";
+import { useTheme } from "../hooks/useTheme";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 
 export interface CastStartDetails {
   sessionId?: string;
@@ -71,6 +80,9 @@ export function DesktopCastModal({
   onOpenSourcesDevices,
   onCastStart,
 }: Props) {
+  const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
+  const { t } = useTranslation();
   const [devices, setDevices] = useState<CastDevice[]>([]);
   const [loading, setLoading] = useState(false);
   const [castingTo, setCastingTo] = useState<string | null>(null);
@@ -331,42 +343,60 @@ export function DesktopCastModal({
 
   const sourceStatusText =
     sourceReadiness === "preparing"
-      ? "Preparing a cast-ready source..."
+      ? t("player.controls.remuxPreparing", {
+          defaultValue: "Preparing a cast-ready source...",
+        })
       : sourceReadiness === "fallback"
-        ? "Trying another compatible source..."
+        ? t("player.status.tryingFallback", {
+            defaultValue: "Trying another compatible source...",
+          })
         : sourceReadiness === "ready"
           ? preparedCast?.plan.requiresRemux
-            ? "Compatible stream prepared through the desktop bridge."
+            ? "A compatible stream is ready. Choose a display."
             : "Source ready. Choose a display."
           : sourceReadiness === "failed"
             ? "A cast-ready source could not be prepared."
             : null;
+  const readinessColor =
+    sourceReadiness === "failed"
+      ? colors.error
+      : sourceReadiness === "fallback"
+        ? colors.warning
+        : sourceReadiness === "ready"
+          ? colors.success
+          : colors.tint;
 
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType={reducedMotion ? "none" : "fade"}
       transparent
       onRequestClose={onClose}
     >
-      <View
-        style={[
-          styles.overlay,
-          Platform.OS === "web" && ({ backdropFilter: "blur(12px)" } as any),
-        ]}
-      >
-        <View style={styles.container}>
+      <View style={[styles.overlay, { backgroundColor: colors.scrim }]}>
+        <View
+          accessibilityViewIsModal
+          accessibilityLabel={t("player.controls.cast", {
+            defaultValue: "Cast",
+          })}
+          style={[styles.container, { backgroundColor: colors.card }]}
+        >
           <View style={styles.header}>
             <View style={styles.headerTextContainer}>
               <MaterialIcons
                 name="cast"
                 size={24}
-                color="#c4b5fd"
+                color={colors.tint}
                 style={styles.headerIcon}
               />
               <View>
-                <Text style={styles.title}>Cast to a display</Text>
-                <Text style={styles.subtitle} numberOfLines={1}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {t("player.controls.cast", { defaultValue: "Cast" })}
+                </Text>
+                <Text
+                  style={[styles.subtitle, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
                   {title}
                 </Text>
               </View>
@@ -374,13 +404,24 @@ export function DesktopCastModal({
             <Pressable
               onPress={onClose}
               hitSlop={10}
-              accessibilityLabel="Close cast dialog"
-              style={({ pressed }) => [
+              accessibilityRole="button"
+              accessibilityLabel={t("player.controls.close", {
+                defaultValue: "Close",
+              })}
+              style={({ pressed, focused }: any) => [
                 styles.closeBtnWrapper,
+                { backgroundColor: colors.surfaceElevated },
                 pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
               ]}
             >
-              <MaterialIcons name="close" size={22} color="#c4c1d0" />
+              <MaterialIcons
+                name="close"
+                size={22}
+                color={colors.textSecondary}
+              />
             </Pressable>
           </View>
 
@@ -388,23 +429,38 @@ export function DesktopCastModal({
             <View
               style={[
                 styles.readiness,
-                sourceReadiness === "failed" && styles.readinessFailed,
+                {
+                  backgroundColor: readinessColor + "12",
+                  borderColor: readinessColor + "38",
+                },
               ]}
             >
               {sourceReadiness === "preparing" ? (
-                <ActivityIndicator size="small" color="#c4b5fd" />
+                <ActivityIndicator size="small" color={readinessColor} />
               ) : (
                 <MaterialIcons
-                  name={sourceReadiness === "ready" ? "check-circle" : "error"}
+                  name={
+                    sourceReadiness === "ready"
+                      ? "check-circle"
+                      : sourceReadiness === "fallback"
+                        ? "sync"
+                        : "error"
+                  }
                   size={18}
-                  color={sourceReadiness === "ready" ? "#86efac" : "#fda4af"}
+                  color={readinessColor}
                 />
               )}
-              <Text style={styles.readinessText}>{sourceStatusText}</Text>
+              <Text style={[styles.readinessText, { color: colors.text }]}>
+                {sourceStatusText}
+              </Text>
             </View>
           )}
 
-          {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+          {errorMessage && (
+            <Text style={[styles.errorText, { color: colors.error }]}>
+              {errorMessage}
+            </Text>
+          )}
           {recovery && recovery.action !== "choose_compatible_device" ? (
             <AppButton
               label={recovery.actionLabel}
@@ -422,13 +478,15 @@ export function DesktopCastModal({
 
           {loading && devices.length === 0 ? (
             <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color="#c4b5fd" />
-              <Text style={styles.emptyText}>Searching for displays...</Text>
+              <ActivityIndicator size="large" color={colors.tint} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                Searching for displays...
+              </Text>
             </View>
           ) : devices.length === 0 ? (
             <View style={styles.centerBox}>
-              <MaterialIcons name="tv-off" size={44} color="#777386" />
-              <Text style={styles.emptyText}>
+              <MaterialIcons name="tv-off" size={44} color={colors.disabled} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No displays found on this network
               </Text>
             </View>
@@ -450,11 +508,35 @@ export function DesktopCastModal({
                   item.type === "chromecast" ? "cast" : "airplay";
                 return (
                   <Pressable
-                    style={({ pressed }) => [
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name}. ${
+                      isCasting
+                        ? t("player.cast.castingTo", {
+                            name: item.name,
+                            defaultValue: "Connecting to display...",
+                          })
+                        : `Available. ${getDeviceCapabilitySummary(item)}`
+                    }`}
+                    accessibilityState={{
+                      disabled: deviceDisabled,
+                      busy: isCasting,
+                    }}
+                    style={({ hovered, pressed, focused }: any) => [
                       styles.deviceItem,
-                      isCasting && styles.deviceItemActive,
+                      { backgroundColor: colors.surfaceElevated },
+                      hovered &&
+                        !deviceDisabled && {
+                          backgroundColor: colors.surfaceSubtle,
+                        },
+                      isCasting && {
+                        backgroundColor: colors.tint,
+                        borderColor: colors.tint,
+                      },
                       pressed && !deviceDisabled && styles.pressed,
                       deviceDisabled && !isCasting && styles.deviceDisabled,
+                      Platform.OS === "web" &&
+                        focused &&
+                        getWebFocusStyle(colors.focus),
                     ]}
                     onPress={() => handleCast(item)}
                     disabled={deviceDisabled}
@@ -463,13 +545,15 @@ export function DesktopCastModal({
                       <MaterialIcons
                         name={iconName}
                         size={26}
-                        color={isCasting ? "#ffffff" : "#c4b5fd"}
+                        color={isCasting ? colors.onTint : colors.tint}
                       />
                       <View style={styles.deviceTextCol}>
                         <Text
                           style={[
                             styles.deviceName,
-                            isCasting && styles.deviceNameActive,
+                            {
+                              color: isCasting ? colors.onTint : colors.text,
+                            },
                           ]}
                         >
                           {item.name}
@@ -477,22 +561,29 @@ export function DesktopCastModal({
                         <Text
                           style={[
                             styles.deviceType,
-                            isCasting && styles.deviceTypeActive,
+                            {
+                              color: isCasting
+                                ? colors.onTint
+                                : colors.textSecondary,
+                            },
                           ]}
                         >
                           {isCasting
-                            ? "Connecting to display..."
+                            ? t("player.cast.castingTo", {
+                                name: item.name,
+                                defaultValue: "Connecting to display...",
+                              })
                             : `Available · ${getDeviceCapabilitySummary(item)}`}
                         </Text>
                       </View>
                     </View>
                     {isCasting ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
+                      <ActivityIndicator size="small" color={colors.onTint} />
                     ) : (
                       <MaterialIcons
                         name="chevron-right"
                         size={24}
-                        color="#777386"
+                        color={colors.textSecondary}
                       />
                     )}
                   </Pressable>
@@ -502,9 +593,14 @@ export function DesktopCastModal({
           )}
 
           <Pressable
-            style={({ pressed }) => [
+            accessibilityRole="button"
+            accessibilityState={{ disabled: loading, busy: loading }}
+            style={({ pressed, focused }: any) => [
               styles.refreshBtn,
               pressed && styles.pressed,
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
             ]}
             onPress={fetchDevices}
             disabled={loading}
@@ -512,11 +608,14 @@ export function DesktopCastModal({
             <MaterialIcons
               name="refresh"
               size={20}
-              color={loading ? "#777386" : "#d8d4e3"}
+              color={loading ? colors.disabled : colors.text}
               style={styles.refreshIcon}
             />
             <Text
-              style={[styles.refreshText, loading && styles.refreshDisabled]}
+              style={[
+                styles.refreshText,
+                { color: loading ? colors.disabled : colors.text },
+              ]}
             >
               {loading ? "Scanning..." : "Refresh displays"}
             </Text>
@@ -530,20 +629,16 @@ export function DesktopCastModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(9, 10, 18, 0.58)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: uiSpacing.xl,
   },
   container: {
-    backgroundColor: "rgba(24, 24, 36, 0.94)",
-    borderRadius: uiRadii.lg,
-    padding: uiSpacing.xl + 2,
+    borderRadius: uiRadii.sheet,
+    padding: uiSpacing.xxl,
     width: "100%",
     maxWidth: 440,
     maxHeight: "80%",
-    borderWidth: 1,
-    borderColor: "rgba(221, 214, 254, 0.18)",
   },
   header: {
     flexDirection: "row",
@@ -561,21 +656,19 @@ const styles = StyleSheet.create({
     marginRight: uiSpacing.sm + 2,
   },
   title: {
-    color: "#ffffff",
     ...uiTypography.title,
-    fontWeight: "800",
   },
   subtitle: {
-    color: "#a8a4b8",
-    fontSize: 13,
-    lineHeight: 18,
+    ...uiTypography.label,
     marginTop: 2,
     maxWidth: 300,
   },
   closeBtnWrapper: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    padding: uiSpacing.sm - 1,
-    borderRadius: uiRadii.xs,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: uiRadii.control,
   },
   pressed: {
     opacity: 0.72,
@@ -584,29 +677,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: uiSpacing.sm,
-    backgroundColor: "rgba(134, 239, 172, 0.08)",
     borderWidth: 1,
-    borderColor: "rgba(134, 239, 172, 0.18)",
-    borderRadius: uiRadii.xs,
+    borderRadius: uiRadii.card,
     paddingHorizontal: uiSpacing.md,
     paddingVertical: uiSpacing.sm + 2,
     marginBottom: uiSpacing.md,
   },
-  readinessFailed: {
-    backgroundColor: "rgba(253, 164, 175, 0.08)",
-    borderColor: "rgba(253, 164, 175, 0.18)",
-  },
   readinessText: {
-    color: "#dedbea",
-    ...uiTypography.caption,
-    fontSize: 13,
-    fontWeight: "600",
+    ...uiTypography.label,
     flex: 1,
   },
   errorText: {
-    color: "#fda4af",
-    fontSize: 13,
-    lineHeight: 18,
+    ...uiTypography.label,
     marginBottom: uiSpacing.md,
   },
   recoveryButton: {
@@ -615,32 +697,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: uiSpacing.lg,
   },
   emptyText: {
-    color: "#a8a4b8",
+    ...uiTypography.body,
     textAlign: "center",
-    marginTop: 12,
-    fontSize: 15,
+    marginTop: uiSpacing.md,
   },
   centerBox: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 34,
+    paddingVertical: uiSpacing.xxxl,
   },
   deviceList: {
-    gap: uiSpacing.sm + 2,
+    gap: uiSpacing.md,
   },
   deviceItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255, 255, 255, 0.045)",
-    padding: uiSpacing.lg - 1,
-    borderRadius: uiRadii.xs,
+    minHeight: 72,
+    padding: uiSpacing.lg,
+    borderRadius: uiRadii.card,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.07)",
-  },
-  deviceItemActive: {
-    backgroundColor: "rgba(139, 92, 246, 0.28)",
-    borderColor: "rgba(196, 181, 253, 0.7)",
+    borderColor: "transparent",
   },
   deviceDisabled: {
     opacity: 0.55,
@@ -658,38 +735,28 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   deviceName: {
-    color: "#f5f3ff",
-    fontSize: 16,
-    fontWeight: "600",
+    ...uiTypography.label,
+    fontSize: 15,
+    lineHeight: 20,
     marginBottom: 3,
   },
-  deviceNameActive: {
-    color: "#ffffff",
-  },
   deviceType: {
-    color: "#a8a4b8",
-    fontSize: 12,
+    ...uiTypography.caption,
     textTransform: "capitalize",
-  },
-  deviceTypeActive: {
-    color: "#ede9fe",
   },
   refreshBtn: {
     marginTop: uiSpacing.xl - 2,
-    padding: uiSpacing.md,
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.md,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: uiRadii.control,
   },
   refreshIcon: {
     marginRight: uiSpacing.sm,
   },
   refreshText: {
-    color: "#d8d4e3",
     ...uiTypography.control,
-    fontWeight: "700",
-  },
-  refreshDisabled: {
-    color: "#777386",
   },
 });

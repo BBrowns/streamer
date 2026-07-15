@@ -21,7 +21,7 @@ interface PlayerOverlayProps {
 
 export function PlayerOverlay({
   currentStream,
-  engineType,
+  engineType: _engineType,
   stats,
   onClose,
   onSettings,
@@ -30,7 +30,7 @@ export function PlayerOverlay({
   isPiPSupported = false,
   showInfoBar = true,
 }: PlayerOverlayProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
   return (
@@ -40,9 +40,7 @@ export function PlayerOverlay({
         style={[
           styles.topBar,
           {
-            backgroundColor: isDark
-              ? "rgba(0,0,0,0.8)"
-              : "rgba(255,255,255,0.85)",
+            backgroundColor: colors.surfaceOverlay,
             paddingTop: Platform.OS === "web" ? 20 : 60,
           },
         ]}
@@ -50,12 +48,12 @@ export function PlayerOverlay({
         <Pressable
           style={({ hovered, focused }: any) => [
             styles.closeButton,
-            { backgroundColor: colors.tint + "15" },
+            { backgroundColor: colors.surfaceElevated },
             hovered && {
-              backgroundColor: colors.tint + "25",
+              backgroundColor: colors.card,
               transform: [{ scale: 1.05 }],
             },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={onClose}
           accessibilityRole="button"
@@ -80,12 +78,12 @@ export function PlayerOverlay({
             <Pressable
               style={({ hovered, focused }: any) => [
                 styles.iconButton,
-                { backgroundColor: colors.tint + "15" },
+                { backgroundColor: colors.surfaceElevated },
                 hovered && {
-                  backgroundColor: colors.tint + "25",
+                  backgroundColor: colors.card,
                   transform: [{ scale: 1.1 }],
                 },
-                focused && getWebFocusStyle(colors.tint),
+                focused && getWebFocusStyle(colors.focus),
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
@@ -98,14 +96,14 @@ export function PlayerOverlay({
             <Pressable
               style={({ hovered, focused }: any) => [
                 styles.iconButton,
-                { backgroundColor: colors.tint + "15" },
+                { backgroundColor: colors.surfaceElevated },
                 hovered && {
-                  backgroundColor: colors.tint + "25",
+                  backgroundColor: colors.card,
                   transform: [{ scale: 1.1 }],
                 },
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(colors.tint),
+                  getWebFocusStyle(colors.focus),
               ]}
               onPress={onTogglePiP}
               accessibilityRole="button"
@@ -121,12 +119,14 @@ export function PlayerOverlay({
           <Pressable
             style={({ hovered, focused }: any) => [
               styles.iconButton,
-              { backgroundColor: colors.tint + "15" },
+              { backgroundColor: colors.surfaceElevated },
               hovered && {
-                backgroundColor: colors.tint + "25",
+                backgroundColor: colors.card,
                 transform: [{ scale: 1.1 }],
               },
-              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
             ]}
             onPress={onSettings}
             accessibilityRole="button"
@@ -143,9 +143,7 @@ export function PlayerOverlay({
           style={[
             styles.infoBar,
             {
-              backgroundColor: isDark
-                ? "rgba(10,10,26,0.95)"
-                : "rgba(255,255,255,0.95)",
+              backgroundColor: colors.surfaceOverlay,
               borderTopWidth: 1,
               borderTopColor: colors.border,
             },
@@ -158,11 +156,8 @@ export function PlayerOverlay({
               t("player.controls.nowPlaying")}
           </Text>
           <View style={styles.infoSubRow}>
-            <Text style={[styles.engineText, { color: colors.textSecondary }]}>
-              {t("player.controls.engine")}: {engineType}
-            </Text>
             {stats.peers > 0 && (
-              <Text style={[styles.speedText, { color: colors.tint }]}>
+              <Text style={[styles.speedText, { color: colors.textSecondary }]}>
                 ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers}{" "}
                 {t("player.controls.peers")}
               </Text>
@@ -194,47 +189,42 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 16,
     paddingBottom: 8,
-    backgroundColor: "rgba(0,0,0,0.8)",
     pointerEvents: "auto",
   },
   closeButton: {
-    backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 24,
+    borderRadius: 8,
     minWidth: 44,
     minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
   },
-  closeButtonText: { color: "#f8fafc", fontWeight: "600", fontSize: 14 },
+  closeButtonText: { fontWeight: "600", fontSize: 14 },
   topControls: { flexDirection: "row", alignItems: "center", gap: 12 },
   iconButton: {
-    backgroundColor: "rgba(255,255,255,0.1)",
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
   },
   infoBar: {
-    backgroundColor: "rgba(10,10,26,0.95)",
     alignSelf: "center",
     width: "94%",
     maxWidth: 920,
     marginTop: 10,
-    borderRadius: 22,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     pointerEvents: "auto",
   },
-  infoTitle: { color: "#f8fafc", fontWeight: "bold", fontSize: 15 },
+  infoTitle: { fontWeight: "bold", fontSize: 15 },
   infoSubRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginTop: 4,
   },
-  engineText: { color: "#a1a1aa", fontSize: 11 },
-  speedText: { color: "#818cf8", fontSize: 11, fontWeight: "600" },
+  speedText: { fontSize: 11, fontWeight: "600" },
 });

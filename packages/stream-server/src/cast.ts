@@ -148,15 +148,25 @@ router.post("/play", async (req: Request, res: Response) => {
 });
 
 router.post("/control", async (req: Request, res: Response) => {
-  const { deviceId, action } = req.body as { deviceId: string; action: string };
+  const { deviceId, action, position } = req.body as {
+    deviceId: string;
+    action: string;
+    position?: number;
+  };
   const device = devices.find((d) => d.id === deviceId);
 
   if (!device) {
     return res.status(404).json({ error: "Device not found" });
   }
 
-  if (!["pause", "resume", "play", "stop"].includes(action)) {
+  if (!["pause", "resume", "play", "stop", "seek"].includes(action)) {
     return res.status(400).json({ error: "Unknown action" });
+  }
+  if (
+    action === "seek" &&
+    (typeof position !== "number" || !Number.isFinite(position) || position < 0)
+  ) {
+    return res.status(400).json({ error: "Invalid seek position" });
   }
 
   try {
@@ -193,6 +203,7 @@ router.post("/control", async (req: Request, res: Response) => {
       const cb = (err: Error) => (err ? reject(err) : resolve());
       if (action === "pause") player.pause(cb);
       else if (action === "stop") player.stop(cb);
+      else if (action === "seek") player.seek(position, cb);
       else player.play(cb);
     });
 
@@ -200,6 +211,53 @@ router.post("/control", async (req: Request, res: Response) => {
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message ?? "Control failed" });
+  }
+});
+
+router.get("/status/:deviceId", async (req: Request, res: Response) => {
+  const device = devices.find(
+    (candidate) => candidate.id === req.params.deviceId,
+  );
+  if (!device) return res.status(404).json({ error: "Device not found" });
+
+  try {
+    const { Client, DefaultMediaReceiver } = await import("castv2-client");
+    const client = new Client() as unknown as CastClientType;
+    await new Promise<void>((resolve, reject) => {
+      client.connect({ host: device.host, port: device.port }, (err: Error) =>
+        err ? reject(err) : resolve(),
+      );
+    });
+    const sessions: any[] = await new Promise((resolve, reject) => {
+      client.getSessions((err: Error, currentSessions: any[]) =>
+        err ? reject(err) : resolve(currentSessions),
+      );
+    });
+    if (!sessions.length) {
+      client.close();
+      return res.status(404).json({ error: "No active session" });
+    }
+    const player: any = await new Promise((resolve, reject) => {
+      client.join(sessions[0], DefaultMediaReceiver, (err: Error, app: any) =>
+        err ? reject(err) : resolve(app),
+      );
+    });
+    const status: any = await new Promise((resolve, reject) => {
+      player.getStatus((err: Error, currentStatus: any) =>
+        err ? reject(err) : resolve(currentStatus),
+      );
+    });
+    client.close();
+    return res.json({
+      currentTime: Number(status?.currentTime) || 0,
+      duration: Number(status?.media?.duration) || 0,
+      isPaused: status?.playerState !== "PLAYING",
+      playerState: status?.playerState || "UNKNOWN",
+    });
+  } catch (err: any) {
+    return res
+      .status(500)
+      .json({ error: redactSensitiveText(err?.message ?? "Status failed") });
   }
 });
 

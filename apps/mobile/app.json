@@ -34,7 +34,13 @@
     "plugins": [
       "expo-router",
       "react-native-google-cast",
-      "expo-video",
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": true,
+          "supportsBackgroundPlayback": true
+        }
+      ],
       "expo-font",
       "expo-secure-store",
       "expo-image"

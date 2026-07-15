@@ -3,15 +3,26 @@ import {
   Text,
   Pressable,
   Modal,
-  FlatList,
+  ScrollView,
   StyleSheet,
+  Platform,
 } from "react-native";
+import { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import type {
   AudioTrack,
   SubtitleTrack,
 } from "../../services/streamEngine/IStreamEngine";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 
 interface PlayerSettingsModalProps {
   visible: boolean;
@@ -34,195 +45,264 @@ export function PlayerSettingsModal({
   playbackRate,
   onSelectPlaybackRate,
 }: PlayerSettingsModalProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
+  const reducedMotion = useReducedMotion();
+  const [focusedControl, setFocusedControl] = useState<string | null>(null);
+
+  const webFocusProps = (control: string) =>
+    Platform.OS === "web"
+      ? {
+          onFocus: () => setFocusedControl(control),
+          onBlur: () => setFocusedControl(null),
+        }
+      : {};
 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={reducedMotion ? "none" : "slide"}
       transparent
       onRequestClose={onClose}
     >
-      <View
-        style={[
-          styles.modalBg,
-          { backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.3)" },
-        ]}
-      >
+      <View style={[styles.modalBg, { backgroundColor: colors.scrim }]}>
         <View
           style={[
             styles.sheetContent,
             {
-              backgroundColor: colors.card,
-              borderTopColor: colors.border,
-              borderTopWidth: 1,
+              backgroundColor: colors.surfaceElevated,
             },
           ]}
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>
-              ⚙️ {t("player.settings.title")}
+              {t("player.settings.title")}
             </Text>
             <Pressable
+              {...webFocusProps("done")}
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel={t("player.settings.done")}
+              style={({ pressed }) => [
+                styles.doneButton,
+                pressed && { backgroundColor: colors.surfaceSubtle },
+                focusedControl === "done" && getWebFocusStyle(colors.focus),
+              ]}
             >
-              <Text style={[styles.doneText, { color: colors.tint }]}>
+              <Text style={[styles.doneText, { color: colors.text }]}>
                 {t("player.settings.done")}
               </Text>
             </Pressable>
           </View>
 
-          {/* Playback Speed */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            ⏩ {t("player.settings.speed")}
-          </Text>
-          <View style={styles.speedRow}>
-            {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
-              <Pressable
-                key={rate}
-                style={[
-                  styles.speedBtn,
-                  {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.05)",
-                  },
-                  playbackRate === rate && {
-                    backgroundColor: colors.tint + "15",
-                  },
-                ]}
-                onPress={() => onSelectPlaybackRate(rate)}
-              >
-                <Text
-                  style={[
-                    styles.speedBtnText,
-                    { color: colors.textSecondary },
-                    playbackRate === rate && {
-                      color: colors.tint,
-                      fontWeight: "bold",
-                    },
-                  ]}
-                >
-                  {rate}x
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Audio Tracks */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.textSecondary, marginTop: 20 },
-            ]}
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            🔊 {t("player.settings.audio")}
-          </Text>
-          {audioTracks.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t("player.settings.noAudio")}
-            </Text>
-          ) : (
-            <FlatList
-              data={audioTracks}
-              keyExtractor={(t) => t.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={[
-                    styles.trackRow,
-                    item.active && { backgroundColor: colors.tint + "15" },
-                  ]}
-                  onPress={() => onSelectAudio(item.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Audio: ${item.label}${item.active ? ", selected" : ""}`}
-                >
-                  <Text style={[styles.trackLabel, { color: colors.text }]}>
-                    {item.label}
-                  </Text>
-                  <Text
-                    style={[styles.trackLang, { color: colors.textSecondary }]}
-                  >
-                    {item.language}
-                  </Text>
-                  {item.active && (
-                    <Text style={[styles.checkIcon, { color: colors.tint }]}>
-                      ✓
-                    </Text>
-                  )}
-                </Pressable>
-              )}
-            />
-          )}
-
-          {/* Subtitles */}
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: colors.textSecondary, marginTop: 20 },
-            ]}
-          >
-            💬 {t("player.settings.subtitles")}
-          </Text>
-          {subtitles.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {t("player.settings.noSubtitles")}
-            </Text>
-          ) : (
-            <>
-              <Pressable
-                style={[
-                  styles.trackRow,
-                  subtitles.every((s) => !s.active) && {
-                    backgroundColor: colors.tint + "15",
-                  },
-                ]}
-                onPress={() => onSelectSubtitle(null)}
-                accessibilityRole="button"
-                accessibilityLabel={t("player.settings.off")}
-              >
-                <Text style={[styles.trackLabel, { color: colors.text }]}>
-                  {t("player.settings.off")}
-                </Text>
-              </Pressable>
-              <FlatList
-                data={subtitles}
-                keyExtractor={(t) => t.id}
-                scrollEnabled={false}
-                renderItem={({ item }) => (
+            {/* Playback Speed */}
+            <View style={styles.sectionHeader}>
+              <Ionicons
+                name="speedometer-outline"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t("player.settings.speed")}
+              </Text>
+            </View>
+            <View style={styles.speedRow}>
+              {[0.5, 1, 1.25, 1.5, 2].map((rate) => {
+                const control = `speed-${rate}`;
+                const selected = playbackRate === rate;
+                return (
                   <Pressable
-                    style={[
-                      styles.trackRow,
-                      item.active && { backgroundColor: colors.tint + "15" },
+                    {...webFocusProps(control)}
+                    key={rate}
+                    style={({ pressed }) => [
+                      styles.speedBtn,
+                      {
+                        backgroundColor: selected
+                          ? colors.tint + "18"
+                          : colors.surfaceSubtle,
+                      },
+                      pressed && { opacity: 0.78 },
+                      focusedControl === control &&
+                        getWebFocusStyle(colors.focus),
                     ]}
-                    onPress={() => onSelectSubtitle(item.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Subtitle: ${item.label}${item.active ? ", selected" : ""}`}
+                    onPress={() => onSelectPlaybackRate(rate)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`${t("player.settings.speed")}: ${rate}x`}
                   >
-                    <Text style={[styles.trackLabel, { color: colors.text }]}>
-                      {item.label}
-                    </Text>
                     <Text
                       style={[
-                        styles.trackLang,
-                        { color: colors.textSecondary },
+                        styles.speedBtnText,
+                        {
+                          color: selected ? colors.tint : colors.textSecondary,
+                        },
                       ]}
                     >
-                      {item.language}
+                      {rate}x
                     </Text>
-                    {item.active && (
-                      <Text style={[styles.checkIcon, { color: colors.tint }]}>
-                        ✓
-                      </Text>
-                    )}
                   </Pressable>
-                )}
+                );
+              })}
+            </View>
+
+            {/* Audio Tracks */}
+            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
+              <Ionicons
+                name="volume-high-outline"
+                size={18}
+                color={colors.textSecondary}
               />
-            </>
-          )}
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t("player.settings.audio")}
+              </Text>
+            </View>
+            {audioTracks.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t("player.settings.noAudio")}
+              </Text>
+            ) : (
+              <View accessibilityRole="radiogroup">
+                {audioTracks.map((item) => {
+                  const control = `audio-${item.id}`;
+                  return (
+                    <Pressable
+                      {...webFocusProps(control)}
+                      key={item.id}
+                      style={({ pressed }) => [
+                        styles.trackRow,
+                        {
+                          backgroundColor: item.active
+                            ? colors.tint + "18"
+                            : "transparent",
+                        },
+                        pressed && { backgroundColor: colors.surfaceSubtle },
+                        focusedControl === control &&
+                          getWebFocusStyle(colors.focus),
+                      ]}
+                      onPress={() => onSelectAudio(item.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: !!item.active }}
+                      accessibilityLabel={`${t("player.settings.audio")}: ${item.label}`}
+                    >
+                      <Text style={[styles.trackLabel, { color: colors.text }]}>
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.trackLang,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {item.language}
+                      </Text>
+                      {item.active && (
+                        <Text
+                          style={[styles.checkIcon, { color: colors.tint }]}
+                        >
+                          ✓
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Subtitles */}
+            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
+              <Ionicons
+                name="text-outline"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t("player.settings.subtitles")}
+              </Text>
+            </View>
+            {subtitles.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {t("player.settings.noSubtitles")}
+              </Text>
+            ) : (
+              <>
+                <Pressable
+                  {...webFocusProps("subtitle-off")}
+                  style={({ pressed }) => [
+                    styles.trackRow,
+                    subtitles.every((s) => !s.active) && {
+                      backgroundColor: colors.tint + "18",
+                    },
+                    pressed && { backgroundColor: colors.surfaceSubtle },
+                    focusedControl === "subtitle-off" &&
+                      getWebFocusStyle(colors.focus),
+                  ]}
+                  onPress={() => onSelectSubtitle(null)}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    checked: subtitles.every((subtitle) => !subtitle.active),
+                  }}
+                  accessibilityLabel={t("player.settings.off")}
+                >
+                  <Text style={[styles.trackLabel, { color: colors.text }]}>
+                    {t("player.settings.off")}
+                  </Text>
+                </Pressable>
+                <View accessibilityRole="radiogroup">
+                  {subtitles.map((item) => {
+                    const control = `subtitle-${item.id}`;
+                    return (
+                      <Pressable
+                        {...webFocusProps(control)}
+                        key={item.id}
+                        style={({ pressed }) => [
+                          styles.trackRow,
+                          {
+                            backgroundColor: item.active
+                              ? colors.tint + "18"
+                              : "transparent",
+                          },
+                          pressed && { backgroundColor: colors.surfaceSubtle },
+                          focusedControl === control &&
+                            getWebFocusStyle(colors.focus),
+                        ]}
+                        onPress={() => onSelectSubtitle(item.id)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: !!item.active }}
+                        accessibilityLabel={`${t("player.settings.subtitles")}: ${item.label}`}
+                      >
+                        <Text
+                          style={[styles.trackLabel, { color: colors.text }]}
+                        >
+                          {item.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.trackLang,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {item.language}
+                        </Text>
+                        {item.active && (
+                          <Text
+                            style={[styles.checkIcon, { color: colors.tint }]}
+                          >
+                            ✓
+                          </Text>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -232,67 +312,76 @@ export function PlayerSettingsModal({
 const styles = StyleSheet.create({
   modalBg: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "flex-end",
     zIndex: 50,
   },
   sheetContent: {
-    backgroundColor: "#0d0d24",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: "60%",
+    width: "100%",
+    maxWidth: 680,
+    alignSelf: "center",
+    borderTopLeftRadius: uiRadii.sheet,
+    borderTopRightRadius: uiRadii.sheet,
+    padding: uiSpacing.xl,
+    maxHeight: "80%",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: uiSpacing.xl,
   },
-  title: { color: "#f8fafc", fontSize: 18, fontWeight: "bold" },
-  doneText: { color: "#818cf8", fontWeight: "bold", fontSize: 15 },
+  scroll: { flexShrink: 1 },
+  scrollContent: { paddingBottom: uiSpacing.huge },
+  title: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
+  doneButton: {
+    minWidth: uiTouchTarget,
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.control,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: { ...uiTypography.control },
+  sectionHeader: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.sm,
+    marginBottom: uiSpacing.sm,
+  },
+  sectionSpacing: { marginTop: uiSpacing.xl },
   sectionTitle: {
-    color: "#f8fafc",
+    ...uiTypography.label,
     fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 8,
   },
-  emptyText: { color: "#a1a1aa", fontSize: 12, fontStyle: "italic" },
+  emptyText: { ...uiTypography.caption, paddingVertical: uiSpacing.sm },
   trackRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 4,
-    minHeight: 44,
+    paddingVertical: uiSpacing.sm,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.control,
+    marginBottom: uiSpacing.xs,
+    minHeight: uiTouchTarget,
   },
-  trackRowActive: { backgroundColor: "rgba(129,140,248,0.15)" },
-  trackLabel: { color: "#f8fafc", fontSize: 14, flex: 1 },
-  trackLang: { color: "#a1a1aa", fontSize: 12, marginRight: 8 },
-  checkIcon: { color: "#818cf8", fontWeight: "bold", fontSize: 16 },
+  trackLabel: { ...uiTypography.body, fontSize: 14, flex: 1 },
+  trackLang: { ...uiTypography.caption, marginRight: uiSpacing.sm },
+  checkIcon: { ...uiTypography.control, fontSize: 16 },
   speedRow: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 4,
+    flexWrap: "wrap",
+    gap: uiSpacing.sm,
+    marginBottom: uiSpacing.xs,
   },
   speedBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  speedBtnActive: {
-    backgroundColor: "rgba(129,140,248,0.15)",
+    minWidth: 54,
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.control,
+    alignItems: "center",
+    justifyContent: "center",
   },
   speedBtnText: {
-    color: "#a1a1aa",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  speedBtnTextActive: {
-    color: "#818cf8",
-    fontWeight: "bold",
+    ...uiTypography.control,
   },
 });

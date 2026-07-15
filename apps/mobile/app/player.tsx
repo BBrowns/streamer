@@ -14,7 +14,11 @@ import {
   Image,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { VideoView, useVideoPlayer } from "expo-video";
+import {
+  VideoView,
+  isPictureInPictureSupported,
+  useVideoPlayer,
+} from "expo-video";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -120,6 +124,7 @@ export default function PlayerScreen() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  const [previewControls, setPreviewControls] = useState(false);
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
     null,
@@ -173,8 +178,28 @@ export default function PlayerScreen() {
       );
     }
     clearPlayer();
-    router.replace("/settings");
+    router.replace("/settings/sources");
   }, [clearPlayer, playbackSessionId, router]);
+
+  const handleChooseSource = useCallback(() => {
+    if (!mediaInfo) return;
+    if (playbackSessionId) {
+      cancelPlaybackSession(
+        playbackSessionId,
+        "User chose advanced source selection.",
+      );
+    }
+    const target = {
+      pathname: "/detail/[type]/[id]",
+      params: {
+        type: mediaInfo.type,
+        id: mediaInfo.itemId,
+        sources: "1",
+      },
+    } as const;
+    clearPlayer();
+    router.replace(target as any);
+  }, [clearPlayer, mediaInfo, playbackSessionId, router]);
 
   useEffect(
     () => () => {
@@ -188,17 +213,8 @@ export default function PlayerScreen() {
     [playbackSessionId],
   );
 
-  useEffect(
-    () => () => {
-      const cast = useCastStore.getState().activeCast;
-      if (!cast) return;
-      void stopCastSession(cast.device.id, cast.sessionId).catch((error) =>
-        console.error("Failed to stop cast", error),
-      );
-      useCastStore.getState().clearActiveCast();
-    },
-    [],
-  );
+  // Cast sessions intentionally outlive this route. They only stop after an
+  // explicit stop/close action, so navigation cannot silently end playback.
 
   const handleRetryPlayback = useCallback(async () => {
     if (!currentStream) return;
@@ -440,6 +456,8 @@ export default function PlayerScreen() {
   ]);
 
   const player = useVideoPlayer(playbackUri || "", (p) => {
+    p.staysActiveInBackground = true;
+    p.showNowPlayingNotification = true;
     p.play();
   });
 
@@ -624,7 +642,9 @@ export default function PlayerScreen() {
     const availableSubtitleTracks = player.availableSubtitleTracks || [];
 
     if (availableAudioTracks.length > 0) {
-      setAudioTracks(buildTrackRows(availableAudioTracks, player.audioTrack));
+      setAudioTracks(
+        buildTrackRows(availableAudioTracks, player.audioTrack, "audio"),
+      );
     } else if (engine) {
       setAudioTracks(engine.getAudioTracks());
     } else {
@@ -633,7 +653,11 @@ export default function PlayerScreen() {
 
     if (availableSubtitleTracks.length > 0) {
       setSubtitles(
-        buildTrackRows(availableSubtitleTracks, player.subtitleTrack),
+        buildTrackRows(
+          availableSubtitleTracks,
+          player.subtitleTrack,
+          "subtitle",
+        ),
       );
     } else if (engine) {
       setSubtitles(engine.getSubtitles());
@@ -1002,9 +1026,25 @@ export default function PlayerScreen() {
     }
   }, []);
 
+  const isPiPSupported = useMemo(() => {
+    if (Platform.OS === "web") {
+      return Boolean(
+        typeof document !== "undefined" &&
+        ((document as any).pictureInPictureEnabled ||
+          (document.createElement("video") as any)
+            .webkitSupportsPresentationMode),
+      );
+    }
+    try {
+      return isPictureInPictureSupported();
+    } catch {
+      return false;
+    }
+  }, []);
+
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
-  if (currentStream && !playbackUri) {
+  if (currentStream && !playbackUri && !previewControls) {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
@@ -1019,6 +1059,8 @@ export default function PlayerScreen() {
           session={activeSession}
           onBack={handleClose}
           onRetry={handleRetryPlayback}
+          onChooseSource={mediaInfo ? handleChooseSource : undefined}
+          onPreviewPlayer={__DEV__ ? () => setPreviewControls(true) : undefined}
           onOpenSourcesDevices={
             currentStream.infoHash ? handleOpenSourcesDevices : undefined
           }
@@ -1087,14 +1129,20 @@ export default function PlayerScreen() {
             </View>
           ) : (
             <>
-              <VideoView
-                ref={videoViewRef}
-                player={player}
-                style={styles.webVideo}
-                nativeControls={false}
-                contentFit="contain"
-                onFullscreenEnter={() => showControls()}
-              />
+              {previewControls ? (
+                <View style={styles.webVideo} />
+              ) : (
+                <VideoView
+                  ref={videoViewRef}
+                  player={player}
+                  style={styles.webVideo}
+                  nativeControls={false}
+                  contentFit="contain"
+                  allowsPictureInPicture={isPiPSupported}
+                  startsPictureInPictureAutomatically={false}
+                  onFullscreenEnter={() => showControls()}
+                />
+              )}
 
               <View style={styles.interactionLayer}>
                 <Pressable
@@ -1133,16 +1181,22 @@ export default function PlayerScreen() {
           )}
 
           <PlayerStatusOverlay
-            streamState={streamState}
+            streamState={previewControls ? "playing" : streamState}
             runtimeState={runtimeState}
             streamMetrics={streamMetrics}
-            isBuffering={isBuffering}
-            errorMessage={errorMessage}
-            runtimeError={runtimeError}
-            fallbackReason={fallbackReason}
-            session={activeSession}
+            isBuffering={previewControls ? false : isBuffering}
+            errorMessage={previewControls ? null : errorMessage}
+            runtimeError={previewControls ? null : runtimeError}
+            fallbackReason={previewControls ? null : fallbackReason}
+            session={previewControls ? null : activeSession}
             onBack={handleClose}
             onRetry={handleRetryPlayback}
+            onChooseSource={mediaInfo ? handleChooseSource : undefined}
+            onPreviewPlayer={
+              __DEV__ && !previewControls
+                ? () => setPreviewControls(true)
+                : undefined
+            }
             onOpenSourcesDevices={
               currentStream?.infoHash ? handleOpenSourcesDevices : undefined
             }
@@ -1157,7 +1211,7 @@ export default function PlayerScreen() {
               onSettings={() => setSettingsOpen(true)}
               onWebCast={() => setCastModalOpen(true)}
               onTogglePiP={handleTogglePiP}
-              isPiPSupported={true}
+              isPiPSupported={isPiPSupported}
               showInfoBar={false}
             />
           )}
@@ -1168,11 +1222,24 @@ export default function PlayerScreen() {
             duration={playerDuration}
             isVisible={controlsVisible && !activeCast}
             isPlaying={player?.playing ?? false}
-            capabilities={playerCapabilities}
+            capabilities={
+              previewControls
+                ? { ...playerCapabilities, canRetry: false, canCast: false }
+                : playerCapabilities
+            }
             sourceLabel={sourceLabel}
             castStatus={castStatus}
             downloadStatus={downloadStatus}
-            fallbackReason={fallbackReason}
+            fallbackReason={previewControls ? null : fallbackReason}
+            audioStatus={
+              audioTracks.find((track) => track.active)?.label || null
+            }
+            subtitleStatus={
+              subtitles.find((track) => track.active)?.label ||
+              (subtitles.length > 0
+                ? t("player.settings.off", { defaultValue: "Subtitles off" })
+                : null)
+            }
             muted={muted}
             volume={volume}
             onSeekBy={handleSeekBy}
@@ -1184,6 +1251,7 @@ export default function PlayerScreen() {
             onOpenCast={() => setCastModalOpen(true)}
             onRetry={handleRetryPlayback}
             onPlayPause={() => {
+              if (previewControls) return;
               if (player?.playing) player.pause();
               else player?.play();
             }}
@@ -1264,7 +1332,7 @@ export default function PlayerScreen() {
             title={mediaInfo?.title || ""}
             onOpenSourcesDevices={() => {
               setCastModalOpen(false);
-              router.push("/sources" as any);
+              router.push("/settings/sources" as any);
             }}
             onCastStart={(device, details) => {
               if (player?.playing) player.pause();
@@ -1343,7 +1411,7 @@ const createStyles = (colors: any, isDark: boolean) =>
       top: "40%",
       paddingHorizontal: 20,
       paddingVertical: 10,
-      backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.8)",
+      backgroundColor: colors.surfaceOverlay,
       borderRadius: 24,
       zIndex: 20,
     },
@@ -1365,7 +1433,7 @@ const createStyles = (colors: any, isDark: boolean) =>
     },
     castCard: {
       alignItems: "center",
-      backgroundColor: isDark ? "rgba(20,20,35,0.6)" : "rgba(255,255,255,0.9)",
+      backgroundColor: colors.surfaceOverlay,
       padding: 40,
       borderRadius: 32,
       borderWidth: 1,
@@ -1402,52 +1470,4 @@ const createStyles = (colors: any, isDark: boolean) =>
       borderColor: colors.error + "30",
     },
     stopCastText: { color: colors.error, fontWeight: "600", fontSize: 15 },
-    resumeOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 50,
-    },
-    resumeBox: {
-      backgroundColor: colors.card,
-      padding: 30,
-      borderRadius: 24,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: "center",
-      maxWidth: 340,
-    },
-    resumeTitle: {
-      color: colors.text,
-      fontSize: 20,
-      fontWeight: "bold",
-      marginBottom: 8,
-    },
-    resumeSub: {
-      color: colors.textSecondary,
-      fontSize: 15,
-      marginBottom: 24,
-    },
-    resumeBtns: {
-      flexDirection: "row",
-      gap: 12,
-    },
-    resumeBtnGhost: {
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 12,
-      backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
-    },
-    resumeBtnGhostText: { color: colors.text, fontWeight: "600" },
-    resumeBtnPrimary: {
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 12,
-      backgroundColor: colors.tint,
-    },
-    resumeBtnPrimaryText: {
-      color: isDark ? "#000" : "#fff",
-      fontWeight: "bold",
-    },
   });

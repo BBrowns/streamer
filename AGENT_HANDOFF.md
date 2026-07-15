@@ -20,6 +20,16 @@ Current phase:
   golden-path automation, unified bridge/action preflight, mobile/server
   release configuration, recoverable offline/cast UX, and the focused
   accessibility/responsive visual-quality pass are in place.
+- Adaptive UX foundation: PR #152 introduces semantic tokens, window classes,
+  four primary destinations, stable Home composition, provider-aware discovery,
+  Undo foundations, visible media-language state, and synchronized
+  PiP/background/cast continuity. Its title and scope intentionally describe a
+  foundation, not a completed visual redesign.
+- Obsidian Editorial overhaul: the stacked `codex/obsidian-ui-overhaul` branch
+  implements the screen-level art direction, routed Settings information
+  architecture, canonical Search experience, Inter typography, and dark/light
+  screenshot QA. It is ready for review, subject to CI and the explicitly
+  deferred real-device evidence below.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
@@ -338,17 +348,23 @@ Bridge behavior is safer and more explicit:
 
 ### UI/UX Progress
 
-Some pastel glass/cinematic polish has been added, but the app is not yet at the intended Netflix/Disney+/Prime-quality UX. Treat the current UI as an improved baseline, not as the final revamp.
+The active direction is **Obsidian Editorial**: near-black or warm-neutral
+canvases, bundled Inter typography, restrained cobalt for selection/focus,
+neutral high-contrast Play actions, artwork-led colour, and fewer visible
+containers. The earlier pastel-glass identity is legacy guidance.
 
 Known useful direction:
 
-- Keep the provider grouping on Discover; the user specifically likes provider/provider-like rails.
-- Move primary flows toward visually calm, pastel glass, cinematic layouts.
+- Keep provider/provider-like rails, now surfaced through Home and Search
+  discovery rather than a primary Discover tab.
+- Keep primary flows visually calm and media-led, with limited translucency,
+  purposeful containment, and equal dark/light hierarchy.
 - Avoid exposing source complexity as the default path.
-- Settings is now clearer but still not final. It groups Sources & Add-ons,
-  Playback & Downloads, Account & Sync, Application, About & Updates, and
-  Privacy & Data. Sources & Devices remains the detailed readiness/diagnostics
-  surface.
+- Settings uses Account, Playback, Downloads, Sources & Devices, Appearance,
+  Privacy, About, and Advanced routes. Compact through expanded windows show a
+  category overview or one detail page; only large windows show list-detail.
+- `/search` owns discovery, suggestions, results, and filters. The compatibility
+  `/search/results` route preserves parameters but is not a second experience.
 
 ## Current Known Gaps
 
@@ -434,19 +450,28 @@ Gateway lifecycle exists now, but these are still open:
   playback and seek behavior still need device validation.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
-### 4. UI/UX Revamp Is Still Incomplete
+### 4. Obsidian UI/UX Overhaul And Evidence
 
-Home, detail, and settings now have a stronger pastel glass/cinematic baseline,
-but the UI is not yet the full visual/product redesign the user wants:
+The adaptive foundation provides the shell, Home composition, provider-aware
+search data, Undo notifications, player track state, cast mini-controller,
+full-viewport auth routes, recovery UI, and source-independent player preview.
+The stacked Obsidian pass replaces the remaining legacy palette and composition,
+rebuilds Settings and Search, and supplies dark/light screenshot evidence. Its
+renderer suite covers 17 scenarios per browser project: 32 pass and two
+project-aware duplicates are intentionally skipped. Settings/Search screenshots
+cover 390 x 844 and 1440 x 1000; layout assertions also cover 768 and 1024.
 
-- Continue refining Home around hero, continue watching, provider rails,
-  recommendations, and bridge status.
-- Discover provider grouping should be kept and expanded with provider, genre, quality, and type filtering.
-- Continue refining Detail hierarchy around `Play Best` and collapsed advanced
-  sources.
-- Continue refining the reorganized Settings and Sources & Devices screens.
-- Player controls should feel more professional and less like a generic overlay.
-- Desktop and phone layouts need screenshot-driven QA.
+The remaining work is validation or depends on trustworthy upstream metadata:
+
+- Search provider provenance and partial-failure counts are reliable. Add genre,
+  language, quality, or richer availability facets only when upstream metadata
+  is reliable.
+- Validate Downloads, Series episode lists, settings panels, caption-safe
+  layout, visible subtitle/audio state, large text, and focus-not-obscured
+  behavior on native targets.
+- Authenticated Home/Downloads and unauthenticated login/onboarding screenshots
+  now run in compact and desktop-renderer golden paths. Keep native PiP,
+  lock-screen, download, and Chromecast support marked unproven until tested.
 
 ### 5. Production Readiness Is Still Open
 
@@ -463,7 +488,11 @@ Before this can be considered production-ready:
 - Secrets/env management needs review.
 - Bridge, add-on URLs, auth, cast URLs, and remote media URLs need a focused security review.
 - Privacy export/delete flows should be verified end-to-end.
-- Golden path tests should cover browse -> Play Best -> fallback -> download -> cast.
+- Golden paths cover browse -> Play Best, automatic and manual fallback,
+  planner-backed download/cast eligibility, responsive primary surfaces,
+  routed Settings, canonical Search, provider partial failures, filter reset,
+  and Command Palette keyboard navigation. Packaged desktop and real native
+  playback/cast/download behavior still require target evidence.
 
 ## Completed Roadmap Through PR #141
 

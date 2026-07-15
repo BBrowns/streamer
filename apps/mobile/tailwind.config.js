@@ -6,17 +6,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#010101", // True Black for AMOLED
-        surface: "#080808", // Almost black for panels
-        "surface-bright": "#121212",
-        primary: "#00f2ff", // Cyber Cyan - aggressive & modern
-        "primary-dim": "rgba(0, 242, 255, 0.1)",
-        accent: "#ffffff",
-        textMain: "#ffffff",
-        textMuted: "#888888",
-        error: "#ff3b3b",
-        success: "#00ff88",
-        warning: "#ffd600",
+        background: "#08090c",
+        surface: "#111318",
+        "surface-bright": "#181b21",
+        primary: "#f4f5f7",
+        "primary-dim": "rgba(244, 245, 247, 0.12)",
+        accent: "#6c79f5",
+        textMain: "#f4f5f7",
+        textMuted: "#9da3ae",
+        error: "#ff7087",
+        success: "#4ec98b",
+        warning: "#e7b86a",
       },
       borderRadius: {
         "2xl": "16px",
@@ -32,8 +32,7 @@ module.exports = {
         88: "22rem",
       },
       fontFamily: {
-        // We will default to system sans for now, but explicit slots allow for easy swapping to 'Inter' or 'Roboto' later if loaded.
-        sans: ["System"],
+        sans: ["Inter_400Regular", "system-ui", "sans-serif"],
       },
     },
   },

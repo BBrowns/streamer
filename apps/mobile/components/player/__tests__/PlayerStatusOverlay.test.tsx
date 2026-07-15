@@ -76,6 +76,8 @@ describe("PlayerStatusOverlay", () => {
 
   it("offers retry and Sources & Devices actions on playback errors", () => {
     const onRetry = jest.fn();
+    const onChooseSource = jest.fn();
+    const onPreviewPlayer = jest.fn();
     const onOpenSourcesDevices = jest.fn();
     const onBack = jest.fn();
 
@@ -87,15 +89,21 @@ describe("PlayerStatusOverlay", () => {
         errorMessage="The desktop bridge is not ready."
         onBack={onBack}
         onRetry={onRetry}
+        onChooseSource={onChooseSource}
+        onPreviewPlayer={onPreviewPlayer}
         onOpenSourcesDevices={onOpenSourcesDevices}
       />,
     );
 
     fireEvent.press(screen.getByText("common.retry"));
+    fireEvent.press(screen.getByText("player.errors.chooseSource"));
+    fireEvent.press(screen.getByText("player.errors.previewPlayer"));
     fireEvent.press(screen.getByText("player.errors.openSourcesDevices"));
     fireEvent.press(screen.getByText("player.errors.goBack"));
 
     expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onChooseSource).toHaveBeenCalledTimes(1);
+    expect(onPreviewPlayer).toHaveBeenCalledTimes(1);
     expect(onOpenSourcesDevices).toHaveBeenCalledTimes(1);
     expect(onBack).toHaveBeenCalledTimes(1);
   });

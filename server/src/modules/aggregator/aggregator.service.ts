@@ -14,6 +14,7 @@ import {
   type MetaPreview,
   type MetaDetail,
   type Stream,
+  type SearchResponse,
 } from "@streamer/shared";
 import { z } from "zod";
 import { StreamParser } from "./domain/stream-parser.js";
@@ -312,49 +313,108 @@ export class AggregatorService {
     query: string,
     requestId: string,
   ): Promise<MetaPreview[]> {
+    return (await this.searchWithProvenance(userId, query, requestId)).metas;
+  }
+
+  /** Search while preserving which installed providers returned each title. */
+  async searchWithProvenance(
+    userId: string,
+    query: string,
+    requestId: string,
+  ): Promise<SearchResponse> {
     const addons = await this.getUserAddons(userId);
     const contentTypes = ["movie", "series"];
 
     // Build all search tasks across all addons × all content types
-    const tasks = addons.flatMap((addon: any) =>
+    const attempts = addons.flatMap((addon: any) =>
       contentTypes
         .filter((type) =>
           this.addonSupportsResource(addon.manifest, "catalog", type),
         )
-        .map(async (type) => {
-          const catalogId = this.findCatalogId(addon.manifest, type);
-          if (!catalogId) return [];
+        .map((type) => ({
+          addonId: addon.id as string,
+          addonName: addon.manifest.name as string,
+          run: async () => {
+            const catalogId = this.findCatalogId(addon.manifest, type);
+            if (!catalogId) {
+              return {
+                addonId: addon.id,
+                addonName: addon.manifest.name,
+                metas: [] as MetaPreview[],
+              };
+            }
 
-          const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
-          const data = await resilientFetch(
-            addon.transportUrl,
-            addon.manifest.id,
-            path,
-            requestId,
-            catalogResponseSchema,
-          );
-          return data.metas || [];
-        }),
+            const path = `catalog/${type}/${catalogId}/search=${encodeURIComponent(query)}.json`;
+            const data = await resilientFetch(
+              addon.transportUrl,
+              addon.manifest.id,
+              path,
+              requestId,
+              catalogResponseSchema,
+            );
+            return {
+              addonId: addon.id,
+              addonName: addon.manifest.name,
+              metas: data.metas || [],
+            };
+          },
+        })),
     );
 
-    const results = await Promise.allSettled(tasks);
+    const results = await Promise.allSettled(
+      attempts.map((attempt) => attempt.run()),
+    );
 
     // Merge and deduplicate by ID
     const seen = new Set<string>();
     const merged: MetaPreview[] = [];
+    const providers = new Map<string, { id: string; name: string }>();
+    const providersByContent = new Map<string, Set<string>>();
+    const successfulProviderIds = new Set<string>();
+    const providersWithFailedAttempts = new Set<string>();
 
-    for (const result of results) {
+    for (const [index, result] of results.entries()) {
+      const attempt = attempts[index];
       if (result.status === "fulfilled") {
-        for (const meta of result.value) {
-          if (!seen.has(meta.id)) {
-            seen.add(meta.id);
+        const { addonId, addonName, metas } = result.value;
+        successfulProviderIds.add(addonId);
+        providers.set(addonId, { id: addonId, name: addonName });
+        for (const meta of metas) {
+          const contentKey = `${meta.type}:${meta.id}`;
+          const contentProviders =
+            providersByContent.get(contentKey) ?? new Set<string>();
+          contentProviders.add(addonId);
+          providersByContent.set(contentKey, contentProviders);
+          if (!seen.has(contentKey)) {
+            seen.add(contentKey);
             merged.push(meta);
           }
         }
+      } else {
+        providersWithFailedAttempts.add(attempt.addonId);
       }
     }
 
-    return merged;
+    const attemptedProviders = new Set(
+      attempts.map((attempt) => attempt.addonId),
+    ).size;
+    const successfulProviders = successfulProviderIds.size;
+    // A provider can support more than one searchable content type. Keep it in
+    // the failed set when any of those attempts failed, even if another type
+    // succeeded, so clients can truthfully communicate incomplete results.
+    const failedProviderIds = Array.from(providersWithFailedAttempts);
+
+    return {
+      metas: merged,
+      providers: Array.from(providers.values()),
+      providersByContent: Object.fromEntries(
+        Array.from(providersByContent, ([key, ids]) => [key, Array.from(ids)]),
+      ),
+      attemptedProviders,
+      successfulProviders,
+      failedProviderIds,
+      partial: failedProviderIds.length > 0 && successfulProviders > 0,
+    };
   }
 
   /** Get installed add-ons for user, with manifests */

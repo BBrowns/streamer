@@ -16,7 +16,8 @@ export type GoldenPathScenario =
   | "no-peers"
   | "bridge-unavailable"
   | "download-unsupported"
-  | "cast-ready";
+  | "cast-ready"
+  | "search-partial";
 
 export const FIXTURE_MOVIE_ID = "golden-path-movie";
 const FIXTURE_SERIES_ID = "golden-path-series";
@@ -66,6 +67,57 @@ const seriesPreview = {
   description: "A deterministic series fixture.",
   releaseInfo: "2026",
   imdbRating: "8.4",
+};
+
+const searchPreviews = [
+  moviePreview,
+  seriesPreview,
+  {
+    ...moviePreview,
+    id: "fixture-movie-two",
+    name: "Midnight Atlas",
+    releaseInfo: "2025",
+    imdbRating: "8.1",
+  },
+  {
+    ...moviePreview,
+    id: "fixture-movie-three",
+    name: "The Quiet Signal",
+    releaseInfo: "2024",
+    imdbRating: "7.9",
+  },
+  {
+    ...seriesPreview,
+    id: "fixture-series-two",
+    name: "Northern Lights",
+    releaseInfo: "2025",
+    imdbRating: "8.2",
+  },
+  {
+    ...moviePreview,
+    id: "fixture-movie-four",
+    name: "After the Horizon",
+    releaseInfo: "2023",
+    imdbRating: "7.7",
+  },
+];
+
+const catalogAddon = {
+  id: "fixture-addon",
+  transportUrl: "https://fixture.example.test/manifest.json",
+  installedAt: "2026-01-01T00:00:00.000Z",
+  manifest: {
+    id: "com.streamer.fixture",
+    version: "1.0.0",
+    name: "Streamer Selects",
+    description: "Deterministic discovery fixtures.",
+    resources: ["catalog", "meta", "stream"],
+    types: ["movie", "series"],
+    catalogs: [
+      { type: "movie", id: "featured", name: "Featured films" },
+      { type: "series", id: "series", name: "Series to discover" },
+    ],
+  },
 };
 
 function candidate(
@@ -312,6 +364,27 @@ export async function installGoldenPathRoutes(
         await json(route, { metas: [seriesPreview] });
         return;
       }
+      if (url.pathname === "/api/search") {
+        const providers = [
+          { id: catalogAddon.id, name: catalogAddon.manifest.name },
+        ];
+        await json(route, {
+          metas: searchPreviews,
+          providers,
+          providersByContent: Object.fromEntries(
+            searchPreviews.map((item) => [
+              `${item.type}:${item.id}`,
+              [catalogAddon.id],
+            ]),
+          ),
+          attemptedProviders: scenario === "search-partial" ? 2 : 1,
+          successfulProviders: 1,
+          failedProviderIds:
+            scenario === "search-partial" ? ["fixture-unavailable"] : [],
+          partial: scenario === "search-partial",
+        });
+        return;
+      }
       if (url.pathname === `/api/meta/movie/${FIXTURE_MOVIE_ID}`) {
         await json(route, {
           meta: {
@@ -360,7 +433,25 @@ export async function installGoldenPathRoutes(
         return;
       }
       if (url.pathname === "/api/addons") {
-        await json(route, { addons: [] });
+        await json(route, { addons: [catalogAddon] });
+        return;
+      }
+      if (
+        url.pathname.startsWith(`/api/addons/${catalogAddon.id}/catalog/movie/`)
+      ) {
+        await json(route, {
+          metas: searchPreviews.filter((item) => item.type === "movie"),
+        });
+        return;
+      }
+      if (
+        url.pathname.startsWith(
+          `/api/addons/${catalogAddon.id}/catalog/series/`,
+        )
+      ) {
+        await json(route, {
+          metas: searchPreviews.filter((item) => item.type === "series"),
+        });
         return;
       }
       if (url.pathname === "/api/library/progress") {
@@ -385,6 +476,20 @@ export async function installGoldenPathRoutes(
       }
       if (url.pathname === "/api/sessions") {
         await json(route, { sessions: [] });
+        return;
+      }
+      if (url.pathname === "/api/auth/sessions") {
+        await json(route, {
+          sessions: [
+            {
+              id: "fixture-session",
+              deviceId: "fixture-browser",
+              ipAddress: "127.0.0.1",
+              userAgent: "Streamer fixture browser",
+              lastActivity: "2026-07-14T18:00:00.000Z",
+            },
+          ],
+        });
         return;
       }
       if (

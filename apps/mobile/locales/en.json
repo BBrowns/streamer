@@ -1,12 +1,111 @@
 {
   "tabs": {
     "home": "Home",
+    "search": "Search",
     "discover": "Discover",
     "library": "Library",
     "downloads": "Downloads",
     "settings": "Settings"
   },
+  "search": {
+    "eyebrow": "Discover",
+    "title": "Find your next story",
+    "placeholder": "Search movies and series",
+    "a11y": {
+      "field": "Search movies and series",
+      "openDetails": "Open title details",
+      "poster": "{{title}} poster"
+    },
+    "actions": {
+      "clearSearch": "Clear search"
+    },
+    "types": {
+      "all": "All",
+      "movie": "Movie",
+      "series": "Series",
+      "moviePlural": "Movies",
+      "seriesPlural": "Series"
+    },
+    "recent": {
+      "title": "Recent searches",
+      "clear": "Clear",
+      "open": "Search for {{query}}",
+      "remove": "Remove {{query}} from recent searches"
+    },
+    "discovery": {
+      "title": "Browse your catalogs",
+      "subtitle": "Fresh picks from your installed add-ons.",
+      "noProvidersTitle": "Add a content source",
+      "noProvidersDescription": "Install an add-on to search and browse movies and series.",
+      "noCatalogsTitle": "No catalogs for this view",
+      "noCatalogsDescription": "Your installed add-ons do not offer catalogs for the selected title type.",
+      "catalogErrorTitle": "Catalog unavailable",
+      "catalogErrorDescription": "This catalog could not be loaded. Try again.",
+      "manageAddons": "Manage add-ons"
+    },
+    "suggestions": {
+      "noMatch": "No title suggestions yet.",
+      "showAll": "Show all results for “{{query}}”"
+    },
+    "command": {
+      "label": "Quick search",
+      "noRecent": "No recent searches",
+      "minimum": "Type at least 2 characters to search",
+      "noResults": "No results for “{{query}}”",
+      "errorTitle": "Search is unavailable",
+      "errorDescription": "Check your connection and try again.",
+      "navigate": "Navigate",
+      "open": "Open",
+      "close": "Close"
+    },
+    "filters": {
+      "title": "Filters",
+      "subtitle": "Refine these results",
+      "type": "Filter by title type",
+      "year": "Year",
+      "provider": "Source",
+      "sort": "Sort by",
+      "anyYear": "Any year",
+      "allProviders": "All sources",
+      "button": "Filters",
+      "open": "Open search filters",
+      "close": "Close filters",
+      "reset": "Reset filters",
+      "sortBy": "Sort by {{sort}}"
+    },
+    "sort": {
+      "default": "Best match",
+      "title": "Title A–Z",
+      "year": "Newest"
+    },
+    "results": {
+      "summary": "{{count}} results for “{{query}}”",
+      "summary_one": "1 result for “{{query}}”",
+      "summary_other": "{{count}} results for “{{query}}”",
+      "searching": "Searching for “{{query}}”…",
+      "detailHint": "Choose a title to view details and available playback options.",
+      "sources": "Available from {{count}} sources",
+      "sources_one": "Available from 1 source",
+      "sources_other": "Available from {{count}} sources"
+    },
+    "states": {
+      "partial": "Some sources could not be reached. Showing results from the sources that responded.",
+      "errorTitle": "Search could not load",
+      "errorDescription": "Check your connection and try the search again.",
+      "providersFailedTitle": "Sources are temporarily unavailable",
+      "providersFailedDescription": "None of your content sources responded. Try again in a moment.",
+      "noMatchTitle": "No titles found",
+      "noMatchDescription": "Nothing matched “{{query}}”. Try a different title.",
+      "filterEmptyTitle": "No results with these filters",
+      "filterEmptyDescription": "Reset your filters to see all matching titles."
+    }
+  },
   "home": {
+    "hero": {
+      "eyebrow": "Featured · {{type}}",
+      "a11y": "Featured: {{title}}",
+      "hint": "Opens title details"
+    },
     "auth": {
       "title": "Streamer",
       "subtitle": "Your universe of content, aggregated from the open web.",
@@ -16,6 +115,7 @@
       "popularMovies": "Popular Movies",
       "topTVShows": "Top TV Shows",
       "recentlyAdded": "Recently Added",
+      "moreToWatch": "More to Watch",
       "fromProviders": "From Your Providers"
     },
     "continueWatching": {
@@ -76,7 +176,9 @@
     },
     "header": {
       "select": "Select",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "back": "Back to settings",
+      "description": "Saved films, series, and everything ready to continue."
     },
     "filters": {
       "all": "All",
@@ -98,13 +200,19 @@
       "removeTitle": "Remove Items",
       "removeMessage": "Are you sure you want to remove {{count}} items from your library?",
       "bulkDeleteTitle": "Remove Items",
-      "bulkDeleteMessage": "Are you sure you want to remove {{count}} items? This cannot be undone."
+      "bulkDeleteMessage": "Are you sure you want to remove {{count}} items? This cannot be undone.",
+      "added": "Added to Library",
+      "removed": "Removed from Library"
     },
     "actions": {
       "prompt": "What would you like to do?",
       "viewDetails": "View Details",
       "remove": "Remove from Library",
-      "removeDownload": "Remove Download"
+      "removeDownload": "Remove Download",
+      "undo": "Undo",
+      "restore": "Restore",
+      "bulkRemoved": "{{count}} titles removed from Library",
+      "bulkRemoved_one": "1 title removed from Library"
     }
   },
   "downloads": {
@@ -140,7 +248,9 @@
       "pause": "Pause",
       "resume": "Resume",
       "retry": "Retry",
-      "play": "Play"
+      "play": "Play",
+      "verify": "Verify",
+      "deleteDownload": "Delete download"
     },
     "status": {
       "queued": "Queued",
@@ -165,12 +275,65 @@
       "all": "All {{count}}",
       "active": "Active {{count}}",
       "ready": "Ready {{count}}",
-      "attention": "Issues {{count}}"
+      "attention": "Issues {{count}}",
+      "label": "Filter downloads"
     },
     "summary": {
       "active": "Active",
       "ready": "Ready",
-      "storage": "Offline storage"
+      "storage": "Offline storage",
+      "needsVerification": "Needs check"
+    },
+    "storage": {
+      "externalCleanup": "Streamer can only remove downloads managed by this app. Use your device storage settings for other files."
+    },
+    "smart": {
+      "title": "Smart Downloads",
+      "subtitle": "Optional rules for next episodes, cleanup, quality, and storage.",
+      "on": "On",
+      "off": "Off",
+      "enable": "Enable smart downloads",
+      "enableSubtitle": "Opt in before Streamer plans any automatic episode downloads.",
+      "nextEpisode": "Auto-download next episode",
+      "nextEpisodeSubtitle": "Plans the next unwatched episode when a series download finishes.",
+      "autoDelete": "Auto-delete watched downloads",
+      "autoDeleteSubtitle": "Cleanup is opt-in and never removes unverified files.",
+      "wifiOnly": "Wi-Fi only",
+      "wifiOnlySubtitle": "Mobile background downloads are platform-limited; this preference gates automatic plans.",
+      "quality": "Quality preference",
+      "storageLimit": "{{count}} GB limit",
+      "hlsUnsupported": "HLS offline remains unsupported",
+      "plannedTitle": "Planned next episodes",
+      "unknownSeries": "Series"
+    },
+    "recovery": {
+      "pausedTitle": "Download paused",
+      "pausedMessage": "Resume when you are ready to continue this download.",
+      "resumeAction": "Resume",
+      "missingTitle": "Offline file unavailable",
+      "noManagedFileMessage": "The managed file is no longer available on this device.",
+      "missingFileMessage": "The downloaded file could not be found. Prepare it again.",
+      "downloadAgainAction": "Download again",
+      "verificationTitle": "Verification needed",
+      "verificationMessage": "Check the local file before marking it ready offline.",
+      "verifyAction": "Verify file",
+      "interruptedTitle": "Download interrupted",
+      "interruptedMessage": "The transfer stopped before it finished. You can safely resume it.",
+      "storageTitle": "More storage needed",
+      "storageMessage": "Free some device storage before retrying this download.",
+      "freeSpaceAction": "Manage storage",
+      "setupTitle": "Playback setup needs attention",
+      "setupMessage": "Open Sources & Devices and review this device before retrying the download.",
+      "reviewSetupAction": "Review setup",
+      "expiredTitle": "Viewing option expired",
+      "expiredMessage": "This viewing option is no longer available. Prepare the download again.",
+      "prepareAgainAction": "Prepare again",
+      "unsupportedTitle": "Offline download unavailable",
+      "unsupportedMessage": "This viewing option cannot be saved for offline use.",
+      "removeAction": "Remove",
+      "failedTitle": "Download needs attention",
+      "failedMessage": "Try the download again or choose another viewing option.",
+      "retryAction": "Try again"
     },
     "footer": {
       "verified": "Offline items are shown as ready only after the local file is verified."
@@ -186,6 +349,20 @@
   "onboarding": {
     "title": "Personalize",
     "subtitle": "Customize your experience before we begin.",
+    "intro": {
+      "streamingTitle": "Everything worth watching",
+      "streamingDescription": "Films, series, and your next episode in one quiet, cinematic library.",
+      "syncTitle": "Pick up where you left off",
+      "syncDescription": "Start on desktop, continue on mobile, and keep your library close.",
+      "playbackTitle": "Playback, your way",
+      "playbackDescription": "Choose your viewing options once. Streamer keeps the details out of the way."
+    },
+    "carousel": {
+      "stepLabel": "Onboarding step {{count}}",
+      "previous": "Previous step",
+      "next": "Next step",
+      "getStarted": "Get started"
+    },
     "appearance": "Appearance",
     "addonsTitle": "Starter Add-ons",
     "addonsSubtitle": "Highly recommended for metadata and subtitles.",
@@ -196,14 +373,21 @@
     "setupCheck": {
       "title": "Check setup",
       "subtitle": "Streamer should feel simple, but playback still depends on your sources and device readiness.",
-      "sources": "Sources & metadata",
-      "sourcesBody": "Install Cinemeta now; add streaming add-ons later from Settings.",
-      "bridge": "Desktop bridge",
-      "bridgeBody": "Desktop can prepare torrent/remux playback and share its LAN URL.",
+      "sources": "Catalog & viewing options",
+      "sourcesBody": "Your starter catalog is ready. You can add more viewing options later in Settings.",
+      "bridge": "Extra playback support",
+      "bridgeBody": "For some titles, the desktop companion helps prepare playback automatically.",
       "offlineCast": "Downloads & cast",
-      "offlineCastBody": "Offline and casting become available only when a source supports it.",
+      "offlineCastBody": "Downloads and casting appear automatically when they are available.",
       "privacy": "Privacy",
-      "privacyBody": "Raw stream URLs, magnets, and tokens are not included in diagnostics."
+      "privacyBody": "Diagnostic reports hide sensitive connection details."
+    },
+    "themeA11y": "{{theme}} theme",
+    "addonA11y": "{{name}}. {{description}}",
+    "starterAddons": {
+      "cinemeta": "A curated movie and series catalog.",
+      "openSubtitles": "A broad subtitle library for films and series.",
+      "torrentio": "An optional community viewing source."
     },
     "finish": "Finish & Sign In"
   },
@@ -263,7 +447,11 @@
     },
     "about": {
       "releasePolicy": "Desktop updates are checked manually until the release pipeline is fully validated.",
-      "checkUpdates": "Check for updates"
+      "checkUpdates": "Check for updates",
+      "terms": "Terms of use",
+      "termsDescription": "Read the terms that apply to Streamer",
+      "privacy": "Privacy policy",
+      "privacyDescription": "See how Streamer handles your data"
     },
     "alerts": {
       "deleteAccountTitle": "Delete Account",
@@ -285,6 +473,208 @@
       "light": "Light",
       "dark": "Dark",
       "system": "System"
+    },
+    "overview": {
+      "title": "Settings",
+      "subtitle": "Your account, playback, downloads, and app preferences.",
+      "categories": "Categories"
+    },
+    "navigation": {
+      "account": {
+        "title": "Account",
+        "description": "Profile, Trakt, security, and signed-in devices"
+      },
+      "playback": {
+        "title": "Playback",
+        "description": "Quality, autoplay, audio, and subtitles"
+      },
+      "downloads": {
+        "title": "Downloads",
+        "description": "Smart Downloads, quality, storage, and cleanup"
+      },
+      "sources": {
+        "title": "Sources & Devices",
+        "description": "Add-ons and playback availability"
+      },
+      "appearance": {
+        "title": "Appearance",
+        "description": "Theme and language"
+      },
+      "privacy": {
+        "title": "Privacy",
+        "description": "App lock, data export, and account deletion"
+      },
+      "about": {
+        "title": "About",
+        "description": "Version and desktop updates"
+      },
+      "advanced": {
+        "title": "Advanced",
+        "description": "Connections, runtime, repair, and diagnostics"
+      }
+    },
+    "readiness": {
+      "readyTitle": "Ready to play",
+      "attentionTitle": "Playback setup needs attention",
+      "readyDescription": "This device is ready for supported playback and downloads.",
+      "attentionDescription": "Direct playback may still work. Review your setup for every source type.",
+      "review": "Review",
+      "checkAgain": "Check again"
+    },
+    "common": { "loading": "Loading…" },
+    "accountModals": {
+      "common": {
+        "cancel": "Cancel",
+        "errorTitle": "Something went wrong",
+        "successTitle": "Saved"
+      },
+      "profile": {
+        "title": "Edit profile",
+        "displayName": "Display name",
+        "save": "Save",
+        "saveA11y": "Save profile changes",
+        "updated": "Your profile was updated.",
+        "updateFailed": "Your profile could not be updated."
+      },
+      "password": {
+        "title": "Change password",
+        "current": "Current password",
+        "new": "New password (at least 8 characters)",
+        "newA11y": "New password, at least 8 characters",
+        "update": "Update password",
+        "updateA11y": "Update password",
+        "minimumLength": "The new password must be at least 8 characters.",
+        "updated": "Your password was changed.",
+        "updateFailed": "Your password could not be changed."
+      },
+      "sessions": {
+        "title": "Active sessions",
+        "done": "Done",
+        "justNow": "Just now",
+        "minutesAgo": "{{count}}m ago",
+        "hoursAgo": "{{count}}h ago",
+        "thisDevice": "This device",
+        "unknownDevice": "Unknown device",
+        "unknownIp": "Unknown IP",
+        "revokeA11y": "Revoke this session",
+        "revokeTitle": "Revoke session?",
+        "revokeDescription": "This signs the associated device out of Streamer.",
+        "revoke": "Revoke",
+        "revokeFailed": "The session could not be revoked."
+      }
+    },
+    "detail": {
+      "account": {
+        "editProfile": "Edit profile",
+        "editProfileDescription": "Change your name and profile details"
+      },
+      "downloads": {
+        "openDownloads": "Open downloads",
+        "openDownloadsDescription": "View the queue, offline titles, and storage"
+      },
+      "privacy": { "dangerZone": "Danger zone" }
+    },
+    "playbackPreferences": {
+      "quality": "Playback quality",
+      "qualityDescription": "Choose the maximum quality used when Streamer ranks sources.",
+      "auto": "Auto",
+      "audio": "Audio language",
+      "audioDescription": "Prefer this audio track when it is available.",
+      "subtitles": "Subtitles",
+      "subtitlesDescription": "Choose the subtitle language selected at the start of playback.",
+      "autoplay": "Autoplay next episode",
+      "autoplayDescription": "Continue a series when the next episode is known.",
+      "languages": {
+        "off": "Off",
+        "english": "English",
+        "dutch": "Dutch",
+        "spanish": "Spanish"
+      }
+    },
+    "downloadPreferences": {
+      "smartDownloads": "Smart Downloads",
+      "smartDownloadsDescription": "Automatically manage selected episodes using your preferences.",
+      "nextEpisode": "Download the next episode",
+      "nextEpisodeDescription": "Plan the next unwatched episode when a series download finishes.",
+      "wifiOnly": "Wi-Fi only",
+      "wifiOnlyDescription": "Only create automatic download plans on Wi-Fi.",
+      "cleanup": "Remove watched downloads",
+      "cleanupDescription": "Remove verified watched files when space can be reclaimed.",
+      "quality": "Download quality",
+      "qualityDescription": "Set the maximum quality for automatic downloads.",
+      "best": "Best",
+      "storageLimit": "Storage limit",
+      "storageLimitDescription": "Choose how much space Smart Downloads may use on this device."
+    },
+    "biometric": { "prompt": "Authenticate to enable biometric unlock" },
+    "update": {
+      "notLoaded": "Update status has not loaded yet.",
+      "checking": "Checking for updates…",
+      "available": "Version {{version}} is available.",
+      "latest": "latest",
+      "current": "Streamer is up to date ({{version}}).",
+      "unsupported": "Update checks are available in packaged desktop builds.",
+      "failed": "Update check failed.",
+      "downloaded": "An update was downloaded by the desktop updater.",
+      "version": "Current version: {{version}}"
+    },
+    "sourcesSection": {
+      "addonsTitle": "Content sources",
+      "addonsDescription": "Install and manage the add-ons that provide your catalog.",
+      "pageDescription": "Review playback availability, connected devices, and content sources."
+    },
+    "advancedSection": {
+      "copyDiagnostics": "Copy diagnostics",
+      "copying": "Copying…",
+      "recheckRuntime": "Re-check runtime",
+      "repairSteps": "Repair steps",
+      "useLanUrl": "Use LAN URL",
+      "restarting": "Restarting…",
+      "restart": "Restart service",
+      "cleaning": "Cleaning…",
+      "cleanCache": "Clean cache",
+      "lanWarningTitle": "Use the desktop app's network address",
+      "lanWarningDescription": "The local address only works on this device. Use the desktop app's network address for playback, downloads, or casting from another device.",
+      "devicesTitle": "Devices & cast",
+      "devicesDescription": "Use the desktop app for playback services on this network.",
+      "desktopBridge": "Desktop service",
+      "connected": "Connected",
+      "casting": "Casting",
+      "castingReadyDescription": "Casting can use the active playback plan.",
+      "ready": "Ready",
+      "limited": "Limited",
+      "playbackTitle": "Playback & downloads",
+      "playbackDescription": "Detailed source information is shown here only for troubleshooting.",
+      "directStreams": "Direct streams",
+      "directStreamsDescription": "Supported HTTP and HLS sources play without the desktop service.",
+      "torrentStreams": "Torrent streams",
+      "torrentStreamsDescription": "Torrent sources use the desktop service for preparation and playback.",
+      "downloadsDescription": "Offline availability appears after a local file is verified.",
+      "directOnly": "Direct only",
+      "resolversTitle": "Remote resolvers",
+      "resolversDescription": "Optional paid services are not required for setup.",
+      "realDebridDescription": "Optional paid resolver. Disabled by default and not needed for first-time setup.",
+      "technicalDescription": "Connection settings and diagnostics for troubleshooting.",
+      "connectionSettings": "Connection settings",
+      "connectionDescription": "Server addresses and the pairing token for the desktop service.",
+      "pairingToken": "Pairing token (optional)",
+      "pairingPlaceholder": "Only needed when the desktop service requires a token",
+      "diagnostics": "Advanced diagnostics",
+      "diagnosticsDescription": "Build, runtime, media engine, cache, and repair details.",
+      "repair": "Repair",
+      "checking": "Checking",
+      "needsService": "Needs desktop service",
+      "serviceNeedsRepair": "Desktop service needs repair",
+      "setupReadyDescription": "Direct and supported torrent playback, downloads, and casting can use this setup.",
+      "setupRepairDescription": "Direct playback can still work, but service-backed playback and downloads need repair first.",
+      "diagnosticsExported": "Diagnostics exported",
+      "diagnosticsCopiedDescription": "A safe debug bundle was copied to the clipboard.",
+      "diagnosticsExportedDescription": "A safe debug bundle was exported.",
+      "diagnosticsUnavailable": "Diagnostics unavailable",
+      "diagnosticsUnavailableDescription": "Could not export diagnostics.",
+      "cacheCleaned": "Cache cleaned",
+      "cacheCleanupFailed": "Cache cleanup failed",
+      "cacheCleanupFailedDescription": "Could not clean inactive cache entries."
     },
     "onboarding": {
       "title": "Personalize",
@@ -320,6 +710,10 @@
     "empty": {
       "title": "No add-ons installed",
       "hint": "Try: https://v3-cinemeta.strem.io/manifest.json"
+    },
+    "fetchError": {
+      "title": "Add-ons could not load",
+      "description": "Check your connection and try again."
     }
   },
   "detail": {
@@ -340,6 +734,77 @@
     "watchlist": {
       "add": "+ Add to Library",
       "remove": "✓ In Library"
+    },
+    "actionPanel": {
+      "findingSources": "Finding viewing options",
+      "sourceCount": "{{count}} sources",
+      "sourceCount_one": "1 source",
+      "noSources": "No sources yet",
+      "episodeCount": "{{count}} episodes",
+      "episodeCount_one": "1 episode",
+      "findingBest": "Finding best option",
+      "playBest": "Play Best",
+      "preparing": "Preparing",
+      "inLibrary": "In Library",
+      "add": "Add"
+    },
+    "sources": {
+      "episodes": "Episodes",
+      "more": "More Sources",
+      "show": "Show more sources",
+      "hide": "Hide more sources",
+      "available": "Advanced fallback · {{count}} available",
+      "groups": "Advanced fallback · {{count}} groups",
+      "filterByQuality": "Filter sources by {{quality}}"
+    },
+    "readiness": {
+      "finishSetupTitle": "Finish playback setup",
+      "setupAttentionTitle": "Playback setup needs attention",
+      "openSourcesDetail": "Open Sources & Devices to connect to the desktop app.",
+      "directMayWork": "Direct viewing options may still work on this device.",
+      "sourcesAction": "Sources & Devices",
+      "extraSupportTitle": "Extra playback support needed",
+      "extraSupportMessage": "This viewing option needs help from the desktop app.",
+      "checkSupportDetail": "Review Sources & Devices or choose another viewing option.",
+      "noSourcesTitle": "No viewing options found",
+      "noSourcesMessage": "No available source could be prepared for this title.",
+      "noSourcesDetail": "Check your add-ons or try again later.",
+      "noCompatibleTitle": "No compatible viewing option",
+      "noCompatibleMessage": "The available options cannot be used for this action on this device.",
+      "noCompatibleDetail": "Choose another option or review Sources & Devices.",
+      "optionUnavailableTitle": "Viewing option unavailable",
+      "optionCouldNotStart": "This option could not start right now.",
+      "tryAgainOrMore": "Try again or open More Sources.",
+      "optionCannotPlay": "This option cannot play reliably on this device.",
+      "tryAnotherOption": "Choose another viewing option or a lower quality.",
+      "timeoutTitle": "Preparation took too long",
+      "timeoutMessage": "This viewing option did not become ready in time.",
+      "timeoutDetail": "Try again or choose another viewing option.",
+      "networkTitle": "Connection problem",
+      "networkMessage": "Reconnect to the internet and try again.",
+      "unavailableMessage": "This action is not available with the current viewing options.",
+      "attemptedOptions": "{{count}} other viewing options were also tried.",
+      "attemptedOptions_one": "1 other viewing option was also tried.",
+      "setup": {
+        "play": "Connect the desktop app to play this title.",
+        "download": "Connect the desktop app to prepare this download.",
+        "cast": "Connect the desktop app to cast this title."
+      },
+      "setupNeedsAttention": {
+        "play": "Review this device before trying playback again.",
+        "download": "Review this device before trying the download again.",
+        "cast": "Review this device before trying to cast again."
+      },
+      "sourceFailed": {
+        "play": "Trying another viewing option",
+        "download": "Trying another download option",
+        "cast": "Trying another cast option"
+      },
+      "unavailable": {
+        "play": "Playback unavailable",
+        "download": "Download unavailable",
+        "cast": "Cast unavailable"
+      }
     },
     "errors": {
       "notFound": "Content not found",
@@ -420,6 +885,7 @@
       "title": "Resume Playback?",
       "subtitle": "You left off at {{time}}",
       "resume": "Resume",
+      "resumeFrom": "Resume from {{time}}",
       "startOver": "Start Over"
     },
     "upsell": {
@@ -441,6 +907,9 @@
       "seekUnavailable": "Seek unavailable",
       "seekBackUnavailable": "Seek back unavailable",
       "seekForwardUnavailable": "Seek forward unavailable",
+      "seekDurationUnavailable": "Seeking is unavailable until the duration is known.",
+      "seekLiveUnavailable": "Seeking is unavailable for this live stream.",
+      "seekRemuxUnavailable": "Seeking becomes available after preparation finishes.",
       "progress": "Playback progress",
       "progressUnavailable": "Playback progress unavailable",
       "live": "Live",
@@ -475,6 +944,20 @@
       "noSubtitles": "No subtitle tracks available.",
       "off": "Off"
     },
+    "remote": {
+      "castingTo": "Casting to {{name}}",
+      "activeOn": "Active on {{name}}",
+      "anotherDevice": "another device",
+      "paused": "Paused",
+      "playing": "Playing",
+      "unknownContent": "Unknown title",
+      "seekBack": "Seek cast back 10 seconds",
+      "seekForward": "Seek cast forward 10 seconds",
+      "resume": "Resume remote playback",
+      "pause": "Pause remote playback",
+      "openPlayer": "Open player",
+      "takeOver": "Take over"
+    },
     "status": {
       "planning": "Preparing playback...",
       "checkingBridge": "Checking the desktop bridge...",
@@ -489,6 +972,7 @@
       "tryingFallback": "Trying another source...",
       "buffering": "Buffering...",
       "errorTitle": "Connection Failed",
+      "noSourcesTitle": "No playable source",
       "bridgeErrorTitle": "Bridge Not Ready",
       "noPeersTitle": "No Peers Found",
       "unsupportedTitle": "Source Not Supported",
@@ -498,22 +982,60 @@
     },
     "errors": {
       "noStream": "No stream selected",
-      "bridgeUnavailable": "The desktop bridge is not ready. Open Sources & Devices to check the URL or repair the streaming engine, then try again.",
-      "playbackFailed": "Playback failed before the first frame could load.",
-      "playbackTimeout": "The stream did not produce playable video within 60 seconds. The torrent may be slow, stalled, or incompatible with this player.",
-      "unsupportedCodec": "This source appears to use HEVC/H.265 or Dolby Vision, which this desktop/web player cannot decode reliably. Pick an H.264/x264 source or a lower-quality MP4 instead.",
+      "bridgeUnavailable": "Playback support is not ready. Open Sources & Devices, review this device, and try again.",
+      "playbackFailed": "This title could not start playing.",
+      "playbackTimeout": "This title took too long to prepare. Try again or choose another viewing option.",
+      "unsupportedCodec": "This viewing option cannot play reliably on this device. Choose another option or a lower quality.",
       "openSourcesDevices": "Sources & Devices",
+      "chooseSource": "Choose another source",
+      "previewPlayer": "Preview player",
       "goBack": "Go Back"
     },
     "cast": {
       "castingTo": "Casting to {{name}}",
       "stop": "Stop Casting"
+    },
+    "casting": {
+      "active": "Casting",
+      "to": "Casting to {{name}}",
+      "stop": "Stop casting"
+    },
+    "castRecovery": {
+      "devicesTitle": "Displays unavailable",
+      "devicesMessage": "Streamer could not search for nearby displays.",
+      "searchAgainAction": "Search again",
+      "deviceTitle": "Display unavailable",
+      "deviceMessage": "This display could not be reached. Check that it is online and on the same network.",
+      "refreshAction": "Refresh displays",
+      "incompatibleTitle": "Viewing option not supported",
+      "incompatibleMessage": "This display cannot play the prepared viewing option.",
+      "chooseDisplayAction": "Choose another display",
+      "tryAnotherAction": "Try another option",
+      "sourceReachTitle": "Display cannot reach this option",
+      "sourceReachMessage": "Prepare another viewing option that the display can access.",
+      "prepareAnotherAction": "Prepare another option",
+      "supportTitle": "Extra playback support needed",
+      "supportMessage": "Review Sources & Devices before trying this cast again.",
+      "reviewSetupAction": "Review setup",
+      "setupTitle": "Playback setup needs attention",
+      "setupMessage": "Open Sources & Devices and review this device before casting again.",
+      "failedTitle": "Casting did not start",
+      "failedMessage": "Try again or choose another viewing option.",
+      "tryAgainAction": "Try again"
     }
   },
   "common": {
     "loading": "Loading...",
     "error": "Error",
     "retry": "Retry",
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "actions": { "viewDetails": "View details" },
+    "media": { "movie": "Movie", "series": "Series" },
+    "unexpectedError": {
+      "title": "Something went wrong",
+      "description": "Streamer could not load this screen. Try again."
+    },
     "themes": {
       "dark": "Dark",
       "light": "Light",
@@ -522,12 +1044,21 @@
   },
   "notifications": {
     "title": "Notifications",
-    "empty": "No notifications"
+    "empty": "No notifications",
+    "dismiss": "Dismiss notification"
+  },
+  "biometricLock": {
+    "prompt": "Unlock Streamer to continue",
+    "usePin": "Use device passcode",
+    "title": "Streamer is locked",
+    "subtitle": "Confirm your identity to return to your library.",
+    "unlock": "Unlock Streamer"
   },
   "legal": {
     "privacyTitle": "Privacy Policy",
     "termsTitle": "Terms of Service",
     "lastUpdated": "Last Updated: {{date}}",
+    "updatedDate": "July 2026",
     "sections": {
       "privacy": {
         "1": "1. Data Collection",
@@ -541,6 +1072,27 @@
         "3": "3. User Content",
         "4": "4. Limitation of Liability"
       }
+    },
+    "bodies": {
+      "privacy": {
+        "1": "Streamer stores the account and playback data needed to provide your library, progress, and device sessions.",
+        "2": "Authentication tokens and connection credentials are treated as sensitive and are not included in diagnostic exports.",
+        "3": "Installed add-ons and external services have their own privacy practices. Review them before connecting an account or source.",
+        "4": "You can export your data or delete your account from Privacy settings."
+      },
+      "terms": {
+        "1": "By using Streamer, you agree to these terms and the laws that apply where you live.",
+        "2": "Use Streamer and connected sources responsibly. You are responsible for the sources and content you choose to access.",
+        "3": "You retain responsibility for links, add-ons, and other configuration you add to the service.",
+        "4": "Streamer is provided without a guarantee that every external source or device will remain available."
+      }
     }
+  },
+  "navigation": { "menu": "Menu", "back": "Back" },
+  "catalog": {
+    "openMovieDetails": "Open movie details",
+    "openSeriesDetails": "Open series details",
+    "scrollLeft": "Scroll left",
+    "scrollRight": "Scroll right"
   }
 }

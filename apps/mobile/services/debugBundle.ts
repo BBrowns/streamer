@@ -301,14 +301,59 @@ export function serializeDebugBundle(bundle: DebugBundle) {
   return JSON.stringify(bundle, null, 2);
 }
 
+export async function tryWriteDebugBundleToClipboard(
+  payload: string,
+  clipboard: { writeText?: (value: string) => Promise<void> } | undefined = (
+    globalThis as any
+  ).navigator?.clipboard,
+) {
+  if (!clipboard?.writeText) return false;
+
+  try {
+    await clipboard.writeText(payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function triggerBrowserDebugBundleDownload(payload: string) {
+  const documentRef = (globalThis as any).document;
+  const urlApi = (globalThis as any).URL;
+  const BlobCtor = (globalThis as any).Blob;
+  if (!documentRef?.createElement || !urlApi?.createObjectURL || !BlobCtor) {
+    return false;
+  }
+
+  const objectUrl = urlApi.createObjectURL(
+    new BlobCtor([payload], { type: "application/json" }),
+  );
+  const anchor = documentRef.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = `streamer_debug_bundle_${Date.now()}.json`;
+  anchor.style.display = "none";
+
+  try {
+    documentRef.body?.appendChild(anchor);
+    anchor.click();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    anchor.remove?.();
+    urlApi.revokeObjectURL?.(objectUrl);
+  }
+}
+
 export async function exportDebugBundle(bundle: DebugBundle) {
   const payload = serializeDebugBundle(bundle);
 
   if (Platform.OS === "web") {
-    const clipboard = (globalThis as any).navigator?.clipboard;
-    if (clipboard?.writeText) {
-      await clipboard.writeText(payload);
+    if (await tryWriteDebugBundleToClipboard(payload)) {
       return { method: "clipboard" as const };
+    }
+    if (triggerBrowserDebugBundleDownload(payload)) {
+      return { method: "download" as const };
     }
   }
 

@@ -1,12 +1,111 @@
 {
   "tabs": {
     "home": "Inicio",
+    "search": "Buscar",
     "discover": "Descubrir",
     "library": "Biblioteca",
     "downloads": "Descargas",
     "settings": "Ajustes"
   },
+  "search": {
+    "eyebrow": "Descubrir",
+    "title": "Encuentra tu próxima historia",
+    "placeholder": "Buscar películas y series",
+    "a11y": {
+      "field": "Buscar películas y series",
+      "openDetails": "Abrir detalles del título",
+      "poster": "Póster de {{title}}"
+    },
+    "actions": {
+      "clearSearch": "Borrar búsqueda"
+    },
+    "types": {
+      "all": "Todo",
+      "movie": "Película",
+      "series": "Serie",
+      "moviePlural": "Películas",
+      "seriesPlural": "Series"
+    },
+    "recent": {
+      "title": "Búsquedas recientes",
+      "clear": "Borrar",
+      "open": "Buscar {{query}}",
+      "remove": "Eliminar {{query}} de búsquedas recientes"
+    },
+    "discovery": {
+      "title": "Explora tus catálogos",
+      "subtitle": "Novedades de tus complementos instalados.",
+      "noProvidersTitle": "Añade una fuente de contenido",
+      "noProvidersDescription": "Instala un complemento para buscar y explorar películas y series.",
+      "noCatalogsTitle": "No hay catálogos para esta vista",
+      "noCatalogsDescription": "Tus complementos instalados no ofrecen catálogos para el tipo de título seleccionado.",
+      "catalogErrorTitle": "Catálogo no disponible",
+      "catalogErrorDescription": "No se pudo cargar este catálogo. Inténtalo de nuevo.",
+      "manageAddons": "Gestionar complementos"
+    },
+    "suggestions": {
+      "noMatch": "Todavía no hay sugerencias de títulos.",
+      "showAll": "Mostrar todos los resultados de «{{query}}»"
+    },
+    "command": {
+      "label": "Búsqueda rápida",
+      "noRecent": "No hay búsquedas recientes",
+      "minimum": "Escribe al menos 2 caracteres para buscar",
+      "noResults": "No hay resultados para «{{query}}»",
+      "errorTitle": "La búsqueda no está disponible",
+      "errorDescription": "Comprueba tu conexión y vuelve a intentarlo.",
+      "navigate": "Navegar",
+      "open": "Abrir",
+      "close": "Cerrar"
+    },
+    "filters": {
+      "title": "Filtros",
+      "subtitle": "Refina estos resultados",
+      "type": "Filtrar por tipo de título",
+      "year": "Año",
+      "provider": "Fuente",
+      "sort": "Ordenar por",
+      "anyYear": "Cualquier año",
+      "allProviders": "Todas las fuentes",
+      "button": "Filtros",
+      "open": "Abrir filtros de búsqueda",
+      "close": "Cerrar filtros",
+      "reset": "Restablecer filtros",
+      "sortBy": "Ordenar por {{sort}}"
+    },
+    "sort": {
+      "default": "Mejor coincidencia",
+      "title": "Título A–Z",
+      "year": "Más recientes"
+    },
+    "results": {
+      "summary": "{{count}} resultados para «{{query}}»",
+      "summary_one": "1 resultado para «{{query}}»",
+      "summary_other": "{{count}} resultados para «{{query}}»",
+      "searching": "Buscando «{{query}}»…",
+      "detailHint": "Elige un título para ver detalles y opciones de reproducción.",
+      "sources": "Disponible en {{count}} fuentes",
+      "sources_one": "Disponible en 1 fuente",
+      "sources_other": "Disponible en {{count}} fuentes"
+    },
+    "states": {
+      "partial": "No se pudo contactar con algunas fuentes. Se muestran los resultados disponibles.",
+      "errorTitle": "No se pudo cargar la búsqueda",
+      "errorDescription": "Comprueba tu conexión y vuelve a intentarlo.",
+      "providersFailedTitle": "Las fuentes no están disponibles temporalmente",
+      "providersFailedDescription": "Ninguna fuente de contenido respondió. Inténtalo de nuevo en un momento.",
+      "noMatchTitle": "No se encontraron títulos",
+      "noMatchDescription": "Nada coincide con «{{query}}». Prueba con otro título.",
+      "filterEmptyTitle": "No hay resultados con estos filtros",
+      "filterEmptyDescription": "Restablece los filtros para ver todos los títulos coincidentes."
+    }
+  },
   "home": {
+    "hero": {
+      "eyebrow": "Destacado · {{type}}",
+      "a11y": "Destacado: {{title}}",
+      "hint": "Abre los detalles del título"
+    },
     "auth": {
       "title": "Streamer",
       "subtitle": "Tu universo de contenido, agregado de la web abierta.",
@@ -16,6 +115,7 @@
       "popularMovies": "Películas populares",
       "topTVShows": "Series destacadas",
       "recentlyAdded": "Añadido recientemente",
+      "moreToWatch": "Más para ver",
       "fromProviders": "De tus proveedores"
     },
     "continueWatching": {
@@ -76,7 +176,9 @@
     },
     "header": {
       "select": "Seleccionar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "back": "Volver a ajustes",
+      "description": "Películas y series guardadas, y todo lo que puedes continuar."
     },
     "filters": {
       "all": "Todo",
@@ -96,7 +198,21 @@
     },
     "alerts": {
       "removeTitle": "Eliminar elementos",
-      "removeMessage": "¿Estás seguro de que quieres eliminar {{count}} elementos de tu biblioteca?"
+      "removeMessage": "¿Estás seguro de que quieres eliminar {{count}} elementos de tu biblioteca?",
+      "bulkDeleteTitle": "Eliminar elementos",
+      "bulkDeleteMessage": "¿Estás seguro de que quieres eliminar {{count}} elementos? Esta acción no se puede deshacer.",
+      "added": "Añadido a la biblioteca",
+      "removed": "Eliminado de la biblioteca"
+    },
+    "actions": {
+      "prompt": "¿Qué quieres hacer?",
+      "viewDetails": "Ver detalles",
+      "remove": "Eliminar de la biblioteca",
+      "removeDownload": "Eliminar descarga",
+      "undo": "Deshacer",
+      "restore": "Restaurar",
+      "bulkRemoved": "{{count}} títulos eliminados de la biblioteca",
+      "bulkRemoved_one": "1 título eliminado de la biblioteca"
     }
   },
   "downloads": {
@@ -132,7 +248,9 @@
       "pause": "Pausar",
       "resume": "Reanudar",
       "retry": "Reintentar",
-      "play": "Reproducir"
+      "play": "Reproducir",
+      "verify": "Verificar",
+      "deleteDownload": "Eliminar descarga"
     },
     "status": {
       "queued": "En cola",
@@ -157,12 +275,65 @@
       "all": "Todo {{count}}",
       "active": "Activo {{count}}",
       "ready": "Listo {{count}}",
-      "attention": "Problemas {{count}}"
+      "attention": "Problemas {{count}}",
+      "label": "Filtrar descargas"
     },
     "summary": {
       "active": "Activo",
       "ready": "Listo",
-      "storage": "Almacenamiento sin conexión"
+      "storage": "Almacenamiento sin conexión",
+      "needsVerification": "Requiere revisión"
+    },
+    "storage": {
+      "externalCleanup": "Streamer solo puede eliminar descargas gestionadas por esta aplicación. Usa los ajustes de almacenamiento del dispositivo para otros archivos."
+    },
+    "smart": {
+      "title": "Descargas inteligentes",
+      "subtitle": "Reglas opcionales para próximos episodios, limpieza, calidad y almacenamiento.",
+      "on": "Activadas",
+      "off": "Desactivadas",
+      "enable": "Activar descargas inteligentes",
+      "enableSubtitle": "Actívalas antes de que Streamer planifique descargas automáticas de episodios.",
+      "nextEpisode": "Descargar automáticamente el siguiente episodio",
+      "nextEpisodeSubtitle": "Planifica el siguiente episodio no visto al terminar una descarga de serie.",
+      "autoDelete": "Eliminar automáticamente descargas vistas",
+      "autoDeleteSubtitle": "La limpieza es opcional y nunca elimina archivos sin verificar.",
+      "wifiOnly": "Solo Wi-Fi",
+      "wifiOnlySubtitle": "Las descargas móviles en segundo plano dependen de la plataforma; esta preferencia limita los planes automáticos.",
+      "quality": "Calidad preferida",
+      "storageLimit": "Límite de {{count}} GB",
+      "hlsUnsupported": "HLS sin conexión aún no es compatible",
+      "plannedTitle": "Próximos episodios planificados",
+      "unknownSeries": "Serie"
+    },
+    "recovery": {
+      "pausedTitle": "Descarga pausada",
+      "pausedMessage": "Reanuda cuando quieras continuar esta descarga.",
+      "resumeAction": "Reanudar",
+      "missingTitle": "Archivo sin conexión no disponible",
+      "noManagedFileMessage": "El archivo gestionado ya no está disponible en este dispositivo.",
+      "missingFileMessage": "No se encontró el archivo descargado. Prepáralo de nuevo.",
+      "downloadAgainAction": "Descargar de nuevo",
+      "verificationTitle": "Verificación necesaria",
+      "verificationMessage": "Comprueba el archivo local antes de marcarlo como disponible sin conexión.",
+      "verifyAction": "Verificar archivo",
+      "interruptedTitle": "Descarga interrumpida",
+      "interruptedMessage": "La transferencia se detuvo antes de terminar. Puedes reanudarla de forma segura.",
+      "storageTitle": "Se necesita más almacenamiento",
+      "storageMessage": "Libera espacio en el dispositivo antes de reintentar esta descarga.",
+      "freeSpaceAction": "Gestionar almacenamiento",
+      "setupTitle": "La configuración necesita atención",
+      "setupMessage": "Abre Fuentes y dispositivos y revisa este dispositivo antes de reintentar la descarga.",
+      "reviewSetupAction": "Revisar configuración",
+      "expiredTitle": "Opción de visualización caducada",
+      "expiredMessage": "Esta opción ya no está disponible. Prepara la descarga de nuevo.",
+      "prepareAgainAction": "Preparar de nuevo",
+      "unsupportedTitle": "Descarga sin conexión no disponible",
+      "unsupportedMessage": "Esta opción no se puede guardar para verla sin conexión.",
+      "removeAction": "Eliminar",
+      "failedTitle": "La descarga requiere atención",
+      "failedMessage": "Reintenta la descarga o elige otra opción de visualización.",
+      "retryAction": "Reintentar"
     },
     "footer": {
       "verified": "Los elementos solo se muestran como disponibles sin conexión después de verificar el archivo local."
@@ -178,6 +349,20 @@
   "onboarding": {
     "title": "Personalizar",
     "subtitle": "Personaliza tu experiencia antes de empezar.",
+    "intro": {
+      "streamingTitle": "Todo lo que merece la pena ver",
+      "streamingDescription": "Películas, series y tu próximo episodio en una biblioteca tranquila y cinematográfica.",
+      "syncTitle": "Continúa donde lo dejaste",
+      "syncDescription": "Empieza en el escritorio, continúa en el móvil y mantén tu biblioteca cerca.",
+      "playbackTitle": "Reproducción a tu manera",
+      "playbackDescription": "Elige tus opciones de visualización una vez. Streamer mantiene los detalles fuera de la vista."
+    },
+    "carousel": {
+      "stepLabel": "Paso de introducción {{count}}",
+      "previous": "Paso anterior",
+      "next": "Siguiente paso",
+      "getStarted": "Empezar"
+    },
     "appearance": "Apariencia",
     "addonsTitle": "Complementos iniciales",
     "addonsSubtitle": "Muy recomendados para metadatos y subtítulos.",
@@ -188,14 +373,21 @@
     "setupCheck": {
       "title": "Comprobar configuración",
       "subtitle": "Streamer debe sentirse simple, pero la reproducción depende de tus fuentes y del estado del dispositivo.",
-      "sources": "Fuentes y metadatos",
-      "sourcesBody": "Instala Cinemeta ahora; añade complementos de streaming más tarde desde Ajustes.",
-      "bridge": "Bridge de escritorio",
-      "bridgeBody": "El escritorio puede preparar reproducción torrent/remux y compartir su URL LAN.",
+      "sources": "Catálogo y opciones de visualización",
+      "sourcesBody": "Tu catálogo inicial está listo. Puedes añadir más opciones de visualización desde Ajustes.",
+      "bridge": "Compatibilidad de reproducción adicional",
+      "bridgeBody": "Para algunos títulos, la aplicación de escritorio ayuda a preparar la reproducción automáticamente.",
       "offlineCast": "Descargas y cast",
-      "offlineCastBody": "Offline y cast solo estarán disponibles cuando una fuente lo admita.",
+      "offlineCastBody": "Las descargas y la transmisión aparecen automáticamente cuando están disponibles.",
       "privacy": "Privacidad",
-      "privacyBody": "Las URL de streams, magnets y tokens sin procesar no se incluyen en diagnósticos."
+      "privacyBody": "Los informes de diagnóstico ocultan los datos de conexión sensibles."
+    },
+    "themeA11y": "Tema {{theme}}",
+    "addonA11y": "{{name}}. {{description}}",
+    "starterAddons": {
+      "cinemeta": "Un catálogo seleccionado de películas y series.",
+      "openSubtitles": "Una amplia biblioteca de subtítulos para películas y series.",
+      "torrentio": "Una fuente comunitaria opcional de visualización."
     },
     "finish": "Finalizar e Iniciar sesión"
   },
@@ -255,7 +447,11 @@
     },
     "about": {
       "releasePolicy": "Las actualizaciones de escritorio se comprueban manualmente hasta validar completamente el pipeline de releases.",
-      "checkUpdates": "Comprobar actualizaciones"
+      "checkUpdates": "Comprobar actualizaciones",
+      "terms": "Términos de uso",
+      "termsDescription": "Consulta los términos aplicables a Streamer",
+      "privacy": "Política de privacidad",
+      "privacyDescription": "Consulta cómo gestiona Streamer tus datos"
     },
     "alerts": {
       "deleteAccountTitle": "Eliminar cuenta",
@@ -277,6 +473,207 @@
       "light": "Claro",
       "dark": "Oscuro",
       "system": "Sistema"
+    },
+    "overview": {
+      "title": "Ajustes",
+      "subtitle": "Tu cuenta, reproducción, descargas y preferencias de la aplicación.",
+      "categories": "Categorías"
+    },
+    "navigation": {
+      "account": {
+        "title": "Cuenta",
+        "description": "Perfil, Trakt, seguridad y dispositivos conectados"
+      },
+      "playback": {
+        "title": "Reproducción",
+        "description": "Calidad, reproducción automática, audio y subtítulos"
+      },
+      "downloads": {
+        "title": "Descargas",
+        "description": "Descargas inteligentes, calidad, almacenamiento y limpieza"
+      },
+      "sources": {
+        "title": "Fuentes y dispositivos",
+        "description": "Complementos y disponibilidad de reproducción"
+      },
+      "appearance": { "title": "Apariencia", "description": "Tema e idioma" },
+      "privacy": {
+        "title": "Privacidad",
+        "description": "Bloqueo, exportación de datos y eliminación de cuenta"
+      },
+      "about": {
+        "title": "Acerca de",
+        "description": "Versión y actualizaciones de escritorio"
+      },
+      "advanced": {
+        "title": "Avanzado",
+        "description": "Conexiones, entorno, reparación y diagnósticos"
+      }
+    },
+    "readiness": {
+      "readyTitle": "Listo para reproducir",
+      "attentionTitle": "La configuración necesita atención",
+      "readyDescription": "Este dispositivo está listo para reproducción y descargas compatibles.",
+      "attentionDescription": "La reproducción directa puede funcionar. Revisa la configuración para cada tipo de fuente.",
+      "review": "Revisar",
+      "checkAgain": "Comprobar de nuevo"
+    },
+    "common": { "loading": "Cargando…" },
+    "accountModals": {
+      "common": {
+        "cancel": "Cancelar",
+        "errorTitle": "Algo ha salido mal",
+        "successTitle": "Guardado"
+      },
+      "profile": {
+        "title": "Editar perfil",
+        "displayName": "Nombre para mostrar",
+        "save": "Guardar",
+        "saveA11y": "Guardar cambios del perfil",
+        "updated": "Tu perfil se ha actualizado.",
+        "updateFailed": "No se ha podido actualizar tu perfil."
+      },
+      "password": {
+        "title": "Cambiar contraseña",
+        "current": "Contraseña actual",
+        "new": "Nueva contraseña (al menos 8 caracteres)",
+        "newA11y": "Nueva contraseña, al menos 8 caracteres",
+        "update": "Actualizar contraseña",
+        "updateA11y": "Actualizar contraseña",
+        "minimumLength": "La nueva contraseña debe tener al menos 8 caracteres.",
+        "updated": "Tu contraseña se ha cambiado.",
+        "updateFailed": "No se ha podido cambiar tu contraseña."
+      },
+      "sessions": {
+        "title": "Sesiones activas",
+        "done": "Listo",
+        "justNow": "Ahora mismo",
+        "minutesAgo": "Hace {{count}} min",
+        "hoursAgo": "Hace {{count}} h",
+        "thisDevice": "Este dispositivo",
+        "unknownDevice": "Dispositivo desconocido",
+        "unknownIp": "IP desconocida",
+        "revokeA11y": "Revocar esta sesión",
+        "revokeTitle": "¿Revocar sesión?",
+        "revokeDescription": "Esto cierra la sesión del dispositivo asociado en Streamer.",
+        "revoke": "Revocar",
+        "revokeFailed": "No se ha podido revocar la sesión."
+      }
+    },
+    "detail": {
+      "account": {
+        "editProfile": "Editar perfil",
+        "editProfileDescription": "Cambia tu nombre y los datos del perfil"
+      },
+      "downloads": {
+        "openDownloads": "Abrir descargas",
+        "openDownloadsDescription": "Consulta la cola, títulos sin conexión y almacenamiento"
+      },
+      "privacy": { "dangerZone": "Zona de peligro" }
+    },
+    "playbackPreferences": {
+      "quality": "Calidad de reproducción",
+      "qualityDescription": "Elige la calidad máxima al ordenar las fuentes.",
+      "auto": "Automática",
+      "audio": "Idioma de audio",
+      "audioDescription": "Prefiere esta pista de audio cuando esté disponible.",
+      "subtitles": "Subtítulos",
+      "subtitlesDescription": "Elige el idioma de subtítulos seleccionado al iniciar la reproducción.",
+      "autoplay": "Reproducir el siguiente episodio",
+      "autoplayDescription": "Continúa una serie cuando se conoce el siguiente episodio.",
+      "languages": {
+        "off": "Desactivados",
+        "english": "Inglés",
+        "dutch": "Neerlandés",
+        "spanish": "Español"
+      }
+    },
+    "downloadPreferences": {
+      "smartDownloads": "Descargas inteligentes",
+      "smartDownloadsDescription": "Gestiona episodios seleccionados automáticamente según tus preferencias.",
+      "nextEpisode": "Descargar el siguiente episodio",
+      "nextEpisodeDescription": "Planifica el siguiente episodio no visto al terminar una descarga.",
+      "wifiOnly": "Solo Wi-Fi",
+      "wifiOnlyDescription": "Crea planes de descarga automática únicamente con Wi-Fi.",
+      "cleanup": "Eliminar descargas vistas",
+      "cleanupDescription": "Elimina archivos verificados y vistos cuando se pueda recuperar espacio.",
+      "quality": "Calidad de descarga",
+      "qualityDescription": "Define la calidad máxima de las descargas automáticas.",
+      "best": "Mejor",
+      "storageLimit": "Límite de almacenamiento",
+      "storageLimitDescription": "Elige cuánto espacio pueden usar las descargas inteligentes en este dispositivo."
+    },
+    "biometric": {
+      "prompt": "Autentícate para activar el desbloqueo biométrico"
+    },
+    "update": {
+      "notLoaded": "El estado de actualización aún no se ha cargado.",
+      "checking": "Buscando actualizaciones…",
+      "available": "La versión {{version}} está disponible.",
+      "latest": "más reciente",
+      "current": "Streamer está actualizado ({{version}}).",
+      "unsupported": "La búsqueda de actualizaciones está disponible en aplicaciones de escritorio empaquetadas.",
+      "failed": "Falló la búsqueda de actualizaciones.",
+      "downloaded": "El actualizador de escritorio descargó una actualización.",
+      "version": "Versión actual: {{version}}"
+    },
+    "sourcesSection": {
+      "addonsTitle": "Fuentes de contenido",
+      "addonsDescription": "Instala y gestiona los complementos que proporcionan tu catálogo.",
+      "pageDescription": "Revisa la disponibilidad de reproducción, los dispositivos conectados y las fuentes."
+    },
+    "advancedSection": {
+      "copyDiagnostics": "Copiar diagnósticos",
+      "copying": "Copiando…",
+      "recheckRuntime": "Volver a comprobar el entorno",
+      "repairSteps": "Pasos de reparación",
+      "useLanUrl": "Usar dirección de red",
+      "restarting": "Reiniciando…",
+      "restart": "Reiniciar servicio",
+      "cleaning": "Limpiando…",
+      "cleanCache": "Limpiar caché",
+      "lanWarningTitle": "Usa la dirección de red de la aplicación de escritorio",
+      "lanWarningDescription": "La dirección local solo funciona en este dispositivo. Usa la dirección de red de la aplicación de escritorio para reproducir, descargar o enviar desde otro dispositivo.",
+      "devicesTitle": "Dispositivos y casting",
+      "devicesDescription": "Usa la aplicación de escritorio para los servicios de reproducción de esta red.",
+      "desktopBridge": "Servicio de escritorio",
+      "connected": "Conectado",
+      "casting": "Casting",
+      "castingReadyDescription": "El casting puede usar el plan de reproducción activo.",
+      "ready": "Listo",
+      "limited": "Limitado",
+      "playbackTitle": "Reproducción y descargas",
+      "playbackDescription": "La información detallada de las fuentes aparece aquí solo para resolver problemas.",
+      "directStreams": "Streams directos",
+      "directStreamsDescription": "Las fuentes HTTP y HLS compatibles funcionan sin el servicio de escritorio.",
+      "torrentStreams": "Streams torrent",
+      "torrentStreamsDescription": "Las fuentes torrent usan el servicio de escritorio para prepararse y reproducirse.",
+      "downloadsDescription": "La disponibilidad sin conexión aparece tras verificar un archivo local.",
+      "directOnly": "Solo directo",
+      "resolversTitle": "Resolutores remotos",
+      "resolversDescription": "Los servicios de pago opcionales no son necesarios para configurar la aplicación.",
+      "realDebridDescription": "Resolutor de pago opcional. Está desactivado por defecto y no es necesario para la configuración inicial.",
+      "technicalDescription": "Ajustes de conexión y diagnósticos para resolver problemas.",
+      "connectionSettings": "Ajustes de conexión",
+      "connectionDescription": "Direcciones del servidor y token de vinculación del servicio de escritorio.",
+      "pairingToken": "Token de vinculación (opcional)",
+      "pairingPlaceholder": "Solo es necesario cuando el servicio de escritorio requiere un token",
+      "diagnostics": "Diagnósticos avanzados",
+      "diagnosticsDescription": "Detalles de compilación, entorno, motor multimedia, caché y reparación.",
+      "repair": "Reparar",
+      "checking": "Comprobando",
+      "needsService": "Necesita el servicio de escritorio",
+      "serviceNeedsRepair": "El servicio de escritorio necesita reparación",
+      "setupReadyDescription": "La reproducción directa y torrent compatible, las descargas y el casting pueden usar esta configuración.",
+      "setupRepairDescription": "La reproducción directa puede funcionar, pero la reproducción y las descargas mediante el servicio necesitan reparación.",
+      "diagnosticsExported": "Diagnósticos exportados",
+      "diagnosticsCopiedDescription": "Se copió un paquete de depuración seguro al portapapeles.",
+      "diagnosticsExportedDescription": "Se exportó un paquete de depuración seguro.",
+      "diagnosticsUnavailable": "Diagnósticos no disponibles",
+      "diagnosticsUnavailableDescription": "No se pudieron exportar los diagnósticos.",
+      "cacheCleaned": "Caché limpiada",
+      "cacheCleanupFailed": "Falló la limpieza de caché",
+      "cacheCleanupFailedDescription": "No se pudieron limpiar las entradas inactivas de la caché."
     },
     "onboarding": {
       "title": "Personalizar",
@@ -312,6 +709,10 @@
     "empty": {
       "title": "No hay complementos instalados",
       "hint": "Prueba: https://v3-cinemeta.strem.io/manifest.json"
+    },
+    "fetchError": {
+      "title": "No se pudieron cargar los complementos",
+      "description": "Comprueba tu conexión y vuelve a intentarlo."
     }
   },
   "detail": {
@@ -332,6 +733,77 @@
     "watchlist": {
       "add": "+ Añadir a la biblioteca",
       "remove": "✓ En la biblioteca"
+    },
+    "actionPanel": {
+      "findingSources": "Buscando opciones de visualización",
+      "sourceCount": "{{count}} fuentes",
+      "sourceCount_one": "1 fuente",
+      "noSources": "Aún no hay fuentes",
+      "episodeCount": "{{count}} episodios",
+      "episodeCount_one": "1 episodio",
+      "findingBest": "Buscando la mejor opción",
+      "playBest": "Reproducir la mejor",
+      "preparing": "Preparando",
+      "inLibrary": "En la biblioteca",
+      "add": "Añadir"
+    },
+    "sources": {
+      "episodes": "Episodios",
+      "more": "Más fuentes",
+      "show": "Mostrar más fuentes",
+      "hide": "Ocultar más fuentes",
+      "available": "Alternativa avanzada · {{count}} disponibles",
+      "groups": "Alternativa avanzada · {{count}} grupos",
+      "filterByQuality": "Filtrar fuentes por {{quality}}"
+    },
+    "readiness": {
+      "finishSetupTitle": "Completa la configuración de reproducción",
+      "setupAttentionTitle": "La configuración necesita atención",
+      "openSourcesDetail": "Abre Fuentes y dispositivos para conectar la aplicación de escritorio.",
+      "directMayWork": "Las opciones directas aún pueden funcionar en este dispositivo.",
+      "sourcesAction": "Fuentes y dispositivos",
+      "extraSupportTitle": "Se necesita compatibilidad adicional",
+      "extraSupportMessage": "Esta opción necesita ayuda de la aplicación de escritorio.",
+      "checkSupportDetail": "Revisa Fuentes y dispositivos o elige otra opción.",
+      "noSourcesTitle": "No se encontraron opciones",
+      "noSourcesMessage": "No se pudo preparar ninguna fuente disponible para este título.",
+      "noSourcesDetail": "Comprueba tus complementos o vuelve a intentarlo más tarde.",
+      "noCompatibleTitle": "No hay una opción compatible",
+      "noCompatibleMessage": "Las opciones disponibles no se pueden usar para esta acción en este dispositivo.",
+      "noCompatibleDetail": "Elige otra opción o revisa Fuentes y dispositivos.",
+      "optionUnavailableTitle": "Opción no disponible",
+      "optionCouldNotStart": "Esta opción no ha podido iniciarse ahora.",
+      "tryAgainOrMore": "Vuelve a intentarlo o abre Más fuentes.",
+      "optionCannotPlay": "Esta opción no puede reproducirse de forma fiable en este dispositivo.",
+      "tryAnotherOption": "Elige otra opción o una calidad inferior.",
+      "timeoutTitle": "La preparación tardó demasiado",
+      "timeoutMessage": "Esta opción no estuvo lista a tiempo.",
+      "timeoutDetail": "Vuelve a intentarlo o elige otra opción.",
+      "networkTitle": "Problema de conexión",
+      "networkMessage": "Vuelve a conectarte a internet e inténtalo de nuevo.",
+      "unavailableMessage": "Esta acción no está disponible con las opciones actuales.",
+      "attemptedOptions": "También se probaron otras {{count}} opciones.",
+      "attemptedOptions_one": "También se probó otra opción.",
+      "setup": {
+        "play": "Conecta la aplicación de escritorio para reproducir este título.",
+        "download": "Conecta la aplicación de escritorio para preparar esta descarga.",
+        "cast": "Conecta la aplicación de escritorio para transmitir este título."
+      },
+      "setupNeedsAttention": {
+        "play": "Revisa este dispositivo antes de intentar reproducir de nuevo.",
+        "download": "Revisa este dispositivo antes de reintentar la descarga.",
+        "cast": "Revisa este dispositivo antes de volver a transmitir."
+      },
+      "sourceFailed": {
+        "play": "Probando otra opción de visualización",
+        "download": "Probando otra opción de descarga",
+        "cast": "Probando otra opción de transmisión"
+      },
+      "unavailable": {
+        "play": "Reproducción no disponible",
+        "download": "Descarga no disponible",
+        "cast": "Transmisión no disponible"
+      }
     },
     "errors": {
       "notFound": "Contenido no encontrado",
@@ -362,13 +834,19 @@
       "password": "Contraseña",
       "button": "Crear cuenta",
       "haveAccount": "¿Ya tienes una cuenta?",
-      "signIn": "Iniciar sesión"
+      "signIn": "Iniciar sesión",
+      "passwordMin": "La contraseña debe tener al menos 8 caracteres",
+      "passwordUpper": "La contraseña debe incluir al menos una mayúscula",
+      "passwordLower": "La contraseña debe incluir al menos una minúscula",
+      "passwordDigit": "La contraseña debe incluir al menos un número"
     },
     "forgot": {
       "title": "Restablecer contraseña",
       "subtitle": "Introduce tu correo para recibir un enlace de restablecimiento",
       "button": "Enviar enlace",
-      "back": "Volver al inicio de sesión"
+      "back": "Volver al inicio de sesión",
+      "success": "Si la cuenta existe, se ha enviado un enlace de restablecimiento.",
+      "error": "No se ha podido solicitar un enlace de restablecimiento"
     },
     "resetPassword": {
       "title": "Nueva Contraseña",
@@ -386,6 +864,9 @@
       "subtitle": "Hemos enviado un enlace de verificación a",
       "yourEmail": "tu correo",
       "description": "Por favor, revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta. Si no ves el correo, revisa tu carpeta de spam.",
+      "success": "Correo verificado. Ya puedes iniciar sesión.",
+      "failed": "La verificación del correo ha fallado",
+      "verifyButton": "Verificar correo",
       "resendSuccess": "¡Nuevo enlace enviado con éxito!",
       "resendError": "Error al enviar. Por favor, inténtalo de nuevo.",
       "resendButton": "Reenviar Correo",
@@ -403,6 +884,7 @@
       "title": "¿Reanudar reproducción?",
       "subtitle": "Te quedaste en {{time}}",
       "resume": "Reanudar",
+      "resumeFrom": "Reanudar desde {{time}}",
       "startOver": "Empezar de nuevo"
     },
     "upsell": {
@@ -424,6 +906,9 @@
       "seekUnavailable": "Búsqueda no disponible",
       "seekBackUnavailable": "Retroceso no disponible",
       "seekForwardUnavailable": "Avance no disponible",
+      "seekDurationUnavailable": "La búsqueda no está disponible hasta conocer la duración.",
+      "seekLiveUnavailable": "La búsqueda no está disponible en esta transmisión en directo.",
+      "seekRemuxUnavailable": "La búsqueda estará disponible al terminar la preparación.",
       "progress": "Progreso de reproducción",
       "progressUnavailable": "Progreso no disponible",
       "live": "En directo",
@@ -458,6 +943,20 @@
       "noSubtitles": "No hay pistas de subtítulos disponibles.",
       "off": "Desactivado"
     },
+    "remote": {
+      "castingTo": "Transmitiendo a {{name}}",
+      "activeOn": "Activo en {{name}}",
+      "anotherDevice": "otro dispositivo",
+      "paused": "En pausa",
+      "playing": "Reproduciendo",
+      "unknownContent": "Título desconocido",
+      "seekBack": "Retroceder la transmisión 10 segundos",
+      "seekForward": "Avanzar la transmisión 10 segundos",
+      "resume": "Reanudar reproducción remota",
+      "pause": "Pausar reproducción remota",
+      "openPlayer": "Abrir reproductor",
+      "takeOver": "Continuar aquí"
+    },
     "status": {
       "planning": "Preparando la reproducción...",
       "checkingBridge": "Comprobando el puente de escritorio...",
@@ -472,6 +971,7 @@
       "tryingFallback": "Probando otra fuente...",
       "buffering": "Cargando el búfer...",
       "errorTitle": "Error de conexión",
+      "noSourcesTitle": "No hay una fuente reproducible",
       "bridgeErrorTitle": "El puente no está listo",
       "noPeersTitle": "No se encontraron pares",
       "unsupportedTitle": "Fuente no compatible",
@@ -481,18 +981,60 @@
     },
     "errors": {
       "noStream": "No hay flujo seleccionado",
+      "bridgeUnavailable": "La compatibilidad de reproducción no está lista. Abre Fuentes y dispositivos, revisa este dispositivo e inténtalo de nuevo.",
+      "playbackFailed": "No se ha podido iniciar este título.",
+      "playbackTimeout": "Este título ha tardado demasiado en prepararse. Inténtalo de nuevo o elige otra opción.",
+      "unsupportedCodec": "Esta opción no puede reproducirse de forma fiable en este dispositivo. Elige otra opción o una calidad inferior.",
       "openSourcesDevices": "Fuentes y dispositivos",
+      "chooseSource": "Elegir otra fuente",
+      "previewPlayer": "Vista previa del reproductor",
       "goBack": "Volver"
     },
     "cast": {
       "castingTo": "Transmitiendo a {{name}}",
       "stop": "Detener transmisión"
+    },
+    "casting": {
+      "active": "Transmitiendo",
+      "to": "Transmitiendo a {{name}}",
+      "stop": "Detener transmisión"
+    },
+    "castRecovery": {
+      "devicesTitle": "Pantallas no disponibles",
+      "devicesMessage": "Streamer no pudo buscar pantallas cercanas.",
+      "searchAgainAction": "Buscar de nuevo",
+      "deviceTitle": "Pantalla no disponible",
+      "deviceMessage": "No se pudo alcanzar esta pantalla. Comprueba que esté en línea y en la misma red.",
+      "refreshAction": "Actualizar pantallas",
+      "incompatibleTitle": "Opción no compatible",
+      "incompatibleMessage": "Esta pantalla no puede reproducir la opción preparada.",
+      "chooseDisplayAction": "Elegir otra pantalla",
+      "tryAnotherAction": "Probar otra opción",
+      "sourceReachTitle": "La pantalla no puede acceder a esta opción",
+      "sourceReachMessage": "Prepara otra opción a la que la pantalla pueda acceder.",
+      "prepareAnotherAction": "Preparar otra opción",
+      "supportTitle": "Se necesita compatibilidad adicional",
+      "supportMessage": "Revisa Fuentes y dispositivos antes de volver a transmitir.",
+      "reviewSetupAction": "Revisar configuración",
+      "setupTitle": "La configuración necesita atención",
+      "setupMessage": "Abre Fuentes y dispositivos y revisa este dispositivo antes de volver a transmitir.",
+      "failedTitle": "La transmisión no se inició",
+      "failedMessage": "Vuelve a intentarlo o elige otra opción.",
+      "tryAgainAction": "Reintentar"
     }
   },
   "common": {
     "loading": "Cargando...",
     "error": "Error",
     "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "dismiss": "Cerrar",
+    "actions": { "viewDetails": "Ver detalles" },
+    "media": { "movie": "Película", "series": "Serie" },
+    "unexpectedError": {
+      "title": "Algo ha salido mal",
+      "description": "Streamer no pudo cargar esta pantalla. Inténtalo de nuevo."
+    },
     "themes": {
       "dark": "Oscuro",
       "light": "Claro",
@@ -501,12 +1043,21 @@
   },
   "notifications": {
     "title": "Notificaciones",
-    "empty": "No hay notificaciones"
+    "empty": "No hay notificaciones",
+    "dismiss": "Cerrar notificación"
+  },
+  "biometricLock": {
+    "prompt": "Desbloquea Streamer para continuar",
+    "usePin": "Usar el código del dispositivo",
+    "title": "Streamer está bloqueado",
+    "subtitle": "Confirma tu identidad para volver a tu biblioteca.",
+    "unlock": "Desbloquear Streamer"
   },
   "legal": {
     "privacyTitle": "Política de Privacidad",
     "termsTitle": "Términos de Servicio",
     "lastUpdated": "Última actualización: {{date}}",
+    "updatedDate": "julio de 2026",
     "sections": {
       "privacy": {
         "1": "1. Recopilación de Datos",
@@ -520,6 +1071,27 @@
         "3": "3. Contenido del Usuario",
         "4": "4. Limitación de Responsabilidad"
       }
+    },
+    "bodies": {
+      "privacy": {
+        "1": "Streamer guarda los datos de cuenta y reproducción necesarios para tu biblioteca, progreso y sesiones de dispositivos.",
+        "2": "Los tokens de autenticación y credenciales de conexión son sensibles y no se incluyen en exportaciones de diagnóstico.",
+        "3": "Los complementos y servicios externos tienen sus propias prácticas de privacidad. Revísalas antes de conectar una cuenta o fuente.",
+        "4": "Puedes exportar tus datos o eliminar tu cuenta desde los ajustes de Privacidad."
+      },
+      "terms": {
+        "1": "Al usar Streamer, aceptas estos términos y las leyes aplicables donde vives.",
+        "2": "Usa Streamer y las fuentes conectadas de forma responsable. Eres responsable de las fuentes y contenidos a los que accedes.",
+        "3": "Conservas la responsabilidad sobre enlaces, complementos y otra configuración que añadas al servicio.",
+        "4": "Streamer se ofrece sin garantía de que todas las fuentes o dispositivos externos sigan disponibles."
+      }
     }
+  },
+  "navigation": { "menu": "Menú", "back": "Atrás" },
+  "catalog": {
+    "openMovieDetails": "Abrir detalles de la película",
+    "openSeriesDetails": "Abrir detalles de la serie",
+    "scrollLeft": "Desplazar a la izquierda",
+    "scrollRight": "Desplazar a la derecha"
   }
 }

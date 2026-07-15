@@ -184,6 +184,10 @@ export function inferPlaybackErrorCodeFromMessages(
     return "PLAYBACK_TIMEOUT";
   }
 
+  if (text.includes("stalled") || text.includes("stuck preparing")) {
+    return "GATEWAY_TIMEOUT";
+  }
+
   if (
     text.includes("did not return") ||
     text.includes("source unavailable") ||

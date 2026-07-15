@@ -1,11 +1,4 @@
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
@@ -16,6 +9,7 @@ import {
 } from "../../stores/smartDownloadStore";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
+import { AppSwitch } from "../ui/AppSwitch";
 import {
   getWebFocusStyle,
   uiRadii,
@@ -69,9 +63,7 @@ export function SmartDownloadsPanel({ framed = true }: { framed?: boolean }) {
           style={[
             styles.iconBubble,
             {
-              backgroundColor: isDark
-                ? "rgba(216,180,254,0.14)"
-                : "rgba(167,139,250,0.13)",
+              backgroundColor: colors.tint + (isDark ? "18" : "12"),
             },
           ]}
         >
@@ -167,13 +159,13 @@ export function SmartDownloadsPanel({ framed = true }: { framed?: boolean }) {
                     backgroundColor: active
                       ? colors.tint
                       : isDark
-                        ? "rgba(255,255,255,0.05)"
-                        : "rgba(0,0,0,0.035)",
+                        ? "rgba(244,245,247,0.06)"
+                        : "rgba(16,18,22,0.05)",
                   },
                   pressed && { opacity: 0.78 },
                   Platform.OS === "web" &&
                     focused &&
-                    getWebFocusStyle(colors.tint),
+                    getWebFocusStyle(colors.focus),
                 ]}
                 onPress={() => {
                   hapticImpactLight();
@@ -282,13 +274,11 @@ function PreferenceRow({
           {subtitle}
         </Text>
       </View>
-      <Switch
+      <AppSwitch
         value={value}
         onValueChange={onValueChange}
         disabled={disabled}
         accessibilityLabel={accessibilityLabel}
-        trackColor={{ false: "#d7d1df", true: colors.tint }}
-        thumbColor="#fff"
       />
     </View>
   );

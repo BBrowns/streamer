@@ -1,24 +1,69 @@
+import { Platform } from "react-native";
 import type { ThemeColors } from "../../constants/theme";
 
 export const uiSpacing = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,
   lg: 16,
   xl: 20,
   xxl: 24,
+  xxxl: 32,
+  huge: 40,
+  giant: 48,
+  section: 64,
 };
 
 export const uiRadii = {
   xs: 8,
   sm: 12,
-  md: 16,
-  lg: 20,
-  xl: 24,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  control: 8,
+  card: 12,
+  sheet: 20,
+  hero: 20,
   pill: 999,
 };
 
 export const uiTouchTarget = 44;
+
+export const uiMotion = {
+  fast: 120,
+  standard: 180,
+  slow: 280,
+};
+
+export const uiLayout = {
+  contentMaxWidth: 1600,
+  readingMaxWidth: 760,
+  detailMaxWidth: 1120,
+  compactGutter: 16,
+  mediumGutter: 24,
+  desktopGutter: 40,
+  settingsRailWidth: 256,
+  filterRailWidth: 240,
+} as const;
+
+const webInterFontStack =
+  '"Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+export const uiFonts = {
+  regular: Platform.OS === "web" ? webInterFontStack : "Inter_400Regular",
+  medium: Platform.OS === "web" ? webInterFontStack : "Inter_500Medium",
+  semibold: Platform.OS === "web" ? webInterFontStack : "Inter_600SemiBold",
+  bold: Platform.OS === "web" ? webInterFontStack : "Inter_700Bold",
+  extrabold: Platform.OS === "web" ? webInterFontStack : "Inter_800ExtraBold",
+  black: Platform.OS === "web" ? webInterFontStack : "Inter_900Black",
+  system: Platform.select({
+    ios: "System",
+    android: "sans-serif",
+    web: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    default: "System",
+  }),
+} as const;
 
 export function getWebFocusStyle(color: string) {
   return {
@@ -29,35 +74,69 @@ export function getWebFocusStyle(color: string) {
   } as const;
 }
 
+export function getAccentForeground(colors: ThemeColors) {
+  return colors.onTint;
+}
+
+export function getPrimaryForeground(colors: ThemeColors) {
+  return colors.onPrimary;
+}
+
 export const uiTypography = {
+  display: {
+    fontFamily: uiFonts.extrabold,
+    fontSize: 48,
+    lineHeight: 52,
+    fontWeight: "800" as const,
+    letterSpacing: -1.4,
+  },
+  headline: {
+    fontFamily: uiFonts.extrabold,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: "800" as const,
+    letterSpacing: -0.8,
+  },
   sectionLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "800" as const,
-    letterSpacing: 0,
-  },
-  control: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: "800" as const,
-    letterSpacing: 0,
-  },
-  caption: {
+    fontFamily: uiFonts.bold,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "700" as const,
+    letterSpacing: 0.4,
+  },
+  control: {
+    fontFamily: uiFonts.bold,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700" as const,
+    letterSpacing: 0,
+  },
+  caption: {
+    fontFamily: uiFonts.medium,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "500" as const,
     letterSpacing: 0,
   },
   body: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "600" as const,
+    fontFamily: uiFonts.regular,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "400" as const,
     letterSpacing: 0,
   },
   title: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: "900" as const,
+    fontFamily: uiFonts.bold,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "700" as const,
+    letterSpacing: -0.35,
+  },
+  label: {
+    fontFamily: uiFonts.semibold,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600" as const,
     letterSpacing: 0,
   },
 };
@@ -76,10 +155,8 @@ export function getSurfaceColors(
 
   if (tone === "accent") {
     return {
-      backgroundColor: isDark
-        ? "rgba(216,180,254,0.12)"
-        : "rgba(167,139,250,0.10)",
-      borderColor: colors.tint + "36",
+      backgroundColor: colors.tint + (isDark ? "14" : "10"),
+      borderColor: "transparent",
     };
   }
 
@@ -98,8 +175,8 @@ export function getSurfaceColors(
   }
 
   return {
-    backgroundColor: isDark ? "rgba(255,255,255,0.055)" : colors.card,
-    borderColor: colors.border,
+    backgroundColor: colors.card,
+    borderColor: "transparent",
   };
 }
 
@@ -112,5 +189,5 @@ export function getToneColor(colors: ThemeColors, tone: StatusTone) {
 }
 
 export function getSoftOverlayColor(isDark: boolean) {
-  return isDark ? "rgba(9,10,18,0.68)" : "rgba(251,246,244,0.78)";
+  return isDark ? "rgba(8,9,12,0.72)" : "rgba(243,242,239,0.82)";
 }

@@ -2,9 +2,7 @@ import {
   View,
   Text,
   ActivityIndicator,
-  Platform,
   Pressable,
-  useWindowDimensions,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,6 +35,9 @@ import { DesktopCastModal } from "../../../components/DesktopCastModal";
 import { useCastStore } from "../../../stores/castStore";
 import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
 import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
+import { useWindowClass } from "../../../hooks/useWindowClass";
+import { useTheme } from "../../../hooks/useTheme";
+import { mapPlaybackMessageToRuntimeFailure } from "../../../services/playback/PlaybackErrors";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -47,7 +48,15 @@ import {
 } from "../../../components/detail/PlaybackReadinessNotice";
 
 export default function DetailScreen() {
-  const { type, id } = useLocalSearchParams<{ type: string; id: string }>();
+  const {
+    type,
+    id,
+    sources: sourcesParam,
+  } = useLocalSearchParams<{
+    type: string;
+    id: string;
+    sources?: string;
+  }>();
   const castType = type as "movie" | "series";
   const router = useRouter();
   const { t } = useTranslation();
@@ -55,8 +64,9 @@ export default function DetailScreen() {
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
   const setSessionStream = usePlayerStore((s) => s.setSessionStream);
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { isExpanded, isLarge } = useWindowClass();
+  const { colors } = useTheme();
+  const isDesktop = isExpanded || isLarge;
 
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
     null,
@@ -79,7 +89,7 @@ export default function DetailScreen() {
 
   const openSourcesDevices = useCallback(() => {
     setPlaybackNotice(null);
-    router.push("/settings");
+    router.push("/settings/sources");
   }, [router]);
 
   const handleToggleLibrary = useCallback(() => {
@@ -88,7 +98,17 @@ export default function DetailScreen() {
     const { show } = useToastStore.getState();
     if (inLibrary) {
       removeFromLibrary.mutate(id, {
-        onSuccess: () => show(t("library.alerts.removed"), "info"),
+        onSuccess: () =>
+          show(t("library.alerts.removed"), "info", {
+            actionLabel: t("library.actions.undo"),
+            onAction: () =>
+              addToLibrary.mutateAsync({
+                type: castType,
+                itemId: id,
+                title: meta.name,
+                poster: meta.poster,
+              }),
+          }),
       });
     } else {
       hapticSuccess();
@@ -133,23 +153,34 @@ export default function DetailScreen() {
 
   if (metaLoading) {
     return (
-      <View style={styles.cinemaCentered}>
-        <ActivityIndicator size="large" color="#d8b4fe" />
+      <View
+        style={[styles.cinemaCentered, { backgroundColor: colors.background }]}
+      >
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }
 
   if (!meta) {
     return (
-      <View style={styles.cinemaCentered}>
+      <View
+        style={[styles.cinemaCentered, { backgroundColor: colors.background }]}
+      >
         <Pressable
-          style={styles.errorBackButton}
+          style={[
+            styles.errorBackButton,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
           onPress={() => goBackOrReplace(router)}
         >
-          <Ionicons name="chevron-back" size={20} color="#f2d7ff" />
-          <Text style={styles.errorBackText}>Back</Text>
+          <Ionicons name="chevron-back" size={20} color={colors.tint} />
+          <Text style={[styles.errorBackText, { color: colors.tint }]}>
+            Back
+          </Text>
         </Pressable>
-        <Text style={styles.errorText}>{t("detail.errors.notFound")}</Text>
+        <Text style={[styles.errorText, { color: colors.error }]}>
+          {t("detail.errors.notFound")}
+        </Text>
       </View>
     );
   }
@@ -198,53 +229,26 @@ export default function DetailScreen() {
       return;
     }
 
-    const playbackStream =
-      season && episode
-        ? {
-            ...stream,
-            fileSelectionHints: {
-              ...stream.fileSelectionHints,
-              season,
-              episode,
-            },
-          }
-        : stream;
-    const streamId = stream.infoHash || stream.url;
-    const task = useDownloadStore.getState().tasks[streamId || ""];
+    try {
+      const playbackStream =
+        season && episode
+          ? {
+              ...stream,
+              fileSelectionHints: {
+                ...stream.fileSelectionHints,
+                season,
+                episode,
+              },
+            }
+          : stream;
+      const streamId = stream.infoHash || stream.url;
+      const task = useDownloadStore.getState().tasks[streamId || ""];
 
-    if (isTaskOfflinePlayable(task) && task?.localUri) {
-      if (await downloadService.verifyTask(task.id)) {
-        setPlaybackNotice(null);
-        setStream(
-          { ...playbackStream, url: task.localUri },
-          {
-            type: castType,
-            itemId: id || "unknown",
-            title: episodeTitle
-              ? `${meta?.name} - ${episodeTitle}`
-              : (meta?.name ?? stream.title ?? "Unknown"),
-            poster: meta?.poster,
-            season,
-            episode,
-          },
-        );
-
-        router.push("/player");
-        return;
-      }
-    }
-
-    const uri = await streamEngineManager.getPlaybackUri(playbackStream);
-    const playable = !!uri && uri.length > 0;
-
-    if (!playable && stream.infoHash) {
-      const bridgeUp = await streamEngineManager.detectBridge();
-      if (bridgeUp) {
-        const retryUri =
-          await streamEngineManager.getPlaybackUri(playbackStream);
-        if (retryUri && retryUri.length > 0) {
+      if (isTaskOfflinePlayable(task) && task?.localUri) {
+        if (await downloadService.verifyTask(task.id)) {
+          setPlaybackNotice(null);
           setStream(
-            { ...playbackStream, url: retryUri },
+            { ...playbackStream, url: task.localUri },
             {
               type: castType,
               itemId: id || "unknown",
@@ -256,43 +260,81 @@ export default function DetailScreen() {
               episode,
             },
           );
+
           router.push("/player");
           return;
         }
       }
-    }
 
-    if (!playable) {
-      let msg = t("detail.errors.notPlayable");
-      if (stream.infoHash) {
-        if (streamEngineManager.bridgeStatus === "unsupported") {
-          msg = t("detail.errors.bridgeBroken");
-        } else {
-          msg = t("detail.errors.torrentBridge");
+      const uri = await streamEngineManager.getPlaybackUri(playbackStream);
+      const playable = !!uri && uri.length > 0;
+
+      if (!playable && stream.infoHash) {
+        const bridgeUp = await streamEngineManager.detectBridge();
+        if (bridgeUp) {
+          const retryUri =
+            await streamEngineManager.getPlaybackUri(playbackStream);
+          if (retryUri && retryUri.length > 0) {
+            setStream(
+              { ...playbackStream, url: retryUri },
+              {
+                type: castType,
+                itemId: id || "unknown",
+                title: episodeTitle
+                  ? `${meta?.name} - ${episodeTitle}`
+                  : (meta?.name ?? stream.title ?? "Unknown"),
+                poster: meta?.poster,
+                season,
+                episode,
+              },
+            );
+            router.push("/player");
+            return;
+          }
         }
       }
 
-      showPlanMessage(null, msg, "play");
-      return;
-    }
+      if (!playable) {
+        let msg = t("detail.errors.notPlayable");
+        if (stream.infoHash) {
+          if (streamEngineManager.bridgeStatus === "unsupported") {
+            msg = t("detail.errors.bridgeBroken");
+          } else {
+            msg = t("detail.errors.torrentBridge");
+          }
+        }
 
-    setPlaybackNotice(null);
-    setStream(
-      uri && playbackStream.url !== uri
-        ? { ...playbackStream, url: uri }
-        : playbackStream,
-      {
-        type: castType,
-        itemId: id || "unknown",
-        title: episodeTitle
-          ? `${meta?.name} - ${episodeTitle}`
-          : (meta?.name ?? playbackStream.title ?? "Unknown"),
-        poster: meta?.poster,
-        season,
-        episode,
-      },
-    );
-    router.push("/player");
+        showPlanMessage(null, msg, "play");
+        return;
+      }
+
+      setPlaybackNotice(null);
+      setStream(
+        uri && playbackStream.url !== uri
+          ? { ...playbackStream, url: uri }
+          : playbackStream,
+        {
+          type: castType,
+          itemId: id || "unknown",
+          title: episodeTitle
+            ? `${meta?.name} - ${episodeTitle}`
+            : (meta?.name ?? playbackStream.title ?? "Unknown"),
+          poster: meta?.poster,
+          season,
+          episode,
+        },
+      );
+      router.push("/player");
+    } catch (err: any) {
+      const message = err?.message || t("detail.errors.notPlayable");
+      const failure = mapPlaybackMessageToRuntimeFailure(
+        message,
+        stream.infoHash ? "GATEWAY_TIMEOUT" : "SOURCE_UNAVAILABLE",
+      );
+      setPlaybackNotice(
+        getPlaybackReadinessCopyFromError(failure.error, "play", [message]),
+      );
+    }
   };
 
   const maybePlanNextEpisode = (
@@ -440,6 +482,7 @@ export default function DetailScreen() {
     groupedStreams,
     availableResolutions,
     selectedResolution,
+    initiallyOpenSources: sourcesParam === "1",
     setSelectedResolution,
     inLibrary: !!inLibrary,
     handleToggleLibrary,
@@ -478,7 +521,7 @@ export default function DetailScreen() {
           onClose={() => setCastModalOpen(false)}
           onOpenSourcesDevices={() => {
             setCastModalOpen(false);
-            router.push("/sources" as any);
+            router.push("/settings/sources" as any);
           }}
           onCastStart={(device, details) => {
             usePlayerStore.getState().clearPlayer();
@@ -504,7 +547,6 @@ export default function DetailScreen() {
 const styles = StyleSheet.create({
   cinemaCentered: {
     flex: 1,
-    backgroundColor: "#11121c",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -518,13 +560,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
   },
   errorBackText: {
-    color: "#f2d7ff",
     fontWeight: "800",
   },
-  errorText: { color: "#ff9ba6" },
+  errorText: {},
 });

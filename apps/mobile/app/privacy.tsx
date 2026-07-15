@@ -17,7 +17,7 @@ export default function PrivacyScreen() {
         {t("legal.privacyTitle")}
       </Text>
       <Text style={[styles.date, { color: colors.textSecondary }]}>
-        {t("legal.lastUpdated", { date: "April 1, 2026" })}
+        {t("legal.lastUpdated", { date: t("legal.updatedDate") })}
       </Text>
 
       <View style={styles.section}>
@@ -25,9 +25,7 @@ export default function PrivacyScreen() {
           {t("legal.sections.privacy.1")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          We collect only the most essential information to enable cross-device
-          synchronization. This includes your email (for account creation) and
-          metadata hashes for items in your library.
+          {t("legal.bodies.privacy.1")}
         </Text>
       </View>
 
@@ -36,10 +34,7 @@ export default function PrivacyScreen() {
           {t("legal.sections.privacy.2")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          We do NOT store or access any sensitive information, including payment
-          data, beyond what is necessary to authenticate your account. We do Not
-          track your specific viewing content; only the metadata required for
-          library syncing.
+          {t("legal.bodies.privacy.2")}
         </Text>
       </View>
 
@@ -48,9 +43,7 @@ export default function PrivacyScreen() {
           {t("legal.sections.privacy.3")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          We do not sell or share your personal information with third parties
-          for marketing purposes. Your data is used exclusively to provide the
-          Streamer service.
+          {t("legal.bodies.privacy.3")}
         </Text>
       </View>
 
@@ -59,8 +52,7 @@ export default function PrivacyScreen() {
           {t("legal.sections.privacy.4")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          You can delete your account and all associated data at any time
-          through the application's settings screen.
+          {t("legal.bodies.privacy.4")}
         </Text>
       </View>
     </ScrollView>
@@ -68,16 +60,15 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050614" },
+  container: { flex: 1 },
   content: { padding: 24, paddingBottom: 60 },
-  title: { color: "#f8fafc", fontSize: 28, fontWeight: "900", marginBottom: 8 },
-  date: { color: "#64748b", fontSize: 14, marginBottom: 32 },
+  title: { fontSize: 28, fontWeight: "900", marginBottom: 8 },
+  date: { fontSize: 14, marginBottom: 32 },
   section: { marginBottom: 24 },
   sectionTitle: {
-    color: "#d8b4fe",
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 10,
   },
-  text: { color: "#94a3b8", fontSize: 15, lineHeight: 24 },
+  text: { fontSize: 15, lineHeight: 24 },
 });

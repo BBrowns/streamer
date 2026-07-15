@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { AppButton } from "../ui/AppButton";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
+import { useTranslation } from "react-i18next";
 
 type DetailActionPanelProps = {
   castType: "movie" | "series";
@@ -33,15 +34,16 @@ export function DetailActionPanel({
   onToggleLibrary,
   style,
 }: DetailActionPanelProps) {
+  const { t } = useTranslation();
   const isMovie = castType !== "series";
   const actionDisabled = !!planningAction;
   const sourceLabel = isMovie
     ? streamsLoading
-      ? "Finding sources"
+      ? t("detail.actionPanel.findingSources")
       : sourceCount > 0
-        ? `${sourceCount} sources`
-        : "No sources"
-    : `${episodeCount} episodes`;
+        ? t("detail.actionPanel.sourceCount", { count: sourceCount })
+        : t("detail.actionPanel.noSources")
+    : t("detail.actionPanel.episodeCount", { count: episodeCount });
   const sourceTone = isMovie
     ? streamsLoading
       ? "warning"
@@ -53,7 +55,7 @@ export function DetailActionPanel({
       : "warning";
 
   return (
-    <Surface variant="accent" style={[styles.panel, style]}>
+    <Surface variant="plain" padded={false} style={[styles.panel, style]}>
       <View style={styles.statusRow}>
         <StatusPill
           label={sourceLabel}
@@ -67,7 +69,9 @@ export function DetailActionPanel({
           <>
             <AppButton
               label={
-                planningAction === "play" ? "Finding best..." : "Play Best"
+                planningAction === "play"
+                  ? t("detail.actionPanel.findingBest")
+                  : t("detail.actionPanel.playBest")
               }
               icon="play"
               variant="primary"
@@ -79,7 +83,9 @@ export function DetailActionPanel({
             />
             <AppButton
               label={
-                planningAction === "download" ? "Preparing..." : "Download"
+                planningAction === "download"
+                  ? t("detail.actionPanel.preparing")
+                  : t("detail.download")
               }
               icon="download-outline"
               variant="secondary"
@@ -91,7 +97,11 @@ export function DetailActionPanel({
             />
             {onCast ? (
               <AppButton
-                label={planningAction === "cast" ? "Preparing..." : "Cast"}
+                label={
+                  planningAction === "cast"
+                    ? t("detail.actionPanel.preparing")
+                    : t("detail.cast")
+                }
                 icon="tv-outline"
                 variant="secondary"
                 size="large"
@@ -105,9 +115,13 @@ export function DetailActionPanel({
         ) : null}
 
         <AppButton
-          label={inLibrary ? "In Library" : "Add"}
+          label={
+            inLibrary
+              ? t("detail.actionPanel.inLibrary")
+              : t("detail.actionPanel.add")
+          }
           icon={inLibrary ? "checkmark" : "add"}
-          variant={inLibrary ? "primary" : "secondary"}
+          variant="secondary"
           size="large"
           onPress={onToggleLibrary}
           style={styles.secondaryButton}

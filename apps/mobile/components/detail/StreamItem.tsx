@@ -43,10 +43,10 @@ export function StreamItem({
   const playable = !!engine;
   const canDownload = getDownloadEligibility(stream).canDownload;
   const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
-  const surfaceColor = isDark ? "rgba(255,255,255,0.08)" : colors.card;
-  const badgeSurface = isDark ? "rgba(242,215,255,0.12)" : "#f3edf8";
-  const readySurface = isDark ? "rgba(197,233,213,0.18)" : "#e7f6ee";
-  const warnSurface = isDark ? "rgba(255,219,166,0.18)" : "#fff3df";
+  const surfaceColor = colors.surfaceElevated;
+  const badgeSurface = colors.tint + "18";
+  const readySurface = colors.success + "20";
+  const warnSurface = colors.warning + "20";
   const handlePlayPress = () => {
     hapticImpactLight();
     onPress();
@@ -76,13 +76,17 @@ export function StreamItem({
         styles.streamCard,
         {
           backgroundColor: surfaceColor,
-          borderColor: colors.border,
+          borderColor: "transparent",
         },
       ]}
     >
       <Pressable
         {...playProps}
-        style={[styles.streamPressArea, isPlayFocused && styles.webFocused]}
+        style={[
+          styles.streamPressArea,
+          isPlayFocused && styles.webFocused,
+          isPlayFocused && { outlineColor: colors.focus },
+        ]}
         onPress={handlePlayPress}
         accessibilityRole="button"
         accessibilityLabel={`Play stream: ${stream.title || stream.name || `Stream ${index + 1}`}`}
@@ -117,7 +121,9 @@ export function StreamItem({
               {engine?.getEngineType().toUpperCase() || "UNKNOWN"}
             </Text>
             {stream.seeders !== undefined && (
-              <Text style={styles.seederBadge}>{stream.seeders} peers</Text>
+              <Text style={[styles.seederBadge, { color: colors.success }]}>
+                {stream.seeders} peers
+              </Text>
             )}
             <View
               style={[
@@ -146,17 +152,36 @@ export function StreamItem({
               </Text>
             </View>
             {isCompleted && (
-              <View style={styles.downloadedBadge}>
-                <Text style={styles.downloadedBadgeText}>Offline</Text>
+              <View
+                style={[
+                  styles.downloadedBadge,
+                  { backgroundColor: colors.success + "20" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.downloadedBadgeText,
+                    { color: colors.success },
+                  ]}
+                >
+                  Offline
+                </Text>
               </View>
             )}
           </View>
         </View>
-        <Ionicons
-          name={playable ? "play-circle" : "alert-circle-outline"}
-          size={28}
-          color={playable ? colors.tint : colors.warning}
-        />
+        <View
+          style={[
+            styles.playButton,
+            { backgroundColor: playable ? colors.primary : "transparent" },
+          ]}
+        >
+          <Ionicons
+            name={playable ? "play" : "alert-circle-outline"}
+            size={playable ? 17 : 24}
+            color={playable ? colors.onPrimary : colors.warning}
+          />
+        </View>
       </Pressable>
 
       <View style={styles.streamActions}>
@@ -166,6 +191,7 @@ export function StreamItem({
             style={[
               styles.downloadIconBtn,
               isDownloadFocused && styles.webFocused,
+              isDownloadFocused && { outlineColor: colors.focus },
             ]}
             onPress={handleDownloadPress}
             disabled={isCompleted || isInProgress}
@@ -199,11 +225,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderRadius: 18,
+    borderRadius: 12,
     padding: 18,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.14)",
   },
   streamPressArea: {
     flex: 1,
@@ -217,7 +241,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   streamTitle: {
-    color: "#ffffff",
     fontWeight: "700",
     fontSize: 16,
     marginBottom: 8,
@@ -229,58 +252,38 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   resBadge: {
-    backgroundColor: "rgba(242,215,255,0.16)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   resBadgeText: {
-    color: "#f2d7ff",
     fontSize: 10,
     fontWeight: "800",
   },
   streamEngine: {
-    color: "#b8adc8",
     fontSize: 11,
     fontWeight: "800",
   },
   seederBadge: {
-    color: "#9fd9b5",
     fontSize: 11,
     fontWeight: "700",
     marginLeft: 4,
   },
   sourceBadge: {
-    backgroundColor: "rgba(242,215,255,0.12)",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
-  sourceBadgeWarn: {
-    backgroundColor: "rgba(255, 219, 166, 0.18)",
-  },
-  sourceBadgeReady: {
-    backgroundColor: "rgba(197, 233, 213, 0.18)",
-  },
   sourceBadgeText: {
-    color: "#f2d7ff",
     fontSize: 10,
     fontWeight: "900",
   },
-  sourceBadgeWarnText: {
-    color: "#ffdba6",
-  },
-  sourceBadgeReadyText: {
-    color: "#c5e9d5",
-  },
   downloadedBadge: {
-    backgroundColor: "rgba(197, 233, 213, 0.14)",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
   },
   downloadedBadgeText: {
-    color: "#c5e9d5",
     fontSize: 10,
     fontWeight: "900",
   },
@@ -291,17 +294,26 @@ const styles = StyleSheet.create({
     marginLeft: 14,
   },
   downloadIconBtn: {
-    padding: 4,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  playButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   webFocused: {
     // @ts-ignore web-only
     outlineStyle: "solid",
     outlineWidth: 2,
-    outlineColor: "#a78bfa",
     outlineOffset: 2,
   } as any,
   progressText: {
-    color: "#f2d7ff",
     fontSize: 13,
     fontWeight: "900",
   },

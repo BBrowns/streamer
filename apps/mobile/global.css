@@ -2,23 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-    /* Glassmorphic AMOLED Custom Classes */
-    .glass {
-        @apply bg-black/60 border border-white/5 backdrop-blur-2xl;
-    }
-    
-    .glass-strong {
-        @apply bg-black/80 border border-white/10 backdrop-blur-3xl;
-    }
+:root {
+  color-scheme: dark light;
+  --streamer-canvas: #08090c;
+}
 
-    .glass-panel {
-        @apply bg-[#080808]/40 border border-white/5 backdrop-blur-[40px];
-    }
+@media (prefers-color-scheme: light) {
+  :root {
+    --streamer-canvas: #f3f2ef;
+  }
+}
+
+html,
+body,
+#root {
+  background: var(--streamer-canvas);
+  font-family:
+    "Inter Variable",
+    Inter_400Regular,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 
 /* ─── Desktop card hover overlays ─── */
 [data-catalog-card]:hover [data-hover-overlay] {
-    opacity: 1 !important;
-    pointer-events: auto !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

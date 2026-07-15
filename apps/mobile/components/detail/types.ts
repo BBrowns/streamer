@@ -10,6 +10,7 @@ export interface DetailLayoutProps {
   groupedStreams: Record<string, Stream[]>;
   availableResolutions: string[];
   selectedResolution: string | null;
+  initiallyOpenSources?: boolean;
   setSelectedResolution: (res: string) => void;
   inLibrary: boolean;
   handleToggleLibrary: () => void;

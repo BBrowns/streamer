@@ -7,7 +7,6 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,22 +16,27 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
-import { getWebFocusStyle } from "../../components/ui/designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiTypography,
+} from "../../components/ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 const STARTER_ADDONS = [
   {
     name: "Cinemeta",
-    description: "Official movie & TV show metadata provider.",
+    descriptionKey: "onboarding.starterAddons.cinemeta",
     url: "https://v3-cinemeta.strem.io/manifest.json",
   },
   {
     name: "OpenSubtitles",
-    description: "The world's largest subtitle database.",
+    descriptionKey: "onboarding.starterAddons.openSubtitles",
     url: "https://opensubtitles-v3.strem.io/manifest.json",
   },
   {
     name: "Torrentio",
-    description: "Optional community stream source for playable results.",
+    descriptionKey: "onboarding.starterAddons.torrentio",
     url: "https://torrentio.strem.fun/manifest.json",
   },
 ];
@@ -41,18 +45,18 @@ const SETUP_CHECKS = [
   {
     icon: "albums-outline" as const,
     titleKey: "onboarding.setupCheck.sources",
-    fallbackTitle: "Sources & metadata",
+    fallbackTitle: "Catalogs & add-ons",
     bodyKey: "onboarding.setupCheck.sourcesBody",
     fallbackBody:
-      "Install Cinemeta now; add streaming add-ons later from Settings.",
+      "Start with a rich catalog now and add playback options whenever you are ready.",
   },
   {
     icon: "desktop-outline" as const,
     titleKey: "onboarding.setupCheck.bridge",
-    fallbackTitle: "Desktop bridge",
+    fallbackTitle: "Playback on every screen",
     bodyKey: "onboarding.setupCheck.bridgeBody",
     fallbackBody:
-      "Desktop can prepare torrent/remux playback and share its LAN URL.",
+      "The desktop companion quietly prepares sources that need a little extra help.",
   },
   {
     icon: "cloud-download-outline" as const,
@@ -67,8 +71,7 @@ const SETUP_CHECKS = [
     titleKey: "onboarding.setupCheck.privacy",
     fallbackTitle: "Privacy",
     bodyKey: "onboarding.setupCheck.privacyBody",
-    fallbackBody:
-      "Raw stream URLs, magnets, and tokens are not included in diagnostics.",
+    fallbackBody: "Diagnostic reports hide sensitive connection details.",
   },
 ];
 
@@ -79,8 +82,7 @@ export default function OnboardingSetup() {
   const setPendingAddons = useAuthStore((s) => s.setPendingAddons);
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
-  const compact = width < 600;
+  const { isCompact: compact } = useWindowClass();
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
 
   const handleToggleTheme = (t: "light" | "dark" | "system") => {
@@ -158,17 +160,15 @@ export default function OnboardingSetup() {
                 style={[
                   styles.setupItem,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.035)"
-                      : "rgba(0,0,0,0.025)",
-                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceSubtle,
+                    borderColor: "transparent",
                   },
                 ]}
               >
                 <View
                   style={[
                     styles.setupIcon,
-                    { backgroundColor: `${colors.tint}18` },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Ionicons name={item.icon} size={18} color={colors.tint} />
@@ -200,11 +200,9 @@ export default function OnboardingSetup() {
                 style={({ pressed, focused }: any) => [
                   styles.themeOption,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.04)",
+                    backgroundColor: colors.surfaceSubtle,
                     borderColor:
-                      theme === themeOption ? colors.tint : colors.border,
+                      theme === themeOption ? colors.tint : "transparent",
                   },
                   theme === themeOption && {
                     backgroundColor: `${colors.tint}15`,
@@ -212,11 +210,13 @@ export default function OnboardingSetup() {
                   pressed && { opacity: 0.8 },
                   Platform.OS === "web" &&
                     focused &&
-                    getWebFocusStyle(colors.tint),
+                    getWebFocusStyle(colors.focus),
                 ]}
                 onPress={() => handleToggleTheme(themeOption)}
                 accessibilityRole="radio"
-                accessibilityLabel={`${t(`common.themes.${themeOption}`)} theme`}
+                accessibilityLabel={t("onboarding.themeA11y", {
+                  theme: t(`common.themes.${themeOption}`),
+                })}
                 accessibilityState={{ checked: theme === themeOption }}
               >
                 <Ionicons
@@ -265,21 +265,22 @@ export default function OnboardingSetup() {
               style={({ pressed, focused }: any) => [
                 styles.addonCard,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.03)"
-                    : "rgba(0,0,0,0.02)",
+                  backgroundColor: colors.card,
                   borderColor: selectedUrls.includes(addon.url)
                     ? colors.tint
-                    : colors.border,
+                    : "transparent",
                 },
                 pressed && { opacity: 0.8 },
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(colors.tint),
+                  getWebFocusStyle(colors.focus),
               ]}
               onPress={() => handleInstallAddon(addon.url)}
               accessibilityRole="checkbox"
-              accessibilityLabel={`${addon.name}. ${addon.description}`}
+              accessibilityLabel={t("onboarding.addonA11y", {
+                name: addon.name,
+                description: t(addon.descriptionKey),
+              })}
               accessibilityState={{
                 checked: selectedUrls.includes(addon.url),
               }}
@@ -291,7 +292,7 @@ export default function OnboardingSetup() {
                 <Text
                   style={[styles.addonDesc, { color: colors.textSecondary }]}
                 >
-                  {addon.description}
+                  {t(addon.descriptionKey)}
                 </Text>
               </View>
               <View
@@ -300,9 +301,7 @@ export default function OnboardingSetup() {
                   {
                     backgroundColor: selectedUrls.includes(addon.url)
                       ? colors.tint
-                      : isDark
-                        ? "rgba(255,255,255,0.06)"
-                        : "rgba(0,0,0,0.04)",
+                      : colors.surfaceElevated,
                   },
                 ]}
               >
@@ -310,7 +309,9 @@ export default function OnboardingSetup() {
                   name={selectedUrls.includes(addon.url) ? "checkmark" : "add"}
                   size={16}
                   color={
-                    selectedUrls.includes(addon.url) ? "#fff" : colors.tint
+                    selectedUrls.includes(addon.url)
+                      ? colors.onTint
+                      : colors.tint
                   }
                 />
               </View>
@@ -345,31 +346,22 @@ export default function OnboardingSetup() {
           style={({ pressed, focused }: any) => [
             styles.finishBtn,
             pressed && { opacity: 0.82 },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={handleFinish}
           accessibilityRole="button"
           accessibilityLabel={t("onboarding.finish")}
         >
           <LinearGradient
-            colors={isDark ? ["#f2d7ff", "#c5e9d5"] : ["#d8b4fe", "#ffc8dd"]}
+            colors={[colors.primary, colors.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.finishGradient}
           >
-            <Text
-              style={[
-                styles.finishBtnText,
-                { color: isDark ? "#2c1738" : "#fff" },
-              ]}
-            >
+            <Text style={[styles.finishBtnText, { color: colors.onPrimary }]}>
               {t("onboarding.finish")}
             </Text>
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color={isDark ? "#2c1738" : "#fff"}
-            />
+            <Ionicons name="arrow-forward" size={18} color={colors.onPrimary} />
           </LinearGradient>
         </Pressable>
       </ScrollView>
@@ -394,15 +386,14 @@ const styles = StyleSheet.create({
   },
   header: { marginBottom: 40 },
   title: {
-    fontSize: 36,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.headline,
   },
-  subtitle: { fontSize: 16, marginTop: 8 },
+  subtitle: { ...uiTypography.body, fontSize: 16, marginTop: 8 },
   section: { marginBottom: 32 },
   sectionLabel: {
-    fontSize: 18,
-    fontWeight: "800",
+    ...uiTypography.title,
+    fontSize: 20,
+    lineHeight: 26,
     marginBottom: 12,
   },
   sectionDesc: { fontSize: 13, marginBottom: 16 },
@@ -423,8 +414,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 12,
     padding: 14,
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: uiRadii.card,
+    borderWidth: 0,
   },
   setupIcon: {
     width: 34,
@@ -451,7 +442,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 96,
     height: 85,
-    borderRadius: 20,
+    borderRadius: uiRadii.card,
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
@@ -463,7 +454,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    borderRadius: 20,
+    borderRadius: uiRadii.card,
     marginBottom: 12,
     borderWidth: 1.5,
   },
@@ -484,7 +475,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   legalLink: { fontWeight: "700" },
-  finishBtn: { height: 64, borderRadius: 24, overflow: "hidden" },
+  finishBtn: { height: 52, borderRadius: uiRadii.control, overflow: "hidden" },
   finishGradient: {
     flex: 1,
     flexDirection: "row",
@@ -493,9 +484,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   finishBtnText: {
-    fontSize: 17,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    ...uiTypography.control,
+    fontSize: 16,
   },
 });

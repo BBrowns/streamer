@@ -24,8 +24,8 @@ describe("PlaybackReadinessNotice", () => {
     expect(
       getPlaybackReadinessCopy(plan, "Not playable", "play"),
     ).toMatchObject({
-      title: "Desktop bridge required",
-      message: "Start the desktop bridge to play torrent sources.",
+      title: "Finish playback setup",
+      message: "Connect the desktop app to play this title.",
       tone: "warning",
       primaryActionLabel: "Sources & Devices",
     });
@@ -50,9 +50,9 @@ describe("PlaybackReadinessNotice", () => {
         "No peers found",
       ]),
     ).toMatchObject({
-      title: "Playback source failed",
+      title: "Trying another viewing option",
       message: "This stream is not playable.",
-      detail: "Tried 1 source. No peers found",
+      detail: "1 other viewing option was also tried.",
       tone: "warning",
     });
   });
@@ -69,10 +69,9 @@ describe("PlaybackReadinessNotice", () => {
         "play",
       ),
     ).toMatchObject({
-      title: "Bridge needs repair",
-      message: "Bridge is running but the streaming engine is unavailable.",
-      detail:
-        "The app can see the bridge, but the torrent engine is not ready for playback.",
+      title: "Playback setup needs attention",
+      message: "Review this device before trying playback again.",
+      detail: "Direct viewing options may still work on this device.",
       tone: "error",
       primaryActionLabel: "Sources & Devices",
     });
@@ -91,11 +90,9 @@ describe("PlaybackReadinessNotice", () => {
         "download",
       ),
     ).toMatchObject({
-      title: "Bridge needs repair",
-      message:
-        "Desktop bridge needs repair before torrent sources can be downloaded on this device.",
-      detail:
-        "The app can see the bridge, but the torrent engine is not ready for downloads.",
+      title: "Playback setup needs attention",
+      message: "Review this device before trying the download again.",
+      detail: "Direct viewing options may still work on this device.",
       tone: "error",
     });
   });
@@ -113,8 +110,8 @@ describe("PlaybackReadinessNotice", () => {
         ["No peers found"],
       ),
     ).toMatchObject({
-      title: "Source has no peers",
-      detail: "Tried 1 source. No peers found",
+      title: "Viewing option unavailable",
+      detail: "1 other viewing option was also tried.",
       tone: "warning",
     });
   });

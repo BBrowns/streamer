@@ -6,23 +6,34 @@ export interface Toast {
   id: string;
   message: string;
   type: ToastType;
+  actionLabel?: string;
+  onAction?: () => void | Promise<unknown>;
+  duration?: number;
+}
+
+export interface ToastOptions {
+  actionLabel?: string;
+  onAction?: () => void | Promise<unknown>;
+  duration?: number;
 }
 
 interface ToastStore {
   toasts: Toast[];
-  show: (message: string, type?: ToastType) => void;
+  show: (message: string, type?: ToastType, options?: ToastOptions) => void;
   dismiss: (id: string) => void;
 }
 
 export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
-  show: (message, type = "info") => {
+  show: (message, type = "info", options = {}) => {
     const id = Math.random().toString(36).slice(2);
-    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
-    // Auto-dismiss after 3.5 s
+    const duration = options.duration ?? (options.onAction ? 7000 : 3500);
+    set((s) => ({
+      toasts: [...s.toasts, { id, message, type, ...options, duration }],
+    }));
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-    }, 3500);
+    }, duration);
   },
   dismiss: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),

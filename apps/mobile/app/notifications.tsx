@@ -5,16 +5,18 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
+  Platform,
   StyleSheet,
 } from "react-native";
 import { useNotifications } from "../hooks/useNotifications";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "../hooks/useTheme";
 import { useTranslation } from "react-i18next";
+import { getWebFocusStyle } from "../components/ui/designSystem";
 
 export default function NotificationsScreen() {
   const { notifications, isLoading, markAsRead } = useNotifications();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useTranslation();
 
   if (isLoading) {
@@ -48,18 +50,19 @@ export default function NotificationsScreen() {
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <Pressable
-            style={[
+            style={({ pressed, focused }: any) => [
               styles.notificationCard,
               {
                 backgroundColor: colors.card,
-                borderColor: colors.border,
+                borderColor: "transparent",
               },
               !item.read && {
-                backgroundColor: isDark
-                  ? "rgba(99, 102, 241, 0.1)"
-                  : colors.tint + "10",
-                borderColor: colors.tint,
+                backgroundColor: colors.tint + "12",
               },
+              pressed && { opacity: 0.72 },
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
             ]}
             onPress={() => {
               if (!item.read) markAsRead.mutate(item.id);
@@ -106,16 +109,13 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#050510",
   },
   center: {
     flex: 1,
-    backgroundColor: "#050510",
     justifyContent: "center",
     alignItems: "center",
   },
   emptyText: {
-    color: "#94a3b8",
     fontSize: 16,
     marginTop: 16,
   },
@@ -124,16 +124,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   notificationCard: {
+    minHeight: 72,
     flexDirection: "row",
-    backgroundColor: "#0f172a",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  unreadCard: {
-    backgroundColor: "#1e1b4b",
-    borderColor: "#4338ca",
   },
   iconContainer: {
     marginRight: 16,
@@ -143,30 +138,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: "#e2e8f0",
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 4,
   },
   unreadTitle: {
-    color: "#ffffff",
     fontWeight: "bold",
   },
   message: {
-    color: "#94a3b8",
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 8,
   },
   date: {
-    color: "#64748b",
     fontSize: 12,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#818cf8",
     alignSelf: "center",
     marginLeft: 8,
   },

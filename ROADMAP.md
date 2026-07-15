@@ -69,6 +69,11 @@ Implemented through PR #151:
   failed download offers one context-specific retry, replan, verify, storage,
   bridge-repair, or remove action, while cast discovery/source/device failures
   offer refresh, fallback, or bridge repair without retrying loopback URLs.
+- PR #152 introduces the adaptive UX foundation: semantic state tokens,
+  compact/medium/expanded/large window classes, four primary destinations,
+  deduplicated Home composition, unified Search/discovery state, recoverable
+  removal actions, and PiP/background/cast continuity. The stacked Obsidian
+  branch owns the subsequent visual and information-architecture overhaul.
 
 Not yet proven:
 
@@ -97,6 +102,88 @@ The next priorities are based on observed gaps, not old roadmap numbering:
   `unknown` target status until that evidence exists.
 
 ## Active Roadmap
+
+### Ready for Review: Obsidian Editorial UI/UX Overhaul
+
+Goal: finish the screen-level visual and information-architecture redesign
+without changing the playback control plane or exposing source complexity as
+the default experience.
+
+PR #152 is deliberately scoped and titled as the adaptive UX foundation. It
+contains the responsive shell, discovery state, accessibility, recovery, and
+playback-continuity work listed below; it is not the visual-overhaul PR.
+
+Implemented in the foundation draft:
+
+- Semantic theme, focus, overlay, disabled, and contrast tokens.
+- Compact bottom navigation and medium/expanded/large rail/sidebar behavior.
+- Stable Home hero/rail composition with canonical deduplication and honest
+  released-date labeling.
+- One Search/discovery destination with URL-restorable type/year/sort state and
+  a responsive advanced-filter surface.
+- Search provenance returned by the server, canonical `type:id` deduplication,
+  and a URL-restorable provider facet.
+- Undo for Library and Continue Watching removal.
+- PiP/background configuration, accessible player status announcements, and a
+  cast session that survives route navigation with synchronized status,
+  progress, pause/play, and seek controls.
+- Detail, Library, auth, onboarding, player sheets, and core media controls now
+  consume semantic tokens and the shared window-class contract; active audio
+  and subtitle choices are visible in the player controls.
+- Auth, account, onboarding, and legal routes own the full viewport instead of
+  appearing inside authenticated desktop navigation. Compact and large web
+  checks show no horizontal overflow.
+- Player sheets scroll under large text, native controls respect safe areas,
+  and common `AD`, `SDH`, and `CC` track labels expand to understandable
+  accessibility descriptions.
+- Player failures expose an explicit advanced source choice, stalled gateways
+  remain inside recoverable UI, and development builds can preview the real
+  player chrome without a playable source.
+- Confirmed single and bulk download deletion now waits seven seconds before
+  mutating files and exposes Undo during that grace period.
+- Settings account/session surfaces and their profile/password modals use the
+  semantic surface, scrim, contrast, disabled, and focus contracts.
+- Provider rails exclude titles already claimed by the hero, Continue Watching,
+  and primary Home rails.
+
+Implemented by the stacked Obsidian overhaul:
+
+- Obsidian dark and warm-neutral light palettes, bundled Inter typography,
+  editorial layout tokens, quieter surfaces, and neutral high-contrast Play
+  actions across the primary screens.
+- Settings category routing with a concise overview on compact through expanded
+  windows and a true independently scrolling list-detail layout only on large.
+- A consumer-facing Settings hierarchy that separates Account, Playback,
+  Downloads, Sources & Devices, Appearance, Privacy, About, and Advanced.
+- Search discovery on the canonical `/search` route, debounced title
+  suggestions, media-first results, mobile filter sheets, large-screen filter
+  sidebar, and explicit partial-provider states.
+- Screenshot-driven dark/light regression evidence for Settings and Search at
+  390 x 844 and 1440 x 1000, plus overflow and pane assertions at 768 and 1024
+  pixel widths.
+- Automated route, filter-reset, debounce/cancellation, partial-provider,
+  keyboard, contrast, reduced-motion, touch-target, and locale-parity coverage.
+
+Remaining evidence and upstream-data gates:
+
+- Add genre/language/availability facets only when providers return reliable
+  metadata for those fields; do not infer them from labels.
+- Validate Downloads, episode lists, settings panels, subtitle visibility,
+  caption-safe layout, large text, and focus-not-obscured behavior on native
+  iPhone and Android targets.
+- Record native PiP, lock-screen, download, and Chromecast evidence without
+  converting unknowns into claims.
+
+Acceptance:
+
+- Core consumer flows share one token and window-class contract.
+- Search/back state and Home rail identity remain stable and test-covered.
+- Player features do not regress below platform-standard media expectations.
+- Automated checks and responsive screenshots cover authenticated primary
+  states; native claims remain gated by real-device evidence.
+- Settings and Search visibly depart from their legacy long-list/card-stack
+  compositions and keep controls, focus, and content usable at 390, 768, 1024,
+  and 1440 pixel widths.
 
 ### Completed: PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
@@ -322,7 +409,10 @@ of mocks or unit tests.
 7. Completed: PR #149 - dev runtime architecture guard.
 8. Completed: PR #150 - accessibility and responsive visual quality.
 9. Completed: PR #151 - consistent dev runtime entrypoints.
-10. Deferred milestone - real-target QA and RC evidence when available.
+10. Ready for review - Obsidian Editorial UI/UX overhaul, stacked on the
+    adaptive UX foundation in PR #152, with renderer evidence recorded in
+    [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
+11. Deferred milestone - real-target QA and RC evidence when available.
 
 Dependency enforcement, deterministic renderer automation, shared action
 preflight, mobile release configuration, server production hardening, and

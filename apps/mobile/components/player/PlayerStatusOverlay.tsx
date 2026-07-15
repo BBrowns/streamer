@@ -21,6 +21,8 @@ interface PlayerStatusOverlayProps {
   session?: PlaybackSession | null;
   onBack: () => void;
   onRetry?: () => void;
+  onChooseSource?: () => void;
+  onPreviewPlayer?: () => void;
   onOpenSourcesDevices?: () => void;
 }
 
@@ -35,6 +37,8 @@ export function PlayerStatusOverlay({
   session,
   onBack,
   onRetry,
+  onChooseSource,
+  onPreviewPlayer,
   onOpenSourcesDevices,
 }: PlayerStatusOverlayProps) {
   const { colors } = useTheme();
@@ -115,6 +119,26 @@ export function PlayerStatusOverlay({
             },
           ]
         : []),
+      ...(onChooseSource
+        ? [
+            {
+              label: t("player.errors.chooseSource"),
+              onPress: onChooseSource,
+              variant: "secondary" as const,
+              icon: "layers-outline" as const,
+            },
+          ]
+        : []),
+      ...(onPreviewPlayer
+        ? [
+            {
+              label: t("player.errors.previewPlayer"),
+              onPress: onPreviewPlayer,
+              variant: "secondary" as const,
+              icon: "eye-outline" as const,
+            },
+          ]
+        : []),
       ...(onOpenSourcesDevices
         ? [
             {
@@ -153,8 +177,12 @@ export function PlayerStatusOverlay({
   // to satisfy the compiler to avoid "condition always false" lints.
   if (isBuffering) {
     return (
-      <View style={styles.bufferingOverlay}>
-        <ActivityIndicator size="large" color="#818cf8" />
+      <View
+        style={styles.bufferingOverlay}
+        accessibilityLiveRegion="polite"
+        accessibilityLabel={t("player.status.buffering")}
+      >
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }

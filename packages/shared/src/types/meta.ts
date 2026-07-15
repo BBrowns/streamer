@@ -6,6 +6,7 @@ export interface MetaPreview {
   poster: string;
   description?: string;
   releaseInfo?: string;
+  released?: string;
   imdbRating?: string;
 }
 

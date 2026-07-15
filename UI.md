@@ -9,27 +9,50 @@
 
 ## 1. Design Philosophy
 
-The current product direction is **pastel glass cinema**: Apple-inspired, soft, cinematic, and calm enough for repeated media browsing. This is the target direction; some older components still show heavier/darker styling and should be treated as migration candidates.
+The active product direction is **Obsidian Editorial**: dark cinematic first,
+with a fully supported warm-neutral light mode. Artwork and typography provide
+the visual energy; the application chrome stays quiet and predictable.
 
-- **Pastel glass:** warm mist backgrounds, frosted cards, restrained borders, lavender/blush/mint/peach accents.
-- **Cinematic media hierarchy:** large artwork, clear Play Best action, visible next content, and less source noise.
-- **Consumer-streaming UX:** users should not have to understand torrents, codecs, peers, bridge URLs, or add-on internals to press Play.
+- **Obsidian canvas:** near-black neutral backgrounds, restrained cobalt for
+  selection/focus/status, and no decorative violet glow.
+- **Editorial hierarchy:** Inter Variable on web/Electron and bundled Inter
+  weights on Expo native, generous content rhythm, strong artwork crops, and
+  neutral high-contrast Play or Resume actions.
+- **Purposeful containment:** most content sits directly on the canvas. Borders,
+  elevated surfaces, pills, and coloured icon tiles are reserved for states that
+  genuinely need containment or emphasis.
+- **Functional light mode:** warm neutral backgrounds preserve the same hierarchy,
+  contrast, focus treatment, and media emphasis.
+- **Consumer-streaming UX:** users should not have to understand torrents,
+  codecs, peers, bridge URLs, or add-on internals to press Play.
 
 The long-term references are closer to Apple TV/Vision Pro-style media surfaces, StreamX-like Apple platform structure, Infuse, Plex, Netflix, Disney+, and Prime Video than to a technical source browser.
 
-The current UI is an improved baseline, not the final Netflix/Disney+/Prime
-quality product. Future UI work should be screenshot-driven and should preserve
-the now-central playback architecture.
+PR #152 is the adaptive UX foundation: it established the responsive shell,
+discovery state, playback recovery, and accessibility contracts. The stacked
+Obsidian overhaul is the screen-level visual and information-architecture pass.
+Both phases preserve the session-driven playback architecture.
 
-Current UI phase:
+Current UI phase (stacked redesign implementation):
 
 - Keep the existing Expo/React Native stack.
-- Continue with constrained primitives and screen-by-screen improvements.
-- Do not start a full Tamagui migration or broad visual rewrite.
-- Prioritize reliability-facing UX first: player states, Sources & Devices,
-  More Sources/debug information, downloads, cast, and settings setup clarity.
-- Larger Home/Search/Onboarding polish should build on the design-system pilot
-  after playback/gateway/offline/cast states are clear.
+- Use the shared semantic palette and `useWindowClass()` for all new core UI.
+- Compact navigation exposes Home, Search, Library, and Downloads; medium,
+  expanded, and large windows adapt to a rail/sidebar.
+- Home uses one canonical `type:id` identity for hero and primary rails, with
+  Continue Watching excluded from repeated recommendations. Provider rails
+  also exclude content already claimed by those primary surfaces.
+- Search is the single discovery destination. `/search` owns discovery,
+  suggestions, results, and filters; `/search/results` only preserves compatible
+  links and parameters. Search responses include provider provenance and partial
+  provider-failure metadata.
+- Settings uses a compact category overview and `/settings/[section]` detail
+  routes. A true list-detail layout appears only in the large window class.
+- Home, Detail, Library, Downloads, auth/onboarding, player sheets, Search, and
+  Settings share the Obsidian palette, typography, radii, and layout contracts.
+- Keep the Expo/React Native stack; do not start a parallel UI-framework migration.
+- Preserve the session-driven playback architecture and progressive disclosure
+  of source/device complexity.
 
 Primary hierarchy:
 
@@ -50,19 +73,30 @@ Tamagui is not currently a committed full-app migration. If introduced, treat
 it as a pilot for constrained primitives such as buttons, surfaces, sheets,
 status pills, and settings panels before replacing large screens.
 
-Useful future primitives:
+Core Obsidian primitives:
 
 - `AppButton`
+- `AppSwitch`
 - `Surface`
-- `ContentCard`
+- `PageLayout`
+- `ContentBoundary`
+- `PageHeader`
+- `PosterCard`
+- `SearchResultCard`
+- `SettingsNavRow`
+- `SettingsToggleRow`
+- `SettingsChoiceRow`
+- `FilterSidebar`
+- `FilterSheet`
+- `ContentTabs`
+- `SearchField`
 - `StatusPill`
-- `SectionHeader`
 - `PlaybackStatusPanel`
 - `EmptyState`
 - `ErrorState`
 - `ActionSheet`
 
-Current pilot primitives:
+Shared primitives in production code:
 
 - `components/ui/designSystem.ts` for shared spacing, radii, typography,
   surface tone, status tone, and overlay tokens. Use this before adding local
@@ -70,15 +104,21 @@ Current pilot primitives:
 - `components/ui/AppButton.tsx` for primary, secondary, ghost, and danger
   actions with consistent sizing, icon support, loading state, and accessibility
   state.
-- `components/ui/Surface.tsx` for bordered pastel glass panels.
+- `components/ui/Surface.tsx` for semantic bordered/elevated panels.
 - `components/ui/StatusPill.tsx` for bridge/playback/download readiness labels.
 - `components/ui/TextField.tsx` for themed form inputs.
+- `components/ui/SearchField.tsx` for the canonical search icon, focus line,
+  loading, clear action, and inline keyboard shortcut used by Search and the
+  Command Palette.
+- `components/ui/ContentTabs.tsx` for quiet peer-view navigation such as All,
+  Movies, and Series. It intentionally uses text and a selected underline
+  instead of filter pills.
 - `components/ui/PlaybackStatusPanel.tsx` for centered player readiness and
   error states with consistent status pills and actions.
 
-The first pilot migration is `SourcesSection`, because bridge/add-on setup is
-one of the highest-friction product areas. Future PRs should reuse these
-primitives before adding another local button/card/input style.
+These primitives now underpin Settings, Search, catalog, detail, downloads,
+auth/onboarding, and player recovery surfaces. New UI should reuse them before
+adding another local button, switch, card, input, or page-layout style.
 
 The detail-screen action hierarchy now uses `DetailActionPanel` to keep
 `Play Best` primary for movies, keep series playback on episode rows, and keep
@@ -96,8 +136,8 @@ and lower styling drift, not a full visual migration.
 
 Do not do:
 
-- Do not perform a full visual rewrite in one PR.
-- Do not reintroduce neon/dark-heavy styling as the default app identity.
+- Do not reintroduce neon styling, dense glassmorphism, or a light-only identity.
+- Do not use cobalt, pills, borders, or elevation as decoration on every element.
 - Do not expose raw source complexity as the primary detail-screen flow.
 - Do not add a marketing landing page instead of improving the actual app
   screens.
@@ -111,19 +151,24 @@ Do not do:
 
 The entire colour system is defined in a single `PALETTE` object with two variants:
 
-| Token           | Dark                     | Light                      | Usage                                  |
-| --------------- | ------------------------ | -------------------------- | -------------------------------------- |
-| `background`    | `#11121c`                | `#fbf6f4`                  | Cinematic midnight / soft warm mist    |
-| `card`          | `rgba(255,255,255,0.08)` | `rgba(255,255,255,0.72)`   | Frosted surfaces                       |
-| `text`          | `#fff8ff`                | `#282236`                  | Primary text                           |
-| `textSecondary` | `#c6bfd2`                | `#6f657d`                  | Labels, subtitles                      |
-| `tint`          | `#d8b4fe` (lavender)     | `#a78bfa` (soft violet)    | Accent — buttons, active states, icons |
-| `border`        | `rgba(255,255,255,0.14)` | `rgba(106, 93, 125, 0.16)` | Dividers, glass borders                |
-| `error`         | `#ff9ba6`                | `#df6b7a`                  | Error text, destructive actions        |
-| `success`       | `#a7e8bd`                | `#63b987`                  | Confirmations                          |
-| `warning`       | `#ffd9a8`                | `#d7a15f`                  | Warnings, incomplete states            |
+| Token                 | Dark                     | Light                    | Usage                              |
+| --------------------- | ------------------------ | ------------------------ | ---------------------------------- |
+| `background`          | `#08090c`                | `#f3f2ef`                | App canvas                         |
+| `card`                | `#111318`                | `#ffffff`                | Base surfaces                      |
+| `surfaceElevated`     | `#181b21`                | `#e9e8e4`                | Sheets and elevated controls       |
+| `surfaceOverlay`      | `rgba(17,19,24,0.96)`    | `rgba(255,255,255,0.97)` | Readable overlays                  |
+| `text`                | `#f4f5f7`                | `#101216`                | Primary text                       |
+| `textSecondary`       | `#9da3ae`                | `#656b75`                | Labels and supporting copy         |
+| `tint`                | `#6c79f5`                | `#4f5fd1`                | Selection, focus, and active state |
+| `onTint`              | `#08090c`                | `#ffffff`                | Content on accent surfaces         |
+| `primary`             | `#f4f5f7`                | `#101216`                | Neutral primary actions            |
+| `onPrimary`           | `#08090c`                | `#ffffff`                | Content on primary actions         |
+| `focus`               | `#8792ff`                | `#4f5fd1`                | Visible keyboard focus             |
+| `border`              | `rgba(244,245,247,0.09)` | `rgba(16,18,22,0.09)`    | Dividers and boundaries            |
+| `opaqueGlassFallback` | `#111318`                | `#ffffff`                | Reduced-transparency fallback      |
 
-**Key design decision:** The palette has moved away from neon cyan/dark sci-fi styling toward softer lavender and warm glass. Future UI work should keep that direction and avoid returning to one-note neon or heavy dark-only surfaces.
+Status, scrim, disabled, and overlay tokens are also semantic. New components
+must consume tokens instead of inferring foreground contrast from `isDark`.
 
 ### 2.2 `useTheme()` Hook
 
@@ -135,64 +180,68 @@ Every themed component calls `useTheme()` which:
 
 **Intricacy:** Styles that depend on `isDark` or `colors` must be computed inside the render function — either as a `useMemo(() => StyleSheet.create(...), [colors, isDark])` (pattern used in `player.tsx`) or via inline style objects. Static `StyleSheet.create()` at module level cannot reference theme tokens because `StyleSheet.create` runs once at module load time, before any theme is known. The player screen demonstrates the correct pattern.
 
-### 2.3 Button Text Colour Inversion
+### 2.3 Accent Foreground
 
-Every button in the app uses the pattern:
-
-```tsx
-color: isDark ? "#000" : "#fff";
-```
-
-This is because the tint colour changes between modes and needs different foreground contrast. If the tint changes significantly, verify contrast in both themes instead of blindly keeping this inversion.
+Primary controls use `colors.onTint` through `getAccentForeground(colors)`.
+Do not derive primary-button text from dark/light mode; contrast belongs to the
+palette contract.
 
 ---
 
 ## 3. Cross-Platform Layout Strategy
 
-The app targets five environments from a single codebase: iOS, Android, Web (browser), Web (Electron), and potentially iPad. The layout adapts at two levels.
+The app targets iOS, Android, browser web, Electron, and resizable tablet/foldable
+windows from one codebase. Layout decisions use window size, not device labels.
 
 ### 3.1 Navigation Shell
 
-| Viewport                | Navigation                                        |
-| ----------------------- | ------------------------------------------------- |
-| Mobile (iOS/Android)    | Bottom tab bar (Expo Router `(tabs)/_layout.tsx`) |
-| Desktop web (≥ 1024 px) | Persistent left sidebar (`DesktopLayout.tsx`)     |
+| Window class | Width      | Navigation                     |
+| ------------ | ---------- | ------------------------------ |
+| `compact`    | `< 600`    | Four-item bottom tab bar       |
+| `medium`     | `600–839`  | 72-point icon rail             |
+| `expanded`   | `840–1199` | 88-point labelled/compact rail |
+| `large`      | `≥ 1200`   | 216-point persistent sidebar   |
 
-`DesktopLayout` is a wrapper component used in the root layout. It uses `Platform.OS === "web" && width > 1024` as its guard. On mobile it is a passthrough (`return <>{children}</>`). This means the sidebar and tab bar are **mutually exclusive** — there is no double navigation on large phones in landscape.
+`useWindowClass()` is the shared classification contract. `DesktopLayout` and
+the tabs use the same result, keeping bottom navigation and rail/sidebar
+mutually exclusive during resizing, split screen, and foldable transitions.
 
 The sidebar includes:
 
 - App logo mark (coloured square with a play icon + wordmark)
-- Primary nav items (Home, Discover, Library, Downloads)
+- Primary nav items (Home, Search, Library, Downloads)
 - A spacer that pushes Settings to the bottom
 - A `⌘K` keyboard shortcut badge on the Search item (web-only, rendered conditionally)
 - Hover states using `onPointerEnter`/`onPointerLeave` — web APIs that are no-ops on native
 
 ### 3.2 Responsive Grid (`useResponsiveColumns`)
 
-The catalog grids (`FlatList` with `numColumns`) use `useResponsiveColumns()`:
-
-| Width     | Columns |
-| --------- | ------- |
-| ≥ 1280 px | 6       |
-| ≥ 1024 px | 5       |
-| ≥ 768 px  | 4       |
-| ≥ 480 px  | 3       |
-| < 480 px  | 2       |
-
-This is the only layout breakpoint system in use. There is no CSS media query equivalent — everything flows through `useWindowDimensions()`.
+Catalog grids derive their columns from the same window class: compact 2,
+medium 3, expanded 4, and large 6. Avoid introducing local breakpoint buckets
+for core screen structure.
 
 **Intricacy:** `FlatList` requires a `key` prop change when `numColumns` changes (e.g. `key={`grid-${numColumns}`}`). Without this, React Native throws a warning and the grid does not re-render correctly. This is done correctly in the home screen but is a common pitfall when adding new grids.
 
-### 3.3 Desktop Hero Banner
+### 3.3 Adaptive Hero And Home Feed
 
-On desktop (≥ 1024 px), the home screen shows a `HomeHeroBanner` using the first catalog item. The banner is hidden on mobile to preserve screen real estate. The first item is sliced out of the `FlatList` data array (`movies?.slice(1)`) when the hero is active to avoid duplicating it in the grid below.
+`HomeHeroBanner` renders on compact through large windows with class-specific
+height and poster treatment. `buildHomeFeed()` claims content using canonical
+`type:id` keys so the hero, Continue Watching, and primary rails do not repeat
+the same title. A `Recently Added` rail is used only when enough valid
+`released` metadata exists; otherwise the honest label is `More to Watch`.
 
 ---
 
 ## 4. Component Library (`components/ui/`)
 
 These are the foundational building blocks used across all screens.
+
+This is an app-local component library, not a separate workspace package. That
+is deliberate: mobile, web, and Electron currently render the same Expo app,
+while these primitives depend on app hooks such as `useTheme()` and
+`useWindowClass()`. `@streamer/shared` remains reserved for runtime-independent
+types and contracts. A separate `packages/ui` becomes useful only when a second
+renderer needs the same components without importing the Expo application.
 
 ### 4.1 `EmptyState`
 
@@ -229,57 +278,83 @@ export default function HomeScreen() {
 
 **Intricacy:** Sentry is imported via `require()` lazily inside `componentDidCatch`. This is intentional — it makes the `ErrorBoundary` component safe to use in environments where Sentry is not configured (e.g. local development without a DSN), without causing a module-load crash.
 
-**Known gap:** The `ErrorBoundary` hardcodes dark colours (`#0a0a1a` background, `#e0e0ff` title) rather than using `useTheme`. It cannot use hooks (it's a class component), and no `ThemeContext` is set up. See [Section 11, item 1](#11-future-improvement-suggestions) for the fix.
+The exported functional wrapper reads `useTheme()` and injects semantic colours
+into the class-based boundary. The fallback therefore follows light/dark mode,
+uses the neutral primary action, and exposes a visible web focus ring without
+putting hooks inside the error-boundary class.
 
 ### 4.4 `FilterChipBar`
 
-A horizontal scrollable row of toggle chips. Used for compact filter sets such
-as Discover type, Downloads queue state, and Search type/year filters.
+A horizontal scrollable row of toggle chips. Used for genuine compact facets
+and status filters such as Downloads queue state and secondary Search filters.
 Implemented with `ScrollView horizontal` — not `FlatList` — because these
 option lists are small and known.
 
-### 4.5 `OfflineBanner`
+Do not use `FilterChipBar` for top-level content destinations. Search and
+Library use `ContentTabs` for All, Movies, and Series, so selected state reads
+as navigation rather than a row of oversized buttons.
+
+### 4.5 `ContentTabs`
+
+Quiet horizontal text navigation for peer content views. Every tab keeps a
+44-pixel target, exposes the selected state to assistive technology, and uses a
+two-pixel cobalt indicator instead of a filled pill. Search and Library share
+this primitive.
+
+### 4.6 `SearchField`
+
+The canonical themed search input. It owns search icon placement, focus
+treatment, loading state, clear action, placeholder behaviour, and the optional
+inline `⌘K` hint. Search and `CommandPalette` share it so their interaction and
+accessibility contracts cannot drift.
+
+`components/search/RecentSearches.tsx` complements the input with page and
+compact variants. It renders a restrained divided list rather than a card or
+chip cloud and is shared by Search and the Command Palette.
+
+### 4.7 `OfflineBanner`
 
 Polls `expo-network` for connectivity and shows a persistent top banner when offline. Displayed at the top of the `ListHeaderComponent` in the home screen's `FlatList`.
 
-### 4.6 `WatchProgressBar`
+### 4.8 `WatchProgressBar`
 
 A thin horizontal progress bar rendered below catalog cards to indicate watch progress. Reads from the `WatchProgress` data returned by `useContinueWatching`.
 
-### 4.7 `CommandPalette`
+### 4.9 `CommandPalette`
 
 A keyboard-driven search overlay (web/desktop). Triggered by `⌘K`. Renders a
-modal with a text input and live search results using `useGlobalSearch`; Enter
-opens the unified `/search/results?q=...` route. Recent searches use
-`SearchService`, the same storage used by the mobile/Discover search overlay
-and `/search`.
+modal with a text input and live, keyboard-selectable suggestions using the same
+debounced search controller as `/search`; Enter opens the canonical
+`/search?q=...` route. Recent searches use the shared `SearchService` storage.
 
-### 4.7.1 Unified Search Screen
+### 4.9.1 Unified Search Screen
 
-`app/search/index.tsx` and `app/search/results.tsx` render the same search
-experience. `/search` supports an optional `q` param, and
-`/search/results?q=...` remains a compatibility route for existing callers.
+`app/(tabs)/search.tsx` is the single `/search` destination.
+`/search/results?q=...` remains a compatibility route for existing callers and
+older result links. The old Discover tab redirects to `/search`; discovery is
+the normal zero-query state rather than a hidden route mode.
 The screen provides:
 
-- editable search input
-- recent searches
-- a search suggestion when typed text has not been submitted
-- skeleton loading
-- retryable error state
-- no-results state
-- type filters (`All`, `Movies`, `Series`)
-- year filters derived from returned metadata
+- a sticky editable search input
+- a restrained recent-search list and installed-provider catalog rails
+- debounced poster/title suggestions from two characters
+- debounced progress plus poster/title suggestions while results load
+- partial-provider, retryable error, no-provider, and no-results states
+- shareable/restorable query, type, year, provider, and sort URL state
+- text-tab type navigation (`All`, `Movies`, `Series`)
+- labelled year/provider/sort controls in a compact-through-expanded sheet
+- a fixed filter sidebar beside results only in the large window class
 
 Search filters are intentionally applied client-side over `/api/search?q=...`
 results. Add-on search support is not uniform enough to make provider/genre/
 quality filtering a reliable backend contract yet. Do not expose source picking
 as the primary search UX.
 
-### 4.8 `DesktopLayout`
+### 4.10 `DesktopLayout`
 
 See Section 3.1 above.
 
-### 4.9 `BiometricLockOverlay`
+### 4.11 `BiometricLockOverlay`
 
 An overlay that gates access to the app behind biometric authentication using `expo-local-authentication`. Activated on app foreground if enabled in settings. Renders over the entire screen using `position: absolute` fill.
 
@@ -360,7 +435,7 @@ Manages `controlsVisible` state using a 4-second auto-hide timer. Taps anywhere 
 Renders the visible playback control surface:
 
 - Center glass controls with Play/Pause and Skip ±10s.
-- Bottom pastel glass progress tray with current time, duration, and progress.
+- Bottom high-contrast progress tray with current time, duration, and progress.
 - Accessible progress control using `accessibilityRole="adjustable"`,
   `accessibilityActions`, and ±10s seek actions.
 - Capability-aware timeline copy for direct, remux, live, and unknown-duration
@@ -443,40 +518,38 @@ For series, it additionally renders the `EpisodeSelector` component to let the u
 
 ## 8. Settings Screen (`app/(tabs)/settings.tsx`)
 
-The settings screen is divided into user-facing sections with
-`SettingsSection` and shared UI primitives:
+Settings is a routed information architecture, not one long form. Its public
+section contract is `account`, `playback`, `downloads`, `sources`,
+`appearance`, `privacy`, `about`, and `advanced`.
 
-Smart Downloads is shown as an opt-in Downloads setting. It must stay disabled
-by default, must state that HLS offline remains unsupported, and must present
-planned next episodes as planned intents rather than completed offline files.
+- `/settings` shows profile, one compact consumer readiness summary, and the
+  eight category rows on compact, medium, and expanded windows.
+- `/settings/[section]` shows exactly one category. `/sources` redirects to
+  `/settings/sources` so existing bookmarks and recovery actions stay valid.
+- Only the large window class (at least 1200 px) uses list-detail: a 256 px
+  category rail and one independently scrolling detail column capped at 800 px.
+  Account is the default selection.
+- Account owns profile, Trakt, sessions, password, and sign-out. Playback owns
+  quality, autoplay, audio, and subtitle preferences. Downloads owns Smart
+  Downloads, network/quality/storage policy, cleanup, and the queue shortcut.
+- Sources & Devices presents add-ons and a consumer readiness summary. Server
+  URLs, pairing, runtime state, cache repair, and detailed diagnostics live only
+  in Advanced or behind a concrete recovery action.
+- Appearance owns theme and language. Privacy owns biometric unlock, export,
+  and a separate danger zone. About owns version, links, and the one desktop
+  update control when available.
 
-Download attention states show exactly one contextual primary recovery action:
-resume, prepare again, verify, free storage, repair bridge, or remove. Cast
-errors use the same principle for display refresh, compatible-source fallback,
-or bridge repair. Raw transport details and source URLs do not belong in these
-surfaces.
+The category rows use `SettingsNavRow`; actions, switches, and discrete choices
+use `SettingsActionRow`, `SettingsToggleRow`, and `SettingsChoiceRow`. Every
+interactive row has a minimum 44 px target, keyboard focus, selected/pressed
+state, and translated labels. Avoid duplicating a setting in the overview and
+its detail page.
 
-Personalization is local-only in the current implementation. Playback quality,
-subtitle language, audio language, and autoplay-next preferences are exposed in
-Settings and persisted in `playerStore`. Play Best uses the selected playback
-quality as the maximum planner quality; subtitles/audio remain player
-preferences until richer track selection is available.
-
-- **Sources & Add-ons** — playback readiness and add-on management.
-- **Playback & Downloads** — desktop bridge/cast readiness, Downloads, Smart
-  Downloads, and Personalization.
-- **Account & Sync** — profile, Trakt, active sessions, and password.
-- **Application** — appearance, language, biometrics, and desktop update card
-  when the Electron bridge API is available.
-- **About & Updates** — app/build/runtime/channel label and manual desktop
-  update check when supported.
-- **Privacy & Data** — export data and delete account.
-
-On desktop, the left pane stays as a section list and the right pane renders
-Sources & Devices or inline account modals. On mobile, Sources & Devices opens
-as its own screen. Keep scary diagnostics inside Sources & Devices/Advanced
-surfaces; the main Settings list should answer whether the app is ready to play
-and where the user should go next.
+Smart Downloads stays opt-in and disabled by default. HLS offline limitations
+and planned-next-episode intents must never be presented as completed offline
+files. Playback quality is passed to Play Best as the planner ceiling; audio
+and subtitle choices remain player preferences until richer track selection is
+available.
 
 The Trakt OAuth flow uses `expo-web-browser` to open the Trakt authorization
 URL, then captures the redirect via deep link.
@@ -531,23 +604,19 @@ Each domain has a custom hook:
 
 ### High Priority
 
-#### 1. Theme-Aware ErrorBoundary
-
-`ErrorBoundary` is a class component that hardcodes dark mode colours (`#0a0a1a` background). The fix is to introduce a `ThemeContext` (React context) that provides colours without hooks, then consume it via `static contextType = ThemeContext` inside the class component. This is a standard React pattern for class components and would make the error screen consistent with the rest of the app in light mode.
-
-#### 2. Image Fallback for Catalog Cards
+#### 1. Image Fallback for Catalog Cards
 
 `CatalogItemCard` and the detail screen poster render `<Image source={{ uri: poster }}>` with no `onError` handler. When an add-on returns a broken or expired poster URL (common with some Stremio add-ons), the result is a blank or broken image. Add an `onError` → replace `source` with a local placeholder asset (e.g. a blurred branded card background). A `useState` pattern switching between the remote URI and a `require('../assets/placeholder.png')` source handles this cleanly.
 
-#### 3. Pagination / Infinite Scroll in Catalog
+#### 2. Pagination / Infinite Scroll in Catalog
 
 The catalog `FlatList` loads all items from the first API call. The aggregator supports a `skip` parameter, and the `AggregatorService.getCatalog` method accepts `skip`. However, the mobile `useCatalog` hook never passes `skip`. As catalog sizes grow (Cinemeta returns hundreds of items), this creates a large initial payload. Implement React Query's `useInfiniteQuery` with `getNextPageParam: (last, all) => all.length * PAGE_SIZE` and add an `onEndReached` handler on the `FlatList`.
 
-#### 4. Reanimated-Based Skeleton Shimmer
+#### 3. Reanimated-Based Skeleton Shimmer
 
 The `SkeletonLoader` uses the legacy `Animated` API for its opacity pulse. Moving to `react-native-reanimated` (already in the project at v4.2.1) would allow a horizontal gradient shimmer effect (via `LinearGradient` + a shared value animated position) rather than a simple opacity pulse, which is the standard modern pattern and looks significantly more polished.
 
-#### 5. Stream List Virtualization
+#### 4. Stream List Virtualization
 
 The stream list on the detail screen renders inside a `ScrollView` (not a `FlatList`). For popular content, Torrentio can return 50–200+ streams. Rendering all of them at once causes jank on lower-end Android devices. Replace with a `FlashList` (`@shopify/flash-list`, which recycling-list-compatible with variable height) for the stream list.
 
@@ -588,13 +657,20 @@ The `CommandPalette` is desktop-only (`Platform.OS === "web"`). On mobile, there
 
 `app/player.tsx` is ~800 lines despite already being decomposed. The Chromecast cast detection logic, the `previousProgress` resume prompt, and the `seekFeedback` animation could each be extracted into separate components or hooks. A `useCast` hook (managing `remoteMediaClient` setup and the `lastCastUriRef`) and a `useResumePrompt` hook would each be ~30–50 lines and make the player's main render function much easier to read.
 
-#### 12. Add `react-native-fast-image` for Poster Caching
+#### 12. Expand `FlashList` Coverage and Profile Poster Memory
 
-Expo's `<Image>` component does memory and disk caching, but it re-decodes images on scroll when they leave the `FlatList` render window. `@shopify/flash-list` pairs well with `expo-image` (the newer replacement for `expo/image`), which uses the native SDWebImage (iOS) and Glide (Android) for aggressive caching. Migrating catalog cards to `expo-image` would reduce scroll jank on large catalogs.
+Core poster surfaces now use `expo-image` with memory/disk caching. The next
+step is to profile long catalog, search, and episode collections on lower-end
+native devices and extend `@shopify/flash-list` only where measurements show
+that view recycling improves frame time or memory pressure.
 
-#### 13. i18n Completeness
+#### 13. i18n Completeness (Implemented for the Overhaul)
 
-The `i18next` setup and locale files exist, but not all strings in the codebase are extracted. Several components have hardcoded English strings (notably `ErrorBoundary`, `PlayerSettingsModal`, and parts of the detail screen). A systematic pass with `i18next-scanner` to find unharvested strings, combined with adding missing locale keys to `locales/en.json`, would complete internationalisation.
+User-facing copy touched by the Obsidian overhaul and its core recovery flows is
+extracted in English, Dutch, and Spanish. A locale-parity test prevents missing
+or extra keys between those files. Future provider/runtime copy must be mapped
+to translation keys before it reaches a consumer surface; raw diagnostic data
+may remain untranslated inside Advanced diagnostics.
 
 ---
 
@@ -608,9 +684,13 @@ Many features branch on `Platform.OS === "web"`. File downloads, the `CommandPal
 
 The `DesktopLayout` `NavLink` component uses `onPointerEnter` and `onPointerLeave` for hover effects. These are web-only pointer events that React Native (pre-0.74) ignores silently. With React Native 0.83 (current), these are now supported on iOS and iPadOS with a pointer device (trackpad, mouse). This is correct behaviour — hover effects will now also work on iPad with a connected mouse.
 
-### `Dimensions.get` vs `useWindowDimensions`
+### Reactive Window Classes
 
-`DesktopLayout` uses `Dimensions.get("window")` (a synchronous, non-reactive read) for its initial desktop check, while most other components use `useWindowDimensions()` (reactive, re-renders on resize). `DesktopLayout` should be migrated to `useWindowDimensions()` to correctly handle browser window resize — otherwise, the sidebar vs. tab bar decision is locked in at mount time.
+`DesktopLayout` and the rebuilt Settings/Search surfaces use the shared
+`useWindowClass()` contract, which is backed by reactive window dimensions.
+Do not reintroduce module-level `Dimensions.get("window")` checks for responsive
+navigation or page composition; browser resize and device rotation must update
+the active compact, medium, expanded, or large layout.
 
 ### `expo-video` vs `expo-av`
 

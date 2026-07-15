@@ -1,42 +1,38 @@
 import React from "react";
 import { View, StyleSheet, StatusBar } from "react-native";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   OnboardingCarousel,
   OnboardingStep,
 } from "../components/ui/OnboardingCarousel";
 import { hapticSelection } from "../lib/haptics";
-
-const ONBOARDING_STEPS: OnboardingStep[] = [
-  {
-    id: "streaming",
-    title: "Soft Cinema",
-    description:
-      "Browse your add-ons, sources, and playback devices from one calm, cinematic space.",
-    image: require("../assets/images/onboarding_streaming.png"),
-    colors: ["#f2d7ff", "#c5e9d5"],
-  },
-  {
-    id: "sync",
-    title: "Across Screens",
-    description:
-      "Start on desktop, continue on iPhone or Android, and keep your library close.",
-    image: require("../assets/images/onboarding_sync.png"),
-    colors: ["#d9e7ff", "#ffd8e7"],
-  },
-  {
-    id: "security",
-    title: "Sources First",
-    description:
-      "Set up Cinemeta now, add streaming sources next, and keep paid services optional.",
-    image: require("../assets/images/onboarding_security.png"),
-    colors: ["#ffe4c7", "#d8f6e4"],
-  },
-];
+import { useTheme } from "../hooks/useTheme";
+import { useTranslation } from "react-i18next";
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+  const onboardingSteps: OnboardingStep[] = [
+    {
+      id: "streaming",
+      title: t("onboarding.intro.streamingTitle"),
+      description: t("onboarding.intro.streamingDescription"),
+      image: require("../assets/images/onboarding_streaming.png"),
+    },
+    {
+      id: "sync",
+      title: t("onboarding.intro.syncTitle"),
+      description: t("onboarding.intro.syncDescription"),
+      image: require("../assets/images/onboarding_sync.png"),
+    },
+    {
+      id: "security",
+      title: t("onboarding.intro.playbackTitle"),
+      description: t("onboarding.intro.playbackDescription"),
+      image: require("../assets/images/onboarding_security.png"),
+    },
+  ];
 
   const handleComplete = async () => {
     hapticSelection();
@@ -44,12 +40,9 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <OnboardingCarousel
-        steps={ONBOARDING_STEPS}
-        onComplete={handleComplete}
-      />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      <OnboardingCarousel steps={onboardingSteps} onComplete={handleComplete} />
     </View>
   );
 }
@@ -57,6 +50,5 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#050614",
   },
 });

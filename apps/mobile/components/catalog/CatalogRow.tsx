@@ -1,26 +1,26 @@
-import React, { memo, useRef, useState, useEffect } from "react";
+import React, { memo, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  Image,
   Pressable,
   ActivityIndicator,
   Platform,
-  useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useAddonCatalog } from "../../hooks/useAddonCatalog";
-import type {
-  MetaPreview,
-  CatalogDefinition,
-  InstalledAddon,
-} from "@streamer/shared";
+import type { CatalogDefinition, InstalledAddon } from "@streamer/shared";
 import { CatalogItemCard } from "./CatalogItemCard";
 import { useTheme } from "../../hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
-import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { useTranslation } from "react-i18next";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 
 const CARD_WIDTH_MOBILE = 140;
 const CARD_WIDTH_DESKTOP = 200;
@@ -29,18 +29,20 @@ const CARD_GAP = 12;
 function CatalogRowInner({
   catalog,
   addon,
+  excludeContentKeys,
 }: {
   catalog: CatalogDefinition;
   addon: InstalledAddon;
+  excludeContentKeys?: ReadonlySet<string>;
 }) {
   const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
     useAddonCatalog(addon.id, catalog);
-  const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { isExpanded, isLarge } = useWindowClass();
+  const isDesktop = isExpanded || isLarge;
   const flatListRef = useRef<FlatList>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
-  const router = useRouter();
   const cardWidth = isDesktop ? CARD_WIDTH_DESKTOP : CARD_WIDTH_MOBILE;
   const scrollAmount = cardWidth * 3 + CARD_GAP * 3; // scroll 3 cards at a time
 
@@ -54,29 +56,17 @@ function CatalogRowInner({
     flatListRef.current?.scrollToOffset({ offset: newOffset, animated: true });
   };
 
-  const flattenedData = data?.pages.flat() || [];
-
-  const { selectedIndex } = useKeyboardNavigation({
-    itemCount: flattenedData.length,
-    columns: 1,
-    onSelect: (index) => {
-      const item = flattenedData[index];
-      if (item) {
-        router.push(`/detail/${item.type}/${item.id}`);
-      }
+  const flattenedData = (data?.pages.flat() || []).filter(
+    (item, index, items) => {
+      const key = `${item.type}:${item.id}`;
+      return (
+        !excludeContentKeys?.has(key) &&
+        items.findIndex(
+          (candidate) => `${candidate.type}:${candidate.id}` === key,
+        ) === index
+      );
     },
-    isActive: isDesktop,
-  });
-
-  useEffect(() => {
-    if (selectedIndex >= 0 && flatListRef.current) {
-      flatListRef.current.scrollToIndex({
-        index: selectedIndex,
-        animated: true,
-        viewPosition: 0.5,
-      });
-    }
-  }, [selectedIndex]);
+  );
 
   if (isLoading) {
     return (
@@ -107,23 +97,22 @@ function CatalogRowInner({
         {isDesktop && (
           <View style={styles.scrollArrows}>
             <Pressable
-              style={({ pressed, hovered }: any) => [
+              style={({ pressed, hovered, focused }: any) => [
                 styles.arrowBtn,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.05)",
-                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceElevated,
                 },
                 hovered && {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.12)"
-                    : "rgba(0,0,0,0.1)",
+                  backgroundColor: colors.surfaceElevated,
                 },
                 pressed && { opacity: 0.7 },
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
               ]}
               onPress={scrollLeft}
-              accessibilityLabel="Scroll left"
+              accessibilityRole="button"
+              accessibilityLabel={t("catalog.scrollLeft")}
             >
               <Ionicons
                 name="chevron-back"
@@ -132,23 +121,22 @@ function CatalogRowInner({
               />
             </Pressable>
             <Pressable
-              style={({ pressed, hovered }: any) => [
+              style={({ pressed, hovered, focused }: any) => [
                 styles.arrowBtn,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.05)",
-                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceElevated,
                 },
                 hovered && {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.12)"
-                    : "rgba(0,0,0,0.1)",
+                  backgroundColor: colors.surfaceElevated,
                 },
                 pressed && { opacity: 0.7 },
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
               ]}
               onPress={scrollRight}
-              accessibilityLabel="Scroll right"
+              accessibilityRole="button"
+              accessibilityLabel={t("catalog.scrollRight")}
             >
               <Ionicons
                 name="chevron-forward"
@@ -164,21 +152,17 @@ function CatalogRowInner({
         ref={flatListRef}
         horizontal
         data={flattenedData}
-        keyExtractor={(item, index) =>
-          `${addon.id}-${catalog.type}-${catalog.id}-${item.id}-${index}`
+        keyExtractor={(item) =>
+          `${addon.id}-${catalog.type}-${catalog.id}-${item.type}:${item.id}`
         }
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[
           styles.rowScroll,
           isDesktop && styles.rowScrollDesktop,
         ]}
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <View style={{ width: cardWidth }}>
-            <CatalogItemCard
-              item={item}
-              isFocused={selectedIndex === index}
-              onEnter={() => router.push(`/detail/${item.type}/${item.id}`)}
-            />
+            <CatalogItemCard item={item} />
           </View>
         )}
         onScroll={(e) => setScrollOffset(e.nativeEvent.contentOffset.x)}
@@ -217,22 +201,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rowTitle: {
-    fontSize: 18,
-    fontWeight: "800",
+    ...uiTypography.title,
+    fontSize: 20,
+    lineHeight: 26,
   },
   rowSubtitle: {
-    fontSize: 12,
-    fontWeight: "600",
+    ...uiTypography.caption,
   },
   scrollArrows: {
     flexDirection: "row",
     gap: 8,
   },
   arrowBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: uiRadii.control,
     justifyContent: "center",
     alignItems: "center",
     // @ts-ignore web-only

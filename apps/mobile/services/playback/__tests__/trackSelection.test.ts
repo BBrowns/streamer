@@ -1,6 +1,7 @@
 import {
   buildTrackRows,
   findPreferredPlayerTrack,
+  formatMediaTrackLabel,
   normalizeTrackLanguage,
 } from "../trackSelection";
 
@@ -24,6 +25,16 @@ describe("trackSelection", () => {
       { id: "1", label: "English", language: "en", active: false },
       { id: "2", label: "Spanish", language: "es", active: true },
     ]);
+  });
+
+  it("expands accessibility track abbreviations into understandable labels", () => {
+    expect(formatMediaTrackLabel("English AD", "audio")).toBe(
+      "English AD (Audio description)",
+    );
+    expect(formatMediaTrackLabel("English SDH", "subtitle")).toBe(
+      "English SDH (Captions for deaf and hard of hearing)",
+    );
+    expect(formatMediaTrackLabel("English", "audio")).toBe("English");
   });
 
   it("finds the preferred track by normalized language before falling back to default", () => {

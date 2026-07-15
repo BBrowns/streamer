@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuthStore } from "../../stores/authStore";
 import type { WatchProgress } from "@streamer/shared";
+import { useTheme } from "../../hooks/useTheme";
 
 /**
  * Fetches watch progress for a specific item and renders a thin progress bar
@@ -17,6 +18,7 @@ export function WatchProgressBar({
   style?: object;
 }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { colors } = useTheme();
 
   const { data } = useQuery<WatchProgress | null>({
     queryKey: ["progress", "item", itemId],
@@ -42,9 +44,17 @@ export function WatchProgressBar({
   if (progress < 0.03 || progress >= 0.95) return null;
 
   return (
-    <View style={[styles.track, style]}>
+    <View
+      style={[styles.track, { backgroundColor: colors.disabled + "55" }, style]}
+    >
       <View
-        style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]}
+        style={[
+          styles.fill,
+          {
+            width: `${Math.round(progress * 100)}%`,
+            backgroundColor: colors.tint,
+          },
+        ]}
       />
     </View>
   );
@@ -57,11 +67,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: "rgba(255,255,255,0.1)",
   },
   fill: {
     height: 3,
-    backgroundColor: "#d8b4fe",
     borderRadius: 2,
   },
 });

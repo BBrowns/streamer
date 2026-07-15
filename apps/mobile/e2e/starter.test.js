@@ -11,8 +11,8 @@ describe("App Launch Smoke Test", () => {
     await expect(element(by.id("home-grid"))).toBeVisible();
   });
 
-  it("should navigate to discover tab", async () => {
-    await element(by.label("Discover")).tap();
-    await expect(element(by.id("discover-screen"))).toBeVisible();
+  it("should navigate to the canonical search tab", async () => {
+    await element(by.label("Search")).tap();
+    await expect(element(by.id("search-screen"))).toBeVisible();
   });
 });

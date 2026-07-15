@@ -1,11 +1,4 @@
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../hooks/useTheme";
 import { AuthScaffold } from "../components/auth/AuthScaffold";
 import { BackendUrlField } from "../components/auth/BackendUrlField";
+import { TextField } from "../components/ui/TextField";
+import { AppButton } from "../components/ui/AppButton";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -54,21 +49,15 @@ export default function LoginScreen() {
             ]}
           >
             <Ionicons name="alert-circle" size={18} color={colors.error} />
-            <Text style={styles.errorText}>
+            <Text style={[styles.errorText, { color: colors.error }]}>
               {localError || extractErrorMessage(error)}
             </Text>
           </View>
         )}
 
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
+        <TextField
+          label={t("auth.login.email")}
+          containerStyle={styles.field}
           placeholder={t("auth.login.email")}
           placeholderTextColor={colors.textSecondary + "80"}
           value={email}
@@ -76,15 +65,9 @@ export default function LoginScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
+        <TextField
+          label={t("auth.login.password")}
+          containerStyle={styles.field}
           placeholder={t("auth.login.password")}
           placeholderTextColor={colors.textSecondary + "80"}
           value={password}
@@ -92,29 +75,18 @@ export default function LoginScreen() {
           secureTextEntry
         />
 
-        <Pressable
+        <AppButton
           testID="login-submit"
-          style={({ pressed, hovered }: any) => [
-            styles.primaryButton,
-            { backgroundColor: colors.tint },
-            isLoading && styles.disabledButton,
-            hovered && { opacity: 0.9, transform: [{ scale: 1.01 }] },
-            pressed && { transform: [{ scale: 0.98 }] },
-          ]}
+          label={t("auth.login.button")}
+          icon="log-in-outline"
+          variant="primary"
+          size="large"
+          fullWidth
+          style={styles.primaryButton}
           onPress={handleLogin}
           disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#2c1738" />
-          ) : (
-            <>
-              <Ionicons name="log-in-outline" size={19} color="#2c1738" />
-              <Text style={styles.primaryButtonText}>
-                {t("auth.login.button")}
-              </Text>
-            </>
-          )}
-        </Pressable>
+          loading={isLoading}
+        />
 
         <Pressable
           style={({ hovered }: any) => [hovered && { opacity: 0.7 }]}
@@ -160,31 +132,11 @@ const styles = StyleSheet.create({
     gap: 10,
     alignItems: "center",
   },
-  errorText: { color: "#ff9ba6", fontSize: 14, fontWeight: "700", flex: 1 },
-  input: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-  },
+  errorText: { fontSize: 14, fontWeight: "700", flex: 1 },
+  field: { marginBottom: 14 },
   primaryButton: {
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 9,
     marginTop: 12,
     marginBottom: 24,
-  },
-  disabledButton: { opacity: 0.6 },
-  primaryButtonText: {
-    color: "#2c1738",
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 0,
   },
   linkTextCentered: {
     textAlign: "center",

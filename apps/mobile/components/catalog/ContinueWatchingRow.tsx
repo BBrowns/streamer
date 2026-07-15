@@ -6,7 +6,6 @@ import {
   FlatList,
   Pressable,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,18 +15,23 @@ import type { WatchProgress } from "@streamer/shared";
 import {
   useContinueWatching,
   useRemoveProgress,
+  useUpdateProgress,
 } from "../../hooks/useContinueWatching";
+import { useToastStore } from "../../stores/toastStore";
 import { useTheme } from "../../hooks/useTheme";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { Surface } from "../ui/Surface";
 import { AppButton } from "../ui/AppButton";
 import { SkeletonRow } from "../ui/SkeletonLoader";
 import {
+  getWebFocusStyle,
   getSoftOverlayColor,
   uiRadii,
   uiSpacing,
+  uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 type ContinueWatchingRowProps = {
   showEmptyState?: boolean;
@@ -45,16 +49,14 @@ function episodeLabel(item: WatchProgress) {
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
   const pct = total > 0 ? Math.min((current / total) * 100, 100) : 0;
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
         styles.progressTrack,
         {
-          backgroundColor: isDark
-            ? "rgba(255,255,255,0.14)"
-            : "rgba(30,25,45,0.12)",
+          backgroundColor: colors.disabled,
         },
       ]}
     >
@@ -80,8 +82,8 @@ function ContinueWatchingCard({
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { isExpanded, isLarge } = useWindowClass();
+  const isDesktop = isExpanded || isLarge;
   const cardWidth = isDesktop ? 360 : 286;
   const posterWidth = isDesktop ? 142 : 112;
   const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
@@ -92,11 +94,15 @@ function ContinueWatchingCard({
       : 0;
   const episode = episodeLabel(item);
 
-  const handleResume = () => {
+  const handleOpenDetails = () => {
     router.push(`/detail/${item.type}/${item.itemId}`);
   };
   const { isKeyboardFocused, webPressableProps } =
-    useWebPressableActivation(handleResume);
+    useWebPressableActivation(handleOpenDetails);
+  const detailsLabel = t("library.actions.viewDetails", {
+    defaultValue: "View Details",
+  });
+  const detailsAccessibilityLabel = `${detailsLabel}: ${item.title}`;
 
   return (
     <Surface
@@ -105,17 +111,16 @@ function ContinueWatchingCard({
         styles.card,
         { width: cardWidth },
         Platform.OS === "web" && isKeyboardFocused && styles.cardFocused,
+        Platform.OS === "web" &&
+          isKeyboardFocused && { outlineColor: colors.focus },
       ]}
     >
       <Pressable
         {...webPressableProps}
-        onPress={handleResume}
+        onPress={handleOpenDetails}
         accessibilityRole="button"
-        accessibilityLabel={t("home.continueWatching.resumeA11y", {
-          title: item.title,
-          minutes: remainingMinutes,
-          defaultValue: `Resume ${item.title}, ${remainingMinutes} minutes remaining`,
-        })}
+        accessibilityLabel={detailsAccessibilityLabel}
+        accessibilityHint={t("search.a11y.openDetails")}
         style={({ pressed, hovered }: any) => [
           styles.resumeArea,
           pressed && styles.pressed,
@@ -130,9 +135,7 @@ function ContinueWatchingCard({
             styles.posterFrame,
             {
               width: posterWidth,
-              backgroundColor: isDark
-                ? "rgba(216,180,254,0.12)"
-                : "rgba(167,139,250,0.12)",
+              backgroundColor: colors.tint + "18",
             },
           ]}
         >
@@ -178,11 +181,12 @@ function ContinueWatchingCard({
       </Pressable>
       <View style={styles.actionRow}>
         <AppButton
-          label={t("home.continueWatching.resume")}
-          icon="play"
+          label={detailsLabel}
+          accessibilityLabel={detailsAccessibilityLabel}
+          icon="arrow-forward"
           size="small"
-          variant="primary"
-          onPress={handleResume}
+          variant="secondary"
+          onPress={handleOpenDetails}
         />
         <Pressable
           onPress={() => onRemove(item.itemId)}
@@ -192,7 +196,7 @@ function ContinueWatchingCard({
             title: item.title,
             defaultValue: `Remove ${item.title} from Continue Watching`,
           })}
-          style={({ pressed, hovered }: any) => [
+          style={({ pressed, hovered, focused }: any) => [
             styles.iconButton,
             {
               borderColor: colors.border,
@@ -200,6 +204,7 @@ function ContinueWatchingCard({
               opacity: isRemoving ? 0.5 : pressed ? 0.72 : 1,
             },
             Platform.OS === "web" && hovered && { borderColor: colors.tint },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
         >
           <Ionicons name="close" size={16} color={colors.textSecondary} />
@@ -216,6 +221,7 @@ export function ContinueWatchingRow({
 }: ContinueWatchingRowProps) {
   const { data: items, isLoading } = useContinueWatching();
   const removeProgress = useRemoveProgress();
+  const updateProgress = useUpdateProgress();
   const { t } = useTranslation();
   const { colors } = useTheme();
 
@@ -237,7 +243,7 @@ export function ContinueWatchingRow({
     return (
       <View style={styles.container}>
         <Surface variant="accent" style={styles.emptySurface}>
-          <Ionicons name="play-circle-outline" size={22} color={colors.tint} />
+          <Ionicons name="time-outline" size={22} color={colors.tint} />
           <View style={styles.emptyCopy}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
               {t("home.continueWatching.emptyTitle")}
@@ -255,15 +261,10 @@ export function ContinueWatchingRow({
     <View style={styles.container} testID="continue-watching-row">
       <View style={styles.headerRow}>
         <View style={styles.titleWithIcon}>
-          <Ionicons name="play-circle-outline" size={22} color={colors.tint} />
-          <View>
-            <Text style={[styles.sectionEyebrow, { color: colors.tint }]}>
-              {t("home.continueWatching.eyebrow")}
-            </Text>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {t("home.continueWatching.title")}
-            </Text>
-          </View>
+          <Ionicons name="time-outline" size={22} color={colors.tint} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {t("home.continueWatching.title")}
+          </Text>
         </View>
       </View>
       <FlatList
@@ -277,7 +278,32 @@ export function ContinueWatchingRow({
         renderItem={({ item }) => (
           <MemoizedCard
             item={item}
-            onRemove={(itemId) => removeProgress.mutate(itemId)}
+            onRemove={(itemId) => {
+              const removedItem = items.find(
+                (entry) => entry.itemId === itemId,
+              );
+              removeProgress.mutate(itemId, {
+                onSuccess: () => {
+                  if (!removedItem) return;
+                  useToastStore
+                    .getState()
+                    .show("Removed from Continue Watching", "info", {
+                      actionLabel: "Undo",
+                      onAction: () =>
+                        updateProgress.mutateAsync({
+                          type: removedItem.type,
+                          itemId: removedItem.itemId,
+                          season: removedItem.season ?? undefined,
+                          episode: removedItem.episode ?? undefined,
+                          currentTime: removedItem.currentTime,
+                          duration: removedItem.duration,
+                          title: removedItem.title,
+                          poster: removedItem.poster ?? undefined,
+                        }),
+                    });
+                },
+              });
+            }}
             isRemoving={removeProgress.isPending}
           />
         )}
@@ -302,11 +328,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: uiSpacing.md,
   },
-  sectionEyebrow: {
-    ...uiTypography.sectionLabel,
-    fontSize: 10,
-    textTransform: "uppercase",
-  },
   sectionTitle: {
     ...uiTypography.title,
   },
@@ -321,7 +342,6 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     outlineStyle: "solid",
     outlineWidth: 2,
-    outlineColor: "#a78bfa",
     outlineOffset: 3,
   } as any,
   resumeArea: {
@@ -386,8 +406,8 @@ const styles = StyleSheet.create({
     paddingBottom: uiSpacing.md,
   },
   iconButton: {
-    width: 36,
-    height: 36,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
     borderWidth: 1,
     borderRadius: uiRadii.pill,
     alignItems: "center",

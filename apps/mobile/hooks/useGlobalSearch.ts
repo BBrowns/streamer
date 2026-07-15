@@ -1,26 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../services/api";
-import type { MetaPreview } from "@streamer/shared";
-import { useAuthStore } from "../stores/authStore";
+import { useEffect, useMemo, useState } from "react";
+import {
+  SEARCH_SUGGESTION_LIMIT,
+  createSearchDebouncer,
+} from "../services/searchController";
+import { useSearch } from "./useSearch";
 
-/**
- * Search across all installed add-ons simultaneously.
- * Uses the backend /api/search?q= endpoint which broadcasts
- * to all addons via Promise.allSettled and deduplicates by ID.
- */
+/** Debounced type-ahead search shared by Search and the command palette. */
 export function useGlobalSearch(query: string) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const controller = useMemo(
+    () => createSearchDebouncer(setDebouncedQuery),
+    [],
+  );
 
-  return useQuery<MetaPreview[]>({
-    queryKey: ["search", query],
-    queryFn: async () => {
-      const { data } = await api.get(
-        `/api/search?q=${encodeURIComponent(query)}`,
-      );
-      return data.metas ?? [];
-    },
-    enabled: isAuthenticated && query.length >= 2,
-    staleTime: 30 * 1000, // 30s cache for search results
-    retry: 1,
+  useEffect(() => {
+    controller.update(query);
+    return controller.cancel;
+  }, [controller, query]);
+
+  const result = useSearch(debouncedQuery, {
+    minimumLength: 2,
+    limit: SEARCH_SUGGESTION_LIMIT,
   });
+
+  return {
+    ...result,
+    debouncedQuery,
+    isDebouncing:
+      query.trim().length >= 2 && query.trim() !== debouncedQuery.trim(),
+  };
 }

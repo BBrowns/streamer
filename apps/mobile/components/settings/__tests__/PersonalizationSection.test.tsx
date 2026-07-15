@@ -20,15 +20,19 @@ describe("PersonalizationSection", () => {
   it("updates local playback preferences without requiring an account profile", () => {
     const screen = render(<PersonalizationSection />);
 
-    expect(screen.getByText("Personalization")).toBeTruthy();
-    expect(screen.getByText("Local preferences only")).toBeTruthy();
+    expect(
+      screen.getByText("settings.playbackPreferences.quality"),
+    ).toBeTruthy();
+    expect(screen.getByText("settings.playbackPreferences.audio")).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText("Prefer 720p playback"));
-    fireEvent.press(screen.getByLabelText("Prefer Dutch subtitles"));
-    fireEvent(
-      screen.getByLabelText("Autoplay next episode"),
-      "valueChange",
-      false,
+    fireEvent.press(screen.getByLabelText("720P"));
+    fireEvent.press(
+      screen.getAllByLabelText(
+        "settings.playbackPreferences.languages.dutch",
+      )[1],
+    );
+    fireEvent.press(
+      screen.getByLabelText("settings.playbackPreferences.autoplay"),
     );
 
     expect(usePlayerStore.getState()).toMatchObject({

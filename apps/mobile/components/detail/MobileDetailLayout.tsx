@@ -5,7 +5,6 @@ import {
   Image,
   Pressable,
   ActivityIndicator,
-  Dimensions,
   Platform,
 } from "react-native";
 import { useState } from "react";
@@ -21,9 +20,9 @@ import { useTheme } from "../../hooks/useTheme";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 import { DetailActionPanel } from "./DetailActionPanel";
 import { SourceInspectorPanel } from "./SourceInspectorPanel";
-
-const { height } = Dimensions.get("window");
-const BACKDROP_HEIGHT = height * 0.55;
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
+import { useTranslation } from "react-i18next";
 
 export function MobileDetailLayout({
   id,
@@ -34,6 +33,7 @@ export function MobileDetailLayout({
   groupedStreams,
   availableResolutions,
   selectedResolution,
+  initiallyOpenSources,
   setSelectedResolution,
   inLibrary,
   handleToggleLibrary,
@@ -47,7 +47,13 @@ export function MobileDetailLayout({
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
-  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const { t } = useTranslation();
+  const { height, isCompact, isLarge } = useWindowClass();
+  const [sourcesOpen, setSourcesOpen] = useState(!!initiallyOpenSources);
+  const backdropHeight = Math.min(
+    height * (isCompact ? 0.46 : 0.52),
+    isLarge ? 520 : 460,
+  );
   const selectedStreams =
     castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
   const streamsData =
@@ -56,18 +62,16 @@ export function MobileDetailLayout({
     castType !== "series" && availableResolutions.length > 0;
   const sourceCount =
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
-  const primaryTextColor = isDark ? "#2c1738" : "#ffffff";
-  const surfaceColor = isDark ? "rgba(255,255,255,0.08)" : colors.card;
-  const softSurfaceColor = isDark
-    ? "rgba(255,255,255,0.08)"
-    : "rgba(255,255,255,0.62)";
+  const primaryTextColor = colors.onTint;
+  const surfaceColor = colors.card;
+  const softSurfaceColor = colors.surfaceElevated;
   const heroGradientColors = isDark
-    ? (["transparent", "rgba(17,18,28,0.58)", colors.background] as const)
-    : (["transparent", "rgba(251,246,244,0.5)", colors.background] as const);
+    ? (["transparent", "rgba(8,9,12,0.62)", colors.background] as const)
+    : (["transparent", "rgba(243,242,239,0.54)", colors.background] as const);
 
   const renderHeader = () => (
     <View>
-      <View style={styles.heroContainer}>
+      <View style={[styles.heroContainer, { height: backdropHeight }]}>
         {!!meta.background ? (
           <Image
             source={{ uri: meta.background }}
@@ -81,7 +85,12 @@ export function MobileDetailLayout({
             resizeMode="cover"
           />
         ) : (
-          <View style={styles.backdrop} />
+          <View
+            style={[
+              styles.backdrop,
+              { backgroundColor: colors.surfaceElevated },
+            ]}
+          />
         )}
 
         <LinearGradient
@@ -91,7 +100,7 @@ export function MobileDetailLayout({
         />
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { minHeight: height * 0.6 }]}>
         <Text style={[styles.title, { color: colors.text }]}>{meta.name}</Text>
 
         <View style={styles.metaRow}>
@@ -101,7 +110,7 @@ export function MobileDetailLayout({
                 styles.metaTag,
                 {
                   color: colors.textSecondary,
-                  backgroundColor: softSurfaceColor,
+                  backgroundColor: "transparent",
                 },
               ]}
             >
@@ -114,7 +123,7 @@ export function MobileDetailLayout({
                 styles.metaTag,
                 {
                   color: colors.textSecondary,
-                  backgroundColor: softSurfaceColor,
+                  backgroundColor: "transparent",
                 },
               ]}
             >
@@ -122,7 +131,17 @@ export function MobileDetailLayout({
             </Text>
           )}
           {!!meta.imdbRating && (
-            <Text style={styles.ratingTag}>⭐ {meta.imdbRating}</Text>
+            <Text
+              style={[
+                styles.ratingTag,
+                {
+                  color: colors.warning,
+                  backgroundColor: "transparent",
+                },
+              ]}
+            >
+              ⭐ {meta.imdbRating}
+            </Text>
           )}
         </View>
 
@@ -210,18 +229,29 @@ export function MobileDetailLayout({
             <View
               style={[
                 styles.sourceDisclosure,
-                { backgroundColor: surfaceColor, borderColor: colors.border },
+                { backgroundColor: surfaceColor, borderColor: "transparent" },
               ]}
             >
               <Pressable
-                style={styles.sourceDisclosureHeader}
+                style={({ pressed, focused }: any) => [
+                  styles.sourceDisclosureHeader,
+                  pressed && {
+                    backgroundColor: softSurfaceColor,
+                    opacity: 0.82,
+                  },
+                  Platform.OS === "web" &&
+                    focused &&
+                    getWebFocusStyle(colors.focus),
+                ]}
                 onPress={() => {
                   hapticImpactLight();
                   setSourcesOpen((value) => !value);
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  sourcesOpen ? "Hide more sources" : "Show more sources"
+                  sourcesOpen
+                    ? t("detail.sources.hide")
+                    : t("detail.sources.show")
                 }
                 accessibilityState={{ expanded: sourcesOpen }}
               >
@@ -239,7 +269,7 @@ export function MobileDetailLayout({
                         { color: colors.text },
                       ]}
                     >
-                      More Sources
+                      {t("detail.sources.more")}
                     </Text>
                     <Text
                       style={[
@@ -247,7 +277,9 @@ export function MobileDetailLayout({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      Advanced fallback · {availableResolutions.length} groups
+                      {t("detail.sources.groups", {
+                        count: availableResolutions.length,
+                      })}
                     </Text>
                   </View>
                 </View>
@@ -271,7 +303,7 @@ export function MobileDetailLayout({
                     {availableResolutions.map((res) => (
                       <Pressable
                         key={res}
-                        style={[
+                        style={({ pressed, focused }: any) => [
                           styles.resBubble,
                           {
                             backgroundColor: softSurfaceColor,
@@ -281,13 +313,20 @@ export function MobileDetailLayout({
                             backgroundColor: colors.tint,
                             borderColor: colors.tint,
                           },
+                          pressed && { opacity: 0.76 },
+                          Platform.OS === "web" &&
+                            focused &&
+                            getWebFocusStyle(colors.focus),
                         ]}
                         onPress={() => {
                           hapticImpactLight();
                           setSelectedResolution(res);
                         }}
                         accessibilityRole="radio"
-                        accessibilityLabel={`Filter sources by ${res === "2160p" ? "4K" : res}`}
+                        accessibilityLabel={t(
+                          "detail.sources.filterByQuality",
+                          { quality: res === "2160p" ? "4K" : res },
+                        )}
                         accessibilityState={{
                           checked: selectedResolution === res,
                         }}
@@ -333,24 +372,19 @@ export function MobileDetailLayout({
       <Stack.Screen options={{ headerShown: false }} />
 
       <Pressable
-        style={[
+        style={({ focused }: any) => [
           styles.floatingBack,
           {
-            backgroundColor: isDark
-              ? "rgba(255,255,255,0.12)"
-              : "rgba(255,255,255,0.74)",
+            backgroundColor: colors.surfaceOverlay,
             borderColor: colors.border,
           },
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         ]}
         onPress={onBack}
         accessibilityRole="button"
         accessibilityLabel="Back to previous screen"
       >
-        <Ionicons
-          name="chevron-back"
-          size={28}
-          color={isDark ? "#ffffff" : colors.text}
-        />
+        <Ionicons name="chevron-back" size={28} color={colors.text} />
       </Pressable>
 
       <FlashList
@@ -377,7 +411,6 @@ export function MobileDetailLayout({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#11121c",
   },
   floatingBack: {
     position: "absolute",
@@ -387,18 +420,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   heroContainer: {
     width: "100%",
-    height: BACKDROP_HEIGHT,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#151622",
   },
   heroGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -408,14 +438,10 @@ const styles = StyleSheet.create({
     padding: 20,
     marginTop: -80,
     zIndex: 2,
-    minHeight: height * 0.6,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: "#fff8ff",
+    ...uiTypography.headline,
     marginBottom: 12,
-    letterSpacing: 0,
   },
   metaRow: {
     flexDirection: "row",
@@ -424,20 +450,14 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   metaTag: {
-    color: "#c6bfd2",
-    fontSize: 13,
-    fontWeight: "600",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 12,
+    ...uiTypography.label,
+    paddingHorizontal: 0,
     paddingVertical: 4,
     borderRadius: 8,
   },
   ratingTag: {
-    color: "#ffd9a8",
-    fontSize: 13,
-    fontWeight: "700",
-    backgroundColor: "rgba(255,217,168,0.14)",
-    paddingHorizontal: 12,
+    ...uiTypography.label,
+    paddingHorizontal: 0,
     paddingVertical: 4,
     borderRadius: 8,
   },
@@ -448,20 +468,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   genrePill: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.14)",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   genreText: {
-    color: "#e6dff0",
     fontSize: 12,
     fontWeight: "600",
   },
   description: {
-    color: "#d8d0df",
     fontSize: 15,
     lineHeight: 24,
     marginBottom: 32,
@@ -470,9 +486,9 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    color: "#fff8ff",
-    fontWeight: "800",
-    fontSize: 18,
+    ...uiTypography.title,
+    fontSize: 20,
+    lineHeight: 26,
     marginBottom: 20,
     letterSpacing: 0,
   },
@@ -483,12 +499,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sourceDisclosure: {
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: uiRadii.sheet,
+    borderWidth: 0,
     padding: 16,
   },
   sourceDisclosureHeader: {
     minHeight: 52,
+    borderRadius: uiRadii.control,
+    paddingHorizontal: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -509,7 +527,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   sectionContent: {
-    color: "#c6bfd2",
     fontSize: 14,
     lineHeight: 22,
   },
@@ -522,32 +539,21 @@ const styles = StyleSheet.create({
   },
   resBubble: {
     minHeight: 44,
-    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
     justifyContent: "center",
   },
-  resBubbleActive: {
-    backgroundColor: "#d8b4fe",
-    borderColor: "#d8b4fe",
-  },
   resText: {
-    color: "#c6bfd2",
     fontSize: 14,
     fontWeight: "800",
-  },
-  resTextActive: {
-    color: "#2c1738",
   },
   streamListWrapper: {
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
   emptyText: {
-    color: "#a99fb6",
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 40,

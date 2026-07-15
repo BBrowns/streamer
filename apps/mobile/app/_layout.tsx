@@ -5,6 +5,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+  Inter_900Black,
+  useFonts,
+} from "@expo-google-fonts/inter";
+import {
   View,
   Text,
   Pressable,
@@ -42,6 +51,12 @@ import {
   clientBuildSentryTags,
 } from "../services/buildMetadata";
 import { clientRuntimeConfig } from "../services/runtimeConfig";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiTypography,
+} from "../components/ui/designSystem";
+import { useTranslation } from "react-i18next";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -76,6 +91,20 @@ const queryClient = new QueryClient({
   },
 });
 
+const productFonts =
+  Platform.OS === "web"
+    ? {
+        "Inter Variable": require("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2"),
+      }
+    : {
+        Inter_400Regular,
+        Inter_500Medium,
+        Inter_600SemiBold,
+        Inter_700Bold,
+        Inter_800ExtraBold,
+        Inter_900Black,
+      };
+
 async function hydrateDesktopBridgeSettings() {
   if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) return;
 
@@ -98,21 +127,38 @@ async function hydrateDesktopBridgeSettings() {
 }
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+
   useEffect(() => {
     Sentry.captureException(createRedactedError(error));
   }, [error]);
 
   return (
-    <View style={styles.errorContainer}>
+    <View
+      style={[styles.errorContainer, { backgroundColor: colors.background }]}
+    >
       <Text style={styles.errorEmoji}>⚠️</Text>
-      <Text style={styles.errorTitle}>Something went wrong</Text>
-      <Text style={styles.errorMessage}>
-        {error.message
-          ? redactSensitiveText(error.message)
-          : "An unexpected error occurred."}
+      <Text style={[styles.errorTitle, { color: colors.error }]}>
+        {t("common.unexpectedError.title")}
       </Text>
-      <Pressable style={styles.retryButton} onPress={retry}>
-        <Text style={styles.retryButtonText}>Try Again</Text>
+      <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
+        {t("common.unexpectedError.description")}
+      </Text>
+      <Pressable
+        style={({ pressed, focused }: any) => [
+          styles.retryButton,
+          { backgroundColor: colors.primary },
+          pressed && { opacity: 0.72 },
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        ]}
+        onPress={retry}
+        accessibilityRole="button"
+        accessibilityLabel={t("common.retry")}
+      >
+        <Text style={[styles.retryButtonText, { color: colors.onPrimary }]}>
+          {t("common.retry")}
+        </Text>
       </Pressable>
     </View>
   );
@@ -126,6 +172,15 @@ function RootLayoutNav() {
   const setDeviceId = useAuthStore((s) => s.setDeviceId);
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const canvas = themeColors.background;
+    document.documentElement.style.backgroundColor = canvas;
+    document.body.style.backgroundColor = canvas;
+    document.getElementById("root")?.style.setProperty("background", canvas);
+  }, [themeColors.background]);
 
   // Global hooks MUST be inside QueryClientProvider
   useAuth();
@@ -243,7 +298,7 @@ function RootLayoutNav() {
             options={{
               headerShown: false,
               title: "",
-              headerBackTitle: "Back",
+              headerBackTitle: t("navigation.back"),
             }}
           />
           <Stack.Screen
@@ -252,37 +307,56 @@ function RootLayoutNav() {
           />
           <Stack.Screen
             name="login"
-            options={{ title: "Sign In", presentation: "modal" }}
+            options={{ title: t("auth.login.button"), presentation: "modal" }}
           />
           <Stack.Screen
             name="register"
-            options={{ title: "Create Account", presentation: "modal" }}
+            options={{
+              title: t("auth.register.title"),
+              presentation: "modal",
+            }}
           />
           <Stack.Screen
             name="notifications"
-            options={{ title: "Notifications", presentation: "modal" }}
+            options={{
+              title: t("notifications.title"),
+              presentation: "modal",
+            }}
           />
           <Stack.Screen
             name="forgot-password"
-            options={{ title: "Forgot Password", presentation: "modal" }}
+            options={{ title: t("auth.forgot.title"), presentation: "modal" }}
           />
           <Stack.Screen
             name="reset-password"
-            options={{ title: "Reset Password", presentation: "modal" }}
+            options={{
+              title: t("auth.resetPassword.title"),
+              presentation: "modal",
+            }}
           />
           <Stack.Screen
             name="verify-email"
-            options={{ title: "Verify Email", presentation: "modal" }}
+            options={{
+              title: t("auth.verifyEmail.title"),
+              presentation: "modal",
+            }}
           />
           <Stack.Screen
             name="detail/[type]/[id]"
             options={{ headerShown: false, title: "" }}
           />
-          <Stack.Screen name="addons/index" options={{ title: "Add-ons" }} />
+          <Stack.Screen
+            name="addons/index"
+            options={{ title: t("addons.title") }}
+          />
+          <Stack.Screen
+            name="search/results"
+            options={{ title: t("tabs.search") }}
+          />
           <Stack.Screen
             name="player"
             options={{
-              title: "Now Playing",
+              title: t("player.controls.nowPlaying"),
               headerShown: false,
               presentation: "fullScreenModal",
             }}
@@ -300,6 +374,10 @@ function RootLayoutNavInner({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts(productFonts);
+
+  if (!fontsLoaded && !fontError) return null;
+
   return (
     <QueryClientProvider client={queryClient}>
       <RootLayoutNav />
@@ -312,30 +390,27 @@ export default Sentry.wrap(RootLayout);
 const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
-    backgroundColor: "#050510",
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
   },
   errorEmoji: { fontSize: 48, marginBottom: 12 },
   errorTitle: {
-    color: "#ef4444",
-    fontSize: 20,
-    fontWeight: "bold",
+    ...uiTypography.title,
     marginBottom: 8,
   },
   errorMessage: {
-    color: "#94a3b8",
-    fontSize: 14,
+    ...uiTypography.body,
     textAlign: "center",
     marginBottom: 24,
     lineHeight: 20,
   },
   retryButton: {
-    backgroundColor: "#818cf8",
+    minWidth: 44,
+    minHeight: 44,
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: uiRadii.control,
   },
-  retryButtonText: { color: "#ffffff", fontWeight: "bold", fontSize: 16 },
+  retryButtonText: { ...uiTypography.control, fontSize: 16 },
 });

@@ -17,7 +17,7 @@ export default function TermsScreen() {
         {t("legal.termsTitle")}
       </Text>
       <Text style={[styles.date, { color: colors.textSecondary }]}>
-        {t("legal.lastUpdated", { date: "April 1, 2026" })}
+        {t("legal.lastUpdated", { date: t("legal.updatedDate") })}
       </Text>
 
       <View style={styles.section}>
@@ -25,9 +25,7 @@ export default function TermsScreen() {
           {t("legal.sections.terms.1")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          By accessing or using the Streamer application, you agree to be bound
-          by these Terms of Service. If you do not agree to these terms, please
-          do not use the application.
+          {t("legal.bodies.terms.1")}
         </Text>
       </View>
 
@@ -36,9 +34,7 @@ export default function TermsScreen() {
           {t("legal.sections.terms.2")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          Streamer is a media aggregation tool. You are responsible for the
-          content you access through the platform. We do not host or monitor
-          third-party add-ons or content.
+          {t("legal.bodies.terms.2")}
         </Text>
       </View>
 
@@ -47,10 +43,7 @@ export default function TermsScreen() {
           {t("legal.sections.terms.3")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          You retain all rights to any content you provide to the service. By
-          providing content, you grant us a non-exclusive, royalty-free license
-          to use, display, and distribute that content within the scope of the
-          service.
+          {t("legal.bodies.terms.3")}
         </Text>
       </View>
 
@@ -59,9 +52,7 @@ export default function TermsScreen() {
           {t("legal.sections.terms.4")}
         </Text>
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          Streamer is provided "as is" without any warranties. We are not
-          responsible for any damage or loss resulting from your use of the
-          application or the content accessed through it.
+          {t("legal.bodies.terms.4")}
         </Text>
       </View>
     </ScrollView>
@@ -69,16 +60,15 @@ export default function TermsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#050614" },
+  container: { flex: 1 },
   content: { padding: 24, paddingBottom: 60 },
-  title: { color: "#f8fafc", fontSize: 28, fontWeight: "900", marginBottom: 8 },
-  date: { color: "#64748b", fontSize: 14, marginBottom: 32 },
+  title: { fontSize: 28, fontWeight: "900", marginBottom: 8 },
+  date: { fontSize: 14, marginBottom: 32 },
   section: { marginBottom: 24 },
   sectionTitle: {
-    color: "#d8b4fe",
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 10,
   },
-  text: { color: "#94a3b8", fontSize: 15, lineHeight: 24 },
+  text: { fontSize: 15, lineHeight: 24 },
 });

@@ -7,12 +7,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { Stack } from "expo-router";
+import { uiRadii, uiTypography } from "../ui/designSystem";
 
 interface AuthScaffoldProps {
   title: string;
@@ -29,94 +31,91 @@ export function AuthScaffold({
   image,
   icon = "play",
 }: AuthScaffoldProps) {
-  const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
-  const isWide = Platform.OS === "web" && width >= 900;
+  const { colors } = useTheme();
+  const { isExpanded, isLarge } = useWindowClass();
+  const isWide = isExpanded || isLarge;
 
   return (
-    <LinearGradient
-      colors={
-        isDark
-          ? ["#11121c", "#171423", "#231727"]
-          : ["#fff9f6", "#f7f0ff", "#ecfbf3"]
-      }
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gradient}
-    >
-      <KeyboardAvoidingView
-        style={styles.keyboard}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        enabled={Platform.OS !== "web"}
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <LinearGradient
+        colors={[colors.background, colors.surfaceSubtle, colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            isWide ? styles.scrollWide : styles.scrollNarrow,
-          ]}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          style={styles.keyboard}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          enabled={Platform.OS !== "web"}
         >
-          <View style={[styles.shell, isWide && styles.shellWide]}>
-            <View style={[styles.previewPane, isWide && styles.previewWide]}>
-              <Image source={image} style={styles.previewImage} />
+          <ScrollView
+            contentContainerStyle={[
+              styles.scroll,
+              isWide ? styles.scrollWide : styles.scrollNarrow,
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={[styles.shell, isWide && styles.shellWide]}>
+              <View style={[styles.previewPane, isWide && styles.previewWide]}>
+                <Image source={image} style={styles.previewImage} />
+                <View
+                  style={[
+                    styles.previewGlass,
+                    {
+                      backgroundColor: colors.surfaceOverlay,
+                      borderColor: "transparent",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.iconBadge,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Ionicons name={icon} size={18} color={colors.onPrimary} />
+                  </View>
+                  <View style={styles.previewTextGroup}>
+                    <Text style={[styles.previewTitle, { color: colors.text }]}>
+                      Streamer
+                    </Text>
+                    <Text
+                      style={[
+                        styles.previewSubtitle,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Your cinematic library
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
               <View
                 style={[
-                  styles.previewGlass,
+                  styles.formPane,
                   {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.08)"
-                      : "rgba(255,255,255,0.7)",
-                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    borderColor: "transparent",
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.iconBadge,
-                    { backgroundColor: colors.tint + "28" },
-                  ]}
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {title}
+                </Text>
+                <Text
+                  style={[styles.subtitle, { color: colors.textSecondary }]}
                 >
-                  <Ionicons name={icon} size={18} color={colors.tint} />
-                </View>
-                <View style={styles.previewTextGroup}>
-                  <Text style={[styles.previewTitle, { color: colors.text }]}>
-                    Streamer
-                  </Text>
-                  <Text
-                    style={[
-                      styles.previewSubtitle,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Pastel cinema
-                  </Text>
-                </View>
+                  {subtitle}
+                </Text>
+                {children}
               </View>
             </View>
-
-            <View
-              style={[
-                styles.formPane,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(255,255,255,0.74)",
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.title, { color: colors.text }]}>
-                {title}
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {subtitle}
-              </Text>
-              {children}
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </>
   );
 }
 
@@ -150,10 +149,8 @@ const styles = StyleSheet.create({
   },
   previewPane: {
     minHeight: 220,
-    borderRadius: 28,
+    borderRadius: uiRadii.hero,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
   },
   previewWide: {
     flex: 1,
@@ -170,8 +167,7 @@ const styles = StyleSheet.create({
     left: 18,
     right: 18,
     bottom: 18,
-    borderRadius: 22,
-    borderWidth: 1,
+    borderRadius: uiRadii.card,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -180,7 +176,7 @@ const styles = StyleSheet.create({
   iconBadge: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: uiRadii.control,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -200,29 +196,24 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 460,
     alignSelf: "center",
-    borderRadius: 28,
-    borderWidth: 1,
-    padding: 24,
+    borderRadius: uiRadii.sheet,
+    borderWidth: 0,
+    padding: 28,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 18px 30px rgba(216, 180, 254, 0.18)" }
+      ? { boxShadow: "0 18px 44px rgba(0,0,0,0.16)" }
       : {
-          shadowColor: "#d8b4fe",
+          shadowColor: "#000000",
           shadowOffset: { width: 0, height: 18 },
-          shadowOpacity: 0.18,
-          shadowRadius: 30,
+          shadowOpacity: 0.16,
+          shadowRadius: 32,
         }),
   } as any,
   title: {
-    fontSize: 34,
-    lineHeight: 40,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.headline,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "600",
+    ...uiTypography.body,
     marginBottom: 24,
   },
 });
