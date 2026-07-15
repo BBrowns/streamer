@@ -157,6 +157,106 @@ describe("playerStore", () => {
     expect(state.runtimeState).toBe("selecting_source");
   });
 
+  it("keeps a resume launch intent runtime-only and consumes it once", () => {
+    usePlayerStore.getState().setSessionStream(
+      { url: "https://cdn.example.test/primary.mp4" } as Stream,
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+      },
+      "session-1",
+      "candidate-1",
+      null,
+      null,
+      { type: "resume", positionSeconds: 93 },
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+      type: "resume",
+      positionSeconds: 93,
+    });
+    expect(usePlayerStore.getState().consumePlaybackLaunchIntent()).toEqual({
+      type: "resume",
+      positionSeconds: 93,
+    });
+    expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
+  });
+
+  it("preserves a launch intent while the same session resolves or falls back", () => {
+    const mediaInfo = {
+      type: "movie" as const,
+      itemId: "tt-resume",
+      title: "Resume Movie",
+    };
+    const store = usePlayerStore.getState();
+
+    store.setSessionStream(
+      { url: "https://cdn.example.test/planned.mp4" } as Stream,
+      mediaInfo,
+      "session-resume",
+      "candidate-planned",
+      null,
+      null,
+      { type: "resume", positionSeconds: 125 },
+    );
+    store.setSessionStream(
+      { url: "https://cdn.example.test/resolved.mp4" } as Stream,
+      mediaInfo,
+      "session-resume",
+      "candidate-resolved",
+      "attempt-resolved",
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+      type: "resume",
+      positionSeconds: 125,
+    });
+
+    store.setSessionStream(
+      { url: "https://cdn.example.test/fallback.mp4" } as Stream,
+      mediaInfo,
+      "session-resume",
+      "candidate-fallback",
+      "attempt-fallback",
+      "Trying another source.",
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+      type: "resume",
+      positionSeconds: 125,
+    });
+  });
+
+  it("does not leak an old launch intent into a different session", () => {
+    const store = usePlayerStore.getState();
+    store.setSessionStream(
+      { url: "https://cdn.example.test/resume.mp4" } as Stream,
+      {
+        type: "movie",
+        itemId: "tt-resume",
+        title: "Resume Movie",
+      },
+      "session-resume",
+      "candidate-resume",
+      null,
+      null,
+      { type: "resume", positionSeconds: 125 },
+    );
+    store.setSessionStream(
+      { url: "https://cdn.example.test/new.mp4" } as Stream,
+      {
+        type: "movie",
+        itemId: "tt-new",
+        title: "New Movie",
+      },
+      "session-new",
+      "candidate-new",
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
+  });
+
   it("does not let legacy fallback bypass an active playback session", () => {
     const primary = { url: "https://cdn.example.test/primary.mp4" } as Stream;
     const fallback = { url: "https://cdn.example.test/fallback.mp4" } as Stream;

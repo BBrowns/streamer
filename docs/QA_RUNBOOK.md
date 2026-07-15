@@ -21,7 +21,8 @@ For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
 
 ### 1. First Frame (TimeToFirstFrame)
 
-- **Step:** Trigger `Play Best` from the content detail page.
+- **Step:** Trigger the consumer-facing **Play** action from the content detail
+  page. `playBest()` is the internal planner action name only.
 - **Verification:** The player should open, show the correct readiness states (e.g., `finding_peers`, `buffering`), and start the video.
 - **Expectation:** Video starts within the timeout budget (default 120s for torrents, much faster for direct).
 
@@ -58,7 +59,43 @@ For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
   configured, include the bridge token. Active torrent directories should be
   protected and the response should report the cleanup result plus current
   `torrentCache` status. The same cleanup can be triggered from
-  Settings -> Sources & Devices -> Advanced Diagnostics -> Clean cache.
+  Settings -> Advanced -> Clean cache.
+
+### 6. Offline Verification
+
+- **Step:** Complete a download, restart the app, and open Downloads while the
+  source is unavailable.
+- **Verification:** Only a managed regular media file that is at least 1 MiB,
+  matches reliable Content-Length metadata, and passes the local video probe is
+  labeled **Ready offline**.
+- **Expectation:** A legacy completion, 206 KB file, directory, HTML/JSON,
+  torrent metadata, size mismatch, timeout, or decode failure loses Ready
+  status and is classified as Needs verification, Incomplete, or Failed.
+
+### 7. Selection And Undo
+
+- **Step:** Select multiple Library or Download rows, change filters, cancel,
+  and schedule a destructive bulk action.
+- **Verification:** Episode rows remain independently selectable, filter change
+  and Cancel clear selection, and the action bar is absent at zero selections.
+- **Expectation:** Library removal changes library membership only. Download
+  deletion waits seven seconds and can be undone during that window.
+
+## Automated Correctness Pass
+
+Before recording a manual run, execute the deterministic renderer suite and the
+real development-shell smoke:
+
+```bash
+npm run test:golden-path
+npm run test:electron-smoke
+```
+
+The browser projects cover 390 x 844, 768 x 1024, 1024 x 768, and 1440 x 1000.
+The Electron smoke uses the real main/preload IPC composition for version
+labels, managed-file inspection, and 125%/150% zoom. Keep these evidence limits
+explicit: Chromium viewport emulation is not native iOS/Android proof, and a
+development Electron smoke is not a packaged sidecar or signing test.
 
 ## Log Capture
 

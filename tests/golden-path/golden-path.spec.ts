@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { playbackPlanRequestSchema } from "@streamer/shared";
 import {
   FIXTURE_MOVIE_ID,
@@ -26,12 +26,13 @@ async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
   const controls = await loginToFixtureShell(page, scenario);
   await expect.poll(controls.bridgeProbes).toBeGreaterThan(0);
   await page
-    .getByRole("button", { name: "Featured: Golden Path Adventure" })
+    .getByTestId("home-hero")
+    .getByRole("button", { name: "View details" })
     .click();
   await expect(page).toHaveURL(
     new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
   );
-  await expect(page.getByRole("button", { name: "Play Best" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
   return controls;
 }
 
@@ -78,6 +79,55 @@ async function settleVisualFrame(page: Page) {
   });
 }
 
+async function expectPointerFocusWithoutKeyboardRing(locator: Locator) {
+  await locator.click();
+  const outline = await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth || "0"),
+    };
+  });
+  expect(outline.style === "none" || outline.width < 3).toBe(true);
+}
+
+async function focusWithKeyboard(
+  page: Page,
+  locator: Locator,
+  maximumTabs = 24,
+) {
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  for (let index = 0; index < maximumTabs; index += 1) {
+    await page.keyboard.press("Tab");
+    if (
+      await locator.evaluate(
+        (element) => element === element.ownerDocument.activeElement,
+      )
+    ) {
+      return;
+    }
+  }
+  throw new Error(
+    `Target did not receive keyboard focus after ${maximumTabs} Tabs.`,
+  );
+}
+
+async function getElementBoxes(locator: Locator) {
+  return locator.evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        right: box.right,
+        bottom: box.bottom,
+      };
+    }),
+  );
+}
+
 test("authentication owns the viewport without duplicate navigation", async ({
   page,
 }, testInfo) => {
@@ -118,11 +168,9 @@ test("onboarding setup remains shell-free and responsive", async ({
   });
 });
 
-test("browse to detail and Play Best reaches a direct player", async ({
-  page,
-}) => {
+test("browse to detail and Play reaches a direct player", async ({ page }) => {
   const controls = await loginAndOpenFixture(page, "direct");
-  await page.getByRole("button", { name: "Play Best" }).click();
+  await page.getByRole("button", { name: "Play" }).click();
 
   await expect(page).toHaveURL(/\/player$/);
   await expect(page.getByTestId("player-screen")).toBeVisible();
@@ -143,7 +191,7 @@ test("a no-peers torrent automatically falls back to a direct candidate", async 
   page,
 }) => {
   const controls = await loginAndOpenFixture(page, "torrent-fallback");
-  await page.getByRole("button", { name: "Play Best" }).click();
+  await page.getByRole("button", { name: "Play" }).click();
 
   await expect(page).toHaveURL(/\/player$/);
   await expect(page.getByTestId("player-screen")).toBeVisible();
@@ -155,7 +203,7 @@ test("no peers is recoverable through advanced source selection", async ({
   page,
 }, testInfo) => {
   const controls = await loginAndOpenFixture(page, "no-peers");
-  await page.getByRole("button", { name: "Play Best" }).click();
+  await page.getByRole("button", { name: "Play" }).click();
 
   await expect(page.getByText("No Peers Found")).toBeVisible();
   const chooseSource = page.getByRole("button", {
@@ -183,7 +231,7 @@ test("development player preview exposes the real control chrome", async ({
   page,
 }, testInfo) => {
   await loginAndOpenFixture(page, "no-peers");
-  await page.getByRole("button", { name: "Play Best" }).click();
+  await page.getByRole("button", { name: "Play" }).click();
 
   await page.getByRole("button", { name: "Preview player" }).click();
   await expect(page.getByTestId("player-screen")).toBeVisible();
@@ -205,7 +253,7 @@ test("bridge unavailable produces a recoverable detail state", async ({
   page,
 }) => {
   await loginAndOpenFixture(page, "bridge-unavailable");
-  await page.getByRole("button", { name: "Play Best" }).click();
+  await page.getByRole("button", { name: "Play" }).click();
 
   await expect(page.getByText("Finish playback setup")).toBeVisible();
   await expect(
@@ -234,12 +282,13 @@ test("cast eligibility uses a planner action and lists displays", async ({
   await page.getByTestId("login-submit").click();
   await expect(page.getByTestId("home-screen")).toBeVisible();
   await page
-    .getByRole("button", { name: "Featured: Golden Path Adventure" })
+    .getByTestId("home-hero")
+    .getByRole("button", { name: "View details" })
     .click();
   await expect(page).toHaveURL(
     new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
   );
-  await page.getByRole("button", { name: "Cast" }).click();
+  await page.getByRole("button", { name: "Cast to device" }).click();
   const castDialog = page.getByRole("dialog");
   await expect(castDialog.getByText("Cast", { exact: true })).toBeVisible();
   await expect(castDialog.getByText("Golden Path Adventure")).toBeVisible();
@@ -261,17 +310,20 @@ test("primary surfaces remain responsive and keyboard accessible", async ({
   await page.getByTestId("login-submit").click();
   await expect(page.getByTestId("home-screen")).toBeVisible();
 
-  const hero = page.getByRole("button", {
-    name: "Featured: Golden Path Adventure",
-  });
-  await hero.focus();
-  await expect(hero).toBeFocused();
+  const hero = page.getByTestId("home-hero");
+  const heroPrimaryAction = hero.getByTestId("home-hero-primary-action");
+  await focusWithKeyboard(page, heroPrimaryAction);
+  await expect(heroPrimaryAction).toBeFocused();
   expect(await page.locator("button button").count()).toBe(0);
   expect(
-    await hero.evaluate((element) =>
-      Number.parseFloat(getComputedStyle(element).outlineWidth || "0"),
-    ),
-  ).toBeGreaterThanOrEqual(3);
+    await heroPrimaryAction.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return (
+        style.outlineStyle !== "none" &&
+        Number.parseFloat(style.outlineWidth || "0") >= 3
+      );
+    }),
+  ).toBe(true);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(await page.evaluate(() => window.innerWidth + 1));
@@ -281,10 +333,10 @@ test("primary surfaces remain responsive and keyboard accessible", async ({
     animations: "disabled",
   });
 
-  if (testInfo.project.name === "desktop-renderer") {
-    await page.getByRole("link", { name: "Downloads" }).click();
-  } else {
+  if (testInfo.project.name === "phone-web") {
     await page.getByRole("tab", { name: "Downloads" }).click();
+  } else {
+    await page.getByRole("link", { name: "Downloads" }).click();
   }
   await expect(page).toHaveURL(/\/downloads$/);
   const emptyAction = page.getByRole("button", {
@@ -305,6 +357,125 @@ test("primary surfaces remain responsive and keyboard accessible", async ({
     fullPage: true,
     animations: "disabled",
   });
+});
+
+test("pointer focus stays quiet while keyboard focus remains explicit", async ({
+  page,
+}, testInfo) => {
+  await loginToFixtureShell(page);
+  const searchNavigation = page.getByRole(
+    testInfo.project.name === "phone-web" ? "tab" : "link",
+    { name: "Search" },
+  );
+
+  if (testInfo.project.name === "phone-web") {
+    // The mobile-web project has touch enabled, so a tap is not treated as a
+    // pointer-focus assertion. Pointer modality is covered by the other three
+    // window projects.
+    await searchNavigation.tap();
+  } else {
+    await expectPointerFocusWithoutKeyboardRing(searchNavigation);
+  }
+  await expect(page).toHaveURL(/\/search$/);
+
+  await page.keyboard.press("Tab");
+  const focused = page.locator(":focus");
+  await expect(focused).toBeVisible();
+  await expect
+    .poll(() =>
+      focused.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return (
+          style.outlineStyle !== "none" &&
+          Number.parseFloat(style.outlineWidth || "0") >= 3
+        );
+      }),
+    )
+    .toBe(true);
+});
+
+test("Library grid uses bounded fixed cards at every window class", async ({
+  page,
+}, testInfo) => {
+  await loginToFixtureShell(page);
+  await page.goto("/library");
+
+  const cards = page.locator('[data-testid^="library-card-library:"]');
+  await expect(cards).toHaveCount(9);
+  await settleVisualFrame(page);
+
+  const boxes = await getElementBoxes(cards);
+  const firstRow = boxes
+    .filter((box) => Math.abs(box.y - boxes[0].y) <= 2)
+    .sort((left, right) => left.x - right.x);
+  const expectedColumns: Record<string, { minimum: number; maximum: number }> =
+    {
+      "phone-web": { minimum: 2, maximum: 2 },
+      "tablet-portrait-web": { minimum: 3, maximum: 3 },
+      "tablet-landscape-web": { minimum: 4, maximum: 5 },
+      "desktop-renderer": { minimum: 5, maximum: 7 },
+    };
+  const expected = expectedColumns[testInfo.project.name];
+
+  expect(firstRow.length).toBeGreaterThanOrEqual(expected.minimum);
+  expect(firstRow.length).toBeLessThanOrEqual(expected.maximum);
+  for (const box of firstRow) {
+    expect(Math.abs(box.width - firstRow[0].width)).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThanOrEqual(112);
+    expect(box.width).toBeLessThanOrEqual(220);
+  }
+  for (let index = 1; index < firstRow.length; index += 1) {
+    const gap = firstRow[index].x - firstRow[index - 1].right;
+    expect(gap).toBeGreaterThanOrEqual(15);
+    expect(gap).toBeLessThanOrEqual(17);
+  }
+  if (testInfo.project.name === "desktop-renderer") {
+    expect(firstRow[0].width).toBeGreaterThanOrEqual(180);
+  }
+  await expectNoHorizontalPageOverflow(page);
+});
+
+test("desktop media rails bound navigation and reveal the final caption", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "Pointer arrows are a large-screen contract; compact layouts use touch swipe.",
+  );
+  await loginToFixtureShell(page);
+
+  const rail = page.getByTestId("catalog-rail-fixture-addon-movie-featured");
+  await expect(rail).toBeVisible();
+  const back = rail.getByRole("button", { name: "Scroll left" });
+  const forward = rail.getByRole("button", { name: "Scroll right" });
+  await expect(back).toBeDisabled();
+  await expect(forward).toBeEnabled();
+
+  for (
+    let attempt = 0;
+    attempt < 10 && (await forward.isEnabled());
+    attempt += 1
+  ) {
+    await forward.click();
+    await page.waitForTimeout(250);
+  }
+  await expect(forward).toBeDisabled();
+  await expect(back).toBeEnabled();
+
+  const lastCard = rail.locator("[data-catalog-card]").last();
+  const [railBox, lastCardBox] = await Promise.all([
+    rail.boundingBox(),
+    lastCard.boundingBox(),
+  ]);
+  expect(railBox).not.toBeNull();
+  expect(lastCardBox).not.toBeNull();
+  expect(lastCardBox!.x).toBeGreaterThanOrEqual(railBox!.x - 1);
+  expect(lastCardBox!.x + lastCardBox!.width).toBeLessThanOrEqual(
+    railBox!.x + railBox!.width + 1,
+  );
+  expect(lastCardBox!.y + lastCardBox!.height).toBeLessThanOrEqual(
+    railBox!.y + railBox!.height + 1,
+  );
 });
 
 test("Obsidian Settings uses a calm overview and focused detail panes", async ({
@@ -367,6 +538,36 @@ test("Obsidian Settings uses a calm overview and focused detail panes", async ({
     fullPage: true,
     animations: "disabled",
   });
+});
+
+test("Sources and Advanced expose mutually exclusive responsibilities", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page);
+
+  await page.goto("/settings/sources");
+  const sources = page.getByTestId("sources-consumer-section");
+  await expect(sources).toBeVisible();
+  await expect(sources.getByText("Content Add-ons")).toBeVisible();
+  await expect(sources.getByText("Local Playback Service")).toBeVisible();
+  await expect(sources.getByText("Casting & Devices")).toBeVisible();
+  await expect(page.getByTestId("sources-advanced-section")).toHaveCount(0);
+  await expectNoHorizontalPageOverflow(page);
+
+  await page.goto("/settings/advanced");
+  const advanced = page.getByTestId("sources-advanced-section");
+  await expect(advanced).toBeVisible();
+  await expect(
+    advanced.getByText("Connection settings", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    advanced.getByText("Playback service maintenance", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    advanced.getByText("Ready to play", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("sources-consumer-section")).toHaveCount(0);
+  await expectNoHorizontalPageOverflow(page);
 });
 
 test("Obsidian Search keeps discovery and results media-first", async ({
@@ -511,6 +712,32 @@ test("Obsidian Search keeps discovery and results media-first", async ({
     fullPage: true,
     animations: "disabled",
   });
+});
+
+test("a failed discovery catalog stays compact while healthy rails remain", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page, "catalog-partial");
+  await page.goto("/search");
+
+  await expect(page.getByText("Content type", { exact: true })).toBeVisible();
+  const error = page.getByTestId(
+    "search-discovery-rail-error-fixture-addon-featured",
+  );
+  await expect(error).toBeVisible();
+  await expect(
+    error.getByText("Featured films", { exact: true }),
+  ).toBeVisible();
+  await expect(error.getByText(/Streamer Selects/)).toBeVisible();
+  await expect(error.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(
+    page.getByText("Series to discover", { exact: true }),
+  ).toBeVisible();
+
+  const errorBox = await error.boundingBox();
+  expect(errorBox).not.toBeNull();
+  expect(errorBox!.height).toBeLessThanOrEqual(100);
+  await expectNoHorizontalPageOverflow(page);
 });
 
 test("Settings and Search adapt without overflow at intermediate widths", async ({

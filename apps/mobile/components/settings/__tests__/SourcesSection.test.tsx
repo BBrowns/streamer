@@ -1,7 +1,7 @@
 import React from "react";
 import { Alert, Platform } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { SourcesSection } from "../SourcesSection";
+import { AdvancedSourcesSection, SourcesSection } from "../SourcesSection";
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
 import { useAuthStore } from "../../../stores/authStore";
 
@@ -9,7 +9,7 @@ jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
 
-describe("SourcesSection", () => {
+describe("Sources and Advanced ownership", () => {
   const originalPlatform = Platform.OS;
   const originalDesktopBridge = window.desktopBridge;
 
@@ -18,10 +18,7 @@ describe("SourcesSection", () => {
     jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        cleanup: { removedEntries: 1, freedBytes: 4096 },
-        torrentCache: { entryCount: 2, totalBytes: 2048, maxBytes: 8192 },
-      }),
+      json: async () => ({ cleanup: { removedEntries: 1, freedBytes: 4096 } }),
     }) as any;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
@@ -47,8 +44,7 @@ describe("SourcesSection", () => {
                 {
                   name: "gateway-readiness",
                   status: "pass",
-                  message:
-                    "Gateway waits for remux cache or first bytes before ready.",
+                  message: "Gateway waits for first bytes before ready.",
                 },
               ],
             },
@@ -72,7 +68,7 @@ describe("SourcesSection", () => {
               maxBytes: 2048,
             },
             torrentCache: {
-              rootDir: "/Users/example/Library/Caches/Streamer/webtorrent",
+              rootDir: "/cache/webtorrent",
               entryCount: 3,
               totalBytes: 4096,
               maxBytes: 8192,
@@ -98,44 +94,52 @@ describe("SourcesSection", () => {
     window.desktopBridge = originalDesktopBridge;
   });
 
-  it("shows runtime re-check and remux diagnostics in advanced details", async () => {
+  it("keeps consumer readiness, add-ons and device capabilities in Sources", async () => {
     const screen = render(<SourcesSection />);
 
     await waitFor(() => {
+      expect(screen.getByText("Content Add-ons")).toBeTruthy();
+      expect(screen.getByText("Local Playback Service")).toBeTruthy();
+      expect(screen.getByText("Casting & Devices")).toBeTruthy();
+    });
+    expect(screen.queryByText("Backend API URL")).toBeNull();
+    expect(screen.queryByText("Real-Debrid")).toBeNull();
+  });
+
+  it("keeps connection, maintenance and collapsed diagnostics in Advanced", async () => {
+    const screen = render(<AdvancedSourcesSection />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Backend API URL")).toBeTruthy();
       expect(screen.getByText("Re-check runtime")).toBeTruthy();
-      expect(screen.getByText("Copy diagnostics")).toBeTruthy();
+      expect(screen.getByText("Export diagnostics")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("Advanced diagnostics"));
+    expect(screen.queryByText("Ready to play")).toBeNull();
+    expect(screen.queryByText("Content Add-ons")).toBeNull();
+    expect(screen.queryByText("Real-Debrid")).toBeNull();
+    expect(screen.queryByText("FFmpeg: Unavailable")).toBeNull();
+
+    fireEvent.press(screen.getByText("Runtime and build details"));
 
     await waitFor(() => {
       expect(screen.getByText("FFmpeg: Unavailable")).toBeTruthy();
       expect(screen.getByText("Remux cache: 2 files · 1 pending")).toBeTruthy();
       expect(
-        screen.getByText("Torrent cache: 3 entries · 4 KB / 8 KB"),
-      ).toBeTruthy();
-      expect(
         screen.getByText(
-          "gateway-readiness: Gateway waits for remux cache or first bytes before ready.",
+          "gateway-readiness: Gateway waits for first bytes before ready.",
         ),
       ).toBeTruthy();
     });
-
-    fireEvent.press(screen.getByText("Re-check runtime"));
-
-    await waitFor(() => {
-      expect(window.desktopBridge?.getBridgeInfo).toHaveBeenCalledTimes(2);
-    });
   });
 
-  it("cleans inactive torrent cache through the configured bridge", async () => {
-    const screen = render(<SourcesSection />);
+  it("cleans inactive playback cache through the configured service", async () => {
+    const screen = render(<AdvancedSourcesSection />);
 
     await waitFor(() => {
-      expect(screen.getByText("Clean cache")).toBeTruthy();
+      expect(screen.getByText("Clean playback cache")).toBeTruthy();
     });
-
-    fireEvent.press(screen.getByText("Clean cache"));
+    fireEvent.press(screen.getByText("Clean playback cache"));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
@@ -147,15 +151,14 @@ describe("SourcesSection", () => {
           }),
         }),
       );
-      expect(window.desktopBridge?.getBridgeInfo).toHaveBeenCalledTimes(2);
       expect(Alert.alert).toHaveBeenCalledWith(
-        "Torrent cache cleaned",
+        "Playback cache cleaned",
         "Removed 1 inactive cache entry and freed 4 KB.",
       );
     });
   });
 
-  it("warns native users when the configured bridge URL is device-local loopback", async () => {
+  it("warns native users when their configured service URL is loopback", async () => {
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "ios",
@@ -169,14 +172,11 @@ describe("SourcesSection", () => {
       .spyOn(streamEngineManager, "getBridgeUrl")
       .mockReturnValue("http://localhost:11470");
 
-    const screen = render(<SourcesSection />);
+    const screen = render(<AdvancedSourcesSection />);
 
     await waitFor(() => {
-      expect(screen.getByText("Use the desktop bridge LAN URL")).toBeTruthy();
       expect(
-        screen.getByText(
-          "localhost only points at this device. Paste the desktop bridge LAN URL before using torrent playback, downloads, or casting here.",
-        ),
+        screen.getByText("Use the desktop service LAN address"),
       ).toBeTruthy();
     });
   });

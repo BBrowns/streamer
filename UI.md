@@ -56,9 +56,11 @@ Current UI phase (stacked redesign implementation):
 
 Primary hierarchy:
 
-1. `Play Best` is the main action.
-2. Download, Cast, and Add are secondary actions.
+1. **Play** is the main consumer action; **Resume** replaces it from 15 seconds
+   of saved progress. `playBest()` remains an internal planner action name.
+2. Download, **Cast to device**, and **Add to Library** are secondary actions.
 3. `More Sources` is collapsed by default and treated as an advanced fallback.
+   It does not request a plan until expanded, and its source count appears once.
 4. Sources & Devices explains bridge/add-on health without forcing users to
    understand torrents or codecs before pressing Play.
 
@@ -82,6 +84,8 @@ Core Obsidian primitives:
 - `ContentBoundary`
 - `PageHeader`
 - `PosterCard`
+- `MediaRail`
+- `SelectionActionBar`
 - `SearchResultCard`
 - `SettingsNavRow`
 - `SettingsToggleRow`
@@ -113,6 +117,12 @@ Shared primitives in production code:
 - `components/ui/ContentTabs.tsx` for quiet peer-view navigation such as All,
   Movies, and Series. It intentionally uses text and a selected underline
   instead of filter pills.
+- `components/ui/MediaRail.tsx` for shared Home, Search, and provider rails,
+  including bounded scroll offsets, complete end spacing, disabled end arrows,
+  keyboard/pointer controls, and subtle edge fades.
+- `components/ui/SelectionActionBar.tsx` for Library and Downloads bulk mode.
+  Its destructive actions use the shared seven-second undo scheduler rather
+  than permanent inline delete-all controls.
 - `components/ui/PlaybackStatusPanel.tsx` for centered player readiness and
   error states with consistent status pills and actions.
 
@@ -120,14 +130,14 @@ These primitives now underpin Settings, Search, catalog, detail, downloads,
 auth/onboarding, and player recovery surfaces. New UI should reuse them before
 adding another local button, switch, card, input, or page-layout style.
 
-The detail-screen action hierarchy now uses `DetailActionPanel` to keep
-`Play Best` primary for movies, keep series playback on episode rows, and keep
-Download, Cast, and Add as secondary actions.
+The detail-screen action hierarchy now uses `DetailActionPanel` to keep **Play**
+primary for movies, keep series playback on episode rows, and keep Download,
+**Cast to device**, and **Add to Library** as secondary actions.
 
-The downloads queue now uses `AppButton`, `Surface`, and `StatusPill` for
-queue cards, destructive actions, summary metrics, and verified-offline status.
-This keeps download readiness aligned with Sources, Detail, and Player without
-changing download service behaviour.
+The downloads queue now uses `AppButton`, `Surface`, `StatusPill`, and
+`SelectionActionBar` for queue cards, deferred bulk deletion, summary metrics,
+and verified-offline status. Smart Downloads preferences live only in Settings;
+Downloads shows one compact status row and its read-only planned queue.
 
 PR #116 tightened the pilot by moving `Surface`, `AppButton`, `StatusPill`,
 `SettingsSection`, `PlaybackStatusPanel`, `DownloadQueueCard`, and the desktop
@@ -220,15 +230,35 @@ Catalog grids derive their columns from the same window class: compact 2,
 medium 3, expanded 4, and large 6. Avoid introducing local breakpoint buckets
 for core screen structure.
 
+Library is the deliberate exception because card readability is width-driven:
+it measures the available content boundary and uses fixed `PosterCard` widths
+without `flex: 1`. It renders 2 columns compact, 3 medium, 4-5 expanded, and
+5-7 large with 16 px gaps and a desktop target near 198 px. Library and Download
+view keys use stable library-row and download-task identities; download task IDs
+encode episode identity, so episodes from one series remain independently
+selectable. Empty filters do not expose Select; filter changes and Cancel clear
+selection.
+
 **Intricacy:** `FlatList` requires a `key` prop change when `numColumns` changes (e.g. `key={`grid-${numColumns}`}`). Without this, React Native throws a warning and the grid does not re-render correctly. This is done correctly in the home screen but is a common pitfall when adding new grids.
 
 ### 3.3 Adaptive Hero And Home Feed
 
 `HomeHeroBanner` renders on compact through large windows with class-specific
-height and poster treatment. `buildHomeFeed()` claims content using canonical
-`type:id` keys so the hero, Continue Watching, and primary rails do not repeat
-the same title. A `Recently Added` rail is used only when enough valid
-`released` metadata exists; otherwise the honest label is `More to Watch`.
+height and poster treatment: approximately 400 px compact, 440 px medium and
+expanded, and 480 px large. The most recent Continue Watching item owns the hero
+when it also exists in the active catalog; otherwise the normal featured choice
+is used. That hero item is removed from Continue Watching to avoid duplication.
+
+At 15 seconds or more saved progress the neutral primary action reads **Resume**
+and carries a runtime-only `PlaybackLaunchIntent` to seek directly without a
+second resume prompt. Earlier progress reads **Play**. Both actions use the
+existing planner/session flow; **View details** is secondary.
+
+`buildHomeFeed()` claims content using canonical `type:id` keys so the hero,
+Continue Watching, and primary rails do not repeat the same title. Generic
+catalog order is presented only as neutral **Movies**, **Series**, and **More to
+Watch** rails. It must never be relabeled as Popular, Trending, Top, New, or
+Recently Added unless the providing catalog explicitly supplies that semantic.
 
 ---
 
@@ -399,11 +429,12 @@ A compound component for TV show episode navigation. Displays a season picker (s
 
 Full-bleed hero image with a gradient overlay, title, metadata, and primary
 actions. `HomeHeroBanner` is used at the top of Home on phone and desktop with
-responsive sizing; `HeroBanner` is used on Discover/detail contexts where the
-component is fed by a specific add-on catalog.
+responsive sizing and Play/Resume launch intent; `HeroBanner` is used on
+Discover/detail contexts where the component is fed by a specific add-on
+catalog.
 
-PR #118 gives Home this hierarchy: hero, Continue Watching, library shortcuts,
-popular movies, top TV shows, recently added, and provider rails. Home must
+PR #118 gave Home an initial hierarchy that is now refined to hero, Continue
+Watching, neutral title-type rails, and genuine named provider rails. Home must
 stay consumer-facing: do not expose source selection or add-on internals there.
 
 ---
@@ -510,9 +541,18 @@ The detail screen fetches:
 
 For series, it additionally renders the `EpisodeSelector` component to let the user pick a season and episode, then fetches streams for that specific episode via `useEpisodeStreams`.
 
-**Primary flow:** The default action is `Play Best`. It calls `PlaybackOrchestrator.playBest()`, which requests a server playback plan, resolves only the selected source, and passes remaining planned fallbacks into `playerStore`.
+**Primary flow:** The visible action is **Play**. It calls the internal
+`PlaybackOrchestrator.playBest()`, which requests one server playback plan,
+resolves only the selected source, and passes remaining planned fallbacks into
+`playerStore`.
 
-**Advanced source display:** Streams are still grouped and displayed with a resolution chip selector (chips for 4K, 1080p, 720p, 480p). This should remain collapsed as `More Sources`, not the main user flow. Tapping a manual stream remains an advanced path and should not bypass the session-driven primary Play Best path. The advanced inspector shows action-specific Play/Download/Cast eligibility, candidate ranking, selected/fallback compatibility hints, rejected-source reasons, and a safe debug-bundle export for support.
+**Advanced source display:** `More Sources` is closed and unplanned by default.
+Expanding it lazy-loads one consumer-facing `SourceChoice` list with reliable
+quality, size, language, and compatibility status. Choosing a candidate sends
+its candidate ID through the existing planner/session resolver; it never
+bypasses that contract with a direct URI. Ranking, codecs, rejected candidates,
+bridge/remux data, and reason codes live behind the separately lazy **Show
+technical details** disclosure.
 
 ---
 
@@ -532,12 +572,20 @@ section contract is `account`, `playback`, `downloads`, `sources`,
 - Account owns profile, Trakt, sessions, password, and sign-out. Playback owns
   quality, autoplay, audio, and subtitle preferences. Downloads owns Smart
   Downloads, network/quality/storage policy, cleanup, and the queue shortcut.
-- Sources & Devices presents add-ons and a consumer readiness summary. Server
-  URLs, pairing, runtime state, cache repair, and detailed diagnostics live only
-  in Advanced or behind a concrete recovery action.
+- Sources & Devices presents general readiness, Content Add-ons, Local Playback
+  Service, and Casting & Devices from the shared playback-environment model.
+  Advanced exclusively owns server/LAN/pairing values, re-check/restart/repair,
+  cache cleanup, diagnostics export, and collapsed technical details. It does
+  not duplicate the general Ready-to-play card.
 - Appearance owns theme and language. Privacy owns biometric unlock, export,
   and a separate danger zone. About owns version, links, and the one desktop
-  update control when available.
+  update control when available. Streamer app, Desktop shell, Electron runtime,
+  Build SHA, and Channel are separate labeled rows; an unstamped local SHA reads
+  `Not stamped (development)`.
+
+Appearance language choices use scalable radio rows with endonyms and a
+checkmark, not flag glyphs. Regional locale values such as `en-US` normalize to
+their supported base language.
 
 The category rows use `SettingsNavRow`; actions, switches, and discrete choices
 use `SettingsActionRow`, `SettingsToggleRow`, and `SettingsChoiceRow`. Every
@@ -547,7 +595,11 @@ its detail page.
 
 Smart Downloads stays opt-in and disabled by default. HLS offline limitations
 and planned-next-episode intents must never be presented as completed offline
-files. Playback quality is passed to Play Best as the planner ceiling; audio
+files. A download is Ready offline only after managed-path type/size checks,
+reliable Content-Length comparison, metadata rejection, and a successful local
+`expo-video` readiness/duration probe. Existing completion records migrate to
+pending verification. Playback quality is passed to the internal `playBest()`
+planner as the ceiling; audio
 and subtitle choices remain player preferences until richer track selection is
 available.
 
@@ -629,11 +681,14 @@ The stream list on the detail screen renders inside a `ScrollView` (not a `FlatL
 #### 7. Keyboard Navigation for Desktop
 
 Electron/web now has a baseline `useWebPressableActivation` helper for
-Tab-focusable Pressables, Enter/Space activation, and visible focus rings.
+Tab-focusable Pressables, Enter/Space activation, and input-modality-aware
+focus. Pointer focus stays quiet, while `:focus-visible` receives a strong
+three-pixel ring; generated Expo Router anchors are styled on the actual outer
+focus node rather than only the inner Pressable.
 It is applied to catalog cards, Continue Watching cards, library cards,
 episode row actions, stream source rows, and the desktop sidebar nav/search.
 Future passes should extend this to remaining settings/detail controls and
-validate full keyboard-only browse -> detail -> Play Best flows in Electron.
+validate full keyboard-only browse -> detail -> Play flows in Electron.
 
 #### 8. Player Seek Bar Accessibility (Implemented)
 

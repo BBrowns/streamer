@@ -129,3 +129,8 @@ test("allowlists update IPC channels explicitly", () => {
   assert.equal(INVOKE_IPC_CHANNELS.includes("check-for-updates"), true);
   assert.equal(INVOKE_IPC_CHANNELS.includes("open-update-page"), true);
 });
+
+test("allowlists safe managed-file inspection while retaining check-file compatibility", () => {
+  assert.equal(INVOKE_IPC_CHANNELS.includes("check-file"), true);
+  assert.equal(INVOKE_IPC_CHANNELS.includes("inspect-file"), true);
+});

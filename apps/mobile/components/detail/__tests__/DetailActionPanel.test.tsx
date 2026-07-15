@@ -15,7 +15,9 @@ jest.mock("react-i18next", () => ({
         "detail.actionPanel.playBest": "Play Best",
         "detail.actionPanel.preparing": "Preparing",
         "detail.actionPanel.inLibrary": "In Library",
-        "detail.actionPanel.add": "Add",
+        "common.actions.play": "Play",
+        "common.actions.castToDevice": "Cast to device",
+        "common.actions.addToLibrary": "Add to Library",
         "detail.download": "Download",
         "detail.cast": "Cast",
       };
@@ -74,15 +76,15 @@ function renderPanel(overrides = {}) {
 }
 
 describe("DetailActionPanel", () => {
-  it("keeps Play Best as the primary movie action", () => {
-    const { getByText, callbacks } = renderPanel();
+  it("uses consumer actions and leaves the source count to More Sources", () => {
+    const { getByText, queryByText, callbacks } = renderPanel();
 
-    fireEvent.press(getByText("Play Best"));
+    fireEvent.press(getByText("Play"));
     fireEvent.press(getByText("Download"));
-    fireEvent.press(getByText("Cast"));
-    fireEvent.press(getByText("Add"));
+    fireEvent.press(getByText("Cast to device"));
+    fireEvent.press(getByText("Add to Library"));
 
-    expect(getByText("12 sources")).toBeTruthy();
+    expect(queryByText("12 sources")).toBeNull();
     expect(callbacks.onPlayBest).toHaveBeenCalledTimes(1);
     expect(callbacks.onDownload).toHaveBeenCalledTimes(1);
     expect(callbacks.onCast).toHaveBeenCalledTimes(1);
@@ -98,10 +100,10 @@ describe("DetailActionPanel", () => {
       inLibrary: true,
     });
 
-    expect(queryByText("Play Best")).toBeNull();
+    expect(queryByText("Play")).toBeNull();
     expect(queryByText("Download")).toBeNull();
-    expect(queryByText("Cast")).toBeNull();
-    expect(getByText("8 episodes")).toBeTruthy();
+    expect(queryByText("Cast to device")).toBeNull();
+    expect(queryByText("8 episodes")).toBeNull();
 
     fireEvent.press(getByText("In Library"));
 
@@ -110,15 +112,15 @@ describe("DetailActionPanel", () => {
   });
 
   it("disables movie playback actions when no source exists", () => {
-    const { getByText, callbacks } = renderPanel({
+    const { getByText, queryByText, callbacks } = renderPanel({
       sourceCount: 0,
       hasPlayableSources: false,
     });
 
-    fireEvent.press(getByText("Play Best"));
+    fireEvent.press(getByText("Play"));
     fireEvent.press(getByText("Download"));
 
-    expect(getByText("No sources")).toBeTruthy();
+    expect(queryByText("No sources")).toBeNull();
     expect(callbacks.onPlayBest).not.toHaveBeenCalled();
     expect(callbacks.onDownload).not.toHaveBeenCalled();
   });

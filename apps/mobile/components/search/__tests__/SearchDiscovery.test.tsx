@@ -45,6 +45,8 @@ const translations: Record<string, string> = {
   "search.discovery.catalogErrorTitle": "Catalog unavailable",
   "search.discovery.catalogErrorDescription":
     "This catalog could not be loaded. Try again.",
+  "search.discovery.inlineCatalogError":
+    "Provider could not load this catalog.",
   "common.retry": "Retry",
 };
 
@@ -196,7 +198,9 @@ describe("SearchDiscovery", () => {
 
     const screen = render(<SearchDiscovery type="all" />);
 
-    expect(screen.getAllByText("Catalog unavailable")).toHaveLength(2);
+    expect(
+      screen.getAllByText("Provider could not load this catalog."),
+    ).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2);
     fireEvent.press(screen.getAllByRole("button", { name: "Retry" })[0]);
     expect(movieRetry).toHaveBeenCalledTimes(1);
@@ -237,6 +241,8 @@ describe("SearchDiscovery", () => {
     const screen = render(<SearchDiscovery type="all" />);
 
     expect(screen.getByText("Healthy result")).toBeTruthy();
-    expect(screen.getByText("Catalog unavailable")).toBeTruthy();
+    expect(
+      screen.getByText("Provider could not load this catalog."),
+    ).toBeTruthy();
   });
 });

@@ -61,7 +61,11 @@ describe("downloadStore", () => {
       isTaskOfflinePlayable(useDownloadStore.getState().tasks["source-1"]),
     ).toBe(false);
 
-    store.markVerified("source-1", "file:///downloads/movie.mp4");
+    store.markVerified(
+      "source-1",
+      "file:///downloads/movie.mp4",
+      2 * 1024 ** 2,
+    );
 
     expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(true);
     expect(
@@ -78,13 +82,43 @@ describe("downloadStore", () => {
       downloadUrl: "https://cdn.example.test/movie.mp4",
       sourceId: "source-1",
     });
-    store.markVerified("source-1", "file:///downloads/movie.mp4");
+    store.markVerified(
+      "source-1",
+      "file:///downloads/movie.mp4",
+      2 * 1024 ** 2,
+    );
 
     store.markFileMissing("source-1", "Downloaded file could not be found.");
 
     expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
       status: "Error",
       error: "Downloaded file could not be found.",
+      offlineVerifiedAt: undefined,
+    });
+    expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(false);
+  });
+
+  it("defensively refuses to mark a 206 KB file verified", () => {
+    const store = useDownloadStore.getState();
+    store.addTask("source-1", {
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      downloadUrl: "https://cdn.example.test/movie.mp4",
+      sourceId: "source-1",
+    });
+
+    store.markVerified(
+      "source-1",
+      "file:///downloads/placeholder.mp4",
+      206 * 1024,
+    );
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      failureReason: "invalid_media",
+      verificationState: "incomplete",
+      playableState: "unplayable",
       offlineVerifiedAt: undefined,
     });
     expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(false);
@@ -140,7 +174,7 @@ describe("downloadStore", () => {
     });
   });
 
-  it("preserves verification markers for persisted v2 tasks", () => {
+  it("requires legacy verification markers to pass the stricter v5 checks", () => {
     const migrated = migrateDownloadTasks(
       {
         tasks: {
@@ -166,9 +200,45 @@ describe("downloadStore", () => {
       2,
     );
 
-    expect(migrated?.tasks?.["source-1"]?.offlineVerifiedAt).toBe(
-      "2026-06-04T10:05:00.000Z",
+    expect(migrated?.tasks?.["source-1"]).toMatchObject({
+      offlineVerifiedAt: undefined,
+      verifiedFileSizeBytes: undefined,
+      verificationState: "pending",
+      playableState: "unknown",
+    });
+  });
+
+  it("never migrates a 206 KB response into an offline-playable item", () => {
+    const migrated = migrateDownloadTasks(
+      {
+        tasks: {
+          "source-1": {
+            id: "source-1",
+            mediaInfo: {
+              type: "movie",
+              itemId: "tt123",
+              title: "Example Movie",
+              downloadUrl: "",
+            },
+            localUri: "file:///downloads/error-response.mp4",
+            progress: 1,
+            status: "Completed",
+            downloadedBytes: 206 * 1024,
+            metadataBytes: 206 * 1024,
+            expectedMediaBytes: 206 * 1024,
+            verifiedFileSizeBytes: 206 * 1024,
+            verificationState: "verified",
+            playableState: "playable",
+            offlineVerifiedAt: "2026-06-04T10:05:00.000Z",
+            createdAt: "2026-06-04T10:00:00.000Z",
+            updatedAt: "2026-06-04T10:05:00.000Z",
+          },
+        },
+      },
+      5,
     );
+
+    expect(isTaskOfflinePlayable(migrated?.tasks?.["source-1"])).toBe(false);
   });
 
   it("strips sensitive download runtime data during migration", () => {
@@ -232,8 +302,11 @@ describe("downloadStore", () => {
       },
       progress: 0.5,
       status: "Paused",
-      totalBytesWritten: 500,
-      totalBytesExpectedToWrite: 1000,
+      downloadedBytes: 500,
+      metadataBytes: 0,
+      expectedMediaBytes: 1000,
+      verificationState: "pending",
+      playableState: "unknown",
       createdAt: "2026-06-04T10:00:00.000Z",
       updatedAt: "2026-06-04T10:05:00.000Z",
     });
@@ -244,6 +317,36 @@ describe("downloadStore", () => {
     expect(safeTask.replanContext).toMatchObject({
       type: "movie",
       id: "tt123",
+    });
+  });
+
+  it("keeps catalog estimates separate from replaceable transport lengths", () => {
+    const store = useDownloadStore.getState();
+    store.addTask("source-size", {
+      type: "movie",
+      itemId: "tt-size",
+      title: "Sized Movie",
+    });
+    store.setDownloadMetadata("source-size", {
+      metadataBytes: 2 * 1024 ** 3,
+    });
+    store.setDownloadMetadata("source-size", {
+      metadataBytes: 0,
+    });
+    store.setDownloadMetadata("source-size", {
+      metadataBytes: undefined,
+    });
+    store.updateProgress("source-size", 0.5, 1_000_000_000, 2_000_000_000);
+    store.setDownloadMetadata("source-size", {
+      expectedMediaBytes: 1_999_999_999,
+    });
+    store.setDownloadMetadata("source-size", {
+      expectedMediaBytes: undefined,
+    });
+
+    expect(useDownloadStore.getState().tasks["source-size"]).toMatchObject({
+      metadataBytes: 2 * 1024 ** 3,
+      expectedMediaBytes: 1_999_999_999,
     });
   });
 });

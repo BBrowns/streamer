@@ -59,6 +59,7 @@ test("IPC channels are registered through trusted wrappers", () => {
     "open-update-page",
     "download-job-start",
     "download-job-cancel",
+    "inspect-file",
     "handoff-play",
   ]) {
     assert.match(
@@ -92,4 +93,19 @@ test("preload exposes a narrow API without raw ipcRenderer access", () => {
     preloadSource,
     /const handler = \(_event, data\) => callback\(data\)/,
   );
+  assert.match(preloadSource, /inspectFile: \(localUri\)/);
+  assert.match(preloadSource, /safeInvoke\("inspect-file", localUri\)/);
+});
+
+test("desktop runtime reports product and Electron versions separately", () => {
+  assert.match(mainSource, /require\("\.\.\/package\.json"\)\.version/);
+  assert.match(mainSource, /productVersion: desktopBuildMetadata\.appVersion/);
+  assert.match(mainSource, /electronVersion: process\.versions\.electron/);
+});
+
+test("desktop smoke mode skips bridge and Bonjour startup only outside packaged builds", () => {
+  assert.match(mainSource, /STREAMER_DESKTOP_SMOKE_DISABLE_BRIDGE/);
+  assert.match(mainSource, /!electron_1\.app\.isPackaged/);
+  assert.match(mainSource, /desktop-smoke-bridge-disabled/);
+  assert.match(mainSource, /Bridge daemon and Bonjour discovery are disabled/);
 });

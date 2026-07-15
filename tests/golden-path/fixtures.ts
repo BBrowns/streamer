@@ -17,7 +17,8 @@ export type GoldenPathScenario =
   | "bridge-unavailable"
   | "download-unsupported"
   | "cast-ready"
-  | "search-partial";
+  | "search-partial"
+  | "catalog-partial";
 
 export const FIXTURE_MOVIE_ID = "golden-path-movie";
 const FIXTURE_SERIES_ID = "golden-path-series";
@@ -101,6 +102,16 @@ const searchPreviews = [
     imdbRating: "7.7",
   },
 ];
+
+const libraryItems = Array.from({ length: 9 }, (_, index) => ({
+  id: `fixture-library-${index + 1}`,
+  userId: "fixture-user",
+  type: index % 3 === 2 ? ("series" as const) : ("movie" as const),
+  itemId: `fixture-library-title-${index + 1}`,
+  title: `Library Fixture ${index + 1}`,
+  poster: POSTER_URL,
+  addedAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+}));
 
 const catalogAddon = {
   id: "fixture-addon",
@@ -439,6 +450,10 @@ export async function installGoldenPathRoutes(
       if (
         url.pathname.startsWith(`/api/addons/${catalogAddon.id}/catalog/movie/`)
       ) {
+        if (scenario === "catalog-partial") {
+          await json(route, { error: "Fixture catalog unavailable." }, 503);
+          return;
+        }
         await json(route, {
           metas: searchPreviews.filter((item) => item.type === "movie"),
         });
@@ -467,7 +482,7 @@ export async function installGoldenPathRoutes(
         return;
       }
       if (url.pathname === "/api/library") {
-        await json(route, { items: [] });
+        await json(route, { items: libraryItems });
         return;
       }
       if (url.pathname === "/api/notifications") {

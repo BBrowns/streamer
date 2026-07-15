@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { DesktopCastModal } from "../DesktopCastModal";
 import { castService } from "../../services/CastService";
 import { prepareCast } from "../../services/playback/PlaybackOrchestrator";
@@ -203,10 +203,10 @@ describe("DesktopCastModal", () => {
       ).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("Living Room"));
+    expect(screen.queryByText("Living Room")).toBeNull();
     expect(start).not.toHaveBeenCalled();
 
-    fireEvent.press(screen.getByLabelText("Review setup"));
+    fireEvent.press(screen.getByLabelText("Sources & Devices"));
     expect(onOpenSourcesDevices).toHaveBeenCalledTimes(1);
   });
 
@@ -286,6 +286,8 @@ describe("DesktopCastModal", () => {
         ),
       ).toBeTruthy();
     });
+    expect(screen.queryByText("Living Room")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Choose another device"));
     fireEvent.press(screen.getByText("Living Room"));
 
     await waitFor(() => {
@@ -332,7 +334,7 @@ describe("DesktopCastModal", () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
-  it("shows cast device capability hints in the device list", async () => {
+  it("keeps device rows consumer-friendly instead of exposing conversion details", async () => {
     getDevices.mockResolvedValueOnce([
       {
         id: "living-room",
@@ -357,7 +359,169 @@ describe("DesktopCastModal", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Available · MP4 · Remux")).toBeTruthy();
+      expect(screen.getByText("Available")).toBeTruthy();
+      expect(screen.queryByText(/Remux/)).toBeNull();
+    });
+  });
+
+  it("offers refresh only when discovery finds no devices", async () => {
+    getDevices.mockResolvedValueOnce([]);
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        playbackUri="https://cdn.example.test/manual.mp4"
+        title="Example Movie"
+        onClose={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("No displays found on this network."),
+      ).toBeTruthy();
+      expect(screen.getByLabelText("Refresh displays")).toBeTruthy();
+    });
+    expect(screen.queryByText("Living Room")).toBeNull();
+    expect(screen.queryByLabelText("Try again")).toBeNull();
+
+    fireEvent.press(screen.getByLabelText("Refresh displays"));
+    await waitFor(() => {
+      expect(screen.getByText("Living Room")).toBeTruthy();
+    });
+  });
+
+  it("keeps discovery recovery separate from source preparation", async () => {
+    getDevices.mockRejectedValueOnce(
+      new Error("Could not search for displays on the configured bridge."),
+    );
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        playbackUri="https://cdn.example.test/manual.mp4"
+        title="Example Movie"
+        onClose={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Streamer could not search for nearby displays."),
+      ).toBeTruthy();
+      expect(screen.getByLabelText("Search again")).toBeTruthy();
+    });
+    expect(screen.queryByText("Source ready. Choose a display.")).toBeNull();
+
+    fireEvent.press(screen.getByLabelText("Search again"));
+    await waitFor(() => {
+      expect(screen.getByText("Living Room")).toBeTruthy();
+    });
+  });
+
+  it("retries only the failed connection with the prepared source", async () => {
+    const onCastStart = jest.fn();
+    start
+      .mockResolvedValueOnce({
+        ok: false,
+        sessionId: "session-1",
+        error: {
+          code: "SOURCE_UNAVAILABLE",
+          message: "The selected display could not be reached.",
+          retryable: true,
+          shouldFallback: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        sessionId: "session-1",
+        candidateId: "candidate-1",
+        attemptId: "attempt-1",
+        stream: preparedCast.stream,
+        uri: preparedCast.resolvedUrl,
+      });
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        title="Example Movie"
+        orchestratorInput={{
+          type: "movie",
+          id: "tt123",
+          title: "Example Movie",
+        }}
+        onClose={jest.fn()}
+        onCastStart={onCastStart}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Living Room")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText("Living Room"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Try again")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText("Try again"));
+    await waitFor(() => {
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(onCastStart).toHaveBeenCalledTimes(1);
+    });
+    expect(prepare).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows one casting state while the session resolver tries its fallback", async () => {
+    let finishStart!: (
+      value: Awaited<ReturnType<typeof startCastSession>>,
+    ) => void;
+    start.mockImplementationOnce(async (_device, _title, _source, options) => {
+      options?.onFallback?.();
+      return new Promise((resolve) => {
+        finishStart = resolve;
+      });
+    });
+    const onCastStart = jest.fn();
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        title="Example Movie"
+        orchestratorInput={{
+          type: "movie",
+          id: "tt123",
+          title: "Example Movie",
+        }}
+        onClose={jest.fn()}
+        onCastStart={onCastStart}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Living Room")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText("Living Room"));
+    await waitFor(() => {
+      expect(
+        screen.getByText("Trying another compatible source..."),
+      ).toBeTruthy();
+    });
+    expect(screen.queryByText("Source ready. Choose a display.")).toBeNull();
+    expect(screen.queryByLabelText("Try again")).toBeNull();
+
+    await act(async () => {
+      finishStart({
+        ok: true,
+        sessionId: "session-1",
+        candidateId: "candidate-fallback",
+        attemptId: "attempt-fallback",
+        stream: { url: "https://cdn.example.test/fallback.mp4" },
+        uri: "https://cdn.example.test/fallback.mp4",
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText(/Connected to/).length).toBeGreaterThan(0);
+      expect(onCastStart).toHaveBeenCalledTimes(1);
     });
   });
 

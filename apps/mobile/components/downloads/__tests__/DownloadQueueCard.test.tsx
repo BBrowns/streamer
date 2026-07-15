@@ -44,8 +44,11 @@ function makeTask(
     },
     progress: 0,
     status: "Pending",
-    totalBytesWritten: 0,
-    totalBytesExpectedToWrite: 0,
+    downloadedBytes: 0,
+    metadataBytes: 0,
+    expectedMediaBytes: 0,
+    verificationState: "pending",
+    playableState: "unknown",
     createdAt: "2026-06-04T10:00:00.000Z",
     updatedAt: "2026-06-04T10:00:00.000Z",
     ...overrides,
@@ -114,6 +117,11 @@ describe("DownloadQueueCard", () => {
         status: "Completed",
         localUri: "file:///downloads/ready.mp4",
         offlineVerifiedAt: "2026-06-04T10:05:00.000Z",
+        downloadedBytes: 2_000_000,
+        expectedMediaBytes: 2_000_000,
+        verifiedFileSizeBytes: 2_000_000,
+        verificationState: "verified",
+        playableState: "playable",
       }),
     );
 
@@ -170,5 +178,38 @@ describe("DownloadQueueCard", () => {
 
     fireEvent.press(getByLabelText("Manage storage"));
     expect(callbacks.onManageStorage).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the card into a checkbox and hides row actions in selection mode", () => {
+    const onToggleSelect = jest.fn();
+    const task = makeTask("selectable", { status: "Downloading" });
+    const callbacks = {
+      onOpen: jest.fn(),
+      onPause: jest.fn(),
+      onResume: jest.fn(),
+      onRetry: jest.fn(),
+      onVerify: jest.fn(),
+      onRepairBridge: jest.fn(),
+      onManageStorage: jest.fn(),
+      onDelete: jest.fn(),
+    };
+    const { getByRole, queryByLabelText } = render(
+      <DownloadQueueCard
+        task={task}
+        {...callbacks}
+        isSelectionMode
+        isSelected
+        onToggleSelect={onToggleSelect}
+      />,
+    );
+
+    const checkbox = getByRole("checkbox");
+    expect(checkbox.props.accessibilityState).toEqual({ checked: true });
+    expect(queryByLabelText("Pause")).toBeNull();
+    expect(queryByLabelText("Delete download")).toBeNull();
+
+    fireEvent.press(checkbox);
+    expect(onToggleSelect).toHaveBeenCalledTimes(1);
+    expect(callbacks.onOpen).not.toHaveBeenCalled();
   });
 });

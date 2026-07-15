@@ -92,7 +92,7 @@ describe("StreamItem", () => {
 
     useDownloadStore
       .getState()
-      .markVerified("abc123", "file:///downloads/movie.mp4");
+      .markVerified("abc123", "file:///downloads/movie.mp4", 2 * 1024 ** 2);
 
     const verified = render(
       <StreamItem
