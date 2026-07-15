@@ -41,6 +41,7 @@
       "noCatalogsDescription": "Tus complementos instalados no ofrecen catálogos para el tipo de título seleccionado.",
       "catalogErrorTitle": "Catálogo no disponible",
       "catalogErrorDescription": "No se pudo cargar este catálogo. Inténtalo de nuevo.",
+      "inlineCatalogError": "{{provider}} no pudo cargar este catálogo.",
       "manageAddons": "Gestionar complementos"
     },
     "suggestions": {
@@ -62,6 +63,7 @@
       "title": "Filtros",
       "subtitle": "Refina estos resultados",
       "type": "Filtrar por tipo de título",
+      "contentType": "Tipo de contenido",
       "year": "Año",
       "provider": "Fuente",
       "sort": "Ordenar por",
@@ -112,9 +114,10 @@
       "button": "Empezar"
     },
     "sections": {
-      "popularMovies": "Películas populares",
-      "topTVShows": "Series destacadas",
-      "recentlyAdded": "Añadido recientemente",
+      "catalogEyebrow": "Catálogo",
+      "exploreEyebrow": "Explorar",
+      "movies": "Películas",
+      "series": "Series",
       "moreToWatch": "Más para ver",
       "fromProviders": "De tus proveedores"
     },
@@ -201,6 +204,9 @@
       "removeMessage": "¿Estás seguro de que quieres eliminar {{count}} elementos de tu biblioteca?",
       "bulkDeleteTitle": "Eliminar elementos",
       "bulkDeleteMessage": "¿Estás seguro de que quieres eliminar {{count}} elementos? Esta acción no se puede deshacer.",
+      "bulkRemoveWithUndoMessage": "¿Eliminar {{count}} títulos de tu biblioteca? Puedes deshacerlo durante unos segundos.",
+      "removeFailed": "No se pudo eliminar este título.",
+      "bulkRemoveFailed": "No se pudieron eliminar los títulos seleccionados.",
       "added": "Añadido a la biblioteca",
       "removed": "Eliminado de la biblioteca"
     },
@@ -209,6 +215,7 @@
       "viewDetails": "Ver detalles",
       "remove": "Eliminar de la biblioteca",
       "removeDownload": "Eliminar descarga",
+      "manageDownloads": "Gestionar descargas",
       "undo": "Deshacer",
       "restore": "Restaurar",
       "bulkRemoved": "{{count}} títulos eliminados de la biblioteca",
@@ -230,7 +237,13 @@
       "clearAllConfirm": "¿Eliminar todas las descargas gestionadas y sus archivos locales?",
       "clearAllButton": "Eliminar todo",
       "deleteTitle": "¿Eliminar descarga?",
-      "deleteMessage": "¿Eliminar \"{{title}}\" de este dispositivo?"
+      "deleteMessage": "¿Eliminar \"{{title}}\" de este dispositivo?",
+      "deleteFailed": "No se pudo eliminar esta descarga.",
+      "deleting": "Eliminando «{{title}}»…",
+      "bulkDeleteTitle": "¿Eliminar las descargas seleccionadas?",
+      "bulkDeleteMessage": "¿Eliminar {{count}} descargas de este dispositivo? Puedes deshacerlo durante unos segundos.",
+      "bulkDeleteFailed": "No se pudieron eliminar algunas descargas.",
+      "bulkDeleting": "Eliminando {{count}} descargas…"
     },
     "card": {
       "unknown": "Descarga desconocida",
@@ -261,6 +274,9 @@
       "checking": "Comprobando archivo",
       "readyOffline": "Disponible sin conexión",
       "completed": "Completado",
+      "needsVerification": "Necesita verificación",
+      "incomplete": "Incompleta",
+      "failed": "Fallida",
       "error": "Requiere atención"
     },
     "sections": {
@@ -285,7 +301,12 @@
       "needsVerification": "Requiere revisión"
     },
     "storage": {
+      "freeTitle": "Liberar almacenamiento del dispositivo",
       "externalCleanup": "Streamer solo puede eliminar descargas gestionadas por esta aplicación. Usa los ajustes de almacenamiento del dispositivo para otros archivos."
+    },
+    "selection": {
+      "selected": "{{count}} seleccionados",
+      "deleteSelected": "Eliminar descargas seleccionadas"
     },
     "smart": {
       "title": "Descargas inteligentes",
@@ -304,6 +325,16 @@
       "storageLimit": "Límite de {{count}} GB",
       "hlsUnsupported": "HLS sin conexión aún no es compatible",
       "plannedTitle": "Próximos episodios planificados",
+      "manage": "Gestionar Descargas inteligentes",
+      "manageSubtitle": "Siguiente episodio, Wi‑Fi, calidad y preferencias de limpieza",
+      "plannedCount": "{{count}} próximos episodios planificados",
+      "planStatus": {
+        "planned": "Planificado",
+        "queued": "En cola",
+        "downloaded": "Descargado",
+        "blocked": "Bloqueado",
+        "skipped": "Omitido"
+      },
       "unknownSeries": "Serie"
     },
     "recovery": {
@@ -330,6 +361,8 @@
       "prepareAgainAction": "Preparar de nuevo",
       "unsupportedTitle": "Descarga sin conexión no disponible",
       "unsupportedMessage": "Esta opción no se puede guardar para verla sin conexión.",
+      "invalidMediaTitle": "El archivo descargado no es válido",
+      "invalidMediaMessage": "Este archivo está incompleto o no se puede reproducir. Descárgalo de nuevo.",
       "removeAction": "Eliminar",
       "failedTitle": "La descarga requiere atención",
       "failedMessage": "Reintenta la descarga o elige otra opción de visualización.",
@@ -446,6 +479,13 @@
       "successMessage": "Tus ajustes de servidor y puente se han actualizado."
     },
     "about": {
+      "notAvailable": "No disponible",
+      "productDescription": "Películas y series en todos tus dispositivos.",
+      "streamerApp": "Aplicación Streamer",
+      "desktopShell": "Aplicación de escritorio",
+      "electronRuntime": "Entorno Electron",
+      "buildSha": "SHA de compilación",
+      "channel": "Canal",
       "releasePolicy": "Las actualizaciones de escritorio se comprueban manualmente hasta validar completamente el pipeline de releases.",
       "checkUpdates": "Comprobar actualizaciones",
       "terms": "Términos de uso",
@@ -573,8 +613,13 @@
     },
     "playbackPreferences": {
       "quality": "Calidad de reproducción",
-      "qualityDescription": "Elige la calidad máxima al ordenar las fuentes.",
-      "auto": "Automática",
+      "qualityDescription": "Streamer solo usa las calidades de vídeo seleccionadas. Las fuentes SD o sin calidad conocida quedan excluidas. Mantén al menos una seleccionada.",
+      "qualityOptions": {
+        "2160": "4K (2160p)",
+        "1080": "Full HD (1080p)",
+        "720": "HD (720p)",
+        "480": "480p"
+      },
       "audio": "Idioma de audio",
       "audioDescription": "Prefiere esta pista de audio cuando esté disponible.",
       "subtitles": "Subtítulos",
@@ -619,8 +664,16 @@
     },
     "sourcesSection": {
       "addonsTitle": "Fuentes de contenido",
+      "contentAddonsTitle": "Complementos de contenido",
       "addonsDescription": "Instala y gestiona los complementos que proporcionan tu catálogo.",
-      "pageDescription": "Revisa la disponibilidad de reproducción, los dispositivos conectados y las fuentes."
+      "pageDescription": "Revisa la disponibilidad de reproducción, los dispositivos conectados y las fuentes.",
+      "playbackDevicesTitle": "Reproducción y dispositivos",
+      "playbackDevicesDescription": "Comprueba si este dispositivo puede preparar la reproducción local y el casting.",
+      "localPlaybackService": "Servicio de reproducción local",
+      "localPlaybackReady": "La reproducción local y la preparación sin conexión están disponibles.",
+      "localPlaybackLimited": "Algunos tipos de fuente pueden requerir revisar la configuración de escritorio.",
+      "castingDevices": "Casting y dispositivos",
+      "castingLimited": "El casting está disponible para fuentes y dispositivos compatibles."
     },
     "advancedSection": {
       "copyDiagnostics": "Copiar diagnósticos",
@@ -672,8 +725,27 @@
       "diagnosticsUnavailable": "Diagnósticos no disponibles",
       "diagnosticsUnavailableDescription": "No se pudieron exportar los diagnósticos.",
       "cacheCleaned": "Caché limpiada",
+      "cacheCleanupResult": "Se eliminaron {{count}} entradas inactivas y se liberaron {{size}}.",
+      "torrentCacheUsage": "{{count}} entradas · {{usage}}",
       "cacheCleanupFailed": "Falló la limpieza de caché",
-      "cacheCleanupFailedDescription": "No se pudieron limpiar las entradas inactivas de la caché."
+      "cacheCleanupFailedDescription": "No se pudieron limpiar las entradas inactivas de la caché.",
+      "serviceMaintenance": "Mantenimiento del servicio de reproducción",
+      "serviceMaintenanceDescription": "Vuelve a comprobar, repara, limpia archivos en caché o exporta diagnósticos.",
+      "restartDescription": "Reinicia el proceso local de reproducción de escritorio.",
+      "cleanPlaybackCache": "Limpiar caché de reproducción",
+      "exportDiagnostics": "Exportar diagnósticos",
+      "technicalDetails": "Detalles técnicos",
+      "hideTechnical": "Oculta los datos internos de estado y versión.",
+      "showTechnical": "Muestra los datos internos de estado y versión.",
+      "runtimeBuildDetails": "Detalles del entorno y la compilación",
+      "appBuildLabel": "Compilación de la aplicación",
+      "statusLabel": "Estado",
+      "reasonLabel": "Motivo",
+      "messageLabel": "Mensaje",
+      "runtimeLabel": "Entorno",
+      "nativeRuntimeLabel": "Entorno nativo",
+      "ffmpegLabel": "FFmpeg",
+      "remuxCacheLabel": "Caché de remux"
     },
     "onboarding": {
       "title": "Personalizar",
@@ -693,6 +765,7 @@
     "install": {
       "title": "Instalar Complemento",
       "hint": "Pega una URL de manifest.json para añadir una fuente de contenido.",
+      "urlLabel": "URL del manifiesto",
       "placeholder": "https://addon-url.com/manifest.json",
       "button": "Instalar",
       "success": "¡Complemento instalado!",
@@ -704,7 +777,8 @@
       "uninstall": "Desinstalar",
       "remove": "Eliminar",
       "cancel": "Cancelar",
-      "confirmRemove": "¿Eliminar \"{{name}}\"?"
+      "confirmRemove": "¿Eliminar \"{{name}}\"?",
+      "removeError": "No se pudo eliminar este complemento. Inténtalo de nuevo."
     },
     "empty": {
       "title": "No hay complementos instalados",
@@ -726,6 +800,9 @@
       "none": "No hay flujos para este episodio.",
       "noneData": "No hay datos de episodios disponibles.",
       "season": "Temporada {{season}}",
+      "playA11y": "Reproducir episodio {{episode}}: {{title}}",
+      "downloadA11y": "Descargar episodio {{episode}}: {{title}}",
+      "moreSourcesA11y": "Más fuentes para el episodio {{episode}}: {{title}}",
       "streamsLabel": "T{{season}} E{{episode}} — Flujos"
     },
     "quality": "Seleccionar calidad",
@@ -752,9 +829,25 @@
       "more": "Más fuentes",
       "show": "Mostrar más fuentes",
       "hide": "Ocultar más fuentes",
-      "available": "Alternativa avanzada · {{count}} disponibles",
+      "available": "{{count}} disponibles",
       "groups": "Alternativa avanzada · {{count}} grupos",
-      "filterByQuality": "Filtrar fuentes por {{quality}}"
+      "filterByQuality": "Filtrar fuentes por {{quality}}",
+      "choiceError": "No se pudieron preparar las fuentes.",
+      "noneConsumer": "No hay fuentes compatibles disponibles.",
+      "technical": "Mostrar detalles técnicos",
+      "hideTechnical": "Ocultar detalles técnicos",
+      "compatibility": {
+        "ready": "Lista en este dispositivo",
+        "localService": "Usa el servicio de reproducción local",
+        "conversion": "Se prepara automáticamente"
+      },
+      "language": {
+        "notListed": "Idioma no indicado",
+        "multiple": "Varios idiomas"
+      },
+      "quality": {
+        "auto": "Automática"
+      }
     },
     "readiness": {
       "finishSetupTitle": "Completa la configuración de reproducción",
@@ -762,6 +855,10 @@
       "openSourcesDetail": "Abre Fuentes y dispositivos para conectar la aplicación de escritorio.",
       "directMayWork": "Las opciones directas aún pueden funcionar en este dispositivo.",
       "sourcesAction": "Fuentes y dispositivos",
+      "qualitySelectionTitle": "Ninguna fuente coincide con tus calidades",
+      "qualitySelectionMessage": "Las fuentes disponibles no tienen una de las calidades seleccionadas en los ajustes de reproducción.",
+      "qualitySelectionDetail": "Permite otra calidad y vuelve a intentar la reproducción.",
+      "playbackSettingsAction": "Ajustes de reproducción",
       "extraSupportTitle": "Se necesita compatibilidad adicional",
       "extraSupportMessage": "Esta opción necesita ayuda de la aplicación de escritorio.",
       "checkSupportDetail": "Revisa Fuentes y dispositivos o elige otra opción.",
@@ -804,6 +901,20 @@
         "download": "Descarga no disponible",
         "cast": "Transmisión no disponible"
       }
+    },
+    "loadState": {
+      "eyebrow": "Detalles del título",
+      "loadingTitle": "Cargando los detalles",
+      "loadingDescription": "Obteniendo la información y las opciones de visualización más recientes.",
+      "notFoundTitle": "Este título no está disponible",
+      "notFoundDescription": "Ninguno de tus complementos actuales pudo proporcionar detalles de este título. Puede que se haya eliminado o que no forme parte de tus catálogos.",
+      "networkTitle": "Estás sin conexión",
+      "networkDescription": "Vuelve a conectarte a internet e intenta cargar este título de nuevo.",
+      "temporaryTitle": "No se pudo cargar este título",
+      "temporaryDescription": "Algo interrumpió la solicitud. Vuelve a intentarlo en unos instantes.",
+      "retry": "Volver a intentar",
+      "reviewAddons": "Revisar complementos",
+      "sourcesDevices": "Fuentes y dispositivos"
     },
     "errors": {
       "notFound": "Contenido no encontrado",
@@ -968,6 +1079,8 @@
       "preparingMetadata": "Leyendo metadatos del torrent...",
       "remuxing": "Preparando un flujo de vídeo compatible...",
       "preparingSubtitle": "Esto puede tardar un momento con fuentes torrent.",
+      "cancelPreparation": "Cancelar la preparación de la fuente",
+      "cancelPreparationHint": "También puedes pulsar Escape para cancelar.",
       "tryingFallback": "Probando otra fuente...",
       "buffering": "Cargando el búfer...",
       "errorTitle": "Error de conexión",
@@ -980,7 +1093,10 @@
       "errorSubtitle": "No se pudo cargar el flujo"
     },
     "errors": {
-      "noStream": "No hay flujo seleccionado",
+      "noStreamStatus": "Reproducción no disponible",
+      "noStreamTitle": "No hay nada en cola para reproducir",
+      "noStream": "Elige un título para iniciar la reproducción. Si ya estabas viendo algo, puede que la solicitud haya caducado.",
+      "browseTitles": "Explorar títulos",
       "bridgeUnavailable": "La compatibilidad de reproducción no está lista. Abre Fuentes y dispositivos, revisa este dispositivo e inténtalo de nuevo.",
       "playbackFailed": "No se ha podido iniciar este título.",
       "playbackTimeout": "Este título ha tardado demasiado en prepararse. Inténtalo de nuevo o elige otra opción.",
@@ -992,7 +1108,18 @@
     },
     "cast": {
       "castingTo": "Transmitiendo a {{name}}",
-      "stop": "Detener transmisión"
+      "stop": "Detener transmisión",
+      "searching": "Buscando pantallas...",
+      "noDevices": "No se encontraron pantallas en esta red.",
+      "compatibleReady": "Hay una fuente compatible lista. Elige una pantalla.",
+      "sourceReady": "Fuente lista. Elige una pantalla.",
+      "connecting": "Conectando con {{name}}...",
+      "connected": "Conectado con {{name}}.",
+      "available": "Disponible",
+      "refreshDisplays": "Actualizar pantallas",
+      "chooseAnotherDevice": "Elegir otro dispositivo",
+      "tryAnotherSource": "Probar otra fuente",
+      "sourcesDevices": "Fuentes y dispositivos"
     },
     "casting": {
       "active": "Transmitiendo",
@@ -1029,7 +1156,14 @@
     "retry": "Reintentar",
     "cancel": "Cancelar",
     "dismiss": "Cerrar",
-    "actions": { "viewDetails": "Ver detalles" },
+    "actions": {
+      "viewDetails": "Ver detalles",
+      "play": "Reproducir",
+      "resume": "Reanudar",
+      "castToDevice": "Enviar a dispositivo",
+      "addToLibrary": "Añadir a la biblioteca"
+    },
+    "castAndCrew": "Reparto y equipo",
     "media": { "movie": "Película", "series": "Serie" },
     "unexpectedError": {
       "title": "Algo ha salido mal",

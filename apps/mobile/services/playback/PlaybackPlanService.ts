@@ -8,29 +8,38 @@ import type {
 import { playbackPlanSchema } from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
-import { usePlayerStore } from "../../stores/playerStore";
+import {
+  normalizePreferredQualities,
+  usePlayerStore,
+} from "../../stores/playerStore";
 import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
 import { buildActionBridgeHint } from "../actionPreflight";
 
 function applyLocalPlaybackPreferences(
   deviceProfile: DeviceProfile,
   action: PlaybackAction,
+  allowedQualities: DeviceProfile["maxQuality"][] | undefined,
 ): DeviceProfile {
-  const { preferredQuality } = usePlayerStore.getState();
-
-  if (action !== "play" || preferredQuality === "auto") {
+  if (action !== "play" || !allowedQualities) {
     return deviceProfile;
   }
 
   return {
     ...deviceProfile,
-    maxQuality: preferredQuality,
+    maxQuality: allowedQualities[0] ?? deviceProfile.maxQuality,
   };
+}
+
+function getAllowedPlaybackQualities() {
+  return normalizePreferredQualities(
+    usePlayerStore.getState().preferredQualities,
+  );
 }
 
 function buildPlannerPreferences(
   preferredAudioLanguage?: string | null,
   preferredSubtitleLanguage?: string | null,
+  allowedQualities?: DeviceProfile["maxQuality"][],
 ): PlaybackPlanRequest["preferences"] | undefined {
   const preferences: NonNullable<PlaybackPlanRequest["preferences"]> = {};
 
@@ -40,6 +49,10 @@ function buildPlannerPreferences(
 
   if (preferredSubtitleLanguage) {
     preferences.preferredSubtitleLanguage = preferredSubtitleLanguage;
+  }
+
+  if (allowedQualities) {
+    preferences.allowedQualities = allowedQualities;
   }
 
   return Object.keys(preferences).length > 0 ? preferences : undefined;
@@ -57,15 +70,19 @@ export async function createPlaybackPlan(
     (input.action === "cast"
       ? getChromecastDeviceProfile()
       : getDeviceProfile());
+  const allowedQualities =
+    input.action === "play" ? getAllowedPlaybackQualities() : undefined;
   const deviceProfile = applyLocalPlaybackPreferences(
     baseDeviceProfile,
     input.action,
+    allowedQualities,
   );
   const { preferredAudioLang, preferredSubtitleLang } =
     usePlayerStore.getState();
   const preferences = buildPlannerPreferences(
     preferredAudioLang,
     preferredSubtitleLang,
+    allowedQualities,
   );
   // Cast compatibility uses the display profile, but bridge reachability is
   // always evaluated from the controller running this client.

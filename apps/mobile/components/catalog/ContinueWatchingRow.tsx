@@ -1,12 +1,5 @@
-import React, { memo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  Platform,
-} from "react-native";
+import React, { memo, useMemo } from "react";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -32,9 +25,11 @@ import {
   uiTypography,
 } from "../ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { MediaRail } from "../ui/MediaRail";
 
 type ContinueWatchingRowProps = {
   showEmptyState?: boolean;
+  excludeContentKey?: string | null;
 };
 
 function formatRemainingMinutes(item: WatchProgress) {
@@ -218,12 +213,22 @@ const MemoizedCard = memo(ContinueWatchingCard);
 
 export function ContinueWatchingRow({
   showEmptyState = false,
+  excludeContentKey,
 }: ContinueWatchingRowProps) {
   const { data: items, isLoading } = useContinueWatching();
   const removeProgress = useRemoveProgress();
   const updateProgress = useUpdateProgress();
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { isExpanded, isLarge } = useWindowClass();
+  const cardWidth = isExpanded || isLarge ? 360 : 286;
+  const visibleItems = useMemo(
+    () =>
+      (items ?? []).filter(
+        (item) => `${item.type}:${item.itemId}` !== excludeContentKey,
+      ),
+    [excludeContentKey, items],
+  );
 
   if (isLoading) {
     return (
@@ -238,7 +243,7 @@ export function ContinueWatchingRow({
     );
   }
 
-  if (!items || items.length === 0) {
+  if (visibleItems.length === 0) {
     if (!showEmptyState) return null;
     return (
       <View style={styles.container}>
@@ -258,57 +263,48 @@ export function ContinueWatchingRow({
   }
 
   return (
-    <View style={styles.container} testID="continue-watching-row">
-      <View style={styles.headerRow}>
-        <View style={styles.titleWithIcon}>
-          <Ionicons name="time-outline" size={22} color={colors.tint} />
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t("home.continueWatching.title")}
-          </Text>
-        </View>
-      </View>
-      <FlatList
-        horizontal
-        data={items}
-        keyExtractor={(item) =>
-          `cw-${item.itemId}-${item.season ?? 0}-${item.episode ?? 0}`
-        }
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <MemoizedCard
-            item={item}
-            onRemove={(itemId) => {
-              const removedItem = items.find(
-                (entry) => entry.itemId === itemId,
-              );
-              removeProgress.mutate(itemId, {
-                onSuccess: () => {
-                  if (!removedItem) return;
-                  useToastStore
-                    .getState()
-                    .show("Removed from Continue Watching", "info", {
-                      actionLabel: "Undo",
-                      onAction: () =>
-                        updateProgress.mutateAsync({
-                          type: removedItem.type,
-                          itemId: removedItem.itemId,
-                          season: removedItem.season ?? undefined,
-                          episode: removedItem.episode ?? undefined,
-                          currentTime: removedItem.currentTime,
-                          duration: removedItem.duration,
-                          title: removedItem.title,
-                          poster: removedItem.poster ?? undefined,
-                        }),
-                    });
-                },
-              });
-            }}
-            isRemoving={removeProgress.isPending}
-          />
-        )}
-      />
-    </View>
+    <MediaRail
+      style={styles.container}
+      testID="continue-watching-row"
+      title={t("home.continueWatching.title")}
+      data={visibleItems}
+      cardWidth={cardWidth}
+      keyExtractor={(item) =>
+        `cw-${item.itemId}-${item.season ?? 0}-${item.episode ?? 0}`
+      }
+      renderItem={(item) => (
+        <MemoizedCard
+          item={item}
+          onRemove={(itemId) => {
+            const removedItem = visibleItems.find(
+              (entry) => entry.itemId === itemId,
+            );
+            removeProgress.mutate(itemId, {
+              onSuccess: () => {
+                if (!removedItem) return;
+                useToastStore
+                  .getState()
+                  .show("Removed from Continue Watching", "info", {
+                    actionLabel: "Undo",
+                    onAction: () =>
+                      updateProgress.mutateAsync({
+                        type: removedItem.type,
+                        itemId: removedItem.itemId,
+                        season: removedItem.season ?? undefined,
+                        episode: removedItem.episode ?? undefined,
+                        currentTime: removedItem.currentTime,
+                        duration: removedItem.duration,
+                        title: removedItem.title,
+                        poster: removedItem.poster ?? undefined,
+                      }),
+                  });
+              },
+            });
+          }}
+          isRemoving={removeProgress.isPending}
+        />
+      )}
+    />
   );
 }
 
@@ -330,10 +326,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...uiTypography.title,
-  },
-  listContent: {
-    paddingHorizontal: uiSpacing.lg,
-    gap: uiSpacing.md,
   },
   card: {
     overflow: "hidden",

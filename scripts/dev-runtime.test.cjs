@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const {
   detectHostArch,
@@ -9,6 +10,7 @@ const {
   normalizeArch,
   parseNpmCommandArgs,
   resolveNpmRunner,
+  runForeground,
   selectNodeRuntime,
 } = require("./dev-runtime.cjs");
 
@@ -153,4 +155,55 @@ test("falls back to the runtime npm CLI when Corepack is unavailable", () => {
     cli: "/runtime/lib/node_modules/npm/bin/npm-cli.js",
     prefixArgs: [],
   });
+});
+
+test("can detach daemon stdin while preserving output and signal forwarding", async () => {
+  const parentProcess = new EventEmitter();
+  const child = new EventEmitter();
+  const signals = [];
+  let spawnOptions;
+  child.killed = false;
+  child.kill = (signal) => {
+    signals.push(signal);
+    child.killed = true;
+  };
+
+  const completion = runForeground("node", ["server.js"], {
+    parentProcess,
+    stdin: "ignore",
+    spawn: (_command, _args, options) => {
+      spawnOptions = options;
+      return child;
+    },
+  });
+
+  assert.deepEqual(spawnOptions.stdio, ["ignore", "inherit", "inherit"]);
+  assert.equal(parentProcess.listenerCount("SIGINT"), 1);
+  assert.equal(parentProcess.listenerCount("SIGTERM"), 1);
+
+  parentProcess.emit("SIGINT");
+  assert.deepEqual(signals, ["SIGINT"]);
+  child.emit("exit", null, "SIGINT");
+
+  assert.equal(await completion, 128);
+  assert.equal(parentProcess.listenerCount("SIGINT"), 0);
+  assert.equal(parentProcess.listenerCount("SIGTERM"), 0);
+});
+
+test("removes signal forwarding when foreground startup fails", async () => {
+  const parentProcess = new EventEmitter();
+  const child = new EventEmitter();
+  child.killed = false;
+  child.kill = () => {};
+
+  const completion = runForeground("missing-node", [], {
+    parentProcess,
+    spawn: () => child,
+  });
+  const startupError = new Error("spawn failed");
+  child.emit("error", startupError);
+
+  await assert.rejects(completion, startupError);
+  assert.equal(parentProcess.listenerCount("SIGINT"), 0);
+  assert.equal(parentProcess.listenerCount("SIGTERM"), 0);
 });

@@ -22,12 +22,13 @@ type SearchFieldProps = Omit<TextInputProps, "style"> & {
   clearAccessibilityLabel: string;
   loading?: boolean;
   shortcutHint?: string;
+  variant?: "underline" | "surface";
   inset?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
 };
 
-/** Shared search-input behavior with a restrained editorial underline. */
+/** Shared search-input behavior for editorial and compact surface contexts. */
 export const SearchField = forwardRef<TextInput, SearchFieldProps>(
   function SearchField(
     {
@@ -36,10 +37,12 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
       clearAccessibilityLabel,
       loading = false,
       shortcutHint,
+      variant = "underline",
       inset = false,
       containerStyle,
       inputStyle,
       placeholderTextColor,
+      testID,
       onFocus,
       onBlur,
       ...inputProps
@@ -51,13 +54,22 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
 
     return (
       <View
+        testID={testID ? `${testID}-container` : undefined}
         style={[
           styles.container,
           inset && styles.inset,
-          {
-            borderBottomColor: focused ? colors.focus : colors.border,
-            borderBottomWidth: focused ? 2 : 1,
-          },
+          variant === "surface"
+            ? [
+                styles.surface,
+                {
+                  backgroundColor: colors.surfaceSubtle,
+                  borderColor: focused ? colors.focus : "transparent",
+                },
+              ]
+            : {
+                borderBottomColor: focused ? colors.focus : colors.border,
+                borderBottomWidth: focused ? 2 : 1,
+              },
           containerStyle,
         ]}
       >
@@ -69,6 +81,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
         <TextInput
           {...inputProps}
           ref={ref}
+          testID={testID}
           value={value}
           autoCapitalize={inputProps.autoCapitalize ?? "none"}
           autoCorrect={inputProps.autoCorrect ?? false}
@@ -90,7 +103,16 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
           <ActivityIndicator size="small" color={colors.tint} />
         ) : null}
         {!loading && shortcutHint && value.length === 0 ? (
-          <Text style={[styles.shortcut, { color: colors.textSecondary }]}>
+          <Text
+            style={[
+              styles.shortcut,
+              {
+                color: colors.textSecondary,
+                backgroundColor: colors.surfaceElevated,
+                borderColor: colors.border,
+              },
+            ]}
+          >
             {shortcutHint}
           </Text>
         ) : null}
@@ -126,6 +148,12 @@ const styles = StyleSheet.create({
     minHeight: 62,
     paddingHorizontal: 18,
   },
+  surface: {
+    minHeight: 50,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 10,
+  },
   input: {
     flex: 1,
     fontSize: 16,
@@ -135,8 +163,13 @@ const styles = StyleSheet.create({
   },
   shortcut: {
     fontSize: 11,
+    lineHeight: 16,
     fontWeight: "700",
     letterSpacing: 0.2,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   clearButton: {
     width: uiTouchTarget,

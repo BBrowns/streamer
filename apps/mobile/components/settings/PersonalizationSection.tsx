@@ -1,17 +1,18 @@
 import { StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { hapticImpactLight } from "../../lib/haptics";
-import { usePlayerStore } from "../../stores/playerStore";
+import {
+  PLAYBACK_QUALITY_OPTIONS,
+  usePlayerStore,
+} from "../../stores/playerStore";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import {
   SettingsChoiceRow,
+  SettingsMultiSelectRow,
   SettingsRowGroup,
   SettingsToggleRow,
 } from "./SettingsRows";
 
-type PlaybackQuality = "auto" | "1080p" | "720p" | "480p";
-
-const QUALITY_OPTIONS: PlaybackQuality[] = ["auto", "1080p", "720p", "480p"];
 const LANGUAGE_OPTIONS = [
   { key: "off", value: "none" },
   { key: "english", value: "en" },
@@ -21,7 +22,9 @@ const LANGUAGE_OPTIONS = [
 
 export function PersonalizationSection() {
   const { t } = useTranslation();
-  const preferredQuality = usePlayerStore((state) => state.preferredQuality);
+  const preferredQualities = usePlayerStore(
+    (state) => state.preferredQualities,
+  );
   const preferredAudioLang = usePlayerStore(
     (state) => state.preferredAudioLang,
   );
@@ -29,8 +32,8 @@ export function PersonalizationSection() {
     (state) => state.preferredSubtitleLang,
   );
   const autoPlayNext = usePlayerStore((state) => state.autoPlayNext);
-  const setPreferredQuality = usePlayerStore(
-    (state) => state.setPreferredQuality,
+  const setPreferredQualities = usePlayerStore(
+    (state) => state.setPreferredQualities,
   );
   const setPreferredAudioLang = usePlayerStore(
     (state) => state.setPreferredAudioLang,
@@ -48,26 +51,29 @@ export function PersonalizationSection() {
   return (
     <View style={styles.stack}>
       <SettingsRowGroup>
-        <SettingsChoiceRow
+        <SettingsMultiSelectRow
           icon="options-outline"
           title={t("settings.playbackPreferences.quality")}
           subtitle={t("settings.playbackPreferences.qualityDescription")}
-        >
-          <SegmentedControl
-            options={QUALITY_OPTIONS.map((quality) => ({
-              label:
-                quality === "auto"
-                  ? t("settings.playbackPreferences.auto")
-                  : quality.toUpperCase(),
-              value: quality,
-            }))}
-            value={preferredQuality}
-            onChange={(quality) => {
-              hapticImpactLight();
-              setPreferredQuality(quality);
-            }}
-          />
-        </SettingsChoiceRow>
+          options={PLAYBACK_QUALITY_OPTIONS.map((quality) => ({
+            label: t(
+              `settings.playbackPreferences.qualityOptions.${quality.slice(0, -1)}`,
+            ),
+            value: quality,
+            disabled:
+              preferredQualities.length === 1 &&
+              preferredQualities.includes(quality),
+          }))}
+          selectedValues={preferredQualities}
+          onToggle={(quality) => {
+            hapticImpactLight();
+            setPreferredQualities(
+              preferredQualities.includes(quality)
+                ? preferredQualities.filter((value) => value !== quality)
+                : [...preferredQualities, quality],
+            );
+          }}
+        />
         <SettingsChoiceRow
           icon="volume-medium-outline"
           title={t("settings.playbackPreferences.audio")}

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   resumeDownloadJob: (id) => safeInvoke("download-job-resume", id),
   cancelDownloadJob: (id) => safeInvoke("download-job-cancel", id),
   checkFile: (localUri) => safeInvoke("check-file", localUri),
+  inspectFile: (localUri) => safeInvoke("inspect-file", localUri),
   deleteFile: (localUri) => safeInvoke("delete-file", localUri),
   getBridgeInfo: () => safeInvoke("get-bridge-info"),
   restartBridge: () => safeInvoke("restart-bridge"),

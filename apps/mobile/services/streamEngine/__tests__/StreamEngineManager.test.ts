@@ -2,6 +2,7 @@ import { StreamEngineManager, validateBridgeUrl } from "../StreamEngineManager";
 import { HLSEngine } from "../HLSEngine";
 import { HttpVideoEngine } from "../HttpVideoEngine";
 import { TorrentEngine } from "../TorrentEngine";
+import { StreamEngineCancellationError } from "../IStreamEngine";
 import type { Stream } from "@streamer/shared";
 import { api } from "../../api";
 import { useAuthStore } from "../../../stores/authStore";
@@ -11,6 +12,29 @@ jest.mock("../../api", () => ({
     get: jest.fn(),
   },
 }));
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function waitForFetchCallCount(count: number) {
+  for (
+    let attempt = 0;
+    attempt < 30 && (global.fetch as jest.Mock).mock.calls.length < count;
+    attempt += 1
+  ) {
+    await Promise.resolve();
+  }
+  expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(
+    count,
+  );
+}
 
 describe("StreamEngineManager", () => {
   let manager: StreamEngineManager;
@@ -646,6 +670,172 @@ describe("TorrentEngine", () => {
       engine.getPlaybackUri({ infoHash: "deadbeef" }),
     ).rejects.toThrow("stalled");
     expect(bridge.bridgeStatus).toBe("available");
+  });
+
+  it("cancels immediately during gateway creation and deletes a job returned late", async () => {
+    const bridge = {
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    };
+    engine = new TorrentEngine(bridge);
+    const postResponse = createDeferred<any>();
+    const onGateway = jest.fn();
+    engine.on("gateway", onGateway);
+    (global.fetch as jest.Mock).mockImplementation(
+      (_url: string, init?: RequestInit) => {
+        if (init?.method === "POST") return postResponse.promise;
+        if (init?.method === "DELETE") {
+          return Promise.resolve({ ok: true, json: async () => ({}) });
+        }
+        throw new Error("Unexpected gateway request");
+      },
+    );
+
+    const playback = engine.getPlaybackUri({ infoHash: "deadbeef" });
+    await waitForFetchCallCount(1);
+    const postSignal = (global.fetch as jest.Mock).mock.calls[0][1]
+      .signal as AbortSignal;
+
+    engine.stop();
+
+    expect(postSignal.aborted).toBe(true);
+    await expect(playback).rejects.toBeInstanceOf(
+      StreamEngineCancellationError,
+    );
+    expect(bridge.bridgeStatus).toBe("available");
+    expect(onGateway).not.toHaveBeenCalledWith(
+      expect.objectContaining({ state: "error" }),
+    );
+
+    postResponse.resolve({
+      ok: true,
+      json: async () => ({
+        id: "late-job",
+        state: "preparing",
+        playbackUrl: "/api/gateway/jobs/late-job/stream",
+      }),
+    });
+    await waitForFetchCallCount(2);
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://bridge.test/api/gateway/jobs/late-job",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    engine.stop();
+    await Promise.resolve();
+    expect(
+      (global.fetch as jest.Mock).mock.calls.filter(
+        ([, init]) => init?.method === "DELETE",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("cancels an in-flight gateway status poll without accepting its late result", async () => {
+    const bridge = {
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    };
+    engine = new TorrentEngine(bridge);
+    const pollResponse = createDeferred<any>();
+    const onGateway = jest.fn();
+    engine.on("gateway", onGateway);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      })
+      .mockImplementationOnce(() => pollResponse.promise)
+      .mockResolvedValue({ ok: true, json: async () => ({}) });
+
+    const playback = engine.getPlaybackUri({ infoHash: "deadbeef" });
+    await waitForFetchCallCount(2);
+    const pollSignal = (global.fetch as jest.Mock).mock.calls[1][1]
+      .signal as AbortSignal;
+
+    engine.stop();
+
+    expect(pollSignal.aborted).toBe(true);
+    await expect(playback).rejects.toBeInstanceOf(
+      StreamEngineCancellationError,
+    );
+    pollResponse.resolve({
+      ok: true,
+      json: async () => ({
+        id: "job-1",
+        state: "ready",
+        playbackUrl: "/api/gateway/jobs/job-1/stream",
+      }),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onGateway).not.toHaveBeenCalledWith(
+      expect.objectContaining({ state: "ready" }),
+    );
+    expect(bridge.bridgeStatus).toBe("available");
+    expect(
+      (global.fetch as jest.Mock).mock.calls.filter(
+        ([, init]) => init?.method === "DELETE",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("cancels the polling delay without waiting for its timer", async () => {
+    jest.useFakeTimers();
+    try {
+      engine = new TorrentEngine({
+        activeStrategy: "local",
+        bridgeAvailable: true,
+        bridgeStatus: "available",
+        bridgeUrl: "http://bridge.test",
+      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "finding_peers",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+          }),
+        })
+        .mockResolvedValue({ ok: true, json: async () => ({}) });
+
+      const playback = engine.getPlaybackUri({ infoHash: "deadbeef" });
+      await waitForFetchCallCount(2);
+
+      engine.stop();
+
+      await expect(playback).rejects.toBeInstanceOf(
+        StreamEngineCancellationError,
+      );
+      expect(jest.getTimerCount()).toBe(0);
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        3,
+        "http://bridge.test/api/gateway/jobs/job-1",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("should identify itself as torrent engine", () => {

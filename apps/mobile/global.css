@@ -5,11 +5,13 @@
 :root {
   color-scheme: dark light;
   --streamer-canvas: #08090c;
+  --streamer-focus: #6c79f5;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     --streamer-canvas: #f3f2ef;
+    --streamer-focus: #4f5fd1;
   }
 }
 
@@ -25,6 +27,50 @@ body,
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+}
+
+/* React Native Web reports `focused` for pointer and keyboard focus alike.
+   Let the browser's modality heuristic suppress strong rings for pointer
+   focus while preserving them for keyboard navigation. */
+@supports selector(:focus-visible) {
+  [tabindex]:focus:not(:focus-visible),
+  a:focus:not(:focus-visible),
+  [role="link"]:focus:not(:focus-visible),
+  button:focus:not(:focus-visible),
+  input:focus:not(:focus-visible),
+  textarea:focus:not(:focus-visible),
+  select:focus:not(:focus-visible) {
+    outline: none !important;
+  }
+
+  /* Expo Router owns compact tab buttons, so give their generated web links
+     the same strong keyboard-only treatment as app Pressables. */
+  [role="tab"]:focus-visible {
+    outline: 3px solid var(--streamer-focus) !important;
+    outline-offset: -3px;
+    border-radius: 8px;
+  }
+
+  a:focus-visible,
+  [role="link"]:focus-visible {
+    outline: 3px solid var(--streamer-focus) !important;
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+}
+
+/* Small fallback for older embedded webviews. The activation helper toggles
+   this modality class before focus moves, mirroring :focus-visible. */
+@supports not selector(:focus-visible) {
+  html:not(.streamer-keyboard-input) [tabindex]:focus,
+  html:not(.streamer-keyboard-input) a:focus,
+  html:not(.streamer-keyboard-input) [role="link"]:focus,
+  html:not(.streamer-keyboard-input) button:focus,
+  html:not(.streamer-keyboard-input) input:focus,
+  html:not(.streamer-keyboard-input) textarea:focus,
+  html:not(.streamer-keyboard-input) select:focus {
+    outline: none !important;
+  }
 }
 
 /* ─── Desktop card hover overlays ─── */

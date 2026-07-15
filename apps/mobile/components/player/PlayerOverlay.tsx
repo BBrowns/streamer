@@ -12,7 +12,6 @@ interface PlayerOverlayProps {
   engineType: string;
   stats: StreamStats;
   onClose: () => void;
-  onSettings: () => void;
   onWebCast?: () => void;
   onTogglePiP?: () => void;
   isPiPSupported?: boolean;
@@ -24,7 +23,6 @@ export function PlayerOverlay({
   engineType: _engineType,
   stats,
   onClose,
-  onSettings,
   onWebCast,
   onTogglePiP,
   isPiPSupported = false,
@@ -34,34 +32,30 @@ export function PlayerOverlay({
   const { t } = useTranslation();
 
   return (
-    <View style={styles.overlay}>
+    <View style={styles.overlay} pointerEvents="box-none">
       {/* Top Bar */}
       <View
+        pointerEvents="box-none"
         style={[
           styles.topBar,
           {
-            backgroundColor: colors.surfaceOverlay,
-            paddingTop: Platform.OS === "web" ? 20 : 60,
+            paddingTop: Platform.OS === "web" ? 16 : 56,
           },
         ]}
       >
         <Pressable
-          style={({ hovered, focused }: any) => [
+          testID="player-close-button"
+          style={({ pressed, hovered, focused }: any) => [
             styles.closeButton,
-            { backgroundColor: colors.surfaceElevated },
-            hovered && {
-              backgroundColor: colors.card,
-              transform: [{ scale: 1.05 }],
-            },
+            { opacity: pressed ? 0.76 : 1 },
+            hovered && styles.hoveredButton,
             Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel={t("player.controls.close")}
         >
-          <Text style={[styles.closeButtonText, { color: colors.text }]}>
-            ✕ {t("player.controls.close")}
-          </Text>
+          <Ionicons name="close" size={24} color="#F4F5F7" />
         </Pressable>
         <View style={styles.topControls}>
           {CastButton && Platform.OS !== "web" && (
@@ -76,31 +70,27 @@ export function PlayerOverlay({
           )}
           {Platform.OS === "web" && onWebCast && (
             <Pressable
-              style={({ hovered, focused }: any) => [
+              style={({ pressed, hovered, focused }: any) => [
                 styles.iconButton,
-                { backgroundColor: colors.surfaceElevated },
-                hovered && {
-                  backgroundColor: colors.card,
-                  transform: [{ scale: 1.1 }],
-                },
+                { opacity: pressed ? 0.76 : 1 },
+                hovered && styles.hoveredButton,
                 focused && getWebFocusStyle(colors.focus),
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
-              accessibilityLabel="Cast to Device"
+              accessibilityLabel={t("common.actions.castToDevice", {
+                defaultValue: "Cast to device",
+              })}
             >
-              <MaterialIcons name="cast" size={20} color={colors.text} />
+              <MaterialIcons name="cast" size={20} color="#F4F5F7" />
             </Pressable>
           )}
           {isPiPSupported && onTogglePiP && (
             <Pressable
-              style={({ hovered, focused }: any) => [
+              style={({ pressed, hovered, focused }: any) => [
                 styles.iconButton,
-                { backgroundColor: colors.surfaceElevated },
-                hovered && {
-                  backgroundColor: colors.card,
-                  transform: [{ scale: 1.1 }],
-                },
+                { opacity: pressed ? 0.76 : 1 },
+                hovered && styles.hoveredButton,
                 Platform.OS === "web" &&
                   focused &&
                   getWebFocusStyle(colors.focus),
@@ -112,28 +102,10 @@ export function PlayerOverlay({
               <MaterialIcons
                 name="picture-in-picture-alt"
                 size={20}
-                color={colors.text}
+                color="#F4F5F7"
               />
             </Pressable>
           )}
-          <Pressable
-            style={({ hovered, focused }: any) => [
-              styles.iconButton,
-              { backgroundColor: colors.surfaceElevated },
-              hovered && {
-                backgroundColor: colors.card,
-                transform: [{ scale: 1.1 }],
-              },
-              Platform.OS === "web" &&
-                focused &&
-                getWebFocusStyle(colors.focus),
-            ]}
-            onPress={onSettings}
-            accessibilityRole="button"
-            accessibilityLabel="Playback settings"
-          >
-            <Ionicons name="settings-sharp" size={20} color={colors.text} />
-          </Pressable>
         </View>
       </View>
 
@@ -180,34 +152,39 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 20,
     justifyContent: "flex-start",
-    pointerEvents: "none",
   },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingTop: 60,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    pointerEvents: "auto",
+    paddingHorizontal: 20,
+    paddingBottom: 4,
   },
   closeButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 44,
-    minHeight: 44,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(8,9,12,0.68)",
     justifyContent: "center",
     alignItems: "center",
   },
-  closeButtonText: { fontWeight: "600", fontSize: 14 },
-  topControls: { flexDirection: "row", alignItems: "center", gap: 12 },
+  topControls: { flexDirection: "row", alignItems: "center", gap: 8 },
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(8,9,12,0.68)",
     justifyContent: "center",
     alignItems: "center",
+  },
+  hoveredButton: {
+    backgroundColor: "rgba(24,27,33,0.92)",
+    transform: [{ scale: 1.04 }],
   },
   infoBar: {
     alignSelf: "center",

@@ -4,22 +4,18 @@ import {
   StyleSheet,
   Image,
   Pressable,
-  ActivityIndicator,
   Platform,
+  ScrollView,
 } from "react-native";
-import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { hapticImpactLight } from "../../lib/haptics";
 import type { DetailLayoutProps } from "./types";
-import { StreamItem } from "./StreamItem";
 import { EpisodeSelector } from "../catalog/EpisodeSelector";
-import { FlashList } from "@shopify/flash-list";
 import { useTheme } from "../../hooks/useTheme";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 import { DetailActionPanel } from "./DetailActionPanel";
-import { SourceInspectorPanel } from "./SourceInspectorPanel";
 import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
 import { useTranslation } from "react-i18next";
+import { MoreSourcesPanel } from "./MoreSourcesPanel";
 
 export function DesktopDetailLayout({
   id,
@@ -27,33 +23,24 @@ export function DesktopDetailLayout({
   meta,
   streams,
   streamsLoading,
-  groupedStreams,
-  availableResolutions,
-  selectedResolution,
   initiallyOpenSources,
-  setSelectedResolution,
   inLibrary,
   handleToggleLibrary,
   handlePlayStream,
+  handlePlayCandidate,
   handleDownloadStream,
   handleCastStream,
   planningAction,
   playbackNotice,
   onDismissPlaybackNotice,
-  onOpenSourcesDevices,
+  onPlaybackNoticeAction,
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-  const [sourcesOpen, setSourcesOpen] = useState(!!initiallyOpenSources);
-  const selectedStreams =
-    castType === "series" ? [] : groupedStreams[selectedResolution!] || [];
-  const streamsData =
-    castType === "series" || !sourcesOpen ? [] : selectedStreams;
   const hasMovieSources = castType !== "series" && (streams?.length ?? 0) > 0;
   const sourceCount =
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
-  const primaryTextColor = colors.onTint;
   const surfaceColor = colors.card;
   const softSurfaceColor = colors.surfaceElevated;
 
@@ -74,14 +61,6 @@ export function DesktopDetailLayout({
             )}
           </Text>
         </View>
-        <Text style={[styles.sourceCountText, { color: colors.textSecondary }]}>
-          {t(
-            castType === "series"
-              ? "detail.actionPanel.episodeCount"
-              : "detail.actionPanel.sourceCount",
-            { count: sourceCount },
-          )}
-        </Text>
       </View>
 
       <Text style={[styles.desktopTitle, { color: colors.text }]}>
@@ -176,14 +155,14 @@ export function DesktopDetailLayout({
         <PlaybackReadinessNotice
           notice={playbackNotice}
           onDismiss={onDismissPlaybackNotice}
-          onPrimaryAction={onOpenSourcesDevices}
+          onPrimaryAction={onPlaybackNoticeAction}
         />
       )}
 
       {!!meta.cast && meta.cast.length > 0 && (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Cast
+            {t("common.castAndCrew", { defaultValue: "Cast & crew" })}
           </Text>
           <Text
             style={[styles.sectionContent, { color: colors.textSecondary }]}
@@ -211,133 +190,19 @@ export function DesktopDetailLayout({
               seriesId={id}
               videos={meta.videos || []}
               onPlayStream={handlePlayStream}
+              onPlayCandidate={handlePlayCandidate}
               onDownloadStream={handleDownloadStream}
             />
           </>
         ) : (
-          <>
-            <Pressable
-              style={({ pressed, focused }: any) => [
-                styles.sourceDisclosureHeader,
-                pressed && {
-                  backgroundColor: softSurfaceColor,
-                  opacity: 0.82,
-                },
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-              onPress={() => {
-                hapticImpactLight();
-                setSourcesOpen((value) => !value);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                sourcesOpen
-                  ? t("detail.sources.hide")
-                  : t("detail.sources.show")
-              }
-              accessibilityState={{ expanded: sourcesOpen }}
-            >
-              <View style={styles.sectionTitleRowCompact}>
-                <Ionicons name="layers-outline" size={18} color={colors.tint} />
-                <View>
-                  <Text
-                    style={[
-                      styles.sectionTitle,
-                      styles.sectionTitleCompact,
-                      { color: colors.text },
-                    ]}
-                  >
-                    {t("detail.sources.more")}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.sourceDisclosureMeta,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {t("detail.sources.available", { count: sourceCount })}
-                  </Text>
-                </View>
-              </View>
-              <Ionicons
-                name={sourcesOpen ? "chevron-up" : "chevron-down"}
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-
-            {sourcesOpen && streamsLoading ? (
-              <ActivityIndicator color={colors.tint} />
-            ) : sourcesOpen && availableResolutions.length > 0 ? (
-              <>
-                <SourceInspectorPanel
-                  contentType={castType}
-                  contentId={id}
-                  title={meta.name}
-                />
-                <View style={styles.resContainer}>
-                  {availableResolutions.map((res) => (
-                    <Pressable
-                      key={res}
-                      style={({ pressed, focused }: any) => [
-                        styles.resBubble,
-                        {
-                          backgroundColor: softSurfaceColor,
-                          borderColor: colors.border,
-                        },
-                        selectedResolution === res && {
-                          backgroundColor: colors.tint,
-                          borderColor: colors.tint,
-                        },
-                        pressed && { opacity: 0.76 },
-                        Platform.OS === "web" &&
-                          focused &&
-                          getWebFocusStyle(colors.focus),
-                      ]}
-                      onPress={() => {
-                        hapticImpactLight();
-                        setSelectedResolution(res);
-                      }}
-                      accessibilityRole="radio"
-                      accessibilityLabel={t("detail.sources.filterByQuality", {
-                        quality: res === "2160p" ? "4K" : res,
-                      })}
-                      accessibilityState={{
-                        checked: selectedResolution === res,
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.resText,
-                          { color: colors.textSecondary },
-                          selectedResolution === res && {
-                            color: primaryTextColor,
-                          },
-                        ]}
-                      >
-                        {res === "2160p" ? "4K" : res.toUpperCase()}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : sourcesOpen ? (
-              <>
-                <SourceInspectorPanel
-                  contentType={castType}
-                  contentId={id}
-                  title={meta.name}
-                />
-                <Text
-                  style={[styles.emptyText, { color: colors.textSecondary }]}
-                >
-                  No streams available. Install more add-ons.
-                </Text>
-              </>
-            ) : null}
-          </>
+          <MoreSourcesPanel
+            contentId={id}
+            title={meta.name}
+            initiallyOpen={initiallyOpenSources}
+            onSelect={(plan, candidateId) =>
+              handlePlayCandidate(plan, candidateId)
+            }
+          />
         )}
       </View>
     </View>
@@ -416,23 +281,13 @@ export function DesktopDetailLayout({
       </View>
 
       <View style={styles.desktopInfoPanel}>
-        <FlashList
-          data={streamsData}
-          ListHeaderComponent={renderHeader}
-          renderItem={({ item: stream, index: i }) => (
-            <View style={styles.streamListWrapper}>
-              <StreamItem
-                stream={stream}
-                index={i}
-                onPress={() => handlePlayStream(stream)}
-                onDownload={() => handleDownloadStream(stream)}
-              />
-            </View>
-          )}
+        <ScrollView
           contentContainerStyle={styles.desktopScrollContent}
           showsVerticalScrollIndicator={false}
           bounces={false}
-        />
+        >
+          {renderHeader()}
+        </ScrollView>
       </View>
     </View>
   );

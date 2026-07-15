@@ -20,7 +20,11 @@ jest.mock("react-native-sse", () =>
 
 import EventSource from "react-native-sse";
 import { useAuthStore } from "../authStore";
-import { usePlayerStore } from "../playerStore";
+import {
+  migratePlayerPreferences,
+  normalizePreferredQualities,
+  usePlayerStore,
+} from "../playerStore";
 
 describe("playerStore", () => {
   beforeEach(() => {
@@ -35,6 +39,32 @@ describe("playerStore", () => {
 
   afterEach(() => {
     usePlayerStore.getState().clearPlayer();
+  });
+
+  it("migrates the legacy maximum-quality preference to an equivalent allowlist", () => {
+    expect(
+      migratePlayerPreferences({
+        playbackRate: 1,
+        preferredQuality: "720p",
+        autoPlayNext: true,
+      }),
+    ).toEqual({
+      playbackRate: 1,
+      preferredQualities: ["720p", "480p"],
+      autoPlayNext: true,
+    });
+  });
+
+  it("normalizes persisted quality values in display and planner order", () => {
+    expect(
+      normalizePreferredQualities(["480p", "invalid", "2160p", "480p"]),
+    ).toEqual(["2160p", "480p"]);
+    expect(normalizePreferredQualities([], "auto")).toEqual([
+      "2160p",
+      "1080p",
+      "720p",
+      "480p",
+    ]);
   });
 
   it("clears previous metrics subscriptions when a new stream starts", () => {
@@ -155,6 +185,106 @@ describe("playerStore", () => {
     expect(state.playbackCandidateId).toBe("candidate-1");
     expect(state.playbackAttemptId).toBe("attempt-1");
     expect(state.runtimeState).toBe("selecting_source");
+  });
+
+  it("keeps a resume launch intent runtime-only and consumes it once", () => {
+    usePlayerStore.getState().setSessionStream(
+      { url: "https://cdn.example.test/primary.mp4" } as Stream,
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+      },
+      "session-1",
+      "candidate-1",
+      null,
+      null,
+      { type: "resume", positionSeconds: 93 },
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+      type: "resume",
+      positionSeconds: 93,
+    });
+    expect(usePlayerStore.getState().consumePlaybackLaunchIntent()).toEqual({
+      type: "resume",
+      positionSeconds: 93,
+    });
+    expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
+  });
+
+  it("preserves a launch intent while the same session resolves or falls back", () => {
+    const mediaInfo = {
+      type: "movie" as const,
+      itemId: "tt-resume",
+      title: "Resume Movie",
+    };
+    const store = usePlayerStore.getState();
+
+    store.setSessionStream(
+      { url: "https://cdn.example.test/planned.mp4" } as Stream,
+      mediaInfo,
+      "session-resume",
+      "candidate-planned",
+      null,
+      null,
+      { type: "resume", positionSeconds: 125 },
+    );
+    store.setSessionStream(
+      { url: "https://cdn.example.test/resolved.mp4" } as Stream,
+      mediaInfo,
+      "session-resume",
+      "candidate-resolved",
+      "attempt-resolved",
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+      type: "resume",
+      positionSeconds: 125,
+    });
+
+    store.setSessionStream(
+      { url: "https://cdn.example.test/fallback.mp4" } as Stream,
+      mediaInfo,
+      "session-resume",
+      "candidate-fallback",
+      "attempt-fallback",
+      "Trying another source.",
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+      type: "resume",
+      positionSeconds: 125,
+    });
+  });
+
+  it("does not leak an old launch intent into a different session", () => {
+    const store = usePlayerStore.getState();
+    store.setSessionStream(
+      { url: "https://cdn.example.test/resume.mp4" } as Stream,
+      {
+        type: "movie",
+        itemId: "tt-resume",
+        title: "Resume Movie",
+      },
+      "session-resume",
+      "candidate-resume",
+      null,
+      null,
+      { type: "resume", positionSeconds: 125 },
+    );
+    store.setSessionStream(
+      { url: "https://cdn.example.test/new.mp4" } as Stream,
+      {
+        type: "movie",
+        itemId: "tt-new",
+        title: "New Movie",
+      },
+      "session-new",
+      "candidate-new",
+    );
+
+    expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
   });
 
   it("does not let legacy fallback bypass an active playback session", () => {

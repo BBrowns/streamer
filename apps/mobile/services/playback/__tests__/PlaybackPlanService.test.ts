@@ -53,15 +53,15 @@ describe("PlaybackPlanService", () => {
       url: "http://192.168.1.25:11470",
     });
     usePlayerStore.setState({
-      preferredQuality: "auto",
+      preferredQualities: ["2160p", "1080p", "720p", "480p"],
       preferredAudioLang: null,
       preferredSubtitleLang: null,
       autoPlayNext: true,
     });
   });
 
-  it("applies the local playback quality preference to planner device profiles", async () => {
-    usePlayerStore.setState({ preferredQuality: "720p" });
+  it("sends exact selected qualities and their upper bound to the planner", async () => {
+    usePlayerStore.setState({ preferredQualities: ["2160p", "1080p"] });
     (api.post as jest.Mock).mockResolvedValueOnce({
       data: makePlaybackPlan({
         state: "ready",
@@ -79,8 +79,35 @@ describe("PlaybackPlanService", () => {
       "/api/playback/plan",
       expect.objectContaining({
         deviceProfile: expect.objectContaining({
-          maxQuality: "720p",
+          maxQuality: "2160p",
         }),
+        preferences: {
+          allowedQualities: ["2160p", "1080p"],
+        },
+      }),
+    );
+  });
+
+  it("keeps all four selectable qualities as an exact allowlist", async () => {
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate(),
+          fallbackCandidates: [],
+        },
+      }),
+    });
+
+    await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
+
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/playback/plan",
+      expect.objectContaining({
+        preferences: {
+          allowedQualities: ["2160p", "1080p", "720p", "480p"],
+        },
       }),
     );
   });
@@ -139,15 +166,15 @@ describe("PlaybackPlanService", () => {
     expect(api.post).toHaveBeenCalledWith(
       "/api/playback/plan",
       expect.objectContaining({
-        preferences: {
+        preferences: expect.objectContaining({
           preferredAudioLanguage: "es",
           preferredSubtitleLanguage: "nl",
-        },
+        }),
       }),
     );
   });
 
-  it("omits empty planner preferences and invalid bridge URLs from requests", async () => {
+  it("keeps the quality allowlist while omitting empty language preferences and invalid bridge URLs", async () => {
     usePlayerStore.setState({
       preferredAudioLang: null,
       preferredSubtitleLang: null,
@@ -181,8 +208,10 @@ describe("PlaybackPlanService", () => {
 
     expect(api.post).toHaveBeenCalledWith(
       "/api/playback/plan",
-      expect.not.objectContaining({
-        preferences: expect.anything(),
+      expect.objectContaining({
+        preferences: {
+          allowedQualities: ["2160p", "1080p", "720p", "480p"],
+        },
       }),
     );
     expect(api.post).toHaveBeenCalledWith(

@@ -41,6 +41,10 @@ export function usePlayerController({
   const setRuntimeState = usePlayerStore((s) => s.setRuntimeState);
   const setRuntimeFailure = usePlayerStore((s) => s.setRuntimeFailure);
   const autoPlayNext = usePlayerStore((s) => s.autoPlayNext);
+  const playbackLaunchIntent = usePlayerStore((s) => s.playbackLaunchIntent);
+  const consumePlaybackLaunchIntent = usePlayerStore(
+    (s) => s.consumePlaybackLaunchIntent,
+  );
 
   const { updateStatus } = useRemoteControl();
   const { sendMessage } = useSync();
@@ -59,6 +63,7 @@ export function usePlayerController({
   const [stats, setStats] = useState<StreamStats>({ speed: 0, peers: 0 });
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [hasPromptedResume, setHasPromptedResume] = useState(false);
+  const [readyPlaybackUri, setReadyPlaybackUri] = useState<string | null>(null);
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
 
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -161,19 +166,86 @@ export function usePlayerController({
     }
   }, [currentStream?.infoHash, playbackUri, subscribeToStreamMetrics]);
 
-  // 3. Resume prompt logic
+  const mediaKey = mediaInfo
+    ? `${mediaInfo.type}:${mediaInfo.itemId}:${mediaInfo.season ?? 0}:${mediaInfo.episode ?? 0}`
+    : null;
+
+  useEffect(() => {
+    setHasPromptedResume(false);
+    setShowResumePrompt(false);
+  }, [mediaKey]);
+
+  // Expo creates the player before an asynchronously resolved session URI is
+  // available. Track readiness for the current URI so a Resume seek cannot be
+  // consumed against the player's temporary empty source.
+  useEffect(() => {
+    setReadyPlaybackUri(null);
+    if (!player || !playbackUri) return;
+
+    const markReady = (status = player.status) => {
+      if (status === "readyToPlay") {
+        setReadyPlaybackUri(playbackUri);
+      }
+    };
+    const statusSubscription = player.addListener?.(
+      "statusChange",
+      ({ status }: { status?: string }) => {
+        if (status === "readyToPlay") markReady(status);
+      },
+    );
+    const sourceSubscription = player.addListener?.("sourceLoad", () =>
+      markReady(),
+    );
+    markReady();
+
+    return () => {
+      statusSubscription?.remove?.();
+      sourceSubscription?.remove?.();
+    };
+  }, [playbackUri, player]);
+
+  // 3. Resume prompt logic. An explicit runtime launch intent wins over the
+  // generic prompt and is consumed after one use, so Resume from Home seeks
+  // directly while an explicit Play starts from the beginning.
   useEffect(() => {
     if (
-      player &&
-      previousProgress &&
-      previousProgress.currentTime > 15 &&
-      !hasPromptedResume
+      !player ||
+      !playbackUri ||
+      readyPlaybackUri !== playbackUri ||
+      hasPromptedResume
     ) {
+      return;
+    }
+
+    if (playbackLaunchIntent) {
+      setHasPromptedResume(true);
+      setShowResumePrompt(false);
+      if (
+        playbackLaunchIntent.type === "resume" &&
+        Number.isFinite(playbackLaunchIntent.positionSeconds) &&
+        playbackLaunchIntent.positionSeconds >= 15
+      ) {
+        player.currentTime = playbackLaunchIntent.positionSeconds;
+      }
+      consumePlaybackLaunchIntent();
+      player.play();
+      return;
+    }
+
+    if (previousProgress && previousProgress.currentTime > 15) {
       setHasPromptedResume(true);
       setShowResumePrompt(true);
       if (player.playing) player.pause();
     }
-  }, [player, previousProgress, hasPromptedResume]);
+  }, [
+    consumePlaybackLaunchIntent,
+    hasPromptedResume,
+    playbackLaunchIntent,
+    playbackUri,
+    player,
+    previousProgress,
+    readyPlaybackUri,
+  ]);
 
   const handleResumeResponse = useCallback(
     (resume: boolean) => {

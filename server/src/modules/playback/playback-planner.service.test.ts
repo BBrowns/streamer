@@ -140,6 +140,164 @@ describe("PlaybackPlannerService", () => {
     );
   });
 
+  it("excludes unselected qualities from both selection and fallbacks", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie.2160p.h264.aac.mp4",
+        title: "Movie.2026.2160p.H264.AAC.mp4",
+        resolution: "2160p",
+      },
+      {
+        url: "https://cdn.example.test/movie.1080p.h264.aac.mp4",
+        title: "Movie.2026.1080p.H264.AAC.mp4",
+        resolution: "1080p",
+      },
+      {
+        url: "https://cdn.example.test/movie.720p.h264.aac.mp4",
+        title: "Movie.2026.720p.H264.AAC.mp4",
+        resolution: "720p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: { ...webProfile, maxQuality: "2160p" },
+        preferences: { allowedQualities: ["2160p", "1080p"] },
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.quality).toBe("2160p");
+    expect(
+      plan.fallbackCandidates.map((candidate) => candidate.quality),
+    ).toEqual(["1080p"]);
+    expect(
+      plan.orderedCandidates.map((candidate) => candidate.quality),
+    ).toEqual(["2160p", "1080p"]);
+    expect(plan.rejectedCandidates).toEqual([
+      expect.objectContaining({ reasonCode: "quality_not_allowed" }),
+    ]);
+    expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
+  });
+
+  it("still excludes SD and unclassified sources when all selectable qualities are allowed", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie.480p.h264.aac.mp4",
+        title: "Movie.2026.480p.H264.AAC.mp4",
+        resolution: "480p",
+      },
+      {
+        url: "https://cdn.example.test/movie.h264.aac.mp4",
+        title: "Movie.2026.H264.AAC.mp4",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: { ...webProfile, maxQuality: "2160p" },
+        preferences: {
+          allowedQualities: ["2160p", "1080p", "720p", "480p"],
+        },
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.selectedCandidate?.quality).toBe("480p");
+    expect(plan.fallbackCandidates).toEqual([]);
+    expect(plan.rejectedCandidates).toEqual([
+      expect.objectContaining({
+        title: "Movie.2026.H264.AAC.mp4",
+        reasonCode: "quality_not_allowed",
+      }),
+    ]);
+    expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
+  });
+
+  it("returns an explained unsupported plan when every source quality is excluded", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie.720p.h264.aac.mp4",
+        title: "Movie.2026.720p.H264.AAC.mp4",
+        resolution: "720p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: { ...webProfile, maxQuality: "2160p" },
+        preferences: { allowedQualities: ["2160p", "1080p"] },
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("unsupported");
+    expect(plan.selectedCandidate).toBeUndefined();
+    expect(plan.fallbackCandidates).toEqual([]);
+    expect(plan.actionEligibility).toMatchObject({
+      eligible: false,
+      reason: "quality_not_allowed",
+    });
+    expect(plan.userMessage).toContain("playback qualities selected");
+    expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
+  });
+
+  it("does not blame quality when another allowed source is incompatible", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/movie.720p.h264.aac.mp4",
+        title: "Movie.2026.720p.H264.AAC.mp4",
+        resolution: "720p",
+      },
+      {
+        url: "https://cdn.example.test/movie.1080p.h264.aac.m3u8",
+        title: "Movie.2026.1080p.H264.AAC.HLS",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: { ...webProfile, maxQuality: "2160p" },
+        preferences: { allowedQualities: ["2160p", "1080p"] },
+        bridge: { status: "available" },
+      },
+      "req-1",
+    );
+
+    expect(plan.state).toBe("unsupported");
+    expect(
+      plan.rejectedCandidates.map((candidate) => candidate.reasonCode),
+    ).toEqual(
+      expect.arrayContaining(["quality_not_allowed", "unsupported_container"]),
+    );
+    expect(plan.userMessage).toBe(
+      "No source is compatible with this device yet.",
+    );
+    expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
+  });
+
   it("prefers a direct MP4 source for mobile play", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {

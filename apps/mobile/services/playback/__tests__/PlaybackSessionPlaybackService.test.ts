@@ -9,10 +9,11 @@ import {
   makePlannedMediaCandidate,
 } from "../../../test-utils/playbackPlan";
 import { usePlaybackSessionStore } from "../../../stores/playbackSessionStore";
-import type {
-  GatewayJobProgress,
-  IStreamEngine,
-  StreamEngineEventMap,
+import {
+  StreamEngineCancellationError,
+  type GatewayJobProgress,
+  type IStreamEngine,
+  type StreamEngineEventMap,
 } from "../../streamEngine/IStreamEngine";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
 import {
@@ -213,6 +214,39 @@ describe("PlaybackSessionPlaybackService", () => {
         "fallback_started",
         "attempt_ready",
       ]),
+    );
+  });
+
+  it("treats engine cancellation as cancellation without failure or fallback", async () => {
+    const primary = { infoHash: "abc123", title: "Torrent" } as Stream;
+    const fallback = {
+      url: "https://cdn.example.test/fallback.mp4",
+      title: "Direct fallback",
+    } as Stream;
+    const primaryEngine = makeEngine(async () => {
+      throw new StreamEngineCancellationError();
+    });
+    const fallbackEngine = makeEngine(async () => fallback.url!);
+    resolveEngine.mockImplementation((stream) =>
+      stream.infoHash ? primaryEngine : fallbackEngine,
+    );
+    const session = createSession(primary, fallback);
+
+    const result = await resolvePlaybackSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { shouldFallback: false },
+    });
+    expect(fallbackEngine.getPlaybackUri).not.toHaveBeenCalled();
+    const updated = usePlaybackSessionStore.getState().sessions[session.id];
+    expect(updated.status).toBe("cancelled");
+    expect(updated.terminalError).toBeUndefined();
+    expect(updated.attempts).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ status: "failed" })]),
+    );
+    expect(updated.eventLog.map((event) => event.type)).not.toEqual(
+      expect.arrayContaining(["attempt_failed", "fallback_started"]),
     );
   });
 

@@ -45,6 +45,14 @@ export function getDownloadPrimaryAction(
 
 export function getDownloadStatusKey(task: DownloadTask) {
   if (isTaskOfflinePlayable(task)) return "readyOffline";
+  if (task.verificationState === "incomplete") return "incomplete";
+  if (
+    task.playableState === "unplayable" &&
+    (task.failureReason === "invalid_media" ||
+      task.failureReason === "missing_file")
+  ) {
+    return "failed";
+  }
 
   switch (task.status) {
     case "Pending":
@@ -79,8 +87,11 @@ export function formatBytes(bytes: number) {
 }
 
 export function getDownloadSizeLabel(task: DownloadTask) {
-  const written = formatBytes(task.totalBytesWritten);
-  const expected = formatBytes(task.totalBytesExpectedToWrite);
+  const written = formatBytes(task.downloadedBytes);
+  const expected = formatBytes(task.expectedMediaBytes);
+  const verified = formatBytes(task.verifiedFileSizeBytes || 0);
+
+  if (isTaskOfflinePlayable(task)) return verified;
 
   if (written && expected && task.status !== "Completed") {
     return `${written} of ${expected}`;
@@ -109,8 +120,7 @@ export function getDownloadQueueSummary(tasks: DownloadTask[]) {
       const group = getDownloadQueueGroup(task);
       summary[group] += 1;
       if (group === "ready") {
-        summary.readyBytes +=
-          task.totalBytesExpectedToWrite || task.totalBytesWritten || 0;
+        summary.readyBytes += task.verifiedFileSizeBytes || 0;
       }
       if (task.status === "Completed" && !isTaskOfflinePlayable(task)) {
         summary.needsVerification += 1;

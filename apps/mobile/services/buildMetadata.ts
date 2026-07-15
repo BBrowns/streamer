@@ -42,10 +42,17 @@ export const clientBuildMetadata = getClientBuildMetadata();
 export const clientBuildSentryTags =
   buildMetadataToSentryTags(clientBuildMetadata);
 
+export function formatBuildStamp(metadata: BuildMetadata) {
+  if (metadata.gitShaShort && metadata.gitShaShort !== "unknown") {
+    return metadata.gitShaShort;
+  }
+
+  return metadata.environment === "development"
+    ? "Not stamped (development)"
+    : "Not stamped";
+}
+
 export function formatBuildLabel(metadata: BuildMetadata) {
-  const sha =
-    metadata.gitShaShort && metadata.gitShaShort !== "unknown"
-      ? metadata.gitShaShort
-      : "unknown sha";
+  const sha = formatBuildStamp(metadata);
   return `${metadata.runtimeType} v${metadata.appVersion} · ${metadata.buildChannel} · ${sha}`;
 }

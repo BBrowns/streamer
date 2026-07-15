@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import type { VideoPlayer } from "expo-video";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import {
   getWebFocusStyle,
@@ -69,6 +70,51 @@ function formatTime(seconds: number) {
 }
 
 const SEEK_STEP_SECONDS = 10;
+const PLAYER_TEXT = "#F4F5F7";
+const PLAYER_MUTED_TEXT = "#B7BDC8";
+const PLAYER_CONTROL_BACKGROUND = "rgba(8, 9, 12, 0.62)";
+const PLAYER_CONTROL_HOVER = "rgba(24, 27, 33, 0.92)";
+const PLAYER_CONTROL_BORDER = "rgba(255, 255, 255, 0.15)";
+
+type SliderKeyboardAction = "decrement" | "increment" | "minimum" | "maximum";
+
+interface WebControlKeyboardEvent {
+  key: string;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}
+
+function getSliderKeyboardAction(key: string): SliderKeyboardAction | null {
+  switch (key.toLowerCase()) {
+    case "arrowleft":
+    case "arrowdown":
+      return "decrement";
+    case "arrowright":
+    case "arrowup":
+      return "increment";
+    case "home":
+      return "minimum";
+    case "end":
+      return "maximum";
+    default:
+      return null;
+  }
+}
+
+export function getVolumeFromKeyboard(
+  currentVolume: number,
+  key: string,
+): number | null {
+  const action = getSliderKeyboardAction(key);
+  if (!action) return null;
+
+  const normalized = Math.min(1, Math.max(0, currentVolume));
+  if (action === "minimum") return 0;
+  if (action === "maximum") return 1;
+
+  const delta = action === "increment" ? 0.1 : -0.1;
+  return Math.min(1, Math.max(0, Math.round((normalized + delta) * 100) / 100));
+}
 
 export function PlayerControls({
   player,
@@ -82,8 +128,6 @@ export function PlayerControls({
   castStatus,
   downloadStatus,
   fallbackReason,
-  audioStatus,
-  subtitleStatus,
   muted = false,
   volume = 1,
   onSeekBy,
@@ -102,6 +146,7 @@ export function PlayerControls({
   const insets = useSafeAreaInsets();
   const compactLayout = isCompact;
   const [scrubberWidth, setScrubberWidth] = useState(0);
+  const [volumeTrackWidth, setVolumeTrackWidth] = useState(0);
 
   if (!isVisible) return null;
 
@@ -198,12 +243,52 @@ export function PlayerControls({
     seekTo((locationX / scrubberWidth) * safeDuration);
   };
 
+  const handleScrubberKeyDown = (event: WebControlKeyboardEvent) => {
+    if (!hasTimeline) return;
+    const action = getSliderKeyboardAction(event.key);
+    if (!action) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (action === "minimum") seekTo(0);
+    else if (action === "maximum") seekTo(safeDuration);
+    else
+      seekBy(action === "increment" ? SEEK_STEP_SECONDS : -SEEK_STEP_SECONDS);
+  };
+
   const volumeLabel = muted
     ? t("player.controls.unmute", { defaultValue: "Unmute" })
     : t("player.controls.mute", { defaultValue: "Mute" });
+  const volumeDownLabel = t("player.controls.volumeDown", {
+    defaultValue: "Volume down",
+  });
+  const volumeUpLabel = t("player.controls.volumeUp", {
+    defaultValue: "Volume up",
+  });
   const normalizedVolume = Math.min(1, Math.max(0, volume));
   const setVolume = (nextVolume: number) => {
     onVolumeChange?.(Math.min(1, Math.max(0, nextVolume)));
+  };
+  const handleVolumePress = (event: GestureResponderEvent) => {
+    if (volumeTrackWidth <= 0) return;
+    const nativeEvent =
+      event.nativeEvent as GestureResponderEvent["nativeEvent"] & {
+        offsetX?: number;
+      };
+    const locationX =
+      typeof nativeEvent.locationX === "number"
+        ? nativeEvent.locationX
+        : nativeEvent.offsetX;
+    if (typeof locationX !== "number") return;
+    setVolume(locationX / volumeTrackWidth);
+  };
+  const handleVolumeKeyDown = (event: WebControlKeyboardEvent) => {
+    const nextVolume = getVolumeFromKeyboard(normalizedVolume, event.key);
+    if (nextVolume === null) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    setVolume(nextVolume);
   };
 
   return (
@@ -234,11 +319,11 @@ export function PlayerControls({
             styles.playPauseBtn,
             Platform.OS === "web" && styles.webInteractive,
             {
-              backgroundColor: colors.primary,
-              borderColor: "transparent",
+              backgroundColor: PLAYER_TEXT,
+              borderColor: "rgba(255,255,255,0.26)",
               opacity: pressed ? 0.82 : 1,
             },
-            hovered && styles.hoveredButton,
+            hovered && styles.playHoveredButton,
             Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={onPlayPause}
@@ -247,8 +332,8 @@ export function PlayerControls({
         >
           <Ionicons
             name={isPlaying ? "pause" : "play"}
-            size={46}
-            color={colors.onPrimary}
+            size={34}
+            color="#08090C"
             style={{ marginLeft: isPlaying ? 0 : 4 }}
           />
         </Pressable>
@@ -261,7 +346,9 @@ export function PlayerControls({
         />
       </View>
 
-      <View
+      <LinearGradient
+        colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.86)"]}
+        locations={[0, 0.42]}
         style={[
           styles.bottomControls,
           compactLayout && styles.bottomControlsCompact,
@@ -269,71 +356,23 @@ export function PlayerControls({
             paddingBottom:
               Platform.OS === "web"
                 ? compactLayout
-                  ? 74
-                  : 112
-                : Math.max(insets.bottom + (compactLayout ? 12 : 24), 24),
+                  ? 12
+                  : 20
+                : Math.max(insets.bottom + 12, 16),
           },
           Platform.OS === "web" && styles.webInteractive,
         ]}
       >
         <View
-          style={[
-            styles.bottomTray,
-            compactLayout && styles.bottomTrayCompact,
-            {
-              backgroundColor: colors.surfaceOverlay,
-              borderColor: colors.border,
-            },
-          ]}
+          style={[styles.bottomTray, compactLayout && styles.bottomTrayCompact]}
         >
-          <View style={styles.statusRow} accessibilityLiveRegion="polite">
-            {sourceLabel ? (
-              <StatusPill icon="sparkles" label={sourceLabel} colors={colors} />
-            ) : null}
-            {downloadStatus ? (
-              <StatusPill
-                icon="cloud-done"
-                label={downloadStatus}
-                colors={colors}
-              />
-            ) : null}
-            {castStatus ? (
-              <StatusPill icon="tv" label={castStatus} colors={colors} />
-            ) : null}
-            {fallbackReason ? (
-              <StatusPill
-                icon="git-compare"
-                label={t("player.controls.fallbackActive", {
-                  defaultValue: "Trying fallback",
-                })}
-                colors={colors}
-              />
-            ) : null}
-            {capabilityMessage ? (
-              <StatusPill
-                icon={capabilities?.isRemux ? "construct" : "radio"}
-                label={capabilityMessage}
-                colors={colors}
-              />
-            ) : null}
-            {audioStatus ? (
-              <StatusPill
-                icon="volume-high"
-                label={audioStatus}
-                colors={colors}
-              />
-            ) : null}
-            {subtitleStatus ? (
-              <StatusPill icon="text" label={subtitleStatus} colors={colors} />
-            ) : null}
-          </View>
-
           <View style={styles.timelineRow}>
-            <Text style={[styles.timeText, { color: colors.text }]}>
+            <Text style={[styles.timeText, { color: PLAYER_TEXT }]}>
               {currentTimeLabel}
             </Text>
 
             <Pressable
+              testID="player-progress-slider"
               style={({ focused }: any) => [
                 styles.scrubberContainer,
                 Platform.OS === "web" &&
@@ -362,6 +401,17 @@ export function PlayerControls({
               disabled={!hasTimeline}
               onPress={handleScrubberPress}
               onLayout={handleScrubberLayout}
+              {...((Platform.OS === "web"
+                ? {
+                    onKeyDown: handleScrubberKeyDown,
+                    "aria-valuemin": 0,
+                    "aria-valuemax": 100,
+                    "aria-valuenow": Math.round(progressPercent),
+                    "aria-valuetext": hasTimeline
+                      ? `${currentTimeLabel} of ${durationLabel}`
+                      : seekUnavailableDetail,
+                  }
+                : {}) as any)}
               onAccessibilityAction={(event) => {
                 if (!hasTimeline) return;
                 switch (event.nativeEvent.actionName) {
@@ -378,7 +428,7 @@ export function PlayerControls({
                 style={[
                   styles.scrubberTrack,
                   {
-                    backgroundColor: colors.disabled,
+                    backgroundColor: "rgba(255,255,255,0.28)",
                     opacity: hasTimeline ? 1 : 0.58,
                   },
                 ]}
@@ -398,8 +448,8 @@ export function PlayerControls({
                       styles.scrubberThumb,
                       {
                         left: `${progressPercent}%`,
-                        backgroundColor: colors.text,
-                        borderColor: colors.border,
+                        backgroundColor: PLAYER_TEXT,
+                        borderColor: "rgba(8,9,12,0.48)",
                       },
                     ]}
                   />
@@ -407,105 +457,183 @@ export function PlayerControls({
               </View>
             </Pressable>
 
-            <Text style={[styles.timeText, { color: colors.text }]}>
+            <Text style={[styles.timeText, { color: PLAYER_TEXT }]}>
               {durationLabel}
             </Text>
           </View>
           {!hasTimeline ? (
-            <Text
-              style={[styles.timelineHint, { color: colors.textSecondary }]}
-            >
+            <Text style={[styles.timelineHint, { color: PLAYER_MUTED_TEXT }]}>
               {seekUnavailableDetail}
             </Text>
           ) : null}
 
-          <View style={styles.actionRow}>
-            {capabilities?.canUseVolume && onToggleMute ? (
-              <ActionButton
-                icon={
-                  muted || normalizedVolume === 0
-                    ? "volume-mute"
-                    : "volume-high"
-                }
-                label={volumeLabel}
-                onPress={onToggleMute}
-                colors={colors}
-              />
-            ) : null}
-            {capabilities?.canUseVolume && onVolumeChange ? (
-              <View
-                style={[
-                  styles.volumeCluster,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.card,
-                  },
-                ]}
-              >
-                <ActionButton
-                  icon="remove"
-                  label={t("player.controls.volumeDown", {
-                    defaultValue: "Volume down",
-                  })}
-                  onPress={() => setVolume(normalizedVolume - 0.1)}
+          <View
+            testID="player-controls-toolbar"
+            style={[
+              styles.toolbarRow,
+              compactLayout && styles.toolbarRowCompact,
+            ]}
+          >
+            <View
+              testID="player-controls-status-row"
+              style={[
+                styles.statusRow,
+                compactLayout && styles.statusRowCompact,
+              ]}
+              accessibilityLiveRegion="polite"
+            >
+              {sourceLabel ? (
+                <StatusPill
+                  icon="information-circle-outline"
+                  label={sourceLabel}
                   colors={colors}
-                  compact
                 />
-                <Text style={[styles.volumeText, { color: colors.text }]}>
-                  {Math.round(normalizedVolume * 100)}
-                </Text>
-                <ActionButton
-                  icon="add"
-                  label={t("player.controls.volumeUp", {
-                    defaultValue: "Volume up",
-                  })}
-                  onPress={() => setVolume(normalizedVolume + 0.1)}
+              ) : null}
+              {downloadStatus ? (
+                <StatusPill
+                  icon="cloud-done"
+                  label={downloadStatus}
                   colors={colors}
-                  compact
                 />
-              </View>
-            ) : null}
-            {onOpenSettings ? (
-              <ActionButton
-                icon={capabilities?.hasCaptions ? "text" : "options"}
-                label={t("player.controls.settings", {
-                  defaultValue: "Audio, subtitles, and source",
-                })}
-                onPress={onOpenSettings}
-                colors={colors}
-              />
-            ) : null}
-            {capabilities?.canCast && onOpenCast ? (
-              <ActionButton
-                icon="tv"
-                label={t("player.controls.cast", { defaultValue: "Cast" })}
-                onPress={onOpenCast}
-                colors={colors}
-              />
-            ) : null}
-            {capabilities?.canRetry && onRetry ? (
-              <ActionButton
-                icon="refresh"
-                label={t("player.controls.retrySource", {
-                  defaultValue: "Retry source",
-                })}
-                onPress={onRetry}
-                colors={colors}
-              />
-            ) : null}
-            {capabilities?.canUseFullscreen && onToggleFullscreen ? (
-              <ActionButton
-                icon="expand"
-                label={t("player.controls.fullscreen", {
-                  defaultValue: "Fullscreen",
-                })}
-                onPress={onToggleFullscreen}
-                colors={colors}
-              />
-            ) : null}
+              ) : null}
+              {castStatus ? (
+                <StatusPill icon="tv" label={castStatus} colors={colors} />
+              ) : null}
+              {fallbackReason ? (
+                <StatusPill
+                  icon="git-compare"
+                  label={t("player.controls.fallbackActive", {
+                    defaultValue: "Trying fallback",
+                  })}
+                  colors={colors}
+                />
+              ) : null}
+              {capabilityMessage && !compactLayout ? (
+                <StatusPill
+                  icon={capabilities?.isRemux ? "construct" : "radio"}
+                  label={capabilityMessage}
+                  colors={colors}
+                />
+              ) : null}
+            </View>
+
+            <View
+              testID="player-controls-action-row"
+              style={[
+                styles.actionRow,
+                compactLayout && styles.actionRowCompact,
+              ]}
+            >
+              {capabilities?.canUseVolume && onToggleMute ? (
+                <ActionButton
+                  icon={
+                    muted || normalizedVolume === 0
+                      ? "volume-mute"
+                      : "volume-high"
+                  }
+                  label={volumeLabel}
+                  onPress={onToggleMute}
+                  colors={colors}
+                />
+              ) : null}
+              {capabilities?.canUseVolume && onVolumeChange ? (
+                <Pressable
+                  testID="player-volume-slider"
+                  style={({ focused }: any) => [
+                    styles.volumeSlider,
+                    Platform.OS === "web" &&
+                      focused &&
+                      getWebFocusStyle(colors.focus),
+                  ]}
+                  onLayout={(event) =>
+                    setVolumeTrackWidth(event.nativeEvent.layout.width)
+                  }
+                  onPress={handleVolumePress}
+                  {...((Platform.OS === "web"
+                    ? {
+                        onKeyDown: handleVolumeKeyDown,
+                        "aria-valuemin": 0,
+                        "aria-valuemax": 100,
+                        "aria-valuenow": Math.round(normalizedVolume * 100),
+                      }
+                    : {}) as any)}
+                  accessibilityRole="adjustable"
+                  accessibilityLabel={t("player.controls.volume", {
+                    defaultValue: "Volume",
+                  })}
+                  accessibilityValue={{
+                    min: 0,
+                    max: 100,
+                    now: Math.round(normalizedVolume * 100),
+                  }}
+                  accessibilityActions={[
+                    { name: "decrement", label: volumeDownLabel },
+                    { name: "increment", label: volumeUpLabel },
+                  ]}
+                  onAccessibilityAction={(event) => {
+                    setVolume(
+                      normalizedVolume +
+                        (event.nativeEvent.actionName === "increment"
+                          ? 0.1
+                          : -0.1),
+                    );
+                  }}
+                >
+                  <View style={styles.volumeTrack}>
+                    <View
+                      style={[
+                        styles.volumeFill,
+                        {
+                          width: `${normalizedVolume * 100}%`,
+                          backgroundColor: PLAYER_TEXT,
+                        },
+                      ]}
+                    />
+                  </View>
+                </Pressable>
+              ) : null}
+              {onOpenSettings ? (
+                <ActionButton
+                  icon={capabilities?.hasCaptions ? "text" : "options"}
+                  label={t("player.controls.settings", {
+                    defaultValue: "Audio, subtitles, and source",
+                  })}
+                  onPress={onOpenSettings}
+                  colors={colors}
+                />
+              ) : null}
+              {capabilities?.canCast && onOpenCast ? (
+                <ActionButton
+                  icon="tv"
+                  label={t("player.controls.cast", { defaultValue: "Cast" })}
+                  onPress={onOpenCast}
+                  colors={colors}
+                />
+              ) : null}
+              {capabilities?.canRetry && onRetry ? (
+                <ActionButton
+                  icon="refresh"
+                  label={t("player.controls.retrySource", {
+                    defaultValue: "Retry source",
+                  })}
+                  onPress={onRetry}
+                  colors={colors}
+                />
+              ) : null}
+              {capabilities?.canUseFullscreen && onToggleFullscreen ? (
+                <ActionButton
+                  icon="expand"
+                  label={t("player.controls.fullscreen", {
+                    defaultValue: "Fullscreen",
+                  })}
+                  onPress={onToggleFullscreen}
+                  colors={colors}
+                />
+              ) : null}
+            </View>
           </View>
         </View>
-      </View>
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -529,8 +657,8 @@ function ControlButton({
         styles.skipButton,
         Platform.OS === "web" && styles.webInteractive,
         {
-          backgroundColor: colors.surfaceOverlay,
-          borderColor: colors.border,
+          backgroundColor: PLAYER_CONTROL_BACKGROUND,
+          borderColor: PLAYER_CONTROL_BORDER,
           opacity: disabled ? 0.38 : pressed ? 0.78 : 1,
         },
         hovered && !disabled && styles.hoveredButton,
@@ -542,8 +670,8 @@ function ControlButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
     >
-      <Ionicons name={icon} size={22} color={colors.text} />
-      <Text style={[styles.skipText, { color: colors.textSecondary }]}>
+      <Ionicons name={icon} size={19} color={PLAYER_TEXT} />
+      <Text style={[styles.skipText, { color: PLAYER_MUTED_TEXT }]}>
         {SEEK_STEP_SECONDS}s
       </Text>
     </Pressable>
@@ -568,8 +696,8 @@ function ActionButton({
       style={({ pressed, hovered, focused }: any) => [
         compact ? styles.compactActionButton : styles.actionButton,
         {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
+          backgroundColor: PLAYER_CONTROL_BACKGROUND,
+          borderColor: PLAYER_CONTROL_BORDER,
           opacity: pressed ? 0.76 : 1,
         },
         hovered && styles.hoveredButton,
@@ -580,7 +708,7 @@ function ActionButton({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={compact ? 16 : 18} color={colors.text} />
+      <Ionicons name={icon} size={compact ? 16 : 18} color={PLAYER_TEXT} />
     </Pressable>
   );
 }
@@ -599,15 +727,15 @@ function StatusPill({
       style={[
         styles.statusPill,
         {
-          borderColor: colors.border,
-          backgroundColor: colors.card,
+          borderColor: PLAYER_CONTROL_BORDER,
+          backgroundColor: PLAYER_CONTROL_BACKGROUND,
         },
       ]}
     >
       <Ionicons name={icon} size={14} color={colors.tint} />
       <Text
         numberOfLines={1}
-        style={[styles.statusPillText, { color: colors.textSecondary }]}
+        style={[styles.statusPillText, { color: PLAYER_MUTED_TEXT }]}
       >
         {label}
       </Text>
@@ -641,16 +769,16 @@ const styles = StyleSheet.create({
     gap: uiSpacing.md,
   },
   playPauseBtn: {
-    width: 82,
-    height: 82,
+    width: 64,
+    height: 64,
     borderRadius: uiRadii.pill,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   skipButton: {
-    width: 58,
-    height: 58,
+    width: 48,
+    height: 48,
     borderRadius: uiRadii.pill,
     borderWidth: 1,
     justifyContent: "center",
@@ -664,11 +792,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   hoveredButton: {
-    transform: [{ scale: 1.04 }],
+    backgroundColor: PLAYER_CONTROL_HOVER,
+    transform: [{ scale: 1.035 }],
+  },
+  playHoveredButton: {
+    backgroundColor: "#FFFFFF",
+    transform: [{ scale: 1.035 }],
   },
   bottomControls: {
-    paddingHorizontal: uiSpacing.xl,
-    paddingTop: uiSpacing.xl,
+    paddingHorizontal: uiSpacing.xxl,
+    paddingTop: 56,
   },
   bottomControlsCompact: {
     paddingHorizontal: uiSpacing.sm,
@@ -676,25 +809,41 @@ const styles = StyleSheet.create({
   },
   bottomTray: {
     width: "100%",
-    maxWidth: 1180,
+    maxWidth: 1440,
     alignSelf: "center",
-    borderRadius: uiRadii.sheet,
-    borderWidth: 0,
-    paddingHorizontal: uiSpacing.lg - 2,
-    paddingVertical: uiSpacing.md,
-    gap: uiSpacing.sm + 2,
+    paddingHorizontal: uiSpacing.sm,
+    paddingVertical: uiSpacing.xs,
+    gap: uiSpacing.xs,
   },
   bottomTrayCompact: {
-    borderRadius: uiRadii.md,
-    paddingHorizontal: uiSpacing.sm,
-    paddingVertical: uiSpacing.sm,
+    paddingHorizontal: uiSpacing.xs,
+    paddingVertical: uiSpacing.xs,
+    gap: uiSpacing.xs,
+  },
+  toolbarRow: {
+    minHeight: uiTouchTarget,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: uiSpacing.sm,
+  },
+  toolbarRowCompact: {
+    flexDirection: "column",
+    flexWrap: "nowrap",
+    alignItems: "stretch",
     gap: uiSpacing.xs,
   },
   statusRow: {
+    flex: 1,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: uiSpacing.sm,
+  },
+  statusRowCompact: {
+    flex: 0,
+    width: "100%",
   },
   statusPill: {
     minHeight: 28,
@@ -713,25 +862,25 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   timelineRow: {
-    minHeight: 40,
+    minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
   },
   timeText: {
-    width: 54,
-    fontSize: 13,
+    width: 52,
+    fontSize: 12,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
     textAlign: "center",
   },
   scrubberContainer: {
     flex: 1,
-    height: 40,
+    height: 36,
     justifyContent: "center",
     marginHorizontal: uiSpacing.sm + 2,
   },
   scrubberTrack: {
-    height: 7,
+    height: 4,
     borderRadius: 4,
     position: "relative",
   },
@@ -744,12 +893,12 @@ const styles = StyleSheet.create({
   },
   scrubberThumb: {
     position: "absolute",
-    top: -5.5,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 1,
-    transform: [{ translateX: -9 }],
+    transform: [{ translateX: -7 }],
   },
   actionRow: {
     flexDirection: "row",
@@ -758,10 +907,13 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     gap: uiSpacing.sm,
   },
+  actionRowCompact: {
+    width: "100%",
+  },
   actionButton: {
     width: uiTouchTarget,
     height: uiTouchTarget,
-    borderRadius: uiRadii.pill,
+    borderRadius: uiRadii.md,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -773,21 +925,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  volumeCluster: {
+  volumeSlider: {
+    width: 76,
     minHeight: uiTouchTarget,
-    borderRadius: uiRadii.pill,
-    borderWidth: 1,
-    paddingHorizontal: 5,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.xs,
+    justifyContent: "center",
+    paddingHorizontal: uiSpacing.xs,
   },
-  volumeText: {
-    minWidth: 28,
-    textAlign: "center",
-    ...uiTypography.caption,
-    fontWeight: "800",
-    fontVariant: ["tabular-nums"],
+  volumeTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.28)",
+  },
+  volumeFill: {
+    height: "100%",
+    borderRadius: 2,
   },
   timelineHint: {
     ...uiTypography.caption,

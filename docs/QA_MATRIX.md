@@ -1,6 +1,6 @@
 # Playback QA Matrix
 
-Last updated: 2026-07-13.
+Last updated: 2026-07-15.
 
 This matrix tracks real target validation for Streamer playback, downloads,
 casting, bridge health, and remux behavior. A target is not considered supported
@@ -20,23 +20,25 @@ tests alone.
 
 ## Status Legend
 
-| Status  | Meaning                                             |
-| ------- | --------------------------------------------------- |
-| Pass    | Validated on the named target and build.            |
-| Partial | Works with documented limitations.                  |
-| Fail    | Reproduced failure. Must link logs or notes.        |
-| Blocked | Could not run because setup/runtime is unavailable. |
-| Unknown | Not run yet. No support claim should be made.       |
+| Status  | Meaning                                                         |
+| ------- | --------------------------------------------------------------- |
+| Pass    | Validated on the named target and build.                        |
+| Partial | A bounded subset passed; documented limitations remain.         |
+| Fail    | Reproduced failure. Must link logs or notes.                    |
+| Blocked | Attempted, but required setup/runtime was unavailable.          |
+| Not run | Explicitly omitted from this run; no target claim is permitted. |
+| Unknown | No target-specific run has been recorded yet.                   |
 
 ## Current Target Status
 
-| Runtime                    | Current status | Evidence                                                                        |
-| -------------------------- | -------------- | ------------------------------------------------------------------------------- |
-| macOS desktop packaged app | Unknown        | No packaged-app run recorded yet.                                               |
-| Electron/web dev runtime   | Partial        | Local regression tests only; see `docs/qa-runs/2026-06-11-local-regression.md`. |
-| iPhone physical device     | Unknown        | No run recorded yet.                                                            |
-| Android physical device    | Unknown        | No run recorded yet.                                                            |
-| Browser web                | Unknown        | No browser playback run recorded yet.                                           |
+| Runtime                    | Current status | Evidence                                                                                                                                                                             |
+| -------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS desktop packaged app | Unknown        | No packaged-app run recorded yet.                                                                                                                                                    |
+| Electron/web dev runtime   | Partial        | Real main/preload smoke passed for build labels, `inspectFile`, and 125%/150% zoom; no packaged playback claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md). |
+| iOS Simulator              | Blocked        | Disposable prebuild and Pods passed; Xcode could not build because the required iOS 26.5 platform/runtime is not installed.                                                          |
+| iPhone physical device     | Unknown        | No run recorded yet.                                                                                                                                                                 |
+| Android physical/emulator  | Not run        | Android SDK/AVD and `adb` were unavailable; browser emulation is not counted as native evidence.                                                                                     |
+| Browser web                | Partial        | Deterministic responsive renderer and recovery flows passed; no real-source first-frame claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md).                  |
 
 ## Reference Fixtures
 
@@ -53,21 +55,21 @@ tests alone.
 
 ## Golden Path Matrix
 
-| Flow                                               | Desktop packaged | Electron/web dev               | iPhone  | Android | Browser web |
-| -------------------------------------------------- | ---------------- | ------------------------------ | ------- | ------- | ----------- |
-| Browse -> detail -> Play Best direct source        | Unknown          | Unknown                        | Unknown | Unknown | Unknown     |
-| Play Best fallback source                          | Unknown          | Unknown                        | Unknown | Unknown | Unknown     |
-| Torrent with peers -> gateway ready -> first frame | Unknown          | Unknown                        | Unknown | Unknown | Unknown     |
-| Torrent no peers -> terminal no-peers/error        | Unknown          | Unknown                        | Unknown | Unknown | Unknown     |
-| Remux source -> remuxing -> first frame            | Unknown          | Partial: unit/integration only | Unknown | Unknown | Unknown     |
-| Direct stream seek forward/back                    | Unknown          | Partial: unit/integration only | Unknown | Unknown | Unknown     |
-| Remuxed stream seek after materialization          | Unknown          | Partial: unit/integration only | Unknown | Unknown | Unknown     |
-| Download direct source                             | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
-| Download torrent source                            | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
-| Cast HLS/MP4 source                                | Unknown          | Unknown                        | Unknown | Unknown | Unknown     |
-| Bridge unavailable/unsupported                     | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
-| Desktop bridge diagnostics/repair                  | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
-| Torrent cache bounded storage/cleanup              | Unknown          | Partial: unit tests only       | Unknown | Unknown | Unknown     |
+| Flow                                               | Desktop packaged | Electron/web dev               | iPhone  | Android | Browser web                    |
+| -------------------------------------------------- | ---------------- | ------------------------------ | ------- | ------- | ------------------------------ |
+| Browse -> detail -> Play direct source             | Unknown          | Partial: deterministic UI only | Unknown | Not run | Partial: deterministic UI only |
+| Play fallback source                               | Unknown          | Partial: deterministic UI only | Unknown | Not run | Partial: deterministic UI only |
+| Torrent with peers -> gateway ready -> first frame | Unknown          | Unknown                        | Unknown | Not run | Unknown                        |
+| Torrent no peers -> terminal no-peers/error        | Unknown          | Partial: deterministic UI only | Unknown | Not run | Partial: deterministic UI only |
+| Remux source -> remuxing -> first frame            | Unknown          | Partial: unit/integration only | Unknown | Not run | Unknown                        |
+| Direct stream seek forward/back                    | Unknown          | Partial: unit/integration only | Unknown | Not run | Unknown                        |
+| Remuxed stream seek after materialization          | Unknown          | Partial: unit/integration only | Unknown | Not run | Unknown                        |
+| Download direct source                             | Unknown          | Partial: unit tests only       | Unknown | Not run | Unknown                        |
+| Download torrent source                            | Unknown          | Partial: unit tests only       | Unknown | Not run | Unknown                        |
+| Cast HLS/MP4 source                                | Unknown          | Partial: planner UI only       | Unknown | Not run | Unknown                        |
+| Bridge unavailable/unsupported                     | Unknown          | Partial: tests and UI smoke    | Unknown | Not run | Partial: deterministic UI only |
+| Desktop bridge diagnostics/repair                  | Unknown          | Partial: unit tests only       | Unknown | Not run | Unknown                        |
+| Torrent cache bounded storage/cleanup              | Unknown          | Partial: unit tests only       | Unknown | Not run | Unknown                        |
 
 ## Storage And Cache Guardrails
 
@@ -87,7 +89,8 @@ on physical targets.
 - Record at least one packaged macOS desktop run.
 - Record at least one physical iPhone run.
 - Record at least one physical Android run.
-- Record one browser-web run.
+- Record one real-source browser-web playback run; deterministic renderer
+  coverage alone does not prove first frame or seeking.
 - Record one real Chromecast or explicitly mark casting as unsupported for the
   release candidate.
 - Attach logs/screenshots for every Fail or Partial result.
@@ -110,9 +113,9 @@ Create a file under `docs/qa-runs/YYYY-MM-DD-target.md`.
 
 ## Results
 
-| Flow             | Fixture | Status  | Notes |
-| ---------------- | ------- | ------- | ----- |
-| Play Best direct | F1      | Unknown |       |
+| Flow        | Fixture | Status  | Notes |
+| ----------- | ------- | ------- | ----- |
+| Play direct | F1      | Unknown |       |
 
 ## Evidence
 

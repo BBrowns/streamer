@@ -1,10 +1,6 @@
 import type { MetaPreview, WatchProgress } from "@streamer/shared";
 
-export type HomeRailKey =
-  | "popular_movies"
-  | "top_series"
-  | "recently_added"
-  | "more_to_watch";
+export type HomeRailKey = "movies" | "series" | "more_to_watch";
 
 export interface HomeRailDefinition {
   key: HomeRailKey;
@@ -13,6 +9,7 @@ export interface HomeRailDefinition {
 
 export interface HomeFeed {
   hero: MetaPreview | null;
+  heroProgress: WatchProgress | null;
   rails: HomeRailDefinition[];
 }
 
@@ -46,47 +43,46 @@ function claimItems(
   return items;
 }
 
-function validReleaseDate(item: MetaPreview) {
-  if (!item.released) return null;
-  const timestamp = Date.parse(item.released);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
 export function buildHomeFeed(
   movies: MetaPreview[],
   series: MetaPreview[],
   continueWatching: WatchProgress[] = [],
 ): HomeFeed {
+  const all = uniqueItems([...movies, ...series]);
+  const catalogByKey = new Map(
+    all.map((item) => [canonicalContentKey(item), item] as const),
+  );
+  const heroProgress =
+    [...continueWatching]
+      .filter((progress) =>
+        catalogByKey.has(`${progress.type}:${progress.itemId}`),
+      )
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.lastWatched || "") || 0;
+        const rightTime = Date.parse(right.lastWatched || "") || 0;
+        return rightTime - leftTime;
+      })[0] ?? null;
   const claimed = new Set(
     continueWatching.map((item) => `${item.type}:${item.itemId}`),
   );
-  const all = uniqueItems([...movies, ...series]);
-  const hero =
-    all.find((item) => !claimed.has(canonicalContentKey(item))) ?? null;
+  const hero = heroProgress
+    ? (catalogByKey.get(`${heroProgress.type}:${heroProgress.itemId}`) ?? null)
+    : (all.find((item) => !claimed.has(canonicalContentKey(item))) ??
+      all[0] ??
+      null);
   if (hero) claimed.add(canonicalContentKey(hero));
 
-  const dated = all
-    .map((item) => ({ item, timestamp: validReleaseDate(item) }))
-    .filter(
-      (entry): entry is { item: MetaPreview; timestamp: number } =>
-        entry.timestamp !== null,
-    )
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .map((entry) => entry.item);
-  const useRecent = dated.length >= 6;
-  const finalItems = claimItems(useRecent ? dated : all, claimed);
-  const popularMovies = claimItems(movies, claimed);
-  const topSeries = claimItems(series, claimed);
+  const movieItems = claimItems(movies, claimed);
+  const seriesItems = claimItems(series, claimed);
+  const moreToWatch = claimItems(all, claimed);
 
   return {
     hero,
+    heroProgress,
     rails: [
-      { key: "popular_movies", items: popularMovies },
-      { key: "top_series", items: topSeries },
-      {
-        key: useRecent ? "recently_added" : "more_to_watch",
-        items: finalItems,
-      },
+      { key: "movies", items: movieItems },
+      { key: "series", items: seriesItems },
+      { key: "more_to_watch", items: moreToWatch },
     ].filter((rail) => rail.items.length > 0) as HomeRailDefinition[],
   };
 }

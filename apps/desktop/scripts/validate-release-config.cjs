@@ -4,6 +4,9 @@ const path = require("path");
 const desktopRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(desktopRoot, "../..");
 const failures = [];
+const requireBuildMetadata =
+  process.argv.includes("--require-build-metadata") ||
+  process.env.STREAMER_BUILD_ENVIRONMENT === "production";
 
 function readJson(relativePath) {
   const fullPath = path.join(desktopRoot, relativePath);
@@ -28,6 +31,18 @@ function requireFile(relativePath) {
   }
 }
 
+function requireStampedEnvironmentValue(name, label) {
+  if (!requireBuildMetadata) return;
+  const value = String(process.env[name] || "").trim();
+  if (!value || value.toLowerCase() === "unknown") {
+    fail(`${label} must be stamped for production desktop releases (${name})`);
+  }
+}
+
+requireStampedEnvironmentValue("STREAMER_APP_VERSION", "Product version");
+requireStampedEnvironmentValue("STREAMER_GIT_SHA", "Git SHA");
+requireStampedEnvironmentValue("STREAMER_BUILD_CHANNEL", "Build channel");
+
 const releaseConfig = readJson("electron-builder.release.json");
 const mac = releaseConfig.mac || {};
 const targets = Array.isArray(mac.target) ? mac.target : [];
@@ -45,7 +60,9 @@ if (mac.hardenedRuntime !== true) {
   fail("mac.hardenedRuntime must be enabled for notarized distribution");
 }
 if (mac.gatekeeperAssess !== false) {
-  fail("mac.gatekeeperAssess must be false; notarization validation happens after packaging");
+  fail(
+    "mac.gatekeeperAssess must be false; notarization validation happens after packaging",
+  );
 }
 if (!targetNames.includes("dmg")) {
   fail("release config must produce a DMG target");
@@ -116,4 +133,8 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log("[desktop] Release signing and notarization config is valid.");
+console.log(
+  requireBuildMetadata
+    ? "[desktop] Release config and stamped build metadata are valid."
+    : "[desktop] Release signing and notarization config is valid.",
+);

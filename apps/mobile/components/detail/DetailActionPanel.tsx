@@ -1,7 +1,6 @@
 import React from "react";
 import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { AppButton } from "../ui/AppButton";
-import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
 import { useTranslation } from "react-i18next";
 
@@ -22,9 +21,6 @@ type DetailActionPanelProps = {
 
 export function DetailActionPanel({
   castType,
-  sourceCount,
-  episodeCount = 0,
-  streamsLoading = false,
   hasPlayableSources,
   inLibrary,
   planningAction,
@@ -37,33 +33,9 @@ export function DetailActionPanel({
   const { t } = useTranslation();
   const isMovie = castType !== "series";
   const actionDisabled = !!planningAction;
-  const sourceLabel = isMovie
-    ? streamsLoading
-      ? t("detail.actionPanel.findingSources")
-      : sourceCount > 0
-        ? t("detail.actionPanel.sourceCount", { count: sourceCount })
-        : t("detail.actionPanel.noSources")
-    : t("detail.actionPanel.episodeCount", { count: episodeCount });
-  const sourceTone = isMovie
-    ? streamsLoading
-      ? "warning"
-      : sourceCount > 0
-        ? "success"
-        : "warning"
-    : episodeCount > 0
-      ? "info"
-      : "warning";
 
   return (
     <Surface variant="plain" padded={false} style={[styles.panel, style]}>
-      <View style={styles.statusRow}>
-        <StatusPill
-          label={sourceLabel}
-          tone={sourceTone}
-          icon={isMovie ? "sparkles-outline" : "albums-outline"}
-        />
-      </View>
-
       <View style={styles.actionRow}>
         {isMovie ? (
           <>
@@ -71,7 +43,7 @@ export function DetailActionPanel({
               label={
                 planningAction === "play"
                   ? t("detail.actionPanel.findingBest")
-                  : t("detail.actionPanel.playBest")
+                  : t("common.actions.play", { defaultValue: "Play" })
               }
               icon="play"
               variant="primary"
@@ -100,7 +72,9 @@ export function DetailActionPanel({
                 label={
                   planningAction === "cast"
                     ? t("detail.actionPanel.preparing")
-                    : t("detail.cast")
+                    : t("common.actions.castToDevice", {
+                        defaultValue: "Cast to device",
+                      })
                 }
                 icon="tv-outline"
                 variant="secondary"
@@ -118,7 +92,9 @@ export function DetailActionPanel({
           label={
             inLibrary
               ? t("detail.actionPanel.inLibrary")
-              : t("detail.actionPanel.add")
+              : t("common.actions.addToLibrary", {
+                  defaultValue: "Add to Library",
+                })
           }
           icon={inLibrary ? "checkmark" : "add"}
           variant="secondary"
@@ -135,10 +111,6 @@ const styles = StyleSheet.create({
   panel: {
     gap: 14,
     marginBottom: 18,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
   },
   actionRow: {
     flexDirection: "row",

@@ -177,6 +177,97 @@ export async function playBest(
   };
 }
 
+/**
+ * Starts a viewer-selected planner candidate without exposing or resolving a
+ * raw URI in the UI. The opaque planner id is mapped into a fresh playback
+ * session, after which the normal session resolver owns preparation and
+ * fallback behavior.
+ */
+export async function playCandidate(
+  input: PlaybackOrchestratorInput,
+  plan: PlaybackPlan,
+  plannerCandidateId: string,
+): Promise<PlaybackOrchestratorResult> {
+  const candidate = plan.orderedCandidates.find(
+    (item) => item.id === plannerCandidateId && item.actionEligibility.eligible,
+  );
+  if (plan.action !== "play" || !candidate) {
+    const error = createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      "That source is no longer available. Choose another source.",
+      { retryable: true, shouldFallback: false },
+    );
+    return {
+      ok: false,
+      error,
+      runtimeState: getPlaybackRuntimeState(error.code),
+      plan,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
+  const store = usePlaybackSessionStore.getState();
+  const session = store.createSession({
+    plan,
+    content: {
+      type: input.type,
+      id: input.id,
+      season: input.season,
+      episode: input.episode,
+    },
+    deviceProfile: getDeviceProfile(),
+    bridge: {
+      status: bridgeDiagnostics.status,
+      reason: bridgeDiagnostics.reason,
+    },
+  });
+  recordSessionStarted("play", input, session.id, plan, bridgeDiagnostics);
+
+  const sessionCandidate = session.candidates.find(
+    (item) =>
+      store.getRuntimeCandidate(session.id, item.id)?.id === plannerCandidateId,
+  );
+  if (!sessionCandidate) {
+    const error = createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      "That source needs to be prepared again.",
+      { retryable: true, shouldFallback: false },
+    );
+    store.failSession(session.id, error);
+    return {
+      ok: false,
+      error,
+      runtimeState: getPlaybackRuntimeState(error.code),
+      plan,
+      sessionId: session.id,
+      attemptedStreams: 0,
+      resolveErrors: [],
+    };
+  }
+
+  if (session.selectedCandidateId !== sessionCandidate.id) {
+    store.dispatchPlaybackEvent(session.id, {
+      type: "candidate_selected",
+      candidateId: sessionCandidate.id,
+      reason: "Source selected by the viewer.",
+    });
+  }
+
+  return {
+    ok: true,
+    stream: candidate.stream,
+    mediaInfo: buildMediaInfo(input, candidate.stream),
+    sessionId: session.id,
+    candidateId: sessionCandidate.id,
+    runtimeState: "selecting_source",
+    plan,
+    attemptedStreams: 0,
+    resolveErrors: [],
+  };
+}
+
 export async function prepareDownload(
   input: PlaybackOrchestratorInput,
 ): Promise<DownloadOrchestratorResult> {

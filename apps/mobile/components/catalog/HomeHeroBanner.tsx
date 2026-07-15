@@ -1,52 +1,38 @@
 import { memo } from "react";
-import {
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { useRouter } from "expo-router";
-import type { MetaPreview } from "@streamer/shared";
+import { Image, Platform, StyleSheet, Text, View } from "react-native";
+import type { MetaPreview, WatchProgress } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../hooks/useTheme";
-import { useWindowClass } from "../../hooks/useWindowClass";
-import {
-  getWebFocusStyle,
-  uiRadii,
-  uiSpacing,
-  uiTouchTarget,
-  uiTypography,
-} from "../ui/designSystem";
 import { useTranslation } from "react-i18next";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { AppButton } from "../ui/AppButton";
+import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
 
-const isWeb = Platform.OS === "web";
+type HomeHeroBannerProps = {
+  item: MetaPreview;
+  progress?: WatchProgress | null;
+  launching?: boolean;
+  onPrimaryAction: () => void;
+  onViewDetails: () => void;
+};
 
-function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
-  const router = useRouter();
-  const { colors } = useTheme();
+function HomeHeroBannerInner({
+  item,
+  progress,
+  launching = false,
+  onPrimaryAction,
+  onViewDetails,
+}: HomeHeroBannerProps) {
   const { t } = useTranslation();
   const { isCompact, isLarge, windowClass } = useWindowClass();
   const showPoster = windowClass === "expanded" || isLarge;
-  const heroHeight = isCompact ? 440 : isLarge ? 540 : 490;
-  const handleNavigate = () => router.push(`/detail/${item.type}/${item.id}`);
+  const heroHeight = isCompact ? 400 : isLarge ? 480 : 440;
+  const shouldResume = (progress?.currentTime ?? 0) >= 15;
 
   return (
-    <Pressable
-      style={({ pressed, focused }: any) => [
-        styles.hero,
-        {
-          backgroundColor: colors.surfaceElevated,
-          height: heroHeight,
-          opacity: pressed ? 0.9 : 1,
-        },
-        isWeb && focused && getWebFocusStyle(colors.focus),
-      ]}
-      onPress={handleNavigate}
-      accessibilityRole="button"
+    <View
+      testID="home-hero"
+      style={[styles.hero, { height: heroHeight }]}
       accessibilityLabel={t("home.hero.a11y", { title: item.name })}
-      accessibilityHint={t("home.hero.hint")}
     >
       <Image
         source={{ uri: item.poster }}
@@ -56,7 +42,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
         accessibilityIgnoresInvertColors
       />
 
-      {isWeb ? (
+      {Platform.OS === "web" ? (
         <View
           style={[
             styles.heroOverlay,
@@ -117,11 +103,33 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
             </Text>
           ) : null}
 
-          <View style={styles.detailsButton}>
-            <Text style={styles.detailsButtonText}>
-              {t("common.actions.viewDetails")}
-            </Text>
-            <Ionicons name="arrow-forward" size={17} color="#08090C" />
+          <View style={styles.actionRow}>
+            <AppButton
+              testID="home-hero-primary-action"
+              label={
+                launching
+                  ? t("detail.actionPanel.preparing", {
+                      defaultValue: "Preparing…",
+                    })
+                  : shouldResume
+                    ? t("common.actions.resume", { defaultValue: "Resume" })
+                    : t("common.actions.play", { defaultValue: "Play" })
+              }
+              icon="play"
+              variant="primary"
+              size="large"
+              loading={launching}
+              disabled={launching}
+              onPress={onPrimaryAction}
+            />
+            <AppButton
+              label={t("common.actions.viewDetails")}
+              icon="information-circle-outline"
+              variant="secondary"
+              size="large"
+              disabled={launching}
+              onPress={onViewDetails}
+            />
           </View>
         </View>
 
@@ -136,7 +144,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -158,25 +166,20 @@ const styles = StyleSheet.create({
     left: -12,
     top: -12,
   },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  } as any,
+  heroOverlay: { ...StyleSheet.absoluteFillObject } as any,
   heroContent: {
     ...StyleSheet.absoluteFillObject,
     padding: uiSpacing.xxl,
     justifyContent: "flex-end",
   },
   heroContentDesktop: {
-    padding: 48,
+    padding: 42,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 48,
+    gap: 44,
   },
-  heroCopy: {
-    flex: 1,
-    maxWidth: 680,
-  },
+  heroCopy: { flex: 1, maxWidth: 680 },
   heroEyebrow: {
     ...uiTypography.sectionLabel,
     color: "#B7BEFF",
@@ -190,14 +193,8 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     marginBottom: uiSpacing.md,
   },
-  heroTitleLarge: {
-    fontSize: 52,
-    lineHeight: 56,
-  },
-  heroTitleCompact: {
-    fontSize: 36,
-    lineHeight: 40,
-  },
+  heroTitleLarge: { fontSize: 48, lineHeight: 52 },
+  heroTitleCompact: { fontSize: 34, lineHeight: 39 },
   heroMetaRow: {
     minHeight: 20,
     flexDirection: "row",
@@ -205,38 +202,22 @@ const styles = StyleSheet.create({
     gap: uiSpacing.lg,
     marginBottom: uiSpacing.md,
   },
-  heroMeta: {
-    ...uiTypography.label,
-    color: "#C5C9D0",
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.xs,
-  },
+  heroMeta: { ...uiTypography.label, color: "#C5C9D0" },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: uiSpacing.xs },
   heroDescription: {
     ...uiTypography.body,
     color: "#C5C9D0",
     maxWidth: 560,
     marginBottom: uiSpacing.xl,
   },
-  detailsButton: {
-    minHeight: uiTouchTarget,
-    alignSelf: "flex-start",
+  actionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: uiSpacing.sm,
-    borderRadius: uiRadii.control,
-    backgroundColor: "#F4F5F7",
-    paddingHorizontal: uiSpacing.lg,
-    paddingVertical: uiSpacing.md,
-  },
-  detailsButtonText: {
-    ...uiTypography.control,
-    color: "#08090C",
+    gap: uiSpacing.md,
   },
   posterShell: {
-    width: 224,
+    width: 198,
     aspectRatio: 2 / 3,
     borderRadius: uiRadii.card,
     overflow: "hidden",
@@ -249,8 +230,5 @@ const styles = StyleSheet.create({
           shadowRadius: 28,
         }),
   } as any,
-  heroPoster: {
-    width: "100%",
-    height: "100%",
-  },
+  heroPoster: { width: "100%", height: "100%" },
 });

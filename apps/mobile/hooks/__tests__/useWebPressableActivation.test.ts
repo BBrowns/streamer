@@ -1,6 +1,8 @@
 import {
   handleKeyboardActivation,
+  isFocusVisibleEvent,
   isKeyboardActivationEvent,
+  setWebInputModality,
 } from "../useWebPressableActivation";
 
 describe("web pressable keyboard activation", () => {
@@ -39,5 +41,49 @@ describe("web pressable keyboard activation", () => {
     expect(onActivate).not.toHaveBeenCalled();
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(event.stopPropagation).not.toHaveBeenCalled();
+  });
+
+  it("only treats :focus-visible focus as keyboard focus", () => {
+    const matches = jest.fn(
+      (selector: string) => selector === ":focus-visible",
+    );
+
+    expect(isFocusVisibleEvent({ currentTarget: { matches } })).toBe(true);
+    expect(matches).toHaveBeenCalledWith(":focus-visible");
+    expect(
+      isFocusVisibleEvent({
+        currentTarget: { matches: () => false },
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps an accessible fallback when selector matching is unavailable", () => {
+    setWebInputModality("keyboard");
+    expect(isFocusVisibleEvent()).toBe(true);
+    expect(
+      isFocusVisibleEvent({
+        currentTarget: {
+          matches: () => {
+            throw new Error("unsupported selector");
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("suppresses the legacy fallback for pointer focus and restores it for keyboard input", () => {
+    setWebInputModality("pointer");
+    const unsupportedFocus = {
+      currentTarget: {
+        matches: () => {
+          throw new Error("unsupported selector");
+        },
+      },
+    };
+
+    expect(isFocusVisibleEvent(unsupportedFocus)).toBe(false);
+    setWebInputModality("keyboard");
+
+    expect(isFocusVisibleEvent(unsupportedFocus)).toBe(true);
   });
 });

@@ -23,6 +23,7 @@ type ContentTabsProps<T extends string> = {
   value: T;
   onChange: (value: T) => void;
   accessibilityLabel: string;
+  variant?: "underline" | "segmented";
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
@@ -36,6 +37,7 @@ export function ContentTabs<T extends string>({
   value,
   onChange,
   accessibilityLabel,
+  variant = "underline",
   style,
   testID,
 }: ContentTabsProps<T>) {
@@ -55,8 +57,17 @@ export function ContentTabs<T extends string>({
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
       showsHorizontalScrollIndicator={false}
-      style={style}
-      contentContainerStyle={styles.content}
+      style={[
+        style,
+        variant === "segmented" && [
+          styles.segmentedFrame,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ],
+      ]}
+      contentContainerStyle={[
+        styles.content,
+        variant === "segmented" && styles.segmentedContent,
+      ]}
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -66,9 +77,16 @@ export function ContentTabs<T extends string>({
             accessibilityRole="tab"
             accessibilityLabel={option.label}
             accessibilityState={{ selected }}
+            aria-selected={Platform.OS === "web" ? selected : undefined}
             onPress={() => handleChange(option.value)}
             style={({ hovered, pressed, focused }: any) => [
               styles.tab,
+              variant === "segmented" && styles.segmentedTab,
+              variant === "segmented" &&
+                selected && {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.tint + (isDark ? "66" : "42"),
+                },
               Platform.OS === "web" &&
                 hovered &&
                 !selected && {
@@ -91,7 +109,7 @@ export function ContentTabs<T extends string>({
             >
               {option.label}
             </Text>
-            {selected && (
+            {selected && variant === "underline" && (
               <View
                 testID={`content-tab-indicator-${option.value}`}
                 style={[styles.indicator, { backgroundColor: colors.tint }]}
@@ -109,6 +127,16 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     gap: 20,
   },
+  segmentedFrame: {
+    flexGrow: 0,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  segmentedContent: {
+    gap: 2,
+    padding: 3,
+  },
   tab: {
     minWidth: uiTouchTarget,
     minHeight: uiTouchTarget,
@@ -119,6 +147,13 @@ const styles = StyleSheet.create({
     position: "relative",
     ...(Platform.OS === "web" ? { cursor: "pointer" } : null),
   } as any,
+  segmentedTab: {
+    width: 90,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
+    borderRadius: 8,
+  },
   label: {
     ...uiTypography.label,
     fontSize: 14,

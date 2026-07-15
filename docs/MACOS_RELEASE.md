@@ -59,8 +59,17 @@ npm run package:mac --workspace=@streamer/desktop
 Build signed release artifacts after loading signing and notarization secrets:
 
 ```bash
-STREAMER_NOTARIZE=true npm run package:mac:release --workspace=@streamer/desktop
+STREAMER_APP_VERSION="$(node -p \"require('./package.json').version\")" \
+STREAMER_GIT_SHA="$(git rev-parse HEAD)" \
+STREAMER_BUILD_CHANNEL="production" \
+STREAMER_NOTARIZE=true \
+npm run package:mac:release --workspace=@streamer/desktop
 ```
+
+`package:mac:release` deliberately fails before packaging when product version,
+Git SHA, or channel is missing or set to `unknown`. Development and unsigned
+smoke packages may remain unstamped and show `Not stamped (development)` in the
+About screen.
 
 ## GitHub Release Workflow
 

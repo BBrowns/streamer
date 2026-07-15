@@ -16,6 +16,7 @@ export type DownloadFailureReason =
   | "bridge_unavailable"
   | "source_expired"
   | "source_unsupported"
+  | "invalid_media"
   | "failed";
 
 export type CastFailureReason =

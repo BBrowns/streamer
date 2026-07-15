@@ -34,7 +34,8 @@
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "security:install-scripts": "node scripts/check-install-script-policy.mjs",
-    "test:golden-path": "playwright test --config=playwright.config.ts",
+    "test:golden-path": "playwright test --config=playwright.config.ts --project=phone-web --project=tablet-portrait-web --project=tablet-landscape-web --project=desktop-renderer",
+    "test:electron-smoke": "playwright test --config=playwright.config.ts --project=electron-smoke",
     "postinstall": "patch-package",
     "prepare": "husky"
   },

@@ -8,10 +8,23 @@ const item = (
 ): MetaPreview => ({ id, type, name: id, poster: "", released });
 
 describe("buildHomeFeed", () => {
-  it("deduplicates content across hero, progress and rails", () => {
+  it("uses the most recent catalog-backed progress item as hero and deduplicates rails", () => {
     const movies = [item("a", "movie"), item("b", "movie"), item("c", "movie")];
     const series = [item("a", "series"), item("s", "series")];
-    const progress = [{ type: "movie", itemId: "a" } as WatchProgress];
+    const progress = [
+      {
+        type: "movie",
+        itemId: "a",
+        currentTime: 42,
+        lastWatched: "2026-07-15T06:00:00.000Z",
+      } as WatchProgress,
+      {
+        type: "series",
+        itemId: "s",
+        currentTime: 120,
+        lastWatched: "2026-07-14T20:00:00.000Z",
+      } as WatchProgress,
+    ];
 
     const feed = buildHomeFeed(movies, series, progress);
     const keys = [
@@ -19,25 +32,56 @@ describe("buildHomeFeed", () => {
       ...feed.rails.flatMap((rail) => rail.items.map(canonicalContentKey)),
     ];
 
-    expect(feed.hero?.id).toBe("b");
+    expect(feed.hero?.id).toBe("a");
+    expect(feed.heroProgress).toBe(progress[0]);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).not.toContain("movie:a");
+    expect(keys.filter((key) => key === "movie:a")).toHaveLength(1);
     expect(keys).toContain("series:a");
+    expect(keys).not.toContain("series:s");
   });
 
-  it("uses a real recently-added rail only with enough valid dates", () => {
-    const movies = Array.from({ length: 8 }, (_, index) =>
-      item(`m${index}`, "movie", `2026-0${(index % 8) + 1}-01`),
-    );
-    const feed = buildHomeFeed(movies, []);
-    expect(feed.rails.at(-1)?.key).toBe("recently_added");
-  });
-
-  it("falls back to honest more-to-watch copy without date metadata", () => {
+  it("falls back to the normal featured choice when progress is absent from the catalog", () => {
     const feed = buildHomeFeed(
-      [item("a", "movie"), item("b", "movie"), item("c", "movie")],
+      [item("a", "movie"), item("b", "movie")],
       [],
+      [
+        {
+          type: "movie",
+          itemId: "missing",
+          lastWatched: "2026-07-15T06:00:00.000Z",
+        } as WatchProgress,
+      ],
     );
-    expect(feed.rails.at(-1)?.key).toBe("more_to_watch");
+
+    expect(feed.hero?.id).toBe("a");
+    expect(feed.heroProgress).toBeNull();
+  });
+
+  it("uses neutral rail semantics without inferring popularity or freshness", () => {
+    const movies = Array.from({ length: 14 }, (_, index) =>
+      item(
+        `m${index}`,
+        "movie",
+        `2026-${String(12 - (index % 12)).padStart(2, "0")}-01`,
+      ),
+    );
+    const series = Array.from({ length: 14 }, (_, index) =>
+      item(
+        `s${index}`,
+        "series",
+        `2025-${String((index % 12) + 1).padStart(2, "0")}-01`,
+      ),
+    );
+
+    const feed = buildHomeFeed(movies, series);
+
+    expect(feed.rails.map((rail) => rail.key)).toEqual([
+      "movies",
+      "series",
+      "more_to_watch",
+    ]);
+    expect(feed.rails[0]?.items.map((entry) => entry.id)).toEqual(
+      movies.slice(1, 13).map((entry) => entry.id),
+    );
   });
 });

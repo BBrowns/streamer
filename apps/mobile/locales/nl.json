@@ -41,6 +41,7 @@
       "noCatalogsDescription": "Je geïnstalleerde add-ons bieden geen catalogi voor het geselecteerde titeltype.",
       "catalogErrorTitle": "Catalogus niet beschikbaar",
       "catalogErrorDescription": "Deze catalogus kon niet worden geladen. Probeer het opnieuw.",
+      "inlineCatalogError": "{{provider}} kon deze catalogus niet laden.",
       "manageAddons": "Add-ons beheren"
     },
     "suggestions": {
@@ -62,6 +63,7 @@
       "title": "Filters",
       "subtitle": "Verfijn deze resultaten",
       "type": "Filter op titeltype",
+      "contentType": "Type content",
       "year": "Jaar",
       "provider": "Bron",
       "sort": "Sorteren op",
@@ -112,9 +114,10 @@
       "button": "Aan de slag"
     },
     "sections": {
-      "popularMovies": "Populaire films",
-      "topTVShows": "Top TV-series",
-      "recentlyAdded": "Nieuw toegevoegd",
+      "catalogEyebrow": "Catalogus",
+      "exploreEyebrow": "Ontdek",
+      "movies": "Films",
+      "series": "Series",
       "moreToWatch": "Meer om te kijken",
       "fromProviders": "Van je providers"
     },
@@ -201,6 +204,9 @@
       "removeMessage": "Weet je zeker dat je {{count}} items uit je bibliotheek wilt verwijderen?",
       "bulkDeleteTitle": "Items verwijderen",
       "bulkDeleteMessage": "Weet je zeker dat je {{count}} items wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      "bulkRemoveWithUndoMessage": "{{count}} titels uit je bibliotheek verwijderen? Je kunt dit enkele seconden ongedaan maken.",
+      "removeFailed": "Deze titel kon niet worden verwijderd.",
+      "bulkRemoveFailed": "De geselecteerde titels konden niet worden verwijderd.",
       "added": "Toegevoegd aan bibliotheek",
       "removed": "Verwijderd uit bibliotheek"
     },
@@ -209,6 +215,7 @@
       "viewDetails": "Details bekijken",
       "remove": "Uit bibliotheek verwijderen",
       "removeDownload": "Download verwijderen",
+      "manageDownloads": "Downloads beheren",
       "undo": "Ongedaan maken",
       "restore": "Herstellen",
       "bulkRemoved": "{{count}} titels uit de bibliotheek verwijderd",
@@ -230,7 +237,13 @@
       "clearAllConfirm": "Alle beheerde downloads en lokale bestanden verwijderen?",
       "clearAllButton": "Alles verwijderen",
       "deleteTitle": "Download verwijderen?",
-      "deleteMessage": "\"{{title}}\" van dit apparaat verwijderen?"
+      "deleteMessage": "\"{{title}}\" van dit apparaat verwijderen?",
+      "deleteFailed": "Deze download kon niet worden verwijderd.",
+      "deleting": "‘{{title}}’ verwijderen…",
+      "bulkDeleteTitle": "Geselecteerde downloads verwijderen?",
+      "bulkDeleteMessage": "{{count}} downloads van dit apparaat verwijderen? Je kunt dit enkele seconden ongedaan maken.",
+      "bulkDeleteFailed": "Sommige downloads konden niet worden verwijderd.",
+      "bulkDeleting": "{{count}} downloads verwijderen…"
     },
     "card": {
       "unknown": "Onbekende download",
@@ -261,6 +274,9 @@
       "checking": "Bestand controleren",
       "readyOffline": "Offline beschikbaar",
       "completed": "Voltooid",
+      "needsVerification": "Controle nodig",
+      "incomplete": "Onvolledig",
+      "failed": "Mislukt",
       "error": "Aandacht nodig"
     },
     "sections": {
@@ -285,7 +301,12 @@
       "needsVerification": "Controle nodig"
     },
     "storage": {
+      "freeTitle": "Opslagruimte vrijmaken",
       "externalCleanup": "Streamer kan alleen downloads verwijderen die door deze app worden beheerd. Gebruik de opslaginstellingen van je apparaat voor andere bestanden."
+    },
+    "selection": {
+      "selected": "{{count}} geselecteerd",
+      "deleteSelected": "Geselecteerde downloads verwijderen"
     },
     "smart": {
       "title": "Slimme downloads",
@@ -304,6 +325,16 @@
       "storageLimit": "Limiet van {{count}} GB",
       "hlsUnsupported": "HLS is offline nog niet ondersteund",
       "plannedTitle": "Geplande volgende afleveringen",
+      "manage": "Instellingen voor Slimme downloads beheren",
+      "manageSubtitle": "Volgende aflevering, wifi, kwaliteit en opruimvoorkeuren",
+      "plannedCount": "{{count}} volgende afleveringen gepland",
+      "planStatus": {
+        "planned": "Gepland",
+        "queued": "In wachtrij",
+        "downloaded": "Gedownload",
+        "blocked": "Geblokkeerd",
+        "skipped": "Overgeslagen"
+      },
       "unknownSeries": "Serie"
     },
     "recovery": {
@@ -330,6 +361,8 @@
       "prepareAgainAction": "Opnieuw voorbereiden",
       "unsupportedTitle": "Offline download niet beschikbaar",
       "unsupportedMessage": "Deze kijkoptie kan niet offline worden opgeslagen.",
+      "invalidMediaTitle": "Gedownload bestand is ongeldig",
+      "invalidMediaMessage": "Dit bestand is onvolledig of kan niet worden afgespeeld. Download het opnieuw.",
       "removeAction": "Verwijderen",
       "failedTitle": "Download vraagt aandacht",
       "failedMessage": "Probeer de download opnieuw of kies een andere kijkoptie.",
@@ -446,6 +479,13 @@
       "successMessage": "Je server- en bridge-instellingen zijn bijgewerkt."
     },
     "about": {
+      "notAvailable": "Niet beschikbaar",
+      "productDescription": "Films en series, op al je apparaten.",
+      "streamerApp": "Streamer-app",
+      "desktopShell": "Desktop-shell",
+      "electronRuntime": "Electron-runtime",
+      "buildSha": "Build-SHA",
+      "channel": "Kanaal",
       "releasePolicy": "Desktop-updates worden handmatig gecontroleerd totdat de release-pipeline volledig is gevalideerd.",
       "checkUpdates": "Controleren op updates",
       "terms": "Gebruiksvoorwaarden",
@@ -570,8 +610,13 @@
     },
     "playbackPreferences": {
       "quality": "Afspeelkwaliteit",
-      "qualityDescription": "Kies de maximale kwaliteit waarmee Streamer bronnen rangschikt.",
-      "auto": "Automatisch",
+      "qualityDescription": "Streamer gebruikt alleen de geselecteerde videokwaliteiten. SD en bronnen zonder bekende kwaliteit blijven uitgesloten. Laat er minimaal één geselecteerd.",
+      "qualityOptions": {
+        "2160": "4K (2160p)",
+        "1080": "Full HD (1080p)",
+        "720": "HD (720p)",
+        "480": "480p"
+      },
       "audio": "Audiotaal",
       "audioDescription": "Geef de voorkeur aan deze audiotrack wanneer die beschikbaar is.",
       "subtitles": "Ondertitels",
@@ -616,8 +661,16 @@
     },
     "sourcesSection": {
       "addonsTitle": "Contentbronnen",
+      "contentAddonsTitle": "Content-add-ons",
       "addonsDescription": "Installeer en beheer de add-ons die je catalogus leveren.",
-      "pageDescription": "Bekijk afspeelbeschikbaarheid, verbonden apparaten en contentbronnen."
+      "pageDescription": "Bekijk afspeelbeschikbaarheid, verbonden apparaten en contentbronnen.",
+      "playbackDevicesTitle": "Afspelen & apparaten",
+      "playbackDevicesDescription": "Bekijk of dit apparaat lokaal afspelen en casten kan voorbereiden.",
+      "localPlaybackService": "Lokale afspeelservice",
+      "localPlaybackReady": "Lokaal afspelen en offline voorbereiden zijn beschikbaar.",
+      "localPlaybackLimited": "Sommige brontypen vereisen mogelijk een controle van de desktopconfiguratie.",
+      "castingDevices": "Casten & apparaten",
+      "castingLimited": "Casten is beschikbaar voor compatibele bronnen en apparaten."
     },
     "advancedSection": {
       "copyDiagnostics": "Diagnostiek kopiëren",
@@ -669,8 +722,27 @@
       "diagnosticsUnavailable": "Diagnostiek niet beschikbaar",
       "diagnosticsUnavailableDescription": "De diagnostiek kon niet worden geëxporteerd.",
       "cacheCleaned": "Cache opgeruimd",
+      "cacheCleanupResult": "{{count}} inactieve cache-items verwijderd en {{size}} vrijgemaakt.",
+      "torrentCacheUsage": "{{count}} items · {{usage}}",
       "cacheCleanupFailed": "Cache opruimen mislukt",
-      "cacheCleanupFailedDescription": "Inactieve cache-items konden niet worden opgeruimd."
+      "cacheCleanupFailedDescription": "Inactieve cache-items konden niet worden opgeruimd.",
+      "serviceMaintenance": "Onderhoud afspeelservice",
+      "serviceMaintenanceDescription": "Controleer opnieuw, herstel, ruim cachebestanden op of exporteer diagnostiek.",
+      "restartDescription": "Herstart het lokale desktopproces voor afspelen.",
+      "cleanPlaybackCache": "Afspeelcache opruimen",
+      "exportDiagnostics": "Diagnostiek exporteren",
+      "technicalDetails": "Technische details",
+      "hideTechnical": "Verberg interne status- en versiegegevens.",
+      "showTechnical": "Toon interne status- en versiegegevens.",
+      "runtimeBuildDetails": "Runtime- en buildgegevens",
+      "appBuildLabel": "App-build",
+      "statusLabel": "Status",
+      "reasonLabel": "Reden",
+      "messageLabel": "Bericht",
+      "runtimeLabel": "Runtime",
+      "nativeRuntimeLabel": "Native runtime",
+      "ffmpegLabel": "FFmpeg",
+      "remuxCacheLabel": "Remux-cache"
     },
     "onboarding": {
       "title": "Personaliseren",
@@ -690,6 +762,7 @@
     "install": {
       "title": "Add-on installeren",
       "hint": "Plak een manifest.json URL om een bron toe te voegen.",
+      "urlLabel": "Manifest-URL",
       "placeholder": "https://addon-url.com/manifest.json",
       "button": "Installeren",
       "success": "Add-on geïnstalleerd!",
@@ -701,7 +774,8 @@
       "uninstall": "Verwijderen",
       "remove": "Verwijder",
       "cancel": "Annuleren",
-      "confirmRemove": "\"{{name}}\" verwijderen?"
+      "confirmRemove": "\"{{name}}\" verwijderen?",
+      "removeError": "Deze add-on kon niet worden verwijderd. Probeer het opnieuw."
     },
     "empty": {
       "title": "Geen add-ons geïnstalleerd",
@@ -723,6 +797,9 @@
       "none": "Geen streams voor deze aflevering.",
       "noneData": "Geen afleveringsgegevens beschikbaar.",
       "season": "Seizoen {{season}}",
+      "playA11y": "Aflevering {{episode}} afspelen: {{title}}",
+      "downloadA11y": "Aflevering {{episode}} downloaden: {{title}}",
+      "moreSourcesA11y": "Meer bronnen voor aflevering {{episode}}: {{title}}",
       "streamsLabel": "S{{season}} A{{episode}} — Streams"
     },
     "quality": "Kwaliteit selecteren",
@@ -749,9 +826,25 @@
       "more": "Meer bronnen",
       "show": "Meer bronnen tonen",
       "hide": "Meer bronnen verbergen",
-      "available": "Geavanceerd alternatief · {{count}} beschikbaar",
+      "available": "{{count}} beschikbaar",
       "groups": "Geavanceerd alternatief · {{count}} groepen",
-      "filterByQuality": "Bronnen filteren op {{quality}}"
+      "filterByQuality": "Bronnen filteren op {{quality}}",
+      "choiceError": "Bronnen konden niet worden voorbereid.",
+      "noneConsumer": "Er zijn geen compatibele bronnen beschikbaar.",
+      "technical": "Technische details tonen",
+      "hideTechnical": "Technische details verbergen",
+      "compatibility": {
+        "ready": "Gereed op dit apparaat",
+        "localService": "Gebruikt Lokale afspeelservice",
+        "conversion": "Wordt automatisch voorbereid"
+      },
+      "language": {
+        "notListed": "Taal niet vermeld",
+        "multiple": "Meerdere talen"
+      },
+      "quality": {
+        "auto": "Automatisch"
+      }
     },
     "readiness": {
       "finishSetupTitle": "Afspeelconfiguratie afronden",
@@ -759,6 +852,10 @@
       "openSourcesDetail": "Open Bronnen & apparaten om verbinding te maken met de desktopapp.",
       "directMayWork": "Directe kijkopties kunnen op dit apparaat nog werken.",
       "sourcesAction": "Bronnen & apparaten",
+      "qualitySelectionTitle": "Geen bron past bij je kwaliteitskeuzes",
+      "qualitySelectionMessage": "De beschikbare bronnen vallen buiten de videokwaliteiten die je bij Afspeelinstellingen hebt geselecteerd.",
+      "qualitySelectionDetail": "Sta een andere kwaliteit toe en probeer daarna opnieuw af te spelen.",
+      "playbackSettingsAction": "Afspeelinstellingen",
       "extraSupportTitle": "Extra afspeelondersteuning nodig",
       "extraSupportMessage": "Deze kijkoptie heeft hulp van de desktopapp nodig.",
       "checkSupportDetail": "Controleer Bronnen & apparaten of kies een andere kijkoptie.",
@@ -801,6 +898,20 @@
         "download": "Download niet beschikbaar",
         "cast": "Casten niet beschikbaar"
       }
+    },
+    "loadState": {
+      "eyebrow": "Titeldetails",
+      "loadingTitle": "Titeldetails laden",
+      "loadingDescription": "De nieuwste informatie en kijkopties worden opgehaald.",
+      "notFoundTitle": "Deze titel is niet beschikbaar",
+      "notFoundDescription": "Geen van je huidige add-ons kon details voor deze titel leveren. De titel is mogelijk verwijderd of maakt geen deel uit van je catalogi.",
+      "networkTitle": "Je bent offline",
+      "networkDescription": "Maak opnieuw verbinding met internet en probeer deze titel opnieuw te laden.",
+      "temporaryTitle": "Deze titel kon niet worden geladen",
+      "temporaryDescription": "Het verzoek werd onderbroken. Probeer het over een moment opnieuw.",
+      "retry": "Opnieuw proberen",
+      "reviewAddons": "Add-ons bekijken",
+      "sourcesDevices": "Bronnen & apparaten"
     },
     "errors": {
       "notFound": "Inhoud niet gevonden",
@@ -965,6 +1076,8 @@
       "preparingMetadata": "Torrentmetadata lezen...",
       "remuxing": "Compatibele videostream voorbereiden...",
       "preparingSubtitle": "Dit kan even duren voor torrentbronnen.",
+      "cancelPreparation": "Bronvoorbereiding annuleren",
+      "cancelPreparationHint": "Je kunt ook op Escape drukken om te annuleren.",
       "tryingFallback": "Een andere bron proberen...",
       "buffering": "Bufferen...",
       "errorTitle": "Verbinding mislukt",
@@ -977,7 +1090,10 @@
       "errorSubtitle": "Stream laden mislukt"
     },
     "errors": {
-      "noStream": "Geen stream geselecteerd",
+      "noStreamStatus": "Afspelen niet beschikbaar",
+      "noStreamTitle": "Er staat niets klaar om af te spelen",
+      "noStream": "Kies een titel om af te spelen. Als je al aan het kijken was, is de afspeelopdracht mogelijk verlopen.",
+      "browseTitles": "Titels bekijken",
       "bridgeUnavailable": "Afspeelondersteuning is nog niet klaar. Open Bronnen & apparaten, controleer dit apparaat en probeer het opnieuw.",
       "playbackFailed": "Deze titel kon niet worden afgespeeld.",
       "playbackTimeout": "Het voorbereiden duurde te lang. Probeer het opnieuw of kies een andere kijkoptie.",
@@ -989,7 +1105,18 @@
     },
     "cast": {
       "castingTo": "Casten naar {{name}}",
-      "stop": "Stop met casten"
+      "stop": "Stop met casten",
+      "searching": "Schermen zoeken...",
+      "noDevices": "Geen schermen gevonden op dit netwerk.",
+      "compatibleReady": "Een compatibele stream is gereed. Kies een scherm.",
+      "sourceReady": "Bron gereed. Kies een scherm.",
+      "connecting": "Verbinden met {{name}}...",
+      "connected": "Verbonden met {{name}}.",
+      "available": "Beschikbaar",
+      "refreshDisplays": "Schermen vernieuwen",
+      "chooseAnotherDevice": "Ander apparaat kiezen",
+      "tryAnotherSource": "Andere bron proberen",
+      "sourcesDevices": "Bronnen & apparaten"
     },
     "casting": {
       "active": "Aan het casten",
@@ -1026,7 +1153,14 @@
     "retry": "Opnieuw proberen",
     "cancel": "Annuleren",
     "dismiss": "Sluiten",
-    "actions": { "viewDetails": "Details bekijken" },
+    "actions": {
+      "viewDetails": "Details bekijken",
+      "play": "Afspelen",
+      "resume": "Hervatten",
+      "castToDevice": "Casten naar apparaat",
+      "addToLibrary": "Toevoegen aan bibliotheek"
+    },
+    "castAndCrew": "Cast & crew",
     "media": { "movie": "Film", "series": "Serie" },
     "unexpectedError": {
       "title": "Er ging iets mis",

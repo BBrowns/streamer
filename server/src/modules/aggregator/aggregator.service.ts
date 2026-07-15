@@ -1,7 +1,7 @@
 import https from "https";
 import { prisma } from "../../prisma/client.js";
 import { logger } from "../../config/logger.js";
-import { resilienceRegistry } from "./resilience.js";
+import { NonRetryableUpstreamError, resilienceRegistry } from "./resilience.js";
 import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver.js";
 import type { ResolvedStream } from "../debrid/ports/debrid.ports.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
@@ -20,6 +20,38 @@ import { z } from "zod";
 import { StreamParser } from "./domain/stream-parser.js";
 
 // Per-addon policy registry is now handled by resilienceRegistry
+
+export class MetadataProvidersUnavailableError extends Error {
+  constructor() {
+    super("No metadata provider completed successfully.");
+    this.name = "MetadataProvidersUnavailableError";
+  }
+}
+
+function getUpstreamStatus(error: unknown): number | undefined {
+  let candidate: unknown = error;
+
+  // Resilience/transport libraries can retain the original failure as a
+  // cause. Keep this deliberately shallow and never expose the cause to the
+  // client.
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== "object") return undefined;
+    const current = candidate as {
+      status?: unknown;
+      response?: { status?: unknown };
+      cause?: unknown;
+    };
+    const status = current.response?.status ?? current.status;
+    if (typeof status === "number") return status;
+    candidate = current.cause;
+  }
+
+  return undefined;
+}
+
+function isExplicitMetadataNotFound(error: unknown) {
+  return getUpstreamStatus(error) === 404;
+}
 
 const secureAgent = new https.Agent({
   maxSockets: 50,
@@ -64,10 +96,27 @@ async function resilientFetch<T>(
         "Fetching from add-on",
       );
 
-      const data = await fetchSafeAddonJson(url, {
-        kind: "resource",
-        axiosOptions: { httpsAgent: secureAgent },
-      });
+      let data: unknown;
+      try {
+        data = await fetchSafeAddonJson(url, {
+          kind: "resource",
+          axiosOptions: { httpsAgent: secureAgent },
+        });
+      } catch (error) {
+        // A missing title is a valid metadata lookup outcome, not a provider
+        // outage. Mark it before the retry/breaker policies observe it while
+        // retaining the original status for getMeta's final classification.
+        if (
+          resourcePath.startsWith("meta/") &&
+          isExplicitMetadataNotFound(error)
+        ) {
+          throw new NonRetryableUpstreamError(
+            "Metadata not found upstream.",
+            error,
+          );
+        }
+        throw error;
+      }
 
       // Strict Sanitation: Validate against expected Zod schema
       const parsed = schema.safeParse(data);
@@ -186,30 +235,45 @@ export class AggregatorService {
     requestId: string,
   ): Promise<MetaDetail | null> {
     const addons = await this.getUserAddons(userId);
-
-    const results = await Promise.allSettled(
-      addons
-        .filter((a: any) =>
-          this.addonSupportsResource(a.manifest, "meta", type),
-        )
-        .map(async (addon: any) => {
-          const data = await resilientFetch(
-            addon.transportUrl,
-            addon.manifest.id,
-            `meta/${type}/${id}.json`,
-            requestId,
-            metaResponseSchema,
-          );
-          return data.meta;
-        }),
+    const metaProviders = addons.filter((addon: any) =>
+      this.addonSupportsResource(addon.manifest, "meta", type),
     );
 
-    // Return the first successful result
+    if (metaProviders.length === 0) return null;
+
+    const results = await Promise.allSettled(
+      metaProviders.map(async (addon: any) => {
+        const data = await resilientFetch(
+          addon.transportUrl,
+          addon.manifest.id,
+          `meta/${type}/${id}.json`,
+          requestId,
+          metaResponseSchema,
+        );
+        return data.meta;
+      }),
+    );
+
+    // A valid result wins even when other providers fail or do not carry the
+    // title. Partial upstream failure must not hide usable metadata.
     const fulfilled = results.find(
       (r: any): r is PromiseFulfilledResult<any> => r.status === "fulfilled",
     );
+    if (fulfilled) return fulfilled.value as MetaDetail;
 
-    return (fulfilled?.value as MetaDetail) ?? null;
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (
+      failures.length > 0 &&
+      failures.every((failure) => isExplicitMetadataNotFound(failure.reason))
+    ) {
+      return null;
+    }
+
+    // Network, timeout, policy, and response-validation failures are
+    // recoverable upstream outages, not proof that a title does not exist.
+    throw new MetadataProvidersUnavailableError();
   }
 
   /** Fetch streams from all add-ons and merge */

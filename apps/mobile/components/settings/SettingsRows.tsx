@@ -239,6 +239,163 @@ export function SettingsChoiceRow({
   );
 }
 
+export function SettingsMultiSelectRow<T extends string>({
+  title,
+  subtitle,
+  icon,
+  options,
+  selectedValues,
+  onToggle,
+  testID,
+}: RowBaseProps & {
+  options: Array<{ label: string; value: T; disabled?: boolean }>;
+  selectedValues: readonly T[];
+  onToggle: (value: T) => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      testID={testID}
+      style={[styles.row, styles.actionRow, styles.choiceControlRow]}
+    >
+      <View style={styles.choiceHeader}>
+        <RowIcon icon={icon} />
+        <RowText title={title} subtitle={subtitle} />
+      </View>
+      <View
+        style={[
+          styles.multiSelect,
+          {
+            backgroundColor: colors.surfaceSubtle,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        {options.map((option, index) => {
+          const selected = selectedValues.includes(option.value);
+          return (
+            <View key={option.value}>
+              {index > 0 && (
+                <View
+                  style={[
+                    styles.multiSelectDivider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+              )}
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityLabel={option.label}
+                accessibilityState={{
+                  checked: selected,
+                  disabled: option.disabled,
+                }}
+                disabled={option.disabled}
+                onPress={() => onToggle(option.value)}
+                style={({ focused, pressed }: any) => [
+                  styles.multiSelectOption,
+                  selected && { backgroundColor: colors.tint + "0D" },
+                  option.disabled && styles.disabled,
+                  pressed && styles.pressed,
+                  Platform.OS === "web" &&
+                    focused &&
+                    getWebFocusStyle(colors.focus),
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.multiSelectLabel,
+                    { color: selected ? colors.text : colors.textSecondary },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                <Ionicons
+                  name={selected ? "checkbox" : "square-outline"}
+                  size={23}
+                  color={selected ? colors.tint : colors.textSecondary}
+                />
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+export function SettingsRadioRow({
+  title,
+  subtitle,
+  selected,
+  onPress,
+  testID,
+}: Pick<RowBaseProps, "title" | "subtitle" | "testID"> & {
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected, selected }}
+      onPress={onPress}
+      style={({ focused, pressed }: any) => [
+        styles.row,
+        styles.radioRow,
+        selected && { backgroundColor: colors.tint + "12" },
+        pressed && styles.pressed,
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+      ]}
+    >
+      <RowText title={title} subtitle={subtitle} />
+      <View
+        style={[
+          styles.radioIndicator,
+          {
+            borderColor: selected ? colors.tint : colors.border,
+            backgroundColor: selected ? colors.tint : "transparent",
+          },
+        ]}
+      >
+        {selected && (
+          <Ionicons name="checkmark" size={16} color={colors.onTint} />
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+export function SettingsInfoRow({
+  title,
+  value,
+  testID,
+}: {
+  title: string;
+  value: string;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View testID={testID} style={[styles.row, styles.infoRow]}>
+      <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+        {title}
+      </Text>
+      <Text
+        selectable
+        numberOfLines={2}
+        style={[styles.infoValue, { color: colors.text }]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export function SettingsRowGroup({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
   const items = Children.toArray(children);
@@ -293,6 +450,39 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 0,
   },
+  radioRow: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 0,
+  },
+  radioIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoRow: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 0,
+  },
+  infoLabel: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  infoValue: {
+    flex: 1.4,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+    textAlign: "right",
+  },
   icon: {
     width: 28,
     alignItems: "center",
@@ -331,6 +521,30 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   choiceControl: { width: "100%" },
+  multiSelect: {
+    width: "100%",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  multiSelectOption: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  multiSelectLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+  },
+  multiSelectDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 12,
+  },
   choiceValue: {
     fontSize: 13,
     fontWeight: "600",

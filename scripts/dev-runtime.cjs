@@ -344,10 +344,15 @@ async function stopListeningProcesses(port, options = {}) {
 
 function runForeground(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const run = options.spawn || spawn;
+    const parentProcess = options.parentProcess || process;
+    const child = run(command, args, {
       cwd: options.cwd || REPOSITORY_ROOT,
       env: options.env || process.env,
-      stdio: "inherit",
+      stdio:
+        options.stdin === "ignore"
+          ? ["ignore", "inherit", "inherit"]
+          : "inherit",
     });
     const forwardInterrupt = () => {
       if (!child.killed) child.kill("SIGINT");
@@ -355,12 +360,18 @@ function runForeground(command, args, options = {}) {
     const forwardTermination = () => {
       if (!child.killed) child.kill("SIGTERM");
     };
-    process.once("SIGINT", forwardInterrupt);
-    process.once("SIGTERM", forwardTermination);
-    child.once("error", reject);
+    const removeSignalForwarding = () => {
+      parentProcess.removeListener("SIGINT", forwardInterrupt);
+      parentProcess.removeListener("SIGTERM", forwardTermination);
+    };
+    parentProcess.once("SIGINT", forwardInterrupt);
+    parentProcess.once("SIGTERM", forwardTermination);
+    child.once("error", (error) => {
+      removeSignalForwarding();
+      reject(error);
+    });
     child.once("exit", (code, signal) => {
-      process.removeListener("SIGINT", forwardInterrupt);
-      process.removeListener("SIGTERM", forwardTermination);
+      removeSignalForwarding();
       if (signal) return resolve(128);
       resolve(code ?? 1);
     });
@@ -411,6 +422,10 @@ async function startStreamServer() {
   );
 
   return runForeground(runtime.execPath, [tsxCli, "watch", entrypoint], {
+    // The bridge is controlled through signals and does not consume input. A
+    // stale/disconnected terminal can otherwise make Node emit an unhandled
+    // EIO from process.stdin while tsx is watching.
+    stdin: "ignore",
     env: {
       ...process.env,
       PATH: `${path.dirname(runtime.execPath)}${path.delimiter}${process.env.PATH || ""}`,
@@ -524,5 +539,6 @@ module.exports = {
   parseNodeVersion,
   resolveNpmCli,
   resolveNpmRunner,
+  runForeground,
   selectNodeRuntime,
 };

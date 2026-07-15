@@ -44,9 +44,21 @@ const RELEASES_URL =
   process.env.STREAMER_RELEASES_URL ||
   "https://github.com/BBrowns/streamer/releases";
 
+const desktopPackageVersion = require("../package.json").version;
+const desktopProductVersion = electron_1.app.isPackaged
+  ? electron_1.app.getVersion()
+  : desktopPackageVersion;
+
 const desktopBuildMetadata = createDesktopBuildMetadata(process.env, {
-  appVersion: electron_1.app.getVersion(),
+  appVersion: desktopProductVersion,
 });
+const desktopRuntime = {
+  productVersion: desktopBuildMetadata.appVersion,
+  electronVersion: process.versions.electron || "unknown",
+};
+const disableBridgeForDesktopSmoke =
+  !electron_1.app.isPackaged &&
+  process.env.STREAMER_DESKTOP_SMOKE_DISABLE_BRIDGE === "true";
 
 initDesktopSentry(desktopBuildMetadata);
 console.log(
@@ -263,6 +275,8 @@ function snapshotDownloadJob(job) {
     totalBytesWritten: job.totalBytesWritten,
     totalBytesExpectedToWrite: job.totalBytesExpectedToWrite,
     localUri: job.localUri || undefined,
+    contentType: job.contentType || undefined,
+    metadataBytes: Math.max(0, Number(job.metadataBytes) || 0),
     error: job.error || undefined,
   };
 }
@@ -276,6 +290,8 @@ function serializeDownloadJob(job) {
     totalBytesWritten: job.totalBytesWritten,
     totalBytesExpectedToWrite: job.totalBytesExpectedToWrite,
     localUri: job.localUri || undefined,
+    contentType: job.contentType || undefined,
+    metadataBytes: Math.max(0, Number(job.metadataBytes) || 0),
     error: job.error || undefined,
   };
 }
@@ -364,6 +380,8 @@ function restoreDownloadJobs() {
           Number(storedJob.totalBytesExpectedToWrite) || 0,
         ),
         localUri: completedFileExists ? toStreamerUri(filePath) : null,
+        contentType: storedJob.contentType || null,
+        metadataBytes: Math.max(0, Number(storedJob.metadataBytes) || 0),
         error:
           status === "Error"
             ? storedJob.error || "Downloaded file could not be found."
@@ -514,6 +532,9 @@ function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
     const rangeTotal = parseContentRangeTotal(res.headers["content-range"]);
     job.totalBytesExpectedToWrite =
       rangeTotal || (contentLength ? contentLength + startByte : 0);
+    job.contentType = Array.isArray(res.headers["content-type"])
+      ? res.headers["content-type"][0]
+      : res.headers["content-type"] || null;
 
     const file = fs.createWriteStream(job.tempPath, {
       flags: startByte > 0 ? "a" : "w",
@@ -609,6 +630,8 @@ function startDownloadJob(id, rawUrl, filename) {
     totalBytesWritten: 0,
     totalBytesExpectedToWrite: 0,
     localUri: null,
+    contentType: null,
+    metadataBytes: 0,
     error: null,
     req: null,
     file: null,
@@ -1332,6 +1355,7 @@ async function getBridgeInfoSnapshot() {
     lanUrl: bridgeLanUrl,
     pairingToken: getBridgePairingToken(),
     build: desktopBuildMetadata,
+    desktopRuntime,
     diagnostics: {
       ...bridgeState,
       status,
@@ -1352,6 +1376,18 @@ async function getBridgeInfoSnapshot() {
 }
 
 async function restartBridgeDaemon() {
+  if (disableBridgeForDesktopSmoke) {
+    bridgeServer = null;
+    setBridgeState({
+      status: "stopped",
+      startedAt: null,
+      error: null,
+      reason: "desktop-smoke-bridge-disabled",
+      pid: null,
+    });
+    return getBridgeInfoSnapshot();
+  }
+
   try {
     bridgeServer?.close?.();
   } catch {}
@@ -1477,6 +1513,22 @@ electron_1.app.whenReady().then(async () => {
     return Boolean(filePath && fs.existsSync(filePath));
   });
 
+  handleTrusted("inspect-file", async (event, localUri) => {
+    const filePath = resolveManagedDownloadPath(
+      downloadsPath,
+      normalizeLocalUri(localUri),
+    );
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { exists: false, isFile: false, sizeBytes: 0 };
+    }
+    const stats = fs.statSync(filePath);
+    return {
+      exists: true,
+      isFile: stats.isFile(),
+      sizeBytes: stats.isFile() ? Math.max(0, stats.size) : 0,
+    };
+  });
+
   handleTrusted("delete-file", async (event, localUri) => {
     const filePath = resolveManagedDownloadPath(
       downloadsPath,
@@ -1532,63 +1584,76 @@ electron_1.app.whenReady().then(async () => {
     return cancelDownloadJob(normalizeIpcId(id));
   });
 
-  // Start the background P2P stream server outside Electron main so native
-  // Node add-ons load against the same Node architecture used by npm install.
-  try {
-    bridgeServer = await startBridgeDaemon();
-    bridgeLanUrl = resolveLanBridgeUrl();
-    console.log(
-      `Successfully started @streamer/stream-server background daemon at ${bridgeLanUrl}`,
-    );
-    electron_1.app.on("will-quit", () => {
-      bridgeServer?.close?.();
-      clearBridgeOwnerClaim();
-    });
-
-    // Announce this desktop bridge on the local network via Bonjour
-    try {
-      const { Bonjour } = await import("bonjour-service");
-      const bonjour = new Bonjour();
-      const service = bonjour.publish({
-        name: `Streamer Desktop (${require("os").hostname()})`,
-        type: "streamer-bridge",
-        protocol: "tcp",
-        port: 11470,
-        txt: {
-          version: desktopBuildMetadata.appVersion,
-          id: electron_1.app.getPath("userData"),
-        },
-      });
-      console.log(`[discovery] Announcing desktop bridge: ${service.name}`);
-
-      electron_1.app.on("will-quit", () => {
-        bonjour.unpublishAll(() => {
-          bonjour.destroy();
-        });
-      });
-    } catch (discoveryError) {
-      captureDesktopException(discoveryError, { component: "bonjour" });
-      console.warn(
-        "[discovery] Failed to announce via Bonjour:",
-        redactSensitiveText(discoveryError?.message || discoveryError),
-      );
-    }
-  } catch (error) {
-    captureDesktopException(error, {
-      component: "stream-server",
-      action: "start-daemon",
-    });
-    console.error(
-      "Failed to start stream server daemon:",
-      redactSensitiveText(error?.message || error),
-    );
-    clearBridgeOwnerClaim();
+  if (disableBridgeForDesktopSmoke) {
     setBridgeState({
-      status: "error",
-      error: error?.message || String(error),
-      reason: classifyBridgeError(error),
+      status: "stopped",
+      startedAt: null,
+      error: null,
+      reason: "desktop-smoke-bridge-disabled",
       pid: null,
     });
+    console.log(
+      "[desktop-smoke] Bridge daemon and Bonjour discovery are disabled.",
+    );
+  } else {
+    // Start the background P2P stream server outside Electron main so native
+    // Node add-ons load against the same Node architecture used by npm install.
+    try {
+      bridgeServer = await startBridgeDaemon();
+      bridgeLanUrl = resolveLanBridgeUrl();
+      console.log(
+        `Successfully started @streamer/stream-server background daemon at ${bridgeLanUrl}`,
+      );
+      electron_1.app.on("will-quit", () => {
+        bridgeServer?.close?.();
+        clearBridgeOwnerClaim();
+      });
+
+      // Announce this desktop bridge on the local network via Bonjour
+      try {
+        const { Bonjour } = await import("bonjour-service");
+        const bonjour = new Bonjour();
+        const service = bonjour.publish({
+          name: `Streamer Desktop (${require("os").hostname()})`,
+          type: "streamer-bridge",
+          protocol: "tcp",
+          port: 11470,
+          txt: {
+            version: desktopBuildMetadata.appVersion,
+            id: electron_1.app.getPath("userData"),
+          },
+        });
+        console.log(`[discovery] Announcing desktop bridge: ${service.name}`);
+
+        electron_1.app.on("will-quit", () => {
+          bonjour.unpublishAll(() => {
+            bonjour.destroy();
+          });
+        });
+      } catch (discoveryError) {
+        captureDesktopException(discoveryError, { component: "bonjour" });
+        console.warn(
+          "[discovery] Failed to announce via Bonjour:",
+          redactSensitiveText(discoveryError?.message || discoveryError),
+        );
+      }
+    } catch (error) {
+      captureDesktopException(error, {
+        component: "stream-server",
+        action: "start-daemon",
+      });
+      console.error(
+        "Failed to start stream server daemon:",
+        redactSensitiveText(error?.message || error),
+      );
+      clearBridgeOwnerClaim();
+      setBridgeState({
+        status: "error",
+        error: error?.message || String(error),
+        reason: classifyBridgeError(error),
+        pid: null,
+      });
+    }
   }
   createWindow();
   createTray();

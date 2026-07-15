@@ -68,6 +68,10 @@ vi.mock("pino-http", () => ({
 
 import { prisma } from "../src/prisma/client.js";
 import { env } from "../src/config/env.js";
+import {
+  aggregatorService,
+  MetadataProvidersUnavailableError,
+} from "../src/modules/aggregator/aggregator.service.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -254,9 +258,41 @@ describe("Aggregator Module", () => {
   });
 
   describe("GET /api/meta/:type/:id", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it("should return 401 without auth token", async () => {
       const res = await request(app).get("/api/meta/movie/tt1234567");
       expect(res.status).toBe(401);
+    });
+
+    it("returns 404 when no installed provider has metadata for the title", async () => {
+      (prisma.installedAddon.findMany as any).mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/meta/movie/tt-missing")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: "Metadata not found" });
+    });
+
+    it("returns a consumer-safe 503 when metadata providers are temporarily unavailable", async () => {
+      vi.spyOn(aggregatorService, "getMeta").mockRejectedValueOnce(
+        new MetadataProvidersUnavailableError(),
+      );
+
+      const res = await request(app)
+        .get("/api/meta/movie/tt-temporary")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({
+        error: "This title could not be loaded right now. Please try again.",
+        code: "METADATA_TEMPORARILY_UNAVAILABLE",
+      });
+      expect(JSON.stringify(res.body)).not.toContain("provider");
     });
   });
 

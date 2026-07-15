@@ -74,6 +74,25 @@ describe("PlayerStatusOverlay", () => {
     ).toBeTruthy();
   });
 
+  it("lets the viewer cancel source preparation immediately", () => {
+    const onCancelPreparation = jest.fn();
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="loading_metrics"
+        runtimeState="preparing_metadata"
+        streamMetrics={null}
+        isBuffering
+        errorMessage={null}
+        onBack={jest.fn()}
+        onCancelPreparation={onCancelPreparation}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText("player.status.cancelPreparation"));
+
+    expect(onCancelPreparation).toHaveBeenCalledTimes(1);
+  });
+
   it("offers retry and Sources & Devices actions on playback errors", () => {
     const onRetry = jest.fn();
     const onChooseSource = jest.fn();

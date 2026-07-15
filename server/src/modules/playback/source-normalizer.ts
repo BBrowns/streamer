@@ -5,6 +5,7 @@ import type {
   MediaCandidate,
   PlaybackAction,
   PlaybackDeviceCompatibility,
+  PlaybackQuality,
   Stream,
 } from "@streamer/shared";
 
@@ -303,6 +304,23 @@ export function qualityWithinProfile(
   return (
     QUALITY_SCORE[candidate.quality || "SD"] <=
     QUALITY_SCORE[deviceProfile.maxQuality]
+  );
+}
+
+export function qualityAllowedByPreferences(
+  candidate: MediaCandidate,
+  preferences?: {
+    allowedQualities?: PlaybackQuality[];
+  },
+) {
+  const allowedQualities = preferences?.allowedQualities;
+  if (!allowedQualities) return true;
+
+  const candidateQuality = candidate.quality;
+  return (
+    candidateQuality !== undefined &&
+    candidateQuality !== "SD" &&
+    allowedQualities.includes(candidateQuality)
   );
 }
 

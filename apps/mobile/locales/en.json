@@ -41,6 +41,7 @@
       "noCatalogsDescription": "Your installed add-ons do not offer catalogs for the selected title type.",
       "catalogErrorTitle": "Catalog unavailable",
       "catalogErrorDescription": "This catalog could not be loaded. Try again.",
+      "inlineCatalogError": "{{provider}} could not load this catalog.",
       "manageAddons": "Manage add-ons"
     },
     "suggestions": {
@@ -62,6 +63,7 @@
       "title": "Filters",
       "subtitle": "Refine these results",
       "type": "Filter by title type",
+      "contentType": "Content type",
       "year": "Year",
       "provider": "Source",
       "sort": "Sort by",
@@ -112,9 +114,10 @@
       "button": "Get Started"
     },
     "sections": {
-      "popularMovies": "Popular Movies",
-      "topTVShows": "Top TV Shows",
-      "recentlyAdded": "Recently Added",
+      "catalogEyebrow": "Catalog",
+      "exploreEyebrow": "Explore",
+      "movies": "Movies",
+      "series": "Series",
       "moreToWatch": "More to Watch",
       "fromProviders": "From Your Providers"
     },
@@ -201,6 +204,9 @@
       "removeMessage": "Are you sure you want to remove {{count}} items from your library?",
       "bulkDeleteTitle": "Remove Items",
       "bulkDeleteMessage": "Are you sure you want to remove {{count}} items? This cannot be undone.",
+      "bulkRemoveWithUndoMessage": "Remove {{count}} titles from your Library? You can undo for a few seconds.",
+      "removeFailed": "Could not remove this title.",
+      "bulkRemoveFailed": "Could not remove the selected titles.",
       "added": "Added to Library",
       "removed": "Removed from Library"
     },
@@ -209,6 +215,7 @@
       "viewDetails": "View Details",
       "remove": "Remove from Library",
       "removeDownload": "Remove Download",
+      "manageDownloads": "Manage downloads",
       "undo": "Undo",
       "restore": "Restore",
       "bulkRemoved": "{{count}} titles removed from Library",
@@ -230,7 +237,13 @@
       "clearAllConfirm": "Delete every managed download and remove its local file?",
       "clearAllButton": "Delete all",
       "deleteTitle": "Delete download?",
-      "deleteMessage": "Delete \"{{title}}\" from this device?"
+      "deleteMessage": "Delete \"{{title}}\" from this device?",
+      "deleteFailed": "Could not delete this download.",
+      "deleting": "Deleting “{{title}}”…",
+      "bulkDeleteTitle": "Delete selected downloads?",
+      "bulkDeleteMessage": "Delete {{count}} downloads from this device? You can undo for a few seconds.",
+      "bulkDeleteFailed": "Some downloads could not be deleted.",
+      "bulkDeleting": "Deleting {{count}} downloads…"
     },
     "card": {
       "unknown": "Unknown Download",
@@ -261,6 +274,9 @@
       "checking": "Checking file",
       "readyOffline": "Ready offline",
       "completed": "Completed",
+      "needsVerification": "Needs verification",
+      "incomplete": "Incomplete",
+      "failed": "Failed",
       "error": "Needs attention"
     },
     "sections": {
@@ -285,7 +301,12 @@
       "needsVerification": "Needs check"
     },
     "storage": {
+      "freeTitle": "Free device storage",
       "externalCleanup": "Streamer can only remove downloads managed by this app. Use your device storage settings for other files."
+    },
+    "selection": {
+      "selected": "{{count}} selected",
+      "deleteSelected": "Delete selected downloads"
     },
     "smart": {
       "title": "Smart Downloads",
@@ -304,6 +325,16 @@
       "storageLimit": "{{count}} GB limit",
       "hlsUnsupported": "HLS offline remains unsupported",
       "plannedTitle": "Planned next episodes",
+      "manage": "Manage Smart Downloads settings",
+      "manageSubtitle": "Next episode, Wi‑Fi, quality, and cleanup preferences",
+      "plannedCount": "{{count}} next episodes planned",
+      "planStatus": {
+        "planned": "Planned",
+        "queued": "Queued",
+        "downloaded": "Downloaded",
+        "blocked": "Blocked",
+        "skipped": "Skipped"
+      },
       "unknownSeries": "Series"
     },
     "recovery": {
@@ -330,6 +361,8 @@
       "prepareAgainAction": "Prepare again",
       "unsupportedTitle": "Offline download unavailable",
       "unsupportedMessage": "This viewing option cannot be saved for offline use.",
+      "invalidMediaTitle": "Downloaded file is invalid",
+      "invalidMediaMessage": "This file is incomplete or cannot be played. Download it again.",
       "removeAction": "Remove",
       "failedTitle": "Download needs attention",
       "failedMessage": "Try the download again or choose another viewing option.",
@@ -446,6 +479,13 @@
       "successMessage": "Your server and bridge settings have been updated."
     },
     "about": {
+      "notAvailable": "Not available",
+      "productDescription": "Movies and series, across your devices.",
+      "streamerApp": "Streamer app",
+      "desktopShell": "Desktop shell",
+      "electronRuntime": "Electron runtime",
+      "buildSha": "Build SHA",
+      "channel": "Channel",
       "releasePolicy": "Desktop updates are checked manually until the release pipeline is fully validated.",
       "checkUpdates": "Check for updates",
       "terms": "Terms of use",
@@ -576,8 +616,13 @@
     },
     "playbackPreferences": {
       "quality": "Playback quality",
-      "qualityDescription": "Choose the maximum quality used when Streamer ranks sources.",
-      "auto": "Auto",
+      "qualityDescription": "Streamer only uses the selected video qualities. SD and sources without a known quality stay excluded. Keep at least one selected.",
+      "qualityOptions": {
+        "2160": "4K (2160p)",
+        "1080": "Full HD (1080p)",
+        "720": "HD (720p)",
+        "480": "480p"
+      },
       "audio": "Audio language",
       "audioDescription": "Prefer this audio track when it is available.",
       "subtitles": "Subtitles",
@@ -620,8 +665,16 @@
     },
     "sourcesSection": {
       "addonsTitle": "Content sources",
+      "contentAddonsTitle": "Content Add-ons",
       "addonsDescription": "Install and manage the add-ons that provide your catalog.",
-      "pageDescription": "Review playback availability, connected devices, and content sources."
+      "pageDescription": "Review playback availability, connected devices, and content sources.",
+      "playbackDevicesTitle": "Playback & devices",
+      "playbackDevicesDescription": "See whether this device can prepare local playback and casting.",
+      "localPlaybackService": "Local Playback Service",
+      "localPlaybackReady": "Local playback and offline preparation are available.",
+      "localPlaybackLimited": "Some source types may need a desktop setup check.",
+      "castingDevices": "Casting & Devices",
+      "castingLimited": "Casting is available for compatible sources and devices."
     },
     "advancedSection": {
       "copyDiagnostics": "Copy diagnostics",
@@ -673,8 +726,27 @@
       "diagnosticsUnavailable": "Diagnostics unavailable",
       "diagnosticsUnavailableDescription": "Could not export diagnostics.",
       "cacheCleaned": "Cache cleaned",
+      "cacheCleanupResult": "Removed {{count}} inactive cache entries and freed {{size}}.",
+      "torrentCacheUsage": "{{count}} entries · {{usage}}",
       "cacheCleanupFailed": "Cache cleanup failed",
-      "cacheCleanupFailedDescription": "Could not clean inactive cache entries."
+      "cacheCleanupFailedDescription": "Could not clean inactive cache entries.",
+      "serviceMaintenance": "Playback service maintenance",
+      "serviceMaintenanceDescription": "Re-check, repair, clean cached files or export diagnostics.",
+      "restartDescription": "Restart the local desktop playback process.",
+      "cleanPlaybackCache": "Clean playback cache",
+      "exportDiagnostics": "Export diagnostics",
+      "technicalDetails": "Technical details",
+      "hideTechnical": "Hide internal status and version details.",
+      "showTechnical": "Show internal status and version details.",
+      "runtimeBuildDetails": "Runtime and build details",
+      "appBuildLabel": "App build",
+      "statusLabel": "Status",
+      "reasonLabel": "Reason",
+      "messageLabel": "Message",
+      "runtimeLabel": "Runtime",
+      "nativeRuntimeLabel": "Native runtime",
+      "ffmpegLabel": "FFmpeg",
+      "remuxCacheLabel": "Remux cache"
     },
     "onboarding": {
       "title": "Personalize",
@@ -694,6 +766,7 @@
     "install": {
       "title": "Install Add-on",
       "hint": "Paste a manifest.json URL to add a content source.",
+      "urlLabel": "Manifest URL",
       "placeholder": "https://addon-url.com/manifest.json",
       "button": "Install",
       "success": "Add-on installed!",
@@ -705,7 +778,8 @@
       "uninstall": "Uninstall",
       "remove": "Remove",
       "cancel": "Cancel",
-      "confirmRemove": "Remove \"{{name}}\"?"
+      "confirmRemove": "Remove \"{{name}}\"?",
+      "removeError": "This add-on could not be removed. Try again."
     },
     "empty": {
       "title": "No add-ons installed",
@@ -727,6 +801,9 @@
       "none": "No streams for this episode.",
       "noneData": "No episode data available.",
       "season": "Season {{season}}",
+      "playA11y": "Play episode {{episode}}: {{title}}",
+      "downloadA11y": "Download episode {{episode}}: {{title}}",
+      "moreSourcesA11y": "More sources for episode {{episode}}: {{title}}",
       "streamsLabel": "S{{season}} E{{episode}} — Streams"
     },
     "quality": "Select Quality",
@@ -753,9 +830,25 @@
       "more": "More Sources",
       "show": "Show more sources",
       "hide": "Hide more sources",
-      "available": "Advanced fallback · {{count}} available",
+      "available": "{{count}} available",
       "groups": "Advanced fallback · {{count}} groups",
-      "filterByQuality": "Filter sources by {{quality}}"
+      "filterByQuality": "Filter sources by {{quality}}",
+      "choiceError": "Sources could not be prepared.",
+      "noneConsumer": "No compatible sources are available.",
+      "technical": "Show technical details",
+      "hideTechnical": "Hide technical details",
+      "compatibility": {
+        "ready": "Ready on this device",
+        "localService": "Uses Local Playback Service",
+        "conversion": "Prepared automatically"
+      },
+      "language": {
+        "notListed": "Language not listed",
+        "multiple": "Multiple languages"
+      },
+      "quality": {
+        "auto": "Auto"
+      }
     },
     "readiness": {
       "finishSetupTitle": "Finish playback setup",
@@ -763,6 +856,10 @@
       "openSourcesDetail": "Open Sources & Devices to connect to the desktop app.",
       "directMayWork": "Direct viewing options may still work on this device.",
       "sourcesAction": "Sources & Devices",
+      "qualitySelectionTitle": "No source matches your quality choices",
+      "qualitySelectionMessage": "Available sources fall outside the video qualities selected in Playback settings.",
+      "qualitySelectionDetail": "Allow another quality, then try playback again.",
+      "playbackSettingsAction": "Playback settings",
       "extraSupportTitle": "Extra playback support needed",
       "extraSupportMessage": "This viewing option needs help from the desktop app.",
       "checkSupportDetail": "Review Sources & Devices or choose another viewing option.",
@@ -805,6 +902,20 @@
         "download": "Download unavailable",
         "cast": "Cast unavailable"
       }
+    },
+    "loadState": {
+      "eyebrow": "Title details",
+      "loadingTitle": "Loading title details",
+      "loadingDescription": "Getting the latest information and viewing options.",
+      "notFoundTitle": "This title isn’t available",
+      "notFoundDescription": "None of your current add-ons could provide details for this title. It may have been removed or may not be part of your catalogs.",
+      "networkTitle": "You’re offline",
+      "networkDescription": "Reconnect to the internet, then try loading this title again.",
+      "temporaryTitle": "This title couldn’t load",
+      "temporaryDescription": "Something interrupted this request. Try again in a moment.",
+      "retry": "Try again",
+      "reviewAddons": "Review add-ons",
+      "sourcesDevices": "Sources & Devices"
     },
     "errors": {
       "notFound": "Content not found",
@@ -969,6 +1080,8 @@
       "preparingMetadata": "Reading torrent metadata...",
       "remuxing": "Preparing a compatible video stream...",
       "preparingSubtitle": "This can take a moment for torrent sources.",
+      "cancelPreparation": "Cancel source preparation",
+      "cancelPreparationHint": "You can also press Escape to cancel.",
       "tryingFallback": "Trying another source...",
       "buffering": "Buffering...",
       "errorTitle": "Connection Failed",
@@ -981,7 +1094,10 @@
       "errorSubtitle": "Unable to load stream"
     },
     "errors": {
-      "noStream": "No stream selected",
+      "noStreamStatus": "Playback unavailable",
+      "noStreamTitle": "Nothing is queued to play",
+      "noStream": "Choose a title to start playback. If you were already watching, the playback request may have expired.",
+      "browseTitles": "Browse titles",
       "bridgeUnavailable": "Playback support is not ready. Open Sources & Devices, review this device, and try again.",
       "playbackFailed": "This title could not start playing.",
       "playbackTimeout": "This title took too long to prepare. Try again or choose another viewing option.",
@@ -993,7 +1109,18 @@
     },
     "cast": {
       "castingTo": "Casting to {{name}}",
-      "stop": "Stop Casting"
+      "stop": "Stop Casting",
+      "searching": "Searching for displays...",
+      "noDevices": "No displays found on this network.",
+      "compatibleReady": "A compatible stream is ready. Choose a display.",
+      "sourceReady": "Source ready. Choose a display.",
+      "connecting": "Connecting to {{name}}...",
+      "connected": "Connected to {{name}}.",
+      "available": "Available",
+      "refreshDisplays": "Refresh displays",
+      "chooseAnotherDevice": "Choose another device",
+      "tryAnotherSource": "Try another source",
+      "sourcesDevices": "Sources & Devices"
     },
     "casting": {
       "active": "Casting",
@@ -1030,7 +1157,14 @@
     "retry": "Retry",
     "cancel": "Cancel",
     "dismiss": "Dismiss",
-    "actions": { "viewDetails": "View details" },
+    "actions": {
+      "viewDetails": "View details",
+      "play": "Play",
+      "resume": "Resume",
+      "castToDevice": "Cast to device",
+      "addToLibrary": "Add to Library"
+    },
+    "castAndCrew": "Cast & crew",
     "media": { "movie": "Movie", "series": "Series" },
     "unexpectedError": {
       "title": "Something went wrong",

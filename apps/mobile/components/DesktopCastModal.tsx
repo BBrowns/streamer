@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useReducer, useRef } from "react";
 import {
   View,
   Text,
@@ -36,9 +36,13 @@ import {
 } from "./ui/designSystem";
 import { AppButton } from "./ui/AppButton";
 import { getCastRecovery } from "../services/actionRecovery";
-import type { CastRecoveryGuidance } from "../types/actionRecovery";
 import { useTheme } from "../hooks/useTheme";
 import { useReducedMotion } from "../hooks/useReducedMotion";
+import {
+  castDialogReducer,
+  hasUsableCastFallback,
+  initialCastDialogState,
+} from "./cast/castDialogState";
 
 export interface CastStartDetails {
   sessionId?: string;
@@ -55,22 +59,6 @@ interface Props {
   onCastStart?: (device: CastDevice, details: CastStartDetails) => void;
 }
 
-type SourceReadiness = "idle" | "preparing" | "fallback" | "ready" | "failed";
-
-function getDeviceCapabilitySummary(device: CastDevice) {
-  const capabilities = device.capabilities;
-  if (!capabilities) return device.type;
-
-  const formats = [
-    capabilities.supportsMp4 !== false ? "MP4" : null,
-    capabilities.supportsHls ? "HLS" : null,
-    capabilities.supportsMkv ? "MKV" : null,
-    capabilities.remuxAllowed !== false ? "Remux" : null,
-  ].filter((label): label is string => Boolean(label));
-
-  return formats.length > 0 ? formats.join(" · ") : device.type;
-}
-
 export function DesktopCastModal({
   visible,
   orchestratorInput,
@@ -83,16 +71,10 @@ export function DesktopCastModal({
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const { t } = useTranslation();
-  const [devices, setDevices] = useState<CastDevice[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [castingTo, setCastingTo] = useState<string | null>(null);
-  const [sourceReadiness, setSourceReadiness] =
-    useState<SourceReadiness>("idle");
-  const [preparedCast, setPreparedCast] =
-    useState<CastOrchestratorSuccess | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [recovery, setRecovery] = useState<CastRecoveryGuidance | null>(null);
-  const devicesRef = useRef<CastDevice[]>([]);
+  const [state, dispatch] = useReducer(
+    castDialogReducer,
+    initialCastDialogState,
+  );
   const orchestratorInputRef = useRef(orchestratorInput);
   const requestIdRef = useRef(0);
   const preparedSessionIdRef = useRef<string | null>(null);
@@ -102,10 +84,6 @@ export function DesktopCastModal({
     orchestratorInputRef.current = orchestratorInput;
   }, [orchestratorInput]);
 
-  useEffect(() => {
-    devicesRef.current = devices;
-  }, [devices]);
-
   const cancelPreparedSession = useCallback(() => {
     const sessionId = preparedSessionIdRef.current;
     if (sessionId && sessionId !== handedOffSessionIdRef.current) {
@@ -114,55 +92,47 @@ export function DesktopCastModal({
     preparedSessionIdRef.current = null;
   }, []);
 
-  const fetchDevices = useCallback(async () => {
-    setLoading(true);
-    try {
-      setDevices(await castService.getDevices());
-    } catch (error) {
-      setDevices([]);
-      const nextRecovery = getCastRecovery(error);
-      if (__DEV__) {
-        console.warn(
-          "[DesktopCastModal] Device discovery failed:",
-          nextRecovery.reason,
-        );
-      }
-      setErrorMessage(nextRecovery.message);
-      setRecovery(nextRecovery);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const prepareSource = useCallback(
     async (
       requestId: number,
-      capabilities?: CastDeviceCapabilities,
+      devices: CastDevice[],
+      options: {
+        capabilities?: CastDeviceCapabilities;
+        device?: CastDevice;
+        reason?: "initial" | "device" | "fallback";
+      } = {},
     ): Promise<CastOrchestratorSuccess | null> => {
       const input = orchestratorInputRef.current;
       if (!input) return null;
 
-      setSourceReadiness("preparing");
-      setErrorMessage(null);
-      setRecovery(null);
-      const deviceProfile = getChromecastDeviceProfile(capabilities);
+      dispatch({
+        type: "preparationStarted",
+        devices,
+        device: options.device,
+        reason: options.reason || "initial",
+      });
+      const deviceProfile = getChromecastDeviceProfile(options.capabilities);
       let result: Awaited<ReturnType<typeof prepareCast>>;
       try {
         result = await prepareCast(input, {
           deviceProfile,
-          castProfile: getCastSessionProfile(deviceProfile, capabilities),
-        });
-      } catch (error: any) {
-        if (requestId !== requestIdRef.current) return null;
-        setPreparedCast(null);
-        setSourceReadiness("failed");
-        const nextRecovery = getCastRecovery(error, {
-          hasDeviceCapabilities: devicesRef.current.some(
-            (device) => device.capabilities,
+          castProfile: getCastSessionProfile(
+            deviceProfile,
+            options.capabilities,
           ),
         });
-        setErrorMessage(nextRecovery.message);
-        setRecovery(nextRecovery);
+      } catch (error) {
+        if (requestId !== requestIdRef.current) return null;
+        const nextRecovery = getCastRecovery(error, {
+          hasDeviceCapabilities: devices.some((device) => device.capabilities),
+        });
+        dispatch({
+          type: "preparationFailed",
+          devices,
+          device: options.device,
+          recovery: nextRecovery,
+          canTryAnotherSource: false,
+        });
         return null;
       }
 
@@ -176,24 +146,75 @@ export function DesktopCastModal({
       preparedSessionIdRef.current = result.sessionId || null;
       if (!result.ok) {
         const nextRecovery = getCastRecovery(result.error, {
-          hasDeviceCapabilities: devicesRef.current.some(
-            (device) => device.capabilities,
-          ),
+          hasDeviceCapabilities: devices.some((device) => device.capabilities),
         });
-        setPreparedCast(null);
-        setSourceReadiness("failed");
-        setErrorMessage(nextRecovery.message);
-        setRecovery(nextRecovery);
+        dispatch({
+          type: "preparationFailed",
+          devices,
+          device: options.device,
+          recovery: nextRecovery,
+          canTryAnotherSource: hasUsableCastFallback(result),
+        });
         return null;
       }
 
-      setPreparedCast(result);
-      setSourceReadiness("ready");
-      setRecovery(null);
+      dispatch({ type: "sourceReady", devices, source: result });
       return result;
     },
     [],
   );
+
+  const discoverDevices = useCallback(
+    async (requestId: number) => {
+      dispatch({ type: "discoveryStarted" });
+      let devices: CastDevice[];
+      try {
+        devices = await castService.getDevices();
+      } catch (error) {
+        if (requestId !== requestIdRef.current) return;
+        const nextRecovery = getCastRecovery(error);
+        if (__DEV__) {
+          console.warn(
+            "[DesktopCastModal] Device discovery failed:",
+            nextRecovery.reason,
+          );
+        }
+        dispatch({ type: "discoveryFailed", recovery: nextRecovery });
+        return;
+      }
+
+      if (requestId !== requestIdRef.current) return;
+      if (devices.length === 0) {
+        dispatch({ type: "discoveryEmpty" });
+        return;
+      }
+
+      if (orchestratorInputRef.current) {
+        await prepareSource(requestId, devices);
+        return;
+      }
+      if (playbackUri) {
+        dispatch({ type: "sourceReady", devices });
+        return;
+      }
+
+      dispatch({
+        type: "preparationFailed",
+        devices,
+        recovery: getCastRecovery(
+          new Error("No cast-ready source is available."),
+        ),
+        canTryAnotherSource: false,
+      });
+    },
+    [playbackUri, prepareSource],
+  );
+
+  const restartDiscovery = useCallback(() => {
+    cancelPreparedSession();
+    const requestId = ++requestIdRef.current;
+    void discoverDevices(requestId);
+  }, [cancelPreparedSession, discoverDevices]);
 
   useEffect(() => {
     if (!visible) return;
@@ -201,170 +222,337 @@ export function DesktopCastModal({
     const requestId = ++requestIdRef.current;
     handedOffSessionIdRef.current = null;
     preparedSessionIdRef.current = null;
-    setCastingTo(null);
-    setPreparedCast(null);
-    setErrorMessage(null);
-    setRecovery(null);
-    void fetchDevices();
-
-    if (orchestratorInputRef.current) {
-      void prepareSource(requestId);
-    } else if (playbackUri) {
-      setSourceReadiness("ready");
-    } else {
-      setSourceReadiness("failed");
-      const nextRecovery = getCastRecovery(
-        new Error("No cast-ready source is available."),
-      );
-      setErrorMessage(nextRecovery.message);
-      setRecovery(nextRecovery);
-    }
+    void discoverDevices(requestId);
 
     return () => {
       requestIdRef.current += 1;
       cancelPreparedSession();
     };
-  }, [
-    cancelPreparedSession,
-    fetchDevices,
-    playbackUri,
-    prepareSource,
-    visible,
-  ]);
+  }, [cancelPreparedSession, discoverDevices, visible]);
 
-  const handleCast = async (device: CastDevice) => {
-    setCastingTo(device.id);
-    setErrorMessage(null);
-
-    try {
-      let source = preparedCast;
-      if (orchestratorInputRef.current && device.capabilities) {
-        cancelPreparedSession();
-        const requestId = ++requestIdRef.current;
-        source = await prepareSource(requestId, device.capabilities);
+  const handleCast = useCallback(
+    async (device: CastDevice) => {
+      const isConnectionRetry =
+        state.status === "connectionFailure" &&
+        state.phase === "connection" &&
+        state.device?.id === device.id;
+      if (
+        state.status !== "ready" &&
+        !isConnectionRetry &&
+        !(state.status === "unsupportedDevice" && state.showDevicePicker)
+      ) {
+        return;
       }
 
-      if (orchestratorInputRef.current) {
-        if (!source) {
-          throw new Error("No cast-ready source is available.");
-        }
+      const devices = state.devices;
+      let source = "source" in state ? state.source : undefined;
+      if (
+        orchestratorInputRef.current &&
+        (device.capabilities || isConnectionRetry)
+      ) {
+        cancelPreparedSession();
+        const requestId = ++requestIdRef.current;
+        source =
+          (await prepareSource(requestId, devices, {
+            capabilities: device.capabilities,
+            device,
+            reason: isConnectionRetry ? "initial" : "device",
+          })) || undefined;
+        if (!source) return;
+      }
 
-        const result = await startCastSession(
-          device,
-          title,
-          {
-            sessionId: source.sessionId,
-            candidateId: source.candidateId,
-            attemptId: source.attemptId,
-            stream: source.stream,
-            uri: source.resolvedUrl,
-          },
-          {
-            onFallback: () => setSourceReadiness("fallback"),
-          },
-        );
-        if (!result.ok) {
-          throw result.error;
-        }
+      dispatch({ type: "castStarted", devices, device, source });
 
-        handedOffSessionIdRef.current = result.sessionId;
-        onCastStart?.(device, {
-          sessionId: result.sessionId,
-          source: {
+      try {
+        if (orchestratorInputRef.current) {
+          if (!source) {
+            const recovery = getCastRecovery(
+              new Error("No cast-ready source is available."),
+            );
+            dispatch({
+              type: "castFailed",
+              devices,
+              device,
+              source,
+              recovery,
+              canTryAnotherSource: false,
+            });
+            return;
+          }
+
+          const result = await startCastSession(
+            device,
+            title,
+            {
+              sessionId: source.sessionId,
+              candidateId: source.candidateId,
+              attemptId: source.attemptId,
+              stream: source.stream,
+              uri: source.resolvedUrl,
+            },
+            {
+              onFallback: () => dispatch({ type: "castFallbackStarted" }),
+            },
+          );
+          if (!result.ok) {
+            const recovery = getCastRecovery(result.error, {
+              hasDeviceCapabilities: Boolean(device.capabilities),
+            });
+            dispatch({
+              type: "castFailed",
+              devices,
+              device,
+              source,
+              recovery,
+              canTryAnotherSource: hasUsableCastFallback({
+                error: result.error,
+                plan: source.plan,
+              }),
+            });
+            return;
+          }
+
+          const connectedSource = {
             ...source,
             stream: result.stream,
             resolvedUrl: result.uri,
             candidateId: result.candidateId,
             attemptId: result.attemptId,
-          },
+          };
+          handedOffSessionIdRef.current = result.sessionId;
+          dispatch({
+            type: "castConnected",
+            devices,
+            device,
+            source: connectedSource,
+            sessionId: result.sessionId,
+          });
+          onCastStart?.(device, {
+            sessionId: result.sessionId,
+            source: connectedSource,
+          });
+          return;
+        }
+
+        if (!playbackUri) {
+          throw new Error("No cast-ready source is available.");
+        }
+
+        await castService.play(
+          device.id,
+          playbackUri,
+          title,
+          getCastContentType({ url: playbackUri }, playbackUri),
+        );
+        dispatch({ type: "castConnected", devices, device });
+        onCastStart?.(device, {});
+      } catch (error) {
+        const nextRecovery = getCastRecovery(error, {
+          hasDeviceCapabilities: Boolean(device.capabilities),
         });
-        return;
+        if (__DEV__) {
+          console.warn("[DesktopCastModal] Cast failed:", nextRecovery.reason);
+        }
+        dispatch({
+          type: "castFailed",
+          devices,
+          device,
+          source,
+          recovery: nextRecovery,
+          canTryAnotherSource: false,
+        });
       }
-
-      if (!playbackUri) {
-        throw new Error("No cast-ready source is available.");
-      }
-
-      await castService.play(
-        device.id,
-        playbackUri,
-        title,
-        getCastContentType({ url: playbackUri }, playbackUri),
-      );
-      onCastStart?.(device, {});
-    } catch (error: any) {
-      const nextRecovery = getCastRecovery(error, {
-        hasDeviceCapabilities: Boolean(device.capabilities),
-      });
-      if (__DEV__) {
-        console.warn("[DesktopCastModal] Cast failed:", nextRecovery.reason);
-      }
-      setCastingTo(null);
-      setSourceReadiness("failed");
-      setErrorMessage(nextRecovery.message);
-      setRecovery(nextRecovery);
-    }
-  };
+    },
+    [
+      cancelPreparedSession,
+      playbackUri,
+      prepareSource,
+      state,
+      title,
+      onCastStart,
+    ],
+  );
 
   const handleRecovery = useCallback(() => {
-    if (!recovery) return;
-    if (recovery.action === "repair_bridge") {
-      if (onOpenSourcesDevices) onOpenSourcesDevices();
-      else onClose();
+    if (state.status === "noDevices") {
+      restartDiscovery();
       return;
     }
-    if (recovery.action === "refresh_devices") {
-      setErrorMessage(null);
-      setRecovery(null);
-      void fetchDevices();
-      return;
-    }
-    if (
-      recovery.action === "retry" ||
-      recovery.action === "replan" ||
-      recovery.action === "choose_compatible_device"
-    ) {
-      const deviceWithCapabilities = devices.find(
-        (device) => device.capabilities,
+
+    if (state.status === "unsupportedDevice") {
+      const alternativeDevices = state.devices.filter(
+        (device) => device.id !== state.rejectedDeviceId,
       );
-      const requestId = ++requestIdRef.current;
-      void prepareSource(requestId, deviceWithCapabilities?.capabilities);
+      if (alternativeDevices.length > 0 && !state.showDevicePicker) {
+        dispatch({ type: "devicePickerOpened" });
+        return;
+      }
+      if (state.canTryAnotherSource && orchestratorInputRef.current) {
+        cancelPreparedSession();
+        const requestId = ++requestIdRef.current;
+        void prepareSource(requestId, state.devices, { reason: "fallback" });
+      }
       return;
     }
-    onClose();
+
+    if (state.status === "preparationFailure") {
+      if (state.recovery.action === "repair_bridge") {
+        if (onOpenSourcesDevices) onOpenSourcesDevices();
+        else onClose();
+        return;
+      }
+      if (!orchestratorInputRef.current) return;
+      if (state.recovery.action === "replan" && !state.canTryAnotherSource) {
+        return;
+      }
+      cancelPreparedSession();
+      const requestId = ++requestIdRef.current;
+      void prepareSource(requestId, state.devices, {
+        capabilities: state.device?.capabilities,
+        device: state.device,
+        reason: state.canTryAnotherSource ? "fallback" : "initial",
+      });
+      return;
+    }
+
+    if (state.status === "connectionFailure") {
+      if (state.recovery.action === "repair_bridge") {
+        if (onOpenSourcesDevices) onOpenSourcesDevices();
+        else onClose();
+        return;
+      }
+      if (
+        state.phase === "discovery" ||
+        state.recovery.action === "refresh_devices"
+      ) {
+        restartDiscovery();
+        return;
+      }
+      if (state.device) void handleCast(state.device);
+    }
   }, [
-    devices,
-    fetchDevices,
+    cancelPreparedSession,
+    handleCast,
     onClose,
     onOpenSourcesDevices,
     prepareSource,
-    recovery,
+    restartDiscovery,
+    state,
   ]);
 
-  const sourceStatusText =
-    sourceReadiness === "preparing"
-      ? t("player.controls.remuxPreparing", {
-          defaultValue: "Preparing a cast-ready source...",
-        })
-      : sourceReadiness === "fallback"
-        ? t("player.status.tryingFallback", {
-            defaultValue: "Trying another compatible source...",
-          })
-        : sourceReadiness === "ready"
-          ? preparedCast?.plan.requiresRemux
-            ? "A compatible stream is ready. Choose a display."
-            : "Source ready. Choose a display."
-          : sourceReadiness === "failed"
-            ? "A cast-ready source could not be prepared."
-            : null;
-  const readinessColor =
-    sourceReadiness === "failed"
+  const preparedSource = "source" in state ? state.source : undefined;
+  const statusText = (() => {
+    switch (state.status) {
+      case "discovering":
+        return t("player.cast.searching", {
+          defaultValue: "Searching for displays...",
+        });
+      case "noDevices":
+        return t("player.cast.noDevices", {
+          defaultValue: "No displays found on this network.",
+        });
+      case "preparing":
+        return state.reason === "fallback"
+          ? t("player.status.tryingFallback", {
+              defaultValue: "Trying another compatible source...",
+            })
+          : t("player.controls.remuxPreparing", {
+              defaultValue: "Preparing a cast-ready source...",
+            });
+      case "ready":
+        return preparedSource?.plan.requiresRemux
+          ? t("player.cast.compatibleReady", {
+              defaultValue: "A compatible stream is ready. Choose a display.",
+            })
+          : t("player.cast.sourceReady", {
+              defaultValue: "Source ready. Choose a display.",
+            });
+      case "preparationFailure":
+      case "unsupportedDevice":
+      case "connectionFailure":
+        return state.recovery.message;
+      case "casting":
+        return state.tryingFallback
+          ? t("player.status.tryingFallback", {
+              defaultValue: "Trying another compatible source...",
+            })
+          : t("player.cast.connecting", {
+              name: state.device.name,
+              defaultValue: "Connecting to {{name}}...",
+            });
+      case "connected":
+        return t("player.cast.connected", {
+          name: state.device.name,
+          defaultValue: "Connected to {{name}}.",
+        });
+    }
+  })();
+  const statusColor =
+    state.status === "preparationFailure" ||
+    state.status === "connectionFailure"
       ? colors.error
-      : sourceReadiness === "fallback"
+      : state.status === "unsupportedDevice"
         ? colors.warning
-        : sourceReadiness === "ready"
+        : state.status === "ready" || state.status === "connected"
           ? colors.success
           : colors.tint;
+  const statusBusy =
+    state.status === "discovering" ||
+    state.status === "preparing" ||
+    state.status === "casting";
+  const recoveryLabel = (() => {
+    if (state.status === "noDevices") {
+      return t("player.cast.refreshDisplays", {
+        defaultValue: "Refresh displays",
+      });
+    }
+    if (state.status === "unsupportedDevice") {
+      if (state.showDevicePicker) return null;
+      const hasAlternativeDevice = state.devices.some(
+        (device) => device.id !== state.rejectedDeviceId,
+      );
+      if (hasAlternativeDevice) {
+        return t("player.cast.chooseAnotherDevice", {
+          defaultValue: "Choose another device",
+        });
+      }
+      return state.canTryAnotherSource
+        ? t("player.cast.tryAnotherSource", {
+            defaultValue: "Try another source",
+          })
+        : null;
+    }
+    if (state.status === "preparationFailure") {
+      if (state.recovery.action === "repair_bridge") {
+        return t("player.cast.sourcesDevices", {
+          defaultValue: "Sources & Devices",
+        });
+      }
+      if (state.recovery.action === "replan" && !state.canTryAnotherSource) {
+        return null;
+      }
+      return state.canTryAnotherSource
+        ? t("player.cast.tryAnotherSource", {
+            defaultValue: "Try another source",
+          })
+        : state.recovery.actionLabel;
+    }
+    if (state.status === "connectionFailure") {
+      return state.recovery.action === "repair_bridge"
+        ? t("player.cast.sourcesDevices", {
+            defaultValue: "Sources & Devices",
+          })
+        : state.recovery.actionLabel;
+    }
+    return null;
+  })();
+  const showDeviceList =
+    state.devices.length > 0 &&
+    (state.status === "ready" ||
+      state.status === "preparing" ||
+      state.status === "casting" ||
+      state.status === "connected" ||
+      (state.status === "unsupportedDevice" && state.showDevicePicker));
 
   return (
     <Modal
@@ -425,49 +613,51 @@ export function DesktopCastModal({
             </Pressable>
           </View>
 
-          {!!sourceStatusText && (
-            <View
-              style={[
-                styles.readiness,
-                {
-                  backgroundColor: readinessColor + "12",
-                  borderColor: readinessColor + "38",
-                },
-              ]}
-            >
-              {sourceReadiness === "preparing" ? (
-                <ActivityIndicator size="small" color={readinessColor} />
-              ) : (
-                <MaterialIcons
-                  name={
-                    sourceReadiness === "ready"
-                      ? "check-circle"
-                      : sourceReadiness === "fallback"
-                        ? "sync"
-                        : "error"
-                  }
-                  size={18}
-                  color={readinessColor}
-                />
-              )}
-              <Text style={[styles.readinessText, { color: colors.text }]}>
-                {sourceStatusText}
-              </Text>
-            </View>
-          )}
-
-          {errorMessage && (
-            <Text style={[styles.errorText, { color: colors.error }]}>
-              {errorMessage}
+          <View
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.readiness,
+              {
+                backgroundColor: statusColor + "12",
+                borderColor: statusColor + "38",
+              },
+            ]}
+          >
+            {statusBusy ? (
+              <ActivityIndicator size="small" color={statusColor} />
+            ) : (
+              <MaterialIcons
+                name={
+                  state.status === "ready" || state.status === "connected"
+                    ? "check-circle"
+                    : state.status === "noDevices"
+                      ? "tv-off"
+                      : state.status === "unsupportedDevice" ||
+                          state.status === "preparationFailure" ||
+                          state.status === "connectionFailure"
+                        ? "error"
+                        : "cast"
+                }
+                size={18}
+                color={statusColor}
+              />
+            )}
+            <Text style={[styles.readinessText, { color: colors.text }]}>
+              {statusText}
             </Text>
-          )}
-          {recovery && recovery.action !== "choose_compatible_device" ? (
+          </View>
+
+          {recoveryLabel ? (
             <AppButton
-              label={recovery.actionLabel}
+              label={recoveryLabel}
               icon={
-                recovery.action === "repair_bridge"
+                (state.status === "preparationFailure" ||
+                  state.status === "connectionFailure") &&
+                state.recovery.action === "repair_bridge"
                   ? "construct-outline"
-                  : "refresh"
+                  : state.status === "unsupportedDevice"
+                    ? "tv-outline"
+                    : "refresh"
               }
               variant="secondary"
               size="small"
@@ -476,46 +666,46 @@ export function DesktopCastModal({
             />
           ) : null}
 
-          {loading && devices.length === 0 ? (
-            <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color={colors.tint} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                Searching for displays...
-              </Text>
-            </View>
-          ) : devices.length === 0 ? (
-            <View style={styles.centerBox}>
-              <MaterialIcons name="tv-off" size={44} color={colors.disabled} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No displays found on this network
-              </Text>
-            </View>
-          ) : (
+          {showDeviceList ? (
             <FlatList
-              data={devices}
+              data={state.devices.filter(
+                (device) =>
+                  state.status !== "unsupportedDevice" ||
+                  device.id !== state.rejectedDeviceId,
+              )}
               keyExtractor={(device) => device.id}
               contentContainerStyle={styles.deviceList}
               renderItem={({ item }) => {
-                const isCasting = castingTo === item.id;
-                const canRetryWithDeviceCapabilities =
-                  sourceReadiness === "failed" && !!item.capabilities;
+                const isActiveDevice =
+                  (state.status === "casting" ||
+                    state.status === "connected") &&
+                  state.device.id === item.id;
+                const isCasting =
+                  state.status === "casting" && state.device.id === item.id;
+                const isConnected =
+                  state.status === "connected" && state.device.id === item.id;
                 const deviceDisabled =
-                  castingTo !== null ||
-                  loading ||
-                  (sourceReadiness !== "ready" &&
-                    !canRetryWithDeviceCapabilities);
+                  state.status !== "ready" &&
+                  !(
+                    state.status === "unsupportedDevice" &&
+                    state.showDevicePicker
+                  );
                 const iconName =
                   item.type === "chromecast" ? "cast" : "airplay";
                 return (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`${item.name}. ${
-                      isCasting
-                        ? t("player.cast.castingTo", {
-                            name: item.name,
-                            defaultValue: "Connecting to display...",
-                          })
-                        : `Available. ${getDeviceCapabilitySummary(item)}`
+                      isConnected
+                        ? statusText
+                        : isCasting
+                          ? t("player.cast.castingTo", {
+                              name: item.name,
+                              defaultValue: "Connecting to display...",
+                            })
+                          : t("player.cast.available", {
+                              defaultValue: "Available",
+                            })
                     }`}
                     accessibilityState={{
                       disabled: deviceDisabled,
@@ -528,12 +718,14 @@ export function DesktopCastModal({
                         !deviceDisabled && {
                           backgroundColor: colors.surfaceSubtle,
                         },
-                      isCasting && {
+                      isActiveDevice && {
                         backgroundColor: colors.tint,
                         borderColor: colors.tint,
                       },
                       pressed && !deviceDisabled && styles.pressed,
-                      deviceDisabled && !isCasting && styles.deviceDisabled,
+                      deviceDisabled &&
+                        !isActiveDevice &&
+                        styles.deviceDisabled,
                       Platform.OS === "web" &&
                         focused &&
                         getWebFocusStyle(colors.focus),
@@ -545,14 +737,16 @@ export function DesktopCastModal({
                       <MaterialIcons
                         name={iconName}
                         size={26}
-                        color={isCasting ? colors.onTint : colors.tint}
+                        color={isActiveDevice ? colors.onTint : colors.tint}
                       />
                       <View style={styles.deviceTextCol}>
                         <Text
                           style={[
                             styles.deviceName,
                             {
-                              color: isCasting ? colors.onTint : colors.text,
+                              color: isActiveDevice
+                                ? colors.onTint
+                                : colors.text,
                             },
                           ]}
                         >
@@ -562,23 +756,33 @@ export function DesktopCastModal({
                           style={[
                             styles.deviceType,
                             {
-                              color: isCasting
+                              color: isActiveDevice
                                 ? colors.onTint
                                 : colors.textSecondary,
                             },
                           ]}
                         >
-                          {isCasting
-                            ? t("player.cast.castingTo", {
-                                name: item.name,
-                                defaultValue: "Connecting to display...",
-                              })
-                            : `Available · ${getDeviceCapabilitySummary(item)}`}
+                          {isConnected
+                            ? statusText
+                            : isCasting
+                              ? t("player.cast.castingTo", {
+                                  name: item.name,
+                                  defaultValue: "Connecting to display...",
+                                })
+                              : t("player.cast.available", {
+                                  defaultValue: "Available",
+                                })}
                         </Text>
                       </View>
                     </View>
-                    {isCasting ? (
+                    {isCasting && !isConnected ? (
                       <ActivityIndicator size="small" color={colors.onTint} />
+                    ) : isConnected ? (
+                      <MaterialIcons
+                        name="check"
+                        size={24}
+                        color={colors.onTint}
+                      />
                     ) : (
                       <MaterialIcons
                         name="chevron-right"
@@ -590,36 +794,7 @@ export function DesktopCastModal({
                 );
               }}
             />
-          )}
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: loading, busy: loading }}
-            style={({ pressed, focused }: any) => [
-              styles.refreshBtn,
-              pressed && styles.pressed,
-              Platform.OS === "web" &&
-                focused &&
-                getWebFocusStyle(colors.focus),
-            ]}
-            onPress={fetchDevices}
-            disabled={loading}
-          >
-            <MaterialIcons
-              name="refresh"
-              size={20}
-              color={loading ? colors.disabled : colors.text}
-              style={styles.refreshIcon}
-            />
-            <Text
-              style={[
-                styles.refreshText,
-                { color: loading ? colors.disabled : colors.text },
-              ]}
-            >
-              {loading ? "Scanning..." : "Refresh displays"}
-            </Text>
-          </Pressable>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -687,24 +862,10 @@ const styles = StyleSheet.create({
     ...uiTypography.label,
     flex: 1,
   },
-  errorText: {
-    ...uiTypography.label,
-    marginBottom: uiSpacing.md,
-  },
   recoveryButton: {
     marginBottom: uiSpacing.md,
     alignSelf: "flex-start",
     paddingHorizontal: uiSpacing.lg,
-  },
-  emptyText: {
-    ...uiTypography.body,
-    textAlign: "center",
-    marginTop: uiSpacing.md,
-  },
-  centerBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: uiSpacing.xxxl,
   },
   deviceList: {
     gap: uiSpacing.md,
@@ -743,20 +904,5 @@ const styles = StyleSheet.create({
   deviceType: {
     ...uiTypography.caption,
     textTransform: "capitalize",
-  },
-  refreshBtn: {
-    marginTop: uiSpacing.xl - 2,
-    minHeight: uiTouchTarget,
-    paddingHorizontal: uiSpacing.md,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: uiRadii.control,
-  },
-  refreshIcon: {
-    marginRight: uiSpacing.sm,
-  },
-  refreshText: {
-    ...uiTypography.control,
   },
 });

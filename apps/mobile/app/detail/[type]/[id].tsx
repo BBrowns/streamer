@@ -1,14 +1,6 @@
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback } from "react";
-import { useMeta } from "../../../hooks/useMeta";
+import { getMetaLoadFailureKind, useMeta } from "../../../hooks/useMeta";
 import { useStreams } from "../../../hooks/useStreams";
 import { usePlayerStore } from "../../../stores/playerStore";
 import {
@@ -28,6 +20,7 @@ import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
 import type { PlaybackAction, PlaybackPlan, Stream } from "@streamer/shared";
 import {
+  playCandidate,
   playBest,
   prepareDownload,
 } from "../../../services/playback/PlaybackOrchestrator";
@@ -36,16 +29,18 @@ import { useCastStore } from "../../../stores/castStore";
 import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
 import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
 import { useWindowClass } from "../../../hooks/useWindowClass";
-import { useTheme } from "../../../hooks/useTheme";
 import { mapPlaybackMessageToRuntimeFailure } from "../../../services/playback/PlaybackErrors";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
 import {
+  getPlaybackReadinessRoute,
   getPlaybackReadinessCopy,
   getPlaybackReadinessCopyFromError,
+  type PlaybackReadinessActionTarget,
   type PlaybackReadinessNoticeCopy,
 } from "../../../components/detail/PlaybackReadinessNotice";
+import { DetailLoadState } from "../../../components/detail/DetailLoadState";
 
 export default function DetailScreen() {
   const {
@@ -60,12 +55,17 @@ export default function DetailScreen() {
   const castType = type as "movie" | "series";
   const router = useRouter();
   const { t } = useTranslation();
-  const { data: meta, isLoading: metaLoading } = useMeta(type, id);
+  const {
+    data: meta,
+    error: metaError,
+    isLoading: metaLoading,
+    isFetching: metaFetching,
+    refetch: refetchMeta,
+  } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
   const setStream = usePlayerStore((s) => s.setStream);
   const setSessionStream = usePlayerStore((s) => s.setSessionStream);
   const { isExpanded, isLarge } = useWindowClass();
-  const { colors } = useTheme();
   const isDesktop = isExpanded || isLarge;
 
   const [selectedResolution, setSelectedResolution] = useState<string | null>(
@@ -87,10 +87,13 @@ export default function DetailScreen() {
     setPlaybackNotice(null);
   }, []);
 
-  const openSourcesDevices = useCallback(() => {
-    setPlaybackNotice(null);
-    router.push("/settings/sources");
-  }, [router]);
+  const handlePlaybackNoticeAction = useCallback(
+    (target: PlaybackReadinessActionTarget) => {
+      setPlaybackNotice(null);
+      router.push(getPlaybackReadinessRoute(target));
+    },
+    [router],
+  );
 
   const handleToggleLibrary = useCallback(() => {
     if (!meta) return;
@@ -151,37 +154,28 @@ export default function DetailScreen() {
     }
   }, [availableResolutions, selectedResolution]);
 
-  if (metaLoading) {
+  if (metaLoading || (!meta && !metaError)) {
     return (
-      <View
-        style={[styles.cinemaCentered, { backgroundColor: colors.background }]}
-      >
-        <ActivityIndicator size="large" color={colors.tint} />
-      </View>
+      <DetailLoadState kind="loading" onBack={() => goBackOrReplace(router)} />
     );
   }
 
   if (!meta) {
+    const failureKind = getMetaLoadFailureKind(metaError);
     return (
-      <View
-        style={[styles.cinemaCentered, { backgroundColor: colors.background }]}
-      >
-        <Pressable
-          style={[
-            styles.errorBackButton,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-          onPress={() => goBackOrReplace(router)}
-        >
-          <Ionicons name="chevron-back" size={20} color={colors.tint} />
-          <Text style={[styles.errorBackText, { color: colors.tint }]}>
-            Back
-          </Text>
-        </Pressable>
-        <Text style={[styles.errorText, { color: colors.error }]}>
-          {t("detail.errors.notFound")}
-        </Text>
-      </View>
+      <DetailLoadState
+        kind={failureKind}
+        retrying={metaFetching}
+        onBack={() => goBackOrReplace(router)}
+        onRetry={() => {
+          void refetchMeta();
+        }}
+        onSupport={() =>
+          router.push(
+            failureKind === "notFound" ? "/addons" : "/settings/sources",
+          )
+        }
+      />
     );
   }
 
@@ -362,6 +356,52 @@ export default function DetailScreen() {
     if (plan) smartDownloads.planNextEpisode(plan);
   };
 
+  const handlePlayCandidate = async (
+    plan: PlaybackPlan,
+    candidateId: string,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => {
+    setPlaybackNotice(null);
+    setPlanningAction("play");
+    try {
+      const result = await playCandidate(
+        {
+          type: castType,
+          id: id || "unknown",
+          title: meta.name,
+          poster: meta.poster,
+          episodeTitle,
+          season,
+          episode,
+        },
+        plan,
+        candidateId,
+      );
+      if (!result.ok) {
+        setPlaybackNotice(
+          getPlaybackReadinessCopyFromError(
+            result.error,
+            "play",
+            result.resolveErrors,
+          ),
+        );
+        return;
+      }
+
+      setSessionStream(
+        result.stream,
+        result.mediaInfo,
+        result.sessionId,
+        result.candidateId,
+      );
+      router.push("/player");
+    } finally {
+      setPlanningAction(null);
+    }
+  };
+
   const handleDownloadStream = async (
     stream?: Stream,
     episodeTitle?: string,
@@ -413,6 +453,7 @@ export default function DetailScreen() {
               candidateId: result.candidateId,
               attemptId: result.attemptId,
             },
+            metadataBytes: result.plan.selectedCandidate?.sizeBytes,
           });
           maybePlanNextEpisode(season, episode);
           return;
@@ -487,12 +528,13 @@ export default function DetailScreen() {
     inLibrary: !!inLibrary,
     handleToggleLibrary,
     handlePlayStream,
+    handlePlayCandidate,
     handleDownloadStream,
     handleCastStream,
     planningAction,
     playbackNotice,
     onDismissPlaybackNotice: dismissPlaybackNotice,
-    onOpenSourcesDevices: openSourcesDevices,
+    onPlaybackNoticeAction: handlePlaybackNoticeAction,
     onBack: () => goBackOrReplace(router),
   };
 
@@ -543,27 +585,3 @@ export default function DetailScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  cinemaCentered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorBackButton: {
-    position: "absolute",
-    top: 28,
-    left: 28,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  errorBackText: {
-    fontWeight: "800",
-  },
-  errorText: {},
-});

@@ -5,6 +5,7 @@ import EventSource from "react-native-sse";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import type {
+  PlaybackQuality,
   PlaybackRuntimeError,
   PlaybackRuntimeState,
   Stream,
@@ -26,6 +27,10 @@ export interface MediaInfo {
   episode?: number;
 }
 
+export type PlaybackLaunchIntent =
+  | { type: "play" }
+  | { type: "resume"; positionSeconds: number };
+
 export interface StreamMetrics {
   state: "finding_peers" | "connecting" | "downloading" | "ready";
   numPeers: number;
@@ -36,6 +41,65 @@ export interface StreamMetrics {
 
 export type StreamLoadState = "idle" | "loading_metrics" | "playing" | "error";
 
+export const PLAYBACK_QUALITY_OPTIONS = [
+  "2160p",
+  "1080p",
+  "720p",
+  "480p",
+] as const satisfies readonly PlaybackQuality[];
+
+export const PLAYER_PREFERENCES_STORE_VERSION = 1;
+
+function isPlaybackQuality(value: unknown): value is PlaybackQuality {
+  return PLAYBACK_QUALITY_OPTIONS.includes(value as PlaybackQuality);
+}
+
+function migrateLegacyPreferredQuality(value: unknown): PlaybackQuality[] {
+  switch (value) {
+    case "1080p":
+      return ["1080p", "720p", "480p"];
+    case "720p":
+      return ["720p", "480p"];
+    case "480p":
+      return ["480p"];
+    case "2160p":
+    case "auto":
+    default:
+      return [...PLAYBACK_QUALITY_OPTIONS];
+  }
+}
+
+export function normalizePreferredQualities(
+  value: unknown,
+  legacyPreferredQuality?: unknown,
+): PlaybackQuality[] {
+  if (Array.isArray(value)) {
+    const requested = new Set(value.filter(isPlaybackQuality));
+    const normalized = PLAYBACK_QUALITY_OPTIONS.filter((quality) =>
+      requested.has(quality),
+    );
+    if (normalized.length > 0) return [...normalized];
+  }
+
+  return migrateLegacyPreferredQuality(legacyPreferredQuality);
+}
+
+export function migratePlayerPreferences(persistedState: unknown) {
+  const state =
+    persistedState && typeof persistedState === "object"
+      ? (persistedState as Record<string, unknown>)
+      : {};
+  const { preferredQuality, ...preferences } = state;
+
+  return {
+    ...preferences,
+    preferredQualities: normalizePreferredQualities(
+      state.preferredQualities,
+      preferredQuality,
+    ),
+  };
+}
+
 interface PlayerState {
   currentStream: Stream | null;
   mediaInfo: MediaInfo | null;
@@ -44,6 +108,7 @@ interface PlayerState {
   playbackSessionId: string | null;
   playbackCandidateId: string | null;
   playbackAttemptId: string | null;
+  playbackLaunchIntent: PlaybackLaunchIntent | null;
   isPlaying: boolean;
   isBuffering: boolean;
   currentTime: number;
@@ -61,7 +126,7 @@ interface PlayerState {
 
   // Persisted preferences
   playbackRate: number;
-  preferredQuality: "auto" | "1080p" | "720p" | "480p";
+  preferredQualities: PlaybackQuality[];
   preferredAudioLang: string | null;
   preferredSubtitleLang: string | null;
   autoPlayNext: boolean;
@@ -78,7 +143,9 @@ interface PlayerState {
     candidateId: string,
     attemptId?: string | null,
     fallbackReason?: string | null,
+    launchIntent?: PlaybackLaunchIntent | null,
   ) => void;
+  consumePlaybackLaunchIntent: () => PlaybackLaunchIntent | null;
   advanceToNextFallback: (reason?: string | null) => Stream | null;
   setPlaying: (playing: boolean) => void;
   setBuffering: (buffering: boolean) => void;
@@ -94,7 +161,7 @@ interface PlayerState {
   setProgress: (currentTime: number, duration: number) => void;
   setPlaybackRate: (rate: number) => void;
   setAutoPlayNext: (enabled: boolean) => void;
-  setPreferredQuality: (quality: PlayerState["preferredQuality"]) => void;
+  setPreferredQualities: (qualities: PlaybackQuality[]) => void;
   setPreferredAudioLang: (lang: string | null) => void;
   setPreferredSubtitleLang: (lang: string | null) => void;
   subscribeToStreamMetrics: (infoHash: string) => void;
@@ -143,6 +210,7 @@ export const usePlayerStore = create<PlayerState>()(
       playbackSessionId: null,
       playbackCandidateId: null,
       playbackAttemptId: null,
+      playbackLaunchIntent: null,
       isPlaying: false,
       isBuffering: false,
       currentTime: 0,
@@ -155,7 +223,7 @@ export const usePlayerStore = create<PlayerState>()(
       _eventSource: null,
       _peerTimeout: null,
       playbackRate: 1.0,
-      preferredQuality: "auto",
+      preferredQualities: [...PLAYBACK_QUALITY_OPTIONS],
       preferredAudioLang: null,
       preferredSubtitleLang: null,
       autoPlayNext: true,
@@ -176,6 +244,7 @@ export const usePlayerStore = create<PlayerState>()(
           playbackSessionId: null,
           playbackCandidateId: null,
           playbackAttemptId: null,
+          playbackLaunchIntent: null,
           isPlaying: false,
           isBuffering: true,
           streamState: "loading_metrics",
@@ -194,6 +263,7 @@ export const usePlayerStore = create<PlayerState>()(
         candidateId,
         attemptId = null,
         fallbackReason = null,
+        launchIntent,
       ) => {
         const state = get();
         if (state._eventSource) {
@@ -201,6 +271,13 @@ export const usePlayerStore = create<PlayerState>()(
           state._eventSource.close();
         }
         if (state._peerTimeout) clearTimeout(state._peerTimeout);
+
+        const nextLaunchIntent =
+          launchIntent !== undefined
+            ? launchIntent
+            : state.playbackSessionId === sessionId
+              ? state.playbackLaunchIntent
+              : null;
 
         set({
           currentStream: stream,
@@ -210,6 +287,7 @@ export const usePlayerStore = create<PlayerState>()(
           playbackSessionId: sessionId,
           playbackCandidateId: candidateId,
           playbackAttemptId: attemptId,
+          playbackLaunchIntent: nextLaunchIntent,
           isPlaying: false,
           isBuffering: true,
           currentTime: 0,
@@ -222,6 +300,11 @@ export const usePlayerStore = create<PlayerState>()(
           _eventSource: null,
           _peerTimeout: null,
         });
+      },
+      consumePlaybackLaunchIntent: () => {
+        const intent = get().playbackLaunchIntent;
+        set({ playbackLaunchIntent: null });
+        return intent;
       },
       advanceToNextFallback: (reason = null) => {
         const state = get();
@@ -299,7 +382,8 @@ export const usePlayerStore = create<PlayerState>()(
         }),
       setProgress: (currentTime, duration) => set({ currentTime, duration }),
       setPlaybackRate: (rate) => set({ playbackRate: rate }),
-      setPreferredQuality: (quality) => set({ preferredQuality: quality }),
+      setPreferredQualities: (qualities) =>
+        set({ preferredQualities: normalizePreferredQualities(qualities) }),
       setPreferredAudioLang: (lang) => set({ preferredAudioLang: lang }),
       setPreferredSubtitleLang: (lang) => set({ preferredSubtitleLang: lang }),
       setAutoPlayNext: (enabled) => set({ autoPlayNext: enabled }),
@@ -544,6 +628,7 @@ export const usePlayerStore = create<PlayerState>()(
           playbackSessionId: null,
           playbackCandidateId: null,
           playbackAttemptId: null,
+          playbackLaunchIntent: null,
           isPlaying: false,
           isBuffering: false,
           currentTime: 0,
@@ -564,11 +649,13 @@ export const usePlayerStore = create<PlayerState>()(
       // Only persist user preferences, not transient playback state
       partialize: (state) => ({
         playbackRate: state.playbackRate,
-        preferredQuality: state.preferredQuality,
+        preferredQualities: state.preferredQualities,
         preferredAudioLang: state.preferredAudioLang,
         preferredSubtitleLang: state.preferredSubtitleLang,
         autoPlayNext: state.autoPlayNext,
       }),
+      version: PLAYER_PREFERENCES_STORE_VERSION,
+      migrate: (persistedState) => migratePlayerPreferences(persistedState),
     },
   ),
 );

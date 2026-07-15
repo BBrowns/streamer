@@ -1,5 +1,27 @@
 import type { PlaybackGatewayPhase, Stream } from "@streamer/shared";
 
+export class StreamEngineCancellationError extends Error {
+  readonly code = "STREAM_ENGINE_CANCELLED";
+  readonly isCancellation = true;
+
+  constructor(message = "Stream preparation was cancelled.") {
+    super(message);
+    this.name = "StreamEngineCancellationError";
+  }
+}
+
+export function isStreamEngineCancellationError(
+  error: unknown,
+): error is StreamEngineCancellationError {
+  return (
+    error instanceof StreamEngineCancellationError ||
+    (!!error &&
+      typeof error === "object" &&
+      ((error as { code?: unknown }).code === "STREAM_ENGINE_CANCELLED" ||
+        (error as { isCancellation?: unknown }).isCancellation === true))
+  );
+}
+
 /** Audio track descriptor */
 export interface AudioTrack {
   id: string;

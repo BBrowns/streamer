@@ -1,5 +1,6 @@
 import type { Stream } from "@streamer/shared";
 import * as Crypto from "expo-crypto";
+import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
@@ -9,11 +10,17 @@ import {
 } from "../../test-utils/playbackPlan";
 import {
   DownloadService,
+  getReliableContentLength,
   getDownloadEligibility,
   mapDesktopDownloadStatus,
   toSafeDownloadErrorMessage,
 } from "../DownloadService";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+
+jest.mock("../offlineVerification", () => ({
+  ...jest.requireActual("../offlineVerification"),
+  probeLocalMedia: jest.fn().mockResolvedValue(true),
+}));
 
 jest.mock("../api", () => ({
   api: {
@@ -198,6 +205,27 @@ describe("getDownloadEligibility", () => {
     expect(mapDesktopDownloadStatus("Error")).toBe("Error");
     expect(mapDesktopDownloadStatus("Canceled")).toBe("Error");
   });
+
+  it("accepts only a positive transport Content-Length as exact size", () => {
+    expect(getReliableContentLength({ "content-length": "2000000000" })).toBe(
+      2_000_000_000,
+    );
+    expect(getReliableContentLength({ "Content-Length": "unknown" })).toBe(
+      undefined,
+    );
+    expect(
+      getReliableContentLength(
+        {
+          "content-length": "500000000",
+          "content-range": "bytes 1500000000-1999999999/2000000000",
+        },
+        206,
+      ),
+    ).toBe(2_000_000_000);
+    expect(
+      getReliableContentLength({ "content-length": "500000000" }, 206),
+    ).toBeUndefined();
+  });
 });
 
 describe("DownloadService session completion", () => {
@@ -229,9 +257,14 @@ describe("DownloadService session completion", () => {
         status: "Completed",
         downloadUrl: "https://cdn.example.test/movie.mp4",
         filename: "source_1.mp4",
-        totalBytesWritten: 1000,
-        totalBytesExpectedToWrite: 1000,
+        totalBytesWritten: 2 * 1024 ** 2,
+        totalBytesExpectedToWrite: 2 * 1024 ** 2,
         localUri: "streamer:///downloads/source_1.mp4",
+      }),
+      inspectFile: jest.fn().mockResolvedValue({
+        exists: true,
+        isFile: true,
+        sizeBytes: 2 * 1024 ** 2,
       }),
       checkFile: jest.fn().mockResolvedValue(true),
       onDownloadProgress: jest.fn(() => () => {}),
@@ -258,14 +291,18 @@ describe("DownloadService session completion", () => {
     );
     await flushPromises();
 
-    expect(window.desktopBridge!.checkFile).toHaveBeenCalledWith(
+    expect(window.desktopBridge!.inspectFile).toHaveBeenCalledWith(
       "streamer:///downloads/source_1.mp4",
     );
+    expect(window.desktopBridge!.checkFile).not.toHaveBeenCalled();
     expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
       status: "Completed",
       localUri: "streamer:///downloads/source_1.mp4",
       playbackSession,
       offlineVerifiedAt: expect.any(String),
+      verifiedFileSizeBytes: 2 * 1024 ** 2,
+      verificationState: "verified",
+      playableState: "playable",
     });
     expect(
       usePlaybackSessionStore.getState().sessions[playbackSession.sessionId],
@@ -276,6 +313,61 @@ describe("DownloadService session completion", () => {
         expect.objectContaining({ type: "download_verified" }),
         expect.objectContaining({ type: "session_completed" }),
       ]),
+    });
+  });
+
+  it("keeps a catalog size when an Electron job reports zero metadata bytes", async () => {
+    const transportBytes = 2_000_000_000;
+    const catalogEstimate = 2 * 1024 ** 3;
+    window.desktopBridge = {
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-estimate",
+        status: "Completed",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_estimate.mp4",
+        totalBytesWritten: transportBytes,
+        totalBytesExpectedToWrite: transportBytes,
+        metadataBytes: 0,
+        contentType: "video/mp4",
+        localUri: "streamer:///downloads/source_estimate.mp4",
+      }),
+      inspectFile: jest.fn().mockResolvedValue({
+        exists: true,
+        isFile: true,
+        sizeBytes: transportBytes,
+      }),
+      checkFile: jest.fn().mockResolvedValue(true),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    const service = new DownloadService();
+
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      {
+        type: "movie",
+        itemId: "tt-estimate",
+        title: "Estimated Movie",
+        sourceId: "source-estimate",
+      } as any,
+      {
+        resolvedUrl: "https://cdn.example.test/movie.mp4",
+        eligibility: {
+          mode: "direct-file",
+          canDownload: true,
+          offlinePlayable: true,
+        },
+        metadataBytes: catalogEstimate,
+      },
+    );
+    await flushPromises();
+
+    expect(useDownloadStore.getState().tasks["source-estimate"]).toMatchObject({
+      status: "Completed",
+      metadataBytes: catalogEstimate,
+      expectedMediaBytes: transportBytes,
+      verifiedFileSizeBytes: transportBytes,
+      verificationState: "verified",
+      playableState: "playable",
     });
   });
 
@@ -318,13 +410,221 @@ describe("DownloadService session completion", () => {
 
     expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
       status: "Error",
-      error: "Downloaded file could not be verified on this device.",
+      error: "Downloaded file could not be found.",
+      failureReason: "missing_file",
     });
     expect(
       usePlaybackSessionStore.getState().sessions[playbackSession.sessionId],
     ).toMatchObject({
       status: "failed",
       terminalError: { code: "SOURCE_UNAVAILABLE" },
+    });
+  });
+
+  it("does not trust downloaded bytes when a legacy Electron bridge only confirms existence", async () => {
+    const fileSize = 2 * 1024 ** 2;
+    window.desktopBridge = {
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-legacy-inspection",
+        status: "Completed",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_legacy_inspection.mp4",
+        totalBytesWritten: fileSize,
+        totalBytesExpectedToWrite: fileSize,
+        metadataBytes: 0,
+        localUri: "streamer:///downloads/source_legacy_inspection.mp4",
+      }),
+      checkFile: jest.fn().mockResolvedValue(true),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    const service = new DownloadService();
+
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      {
+        type: "movie",
+        itemId: "tt-legacy-inspection",
+        title: "Legacy Inspection Movie",
+        sourceId: "source-legacy-inspection",
+      } as any,
+      {
+        resolvedUrl: "https://cdn.example.test/movie.mp4",
+        eligibility: {
+          mode: "direct-file",
+          canDownload: true,
+          offlinePlayable: true,
+        },
+      },
+    );
+    await flushPromises();
+
+    expect(window.desktopBridge!.checkFile).toHaveBeenCalledWith(
+      "streamer:///downloads/source_legacy_inspection.mp4",
+    );
+    expect(
+      useDownloadStore.getState().tasks["source-legacy-inspection"],
+    ).toMatchObject({
+      status: "Error",
+      failureReason: "missing_file",
+      downloadedBytes: fileSize,
+      verifiedFileSizeBytes: undefined,
+      verificationState: "failed",
+      playableState: "unplayable",
+      offlineVerifiedAt: undefined,
+    });
+    expect(
+      useDownloadStore.getState().isDownloaded("source-legacy-inspection"),
+    ).toBe(false);
+  });
+
+  it("does not trust downloaded bytes when native file inspection omits size", async () => {
+    setPlatform("ios");
+    const fileSize = 2 * 1024 ** 2;
+    useDownloadStore.getState().addTask("source-native-inspection", {
+      type: "movie",
+      itemId: "tt-native-inspection",
+      title: "Native Inspection Movie",
+      sourceId: "source-native-inspection",
+    });
+    useDownloadStore
+      .getState()
+      .updateProgress("source-native-inspection", 1, fileSize, fileSize);
+    useDownloadStore
+      .getState()
+      .setStatus(
+        "source-native-inspection",
+        "Completed",
+        "file:///downloads/native-inspection.mp4",
+      );
+    const getInfo = jest.spyOn(FileSystem, "getInfoAsync").mockResolvedValue({
+      exists: true,
+      isDirectory: false,
+      uri: "file:///downloads/native-inspection.mp4",
+    } as any);
+    const service = new DownloadService();
+
+    await expect(service.verifyTask("source-native-inspection")).resolves.toBe(
+      false,
+    );
+
+    expect(getInfo).toHaveBeenCalledWith(
+      "file:///downloads/native-inspection.mp4",
+    );
+    expect(
+      useDownloadStore.getState().tasks["source-native-inspection"],
+    ).toMatchObject({
+      status: "Error",
+      failureReason: "invalid_media",
+      downloadedBytes: fileSize,
+      verifiedFileSizeBytes: 0,
+      verificationState: "incomplete",
+      playableState: "unplayable",
+      offlineVerifiedAt: undefined,
+    });
+    getInfo.mockRestore();
+  });
+
+  it("rejects a 206 KB desktop response instead of exposing it offline", async () => {
+    window.desktopBridge = {
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-1",
+        status: "Completed",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_1.mp4",
+        totalBytesWritten: 206 * 1024,
+        totalBytesExpectedToWrite: 206 * 1024,
+        metadataBytes: 206 * 1024,
+        contentType: "application/json",
+        localUri: "streamer:///downloads/source_1.mp4",
+      }),
+      inspectFile: jest.fn().mockResolvedValue({
+        exists: true,
+        isFile: true,
+        sizeBytes: 206 * 1024,
+      }),
+      checkFile: jest.fn().mockResolvedValue(true),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    const service = new DownloadService();
+
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        sourceId: "source-1",
+      } as any,
+      {
+        resolvedUrl: "https://cdn.example.test/movie.mp4",
+        eligibility: {
+          mode: "direct-file",
+          canDownload: true,
+          offlinePlayable: true,
+        },
+      },
+    );
+    await flushPromises();
+
+    expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
+      status: "Error",
+      failureReason: "invalid_media",
+      verificationState: "incomplete",
+      playableState: "unplayable",
+      offlineVerifiedAt: undefined,
+      verifiedFileSizeBytes: 206 * 1024,
+    });
+    expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(false);
+  });
+
+  it("classifies a large metadata response as failed invalid media", async () => {
+    const fileSize = 2 * 1024 ** 2;
+    window.desktopBridge = {
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "source-metadata",
+        status: "Completed",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "source_metadata.mp4",
+        totalBytesWritten: fileSize,
+        totalBytesExpectedToWrite: fileSize,
+        contentType: "application/x-bittorrent",
+        localUri: "streamer:///downloads/source_metadata.mp4",
+      }),
+      inspectFile: jest.fn().mockResolvedValue({
+        exists: true,
+        isFile: true,
+        sizeBytes: fileSize,
+      }),
+      checkFile: jest.fn().mockResolvedValue(true),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    const service = new DownloadService();
+
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      {
+        type: "movie",
+        itemId: "tt-metadata",
+        title: "Metadata Movie",
+        sourceId: "source-metadata",
+      } as any,
+      {
+        resolvedUrl: "https://cdn.example.test/movie.mp4",
+        eligibility: {
+          mode: "direct-file",
+          canDownload: true,
+          offlinePlayable: true,
+        },
+      },
+    );
+    await flushPromises();
+
+    expect(useDownloadStore.getState().tasks["source-metadata"]).toMatchObject({
+      status: "Error",
+      failureReason: "invalid_media",
+      verificationState: "failed",
+      playableState: "unplayable",
+      offlineVerifiedAt: undefined,
     });
   });
 
@@ -517,6 +817,11 @@ describe("DownloadService session completion", () => {
 
   it("marks a persisted completed file verified during initialization", async () => {
     window.desktopBridge = {
+      inspectFile: jest.fn().mockResolvedValue({
+        exists: true,
+        isFile: true,
+        sizeBytes: 2 * 1024 ** 2,
+      }),
       checkFile: jest.fn().mockResolvedValue(true),
       onDownloadProgress: jest.fn(() => () => {}),
     } as any;
@@ -538,6 +843,9 @@ describe("DownloadService session completion", () => {
       status: "Completed",
       localUri: "streamer:///downloads/movie.mp4",
       offlineVerifiedAt: expect.any(String),
+      verifiedFileSizeBytes: 2 * 1024 ** 2,
+      verificationState: "verified",
+      playableState: "playable",
     });
     expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(true);
   });
@@ -642,6 +950,7 @@ describe("DownloadService session completion", () => {
 
   it("keeps failed deletions visible with a safe retryable error", async () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined);
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
     window.desktopBridge = {
       cancelDownloadJob: jest.fn().mockResolvedValue(null),
       deleteFile: jest
@@ -662,7 +971,11 @@ describe("DownloadService session completion", () => {
     });
     useDownloadStore
       .getState()
-      .markVerified("source-1", "streamer:///downloads/movie.mp4");
+      .markVerified(
+        "source-1",
+        "streamer:///downloads/movie.mp4",
+        2 * 1024 ** 2,
+      );
     const service = new DownloadService();
 
     await expect(service.deleteDownload("source-1")).resolves.toMatchObject({

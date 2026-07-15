@@ -6,6 +6,7 @@ import {
 } from "../../../test-utils/playbackPlan";
 import {
   playBest,
+  playCandidate,
   prepareDownload,
   prepareCast,
 } from "../PlaybackOrchestrator";
@@ -133,6 +134,73 @@ describe("PlaybackOrchestrator", () => {
       content: { type: "movie", id: "tt123" },
       candidates: [{ rank: 0 }, { rank: 1 }],
     });
+  });
+
+  it("maps a viewer-selected planner candidate into a normal playback session", async () => {
+    const primary = makePlannedMediaCandidate({
+      id: "00000000-0000-4000-8000-000000000111",
+      kind: "direct",
+      stream: {
+        url: "https://cdn.example.test/primary.mp4",
+        title: "Primary",
+      },
+    });
+    const viewerChoice = makePlannedMediaCandidate({
+      id: "00000000-0000-4000-8000-000000000112",
+      kind: "direct",
+      rank: 1,
+      stream: {
+        url: "https://cdn.example.test/viewer-choice.mp4",
+        title: "Viewer choice",
+      },
+    });
+    const plan = makePlaybackPlan({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: primary,
+        fallbackCandidates: [viewerChoice],
+      },
+    });
+
+    const result = await playCandidate(
+      {
+        type: "movie",
+        id: "tt123",
+        title: "Example Movie",
+      },
+      plan,
+      viewerChoice.id,
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      stream: viewerChoice.stream,
+      runtimeState: "selecting_source",
+    });
+    expect(resolvePlan).not.toHaveBeenCalled();
+    expect(result.ok && result.candidateId).not.toBe(viewerChoice.id);
+    expect(
+      result.ok &&
+        usePlaybackSessionStore
+          .getState()
+          .getRuntimeCandidate(result.sessionId, result.candidateId)?.id,
+    ).toBe(viewerChoice.id);
+    expect(
+      result.ok &&
+        usePlaybackSessionStore.getState().sessions[result.sessionId],
+    ).toMatchObject({
+      status: "selecting_candidate",
+      selectedCandidateId: result.ok ? result.candidateId : undefined,
+    });
+    expect(
+      result.ok &&
+        usePlaybackSessionStore.getState().sessions[result.sessionId].eventLog,
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "fallback_started" }),
+      ]),
+    );
   });
 
   it("maps not-found plans to NO_SOURCES without resolving streams", async () => {

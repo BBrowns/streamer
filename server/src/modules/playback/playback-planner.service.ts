@@ -28,6 +28,7 @@ import {
   getCastSourceReachability,
   getDeviceCompatibility,
   normalizeStream,
+  qualityAllowedByPreferences,
   scoreCandidate,
 } from "./source-normalizer.js";
 
@@ -143,6 +144,8 @@ function rejectionMessage(
       return "Source does not expose a playable URL or torrent identifier.";
     case "unknown_stream_type":
       return "Source type is not playable inside the app.";
+    case "quality_not_allowed":
+      return "Source quality is outside the playback qualities selected in Settings.";
     case "device_incompatible":
       return "Source is not compatible with this device profile.";
   }
@@ -327,6 +330,8 @@ function evaluateCandidate(
     rejectionReason = "source_missing_url";
   } else if (candidate.kind === "external") {
     rejectionReason = "unknown_stream_type";
+  } else if (!qualityAllowedByPreferences(candidate, request.preferences)) {
+    rejectionReason = "quality_not_allowed";
   } else if (
     preflightRejection === "hls_offline_unsupported" ||
     preflightRejection === "localhost_not_castable" ||
@@ -662,6 +667,22 @@ export class PlaybackPlannerService {
         evaluations,
         "This source needs video conversion before it can play on this device.",
         transcodeRejection.reasonCode,
+      );
+    }
+
+    const onlyQualityRejections =
+      rejectedCandidates.length > 0 &&
+      rejectedCandidates.every(
+        (candidate) => candidate.reasonCode === "quality_not_allowed",
+      );
+    if (onlyQualityRejections) {
+      return emptyPlan(
+        request,
+        "unsupported",
+        rejectedCandidates,
+        evaluations,
+        "No source matches the playback qualities selected in Settings.",
+        "quality_not_allowed",
       );
     }
 

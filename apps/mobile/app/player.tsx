@@ -31,7 +31,10 @@ import {
   isTaskOfflinePlayable,
   useDownloadStore,
 } from "../stores/downloadStore";
-import { usePlayerHotkeys } from "../hooks/usePlayerHotkeys";
+import {
+  getPlayerEscapeAction,
+  usePlayerHotkeys,
+} from "../hooks/usePlayerHotkeys";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { usePlayerController } from "../hooks/usePlayerController";
 
@@ -40,6 +43,7 @@ import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
+import { PlayerInteractionLayer } from "../components/player/PlayerInteractionLayer";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
 import { DesktopCastModal } from "../components/DesktopCastModal";
@@ -64,6 +68,7 @@ import {
 } from "../services/playback/PlaybackSessionPlaybackService";
 import { stopCastSession } from "../services/playback/PlaybackSessionCastService";
 import { useCastStore } from "../stores/castStore";
+import { PlaybackStatusPanel } from "../components/ui/PlaybackStatusPanel";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -156,19 +161,46 @@ export default function PlayerScreen() {
     }
   }, [controlsVisible, showControls]);
 
-  const handleClose = useCallback(() => {
-    if (activeCast) {
-      void stopCastSession(activeCast.device.id, activeCast.sessionId).catch(
-        (error) => console.error("Failed to stop cast", error),
-      );
-      clearActiveCast();
-    }
-    if (playbackSessionId) {
-      cancelPlaybackSession(playbackSessionId, "User left the player.");
-    }
-    goBackOrReplace(router);
-    setTimeout(() => clearPlayer(), 100);
-  }, [activeCast, clearActiveCast, router, clearPlayer, playbackSessionId]);
+  const leavePlayer = useCallback(
+    (reason: string) => {
+      if (activeCast) {
+        void stopCastSession(activeCast.device.id, activeCast.sessionId).catch(
+          (error) => console.error("Failed to stop cast", error),
+        );
+        clearActiveCast();
+      }
+      if (playbackSessionId) {
+        cancelPlaybackSession(playbackSessionId, reason);
+      } else if (currentStream) {
+        streamEngineManager.resolveEngine(currentStream)?.stop?.();
+      }
+      goBackOrReplace(router);
+      setTimeout(() => clearPlayer(), 100);
+    },
+    [
+      activeCast,
+      clearActiveCast,
+      clearPlayer,
+      currentStream,
+      playbackSessionId,
+      router,
+    ],
+  );
+
+  const handleClose = useCallback(
+    () => leavePlayer("User left the player."),
+    [leavePlayer],
+  );
+
+  const handleCancelPreparation = useCallback(
+    () => leavePlayer("User cancelled source preparation."),
+    [leavePlayer],
+  );
+
+  const handleBrowseTitles = useCallback(() => {
+    clearPlayer();
+    router.replace("/search");
+  }, [clearPlayer, router]);
 
   const handleOpenSourcesDevices = useCallback(() => {
     if (playbackSessionId) {
@@ -779,9 +811,14 @@ export default function PlayerScreen() {
     }
     if (!currentStream) return undefined;
 
+    const container = selectedSessionCandidate?.container;
+    const visibleContainer =
+      container && container.toLowerCase() !== "unknown"
+        ? container.toUpperCase()
+        : undefined;
     const parts = [
       currentStream.resolution || selectedSessionCandidate?.quality,
-      selectedSessionCandidate?.container?.toUpperCase(),
+      visibleContainer,
       currentStream.infoHash
         ? t("player.controls.torrent", { defaultValue: "Torrent" })
         : currentStream.url?.toLowerCase().includes(".m3u8")
@@ -945,6 +982,35 @@ export default function PlayerScreen() {
     }
   }, [showControls]);
 
+  const preparationActive = Boolean(
+    currentStream &&
+    !playbackUri &&
+    streamState !== "error" &&
+    activeSession?.status !== "failed" &&
+    activeSession?.status !== "cancelled" &&
+    activeSession?.status !== "completed",
+  );
+  const handleEscape = useCallback(() => {
+    const action = getPlayerEscapeAction({
+      settingsOpen,
+      castOpen: castModalOpen,
+      preparationActive,
+    });
+    if (action === "closeSettings") {
+      setSettingsOpen(false);
+      return true;
+    }
+    if (action === "closeCast") {
+      setCastModalOpen(false);
+      return true;
+    }
+    if (action === "cancelPreparation") {
+      handleCancelPreparation();
+      return true;
+    }
+    return false;
+  }, [castModalOpen, handleCancelPreparation, preparationActive, settingsOpen]);
+
   usePlayerHotkeys({
     player,
     showControls,
@@ -956,6 +1022,7 @@ export default function PlayerScreen() {
     onToggleMute: handleToggleMute,
     onSeekBy: handleSeekBy,
     onSeekPercent: handleSeekPercent,
+    onEscape: handleEscape,
   });
 
   const stopCasting = async () => {
@@ -1059,6 +1126,9 @@ export default function PlayerScreen() {
           session={activeSession}
           onBack={handleClose}
           onRetry={handleRetryPlayback}
+          onCancelPreparation={
+            preparationActive ? handleCancelPreparation : undefined
+          }
           onChooseSource={mediaInfo ? handleChooseSource : undefined}
           onPreviewPlayer={__DEV__ ? () => setPreviewControls(true) : undefined}
           onOpenSourcesDevices={
@@ -1073,19 +1143,26 @@ export default function PlayerScreen() {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="light" />
-        <Text style={styles.errorText}>{t("player.errors.noStream")}</Text>
-        <View style={styles.errorActions}>
-          <Pressable
-            style={styles.errorButton}
-            onPress={handleClose}
-            accessibilityRole="button"
-            accessibilityLabel={t("player.errors.goBack")}
-          >
-            <Text style={styles.errorButtonText}>
-              {t("player.errors.goBack")}
-            </Text>
-          </Pressable>
-        </View>
+        <PlaybackStatusPanel
+          tone="warning"
+          statusLabel={t("player.errors.noStreamStatus")}
+          title={t("player.errors.noStreamTitle")}
+          message={t("player.errors.noStream")}
+          actions={[
+            {
+              label: t("player.errors.browseTitles"),
+              onPress: handleBrowseTitles,
+              variant: "primary",
+              icon: "search-outline",
+            },
+            {
+              label: t("player.errors.goBack"),
+              onPress: handleClose,
+              variant: "secondary",
+              icon: "chevron-back",
+            },
+          ]}
+        />
       </View>
     );
   }
@@ -1144,26 +1221,10 @@ export default function PlayerScreen() {
                 />
               )}
 
-              <View style={styles.interactionLayer}>
-                <Pressable
-                  style={styles.interactionZone}
-                  onPress={() => handleTap("left")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Show controls or double tap to seek back"
-                />
-                <Pressable
-                  style={styles.interactionCenter}
-                  onPress={toggleControls}
-                  accessibilityRole="button"
-                  accessibilityLabel="Show or hide player controls"
-                />
-                <Pressable
-                  style={styles.interactionZone}
-                  onPress={() => handleTap("right")}
-                  accessibilityRole="button"
-                  accessibilityLabel="Show controls or double tap to seek forward"
-                />
-              </View>
+              <PlayerInteractionLayer
+                onTapSide={handleTap}
+                onToggleControls={toggleControls}
+              />
             </>
           )}
 
@@ -1191,6 +1252,9 @@ export default function PlayerScreen() {
             session={previewControls ? null : activeSession}
             onBack={handleClose}
             onRetry={handleRetryPlayback}
+            onCancelPreparation={
+              preparationActive ? handleCancelPreparation : undefined
+            }
             onChooseSource={mediaInfo ? handleChooseSource : undefined}
             onPreviewPlayer={
               __DEV__ && !previewControls
@@ -1208,7 +1272,6 @@ export default function PlayerScreen() {
               engineType={engine?.getEngineType() ?? "Unknown"}
               stats={stats}
               onClose={handleClose}
-              onSettings={() => setSettingsOpen(true)}
               onWebCast={() => setCastModalOpen(true)}
               onTogglePiP={handleTogglePiP}
               isPiPSupported={isPiPSupported}
@@ -1364,28 +1427,6 @@ const createStyles = (colors: any, isDark: boolean) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    errorText: { color: colors.error, fontSize: 16, marginBottom: 16 },
-    errorActions: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "center",
-      gap: 10,
-      maxWidth: 540,
-      paddingHorizontal: 20,
-    },
-    errorButton: {
-      backgroundColor: colors.tint + "15",
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 12,
-      minWidth: 44,
-      minHeight: 44,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    errorButtonText: { color: colors.text, fontWeight: "600" },
     videoContainer: {
       flex: 1,
       justifyContent: "center",
@@ -1394,18 +1435,6 @@ const createStyles = (colors: any, isDark: boolean) =>
       overflow: "hidden",
     },
     webVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
-    interactionLayer: {
-      ...StyleSheet.absoluteFillObject,
-      zIndex: 10,
-      flexDirection: "row",
-      pointerEvents: "box-none",
-    },
-    interactionZone: {
-      flex: 1,
-    },
-    interactionCenter: {
-      width: "20%",
-    },
     seekOverlay: {
       position: "absolute",
       top: "40%",

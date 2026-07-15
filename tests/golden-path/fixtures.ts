@@ -14,10 +14,12 @@ export type GoldenPathScenario =
   | "direct"
   | "torrent-fallback"
   | "no-peers"
+  | "preparing-cancellable"
   | "bridge-unavailable"
   | "download-unsupported"
   | "cast-ready"
-  | "search-partial";
+  | "search-partial"
+  | "catalog-partial";
 
 export const FIXTURE_MOVIE_ID = "golden-path-movie";
 const FIXTURE_SERIES_ID = "golden-path-series";
@@ -102,6 +104,16 @@ const searchPreviews = [
   },
 ];
 
+const libraryItems = Array.from({ length: 9 }, (_, index) => ({
+  id: `fixture-library-${index + 1}`,
+  userId: "fixture-user",
+  type: index % 3 === 2 ? ("series" as const) : ("movie" as const),
+  itemId: `fixture-library-title-${index + 1}`,
+  title: `Library Fixture ${index + 1}`,
+  poster: POSTER_URL,
+  addedAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+}));
+
 const catalogAddon = {
   id: "fixture-addon",
   transportUrl: "https://fixture.example.test/manifest.json",
@@ -171,7 +183,9 @@ function readyPlan(
   const selected = candidate(
     action,
     0,
-    scenario === "torrent-fallback" || scenario === "no-peers"
+    scenario === "torrent-fallback" ||
+      scenario === "no-peers" ||
+      scenario === "preparing-cancellable"
       ? "torrent"
       : "direct",
   );
@@ -241,7 +255,9 @@ function responsePlan(
   scenario: GoldenPathScenario,
 ) {
   const needsTorrentBridge =
-    scenario === "torrent-fallback" || scenario === "no-peers";
+    scenario === "torrent-fallback" ||
+    scenario === "no-peers" ||
+    scenario === "preparing-cancellable";
   if (needsTorrentBridge && request.bridge?.status !== "available") {
     return unavailablePlan(request.action, "bridge-unavailable");
   }
@@ -278,6 +294,7 @@ export interface GoldenPathControls {
   plannerRequests: PlaybackPlanRequest[];
   bridgeProbes: () => number;
   gatewayJobsCreated: () => number;
+  gatewayJobsCancelled: () => number;
 }
 
 export async function installGoldenPathRoutes(
@@ -287,6 +304,7 @@ export async function installGoldenPathRoutes(
   const plannerRequests: PlaybackPlanRequest[] = [];
   let bridgeProbeCount = 0;
   let gatewayJobs = 0;
+  let cancelledGatewayJobs = 0;
   const media = readFileSync(MEDIA_FIXTURE);
 
   await page.routeWebSocket(/\/api\/sync\/events$/, (socket) => {
@@ -439,6 +457,10 @@ export async function installGoldenPathRoutes(
       if (
         url.pathname.startsWith(`/api/addons/${catalogAddon.id}/catalog/movie/`)
       ) {
+        if (scenario === "catalog-partial") {
+          await json(route, { error: "Fixture catalog unavailable." }, 503);
+          return;
+        }
         await json(route, {
           metas: searchPreviews.filter((item) => item.type === "movie"),
         });
@@ -467,7 +489,7 @@ export async function installGoldenPathRoutes(
         return;
       }
       if (url.pathname === "/api/library") {
-        await json(route, { items: [] });
+        await json(route, { items: libraryItems });
         return;
       }
       if (url.pathname === "/api/notifications") {
@@ -553,6 +575,16 @@ export async function installGoldenPathRoutes(
         url.pathname === `/api/gateway/jobs/${GATEWAY_JOB_ID}` &&
         request.method() === "GET"
       ) {
+        if (scenario === "preparing-cancellable") {
+          await json(route, {
+            id: GATEWAY_JOB_ID,
+            state: "preparing",
+            phase: "preparing_metadata",
+            playbackUrl: `/api/gateway/jobs/${GATEWAY_JOB_ID}/stream`,
+            progress: 0.1,
+          });
+          return;
+        }
         await json(route, {
           id: GATEWAY_JOB_ID,
           state: "no_peers",
@@ -567,6 +599,7 @@ export async function installGoldenPathRoutes(
         url.pathname === `/api/gateway/jobs/${GATEWAY_JOB_ID}` &&
         request.method() === "DELETE"
       ) {
+        cancelledGatewayJobs += 1;
         await json(route, { ok: true });
         return;
       }
@@ -601,5 +634,6 @@ export async function installGoldenPathRoutes(
     plannerRequests,
     bridgeProbes: () => bridgeProbeCount,
     gatewayJobsCreated: () => gatewayJobs,
+    gatewayJobsCancelled: () => cancelledGatewayJobs,
   };
 }

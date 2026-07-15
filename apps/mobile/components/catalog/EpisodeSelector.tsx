@@ -1,21 +1,16 @@
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { memo, useState, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import type { VideoEntry, Stream } from "@streamer/shared";
+import type { PlaybackPlan, VideoEntry, Stream } from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
-import { useEpisodeStreams } from "../../hooks/useEpisodeStreams";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
-import { StreamItem } from "../detail/StreamItem";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
-import { SourceInspectorPanel } from "../detail/SourceInspectorPanel";
+import {
+  SourceChoiceList,
+  useSourceChoicePlan,
+} from "../detail/SourceChoiceList";
+import { TechnicalSourceDisclosure } from "../detail/TechnicalSourceDisclosure";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
 
@@ -33,6 +28,7 @@ function EpisodeRow({
   onToggleSources: () => void;
 }) {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const handlePlayPress = () => {
     hapticImpactLight();
     onPress();
@@ -85,7 +81,10 @@ function EpisodeRow({
         style={[styles.episodePlayArea, isPlayFocused && styles.webFocused]}
         onPress={handlePlayPress}
         accessibilityRole="button"
-        accessibilityLabel={`Play episode ${video.episode}: ${video.title}`}
+        accessibilityLabel={t("detail.episodesList.playA11y", {
+          episode: video.episode,
+          title: video.title,
+        })}
       >
         <View
           style={[
@@ -148,7 +147,10 @@ function EpisodeRow({
           ]}
           onPress={handleDownloadPress}
           accessibilityRole="button"
-          accessibilityLabel={`Download episode ${video.episode}: ${video.title}`}
+          accessibilityLabel={t("detail.episodesList.downloadA11y", {
+            episode: video.episode,
+            title: video.title,
+          })}
         >
           <Ionicons
             name="download-outline"
@@ -173,7 +175,10 @@ function EpisodeRow({
           ]}
           onPress={handleToggleSourcesPress}
           accessibilityRole="button"
-          accessibilityLabel={`Advanced sources for episode ${video.episode}: ${video.title}`}
+          accessibilityLabel={t("detail.episodesList.moreSourcesA11y", {
+            episode: video.episode,
+            title: video.title,
+          })}
         >
           <Ionicons
             name={isSelected ? "chevron-up" : "ellipsis-horizontal"}
@@ -186,7 +191,7 @@ function EpisodeRow({
               { color: isSelected ? colors.tint : colors.textSecondary },
             ]}
           >
-            Sources
+            {t("detail.sources.more", { defaultValue: "More sources" })}
           </Text>
         </Pressable>
       </View>
@@ -201,52 +206,28 @@ function EpisodeStreamList({
   season,
   episode,
   episodeTitle,
-  onPlayStream,
-  onDownloadStream,
+  onPlayCandidate,
 }: {
   seriesId: string;
   season: number;
   episode: number;
   episodeTitle: string;
-  onPlayStream: (stream: Stream, episodeTitle: string) => void;
-  onDownloadStream: (stream: Stream, episodeTitle: string) => void;
+  onPlayCandidate: (
+    plan: PlaybackPlan,
+    candidateId: string,
+    episodeTitle: string,
+    season: number,
+    episode: number,
+  ) => void;
 }) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-
-  const { data: streams, isLoading } = useEpisodeStreams(
-    seriesId,
+  const sourceState = useSourceChoicePlan({
+    contentType: "series",
+    contentId: seriesId,
     season,
     episode,
-  );
-
-  if (isLoading) {
-    return (
-      <View style={styles.streamLoading}>
-        <ActivityIndicator color={colors.tint} size="small" />
-        <Text
-          style={[styles.streamLoadingText, { color: colors.textSecondary }]}
-        >
-          {t("detail.episodesList.loading")}
-        </Text>
-      </View>
-    );
-  }
-
-  if (!streams || streams.length === 0) {
-    return (
-      <View style={styles.noStreams}>
-        <Ionicons
-          name="warning-outline"
-          size={20}
-          color={colors.textSecondary}
-        />
-        <Text style={[styles.noStreamsText, { color: colors.textSecondary }]}>
-          {t("detail.episodesList.none")}
-        </Text>
-      </View>
-    );
-  }
+  });
 
   return (
     <View
@@ -261,29 +242,22 @@ function EpisodeStreamList({
       ]}
     >
       <Text style={[styles.streamPanelLabel, { color: colors.tint }]}>
-        More sources ·{" "}
+        {t("detail.sources.more", { defaultValue: "More sources" })} ·{" "}
         {t("detail.episodesList.streamsLabel", { season, episode })}
       </Text>
-      <SourceInspectorPanel
+      <SourceChoiceList
+        state={sourceState}
+        onSelect={(plan, candidateId) =>
+          onPlayCandidate(plan, candidateId, episodeTitle, season, episode)
+        }
+      />
+      <TechnicalSourceDisclosure
         contentType="series"
         contentId={seriesId}
         title={episodeTitle}
         season={season}
         episode={episode}
       />
-      {streams.map((stream, i) => {
-        const key = `${stream.infoHash || stream.url || "stream"}-${i}`;
-
-        return (
-          <StreamItem
-            key={key}
-            stream={stream}
-            index={i}
-            onPress={() => onPlayStream(stream, episodeTitle)}
-            onDownload={() => onDownloadStream(stream, episodeTitle)}
-          />
-        );
-      })}
     </View>
   );
 }
@@ -299,6 +273,13 @@ interface EpisodeSelectorProps {
     season: number,
     episode: number,
   ) => void;
+  onPlayCandidate: (
+    plan: PlaybackPlan,
+    candidateId: string,
+    episodeTitle?: string,
+    season?: number,
+    episode?: number,
+  ) => void;
   onDownloadStream: (
     stream: Stream | undefined,
     episodeTitle: string,
@@ -311,6 +292,7 @@ export const EpisodeSelector = memo(function EpisodeSelector({
   seriesId,
   videos,
   onPlayStream,
+  onPlayCandidate,
   onDownloadStream,
 }: EpisodeSelectorProps) {
   const { colors, isDark } = useTheme();
@@ -442,12 +424,7 @@ export const EpisodeSelector = memo(function EpisodeSelector({
                 season={video.season}
                 episode={video.episode}
                 episodeTitle={video.title}
-                onPlayStream={(stream, title) =>
-                  onPlayStream(stream, title, video.season, video.episode)
-                }
-                onDownloadStream={(stream, title) =>
-                  onDownloadStream(stream, title, video.season, video.episode)
-                }
+                onPlayCandidate={onPlayCandidate}
               />
             )}
           </View>
