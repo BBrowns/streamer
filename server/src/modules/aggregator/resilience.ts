@@ -1,7 +1,7 @@
 import {
   ConsecutiveBreaker,
   ExponentialBackoff,
-  handleAll,
+  handleWhen,
   retry,
   circuitBreaker,
   timeout,
@@ -23,6 +23,20 @@ export interface ResilienceMetrics {
   circuitOpens: number;
   bulkheadRejections: number;
   lastFailure: Date | null;
+}
+
+/**
+ * Marks an expected upstream outcome that must pass through resilience
+ * policies without being retried or counted as a circuit-breaker failure.
+ */
+export class NonRetryableUpstreamError extends Error {
+  readonly cause: unknown;
+
+  constructor(message: string, cause: unknown) {
+    super(message);
+    this.name = "NonRetryableUpstreamError";
+    this.cause = cause;
+  }
 }
 
 export class ResilienceRegistry {
@@ -102,6 +116,9 @@ export class ResilienceRegistry {
 
   private createPolicy(addonId: string): IPolicy {
     const metrics = this.getMetrics(addonId);
+    const retryableFailures = handleWhen(
+      (error) => !(error instanceof NonRetryableUpstreamError),
+    );
 
     // Timeout: configurable, defaults to 5 seconds
     const timeoutPolicy = timeout(
@@ -115,7 +132,7 @@ export class ResilienceRegistry {
     });
 
     // Retry: 1 attempt on failure
-    const retryPolicy = retry(handleAll, {
+    const retryPolicy = retry(retryableFailures, {
       maxAttempts: 1,
       backoff: new ExponentialBackoff({ initialDelay: 500, maxDelay: 2000 }),
     });
@@ -124,7 +141,7 @@ export class ResilienceRegistry {
     });
 
     // Circuit breaker: opens after 3 consecutive failures
-    const breakerPolicy = circuitBreaker(handleAll, {
+    const breakerPolicy = circuitBreaker(retryableFailures, {
       halfOpenAfter: 15_000,
       breaker: new ConsecutiveBreaker(3),
     });

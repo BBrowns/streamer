@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
-import { AggregatorService, buildCatalogPath } from "./aggregator.service";
+import {
+  AggregatorService,
+  buildCatalogPath,
+  MetadataProvidersUnavailableError,
+} from "./aggregator.service";
 import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver";
 import { featureFlags } from "../feature-flag/feature-flag.service";
 import { prisma } from "../../prisma/client";
+import { resilienceRegistry } from "./resilience";
 
 // Mock dependencies
 vi.mock("axios");
@@ -239,6 +244,167 @@ describe("AggregatorService", () => {
         successfulProviders: 0,
         failedProviderIds: [],
         partial: false,
+      });
+    });
+  });
+
+  describe("getMeta failure semantics", () => {
+    function metaAddon(id: string, transportUrl: string) {
+      return {
+        id,
+        userId: "user-1",
+        transportUrl,
+        installedAt: new Date(),
+        manifest: {
+          id: `com.example.${id}`,
+          version: "1.0.0",
+          name: id,
+          description: "Metadata provider",
+          resources: ["meta"],
+          types: ["movie"],
+          catalogs: [],
+        },
+      } as any;
+    }
+
+    function httpError(status: number) {
+      return Object.assign(new Error(`Request failed with status ${status}`), {
+        response: { status },
+      });
+    }
+
+    it("returns null when no installed add-on provides metadata", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([]);
+
+      await expect(
+        service.getMeta("user-1", "movie", "tt-missing", "req-meta-none"),
+      ).resolves.toBeNull();
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    it("returns null when every metadata provider explicitly returns 404", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        metaAddon("meta-404-a", "https://missing-a.example/manifest.json"),
+        metaAddon("meta-404-b", "https://missing-b.example/manifest.json"),
+      ]);
+      vi.mocked(axios.get).mockRejectedValue(httpError(404));
+
+      await expect(
+        service.getMeta("user-1", "movie", "tt-missing", "req-meta-404"),
+      ).resolves.toBeNull();
+    });
+
+    it("does not retry metadata 404s or open the provider circuit", async () => {
+      const addon = metaAddon(
+        "meta-404-recovery",
+        "https://recovering.example/manifest.json",
+      );
+      const addonId = addon.manifest.id;
+      resilienceRegistry.reset();
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([addon]);
+      vi.mocked(axios.get).mockImplementation(async (url) => {
+        if (String(url).includes("/meta/movie/tt-found.json")) {
+          return {
+            data: {
+              meta: {
+                id: "tt-found",
+                type: "movie",
+                name: "Found after misses",
+              },
+            },
+          };
+        }
+        throw httpError(404);
+      });
+
+      for (const id of [
+        "tt-missing-1",
+        "tt-missing-2",
+        "tt-missing-3",
+        "tt-missing-4",
+      ]) {
+        await expect(
+          service.getMeta("user-1", "movie", id, `req-${id}`),
+        ).resolves.toBeNull();
+      }
+
+      await expect(
+        service.getMeta("user-1", "movie", "tt-found", "req-meta-found"),
+      ).resolves.toMatchObject({
+        id: "tt-found",
+        name: "Found after misses",
+      });
+      expect(axios.get).toHaveBeenCalledTimes(5);
+      expect(resilienceRegistry.getMetrics(addonId)).toMatchObject({
+        retries: 0,
+        circuitOpens: 0,
+      });
+    });
+
+    it("throws a recoverable outage when no provider succeeds and one failure is not 404", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        metaAddon("meta-mixed-404", "https://missing.example/manifest.json"),
+        metaAddon("meta-mixed-down", "https://offline.example/manifest.json"),
+      ]);
+      vi.mocked(axios.get).mockImplementation(async (url) => {
+        if (String(url).includes("missing.example")) throw httpError(404);
+        throw Object.assign(new Error("Network unavailable"), {
+          code: "ECONNRESET",
+        });
+      });
+
+      await expect(
+        service.getMeta("user-1", "movie", "tt-unknown", "req-meta-down"),
+      ).rejects.toBeInstanceOf(MetadataProvidersUnavailableError);
+      expect(axios.get).toHaveBeenCalledTimes(3);
+      expect(
+        resilienceRegistry.getMetrics("com.example.meta-mixed-down"),
+      ).toMatchObject({
+        retries: 1,
+        circuitOpens: 0,
+      });
+    });
+
+    it("treats invalid upstream metadata as recoverable instead of missing", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        metaAddon("meta-invalid", "https://invalid.example/manifest.json"),
+      ]);
+      vi.mocked(axios.get).mockResolvedValue({ data: { meta: null } });
+
+      await expect(
+        service.getMeta("user-1", "movie", "tt-invalid", "req-meta-invalid"),
+      ).rejects.toBeInstanceOf(MetadataProvidersUnavailableError);
+    });
+
+    it("returns successful metadata despite another provider failing", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        metaAddon("meta-success", "https://healthy.example/manifest.json"),
+        metaAddon(
+          "meta-partial",
+          "https://offline-partial.example/manifest.json",
+        ),
+      ]);
+      vi.mocked(axios.get).mockImplementation(async (url) => {
+        if (String(url).includes("healthy.example")) {
+          return {
+            data: {
+              meta: {
+                id: "tt-found",
+                type: "movie",
+                name: "Found title",
+              },
+            },
+          };
+        }
+        throw new Error("Provider temporarily unavailable");
+      });
+
+      await expect(
+        service.getMeta("user-1", "movie", "tt-found", "req-meta-partial"),
+      ).resolves.toMatchObject({
+        id: "tt-found",
+        name: "Found title",
+        poster: "",
       });
     });
   });

@@ -1,4 +1,12 @@
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import {
+  View,
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import type { StreamMetrics, StreamLoadState } from "../../stores/playerStore";
@@ -9,6 +17,13 @@ import type {
   PlaybackSessionStatus,
 } from "@streamer/shared";
 import { PlaybackStatusPanel } from "../ui/PlaybackStatusPanel";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 
 interface PlayerStatusOverlayProps {
   streamState: StreamLoadState;
@@ -24,6 +39,7 @@ interface PlayerStatusOverlayProps {
   onChooseSource?: () => void;
   onPreviewPlayer?: () => void;
   onOpenSourcesDevices?: () => void;
+  onCancelPreparation?: () => void;
 }
 
 export function PlayerStatusOverlay({
@@ -40,6 +56,7 @@ export function PlayerStatusOverlay({
   onChooseSource,
   onPreviewPlayer,
   onOpenSourcesDevices,
+  onCancelPreparation,
 }: PlayerStatusOverlayProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -91,17 +108,50 @@ export function PlayerStatusOverlay({
         : null);
 
     return (
-      <PlaybackStatusPanel
-        tone={runtimeState === "trying_fallback" ? "warning" : "loading"}
-        statusLabel={
-          runtimeState === "trying_fallback"
-            ? t("player.status.tryingFallback")
-            : t("downloads.status.preparing")
-        }
-        loading={runtimeState !== "trying_fallback"}
-        title={title}
-        message={message}
-      />
+      <>
+        <PlaybackStatusPanel
+          tone={runtimeState === "trying_fallback" ? "warning" : "loading"}
+          statusLabel={
+            runtimeState === "trying_fallback"
+              ? t("player.status.tryingFallback")
+              : t("downloads.status.preparing")
+          }
+          loading={runtimeState !== "trying_fallback"}
+          title={title}
+          message={message}
+        />
+        {onCancelPreparation ? (
+          <Pressable
+            style={({ pressed, hovered, focused }: any) => [
+              styles.cancelPreparation,
+              {
+                backgroundColor: colors.surfaceOverlay,
+                borderColor: colors.border,
+                opacity: pressed ? 0.76 : 1,
+              },
+              hovered && styles.cancelPreparationHovered,
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+            onPress={onCancelPreparation}
+            accessibilityRole="button"
+            accessibilityLabel={t("player.status.cancelPreparation")}
+            accessibilityHint={
+              Platform.OS === "web"
+                ? t("player.status.cancelPreparationHint")
+                : undefined
+            }
+          >
+            <Ionicons name="close" size={22} color={colors.text} />
+            <Text
+              style={[styles.cancelPreparationText, { color: colors.text }]}
+            >
+              {t("common.cancel")}
+            </Text>
+          </Pressable>
+        ) : null}
+      </>
     );
   }
 
@@ -305,6 +355,26 @@ function getErrorTitle(
 }
 
 const styles = StyleSheet.create({
+  cancelPreparation: {
+    position: "absolute",
+    top: Platform.OS === "web" ? uiSpacing.lg : 56,
+    right: uiSpacing.lg,
+    zIndex: 40,
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: uiSpacing.xs,
+  },
+  cancelPreparationHovered: {
+    transform: [{ scale: 1.02 }],
+  },
+  cancelPreparationText: {
+    ...uiTypography.label,
+  },
   bufferingOverlay: {
     position: "absolute",
     top: 0,

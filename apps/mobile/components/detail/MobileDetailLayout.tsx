@@ -36,7 +36,7 @@ export function MobileDetailLayout({
   planningAction,
   playbackNotice,
   onDismissPlaybackNotice,
-  onOpenSourcesDevices,
+  onPlaybackNoticeAction,
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
@@ -148,7 +148,7 @@ export function MobileDetailLayout({
           <PlaybackReadinessNotice
             notice={playbackNotice}
             onDismiss={onDismissPlaybackNotice}
-            onPrimaryAction={onOpenSourcesDevices}
+            onPrimaryAction={onPlaybackNoticeAction}
           />
         )}
 

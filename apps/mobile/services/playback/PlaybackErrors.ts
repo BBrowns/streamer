@@ -66,7 +66,10 @@ export function createPlaybackRuntimeError(
   code: PlaybackErrorCode,
   message = DEFAULT_MESSAGES[code],
   overrides: Partial<
-    Pick<PlaybackRuntimeError, "retryable" | "shouldFallback" | "debugMessage">
+    Pick<
+      PlaybackRuntimeError,
+      "retryable" | "shouldFallback" | "reasonCode" | "debugMessage"
+    >
   > = {},
 ): PlaybackRuntimeError {
   return {
@@ -74,6 +77,7 @@ export function createPlaybackRuntimeError(
     message,
     retryable: overrides.retryable ?? RETRYABLE_CODES.has(code),
     shouldFallback: overrides.shouldFallback ?? FALLBACK_CODES.has(code),
+    reasonCode: overrides.reasonCode,
     debugMessage: overrides.debugMessage,
   };
 }
@@ -235,6 +239,23 @@ export function mapPlaybackPlanToRuntimeFailure(
     return { error, runtimeState: getPlaybackRuntimeState(error.code) };
   }
 
+  const onlyDisallowedQualities =
+    plan.state === "unsupported" &&
+    plan.rejectedCandidates.length > 0 &&
+    plan.rejectedCandidates.every(
+      (candidate) => candidate.reasonCode === "quality_not_allowed",
+    );
+
+  if (onlyDisallowedQualities) {
+    const error = createPlaybackRuntimeError("NO_PLAYABLE_SOURCE", message, {
+      retryable: false,
+      shouldFallback: false,
+      reasonCode: "quality_not_allowed",
+      debugMessage,
+    });
+    return { error, runtimeState: getPlaybackRuntimeState(error.code) };
+  }
+
   if (plan.state === "needsTranscode" || plan.state === "unsupported") {
     const error = createPlaybackRuntimeError("UNSUPPORTED_CODEC", message, {
       retryable: plan.state === "needsTranscode",
@@ -274,7 +295,10 @@ export function mapPlaybackMessageToRuntimeFailure(
   message: string,
   fallbackCode: PlaybackErrorCode = "UNKNOWN",
   overrides: Partial<
-    Pick<PlaybackRuntimeError, "retryable" | "shouldFallback" | "debugMessage">
+    Pick<
+      PlaybackRuntimeError,
+      "retryable" | "shouldFallback" | "reasonCode" | "debugMessage"
+    >
   > = {},
 ): PlaybackRuntimeFailure {
   const code = inferPlaybackErrorCodeFromMessages([message]) || fallbackCode;

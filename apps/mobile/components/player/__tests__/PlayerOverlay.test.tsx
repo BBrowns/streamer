@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import { PlayerOverlay } from "../PlayerOverlay";
 
 jest.mock("@expo/vector-icons", () => ({
@@ -31,7 +31,6 @@ describe("PlayerOverlay", () => {
         engineType="hls"
         stats={{ peers: 0, speed: 0, progress: 0 } as any}
         onClose={jest.fn()}
-        onSettings={jest.fn()}
         showInfoBar
       />,
     );
@@ -41,5 +40,23 @@ describe("PlayerOverlay", () => {
         expect.objectContaining({ alignSelf: "center" }),
       ]),
     );
+  });
+
+  it("uses a compact close control without duplicating playback settings", () => {
+    const onClose = jest.fn();
+    const screen = render(
+      <PlayerOverlay
+        currentStream={{ title: "Example stream" } as any}
+        engineType="hls"
+        stats={{ peers: 0, speed: 0, progress: 0 } as any}
+        onClose={onClose}
+        showInfoBar={false}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId("player-close-button"));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText("Playback settings")).toBeNull();
   });
 });

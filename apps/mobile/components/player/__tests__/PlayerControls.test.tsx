@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
-import { PlayerControls } from "../PlayerControls";
+import { Platform } from "react-native";
+import { getVolumeFromKeyboard, PlayerControls } from "../PlayerControls";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -102,6 +103,133 @@ describe("PlayerControls", () => {
 
     expect(player.seekBy).toHaveBeenCalledWith(10);
     expect(player.seekBy).toHaveBeenCalledWith(-10);
+  });
+
+  it("supports web keyboard controls on the progress slider", () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "web",
+    });
+    const onSeekBy = jest.fn();
+    const onSeekTo = jest.fn();
+    const preventDefault = jest.fn();
+    const stopPropagation = jest.fn();
+
+    try {
+      const screen = render(
+        <PlayerControls
+          player={createPlayer()}
+          currentTime={30}
+          duration={120}
+          isVisible
+          isPlaying
+          onPlayPause={jest.fn()}
+          onSeekBy={onSeekBy}
+          onSeekTo={onSeekTo}
+          capabilities={{ canSeek: true }}
+        />,
+      );
+      const progress = screen.getByTestId("player-progress-slider");
+
+      fireEvent(progress, "keyDown", {
+        key: "ArrowRight",
+        preventDefault,
+        stopPropagation,
+      });
+      fireEvent(progress, "keyDown", {
+        key: "Home",
+        preventDefault,
+        stopPropagation,
+      });
+      fireEvent(progress, "keyDown", {
+        key: "End",
+        preventDefault,
+        stopPropagation,
+      });
+
+      expect(onSeekBy).toHaveBeenCalledWith(10);
+      expect(onSeekTo).toHaveBeenCalledWith(0);
+      expect(onSeekTo).toHaveBeenCalledWith(120);
+      expect(preventDefault).toHaveBeenCalledTimes(3);
+      expect(stopPropagation).toHaveBeenCalledTimes(3);
+    } finally {
+      Object.defineProperty(Platform, "OS", {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
+  });
+
+  it("maps all standard web volume keys to bounded values", () => {
+    expect(getVolumeFromKeyboard(0.6, "ArrowLeft")).toBe(0.5);
+    expect(getVolumeFromKeyboard(0.6, "ArrowDown")).toBe(0.5);
+    expect(getVolumeFromKeyboard(0.6, "ArrowRight")).toBe(0.7);
+    expect(getVolumeFromKeyboard(0.6, "ArrowUp")).toBe(0.7);
+    expect(getVolumeFromKeyboard(0.6, "Home")).toBe(0);
+    expect(getVolumeFromKeyboard(0.6, "End")).toBe(1);
+    expect(getVolumeFromKeyboard(0.6, "k")).toBeNull();
+    expect(getVolumeFromKeyboard(0, "ArrowDown")).toBe(0);
+    expect(getVolumeFromKeyboard(1, "ArrowUp")).toBe(1);
+  });
+
+  it("handles volume slider keys locally and stops them from bubbling", () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "web",
+    });
+    const onVolumeChange = jest.fn();
+    const preventDefault = jest.fn();
+    const stopPropagation = jest.fn();
+
+    try {
+      const screen = render(
+        <PlayerControls
+          player={createPlayer()}
+          currentTime={30}
+          duration={120}
+          isVisible
+          isPlaying
+          onPlayPause={jest.fn()}
+          volume={0.6}
+          onVolumeChange={onVolumeChange}
+          capabilities={{ canSeek: true, canUseVolume: true }}
+        />,
+      );
+      const volume = screen.getByTestId("player-volume-slider");
+
+      for (const key of [
+        "ArrowLeft",
+        "ArrowDown",
+        "ArrowRight",
+        "ArrowUp",
+        "Home",
+        "End",
+      ]) {
+        fireEvent(volume, "keyDown", {
+          key,
+          preventDefault,
+          stopPropagation,
+        });
+      }
+      fireEvent(volume, "keyDown", {
+        key: "k",
+        preventDefault,
+        stopPropagation,
+      });
+
+      expect(onVolumeChange.mock.calls.map(([value]) => value)).toEqual([
+        0.5, 0.5, 0.7, 0.7, 0, 1,
+      ]);
+      expect(preventDefault).toHaveBeenCalledTimes(6);
+      expect(stopPropagation).toHaveBeenCalledTimes(6);
+    } finally {
+      Object.defineProperty(Platform, "OS", {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
   });
 
   it("disables misleading seek controls for non-seekable streams", () => {

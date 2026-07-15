@@ -448,31 +448,47 @@ The player screen (`app/player.tsx`) is the most complex screen in the app. It w
 ```
 PlayerScreen (app/player.tsx)
 ├── VideoView (expo-video)          — native video renderer
-├── PlayerOverlay                   — gesture handler root, tap-to-show/hide controls
-│   ├── PlayerControls              — play/pause, seek bar, time, cast button
-│   ├── PlayerSettingsModal         — audio track, subtitle track, playback speed
-│   ├── PlayerStatusOverlay         — typed readiness/error state
-│   ├── NextEpisodeOverlay          — "Up Next: Episode X" auto-play prompt
-│   └── RemoteControlBar            — Chromecast / AirPlay remote UI (when casting)
+├── PlayerInteractionLayer          — passive tap/double-tap hit areas
+├── PlayerOverlay                   — quiet top chrome and optional stream info
+├── PlayerControls                  — play/pause, timeline, volume and actions
+├── PlayerSettingsModal             — audio track, subtitle track, playback speed
+├── PlayerStatusOverlay             — typed readiness/error state
+├── NextEpisodeOverlay              — "Up Next: Episode X" auto-play prompt
+├── RemoteControlBar                — Chromecast / AirPlay remote UI (when casting)
 └── DesktopCastModal                — device selector modal for web/Electron
 ```
 
 ### 6.2 `PlayerOverlay`
 
-Manages `controlsVisible` state using a 4-second auto-hide timer. Taps anywhere toggle the controls. Double-tap on the left or right half of the screen seeks ±10 seconds (standard mobile video player convention). A visual seek feedback indicator (`"+10s"` / `"-10s"`) shows briefly then fades — implemented with a timer ref and `seekFeedback` state, not an animation, because the requirement is to reset the timer on repeated taps.
+The visible top chrome uses one compact 44 px Close control plus only the
+platform actions that are available, such as Cast and Picture in Picture. It no
+longer repeats playback settings in the top-right corner. Optional stream
+information appears in a constrained top panel instead of competing with the
+timeline at the bottom.
+
+`PlayerInteractionLayer` owns the passive left, centre, and right hit areas.
+Taps toggle controls and double-taps on the outer areas seek ±10 seconds. These
+hit areas are deliberately removed from keyboard and screen-reader navigation;
+the same actions remain available through labeled controls and hotkeys. A
+visual seek feedback indicator (`"+10s"` / `"-10s"`) resets its timer on
+repeated taps.
 
 ### 6.3 `PlayerControls`
 
-Renders the visible playback control surface:
+Renders the visible playback control surface. The current chrome keeps the
+video dominant: the bottom treatment is a black readability gradient rather
+than a large floating card, and source/status information shares a compact
+toolbar with the available actions.
 
-- Center glass controls with Play/Pause and Skip ±10s.
-- Bottom high-contrast progress tray with current time, duration, and progress.
+- Center controls with one high-contrast Play/Pause action and restrained
+  Skip ±10s controls.
+- Bottom timeline with current time, duration, and cobalt progress.
 - Accessible progress control using `accessibilityRole="adjustable"`,
   `accessibilityActions`, and ±10s seek actions.
 - Capability-aware timeline copy for direct, remux, live, and unknown-duration
   playback.
-- Desktop/web volume, settings, cast, retry, and fullscreen actions when those
-  capabilities are available.
+- Desktop/web mute and continuous volume adjustment, settings, cast, retry, and
+  fullscreen actions when those capabilities are available.
 - Desktop/web keyboard shortcut helper for the currently supported hotkeys.
 - Web pointer pass-through so the overlay can remain visible without blocking
   unrelated video-surface interactions.
@@ -486,19 +502,25 @@ non-seekable.
 
 Extracted hook for keyboard shortcuts on web/desktop. Handles:
 
-| Key           | Action                  |
-| ------------- | ----------------------- |
-| `Space` / `K` | Play/Pause              |
-| `J` / `←`     | Seek back 10 seconds    |
-| `L` / `→`     | Seek forward 10 seconds |
-| `F`           | Toggle fullscreen       |
-| `M`           | Toggle mute             |
-| `1`-`9`       | Jump to 10%-90%         |
+| Key           | Action                                                   |
+| ------------- | -------------------------------------------------------- |
+| `Space` / `K` | Play/Pause                                               |
+| `J` / `←`     | Seek back 10 seconds                                     |
+| `L` / `→`     | Seek forward 10 seconds                                  |
+| `F`           | Toggle fullscreen                                        |
+| `M`           | Toggle mute                                              |
+| `1`-`9`       | Jump to 10%-90%                                          |
+| `Escape`      | Close a player sheet or cancel active source preparation |
 
-All listeners are added to `document` (web only — guarded by `Platform.OS === "web"`). Listeners are cleaned up in the `useEffect` return to avoid leaks.
+All listeners are added to `window` (web only — guarded by
+`Platform.OS === "web"`). Listeners are cleaned up in the `useEffect` return to
+avoid leaks.
 
 Seek shortcuts should use the callback props from `PlayerScreen` rather than
 mutating `player.currentTime` directly when a guarded callback is available.
+Escape follows a strict priority: close Player Settings, then close the Cast
+dialog, then cancel active source preparation. It does not silently leave
+normal playback.
 
 ### 6.5 Progress Reporting
 
@@ -528,6 +550,21 @@ Important visible states:
 
 `PlayerStatusOverlay` uses these states for titles, retry visibility, and Sources & Devices guidance. Keep future player work in this typed model rather than adding raw alert strings.
 
+Source preparation is cancellable as soon as it is active. The loading overlay
+shows a dedicated Cancel control; on web/Electron, Escape triggers the same
+session/engine cancellation path. Closing or cancelling without a planner
+session also stops the resolved engine before leaving the player. A missing
+stream is presented through `PlaybackStatusPanel` with Browse titles and Back,
+not as an isolated error string.
+
+Torrent preparation itself is cancellation-aware. Each operation has an
+`AbortController` and generation guard, so cancelling interrupts the bridge
+request, an active status poll, or the delay before the next poll without
+waiting for the gateway timeout. A job returned late by a bridge that ignored
+the abort is deleted best-effort. Expected cancellation remains a cancelled
+session: it does not create an attempt failure, start a fallback, or degrade the
+remembered bridge status.
+
 ---
 
 ## 7. Detail Screen (`app/detail/[type]/[id].tsx`)
@@ -553,6 +590,22 @@ its candidate ID through the existing planner/session resolver; it never
 bypasses that contract with a direct URI. Ranking, codecs, rejected candidates,
 bridge/remux data, and reason codes live behind the separately lazy **Show
 technical details** disclosure.
+
+Metadata loading and recovery are separate visible states. `useMeta` classifies
+a confirmed `404`/no-provider result, a connection failure, and a temporary
+request failure. `DetailLoadState` supplies Back and Retry in every recovery
+case, with **Review add-ons** for unavailable metadata and **Sources & Devices**
+for recoverable service/setup failures. Confirmed 404 responses are not retried
+automatically. A previously cached full `MetaDetail` remains visible when a
+background refresh fails; a lightweight catalog preview is not promoted to
+full detail data.
+
+The aggregator preserves that distinction: no metadata provider, or only
+explicit provider 404 responses, produces a 404; total network, timeout, policy,
+or schema failure produces the recoverable
+`METADATA_TEMPORARILY_UNAVAILABLE` 503 response. A valid provider response still
+wins during partial failure. This prevents an add-on outage from being shown as
+if the title did not exist.
 
 ---
 
@@ -598,10 +651,19 @@ and planned-next-episode intents must never be presented as completed offline
 files. A download is Ready offline only after managed-path type/size checks,
 reliable Content-Length comparison, metadata rejection, and a successful local
 `expo-video` readiness/duration probe. Existing completion records migrate to
-pending verification. Playback quality is passed to the internal `playBest()`
-planner as the ceiling; audio
-and subtitle choices remain player preferences until richer track selection is
-available.
+pending verification. Playback quality is always passed to the internal
+`playBest()` planner as an exact allowlist of the selected 2160p, 1080p, 720p,
+and 480p values. Unselected, SD, and unclassified qualities are rejected before
+ranking with the internal `quality_not_allowed` reason, including when all four
+selectable qualities are enabled. The final selected quality cannot be removed.
+Persisted legacy maximum-quality choices migrate to equivalent quality sets.
+Audio and subtitle choices remain player preferences until richer track
+selection is available.
+
+When every available source is excluded only by this allowlist, the planner
+reason survives as `quality_not_allowed`. Detail then explains the quality
+conflict and links directly to **Playback settings**. Mixed quality and device
+compatibility failures retain the broader **Sources & Devices** recovery.
 
 The Trakt OAuth flow uses `expo-web-browser` to open the Trakt authorization
 URL, then captures the redirect via deep link.
@@ -730,6 +792,16 @@ may remain untranslated inside Advanced diagnostics.
 ---
 
 ## 12. Platform-Specific Intricacies
+
+### Development stream-server stdin
+
+`npm run dev:stream-server` launches the watch process through
+`scripts/dev-runtime.cjs`. The stream server is signal-controlled and does not
+consume terminal input, so this one child process receives ignored stdin while
+stdout and stderr remain attached. SIGINT and SIGTERM are still forwarded and
+listeners are removed on exit or spawn failure. This prevents a stale or
+disconnected terminal from surfacing an unhandled Node `read EIO` error without
+changing normal interactive npm/mobile commands.
 
 ### `Platform.OS === "web"` Guards
 

@@ -1,6 +1,9 @@
 import type { Context } from "hono";
 import { env } from "../../config/env.js";
-import { aggregatorService } from "./aggregator.service.js";
+import {
+  aggregatorService,
+  MetadataProvidersUnavailableError,
+} from "./aggregator.service.js";
 import { resilienceRegistry } from "./resilience.js";
 import { SessionService } from "../auth/session.service.js";
 
@@ -27,12 +30,22 @@ export class AggregatorController {
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
-    const meta = await aggregatorService.getMeta(
-      user.userId,
-      type,
-      id,
-      requestId,
-    );
+    let meta;
+    try {
+      meta = await aggregatorService.getMeta(user.userId, type, id, requestId);
+    } catch (error) {
+      if (error instanceof MetadataProvidersUnavailableError) {
+        return c.json(
+          {
+            error:
+              "This title could not be loaded right now. Please try again.",
+            code: "METADATA_TEMPORARILY_UNAVAILABLE",
+          },
+          503,
+        );
+      }
+      throw error;
+    }
 
     if (!meta) {
       return c.json({ error: "Metadata not found" }, 404);

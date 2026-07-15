@@ -616,8 +616,13 @@
     },
     "playbackPreferences": {
       "quality": "Playback quality",
-      "qualityDescription": "Choose the maximum quality used when Streamer ranks sources.",
-      "auto": "Auto",
+      "qualityDescription": "Streamer only uses the selected video qualities. SD and sources without a known quality stay excluded. Keep at least one selected.",
+      "qualityOptions": {
+        "2160": "4K (2160p)",
+        "1080": "Full HD (1080p)",
+        "720": "HD (720p)",
+        "480": "480p"
+      },
       "audio": "Audio language",
       "audioDescription": "Prefer this audio track when it is available.",
       "subtitles": "Subtitles",
@@ -851,6 +856,10 @@
       "openSourcesDetail": "Open Sources & Devices to connect to the desktop app.",
       "directMayWork": "Direct viewing options may still work on this device.",
       "sourcesAction": "Sources & Devices",
+      "qualitySelectionTitle": "No source matches your quality choices",
+      "qualitySelectionMessage": "Available sources fall outside the video qualities selected in Playback settings.",
+      "qualitySelectionDetail": "Allow another quality, then try playback again.",
+      "playbackSettingsAction": "Playback settings",
       "extraSupportTitle": "Extra playback support needed",
       "extraSupportMessage": "This viewing option needs help from the desktop app.",
       "checkSupportDetail": "Review Sources & Devices or choose another viewing option.",
@@ -893,6 +902,20 @@
         "download": "Download unavailable",
         "cast": "Cast unavailable"
       }
+    },
+    "loadState": {
+      "eyebrow": "Title details",
+      "loadingTitle": "Loading title details",
+      "loadingDescription": "Getting the latest information and viewing options.",
+      "notFoundTitle": "This title isn’t available",
+      "notFoundDescription": "None of your current add-ons could provide details for this title. It may have been removed or may not be part of your catalogs.",
+      "networkTitle": "You’re offline",
+      "networkDescription": "Reconnect to the internet, then try loading this title again.",
+      "temporaryTitle": "This title couldn’t load",
+      "temporaryDescription": "Something interrupted this request. Try again in a moment.",
+      "retry": "Try again",
+      "reviewAddons": "Review add-ons",
+      "sourcesDevices": "Sources & Devices"
     },
     "errors": {
       "notFound": "Content not found",
@@ -1057,6 +1080,8 @@
       "preparingMetadata": "Reading torrent metadata...",
       "remuxing": "Preparing a compatible video stream...",
       "preparingSubtitle": "This can take a moment for torrent sources.",
+      "cancelPreparation": "Cancel source preparation",
+      "cancelPreparationHint": "You can also press Escape to cancel.",
       "tryingFallback": "Trying another source...",
       "buffering": "Buffering...",
       "errorTitle": "Connection Failed",
@@ -1069,7 +1094,10 @@
       "errorSubtitle": "Unable to load stream"
     },
     "errors": {
-      "noStream": "No stream selected",
+      "noStreamStatus": "Playback unavailable",
+      "noStreamTitle": "Nothing is queued to play",
+      "noStream": "Choose a title to start playback. If you were already watching, the playback request may have expired.",
+      "browseTitles": "Browse titles",
       "bridgeUnavailable": "Playback support is not ready. Open Sources & Devices, review this device, and try again.",
       "playbackFailed": "This title could not start playing.",
       "playbackTimeout": "This title took too long to prepare. Try again or choose another viewing option.",

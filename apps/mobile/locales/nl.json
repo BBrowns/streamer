@@ -610,8 +610,13 @@
     },
     "playbackPreferences": {
       "quality": "Afspeelkwaliteit",
-      "qualityDescription": "Kies de maximale kwaliteit waarmee Streamer bronnen rangschikt.",
-      "auto": "Automatisch",
+      "qualityDescription": "Streamer gebruikt alleen de geselecteerde videokwaliteiten. SD en bronnen zonder bekende kwaliteit blijven uitgesloten. Laat er minimaal één geselecteerd.",
+      "qualityOptions": {
+        "2160": "4K (2160p)",
+        "1080": "Full HD (1080p)",
+        "720": "HD (720p)",
+        "480": "480p"
+      },
       "audio": "Audiotaal",
       "audioDescription": "Geef de voorkeur aan deze audiotrack wanneer die beschikbaar is.",
       "subtitles": "Ondertitels",
@@ -847,6 +852,10 @@
       "openSourcesDetail": "Open Bronnen & apparaten om verbinding te maken met de desktopapp.",
       "directMayWork": "Directe kijkopties kunnen op dit apparaat nog werken.",
       "sourcesAction": "Bronnen & apparaten",
+      "qualitySelectionTitle": "Geen bron past bij je kwaliteitskeuzes",
+      "qualitySelectionMessage": "De beschikbare bronnen vallen buiten de videokwaliteiten die je bij Afspeelinstellingen hebt geselecteerd.",
+      "qualitySelectionDetail": "Sta een andere kwaliteit toe en probeer daarna opnieuw af te spelen.",
+      "playbackSettingsAction": "Afspeelinstellingen",
       "extraSupportTitle": "Extra afspeelondersteuning nodig",
       "extraSupportMessage": "Deze kijkoptie heeft hulp van de desktopapp nodig.",
       "checkSupportDetail": "Controleer Bronnen & apparaten of kies een andere kijkoptie.",
@@ -889,6 +898,20 @@
         "download": "Download niet beschikbaar",
         "cast": "Casten niet beschikbaar"
       }
+    },
+    "loadState": {
+      "eyebrow": "Titeldetails",
+      "loadingTitle": "Titeldetails laden",
+      "loadingDescription": "De nieuwste informatie en kijkopties worden opgehaald.",
+      "notFoundTitle": "Deze titel is niet beschikbaar",
+      "notFoundDescription": "Geen van je huidige add-ons kon details voor deze titel leveren. De titel is mogelijk verwijderd of maakt geen deel uit van je catalogi.",
+      "networkTitle": "Je bent offline",
+      "networkDescription": "Maak opnieuw verbinding met internet en probeer deze titel opnieuw te laden.",
+      "temporaryTitle": "Deze titel kon niet worden geladen",
+      "temporaryDescription": "Het verzoek werd onderbroken. Probeer het over een moment opnieuw.",
+      "retry": "Opnieuw proberen",
+      "reviewAddons": "Add-ons bekijken",
+      "sourcesDevices": "Bronnen & apparaten"
     },
     "errors": {
       "notFound": "Inhoud niet gevonden",
@@ -1053,6 +1076,8 @@
       "preparingMetadata": "Torrentmetadata lezen...",
       "remuxing": "Compatibele videostream voorbereiden...",
       "preparingSubtitle": "Dit kan even duren voor torrentbronnen.",
+      "cancelPreparation": "Bronvoorbereiding annuleren",
+      "cancelPreparationHint": "Je kunt ook op Escape drukken om te annuleren.",
       "tryingFallback": "Een andere bron proberen...",
       "buffering": "Bufferen...",
       "errorTitle": "Verbinding mislukt",
@@ -1065,7 +1090,10 @@
       "errorSubtitle": "Stream laden mislukt"
     },
     "errors": {
-      "noStream": "Geen stream geselecteerd",
+      "noStreamStatus": "Afspelen niet beschikbaar",
+      "noStreamTitle": "Er staat niets klaar om af te spelen",
+      "noStream": "Kies een titel om af te spelen. Als je al aan het kijken was, is de afspeelopdracht mogelijk verlopen.",
+      "browseTitles": "Titels bekijken",
       "bridgeUnavailable": "Afspeelondersteuning is nog niet klaar. Open Bronnen & apparaten, controleer dit apparaat en probeer het opnieuw.",
       "playbackFailed": "Deze titel kon niet worden afgespeeld.",
       "playbackTimeout": "Het voorbereiden duurde te lang. Probeer het opnieuw of kies een andere kijkoptie.",

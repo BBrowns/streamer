@@ -33,7 +33,7 @@ export function DesktopDetailLayout({
   planningAction,
   playbackNotice,
   onDismissPlaybackNotice,
-  onOpenSourcesDevices,
+  onPlaybackNoticeAction,
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
@@ -155,7 +155,7 @@ export function DesktopDetailLayout({
         <PlaybackReadinessNotice
           notice={playbackNotice}
           onDismiss={onDismissPlaybackNotice}
-          onPrimaryAction={onOpenSourcesDevices}
+          onPrimaryAction={onPlaybackNoticeAction}
         />
       )}
 

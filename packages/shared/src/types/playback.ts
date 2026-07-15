@@ -63,6 +63,8 @@ export interface PlaybackRuntimeError {
   message: string;
   retryable: boolean;
   shouldFallback: boolean;
+  /** Optional planner rejection semantics used to choose a focused recovery. */
+  reasonCode?: PlaybackRejectReason;
   debugMessage?: string;
 }
 
@@ -82,9 +84,12 @@ export type BridgeStatus =
   | "no-peers"
   | "unsupported";
 
+export type PlaybackQuality = "2160p" | "1080p" | "720p" | "480p";
+export type SourceQuality = PlaybackQuality | "SD";
+
 export interface DeviceProfile {
   platform: DevicePlatform;
-  maxQuality: "2160p" | "1080p" | "720p" | "480p";
+  maxQuality: PlaybackQuality;
   network: "local" | "remote" | "unknown";
   supports: {
     h264: boolean;
@@ -120,6 +125,8 @@ export interface PlaybackPlanRequest {
   preferences?: {
     preferredAudioLanguage?: string | null;
     preferredSubtitleLanguage?: string | null;
+    /** Exact selectable-quality allowlist. SD and unclassified sources are excluded. */
+    allowedQualities?: PlaybackQuality[];
   };
   bridge?: BridgeHealthHint;
 }
@@ -142,7 +149,7 @@ export interface MediaCandidate {
   id: string;
   stream: Stream;
   kind: "direct" | "hls" | "torrent" | "external" | "unknown";
-  quality?: "2160p" | "1080p" | "720p" | "480p" | "SD";
+  quality?: SourceQuality;
   container?: "mp4" | "mkv" | "hls" | "unknown";
   videoCodec?: "h264" | "h265" | "av1" | "unknown";
   audioCodec?: "aac" | "ac3" | "eac3" | "unknown";
@@ -164,7 +171,8 @@ export type PlaybackRejectReason =
   | "cast_device_incompatible"
   | "localhost_not_castable"
   | "source_missing_url"
-  | "unknown_stream_type";
+  | "unknown_stream_type"
+  | "quality_not_allowed";
 
 export type PlaybackDecisionReasonCode =
   | "selected_highest_score"

@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import {
+  playbackPlanRequestSchema,
   playbackPlanSchema,
   type PlaybackPlan,
   type PlannedMediaCandidate,
@@ -207,5 +208,66 @@ describe("playbackPlanSchema", () => {
     expectTypeOf<
       z.infer<typeof playbackPlanSchema>
     >().toEqualTypeOf<PlaybackPlan>();
+  });
+});
+
+describe("playbackPlanRequestSchema", () => {
+  const request = {
+    type: "movie" as const,
+    id: "tt123",
+    action: "play" as const,
+    deviceProfile: {
+      platform: "web" as const,
+      maxQuality: "2160p" as const,
+      network: "local" as const,
+      supports: {
+        h264: true,
+        h265: true,
+        av1: true,
+        mp4: true,
+        mkv: true,
+        hls: true,
+        dolbyVision: true,
+        aac: true,
+        ac3: true,
+        eac3: true,
+      },
+    },
+  };
+
+  it("accepts an exact playback-quality allowlist", () => {
+    expect(
+      playbackPlanRequestSchema.parse({
+        ...request,
+        preferences: { allowedQualities: ["2160p", "1080p"] },
+      }).preferences?.allowedQualities,
+    ).toEqual(["2160p", "1080p"]);
+  });
+
+  it("accepts all selectable qualities without treating SD as selectable", () => {
+    expect(
+      playbackPlanRequestSchema.parse({
+        ...request,
+        preferences: {
+          allowedQualities: ["2160p", "1080p", "720p", "480p"],
+        },
+      }).preferences?.allowedQualities,
+    ).toEqual(["2160p", "1080p", "720p", "480p"]);
+
+    expect(
+      playbackPlanRequestSchema.safeParse({
+        ...request,
+        preferences: { allowedQualities: ["1080p", "SD"] },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an empty playback-quality allowlist", () => {
+    expect(
+      playbackPlanRequestSchema.safeParse({
+        ...request,
+        preferences: { allowedQualities: [] },
+      }).success,
+    ).toBe(false);
   });
 });

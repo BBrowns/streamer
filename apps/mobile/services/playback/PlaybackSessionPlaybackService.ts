@@ -11,9 +11,10 @@ import {
   getDownloadEligibility,
   type DownloadEligibility,
 } from "../downloadEligibility";
-import type {
-  GatewayJobProgress,
-  IStreamEngine,
+import {
+  isStreamEngineCancellationError,
+  type GatewayJobProgress,
+  type IStreamEngine,
 } from "../streamEngine/IStreamEngine";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import { getUnsupportedWebCodecReason } from "../streamEngine/codecSupport";
@@ -681,6 +682,34 @@ async function attemptCandidate(
       eligibility,
     };
   } catch (error) {
+    if (isStreamEngineCancellationError(error)) {
+      let cancelledSession = getSession(sessionId);
+      if (cancelledSession && !isTerminal(cancelledSession)) {
+        store.cancelSession(
+          sessionId,
+          getActionMessage(action, {
+            play: "Playback preparation was cancelled.",
+            download: "Download preparation was cancelled.",
+            cast: "Cast preparation was cancelled.",
+          }),
+        );
+        cancelledSession = getSession(sessionId);
+      }
+
+      stopActiveEngine(sessionId);
+      clearSessionBreadcrumbState(sessionId);
+      return {
+        ok: false,
+        sessionId,
+        error: cancelledSession
+          ? runtimeErrorFromSession(cancelledSession)
+          : createPlaybackRuntimeError("SOURCE_UNAVAILABLE", undefined, {
+              retryable: false,
+              shouldFallback: false,
+            }),
+      };
+    }
+
     const latestSession = getSession(sessionId);
     if (!latestSession || isTerminal(latestSession)) {
       return {

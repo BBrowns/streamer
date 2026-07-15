@@ -10,7 +10,7 @@ jest.mock("@expo/vector-icons", () => ({
 describe("PersonalizationSection", () => {
   beforeEach(() => {
     usePlayerStore.setState({
-      preferredQuality: "auto",
+      preferredQualities: ["2160p", "1080p", "720p", "480p"],
       preferredAudioLang: null,
       preferredSubtitleLang: null,
       autoPlayNext: true,
@@ -25,7 +25,12 @@ describe("PersonalizationSection", () => {
     ).toBeTruthy();
     expect(screen.getByText("settings.playbackPreferences.audio")).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText("720P"));
+    fireEvent.press(
+      screen.getByLabelText("settings.playbackPreferences.qualityOptions.720"),
+    );
+    fireEvent.press(
+      screen.getByLabelText("settings.playbackPreferences.qualityOptions.480"),
+    );
     fireEvent.press(
       screen.getAllByLabelText(
         "settings.playbackPreferences.languages.dutch",
@@ -36,9 +41,25 @@ describe("PersonalizationSection", () => {
     );
 
     expect(usePlayerStore.getState()).toMatchObject({
-      preferredQuality: "720p",
+      preferredQualities: ["2160p", "1080p"],
       preferredSubtitleLang: "nl",
       autoPlayNext: false,
     });
+  });
+
+  it("keeps at least one playback quality selected", () => {
+    usePlayerStore.setState({ preferredQualities: ["1080p"] });
+    const screen = render(<PersonalizationSection />);
+    const onlyQuality = screen.getByLabelText(
+      "settings.playbackPreferences.qualityOptions.1080",
+    );
+
+    expect(onlyQuality.props.accessibilityState).toMatchObject({
+      checked: true,
+      disabled: true,
+    });
+    fireEvent.press(onlyQuality);
+
+    expect(usePlayerStore.getState().preferredQualities).toEqual(["1080p"]);
   });
 });

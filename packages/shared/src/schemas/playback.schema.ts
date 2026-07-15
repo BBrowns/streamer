@@ -35,6 +35,17 @@ export const playbackRejectReasonSchema = z.enum([
   "localhost_not_castable",
   "source_missing_url",
   "unknown_stream_type",
+  "quality_not_allowed",
+]);
+
+export const playbackQualitySchema = z.enum(["2160p", "1080p", "720p", "480p"]);
+
+export const sourceQualitySchema = z.enum([
+  "2160p",
+  "1080p",
+  "720p",
+  "480p",
+  "SD",
 ]);
 
 export const playbackDecisionReasonCodeSchema = z.enum([
@@ -71,7 +82,7 @@ export const deviceProfileSchema = z.object({
     "chromecast",
     "unknown",
   ]),
-  maxQuality: z.enum(["2160p", "1080p", "720p", "480p"]),
+  maxQuality: playbackQualitySchema,
   network: z.enum(["local", "remote", "unknown"]),
   supports: z.object({
     h264: z.boolean(),
@@ -103,6 +114,7 @@ export const playbackPlanRequestSchema = z.object({
         .max(12)
         .nullable()
         .optional(),
+      allowedQualities: z.array(playbackQualitySchema).min(1).max(4).optional(),
     })
     .optional(),
   bridge: z
@@ -186,7 +198,7 @@ export const mediaCandidateSchema = z
     id: z.string().uuid(),
     stream: streamSchema,
     kind: z.enum(["direct", "hls", "torrent", "external", "unknown"]),
-    quality: z.enum(["2160p", "1080p", "720p", "480p", "SD"]).optional(),
+    quality: sourceQualitySchema.optional(),
     container: z.enum(["mp4", "mkv", "hls", "unknown"]).optional(),
     videoCodec: z.enum(["h264", "h265", "av1", "unknown"]).optional(),
     audioCodec: z.enum(["aac", "ac3", "eac3", "unknown"]).optional(),

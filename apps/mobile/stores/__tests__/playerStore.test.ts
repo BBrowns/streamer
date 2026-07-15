@@ -20,7 +20,11 @@ jest.mock("react-native-sse", () =>
 
 import EventSource from "react-native-sse";
 import { useAuthStore } from "../authStore";
-import { usePlayerStore } from "../playerStore";
+import {
+  migratePlayerPreferences,
+  normalizePreferredQualities,
+  usePlayerStore,
+} from "../playerStore";
 
 describe("playerStore", () => {
   beforeEach(() => {
@@ -35,6 +39,32 @@ describe("playerStore", () => {
 
   afterEach(() => {
     usePlayerStore.getState().clearPlayer();
+  });
+
+  it("migrates the legacy maximum-quality preference to an equivalent allowlist", () => {
+    expect(
+      migratePlayerPreferences({
+        playbackRate: 1,
+        preferredQuality: "720p",
+        autoPlayNext: true,
+      }),
+    ).toEqual({
+      playbackRate: 1,
+      preferredQualities: ["720p", "480p"],
+      autoPlayNext: true,
+    });
+  });
+
+  it("normalizes persisted quality values in display and planner order", () => {
+    expect(
+      normalizePreferredQualities(["480p", "invalid", "2160p", "480p"]),
+    ).toEqual(["2160p", "480p"]);
+    expect(normalizePreferredQualities([], "auto")).toEqual([
+      "2160p",
+      "1080p",
+      "720p",
+      "480p",
+    ]);
   });
 
   it("clears previous metrics subscriptions when a new stream starts", () => {

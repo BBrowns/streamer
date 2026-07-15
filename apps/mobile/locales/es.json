@@ -613,8 +613,13 @@
     },
     "playbackPreferences": {
       "quality": "Calidad de reproducción",
-      "qualityDescription": "Elige la calidad máxima al ordenar las fuentes.",
-      "auto": "Automática",
+      "qualityDescription": "Streamer solo usa las calidades de vídeo seleccionadas. Las fuentes SD o sin calidad conocida quedan excluidas. Mantén al menos una seleccionada.",
+      "qualityOptions": {
+        "2160": "4K (2160p)",
+        "1080": "Full HD (1080p)",
+        "720": "HD (720p)",
+        "480": "480p"
+      },
       "audio": "Idioma de audio",
       "audioDescription": "Prefiere esta pista de audio cuando esté disponible.",
       "subtitles": "Subtítulos",
@@ -850,6 +855,10 @@
       "openSourcesDetail": "Abre Fuentes y dispositivos para conectar la aplicación de escritorio.",
       "directMayWork": "Las opciones directas aún pueden funcionar en este dispositivo.",
       "sourcesAction": "Fuentes y dispositivos",
+      "qualitySelectionTitle": "Ninguna fuente coincide con tus calidades",
+      "qualitySelectionMessage": "Las fuentes disponibles no tienen una de las calidades seleccionadas en los ajustes de reproducción.",
+      "qualitySelectionDetail": "Permite otra calidad y vuelve a intentar la reproducción.",
+      "playbackSettingsAction": "Ajustes de reproducción",
       "extraSupportTitle": "Se necesita compatibilidad adicional",
       "extraSupportMessage": "Esta opción necesita ayuda de la aplicación de escritorio.",
       "checkSupportDetail": "Revisa Fuentes y dispositivos o elige otra opción.",
@@ -892,6 +901,20 @@
         "download": "Descarga no disponible",
         "cast": "Transmisión no disponible"
       }
+    },
+    "loadState": {
+      "eyebrow": "Detalles del título",
+      "loadingTitle": "Cargando los detalles",
+      "loadingDescription": "Obteniendo la información y las opciones de visualización más recientes.",
+      "notFoundTitle": "Este título no está disponible",
+      "notFoundDescription": "Ninguno de tus complementos actuales pudo proporcionar detalles de este título. Puede que se haya eliminado o que no forme parte de tus catálogos.",
+      "networkTitle": "Estás sin conexión",
+      "networkDescription": "Vuelve a conectarte a internet e intenta cargar este título de nuevo.",
+      "temporaryTitle": "No se pudo cargar este título",
+      "temporaryDescription": "Algo interrumpió la solicitud. Vuelve a intentarlo en unos instantes.",
+      "retry": "Volver a intentar",
+      "reviewAddons": "Revisar complementos",
+      "sourcesDevices": "Fuentes y dispositivos"
     },
     "errors": {
       "notFound": "Contenido no encontrado",
@@ -1056,6 +1079,8 @@
       "preparingMetadata": "Leyendo metadatos del torrent...",
       "remuxing": "Preparando un flujo de vídeo compatible...",
       "preparingSubtitle": "Esto puede tardar un momento con fuentes torrent.",
+      "cancelPreparation": "Cancelar la preparación de la fuente",
+      "cancelPreparationHint": "También puedes pulsar Escape para cancelar.",
       "tryingFallback": "Probando otra fuente...",
       "buffering": "Cargando el búfer...",
       "errorTitle": "Error de conexión",
@@ -1068,7 +1093,10 @@
       "errorSubtitle": "No se pudo cargar el flujo"
     },
     "errors": {
-      "noStream": "No hay flujo seleccionado",
+      "noStreamStatus": "Reproducción no disponible",
+      "noStreamTitle": "No hay nada en cola para reproducir",
+      "noStream": "Elige un título para iniciar la reproducción. Si ya estabas viendo algo, puede que la solicitud haya caducado.",
+      "browseTitles": "Explorar títulos",
       "bridgeUnavailable": "La compatibilidad de reproducción no está lista. Abre Fuentes y dispositivos, revisa este dispositivo e inténtalo de nuevo.",
       "playbackFailed": "No se ha podido iniciar este título.",
       "playbackTimeout": "Este título ha tardado demasiado en prepararse. Inténtalo de nuevo o elige otra opción.",

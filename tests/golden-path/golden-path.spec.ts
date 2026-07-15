@@ -230,6 +230,7 @@ test("no peers is recoverable through advanced source selection", async ({
 test("development player preview exposes the real control chrome", async ({
   page,
 }, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await loginAndOpenFixture(page, "no-peers");
   await page.getByRole("button", { name: "Play" }).click();
 
@@ -241,12 +242,172 @@ test("development player preview exposes the real control chrome", async ({
   await expect(
     page.getByRole("button", { name: "Audio, subtitles, and source" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Audio, subtitles, and source" }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Playback settings" }),
+  ).toHaveCount(0);
   await expect(page.getByText(/empty string/i)).toHaveCount(0);
+
+  const hitZones = [
+    page.getByTestId("player-hit-zone-left"),
+    page.getByTestId("player-hit-zone-center"),
+    page.getByTestId("player-hit-zone-right"),
+  ];
+  for (const zone of hitZones) {
+    await expect(zone).toHaveAttribute("tabindex", "-1");
+    expect(
+      await zone.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return style.outlineStyle === "none" || style.outlineWidth === "0px";
+      }),
+    ).toBe(true);
+  }
+
+  if (testInfo.project.name === "phone-web") {
+    const statusRow = page.getByTestId("player-controls-status-row");
+    const actionRow = page.getByTestId("player-controls-action-row");
+    const [statusBox, actionBox] = await Promise.all([
+      statusRow.boundingBox(),
+      actionRow.boundingBox(),
+    ]);
+    expect(statusBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(actionBox!.y).toBeGreaterThanOrEqual(
+      statusBox!.y + statusBox!.height - 1,
+    );
+  }
+
+  if (testInfo.project.name === "desktop-renderer") {
+    const play = page.getByRole("button", { name: "Play playback" });
+    const close = page.getByRole("button", { name: "Close" });
+    const seekBack = page.getByRole("button", {
+      name: "Seek back unavailable",
+    });
+    const settings = page.getByRole("button", {
+      name: "Audio, subtitles, and source",
+    });
+    const progress = page.getByRole("slider", {
+      name: "Playback progress unavailable",
+    });
+    const [playBox, closeBox, seekBackBox, settingsBox, progressBox] =
+      await Promise.all([
+        play.boundingBox(),
+        close.boundingBox(),
+        seekBack.boundingBox(),
+        settings.boundingBox(),
+        progress.boundingBox(),
+      ]);
+    for (const box of [
+      playBox,
+      closeBox,
+      seekBackBox,
+      settingsBox,
+      progressBox,
+    ]) {
+      expect(box).not.toBeNull();
+    }
+    expect(playBox!.width).toBeLessThanOrEqual(68);
+    expect(playBox!.height).toBeLessThanOrEqual(68);
+    expect(closeBox!.width).toBeLessThanOrEqual(48);
+    expect(closeBox!.height).toBeLessThanOrEqual(48);
+    expect(seekBackBox!.width).toBeLessThanOrEqual(52);
+    expect(seekBackBox!.height).toBeLessThanOrEqual(52);
+    expect(progressBox!.y).toBeGreaterThan(800);
+    expect(settingsBox!.y + settingsBox!.height).toBeGreaterThan(900);
+    expect(settingsBox!.y + settingsBox!.height).toBeLessThanOrEqual(992);
+  }
 
   await page.screenshot({
     path: testInfo.outputPath(`player-preview-${testInfo.project.name}.png`),
     animations: "disabled",
   });
+});
+
+test("player volume owns its browser keyboard controls", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "Player keyboard ownership is a desktop browser contract.",
+  );
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginAndOpenFixture(page, "direct");
+  await page.getByRole("button", { name: "Play" }).click();
+
+  await expect(page).toHaveURL(/\/player$/);
+  await expect(page.getByTestId("player-screen")).toBeVisible();
+  const play = page.getByRole("button", { name: "Play playback" });
+  const volume = page.getByRole("slider", { name: "Volume" });
+  await expect(play).toBeVisible();
+  await expect(volume).toBeVisible();
+
+  await focusWithKeyboard(page, volume);
+  const focusOutline = await volume.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth || "0"),
+    };
+  });
+  expect(focusOutline.style).toBe("solid");
+  expect(focusOutline.width).toBeGreaterThanOrEqual(3);
+
+  await page.keyboard.press("Home");
+  await expect(volume).toHaveAttribute("aria-valuenow", "0");
+  await page.keyboard.press("ArrowRight");
+  await expect(volume).toHaveAttribute("aria-valuenow", "10");
+  await page.keyboard.press("ArrowUp");
+  await expect(volume).toHaveAttribute("aria-valuenow", "20");
+  await page.keyboard.press("ArrowLeft");
+  await expect(volume).toHaveAttribute("aria-valuenow", "10");
+  await page.keyboard.press("ArrowDown");
+  await expect(volume).toHaveAttribute("aria-valuenow", "0");
+  await page.keyboard.press("End");
+  await expect(volume).toHaveAttribute("aria-valuenow", "100");
+
+  // Space belongs to the focused adjustable control and must not bubble into
+  // the global play/pause shortcut.
+  await page.keyboard.press("Space");
+  await expect(play).toBeVisible();
+});
+
+test("Escape cancels source preparation through the active session", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "Escape cancellation is a desktop keyboard contract.",
+  );
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  const controls = await loginAndOpenFixture(page, "preparing-cancellable");
+  await page.getByRole("button", { name: "Play" }).click();
+
+  await expect(page).toHaveURL(/\/player$/);
+  await expect.poll(controls.gatewayJobsCreated).toBeGreaterThan(0);
+  const cancel = page.getByRole("button", {
+    name: "Cancel source preparation",
+  });
+  await expect(cancel).toBeVisible();
+  expect(controls.gatewayJobsCancelled()).toBe(0);
+  const cancelBox = await cancel.boundingBox();
+  expect(cancelBox).not.toBeNull();
+  expect(cancelBox!.y).toBeLessThanOrEqual(32);
+  expect(cancelBox!.x + cancelBox!.width).toBeGreaterThanOrEqual(1380);
+
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `player-preparation-cancellable-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(
+    new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
+  );
+  await expect.poll(controls.gatewayJobsCancelled).toBeGreaterThan(0);
 });
 
 test("bridge unavailable produces a recoverable detail state", async ({

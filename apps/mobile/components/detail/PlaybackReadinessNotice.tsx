@@ -12,6 +12,9 @@ import { useTranslation } from "react-i18next";
 import i18n from "../../lib/i18n";
 
 export type PlaybackReadinessTone = "info" | "warning" | "error";
+export type PlaybackReadinessActionTarget =
+  | "sourcesDevices"
+  | "playbackSettings";
 
 export interface PlaybackReadinessNoticeCopy {
   title: string;
@@ -20,6 +23,15 @@ export interface PlaybackReadinessNoticeCopy {
   tone: PlaybackReadinessTone;
   icon: keyof typeof Ionicons.glyphMap;
   primaryActionLabel?: string;
+  primaryActionTarget?: PlaybackReadinessActionTarget;
+}
+
+export function getPlaybackReadinessRoute(
+  target: PlaybackReadinessActionTarget,
+): "/settings/playback" | "/settings/sources" {
+  return target === "playbackSettings"
+    ? "/settings/playback"
+    : "/settings/sources";
 }
 
 function readinessCopy(
@@ -45,6 +57,30 @@ function attemptedOptionsCopy(errors: string[]) {
     : undefined;
 }
 
+function isQualitySelectionExclusion(plan: PlaybackPlan | null): boolean {
+  return (
+    plan?.state === "unsupported" &&
+    plan.rejectedCandidates.length > 0 &&
+    plan.rejectedCandidates.every(
+      (candidate) => candidate.reasonCode === "quality_not_allowed",
+    )
+  );
+}
+
+function qualitySelectionCopy(): PlaybackReadinessNoticeCopy {
+  return {
+    title: readinessCopy("detail.readiness.qualitySelectionTitle"),
+    message: readinessCopy("detail.readiness.qualitySelectionMessage"),
+    detail: readinessCopy("detail.readiness.qualitySelectionDetail"),
+    tone: "info",
+    icon: "options-outline",
+    primaryActionLabel: readinessCopy(
+      "detail.readiness.playbackSettingsAction",
+    ),
+    primaryActionTarget: "playbackSettings",
+  };
+}
+
 export function getPlaybackReadinessCopy(
   plan: PlaybackPlan | null,
   fallback: string,
@@ -55,6 +91,10 @@ export function getPlaybackReadinessCopy(
   const message = plan?.userMessage || fallback;
   const attemptedDetail = attemptedOptionsCopy(errors);
 
+  if (isQualitySelectionExclusion(plan)) {
+    return qualitySelectionCopy();
+  }
+
   if (state === "needsBridge") {
     return {
       title: readinessCopy("detail.readiness.finishSetupTitle"),
@@ -63,6 +103,7 @@ export function getPlaybackReadinessCopy(
       tone: "warning",
       icon: "desktop-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -74,6 +115,7 @@ export function getPlaybackReadinessCopy(
       tone: "error",
       icon: "construct-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -85,6 +127,7 @@ export function getPlaybackReadinessCopy(
       tone: "warning",
       icon: "sync-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -96,6 +139,7 @@ export function getPlaybackReadinessCopy(
       tone: "info",
       icon: "search-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -107,6 +151,7 @@ export function getPlaybackReadinessCopy(
       tone: "warning",
       icon: "alert-circle-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -136,6 +181,10 @@ export function getPlaybackReadinessCopyFromError(
 ): PlaybackReadinessNoticeCopy {
   const attemptedDetail = attemptedOptionsCopy(errors);
 
+  if (error.reasonCode === "quality_not_allowed") {
+    return qualitySelectionCopy();
+  }
+
   if (error.code === "BRIDGE_UNAVAILABLE") {
     return {
       title: readinessCopy("detail.readiness.finishSetupTitle"),
@@ -144,6 +193,7 @@ export function getPlaybackReadinessCopyFromError(
       tone: "warning",
       icon: "desktop-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -155,6 +205,7 @@ export function getPlaybackReadinessCopyFromError(
       tone: "error",
       icon: "construct-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -166,6 +217,7 @@ export function getPlaybackReadinessCopyFromError(
       tone: "info",
       icon: "search-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -188,6 +240,7 @@ export function getPlaybackReadinessCopyFromError(
       tone: "warning",
       icon: "alert-circle-outline",
       primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
+      primaryActionTarget: "sourcesDevices",
     };
   }
 
@@ -228,7 +281,7 @@ export function PlaybackReadinessNotice({
 }: {
   notice: PlaybackReadinessNoticeCopy;
   onDismiss: () => void;
-  onPrimaryAction?: () => void;
+  onPrimaryAction?: (target: PlaybackReadinessActionTarget) => void;
 }) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
@@ -267,14 +320,16 @@ export function PlaybackReadinessNotice({
           </Text>
         )}
         <View style={styles.actions}>
-          {!!notice.primaryActionLabel && !!onPrimaryAction && (
-            <AppButton
-              label={notice.primaryActionLabel}
-              variant="primary"
-              size="small"
-              onPress={onPrimaryAction}
-            />
-          )}
+          {!!notice.primaryActionLabel &&
+            !!notice.primaryActionTarget &&
+            !!onPrimaryAction && (
+              <AppButton
+                label={notice.primaryActionLabel}
+                variant="primary"
+                size="small"
+                onPress={() => onPrimaryAction(notice.primaryActionTarget!)}
+              />
+            )}
           <AppButton
             label={t("common.dismiss")}
             variant="ghost"
