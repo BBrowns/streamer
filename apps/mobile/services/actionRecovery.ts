@@ -20,6 +20,8 @@ interface DownloadRecoveryTask {
   error?: string;
   localUri?: string;
   offlineVerifiedAt?: string;
+  verificationState?: string;
+  playableState?: string;
   failureReason?: DownloadFailureReason;
 }
 
@@ -87,6 +89,13 @@ export function classifyDownloadFailure(
     return "bridge_unavailable";
   }
   if (
+    /too small|not a playable media|invalid media|metadata file|incomplete media/.test(
+      text,
+    )
+  ) {
+    return "invalid_media";
+  }
+  if (
     runtimeCode(error) === "BRIDGE_UNAVAILABLE" ||
     runtimeCode(error) === "BRIDGE_UNSUPPORTED" ||
     /bridge|torrent engine|gateway unavailable|architecture mismatch/.test(text)
@@ -146,7 +155,11 @@ export function getDownloadRecovery(
       actionLabel: recoveryCopy("downloads.recovery.downloadAgainAction"),
     };
   }
-  if (task.status === "Completed" && task.localUri && !task.offlineVerifiedAt) {
+  if (
+    task.status === "Completed" &&
+    task.localUri &&
+    (task.verificationState !== "verified" || task.playableState !== "playable")
+  ) {
     return {
       reason: "verification_required",
       action: "verify",
@@ -202,6 +215,13 @@ export function getDownloadRecovery(
       title: recoveryCopy("downloads.recovery.unsupportedTitle"),
       message: recoveryCopy("downloads.recovery.unsupportedMessage"),
       actionLabel: recoveryCopy("downloads.recovery.removeAction"),
+    },
+    invalid_media: {
+      reason,
+      action: "replan",
+      title: recoveryCopy("downloads.recovery.invalidMediaTitle"),
+      message: recoveryCopy("downloads.recovery.invalidMediaMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.downloadAgainAction"),
     },
     failed: {
       reason,

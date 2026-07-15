@@ -1,5 +1,7 @@
 import React, { type ReactNode, useEffect, useState } from "react";
 import {
+  AccessibilityRole,
+  AccessibilityState,
   Platform,
   Pressable,
   StyleProp,
@@ -31,7 +33,12 @@ type PosterCardProps = {
   selected?: boolean;
   onPress: () => void;
   onActivate?: () => void;
+  onLongPress?: () => void;
+  onContextMenu?: (event: any) => void;
+  accessibilityRole?: AccessibilityRole;
+  accessibilityState?: AccessibilityState;
   accessibilityHint?: string;
+  testID?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -46,7 +53,12 @@ export function PosterCard({
   selected = false,
   onPress,
   onActivate,
+  onLongPress,
+  onContextMenu,
+  accessibilityRole = "button",
+  accessibilityState,
   accessibilityHint,
+  testID,
   style,
 }: PosterCardProps) {
   const { colors, isDark } = useTheme();
@@ -65,10 +77,14 @@ export function PosterCard({
       {...({ dataSet: { catalogCard: true } } as any)}
       {...webPressableProps}
       onPress={onPress}
-      accessibilityRole="button"
+      onLongPress={onLongPress}
+      // @ts-ignore web-only context menu
+      onContextMenu={Platform.OS === "web" ? onContextMenu : undefined}
+      accessibilityRole={accessibilityRole}
       accessibilityLabel={title}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ selected }}
+      accessibilityState={accessibilityState ?? { selected }}
+      testID={testID}
       style={({ hovered, pressed, focused }: any) => [
         styles.card,
         !reducedMotion && styles.motion,

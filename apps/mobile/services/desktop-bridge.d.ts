@@ -6,6 +6,8 @@ export interface DesktopDownloadProgressData {
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
   localUri?: string;
+  contentType?: string;
+  metadataBytes?: number;
   error?: string;
 }
 
@@ -25,6 +27,8 @@ export interface DesktopDownloadJob {
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
   localUri?: string;
+  contentType?: string;
+  metadataBytes?: number;
   error?: string;
 }
 
@@ -111,6 +115,10 @@ export interface DesktopBridgeInfo {
   lanUrl: string;
   pairingToken?: string;
   build?: BuildMetadata;
+  desktopRuntime?: {
+    productVersion: string;
+    electronVersion: string;
+  };
   diagnostics?: {
     status?: "starting" | "running" | "stopped" | "error";
     startedAt?: number | null;
@@ -190,6 +198,13 @@ export interface DesktopBridge {
    * Checks whether a downloaded desktop URI still exists.
    */
   checkFile(localUri: string): Promise<boolean>;
+
+  /** Returns safe metadata for a managed download without exposing its path. */
+  inspectFile?(localUri: string): Promise<{
+    exists: boolean;
+    isFile: boolean;
+    sizeBytes: number;
+  }>;
 
   /**
    * Deletes a downloaded file from the user's local disk.

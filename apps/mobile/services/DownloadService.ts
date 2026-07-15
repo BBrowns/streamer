@@ -37,6 +37,11 @@ import {
 import { redactSensitiveText } from "./redaction";
 import { addMobileBreadcrumb } from "./sentryBreadcrumbs";
 import { classifyDownloadFailure } from "./actionRecovery";
+import {
+  probeLocalMedia,
+  validateOfflineInspection,
+  type LocalFileInspection,
+} from "./offlineVerification";
 
 export {
   getDownloadEligibility,
@@ -48,6 +53,10 @@ export interface DownloadStartOptions {
   resolvedUrl?: string;
   eligibility?: DownloadEligibility;
   playbackSession?: DownloadPlaybackSessionContext;
+  // Trusted transport size, such as HTTP Content-Length/Content-Range.
+  expectedMediaBytes?: number;
+  // Untrusted catalog/add-on estimate shown as metadata only.
+  metadataBytes?: number;
 }
 
 export interface DownloadOperationResult {
@@ -89,6 +98,29 @@ export function mapDesktopDownloadStatus(
     default:
       return "Downloading";
   }
+}
+
+export function getReliableContentLength(
+  headers?: Record<string, unknown> | null,
+  status?: number,
+) {
+  if (!headers) return undefined;
+  const rawContentRange = headers["content-range"] ?? headers["Content-Range"];
+  const contentRange = Array.isArray(rawContentRange)
+    ? rawContentRange[0]
+    : rawContentRange;
+  const rangeTotalMatch =
+    typeof contentRange === "string"
+      ? /\/\s*(\d+)\s*$/.exec(contentRange)
+      : null;
+  const rangeTotal = Number(rangeTotalMatch?.[1] || 0);
+  if (Number.isFinite(rangeTotal) && rangeTotal > 0) return rangeTotal;
+  if (status === 206 || contentRange) return undefined;
+
+  const rawValue = headers["content-length"] ?? headers["Content-Length"];
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 export class DownloadService {
@@ -237,19 +269,38 @@ export class DownloadService {
     cancelPlaybackSession(playbackSession.sessionId, reason);
   }
 
-  private async verifyLocalUri(localUri?: string) {
-    if (!localUri) return false;
+  private async inspectLocalUri(
+    localUri: string | undefined,
+  ): Promise<LocalFileInspection> {
+    if (!localUri) return { exists: false, isFile: false, sizeBytes: 0 };
 
     if (Platform.OS === "web") {
-      return Boolean(
-        window.desktopBridge &&
-        (await window.desktopBridge.checkFile(localUri).catch(() => false)),
-      );
+      const desktopBridge = window.desktopBridge;
+      if (!desktopBridge) {
+        return { exists: false, isFile: false, sizeBytes: 0 };
+      }
+      if (desktopBridge.inspectFile) {
+        return desktopBridge
+          .inspectFile(localUri)
+          .catch(() => ({ exists: false, isFile: false, sizeBytes: 0 }));
+      }
+      const exists = await desktopBridge.checkFile(localUri).catch(() => false);
+      return {
+        exists,
+        // Legacy bridges can confirm existence, but cannot prove that the path
+        // is a regular media file or report its actual size.
+        isFile: false,
+        sizeBytes: 0,
+      };
     }
 
     return FileSystem.getInfoAsync(localUri)
-      .then((info) => info.exists)
-      .catch(() => false);
+      .then((info: any) => ({
+        exists: Boolean(info.exists),
+        isFile: Boolean(info.exists && !info.isDirectory),
+        sizeBytes: Math.max(0, Number(info.size) || 0),
+      }))
+      .catch(() => ({ exists: false, isFile: false, sizeBytes: 0 }));
   }
 
   private async finalizeCompletedTask(
@@ -276,9 +327,15 @@ export class DownloadService {
         "verifying_download",
         "Verifying the saved local file.",
       );
-      const verified = await this.verifyLocalUri(localUri);
-      if (!verified) {
-        const message = "Downloaded file could not be verified on this device.";
+      const currentTask = useDownloadStore.getState().tasks[id] || task;
+      const inspection = await this.inspectLocalUri(localUri);
+      const validation = validateOfflineInspection({
+        inspection,
+        expectedMediaBytes: currentTask.expectedMediaBytes,
+        contentType: currentTask.contentType,
+      });
+      if (!validation.ok) {
+        const message = validation.message;
         addMobileBreadcrumb({
           category: "download",
           message: "download.verification_failed",
@@ -291,12 +348,34 @@ export class DownloadService {
             hasLocalUri: Boolean(localUri),
           },
         });
-        useDownloadStore.getState().markFileMissing(id, message);
+        if (
+          validation.reason === "missing" ||
+          validation.reason === "not_file"
+        ) {
+          useDownloadStore.getState().markFileMissing(id, message);
+        } else if (validation.reason === "invalid_content_type") {
+          useDownloadStore.getState().markFailed(id, message, "invalid_media");
+        } else {
+          useDownloadStore
+            .getState()
+            .markIncomplete(id, message, validation.sizeBytes);
+        }
         this.failSession(id, message, playbackSession);
         return;
       }
 
-      useDownloadStore.getState().markVerified(id, localUri!);
+      const playable = await probeLocalMedia(localUri!);
+      if (!playable) {
+        const message =
+          "Downloaded file is not a playable media file on this device.";
+        useDownloadStore.getState().markFailed(id, message, "invalid_media");
+        this.failSession(id, message, playbackSession);
+        return;
+      }
+
+      useDownloadStore
+        .getState()
+        .markVerified(id, localUri!, validation.sizeBytes);
       if (playbackSession) {
         const session =
           usePlaybackSessionStore.getState().sessions[
@@ -328,6 +407,8 @@ export class DownloadService {
         resolvedUrl: string;
         eligibility?: DownloadEligibility;
         playbackSession?: DownloadPlaybackSessionContext;
+        expectedMediaBytes?: number;
+        metadataBytes?: number;
       }
     | undefined
   > {
@@ -384,6 +465,7 @@ export class DownloadService {
       resolvedUrl: result.resolvedUrl,
       eligibility: result.eligibility,
       playbackSession,
+      metadataBytes: result.plan.selectedCandidate?.sizeBytes,
     };
   }
 
@@ -402,6 +484,8 @@ export class DownloadService {
       resolvedUrl: prepared.resolvedUrl,
       eligibility: prepared.eligibility,
       playbackSession: prepared.playbackSession,
+      expectedMediaBytes: prepared.expectedMediaBytes,
+      metadataBytes: prepared.metadataBytes,
     });
 
     const restartedTask = useDownloadStore.getState().tasks[id];
@@ -418,15 +502,20 @@ export class DownloadService {
 
     this.desktopProgressUnsubscribe = desktopBridge.onDownloadProgress(
       (data) => {
-        const { tasks, updateProgress, setStatus } =
+        const { tasks, updateProgress, setStatus, setDownloadMetadata } =
           useDownloadStore.getState();
         const task = tasks[data.id];
         if (!task) return;
 
         const totalBytesExpectedToWrite =
-          data.totalBytesExpectedToWrite || task.totalBytesExpectedToWrite || 0;
+          data.totalBytesExpectedToWrite || task.expectedMediaBytes || 0;
         const totalBytesWritten =
-          data.totalBytesWritten || task.totalBytesWritten || 0;
+          data.totalBytesWritten || task.downloadedBytes || 0;
+        setDownloadMetadata(data.id, {
+          expectedMediaBytes: totalBytesExpectedToWrite,
+          metadataBytes: data.metadataBytes,
+          contentType: data.contentType,
+        });
         const progress =
           totalBytesExpectedToWrite > 0
             ? Math.min(totalBytesWritten / totalBytesExpectedToWrite, 1)
@@ -475,7 +564,8 @@ export class DownloadService {
   private applyDesktopJobSnapshot(job: DesktopDownloadJob | null) {
     if (!job) return;
 
-    const { tasks, updateProgress, setStatus } = useDownloadStore.getState();
+    const { tasks, updateProgress, setStatus, setDownloadMetadata } =
+      useDownloadStore.getState();
     if (!tasks[job.id]) return;
 
     const progress =
@@ -489,6 +579,14 @@ export class DownloadService {
       job.totalBytesWritten,
       job.totalBytesExpectedToWrite,
     );
+    setDownloadMetadata(job.id, {
+      expectedMediaBytes:
+        job.totalBytesExpectedToWrite > 0
+          ? job.totalBytesExpectedToWrite
+          : undefined,
+      metadataBytes: job.metadataBytes,
+      contentType: job.contentType,
+    });
     this.recordSessionProgress(
       job.id,
       job.status === "Completed" ? 1 : progress,
@@ -532,8 +630,14 @@ export class DownloadService {
     mediaInfo: MediaInfo,
     options: DownloadStartOptions = {},
   ) {
-    const { addTask, updateProgress, setStatus, setDownloadUrl, removeTask } =
-      useDownloadStore.getState();
+    const {
+      addTask,
+      updateProgress,
+      setStatus,
+      setDownloadUrl,
+      setDownloadMetadata,
+      removeTask,
+    } = useDownloadStore.getState();
 
     const id = this.getDownloadTaskId(stream, mediaInfo);
     const taskMediaInfo = {
@@ -619,6 +723,10 @@ export class DownloadService {
       stream,
       buildDownloadReplanContext(taskMediaInfo),
     );
+    setDownloadMetadata(id, {
+      expectedMediaBytes: options.expectedMediaBytes,
+      metadataBytes: options.metadataBytes,
+    });
     setStatus(id, "Preparing");
 
     // 1. Resolve playback URI after eligibility is known.
@@ -847,6 +955,15 @@ export class DownloadService {
     try {
       const result = await downloadResumable.downloadAsync();
       if (result) {
+        const headers = (result as any).headers || {};
+        const contentLength = getReliableContentLength(
+          headers,
+          Number((result as any).status) || undefined,
+        );
+        setDownloadMetadata(id, {
+          contentType: headers["content-type"] || headers["Content-Type"],
+          expectedMediaBytes: contentLength,
+        });
         await this.finalizeCompletedTask(
           id,
           result.uri,
@@ -895,14 +1012,37 @@ export class DownloadService {
       return false;
     }
 
-    if (await this.verifyLocalUri(task.localUri)) {
-      useDownloadStore.getState().markVerified(id, task.localUri);
+    useDownloadStore.getState().setStatus(id, "Verifying", task.localUri);
+    const inspection = await this.inspectLocalUri(task.localUri);
+    const validation = validateOfflineInspection({
+      inspection,
+      expectedMediaBytes: task.expectedMediaBytes,
+      contentType: task.contentType,
+    });
+    if (validation.ok && (await probeLocalMedia(task.localUri))) {
+      useDownloadStore
+        .getState()
+        .markVerified(id, task.localUri, validation.sizeBytes);
       return true;
     }
 
-    useDownloadStore
-      .getState()
-      .markFileMissing(id, "Downloaded file could not be found.");
+    const message = validation.ok
+      ? "Downloaded file is not a playable media file on this device."
+      : validation.message;
+    if (
+      !validation.ok &&
+      (validation.reason === "missing" || validation.reason === "not_file")
+    ) {
+      useDownloadStore.getState().markFileMissing(id, message);
+    } else if (!validation.ok && validation.reason === "invalid_content_type") {
+      useDownloadStore.getState().markFailed(id, message, "invalid_media");
+    } else if (!validation.ok) {
+      useDownloadStore
+        .getState()
+        .markIncomplete(id, message, validation.sizeBytes);
+    } else {
+      useDownloadStore.getState().markFailed(id, message, "invalid_media");
+    }
     addMobileBreadcrumb({
       category: "download",
       message: "download.verification_failed",
@@ -1070,8 +1210,13 @@ export class DownloadService {
   }
 
   async resumeDownload(id: string): Promise<DownloadOperationResult> {
-    const { tasks, setStatus, updateProgress, setResumeData } =
-      useDownloadStore.getState();
+    const {
+      tasks,
+      setStatus,
+      updateProgress,
+      setResumeData,
+      setDownloadMetadata,
+    } = useDownloadStore.getState();
     const task = tasks[id];
     if (!task) return { ok: false, error: "Download task was not found." };
     if (task.status !== "Paused" && task.status !== "Error") {
@@ -1202,6 +1347,11 @@ export class DownloadService {
       try {
         const result = await resumable.resumeAsync();
         if (result) {
+          setDownloadMetadata(id, {
+            contentType:
+              (result as any).headers?.["content-type"] ||
+              (result as any).headers?.["Content-Type"],
+          });
           await this.finalizeCompletedTask(id, result.uri);
           setResumeData(id, "");
           if (__DEV__) console.log("[DownloadService] Download completed");
@@ -1399,7 +1549,7 @@ export class DownloadService {
 
     // Fall back to tracked task usage when the platform cannot report actual app usage.
     const trackedUsage = Object.values(tasks).reduce((sum, task) => {
-      return sum + (task.totalBytesWritten || 0);
+      return sum + (task.downloadedBytes || 0);
     }, 0);
     if (info.appUsage <= 0) {
       info.appUsage = trackedUsage;

@@ -39,6 +39,9 @@ interface DownloadQueueCardProps {
   onRepairBridge: () => void;
   onManageStorage: () => void;
   onDelete: () => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 const STATUS_DEFAULTS: Record<string, string> = {
@@ -50,6 +53,8 @@ const STATUS_DEFAULTS: Record<string, string> = {
   checking: "Checking file",
   needsVerification: "Needs verification",
   readyOffline: "Ready offline",
+  incomplete: "Incomplete",
+  failed: "Failed",
   error: "Needs attention",
 };
 
@@ -64,6 +69,9 @@ export function DownloadQueueCard({
   onRepairBridge,
   onManageStorage,
   onDelete,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: DownloadQueueCardProps) {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
@@ -163,7 +171,11 @@ export function DownloadQueueCard({
         styles.card,
         compact && styles.cardCompact,
         {
-          borderColor: isError ? colors.error + "50" : "transparent",
+          borderColor: isSelected
+            ? colors.tint
+            : isError
+              ? colors.error + "50"
+              : "transparent",
         },
       ]}
     >
@@ -173,14 +185,37 @@ export function DownloadQueueCard({
           pressed && styles.contentPressed,
           Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         ]}
-        onPress={onOpen}
-        accessibilityRole="button"
+        onPress={isSelectionMode ? onToggleSelect : onOpen}
+        accessibilityRole={isSelectionMode ? "checkbox" : "button"}
         accessibilityLabel={`${task.mediaInfo.title}. ${statusLabel}`}
+        accessibilityState={
+          isSelectionMode ? { checked: isSelected } : undefined
+        }
       >
-        <Image
-          source={{ uri: task.mediaInfo.poster ?? undefined }}
-          style={[styles.poster, compact && styles.posterCompact]}
-        />
+        <View>
+          <Image
+            source={{ uri: task.mediaInfo.poster ?? undefined }}
+            style={[styles.poster, compact && styles.posterCompact]}
+          />
+          {isSelectionMode ? (
+            <View
+              style={[
+                styles.selectionBadge,
+                {
+                  backgroundColor: isSelected
+                    ? colors.tint
+                    : colors.surfaceOverlay,
+                },
+              ]}
+            >
+              <Ionicons
+                name={isSelected ? "checkmark" : "ellipse-outline"}
+                size={17}
+                color={isSelected ? colors.onTint : colors.text}
+              />
+            </View>
+          ) : null}
+        </View>
         <View style={styles.info}>
           <View style={styles.titleRow}>
             <View style={styles.titleGroup}>
@@ -255,45 +290,49 @@ export function DownloadQueueCard({
         </View>
       </Pressable>
 
-      <View
-        style={[
-          styles.actions,
-          compact && styles.actionsCompact,
-          { borderTopColor: colors.border },
-        ]}
-      >
-        {isWorking ? (
-          <View style={styles.workingState}>
-            <ActivityIndicator size="small" color={colors.tint} />
-            <Text style={[styles.workingText, { color: colors.textSecondary }]}>
-              {statusLabel}
-            </Text>
-          </View>
-        ) : primaryAction ? (
-          <AppButton
-            label={primaryLabel}
-            icon={primaryIcon}
-            variant={isReady ? "primary" : "secondary"}
-            size="small"
-            onPress={runPrimaryAction}
-            disabled={busy}
-          />
-        ) : (
-          <View />
-        )}
+      {!isSelectionMode ? (
+        <View
+          style={[
+            styles.actions,
+            compact && styles.actionsCompact,
+            { borderTopColor: colors.border },
+          ]}
+        >
+          {isWorking ? (
+            <View style={styles.workingState}>
+              <ActivityIndicator size="small" color={colors.tint} />
+              <Text
+                style={[styles.workingText, { color: colors.textSecondary }]}
+              >
+                {statusLabel}
+              </Text>
+            </View>
+          ) : primaryAction ? (
+            <AppButton
+              label={primaryLabel}
+              icon={primaryIcon}
+              variant={isReady ? "primary" : "secondary"}
+              size="small"
+              onPress={runPrimaryAction}
+              disabled={busy}
+            />
+          ) : (
+            <View />
+          )}
 
-        {primaryAction !== "remove" ? (
-          <AppButton
-            label={deleteActionLabel}
-            accessibilityLabel={deleteAccessibilityLabel}
-            icon="trash-outline"
-            variant="danger"
-            size="small"
-            onPress={onDelete}
-            disabled={busy}
-          />
-        ) : null}
-      </View>
+          {primaryAction !== "remove" ? (
+            <AppButton
+              label={deleteActionLabel}
+              accessibilityLabel={deleteAccessibilityLabel}
+              icon="trash-outline"
+              variant="danger"
+              size="small"
+              onPress={onDelete}
+              disabled={busy}
+            />
+          ) : null}
+        </View>
+      ) : null}
     </Surface>
   );
 }
@@ -321,6 +360,16 @@ const styles = StyleSheet.create({
   posterCompact: {
     width: 82,
     height: 123,
+  },
+  selectionBadge: {
+    position: "absolute",
+    top: uiSpacing.sm,
+    right: uiSpacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: uiRadii.pill,
+    alignItems: "center",
+    justifyContent: "center",
   },
   info: {
     flex: 1,

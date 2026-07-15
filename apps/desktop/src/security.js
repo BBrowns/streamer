@@ -7,6 +7,7 @@ const DEV_RENDERER_PORT = "8081";
 
 const INVOKE_IPC_CHANNELS = Object.freeze([
   "check-file",
+  "inspect-file",
   "delete-file",
   "get-bridge-info",
   "restart-bridge",

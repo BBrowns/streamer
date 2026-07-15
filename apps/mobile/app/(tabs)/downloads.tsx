@@ -13,7 +13,10 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DownloadQueueCard } from "../../components/downloads/DownloadQueueCard";
-import { SmartDownloadsPanel } from "../../components/downloads/SmartDownloadsPanel";
+import {
+  SmartDownloadPlans,
+  SmartDownloadsStatusRow,
+} from "../../components/downloads/SmartDownloadsStatus";
 import {
   formatBytes,
   getDownloadQueueGroup,
@@ -39,6 +42,11 @@ import {
   type DownloadOperationResult,
 } from "../../services/DownloadService";
 import { useToastStore } from "../../stores/toastStore";
+import { SelectionActionBar } from "../../components/ui/SelectionActionBar";
+import {
+  DESTRUCTIVE_UNDO_MS,
+  scheduleUndoableAction,
+} from "../../services/undoableAction";
 import {
   uiLayout,
   uiSpacing,
@@ -54,9 +62,6 @@ interface DownloadSection {
   data: DownloadTask[];
 }
 
-const pendingDeletionTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const DELETE_GRACE_MS = 7000;
-
 export default function DownloadsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -70,8 +75,9 @@ export default function DownloadsScreen() {
   const summary = useMemo(() => getDownloadQueueSummary(tasks), [tasks]);
   const [filter, setFilter] = useState<QueueFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [deletingAll, setDeletingAll] = useState(false);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const refreshQueue = useCallback(async () => {
     setRefreshing(true);
@@ -91,7 +97,7 @@ export default function DownloadsScreen() {
       hapticImpactLight();
       setBusyIds((current) => new Set(current).add(id));
       try {
-        await operation();
+        return await operation();
       } finally {
         setBusyIds((current) => {
           const next = new Set(current);
@@ -133,23 +139,38 @@ export default function DownloadsScreen() {
         task.mediaInfo.title ||
         t("downloads.unknownTitle", { defaultValue: "Download" });
       const deleteTask = () => {
-        if (pendingDeletionTimers.has(task.id)) return;
-        const timer = setTimeout(() => {
-          pendingDeletionTimers.delete(task.id);
-          void runTaskOperation(task.id, () =>
-            downloadService.deleteDownload(task.id),
-          );
-        }, DELETE_GRACE_MS);
-        pendingDeletionTimers.set(task.id, timer);
-        useToastStore.getState().show(`Deleting “${title}”…`, "info", {
-          actionLabel: "Undo",
-          duration: DELETE_GRACE_MS,
-          onAction: () => {
-            const pending = pendingDeletionTimers.get(task.id);
-            if (pending) clearTimeout(pending);
-            pendingDeletionTimers.delete(task.id);
+        const action = scheduleUndoableAction({
+          key: `download:${task.id}`,
+          commit: async () => {
+            const result = await runTaskOperation(task.id, () =>
+              downloadService.deleteDownload(task.id),
+            );
+            if (!result.ok) {
+              throw new Error(result.error || "Download could not be deleted.");
+            }
           },
+          onError: () =>
+            useToastStore.getState().show(
+              t("downloads.alerts.deleteFailed", {
+                defaultValue: "Could not delete this download.",
+              }),
+              "error",
+            ),
         });
+        useToastStore.getState().show(
+          t("downloads.alerts.deleting", {
+            title,
+            defaultValue: `Deleting “${title}”…`,
+          }),
+          "info",
+          {
+            actionLabel: t("library.actions.undo", { defaultValue: "Undo" }),
+            duration: DESTRUCTIVE_UNDO_MS,
+            onAction: () => {
+              action.undo();
+            },
+          },
+        );
       };
 
       if (Platform.OS === "web") {
@@ -188,73 +209,6 @@ export default function DownloadsScreen() {
     [runTaskOperation, t],
   );
 
-  const deleteAll = useCallback(async () => {
-    setDeletingAll(true);
-    try {
-      await downloadService.deleteAllDownloads();
-    } finally {
-      setDeletingAll(false);
-    }
-  }, []);
-
-  const scheduleDeleteAll = useCallback(() => {
-    const key = "__all__";
-    if (pendingDeletionTimers.has(key)) return;
-    const timer = setTimeout(() => {
-      pendingDeletionTimers.delete(key);
-      void deleteAll();
-    }, DELETE_GRACE_MS);
-    pendingDeletionTimers.set(key, timer);
-    useToastStore.getState().show("Deleting all downloads…", "info", {
-      actionLabel: "Undo",
-      duration: DELETE_GRACE_MS,
-      onAction: () => {
-        const pending = pendingDeletionTimers.get(key);
-        if (pending) clearTimeout(pending);
-        pendingDeletionTimers.delete(key);
-      },
-    });
-  }, [deleteAll]);
-
-  const confirmClearAll = useCallback(() => {
-    if (Platform.OS === "web") {
-      if (
-        window.confirm(
-          t("downloads.alerts.clearAllConfirm", {
-            defaultValue:
-              "Delete every managed download and remove its local file?",
-          }),
-        )
-      ) {
-        scheduleDeleteAll();
-      }
-      return;
-    }
-
-    Alert.alert(
-      t("downloads.alerts.clearAllTitle", {
-        defaultValue: "Delete all downloads?",
-      }),
-      t("downloads.alerts.clearAllMessage", {
-        defaultValue:
-          "This removes every managed download and its local file from this device.",
-      }),
-      [
-        {
-          text: t("common.cancel", { defaultValue: "Cancel" }),
-          style: "cancel",
-        },
-        {
-          text: t("downloads.alerts.clearAllButton", {
-            defaultValue: "Delete all",
-          }),
-          style: "destructive",
-          onPress: scheduleDeleteAll,
-        },
-      ],
-    );
-  }, [scheduleDeleteAll, t]);
-
   const manageStorage = useCallback(() => {
     if (summary.ready > 0) {
       setFilter("ready");
@@ -266,8 +220,115 @@ export default function DownloadsScreen() {
         "There are no verified offline titles to remove here. Free device storage, then retry the download.",
     });
     if (Platform.OS === "web") window.alert(message);
-    else Alert.alert("Free device storage", message);
+    else
+      Alert.alert(
+        t("downloads.storage.freeTitle", {
+          defaultValue: "Free device storage",
+        }),
+        message,
+      );
   }, [summary.ready, t]);
+
+  const visibleTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) => filter === "all" || getDownloadQueueGroup(task) === filter,
+      ),
+    [filter, tasks],
+  );
+  const canSelect = visibleTasks.length > 0;
+  const toggleSelectionMode = useCallback(() => {
+    if (!canSelect && !isSelectionMode) return;
+    hapticImpactLight();
+    setIsSelectionMode((current) => !current);
+    setSelectedIds(new Set());
+  }, [canSelect, isSelectionMode]);
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleTasks.map((task) => task.id));
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => visibleIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+    if (!canSelect) setIsSelectionMode(false);
+  }, [canSelect, visibleTasks]);
+
+  useEffect(() => {
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+  }, [filter]);
+
+  const toggleTaskSelection = useCallback((id: string) => {
+    hapticImpactLight();
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const scheduleBulkDelete = useCallback(() => {
+    const ids = [...selectedIds].sort();
+    if (ids.length === 0) return;
+    const action = scheduleUndoableAction({
+      key: `downloads:bulk:${ids.join(",")}`,
+      commit: async () => {
+        const results = await Promise.all(
+          ids.map((id) => downloadService.deleteDownload(id)),
+        );
+        if (results.some((result) => !result.ok)) {
+          throw new Error("One or more downloads could not be deleted.");
+        }
+      },
+      onError: () =>
+        useToastStore.getState().show(
+          t("downloads.alerts.bulkDeleteFailed", {
+            defaultValue: "Some downloads could not be deleted.",
+          }),
+          "error",
+        ),
+    });
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+    useToastStore.getState().show(
+      t("downloads.alerts.bulkDeleting", {
+        count: ids.length,
+        defaultValue: `Deleting ${ids.length} downloads…`,
+      }),
+      "info",
+      {
+        actionLabel: t("library.actions.undo", { defaultValue: "Undo" }),
+        duration: DESTRUCTIVE_UNDO_MS,
+        onAction: () => {
+          action.undo();
+        },
+      },
+    );
+  }, [selectedIds, t]);
+
+  const confirmBulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    const title = t("downloads.alerts.bulkDeleteTitle", {
+      defaultValue: "Delete selected downloads?",
+    });
+    const message = t("downloads.alerts.bulkDeleteMessage", {
+      count: selectedIds.size,
+      defaultValue: `Delete ${selectedIds.size} downloads from this device? You can undo for a few seconds.`,
+    });
+    if (Platform.OS === "web") {
+      if (window.confirm(message)) scheduleBulkDelete();
+      return;
+    }
+    Alert.alert(title, message, [
+      { text: t("common.cancel", { defaultValue: "Cancel" }), style: "cancel" },
+      {
+        text: t("downloads.actions.delete", { defaultValue: "Delete" }),
+        style: "destructive",
+        onPress: scheduleBulkDelete,
+      },
+    ]);
+  }, [scheduleBulkDelete, selectedIds.size, t]);
 
   const sections = useMemo<DownloadSection[]>(() => {
     const groups: Record<DownloadQueueGroup, DownloadTask[]> = {
@@ -275,7 +336,8 @@ export default function DownloadsScreen() {
       attention: [],
       ready: [],
     };
-    for (const task of tasks) groups[getDownloadQueueGroup(task)].push(task);
+    for (const task of visibleTasks)
+      groups[getDownloadQueueGroup(task)].push(task);
 
     const definitions: DownloadSection[] = [
       {
@@ -310,11 +372,8 @@ export default function DownloadsScreen() {
       },
     ];
 
-    return definitions.filter(
-      (section) =>
-        section.data.length > 0 && (filter === "all" || filter === section.key),
-    );
-  }, [filter, t, tasks]);
+    return definitions.filter((section) => section.data.length > 0);
+  }, [t, visibleTasks]);
 
   const readySize = formatBytes(summary.readyBytes);
   const filterOptions = [
@@ -374,7 +433,12 @@ export default function DownloadsScreen() {
             onAction={() => router.push("/search?mode=discover")}
           />
         </View>
-        <SmartDownloadsPanel />
+        <View style={styles.emptySmartStatus}>
+          <SmartDownloadsStatusRow
+            onPress={() => router.push("/settings/downloads" as never)}
+          />
+          <SmartDownloadPlans />
+        </View>
       </ScrollView>
     );
   }
@@ -415,20 +479,19 @@ export default function DownloadsScreen() {
                   })}
                 </Text>
               </View>
-              <AppButton
-                label={t("downloads.actions.clearAll", {
-                  defaultValue: "Delete all",
-                })}
-                accessibilityLabel={t("downloads.actions.clearAll", {
-                  defaultValue: "Delete all downloads",
-                })}
-                icon="trash-outline"
-                variant="danger"
-                size="small"
-                onPress={confirmClearAll}
-                disabled={deletingAll}
-                style={compact ? styles.clearButtonCompact : undefined}
-              />
+              {canSelect || isSelectionMode ? (
+                <AppButton
+                  label={
+                    isSelectionMode
+                      ? t("library.header.cancel", { defaultValue: "Cancel" })
+                      : t("library.header.select", { defaultValue: "Select" })
+                  }
+                  variant="secondary"
+                  size="small"
+                  onPress={toggleSelectionMode}
+                  style={compact ? styles.clearButtonCompact : undefined}
+                />
+              ) : null}
             </View>
 
             <View style={styles.summaryRow}>
@@ -473,7 +536,10 @@ export default function DownloadsScreen() {
             />
 
             <View style={styles.smartDownloadsPanel}>
-              <SmartDownloadsPanel />
+              <SmartDownloadsStatusRow
+                onPress={() => router.push("/settings/downloads" as never)}
+              />
+              <SmartDownloadPlans />
             </View>
           </View>
         }
@@ -523,6 +589,9 @@ export default function DownloadsScreen() {
             onRepairBridge={() => router.push("/settings/sources" as any)}
             onManageStorage={manageStorage}
             onDelete={() => confirmDelete(item)}
+            isSelectionMode={isSelectionMode}
+            isSelected={selectedIds.has(item.id)}
+            onToggleSelect={() => toggleTaskSelection(item.id)}
           />
         )}
         ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
@@ -556,6 +625,18 @@ export default function DownloadsScreen() {
             </Text>
           </View>
         }
+      />
+      <SelectionActionBar
+        selectedCount={isSelectionMode ? selectedIds.size : 0}
+        selectedLabel={t("downloads.selection.selected", {
+          count: selectedIds.size,
+          defaultValue: `${selectedIds.size} selected`,
+        })}
+        actionLabel={t("downloads.actions.delete", { defaultValue: "Delete" })}
+        actionAccessibilityLabel={t("downloads.selection.deleteSelected", {
+          defaultValue: "Delete selected downloads",
+        })}
+        onAction={confirmBulkDelete}
       />
     </View>
   );
@@ -618,6 +699,11 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   emptyHero: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+  },
+  emptySmartStatus: {
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",

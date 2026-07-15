@@ -38,6 +38,21 @@ export type DownloadStatus =
   | "Error"
   | "Paused";
 
+export type DownloadVerificationState =
+  | "pending"
+  | "checking"
+  | "verified"
+  | "incomplete"
+  | "failed";
+
+export type DownloadPlayableState =
+  | "unknown"
+  | "checking"
+  | "playable"
+  | "unplayable";
+
+export const MIN_OFFLINE_MEDIA_BYTES = 1024 * 1024;
+
 export interface DownloadTask {
   id: string; // unique ID, e.g., the media stream URL or a UUID
   mediaInfo: DownloadMediaItem;
@@ -47,8 +62,14 @@ export interface DownloadTask {
   status: DownloadStatus;
   error?: string;
   failureReason?: DownloadFailureReason;
-  totalBytesWritten: number;
-  totalBytesExpectedToWrite: number;
+  downloadedBytes: number;
+  metadataBytes: number;
+  expectedMediaBytes: number;
+  verifiedFileSizeBytes?: number;
+  verificationState: DownloadVerificationState;
+  playableState: DownloadPlayableState;
+  verificationError?: string;
+  contentType?: string;
   playbackSession?: DownloadPlaybackSessionContext;
   createdAt: string;
   updatedAt: string;
@@ -70,8 +91,16 @@ export interface DownloadState {
   updateProgress: (
     id: string,
     progress: number,
-    totalBytesWritten: number,
-    totalBytesExpectedToWrite: number,
+    downloadedBytes: number,
+    expectedMediaBytes: number,
+  ) => void;
+  setDownloadMetadata: (
+    id: string,
+    metadata: {
+      metadataBytes?: number;
+      expectedMediaBytes?: number;
+      contentType?: string;
+    },
   ) => void;
   setStatus: (
     id: string,
@@ -89,7 +118,16 @@ export interface DownloadState {
     id: string,
     playbackSession?: DownloadPlaybackSessionContext,
   ) => void;
-  markVerified: (id: string, localUri: string) => void;
+  markVerified: (
+    id: string,
+    localUri: string,
+    verifiedFileSizeBytes: number,
+  ) => void;
+  markIncomplete: (
+    id: string,
+    error: string,
+    verifiedFileSizeBytes?: number,
+  ) => void;
   markFileMissing: (id: string, error: string) => void;
   markFailed: (
     id: string,
@@ -98,7 +136,7 @@ export interface DownloadState {
   ) => void;
 }
 
-export const DOWNLOAD_STORE_VERSION = 4;
+export const DOWNLOAD_STORE_VERSION = 5;
 
 function nowIso() {
   return new Date().toISOString();
@@ -165,8 +203,14 @@ export function sanitizeDownloadTaskForPersistence(task: DownloadTask) {
   const {
     originalStream: _originalStream,
     resumeData: _resumeData,
+    // Legacy v4 aliases must not survive a v5 write.
+    totalBytesWritten: _totalBytesWritten,
+    totalBytesExpectedToWrite: _totalBytesExpectedToWrite,
     ...safeTask
-  } = task;
+  } = task as DownloadTask & {
+    totalBytesWritten?: number;
+    totalBytesExpectedToWrite?: number;
+  };
 
   return {
     ...safeTask,
@@ -184,6 +228,9 @@ export function isTaskOfflinePlayable(task?: DownloadTask | null) {
     task?.status === "Completed" &&
     task.localUri &&
     task.offlineVerifiedAt &&
+    task.verificationState === "verified" &&
+    task.playableState === "playable" &&
+    (task.verifiedFileSizeBytes ?? 0) >= MIN_OFFLINE_MEDIA_BYTES &&
     task.localUri.length > 5,
   );
 }
@@ -202,19 +249,39 @@ export function migrateDownloadTasks(
 
   for (const [id, rawTask] of Object.entries(persistedTasks)) {
     if (!rawTask || typeof rawTask !== "object") continue;
-    const task = rawTask as DownloadTask;
+    const task = rawTask as DownloadTask & {
+      totalBytesWritten?: number;
+      totalBytesExpectedToWrite?: number;
+    };
     if (!task.mediaInfo || typeof task.mediaInfo !== "object") continue;
 
     const safeId = safeDownloadTaskId(id, task.mediaInfo) || id;
+    const legacyTask = persistedVersion < DOWNLOAD_STORE_VERSION;
     tasks[safeId] = sanitizeDownloadTaskForPersistence({
       ...task,
       id: safeId,
+      downloadedBytes: Math.max(
+        0,
+        Number(task.downloadedBytes ?? task.totalBytesWritten) || 0,
+      ),
+      metadataBytes: Math.max(0, Number(task.metadataBytes) || 0),
+      expectedMediaBytes: Math.max(
+        0,
+        Number(task.expectedMediaBytes ?? task.totalBytesExpectedToWrite) || 0,
+      ),
+      verifiedFileSizeBytes: legacyTask
+        ? undefined
+        : task.verifiedFileSizeBytes,
+      verificationState: legacyTask
+        ? "pending"
+        : task.verificationState || "pending",
+      playableState: legacyTask ? "unknown" : task.playableState || "unknown",
+      verificationError: legacyTask ? undefined : task.verificationError,
       createdAt: task.createdAt || migratedAt,
       updatedAt: task.updatedAt || migratedAt,
       // Existing completed tasks predate explicit local-file verification.
       // DownloadService.initialize() will verify and restore this marker.
-      offlineVerifiedAt:
-        persistedVersion < 2 ? undefined : task.offlineVerifiedAt,
+      offlineVerifiedAt: legacyTask ? undefined : task.offlineVerifiedAt,
     });
   }
 
@@ -242,8 +309,11 @@ export const useDownloadStore = create<DownloadState>()(
               mediaInfo,
               progress: 0,
               status: "Pending",
-              totalBytesWritten: 0,
-              totalBytesExpectedToWrite: 0,
+              downloadedBytes: 0,
+              metadataBytes: 0,
+              expectedMediaBytes: 0,
+              verificationState: "pending",
+              playableState: "unknown",
               playbackSession,
               originalStream,
               replanContext:
@@ -254,12 +324,7 @@ export const useDownloadStore = create<DownloadState>()(
           },
         }));
       },
-      updateProgress: (
-        id,
-        progress,
-        totalBytesWritten,
-        totalBytesExpectedToWrite,
-      ) =>
+      updateProgress: (id, progress, downloadedBytes, expectedMediaBytes) =>
         set((state) => {
           const task = state.tasks[id];
           if (!task) return state;
@@ -269,11 +334,37 @@ export const useDownloadStore = create<DownloadState>()(
               [id]: {
                 ...task,
                 progress: Math.max(0, Math.min(progress || 0, 1)),
-                totalBytesWritten: Math.max(0, totalBytesWritten || 0),
-                totalBytesExpectedToWrite: Math.max(
-                  0,
-                  totalBytesExpectedToWrite || 0,
-                ),
+                downloadedBytes: Math.max(0, downloadedBytes || 0),
+                expectedMediaBytes:
+                  expectedMediaBytes > 0
+                    ? expectedMediaBytes
+                    : task.expectedMediaBytes,
+                updatedAt: nowIso(),
+              },
+            },
+          };
+        }),
+      setDownloadMetadata: (id, metadata) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task) return state;
+          const incomingMetadataBytes = Number(metadata.metadataBytes);
+          return {
+            tasks: {
+              ...state.tasks,
+              [id]: {
+                ...task,
+                metadataBytes:
+                  Number.isFinite(incomingMetadataBytes) &&
+                  incomingMetadataBytes > 0
+                    ? incomingMetadataBytes
+                    : task.metadataBytes,
+                expectedMediaBytes:
+                  metadata.expectedMediaBytes === undefined
+                    ? task.expectedMediaBytes
+                    : Math.max(0, metadata.expectedMediaBytes || 0),
+                contentType:
+                  metadata.contentType?.trim() || task.contentType || undefined,
                 updatedAt: nowIso(),
               },
             },
@@ -296,6 +387,32 @@ export const useDownloadStore = create<DownloadState>()(
                 resumeData: resumeData ?? task.resumeData,
                 offlineVerifiedAt:
                   status === "Completed" ? task.offlineVerifiedAt : undefined,
+                verifiedFileSizeBytes:
+                  status === "Completed"
+                    ? task.verifiedFileSizeBytes
+                    : undefined,
+                verificationState:
+                  status === "Verifying"
+                    ? "checking"
+                    : status === "Completed"
+                      ? task.verificationState
+                      : status === "Error"
+                        ? task.verificationState === "incomplete"
+                          ? "incomplete"
+                          : "failed"
+                        : "pending",
+                playableState:
+                  status === "Verifying"
+                    ? "checking"
+                    : status === "Completed"
+                      ? task.playableState
+                      : status === "Error"
+                        ? "unplayable"
+                        : "unknown",
+                verificationError:
+                  status === "Error"
+                    ? error || task.verificationError
+                    : undefined,
                 updatedAt: nowIso(),
               },
             },
@@ -355,11 +472,36 @@ export const useDownloadStore = create<DownloadState>()(
             },
           };
         }),
-      markVerified: (id, localUri) =>
+      markVerified: (id, localUri, verifiedFileSizeBytes) =>
         set((state) => {
           const task = state.tasks[id];
           if (!task) return state;
           const timestamp = nowIso();
+          if (verifiedFileSizeBytes < MIN_OFFLINE_MEDIA_BYTES) {
+            const error =
+              "Downloaded file is too small to be a complete movie or episode.";
+            return {
+              tasks: {
+                ...state.tasks,
+                [id]: {
+                  ...task,
+                  status: "Error",
+                  error,
+                  failureReason: "invalid_media",
+                  offlineVerifiedAt: undefined,
+                  downloadedBytes: Math.max(
+                    task.downloadedBytes,
+                    verifiedFileSizeBytes,
+                  ),
+                  verifiedFileSizeBytes: Math.max(0, verifiedFileSizeBytes),
+                  verificationState: "incomplete",
+                  playableState: "unplayable",
+                  verificationError: error,
+                  updatedAt: timestamp,
+                },
+              },
+            };
+          }
           return {
             tasks: {
               ...state.tasks,
@@ -371,7 +513,41 @@ export const useDownloadStore = create<DownloadState>()(
                 error: undefined,
                 failureReason: undefined,
                 offlineVerifiedAt: timestamp,
+                downloadedBytes: Math.max(
+                  task.downloadedBytes,
+                  verifiedFileSizeBytes,
+                ),
+                verifiedFileSizeBytes: Math.max(0, verifiedFileSizeBytes),
+                verificationState: "verified",
+                playableState: "playable",
+                verificationError: undefined,
                 updatedAt: timestamp,
+              },
+            },
+          };
+        }),
+      markIncomplete: (id, error, verifiedFileSizeBytes) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task) return state;
+          return {
+            tasks: {
+              ...state.tasks,
+              [id]: {
+                ...task,
+                status: "Error",
+                error,
+                failureReason: "invalid_media",
+                offlineVerifiedAt: undefined,
+                downloadedBytes: Math.max(
+                  task.downloadedBytes,
+                  verifiedFileSizeBytes || 0,
+                ),
+                verifiedFileSizeBytes,
+                verificationState: "incomplete",
+                playableState: "unplayable",
+                verificationError: error,
+                updatedAt: nowIso(),
               },
             },
           };
@@ -389,6 +565,10 @@ export const useDownloadStore = create<DownloadState>()(
                 error,
                 failureReason: "missing_file",
                 offlineVerifiedAt: undefined,
+                verifiedFileSizeBytes: undefined,
+                verificationState: "failed",
+                playableState: "unplayable",
+                verificationError: error,
                 updatedAt: nowIso(),
               },
             },
@@ -407,6 +587,9 @@ export const useDownloadStore = create<DownloadState>()(
                 error,
                 failureReason: reason,
                 offlineVerifiedAt: undefined,
+                verificationState: "failed",
+                playableState: "unplayable",
+                verificationError: error,
                 updatedAt: nowIso(),
               },
             },

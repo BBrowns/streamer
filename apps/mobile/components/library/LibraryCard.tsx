@@ -1,290 +1,169 @@
 import React from "react";
 import {
-  View,
-  Text,
-  Pressable,
   ActionSheetIOS,
-  Platform,
   Alert,
+  Platform,
+  Pressable,
+  StyleProp,
   StyleSheet,
+  Text,
+  View,
+  ViewStyle,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import type { LibraryItem } from "@streamer/shared";
+import { useTranslation } from "react-i18next";
+import { hapticImpactHeavy, hapticImpactLight } from "../../lib/haptics";
 import {
   isTaskOfflinePlayable,
   useDownloadStore,
 } from "../../stores/downloadStore";
-import { Ionicons } from "@expo/vector-icons";
-import Animated from "react-native-reanimated";
-import { hapticImpactLight, hapticImpactHeavy } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
-import { useTranslation } from "react-i18next";
-import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
+import { PosterCard } from "../ui/PosterCard";
 import {
   getWebFocusStyle,
   uiRadii,
   uiSpacing,
-  uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
+import type { LibraryCardItem } from "./libraryPresentation";
+
+type LibraryCardProps = {
+  item: LibraryCardItem;
+  selectionKey: string;
+  downloadTaskId?: string;
+  onRemove?: (itemId: string) => void;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (selectionKey: string) => void;
+  style?: StyleProp<ViewStyle>;
+};
 
 export function LibraryCard({
   item,
+  selectionKey,
+  downloadTaskId,
   onRemove,
   isSelectionMode,
   isSelected,
   onToggleSelect,
-}: {
-  item: LibraryItem;
-  onRemove: (id: string, isDownload?: boolean) => void;
-  isSelectionMode: boolean;
-  isSelected: boolean;
-  onToggleSelect: (id: string) => void;
-}) {
+  style,
+}: LibraryCardProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const [isHovered, setIsHovered] = React.useState(false);
   const [contextMenu, setContextMenu] = React.useState<{
     x: number;
     y: number;
   } | null>(null);
-  const isWeb = Platform.OS === "web";
   const itemId = item.itemId || item.id;
-
   const tasks = useDownloadStore((state) => state.tasks);
-  const task = Object.values(tasks).find((t) => t.mediaInfo.itemId === itemId);
-
+  const task = downloadTaskId
+    ? tasks[downloadTaskId]
+    : Object.values(tasks).find(
+        (candidate) => candidate.mediaInfo.itemId === itemId,
+      );
   const isPreparing = task?.status === "Preparing";
   const isDownloading =
     task?.status === "Downloading" ||
     task?.status === "Verifying" ||
     isPreparing;
   const isCompleted = isTaskOfflinePlayable(task);
-  const progress = task?.progress || 0;
   const detailsLabel = t("library.actions.viewDetails", {
-    defaultValue: "View Details",
+    defaultValue: "View details",
   });
-  const removeLabel = task
-    ? t("library.actions.removeDownload", {
-        defaultValue: "Remove Download",
-      })
-    : t("library.actions.remove", {
-        defaultValue: "Remove from Library",
-      });
-  const cardAccessibilityLabel = isSelectionMode
-    ? `${t("library.header.select")}: ${item.title}`
-    : `${detailsLabel}: ${item.title}`;
+  const removeLabel = t("library.actions.remove", {
+    defaultValue: "Remove from Library",
+  });
 
   const handlePress = () => {
     hapticImpactLight();
-    if (isSelectionMode) {
-      onToggleSelect(itemId);
-    } else {
-      router.push(`/detail/${item.type}/${itemId}`);
-    }
-  };
-  const { isKeyboardFocused, webPressableProps } =
-    useWebPressableActivation(handlePress);
-
-  const handleContextMenu = (e: any) => {
-    if (!isWeb || isSelectionMode) return;
-    e.preventDefault();
-    setContextMenu({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+    if (isSelectionMode) onToggleSelect(selectionKey);
+    else router.push(`/detail/${item.type}/${itemId}`);
   };
 
-  React.useEffect(() => {
-    if (!contextMenu) return;
-    const hideMenu = () => setContextMenu(null);
-    window.addEventListener("click", hideMenu);
-    window.addEventListener("contextmenu", hideMenu);
-    return () => {
-      window.removeEventListener("click", hideMenu);
-      window.removeEventListener("contextmenu", hideMenu);
-    };
-  }, [contextMenu]);
-
-  const handleLongPress = () => {
+  const showActions = () => {
+    if (isSelectionMode || !onRemove) return;
     hapticImpactHeavy();
-    if (isSelectionMode) return;
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         {
-          options: [
-            t("common.cancel", { defaultValue: "Cancel" }),
-            detailsLabel,
-            removeLabel,
-          ],
-          destructiveButtonIndex: 2,
+          options: [t("common.cancel"), detailsLabel, removeLabel],
           cancelButtonIndex: 0,
+          destructiveButtonIndex: 2,
           title: item.title,
-          message: t("library.actions.prompt", {
-            defaultValue: "What would you like to do?",
-          }),
         },
         (buttonIndex) => {
-          if (buttonIndex === 1) {
-            router.push(`/detail/${item.type}/${itemId}`);
-          } else if (buttonIndex === 2) {
-            onRemove(itemId, !!task);
-          }
+          if (buttonIndex === 1) router.push(`/detail/${item.type}/${itemId}`);
+          if (buttonIndex === 2) onRemove(itemId);
         },
       );
-    } else {
-      Alert.alert(
-        item.title,
-        t("library.actions.prompt", {
-          defaultValue: "What would you like to do?",
-        }),
-        [
-          {
-            text: t("common.cancel", { defaultValue: "Cancel" }),
-            style: "cancel",
-          },
-          {
-            text: detailsLabel,
-            onPress: () => router.push(`/detail/${item.type}/${itemId}`),
-          },
-          {
-            text: removeLabel,
-            style: "destructive",
-            onPress: () => onRemove(itemId, !!task),
-          },
-        ],
-      );
+      return;
     }
+    Alert.alert(item.title, undefined, [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: detailsLabel,
+        onPress: () => router.push(`/detail/${item.type}/${itemId}`),
+      },
+      {
+        text: removeLabel,
+        style: "destructive",
+        onPress: () => onRemove(itemId),
+      },
+    ]);
   };
 
+  React.useEffect(() => {
+    if (!contextMenu || Platform.OS !== "web") return;
+    const hide = () => setContextMenu(null);
+    window.addEventListener("click", hide);
+    window.addEventListener("contextmenu", hide);
+    return () => {
+      window.removeEventListener("click", hide);
+      window.removeEventListener("contextmenu", hide);
+    };
+  }, [contextMenu]);
+
   return (
-    <View
-      style={[
-        styles.cardContainer,
-        {
-          borderColor:
-            isSelectionMode && isSelected ? colors.tint : "transparent",
-          borderWidth: isSelectionMode && isSelected ? 2 : 0,
-        },
-        isSelectionMode && isSelected && styles.cardSelected,
-      ]}
-    >
-      <Pressable
-        {...webPressableProps}
-        style={({ pressed }) => [
-          styles.cardPressable,
-          pressed && styles.cardPressed,
-          isWeb && isKeyboardFocused && styles.cardFocused,
-          isWeb && isKeyboardFocused && { outlineColor: colors.focus },
-        ]}
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-        onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
-        onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
-        // @ts-ignore web-only context menu
-        onContextMenu={isWeb ? handleContextMenu : undefined}
-        accessibilityRole={isSelectionMode ? "checkbox" : "button"}
-        accessibilityLabel={cardAccessibilityLabel}
-        accessibilityHint={
-          isSelectionMode ? undefined : t("search.a11y.openDetails")
+    <View style={[styles.container, style]}>
+      <PosterCard
+        title={item.title}
+        poster={item.poster}
+        eyebrow={t(`search.types.${item.type}`)}
+        metadata={
+          isCompleted
+            ? t("downloads.status.readyOffline", {
+                defaultValue: "Ready offline",
+              })
+            : undefined
         }
+        progress={isDownloading ? (task?.progress ?? 0) * 100 : undefined}
+        selected={isSelected}
+        onPress={handlePress}
+        onLongPress={onRemove ? showActions : undefined}
+        onContextMenu={
+          onRemove && !isSelectionMode
+            ? (event) => {
+                event.preventDefault();
+                setContextMenu({
+                  x: event.nativeEvent.pageX,
+                  y: event.nativeEvent.pageY,
+                });
+              }
+            : undefined
+        }
+        accessibilityRole={isSelectionMode ? "checkbox" : "button"}
         accessibilityState={
           isSelectionMode ? { checked: isSelected } : undefined
         }
-      >
-        <View>
-          <Animated.Image
-            source={{ uri: item.poster ?? undefined }}
-            style={[
-              styles.cardImage,
-              isSelectionMode && isSelected && styles.cardImageSelected,
-              isWeb && isHovered && styles.cardImageHovered,
-            ]}
-            sharedTransitionTag={`poster-${itemId}`}
-            accessibilityLabel={t("search.a11y.poster", {
-              title: item.title,
-              defaultValue: `${item.title} poster`,
-            })}
-          />
-          {isSelectionMode && (
-            <View style={styles.checkboxOverlay} pointerEvents="none">
-              <Ionicons
-                name={isSelected ? "checkmark-circle" : "ellipse-outline"}
-                size={28}
-                color={isSelected ? colors.tint : colors.onTint}
-              />
-            </View>
-          )}
+        accessibilityHint={
+          isSelectionMode ? undefined : t("search.a11y.openDetails")
+        }
+        testID={`library-card-${selectionKey}`}
+      />
 
-          {isWeb && isHovered && !isSelectionMode && (
-            <View style={styles.hoverOverlay} pointerEvents="none">
-              <View
-                style={[
-                  styles.hoverAction,
-                  { backgroundColor: colors.surfaceOverlay },
-                ]}
-              >
-                <Text style={[styles.hoverActionText, { color: colors.text }]}>
-                  {detailsLabel}
-                </Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.text} />
-              </View>
-            </View>
-          )}
-        </View>
-        <View style={styles.cardInfo}>
-          <Text
-            style={[styles.cardTitle, { color: colors.text }]}
-            numberOfLines={2}
-          >
-            {item.title}
-          </Text>
-          <View style={styles.cardTypeRow}>
-            <Ionicons
-              name={item.type === "movie" ? "film-outline" : "tv-outline"}
-              size={11}
-              color={colors.textSecondary}
-            />
-            <Text
-              style={[styles.cardSubtitle, { color: colors.textSecondary }]}
-            >
-              {t(`search.types.${item.type}`)}
-            </Text>
-          </View>
-          {isDownloading && (
-            <View
-              style={[
-                styles.progressContainer,
-                { backgroundColor: colors.disabled },
-              ]}
-            >
-              <View
-                style={[
-                  styles.progressBar,
-                  {
-                    width: `${progress * 100}%`,
-                    backgroundColor: colors.tint,
-                  },
-                ]}
-              />
-            </View>
-          )}
-          {isCompleted && (
-            <View style={styles.downloadBadge}>
-              <Ionicons
-                name="arrow-down-circle"
-                size={13}
-                color={colors.success}
-              />
-              <Text
-                style={[styles.downloadBadgeText, { color: colors.success }]}
-              >
-                {t("library.filters.offline")}
-              </Text>
-            </View>
-          )}
-        </View>
-      </Pressable>
-
-      {isWeb && contextMenu && (
+      {Platform.OS === "web" && contextMenu ? (
         <View
           accessibilityViewIsModal
           style={[
@@ -297,194 +176,95 @@ export function LibraryCard({
             },
           ]}
         >
-          <Pressable
-            style={({ hovered, pressed, focused }: any) => [
-              styles.contextMenuItem,
-              hovered && { backgroundColor: colors.card },
-              pressed && { opacity: 0.72 },
-              focused && getWebFocusStyle(colors.focus),
-            ]}
+          <ContextAction
+            icon="information-circle-outline"
+            label={detailsLabel}
+            color={colors.text}
+            focusColor={colors.focus}
             onPress={() => {
               setContextMenu(null);
               router.push(`/detail/${item.type}/${itemId}`);
             }}
-            accessibilityRole="button"
-            accessibilityLabel={`${detailsLabel}: ${item.title}`}
-          >
-            <Ionicons
-              name="information-circle-outline"
-              size={16}
-              color={colors.text}
-            />
-            <Text style={[styles.contextMenuText, { color: colors.text }]}>
-              {detailsLabel}
-            </Text>
-          </Pressable>
-          <View
-            style={[
-              styles.contextMenuSeparator,
-              { backgroundColor: colors.border },
-            ]}
           />
-          <Pressable
-            style={({ hovered, pressed, focused }: any) => [
-              styles.contextMenuItem,
-              hovered && { backgroundColor: colors.card },
-              pressed && { opacity: 0.72 },
-              focused && getWebFocusStyle(colors.focus),
-            ]}
+          <View
+            style={[styles.separator, { backgroundColor: colors.border }]}
+          />
+          <ContextAction
+            icon="trash-outline"
+            label={removeLabel}
+            color={colors.error}
+            focusColor={colors.focus}
             onPress={() => {
               setContextMenu(null);
-              onRemove(itemId, !!task);
+              onRemove?.(itemId);
             }}
-            accessibilityRole="button"
-            accessibilityLabel={`${removeLabel}: ${item.title}`}
-          >
-            <Ionicons name="trash-outline" size={16} color={colors.error} />
-            <Text style={[styles.contextMenuText, { color: colors.error }]}>
-              {removeLabel}
-            </Text>
-          </Pressable>
+          />
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
 
+function ContextAction({
+  icon,
+  label,
+  color,
+  focusColor,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  focusColor: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ hovered, pressed, focused }: any) => [
+        styles.contextAction,
+        hovered && { backgroundColor: color + "12" },
+        pressed && { opacity: 0.72 },
+        focused && getWebFocusStyle(focusColor),
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={[styles.contextText, { color }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  cardTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
-  },
-  cardContainer: {
-    flex: 1,
-    borderRadius: uiRadii.card,
+  container: {
     position: "relative",
-  },
-  cardPressable: {
-    minHeight: uiTouchTarget,
-    borderRadius: uiRadii.card,
-    // @ts-ignore web-only
-    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-    cursor: Platform.OS === "web" ? "pointer" : undefined,
-  } as any,
-  cardPressed: {
-    opacity: 0.78,
-  },
-  cardFocused: {
-    // @ts-ignore web-only
-    outlineStyle: "solid",
-    outlineWidth: 2,
-    outlineOffset: 3,
-  } as any,
-  cardImage: {
-    width: "100%",
-    aspectRatio: 2 / 3,
-    borderRadius: uiRadii.card,
-  },
-  cardImageHovered: {
-    opacity: 0.85,
-  },
-  cardImageSelected: {
-    opacity: 0.8,
-  },
-  // Desktop hover overlay
-  hoverOverlay: {
-    position: "absolute",
-    inset: 0,
-    justifyContent: "flex-end",
-    alignItems: "flex-start",
-    padding: 12,
-  } as any,
-  hoverAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.sm,
-    minHeight: uiTouchTarget,
-    paddingHorizontal: uiSpacing.md,
-    paddingVertical: uiSpacing.sm,
-    borderRadius: uiRadii.control,
-  },
-  hoverActionText: {
-    ...uiTypography.label,
-  },
-  cardInfo: { paddingTop: 8, paddingHorizontal: 2, paddingBottom: 10 },
-  cardTitle: { fontSize: 14, fontWeight: "700" },
-  cardSubtitle: { fontSize: 11, marginTop: 4 },
-  progressContainer: {
-    height: 3,
-    borderRadius: 2,
-    marginTop: 8,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  downloadBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 6,
-  },
-  downloadBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  cardSelected: {
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 0 0 3px rgba(108,121,245,0.24)" }
-      : {
-          shadowColor: "#6C79F5",
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-        }),
-  } as any,
-  checkboxOverlay: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 16,
-    padding: 2,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   contextMenu: {
-    position: "absolute",
+    position: "fixed",
     zIndex: 1000,
-    width: 200,
-    borderRadius: 12,
+    width: 210,
+    borderRadius: uiRadii.card,
     borderWidth: 1,
-    padding: 6,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 8px 16px rgba(0, 0, 0, 0.2)" }
-      : {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.2,
-          shadowRadius: 16,
-        }),
-    elevation: 10,
+    padding: uiSpacing.xs + 2,
+    boxShadow: "0 12px 30px rgba(0,0,0,0.28)",
   } as any,
-  contextMenuItem: {
-    minHeight: uiTouchTarget,
+  contextAction: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    gap: uiSpacing.sm + 2,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.control,
   },
-  contextMenuText: {
-    fontSize: 13,
-    fontWeight: "600",
+  contextText: {
+    ...uiTypography.label,
   },
-  contextMenuSeparator: {
-    height: 1,
-    marginVertical: 4,
-    marginHorizontal: 8,
-    opacity: 0.5,
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: uiSpacing.xs,
+    marginHorizontal: uiSpacing.sm,
   },
 });
