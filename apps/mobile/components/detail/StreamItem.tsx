@@ -43,7 +43,7 @@ export function StreamItem({
   const playable = !!engine;
   const canDownload = getDownloadEligibility(stream).canDownload;
   const bridgePresentation = getBridgeStatusPresentation(bridgeStatus);
-  const surfaceColor = colors.card;
+  const surfaceColor = colors.surfaceElevated;
   const badgeSurface = colors.tint + "18";
   const readySurface = colors.success + "20";
   const warnSurface = colors.warning + "20";
@@ -76,7 +76,7 @@ export function StreamItem({
         styles.streamCard,
         {
           backgroundColor: surfaceColor,
-          borderColor: colors.border,
+          borderColor: "transparent",
         },
       ]}
     >
@@ -170,11 +170,18 @@ export function StreamItem({
             )}
           </View>
         </View>
-        <Ionicons
-          name={playable ? "play-circle" : "alert-circle-outline"}
-          size={28}
-          color={playable ? colors.tint : colors.warning}
-        />
+        <View
+          style={[
+            styles.playButton,
+            { backgroundColor: playable ? colors.primary : "transparent" },
+          ]}
+        >
+          <Ionicons
+            name={playable ? "play" : "alert-circle-outline"}
+            size={playable ? 17 : 24}
+            color={playable ? colors.onPrimary : colors.warning}
+          />
+        </View>
       </Pressable>
 
       <View style={styles.streamActions}>
@@ -218,7 +225,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: 18,
+    borderRadius: 12,
     padding: 18,
     borderWidth: 1,
   },
@@ -287,7 +294,18 @@ const styles = StyleSheet.create({
     marginLeft: 14,
   },
   downloadIconBtn: {
-    padding: 4,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  playButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
   webFocused: {
     // @ts-ignore web-only

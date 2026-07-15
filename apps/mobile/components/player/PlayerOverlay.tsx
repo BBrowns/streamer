@@ -21,7 +21,7 @@ interface PlayerOverlayProps {
 
 export function PlayerOverlay({
   currentStream,
-  engineType,
+  engineType: _engineType,
   stats,
   onClose,
   onSettings,
@@ -48,12 +48,12 @@ export function PlayerOverlay({
         <Pressable
           style={({ hovered, focused }: any) => [
             styles.closeButton,
-            { backgroundColor: colors.tint + "15" },
+            { backgroundColor: colors.surfaceElevated },
             hovered && {
-              backgroundColor: colors.tint + "25",
+              backgroundColor: colors.card,
               transform: [{ scale: 1.05 }],
             },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={onClose}
           accessibilityRole="button"
@@ -78,12 +78,12 @@ export function PlayerOverlay({
             <Pressable
               style={({ hovered, focused }: any) => [
                 styles.iconButton,
-                { backgroundColor: colors.tint + "15" },
+                { backgroundColor: colors.surfaceElevated },
                 hovered && {
-                  backgroundColor: colors.tint + "25",
+                  backgroundColor: colors.card,
                   transform: [{ scale: 1.1 }],
                 },
-                focused && getWebFocusStyle(colors.tint),
+                focused && getWebFocusStyle(colors.focus),
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
@@ -96,14 +96,14 @@ export function PlayerOverlay({
             <Pressable
               style={({ hovered, focused }: any) => [
                 styles.iconButton,
-                { backgroundColor: colors.tint + "15" },
+                { backgroundColor: colors.surfaceElevated },
                 hovered && {
-                  backgroundColor: colors.tint + "25",
+                  backgroundColor: colors.card,
                   transform: [{ scale: 1.1 }],
                 },
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(colors.tint),
+                  getWebFocusStyle(colors.focus),
               ]}
               onPress={onTogglePiP}
               accessibilityRole="button"
@@ -119,12 +119,14 @@ export function PlayerOverlay({
           <Pressable
             style={({ hovered, focused }: any) => [
               styles.iconButton,
-              { backgroundColor: colors.tint + "15" },
+              { backgroundColor: colors.surfaceElevated },
               hovered && {
-                backgroundColor: colors.tint + "25",
+                backgroundColor: colors.card,
                 transform: [{ scale: 1.1 }],
               },
-              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
             ]}
             onPress={onSettings}
             accessibilityRole="button"
@@ -154,11 +156,8 @@ export function PlayerOverlay({
               t("player.controls.nowPlaying")}
           </Text>
           <View style={styles.infoSubRow}>
-            <Text style={[styles.engineText, { color: colors.textSecondary }]}>
-              {t("player.controls.engine")}: {engineType}
-            </Text>
             {stats.peers > 0 && (
-              <Text style={[styles.speedText, { color: colors.tint }]}>
+              <Text style={[styles.speedText, { color: colors.textSecondary }]}>
                 ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers}{" "}
                 {t("player.controls.peers")}
               </Text>
@@ -195,7 +194,7 @@ const styles = StyleSheet.create({
   closeButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 24,
+    borderRadius: 8,
     minWidth: 44,
     minHeight: 44,
     justifyContent: "center",
@@ -206,7 +205,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -215,7 +214,7 @@ const styles = StyleSheet.create({
     width: "94%",
     maxWidth: 920,
     marginTop: 10,
-    borderRadius: 22,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     pointerEvents: "auto",
@@ -227,6 +226,5 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 4,
   },
-  engineText: { fontSize: 11 },
   speedText: { fontSize: 11, fontWeight: "600" },
 });

@@ -147,23 +147,23 @@ export default function VerifyEmailScreen() {
         <Pressable
           style={[
             styles.primaryButton,
-            { backgroundColor: colors.tint },
+            { backgroundColor: colors.primary },
             isVerifying && styles.disabledButton,
           ]}
           onPress={() => handleVerify()}
           disabled={isVerifying}
         >
           {isVerifying ? (
-            <ActivityIndicator color={colors.onTint} />
+            <ActivityIndicator color={colors.onPrimary} />
           ) : (
             <>
               <Ionicons
                 name="checkmark-circle"
                 size={18}
-                color={colors.onTint}
+                color={colors.onPrimary}
               />
               <Text
-                style={[styles.primaryButtonText, { color: colors.onTint }]}
+                style={[styles.primaryButtonText, { color: colors.onPrimary }]}
               >
                 {t("auth.verifyEmail.verifyButton")}
               </Text>

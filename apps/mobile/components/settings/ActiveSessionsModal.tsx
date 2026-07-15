@@ -4,11 +4,15 @@ import {
   Pressable,
   Modal,
   ActivityIndicator,
+  Platform,
   StyleSheet,
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { getWebFocusStyle } from "../ui/designSystem";
 
 interface SessionItem {
   id: string;
@@ -37,7 +41,9 @@ export function ActiveSessionsModal({
   revokeSession,
   inline,
 }: ActiveSessionsModalProps) {
+  const reducedMotion = useReducedMotion();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const content = (
     <View
       style={[
@@ -63,13 +69,24 @@ export function ActiveSessionsModal({
               color={colors.success}
             />
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Active Sessions
+              {t("settings.accountModals.sessions.title")}
             </Text>
           </View>
           {!inline && (
-            <Pressable onPress={onClose}>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.accountModals.sessions.done")}
+              style={({ focused, pressed }: any) => [
+                styles.headerAction,
+                pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(colors.focus),
+              ]}
+            >
               <Text style={[styles.modalCancel, { color: colors.tint }]}>
-                Done
+                {t("settings.accountModals.sessions.done")}
               </Text>
             </Pressable>
           )}
@@ -85,10 +102,14 @@ export function ActiveSessionsModal({
               const diffMin = Math.floor(diffMs / 60_000);
               const lastSeenLabel =
                 diffMin < 1
-                  ? "Just now"
+                  ? t("settings.accountModals.sessions.justNow")
                   : diffMin < 60
-                    ? `${diffMin}m ago`
-                    : `${Math.floor(diffMin / 60)}h ago`;
+                    ? t("settings.accountModals.sessions.minutesAgo", {
+                        count: diffMin,
+                      })
+                    : t("settings.accountModals.sessions.hoursAgo", {
+                        count: Math.floor(diffMin / 60),
+                      });
 
               return (
                 <View
@@ -118,8 +139,9 @@ export function ActiveSessionsModal({
                       numberOfLines={2}
                     >
                       {isCurrentDevice
-                        ? "This device"
-                        : (session.userAgent?.slice(0, 40) ?? "Unknown device")}
+                        ? t("settings.accountModals.sessions.thisDevice")
+                        : (session.userAgent?.slice(0, 40) ??
+                          t("settings.accountModals.sessions.unknownDevice"))}
                     </Text>
                     <Text
                       style={[
@@ -127,16 +149,27 @@ export function ActiveSessionsModal({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      {session.ipAddress ?? "Unknown IP"} · {lastSeenLabel}
+                      {session.ipAddress ??
+                        t("settings.accountModals.sessions.unknownIp")}{" "}
+                      {" · "}
+                      {lastSeenLabel}
                     </Text>
                   </View>
                   {!isCurrentDevice && (
                     <Pressable
                       onPress={() => revokeSession(session.id)}
-                      hitSlop={8}
                       testID={`btn-revoke-session-${session.id}`}
                       accessibilityRole="button"
-                      accessibilityLabel="Revoke this session"
+                      accessibilityLabel={t(
+                        "settings.accountModals.sessions.revokeA11y",
+                      )}
+                      style={({ focused, pressed }: any) => [
+                        styles.iconButton,
+                        pressed && styles.pressed,
+                        Platform.OS === "web" &&
+                          focused &&
+                          getWebFocusStyle(colors.focus),
+                      ]}
                     >
                       <Ionicons
                         name="trash-outline"
@@ -162,7 +195,7 @@ export function ActiveSessionsModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={reducedMotion ? "none" : "slide"}
       transparent
       onRequestClose={onClose}
     >
@@ -203,6 +236,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modalCancel: { fontWeight: "800", fontSize: 15 },
+  headerAction: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
   sessionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -220,4 +261,12 @@ const styles = StyleSheet.create({
   sessionInfo: { flex: 1 },
   sessionDevice: { fontWeight: "600", fontSize: 14 },
   sessionMeta: { fontSize: 12, marginTop: 2 },
+  iconButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  pressed: { opacity: 0.68 },
 });

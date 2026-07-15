@@ -1,100 +1,147 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  Modal,
+  Animated,
   FlatList,
-  Image,
+  Modal,
+  Platform,
   Pressable,
   StyleSheet,
-  ActivityIndicator,
-  Platform,
-  Animated,
-  Keyboard,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import type { SearchMetaPreview } from "../../hooks/useSearch";
 import { useGlobalSearch } from "../../hooks/useGlobalSearch";
-import type { MetaPreview } from "@streamer/shared";
+import { useTheme } from "../../hooks/useTheme";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { SearchService } from "../../services/SearchService";
+import { moveSearchSelection } from "../../services/searchController";
+import { RecentSearches } from "../search/RecentSearches";
+import { SearchResultCard } from "../search/SearchResultCard";
+import { AppButton } from "./AppButton";
+import { SearchField } from "./SearchField";
 
-interface Props {
+interface CommandPaletteProps {
   visible: boolean;
   onClose: () => void;
 }
 
-import { useTheme } from "../../hooks/useTheme";
-
-export function CommandPalette({ visible, onClose }: Props) {
+export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<TextInput>(null);
+  const scale = useRef(new Animated.Value(0.98)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
   const router = useRouter();
-  const { data: results, isFetching } = useGlobalSearch(query);
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
+  const search = useGlobalSearch(query);
+  const results = search.data?.metas ?? [];
 
-  // Load recent searches on mount
-  useEffect(() => {
-    const loadRecent = async () => {
-      setRecentSearches(await SearchService.getRecentSearches());
-    };
-    loadRecent();
-  }, [visible]);
-
-  const saveSearch = useCallback(async (text: string) => {
-    if (!text || text.trim().length === 0) return;
-    const clean = text.trim();
-    await SearchService.addRecentSearch(clean);
+  const loadRecent = useCallback(async () => {
     setRecentSearches(await SearchService.getRecentSearches());
   }, []);
 
-  const clearHistory = async () => {
-    await SearchService.clearRecentSearches();
-    setRecentSearches([]);
-  };
-
   useEffect(() => {
-    if (visible) {
-      setQuery("");
-      setTimeout(() => inputRef.current?.focus(), 50);
+    if (!visible) return;
+    setQuery("");
+    setSelectedIndex(-1);
+    loadRecent();
+    const focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
+    if (reducedMotion) {
+      scale.setValue(1);
+      opacity.setValue(1);
+    } else {
       Animated.parallel([
-        Animated.spring(scaleAnim, {
+        Animated.spring(scale, {
           toValue: 1,
           useNativeDriver: true,
-          tension: 140,
-          friction: 10,
+          tension: 160,
+          friction: 14,
         }),
-        Animated.timing(opacityAnim, {
+        Animated.timing(opacity, {
           toValue: 1,
-          duration: 150,
+          duration: 140,
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      scaleAnim.setValue(0.95);
-      opacityAnim.setValue(0);
     }
-  }, [visible]);
+    return () => clearTimeout(focusTimer);
+  }, [loadRecent, opacity, reducedMotion, scale, visible]);
 
-  const handleSelect = useCallback(
-    (item: MetaPreview) => {
-      saveSearch(query || item.name);
+  useEffect(() => {
+    setSelectedIndex(results.length > 0 ? 0 : -1);
+  }, [results.length, search.debouncedQuery]);
+
+  useEffect(() => {
+    if (!visible) {
+      scale.setValue(0.98);
+      opacity.setValue(0);
+    }
+  }, [opacity, scale, visible]);
+
+  const saveSearch = useCallback(
+    async (value: string) => {
+      const clean = value.trim();
+      if (!clean) return;
+      await SearchService.addRecentSearch(clean);
+      await loadRecent();
+    },
+    [loadRecent],
+  );
+
+  const openItem = useCallback(
+    async (item: SearchMetaPreview) => {
+      await saveSearch(query || item.name);
       onClose();
       router.push(`/detail/${item.type}/${item.id}`);
     },
-    [onClose, router, query, saveSearch],
+    [onClose, query, router, saveSearch],
   );
 
-  const handleSubmit = useCallback(async () => {
+  const submit = useCallback(async () => {
+    if (selectedIndex >= 0 && results[selectedIndex]) {
+      await openItem(results[selectedIndex]);
+      return;
+    }
     const clean = query.trim();
-    if (!clean) return;
+    if (clean.length < 2) return;
     await saveSearch(clean);
     onClose();
-    router.push({ pathname: "/search/results", params: { q: clean } });
-  }, [onClose, query, router, saveSearch]);
+    router.push({ pathname: "/search", params: { q: clean } });
+  }, [onClose, openItem, query, results, router, saveSearch, selectedIndex]);
+
+  const handleKeyPress = useCallback(
+    (event: any) => {
+      const key = event.nativeEvent?.key;
+      if (key === "ArrowDown") {
+        event.preventDefault?.();
+        setSelectedIndex((current) =>
+          moveSearchSelection(current, results.length, "next"),
+        );
+      } else if (key === "ArrowUp") {
+        event.preventDefault?.();
+        setSelectedIndex((current) =>
+          moveSearchSelection(current, results.length, "previous"),
+        );
+      } else if (key === "Escape") {
+        event.preventDefault?.();
+        onClose();
+      }
+    },
+    [onClose, results.length],
+  );
+
+  const clearHistory = useCallback(async () => {
+    await SearchService.clearRecentSearches();
+    setRecentSearches([]);
+  }, []);
+
+  const isSearching = search.isDebouncing || search.isFetching;
 
   return (
     <Modal
@@ -108,243 +155,111 @@ export function CommandPalette({ visible, onClose }: Props) {
         style={[
           styles.backdrop,
           {
-            backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.4)",
+            backgroundColor: isDark
+              ? "rgba(0,0,0,0.72)"
+              : "rgba(20,22,28,0.42)",
           },
         ]}
         onPress={onClose}
       >
         <Animated.View
+          testID="command-palette"
+          accessibilityViewIsModal
+          accessibilityLabel={t("search.command.label")}
           style={[
             styles.palette,
             {
-              transform: [{ scale: scaleAnim }],
-              opacity: opacityAnim,
-              backgroundColor: colors.card,
-              borderColor: colors.border,
+              transform: [{ scale }],
+              opacity,
+              backgroundColor: colors.surfaceElevated,
             },
           ]}
         >
-          {/* Search Input */}
-          <Pressable
-            style={styles.inputRow}
-            onPress={() => inputRef.current?.focus()}
-          >
-            <Ionicons name="search" size={20} color={colors.textSecondary} />
-            <TextInput
-              ref={inputRef}
-              style={[styles.input, { color: colors.text }]}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search movies, shows..."
-              placeholderTextColor={colors.textSecondary}
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={handleSubmit}
+          <SearchField
+            ref={inputRef}
+            inset
+            testID="command-search-field"
+            value={query}
+            onChangeText={setQuery}
+            onClear={() => setQuery("")}
+            clearAccessibilityLabel={t("search.actions.clearSearch")}
+            loading={isSearching}
+            placeholder={t("search.placeholder")}
+            onKeyPress={handleKeyPress}
+            onSubmitEditing={submit}
+            accessibilityLabel={t("search.a11y.field")}
+            inputStyle={styles.commandInput}
+          />
+
+          {!query ? (
+            <RecentSearches
+              variant="compact"
+              items={recentSearches}
+              onSelect={setQuery}
+              onClear={() => void clearHistory()}
             />
-            {isFetching && (
-              <ActivityIndicator size="small" color={colors.tint} />
-            )}
-            {query.length > 0 && !isFetching && (
-              <Pressable onPress={() => setQuery("")} hitSlop={8}>
-                <Ionicons
-                  name="close-circle"
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            )}
-          </Pressable>
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          {/* Results */}
-          {query.length === 0 ? (
-            <View style={styles.historyContainer}>
-              <View style={styles.historyHeader}>
-                <Text
-                  style={[styles.historyTitle, { color: colors.textSecondary }]}
-                >
-                  RECENT SEARCHES
-                </Text>
-                {recentSearches.length > 0 && (
-                  <Pressable onPress={clearHistory}>
-                    <Text style={[styles.historyClear, { color: colors.tint }]}>
-                      Clear
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-              {recentSearches.length > 0 ? (
-                <View style={styles.historyList}>
-                  {recentSearches.map((s) => (
-                    <Pressable
-                      key={s}
-                      style={styles.historyItem}
-                      onPress={() => setQuery(s)}
-                    >
-                      <Ionicons
-                        name="time-outline"
-                        size={16}
-                        color={colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.historyItemText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {s}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.hint}>
-                  <Ionicons
-                    name="search-outline"
-                    size={32}
-                    color={colors.textSecondary}
-                  />
-                  <Text
-                    style={[styles.hintText, { color: colors.textSecondary }]}
-                  >
-                    No recent searches
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : query.length < 2 ? (
+          ) : query.trim().length < 2 ? (
             <View style={styles.hint}>
-              <Ionicons
-                name="search-outline"
-                size={32}
-                color={colors.textSecondary}
-              />
               <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-                Type at least 2 characters to search
+                {t("search.command.minimum")}
               </Text>
             </View>
-          ) : results && results.length === 0 && !isFetching ? (
+          ) : search.isError ? (
             <View style={styles.hint}>
-              <Ionicons
-                name="film-outline"
-                size={32}
-                color={colors.textSecondary}
-              />
+              <Text style={[styles.errorTitle, { color: colors.text }]}>
+                {t("search.command.errorTitle", {
+                  defaultValue: "Search is unavailable",
+                })}
+              </Text>
               <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-                No results for "{query}"
+                {t("search.command.errorDescription", {
+                  defaultValue: "Check your connection and try again.",
+                })}
+              </Text>
+              <AppButton
+                label={t("common.retry")}
+                variant="secondary"
+                icon="refresh-outline"
+                onPress={() => search.refetch()}
+              />
+            </View>
+          ) : !isSearching && results.length === 0 ? (
+            <View style={styles.hint}>
+              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+                {t("search.command.noResults", { query })}
               </Text>
             </View>
           ) : (
             <FlatList
-              data={results ?? []}
-              keyExtractor={(item) => item.id}
-              style={styles.list}
+              data={results}
+              keyExtractor={(item) => `${item.type}:${item.id}`}
               keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.resultRow,
-                    pressed && {
-                      backgroundColor: isDark
-                        ? "rgba(255,255,255,0.04)"
-                        : "rgba(0,0,0,0.04)",
+              style={styles.list}
+              renderItem={({ item, index }) => (
+                <View
+                  style={[
+                    styles.result,
+                    selectedIndex === index && {
+                      backgroundColor: colors.tint + "14",
                     },
                   ]}
-                  onPress={() => handleSelect(item)}
                 >
-                  <Image
-                    source={{ uri: item.poster }}
-                    style={[
-                      styles.poster,
-                      {
-                        backgroundColor: isDark
-                          ? "#1a1a2e"
-                          : "rgba(0,0,0,0.05)",
-                      },
-                    ]}
-                    resizeMode="cover"
+                  <SearchResultCard
+                    item={item}
+                    compact
+                    onPress={() => openItem(item)}
                   />
-                  <View style={styles.resultInfo}>
-                    <Text
-                      style={[styles.resultTitle, { color: colors.text }]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
-                    <View style={styles.resultMeta}>
-                      <Ionicons
-                        name={
-                          item.type === "movie" ? "film-outline" : "tv-outline"
-                        }
-                        size={12}
-                        color={colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.resultType,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {item.type === "movie" ? "Movie" : "Series"}
-                      </Text>
-                      {!!item.imdbRating && (
-                        <Text
-                          style={[styles.resultRating, { color: "#fbbf24" }]}
-                        >
-                          ⭐ {item.imdbRating}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={colors.textSecondary}
-                  />
-                </Pressable>
+                </View>
               )}
             />
           )}
 
-          {/* Footer hint */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <View
-              style={[
-                styles.footerBadge,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.04)",
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.footerKey, { color: colors.textSecondary }]}>
-                ↵
-              </Text>
-            </View>
-            <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>
-              Open
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              ↑↓ {t("search.command.navigate")}
             </Text>
-            <View
-              style={[
-                styles.footerBadge,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(0,0,0,0.04)",
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.footerKey, { color: colors.textSecondary }]}>
-                Esc
-              </Text>
-            </View>
-            <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>
-              Close
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              ↵ {t("search.command.open")} · Esc {t("search.command.close")}
             </Text>
           </View>
         </Animated.View>
@@ -356,133 +271,55 @@ export function CommandPalette({ visible, onClose }: Props) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-start",
     alignItems: "center",
-    paddingTop: 80,
+    justifyContent: "flex-start",
+    paddingTop: 72,
+    paddingHorizontal: 16,
   },
   palette: {
-    width: "90%",
-    maxWidth: 600,
-    backgroundColor: "#0f0f1a",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    width: "100%",
+    maxWidth: 620,
+    maxHeight: 570,
+    borderRadius: 20,
     overflow: "hidden",
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 24px 48px rgba(0, 0, 0, 0.6)" }
-      : {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 24 },
-          shadowOpacity: 0.6,
-          shadowRadius: 48,
-        }),
-    elevation: 24,
-    maxHeight: 520,
+      ? { boxShadow: "0 26px 70px rgba(0,0,0,0.46)" }
+      : { elevation: 24 }),
   } as any,
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  input: {
-    flex: 1,
-    color: "#f1f5f9",
+  commandInput: {
     fontSize: 17,
-    fontWeight: "500",
-    ...Platform.select({ web: { outlineStyle: "none" } as any }),
+    lineHeight: 22,
+    fontWeight: "600",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  list: { maxHeight: 360 },
-  resultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  resultRowPressed: { backgroundColor: "rgba(255,255,255,0.04)" },
-  poster: {
-    width: 40,
-    height: 60,
-    borderRadius: 6,
-    backgroundColor: "#1a1a2e",
-  },
-  resultInfo: { flex: 1 },
-  resultTitle: { color: "#f1f5f9", fontSize: 15, fontWeight: "700" },
-  resultMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 3,
-  },
-  resultType: { color: "#6b7280", fontSize: 12 },
-  resultRating: { color: "#fbbf24", fontSize: 12, fontWeight: "700" },
+  list: { maxHeight: 390, paddingHorizontal: 10 },
+  result: { borderRadius: 10, paddingHorizontal: 8 },
   hint: {
-    paddingVertical: 40,
+    minHeight: 190,
     alignItems: "center",
-    gap: 12,
+    justifyContent: "center",
+    padding: 24,
   },
-  hintText: { color: "#4b5563", fontSize: 14 },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
-  },
-  footerBadge: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  footerKey: { color: "#9ca3af", fontSize: 11, fontWeight: "700" },
-  footerLabel: { color: "#4b5563", fontSize: 12, marginRight: 8 },
-  historyContainer: {
-    paddingVertical: 12,
-  },
-  historyHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  historyTitle: {
-    color: "#4b5563",
-    fontSize: 10,
+  errorTitle: {
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: "800",
-    letterSpacing: 1.2,
+    textAlign: "center",
   },
-  historyClear: {
-    color: "#d8b4fe",
-    fontSize: 11,
-    fontWeight: "700",
+  hintText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+    textAlign: "center",
   },
-  historyList: {
-    paddingHorizontal: 12,
-  },
-  historyItem: {
+  footer: {
+    minHeight: 44,
+    borderTopWidth: 1,
+    paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    borderRadius: 8,
   },
-  historyItemText: {
-    color: "#94a3b8",
-    fontSize: 14,
-    fontWeight: "500",
-  },
+  footerText: { fontSize: 11, fontWeight: "600" },
+  pressed: { opacity: 0.7 },
 });

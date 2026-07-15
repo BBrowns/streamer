@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "react-native";
+import { useTranslation } from "react-i18next";
 import { api } from "../services/api";
 
 export interface ActiveSession {
@@ -19,6 +20,7 @@ async function fetchSessions(): Promise<ActiveSession[]> {
 
 export function useSessions() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ["sessions"],
@@ -32,18 +34,24 @@ export function useSessions() {
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     },
     onError: () => {
-      Alert.alert("Error", "Failed to revoke session.");
+      Alert.alert(
+        t("settings.accountModals.common.errorTitle"),
+        t("settings.accountModals.sessions.revokeFailed"),
+      );
     },
   });
 
   const revokeSession = (sessionId: string) => {
     Alert.alert(
-      "Revoke Session",
-      "This will sign out the device associated with this session.",
+      t("settings.accountModals.sessions.revokeTitle"),
+      t("settings.accountModals.sessions.revokeDescription"),
       [
-        { text: "Cancel", style: "cancel" },
         {
-          text: "Revoke",
+          text: t("settings.accountModals.common.cancel"),
+          style: "cancel",
+        },
+        {
+          text: t("settings.accountModals.sessions.revoke"),
           style: "destructive",
           onPress: () => revokeMutation.mutate(sessionId),
         },

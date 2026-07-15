@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type {
   PlaybackAction,
@@ -6,6 +6,10 @@ import type {
   PlaybackRuntimeError,
 } from "@streamer/shared";
 import { useTheme } from "../../hooks/useTheme";
+import { AppButton } from "../ui/AppButton";
+import { uiRadii, uiTypography } from "../ui/designSystem";
+import { useTranslation } from "react-i18next";
+import i18n from "../../lib/i18n";
 
 export type PlaybackReadinessTone = "info" | "warning" | "error";
 
@@ -18,28 +22,27 @@ export interface PlaybackReadinessNoticeCopy {
   primaryActionLabel?: string;
 }
 
-function actionNoun(action: PlaybackAction) {
-  if (action === "download") return "downloads";
-  if (action === "cast") return "casting";
-  return "playback";
+function readinessCopy(
+  key: string,
+  options?: Record<string, string | number>,
+): string {
+  return i18n.t(key, options) as string;
 }
 
-function bridgeMessageForAction(
-  message: string,
-  action: PlaybackAction,
-  unsupported: boolean,
-) {
-  if (action === "play" || !/\bplay(?:back)?\b/i.test(message)) return message;
+function actionCopy(group: string, action: PlaybackAction) {
+  return readinessCopy(`detail.readiness.${group}.${action}`);
+}
 
-  if (action === "download") {
-    return unsupported
-      ? "Desktop bridge needs repair before torrent sources can be downloaded on this device."
-      : "Start the desktop bridge to download torrent sources on this device.";
-  }
+function setupMessage(action: PlaybackAction, needsAttention = false) {
+  return actionCopy(needsAttention ? "setupNeedsAttention" : "setup", action);
+}
 
-  return unsupported
-    ? "Desktop bridge needs repair before torrent sources can be cast on this device."
-    : "Start the desktop bridge to cast torrent sources on this device.";
+function attemptedOptionsCopy(errors: string[]) {
+  return errors.length > 0
+    ? readinessCopy("detail.readiness.attemptedOptions", {
+        count: errors.length,
+      })
+    : undefined;
 }
 
 export function getPlaybackReadinessCopy(
@@ -50,77 +53,66 @@ export function getPlaybackReadinessCopy(
 ): PlaybackReadinessNoticeCopy {
   const state = plan?.state;
   const message = plan?.userMessage || fallback;
-  const attemptedDetail =
-    errors.length > 0
-      ? `Tried ${errors.length} source${errors.length === 1 ? "" : "s"}. ${errors[0]}`
-      : undefined;
+  const attemptedDetail = attemptedOptionsCopy(errors);
 
   if (state === "needsBridge") {
     return {
-      title: "Desktop bridge required",
-      message: bridgeMessageForAction(message, action, false),
-      detail:
-        "Open Sources & Devices to connect this device to your desktop bridge.",
+      title: readinessCopy("detail.readiness.finishSetupTitle"),
+      message: setupMessage(action),
+      detail: readinessCopy("detail.readiness.openSourcesDetail"),
       tone: "warning",
       icon: "desktop-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (state === "bridgeUnavailable") {
     return {
-      title: "Bridge needs repair",
-      message: bridgeMessageForAction(message, action, true),
-      detail: `The app can see the bridge, but the torrent engine is not ready for ${actionNoun(action)}.`,
+      title: readinessCopy("detail.readiness.setupAttentionTitle"),
+      message: setupMessage(action, true),
+      detail: readinessCopy("detail.readiness.directMayWork"),
       tone: "error",
       icon: "construct-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (state === "needsTranscode") {
     return {
-      title: "Conversion required",
-      message,
-      detail:
-        "This source needs a conversion job before this device can play it.",
+      title: readinessCopy("detail.readiness.extraSupportTitle"),
+      message: readinessCopy("detail.readiness.extraSupportMessage"),
+      detail: readinessCopy("detail.readiness.checkSupportDetail"),
       tone: "warning",
       icon: "sync-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (state === "notFound") {
     return {
-      title: "No sources yet",
-      message,
-      detail: "Try a different title or add another source provider.",
+      title: readinessCopy("detail.readiness.noSourcesTitle"),
+      message: readinessCopy("detail.readiness.noSourcesMessage"),
+      detail: readinessCopy("detail.readiness.noSourcesDetail"),
       tone: "info",
       icon: "search-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (state === "unsupported") {
     return {
-      title: "No compatible source",
-      message,
-      detail:
-        "The available sources do not match this device. More source providers may help.",
+      title: readinessCopy("detail.readiness.noCompatibleTitle"),
+      message: readinessCopy("detail.readiness.noCompatibleMessage"),
+      detail: readinessCopy("detail.readiness.noCompatibleDetail"),
       tone: "warning",
       icon: "alert-circle-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (state === "ready" && errors.length > 0) {
     return {
-      title:
-        action === "download"
-          ? "Download source failed"
-          : action === "cast"
-            ? "Cast source failed"
-            : "Playback source failed",
+      title: actionCopy("sourceFailed", action),
       message: fallback,
       detail: attemptedDetail,
       tone: "warning",
@@ -129,12 +121,7 @@ export function getPlaybackReadinessCopy(
   }
 
   return {
-    title:
-      action === "download"
-        ? "Download unavailable"
-        : action === "cast"
-          ? "Casting unavailable"
-          : "Playback unavailable",
+    title: actionCopy("unavailable", action),
     message,
     detail: attemptedDetail,
     tone: "warning",
@@ -147,50 +134,47 @@ export function getPlaybackReadinessCopyFromError(
   action: PlaybackAction,
   errors: string[] = [],
 ): PlaybackReadinessNoticeCopy {
-  const attemptedDetail =
-    errors.length > 0
-      ? `Tried ${errors.length} source${errors.length === 1 ? "" : "s"}. ${errors[0]}`
-      : undefined;
+  const attemptedDetail = attemptedOptionsCopy(errors);
 
   if (error.code === "BRIDGE_UNAVAILABLE") {
     return {
-      title: "Desktop bridge required",
-      message: bridgeMessageForAction(error.message, action, false),
-      detail:
-        "Open Sources & Devices to connect this device to your desktop bridge.",
+      title: readinessCopy("detail.readiness.finishSetupTitle"),
+      message: setupMessage(action),
+      detail: readinessCopy("detail.readiness.openSourcesDetail"),
       tone: "warning",
       icon: "desktop-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (error.code === "BRIDGE_UNSUPPORTED") {
     return {
-      title: "Bridge needs repair",
-      message: bridgeMessageForAction(error.message, action, true),
-      detail: `The app can see the bridge, but the torrent engine is not ready for ${actionNoun(action)}.`,
+      title: readinessCopy("detail.readiness.setupAttentionTitle"),
+      message: setupMessage(action, true),
+      detail: readinessCopy("detail.readiness.directMayWork"),
       tone: "error",
       icon: "construct-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (error.code === "NO_SOURCES") {
     return {
-      title: "No sources yet",
-      message: error.message,
-      detail: "Try a different title or add another source provider.",
+      title: readinessCopy("detail.readiness.noSourcesTitle"),
+      message: readinessCopy("detail.readiness.noSourcesMessage"),
+      detail: readinessCopy("detail.readiness.noSourcesDetail"),
       tone: "info",
       icon: "search-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (error.code === "NO_PEERS") {
     return {
-      title: "Source has no peers",
-      message: error.message,
-      detail: attemptedDetail || "Try again later or choose More Sources.",
+      title: readinessCopy("detail.readiness.optionUnavailableTitle"),
+      message: readinessCopy("detail.readiness.optionCouldNotStart"),
+      detail:
+        attemptedDetail || readinessCopy("detail.readiness.tryAgainOrMore"),
       tone: "warning",
       icon: "people-outline",
     };
@@ -198,23 +182,21 @@ export function getPlaybackReadinessCopyFromError(
 
   if (error.code === "UNSUPPORTED_CODEC") {
     return {
-      title: "No compatible source",
-      message: error.message,
-      detail:
-        "The selected source cannot play on this device without conversion.",
+      title: readinessCopy("detail.readiness.noCompatibleTitle"),
+      message: readinessCopy("detail.readiness.optionCannotPlay"),
+      detail: readinessCopy("detail.readiness.tryAnotherOption"),
       tone: "warning",
       icon: "alert-circle-outline",
-      primaryActionLabel: "Sources & Devices",
+      primaryActionLabel: readinessCopy("detail.readiness.sourcesAction"),
     };
   }
 
   if (error.code === "PLAYBACK_TIMEOUT" || error.code === "GATEWAY_TIMEOUT") {
     return {
-      title: "Playback timed out",
-      message: error.message,
+      title: readinessCopy("detail.readiness.timeoutTitle"),
+      message: readinessCopy("detail.readiness.timeoutMessage"),
       detail:
-        attemptedDetail ||
-        "The app can try another source when one is available.",
+        attemptedDetail || readinessCopy("detail.readiness.timeoutDetail"),
       tone: "warning",
       icon: "timer-outline",
     };
@@ -222,8 +204,8 @@ export function getPlaybackReadinessCopyFromError(
 
   if (error.code === "NETWORK_OFFLINE") {
     return {
-      title: "Network problem",
-      message: error.message,
+      title: readinessCopy("detail.readiness.networkTitle"),
+      message: readinessCopy("detail.readiness.networkMessage"),
       detail: attemptedDetail,
       tone: "warning",
       icon: "cloud-offline-outline",
@@ -231,13 +213,8 @@ export function getPlaybackReadinessCopyFromError(
   }
 
   return {
-    title:
-      action === "download"
-        ? "Download unavailable"
-        : action === "cast"
-          ? "Casting unavailable"
-          : "Playback unavailable",
-    message: error.message,
+    title: actionCopy("unavailable", action),
+    message: readinessCopy("detail.readiness.unavailableMessage"),
     detail: attemptedDetail,
     tone: "warning",
     icon: "alert-circle-outline",
@@ -254,13 +231,13 @@ export function PlaybackReadinessNotice({
   onPrimaryAction?: () => void;
 }) {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
   const toneColor =
     notice.tone === "error"
       ? colors.error
       : notice.tone === "warning"
         ? colors.warning
         : colors.tint;
-  const foreground = isDark ? "#201528" : "#ffffff";
 
   return (
     <View
@@ -291,25 +268,19 @@ export function PlaybackReadinessNotice({
         )}
         <View style={styles.actions}>
           {!!notice.primaryActionLabel && !!onPrimaryAction && (
-            <Pressable
-              accessibilityRole="button"
-              style={[styles.primaryAction, { backgroundColor: toneColor }]}
+            <AppButton
+              label={notice.primaryActionLabel}
+              variant="primary"
+              size="small"
               onPress={onPrimaryAction}
-            >
-              <Text style={[styles.primaryActionText, { color: foreground }]}>
-                {notice.primaryActionLabel}
-              </Text>
-            </Pressable>
+            />
           )}
-          <Pressable
-            accessibilityRole="button"
-            style={[styles.dismissAction, { borderColor: colors.border }]}
+          <AppButton
+            label={t("common.dismiss")}
+            variant="ghost"
+            size="small"
             onPress={onDismiss}
-          >
-            <Text style={[styles.dismissText, { color: colors.text }]}>
-              Dismiss
-            </Text>
-          </Pressable>
+          />
         </View>
       </View>
     </View>
@@ -320,18 +291,10 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 18,
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: uiRadii.card,
     padding: 16,
     flexDirection: "row",
     gap: 12,
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 18px 38px rgba(44, 34, 54, 0.16)" }
-      : {
-          shadowColor: "#2c2236",
-          shadowOpacity: 0.16,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: 14 },
-        }),
   } as any,
   iconBubble: {
     width: 38,
@@ -345,14 +308,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
+    ...uiTypography.label,
     fontSize: 15,
-    fontWeight: "900",
     marginBottom: 4,
   },
   message: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
+    ...uiTypography.label,
   },
   detail: {
     fontSize: 12,
@@ -365,28 +326,5 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     marginTop: 12,
-  },
-  primaryAction: {
-    minHeight: 38,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  primaryActionText: {
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  dismissAction: {
-    minHeight: 38,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  dismissText: {
-    fontSize: 12,
-    fontWeight: "800",
   },
 }) as any;

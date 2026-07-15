@@ -234,12 +234,12 @@ export function PlayerControls({
             styles.playPauseBtn,
             Platform.OS === "web" && styles.webInteractive,
             {
-              backgroundColor: colors.surfaceOverlay,
-              borderColor: colors.border,
+              backgroundColor: colors.primary,
+              borderColor: "transparent",
               opacity: pressed ? 0.82 : 1,
             },
             hovered && styles.hoveredButton,
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
           onPress={onPlayPause}
           accessibilityRole="button"
@@ -248,7 +248,7 @@ export function PlayerControls({
           <Ionicons
             name={isPlaying ? "pause" : "play"}
             size={46}
-            color={colors.tint}
+            color={colors.onPrimary}
             style={{ marginLeft: isPlaying ? 0 : 4 }}
           />
         </Pressable>
@@ -338,7 +338,7 @@ export function PlayerControls({
                 styles.scrubberContainer,
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(colors.tint),
+                  getWebFocusStyle(colors.focus),
               ]}
               accessibilityRole="adjustable"
               accessibilityLabel={progressLabel}
@@ -534,7 +534,7 @@ function ControlButton({
           opacity: disabled ? 0.38 : pressed ? 0.78 : 1,
         },
         hovered && !disabled && styles.hoveredButton,
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}
       onPress={onPress}
       disabled={disabled}
@@ -573,7 +573,7 @@ function ActionButton({
           opacity: pressed ? 0.76 : 1,
         },
         hovered && styles.hoveredButton,
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}
       onPress={onPress}
       hitSlop={compact ? 6 : undefined}
@@ -678,8 +678,8 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1180,
     alignSelf: "center",
-    borderRadius: uiRadii.xl + 2,
-    borderWidth: 1,
+    borderRadius: uiRadii.sheet,
+    borderWidth: 0,
     paddingHorizontal: uiSpacing.lg - 2,
     paddingVertical: uiSpacing.md,
     gap: uiSpacing.sm + 2,

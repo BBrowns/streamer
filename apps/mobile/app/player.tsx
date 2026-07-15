@@ -178,7 +178,7 @@ export default function PlayerScreen() {
       );
     }
     clearPlayer();
-    router.replace("/settings");
+    router.replace("/settings/sources");
   }, [clearPlayer, playbackSessionId, router]);
 
   const handleChooseSource = useCallback(() => {
@@ -1332,7 +1332,7 @@ export default function PlayerScreen() {
             title={mediaInfo?.title || ""}
             onOpenSourcesDevices={() => {
               setCastModalOpen(false);
-              router.push("/sources" as any);
+              router.push("/settings/sources" as any);
             }}
             onCastStart={(device, details) => {
               if (player?.playing) player.pause();

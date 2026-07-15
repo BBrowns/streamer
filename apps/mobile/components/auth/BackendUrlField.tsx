@@ -122,10 +122,13 @@ export function BackendUrlField() {
               )}
             </Pressable>
             <Pressable
-              style={[styles.primaryButton, { backgroundColor: colors.tint }]}
+              style={[
+                styles.primaryButton,
+                { backgroundColor: colors.primary },
+              ]}
               onPress={save}
             >
-              <Text style={[styles.primaryText, { color: colors.onTint }]}>
+              <Text style={[styles.primaryText, { color: colors.onPrimary }]}>
                 Gebruik
               </Text>
             </Pressable>

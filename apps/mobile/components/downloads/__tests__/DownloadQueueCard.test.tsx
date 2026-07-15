@@ -23,6 +23,7 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: jest.fn() },
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string }) =>
       options?.defaultValue || _key,
@@ -97,7 +98,9 @@ describe("DownloadQueueCard", () => {
 
     expect(getByText("Needs attention")).toBeTruthy();
     expect(
-      getByText("The transfer stopped before the file was ready offline."),
+      getByText(
+        "The transfer stopped before it finished. You can safely resume it.",
+      ),
     ).toBeTruthy();
 
     fireEvent.press(getByLabelText("Resume"));
@@ -148,10 +151,10 @@ describe("DownloadQueueCard", () => {
 
     expect(
       getByText(
-        "Reconnect or repair the desktop bridge before retrying this download.",
+        "Open Sources & Devices and review this device before retrying the download.",
       ),
     ).toBeTruthy();
-    fireEvent.press(getByLabelText("Repair bridge"));
+    fireEvent.press(getByLabelText("Review setup"));
     expect(callbacks.onRepairBridge).toHaveBeenCalledTimes(1);
     expect(callbacks.onRetry).not.toHaveBeenCalled();
   });
@@ -165,7 +168,7 @@ describe("DownloadQueueCard", () => {
       }),
     );
 
-    fireEvent.press(getByLabelText("Free space"));
+    fireEvent.press(getByLabelText("Manage storage"));
     expect(callbacks.onManageStorage).toHaveBeenCalledTimes(1);
   });
 });

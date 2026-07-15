@@ -1,0 +1,151 @@
+import React, { forwardRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextInput,
+  TextInputProps,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../hooks/useTheme";
+import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
+
+type SearchFieldProps = Omit<TextInputProps, "style"> & {
+  value: string;
+  onClear: () => void;
+  clearAccessibilityLabel: string;
+  loading?: boolean;
+  shortcutHint?: string;
+  inset?: boolean;
+  containerStyle?: StyleProp<ViewStyle>;
+  inputStyle?: StyleProp<TextStyle>;
+};
+
+/** Shared search-input behavior with a restrained editorial underline. */
+export const SearchField = forwardRef<TextInput, SearchFieldProps>(
+  function SearchField(
+    {
+      value,
+      onClear,
+      clearAccessibilityLabel,
+      loading = false,
+      shortcutHint,
+      inset = false,
+      containerStyle,
+      inputStyle,
+      placeholderTextColor,
+      onFocus,
+      onBlur,
+      ...inputProps
+    },
+    ref,
+  ) {
+    const { colors } = useTheme();
+    const [focused, setFocused] = useState(false);
+
+    return (
+      <View
+        style={[
+          styles.container,
+          inset && styles.inset,
+          {
+            borderBottomColor: focused ? colors.focus : colors.border,
+            borderBottomWidth: focused ? 2 : 1,
+          },
+          containerStyle,
+        ]}
+      >
+        <Ionicons
+          name="search"
+          size={19}
+          color={focused ? colors.text : colors.textSecondary}
+        />
+        <TextInput
+          {...inputProps}
+          ref={ref}
+          value={value}
+          autoCapitalize={inputProps.autoCapitalize ?? "none"}
+          autoCorrect={inputProps.autoCorrect ?? false}
+          returnKeyType={inputProps.returnKeyType ?? "search"}
+          placeholderTextColor={
+            placeholderTextColor ?? `${colors.textSecondary}B8`
+          }
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            onBlur?.(event);
+          }}
+          style={[styles.input, { color: colors.text }, inputStyle]}
+        />
+        {loading ? (
+          <ActivityIndicator size="small" color={colors.tint} />
+        ) : null}
+        {!loading && shortcutHint && value.length === 0 ? (
+          <Text style={[styles.shortcut, { color: colors.textSecondary }]}>
+            {shortcutHint}
+          </Text>
+        ) : null}
+        {value.length > 0 ? (
+          <Pressable
+            onPress={onClear}
+            accessibilityRole="button"
+            accessibilityLabel={clearAccessibilityLabel}
+            style={({ pressed, focused: clearFocused }: any) => [
+              styles.clearButton,
+              pressed && styles.pressed,
+              Platform.OS === "web" &&
+                clearFocused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+          >
+            <Ionicons name="close" size={19} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  },
+);
+
+const styles = StyleSheet.create({
+  container: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  inset: {
+    minHeight: 62,
+    paddingHorizontal: 18,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "500",
+    ...Platform.select({ web: { outlineStyle: "none" } as any }),
+  },
+  shortcut: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  clearButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  pressed: {
+    opacity: 0.68,
+  },
+});

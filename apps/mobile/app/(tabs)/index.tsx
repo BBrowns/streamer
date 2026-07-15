@@ -38,7 +38,11 @@ import { useWindowClass } from "../../hooks/useWindowClass";
 import { buildHomeFeed } from "../../services/homeFeed";
 import {
   getWebFocusStyle,
+  uiLayout,
+  uiRadii,
+  uiSpacing,
   uiTouchTarget,
+  uiTypography,
 } from "../../components/ui/designSystem";
 
 function flattenCatalogPages(data: any): MetaPreview[] {
@@ -78,7 +82,7 @@ function SectionHeader({
         <Pressable
           style={({ pressed, focused }: any) => [
             styles.sectionAction,
-            { borderColor: colors.border, backgroundColor: colors.card },
+            { backgroundColor: "transparent" },
             pressed && { opacity: 0.78 },
             Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
@@ -86,10 +90,16 @@ function SectionHeader({
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
         >
-          <Text style={[styles.sectionActionText, { color: colors.tint }]}>
+          <Text
+            style={[styles.sectionActionText, { color: colors.textSecondary }]}
+          >
             {actionLabel}
           </Text>
-          <Ionicons name="chevron-forward" size={15} color={colors.tint} />
+          <Ionicons
+            name="chevron-forward"
+            size={15}
+            color={colors.textSecondary}
+          />
         </Pressable>
       )}
     </View>
@@ -387,6 +397,9 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: {
+    width: "100%",
+    maxWidth: uiLayout.contentMaxWidth,
+    alignSelf: "center",
     paddingBottom: 44,
   },
   loadingWrap: {
@@ -401,8 +414,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionHeader: {
-    paddingHorizontal: 16,
-    marginBottom: 14,
+    paddingHorizontal: uiSpacing.lg,
+    marginBottom: uiSpacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -413,31 +426,27 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   sectionEyebrow: {
-    fontSize: 11,
-    fontWeight: "900",
+    ...uiTypography.sectionLabel,
+    fontSize: 10,
     marginBottom: 4,
-    letterSpacing: 0,
+    textTransform: "uppercase",
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    letterSpacing: 0,
+    ...uiTypography.title,
   },
   sectionAction: {
     minHeight: uiTouchTarget,
-    borderRadius: 999,
-    borderWidth: 1,
+    borderRadius: uiRadii.control,
     paddingHorizontal: 13,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
   sectionActionText: {
-    fontSize: 13,
-    fontWeight: "800",
+    ...uiTypography.label,
   },
   railContainer: {
-    marginBottom: 26,
+    marginBottom: uiSpacing.xxxl,
   },
   railContent: {
     paddingLeft: 16,
@@ -453,7 +462,7 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginHorizontal: 16,
     marginTop: 8,
-    opacity: 0.55,
+    opacity: 0.35,
   },
   providerRailSection: {
     marginTop: 2,

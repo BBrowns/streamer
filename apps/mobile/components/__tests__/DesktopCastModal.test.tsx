@@ -198,7 +198,7 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          "Reconnect or repair the desktop bridge before casting again.",
+          "Open Sources & Devices and review this device before casting again.",
         ),
       ).toBeTruthy();
     });
@@ -206,7 +206,7 @@ describe("DesktopCastModal", () => {
     fireEvent.press(screen.getByText("Living Room"));
     expect(start).not.toHaveBeenCalled();
 
-    fireEvent.press(screen.getByLabelText("Repair bridge"));
+    fireEvent.press(screen.getByLabelText("Review setup"));
     expect(onOpenSourcesDevices).toHaveBeenCalledTimes(1);
   });
 
@@ -228,9 +228,7 @@ describe("DesktopCastModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          "The display or prepared source could not start casting.",
-        ),
+        screen.getByText("Try again or choose another viewing option."),
       ).toBeTruthy();
     });
     expect(start).not.toHaveBeenCalled();
@@ -283,7 +281,9 @@ describe("DesktopCastModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("This display cannot play the prepared source."),
+        screen.getByText(
+          "This display cannot play the prepared viewing option.",
+        ),
       ).toBeTruthy();
     });
     fireEvent.press(screen.getByText("Living Room"));

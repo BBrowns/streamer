@@ -5,6 +5,32 @@ jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
 
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { count?: number }) => {
+      const translations: Record<string, string> = {
+        "detail.actionPanel.findingSources": "Finding sources",
+        "detail.actionPanel.noSources": "No sources",
+        "detail.actionPanel.findingBest": "Finding best",
+        "detail.actionPanel.playBest": "Play Best",
+        "detail.actionPanel.preparing": "Preparing",
+        "detail.actionPanel.inLibrary": "In Library",
+        "detail.actionPanel.add": "Add",
+        "detail.download": "Download",
+        "detail.cast": "Cast",
+      };
+
+      if (key === "detail.actionPanel.sourceCount") {
+        return `${options?.count ?? 0} sources`;
+      }
+      if (key === "detail.actionPanel.episodeCount") {
+        return `${options?.count ?? 0} episodes`;
+      }
+      return translations[key] ?? key;
+    },
+  }),
+}));
+
 jest.mock("../../../hooks/useTheme", () => ({
   useTheme: () => ({
     isDark: false,

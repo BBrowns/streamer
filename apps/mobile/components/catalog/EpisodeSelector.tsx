@@ -75,12 +75,8 @@ function EpisodeRow({
           borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
         },
         isSelected && {
-          backgroundColor: isDark
-            ? "rgba(216,180,254,0.12)"
-            : "rgba(167,139,250,0.12)",
-          borderColor: isDark
-            ? "rgba(216,180,254,0.32)"
-            : "rgba(167,139,250,0.32)",
+          backgroundColor: colors.tint + "14",
+          borderColor: colors.tint + "40",
         },
       ]}
     >
@@ -100,9 +96,7 @@ function EpisodeRow({
                 : "rgba(0,0,0,0.04)",
             },
             isSelected && {
-              backgroundColor: isDark
-                ? "rgba(216,180,254,0.2)"
-                : "rgba(167,139,250,0.16)",
+              backgroundColor: colors.tint + "20",
             },
           ]}
         >
@@ -150,6 +144,7 @@ function EpisodeRow({
                 : "rgba(0,0,0,0.04)",
             },
             isDownloadFocused && styles.webFocused,
+            isDownloadFocused && { outlineColor: colors.focus },
           ]}
           onPress={handleDownloadPress}
           accessibilityRole="button"
@@ -171,11 +166,10 @@ function EpisodeRow({
                 : "rgba(0,0,0,0.04)",
             },
             isSelected && {
-              backgroundColor: isDark
-                ? "rgba(216,180,254,0.2)"
-                : "rgba(167,139,250,0.16)",
+              backgroundColor: colors.tint + "20",
             },
             isSourcesFocused && styles.webFocused,
+            isSourcesFocused && { outlineColor: colors.focus },
           ]}
           onPress={handleToggleSourcesPress}
           accessibilityRole="button"
@@ -541,16 +535,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   episodeIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
   },
   episodeSourceButton: {
     minWidth: 92,
-    height: 36,
-    borderRadius: 18,
+    height: 44,
+    borderRadius: 8,
     paddingHorizontal: 12,
     flexDirection: "row",
     justifyContent: "center",
@@ -569,7 +563,7 @@ const styles = StyleSheet.create({
     // @ts-ignore web-only
     outlineStyle: "solid",
     outlineWidth: 2,
-    outlineColor: "#a78bfa",
+    outlineColor: "transparent",
     outlineOffset: 2,
   } as any,
   streamLoading: {

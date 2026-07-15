@@ -2,7 +2,6 @@ import React from "react";
 import {
   View,
   Text,
-  Image,
   Pressable,
   ActionSheetIOS,
   Platform,
@@ -21,6 +20,13 @@ import { hapticImpactLight, hapticImpactHeavy } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 
 export function LibraryCard({
   item,
@@ -56,6 +62,19 @@ export function LibraryCard({
     isPreparing;
   const isCompleted = isTaskOfflinePlayable(task);
   const progress = task?.progress || 0;
+  const detailsLabel = t("library.actions.viewDetails", {
+    defaultValue: "View Details",
+  });
+  const removeLabel = task
+    ? t("library.actions.removeDownload", {
+        defaultValue: "Remove Download",
+      })
+    : t("library.actions.remove", {
+        defaultValue: "Remove from Library",
+      });
+  const cardAccessibilityLabel = isSelectionMode
+    ? `${t("library.header.select")}: ${item.title}`
+    : `${detailsLabel}: ${item.title}`;
 
   const handlePress = () => {
     hapticImpactLight();
@@ -93,14 +112,8 @@ export function LibraryCard({
         {
           options: [
             t("common.cancel", { defaultValue: "Cancel" }),
-            t("library.actions.viewDetails", { defaultValue: "View Details" }),
-            task
-              ? t("library.actions.removeDownload", {
-                  defaultValue: "Remove Download",
-                })
-              : t("library.actions.remove", {
-                  defaultValue: "Remove from Library",
-                }),
+            detailsLabel,
+            removeLabel,
           ],
           destructiveButtonIndex: 2,
           cancelButtonIndex: 0,
@@ -129,17 +142,11 @@ export function LibraryCard({
             style: "cancel",
           },
           {
-            text: t("library.actions.viewDetails", {
-              defaultValue: "View Details",
-            }),
+            text: detailsLabel,
             onPress: () => router.push(`/detail/${item.type}/${itemId}`),
           },
           {
-            text: task
-              ? t("library.actions.removeDownload", {
-                  defaultValue: "Remove Download",
-                })
-              : t("library.actions.remove", { defaultValue: "Remove" }),
+            text: removeLabel,
             style: "destructive",
             onPress: () => onRemove(itemId, !!task),
           },
@@ -149,135 +156,160 @@ export function LibraryCard({
   };
 
   return (
-    <Pressable
-      {...webPressableProps}
+    <View
       style={[
         styles.cardContainer,
         {
-          backgroundColor: colors.card,
           borderColor:
-            isSelectionMode && isSelected
-              ? colors.tint
-              : isWeb && (isHovered || isKeyboardFocused)
-                ? colors.tint
-                : colors.border,
-          borderWidth: isSelectionMode && isSelected ? 2 : 1,
+            isSelectionMode && isSelected ? colors.tint : "transparent",
+          borderWidth: isSelectionMode && isSelected ? 2 : 0,
         },
         isSelectionMode && isSelected && styles.cardSelected,
-        isWeb && isKeyboardFocused && styles.cardFocused,
-        isWeb && isKeyboardFocused && { outlineColor: colors.focus },
       ]}
-      onPress={handlePress}
-      onLongPress={handleLongPress}
-      onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
-      onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
-      // @ts-ignore
-      onContextMenu={isWeb ? handleContextMenu : undefined}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.title}. Long press for options`}
-      accessibilityHint="Opens detail page"
     >
-      <View>
-        <Animated.Image
-          source={{ uri: item.poster ?? undefined }}
-          style={[
-            styles.cardImage,
-            isSelectionMode && isSelected && styles.cardImageSelected,
-            isWeb && isHovered && styles.cardImageHovered,
-          ]}
-          sharedTransitionTag={`poster-${itemId}`}
-          accessibilityLabel={`${item.title} poster`}
-        />
-        {isSelectionMode && (
-          <View style={styles.checkboxOverlay}>
-            <Ionicons
-              name={isSelected ? "checkmark-circle" : "ellipse-outline"}
-              size={28}
-              color={isSelected ? colors.tint : colors.onTint}
-            />
-          </View>
-        )}
-
-        {/* Desktop hover overlay */}
-        {isWeb && isHovered && !isSelectionMode && (
-          <View style={styles.hoverOverlay}>
-            <Pressable
-              style={[styles.hoverPlayBtn, { backgroundColor: colors.tint }]}
-              onPress={handlePress}
-            >
-              <Ionicons name="play" size={14} color={colors.onTint} />
-              <Text style={[styles.hoverPlayText, { color: colors.onTint }]}>
-                Play
-              </Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-      <View style={styles.cardInfo}>
-        <Text
-          style={[styles.cardTitle, { color: colors.text }]}
-          numberOfLines={2}
-        >
-          {item.title}
-        </Text>
-        <View style={styles.cardTypeRow}>
-          <Ionicons
-            name={item.type === "movie" ? "film-outline" : "tv-outline"}
-            size={11}
-            color={colors.textSecondary}
-          />
-          <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
-            {item.type === "movie" ? "Movie" : "Series"}
-          </Text>
-        </View>
-        {isDownloading && (
-          <View
+      <Pressable
+        {...webPressableProps}
+        style={({ pressed }) => [
+          styles.cardPressable,
+          pressed && styles.cardPressed,
+          isWeb && isKeyboardFocused && styles.cardFocused,
+          isWeb && isKeyboardFocused && { outlineColor: colors.focus },
+        ]}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        onPointerEnter={isWeb ? () => setIsHovered(true) : undefined}
+        onPointerLeave={isWeb ? () => setIsHovered(false) : undefined}
+        // @ts-ignore web-only context menu
+        onContextMenu={isWeb ? handleContextMenu : undefined}
+        accessibilityRole={isSelectionMode ? "checkbox" : "button"}
+        accessibilityLabel={cardAccessibilityLabel}
+        accessibilityHint={
+          isSelectionMode ? undefined : t("search.a11y.openDetails")
+        }
+        accessibilityState={
+          isSelectionMode ? { checked: isSelected } : undefined
+        }
+      >
+        <View>
+          <Animated.Image
+            source={{ uri: item.poster ?? undefined }}
             style={[
-              styles.progressContainer,
-              {
-                backgroundColor: colors.disabled,
-              },
+              styles.cardImage,
+              isSelectionMode && isSelected && styles.cardImageSelected,
+              isWeb && isHovered && styles.cardImageHovered,
             ]}
+            sharedTransitionTag={`poster-${itemId}`}
+            accessibilityLabel={t("search.a11y.poster", {
+              title: item.title,
+              defaultValue: `${item.title} poster`,
+            })}
+          />
+          {isSelectionMode && (
+            <View style={styles.checkboxOverlay} pointerEvents="none">
+              <Ionicons
+                name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                size={28}
+                color={isSelected ? colors.tint : colors.onTint}
+              />
+            </View>
+          )}
+
+          {isWeb && isHovered && !isSelectionMode && (
+            <View style={styles.hoverOverlay} pointerEvents="none">
+              <View
+                style={[
+                  styles.hoverAction,
+                  { backgroundColor: colors.surfaceOverlay },
+                ]}
+              >
+                <Text style={[styles.hoverActionText, { color: colors.text }]}>
+                  {detailsLabel}
+                </Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.text} />
+              </View>
+            </View>
+          )}
+        </View>
+        <View style={styles.cardInfo}>
+          <Text
+            style={[styles.cardTitle, { color: colors.text }]}
+            numberOfLines={2}
           >
-            <View
-              style={[
-                styles.progressBar,
-                { width: `${progress * 100}%`, backgroundColor: colors.tint },
-              ]}
-            />
-          </View>
-        )}
-        {isCompleted && (
-          <View style={styles.downloadBadge}>
+            {item.title}
+          </Text>
+          <View style={styles.cardTypeRow}>
             <Ionicons
-              name="arrow-down-circle"
-              size={13}
-              color={colors.success}
+              name={item.type === "movie" ? "film-outline" : "tv-outline"}
+              size={11}
+              color={colors.textSecondary}
             />
-            <Text style={[styles.downloadBadgeText, { color: colors.success }]}>
-              Offline
+            <Text
+              style={[styles.cardSubtitle, { color: colors.textSecondary }]}
+            >
+              {t(`search.types.${item.type}`)}
             </Text>
           </View>
-        )}
-      </View>
+          {isDownloading && (
+            <View
+              style={[
+                styles.progressContainer,
+                { backgroundColor: colors.disabled },
+              ]}
+            >
+              <View
+                style={[
+                  styles.progressBar,
+                  {
+                    width: `${progress * 100}%`,
+                    backgroundColor: colors.tint,
+                  },
+                ]}
+              />
+            </View>
+          )}
+          {isCompleted && (
+            <View style={styles.downloadBadge}>
+              <Ionicons
+                name="arrow-down-circle"
+                size={13}
+                color={colors.success}
+              />
+              <Text
+                style={[styles.downloadBadgeText, { color: colors.success }]}
+              >
+                {t("library.filters.offline")}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
+
       {isWeb && contextMenu && (
         <View
+          accessibilityViewIsModal
           style={[
             styles.contextMenu,
             {
-              top: contextMenu?.y ?? 0,
-              left: contextMenu?.x ?? 0,
+              top: contextMenu.y,
+              left: contextMenu.x,
               backgroundColor: colors.surfaceElevated,
               borderColor: colors.border,
             },
           ]}
         >
           <Pressable
-            style={({ hovered }: any) => [
+            style={({ hovered, pressed, focused }: any) => [
               styles.contextMenuItem,
               hovered && { backgroundColor: colors.card },
+              pressed && { opacity: 0.72 },
+              focused && getWebFocusStyle(colors.focus),
             ]}
-            onPress={() => router.push(`/detail/${item.type}/${itemId}`)}
+            onPress={() => {
+              setContextMenu(null);
+              router.push(`/detail/${item.type}/${itemId}`);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${detailsLabel}: ${item.title}`}
           >
             <Ionicons
               name="information-circle-outline"
@@ -285,9 +317,7 @@ export function LibraryCard({
               color={colors.text}
             />
             <Text style={[styles.contextMenuText, { color: colors.text }]}>
-              {t("library.actions.viewDetails", {
-                defaultValue: "View Details",
-              })}
+              {detailsLabel}
             </Text>
           </Pressable>
           <View
@@ -297,26 +327,27 @@ export function LibraryCard({
             ]}
           />
           <Pressable
-            style={({ hovered }: any) => [
+            style={({ hovered, pressed, focused }: any) => [
               styles.contextMenuItem,
               hovered && { backgroundColor: colors.card },
+              pressed && { opacity: 0.72 },
+              focused && getWebFocusStyle(colors.focus),
             ]}
-            onPress={() => onRemove(itemId, !!task)}
+            onPress={() => {
+              setContextMenu(null);
+              onRemove(itemId, !!task);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${removeLabel}: ${item.title}`}
           >
             <Ionicons name="trash-outline" size={16} color={colors.error} />
             <Text style={[styles.contextMenuText, { color: colors.error }]}>
-              {task
-                ? t("library.actions.removeDownload", {
-                    defaultValue: "Remove Download",
-                  })
-                : t("library.actions.remove", {
-                    defaultValue: "Remove From Library",
-                  })}
+              {removeLabel}
             </Text>
           </Pressable>
         </View>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -329,14 +360,19 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     flex: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-    // Removed maxWidth: 260 — let the responsive grid handle sizing
-    minHeight: 44,
+    borderRadius: uiRadii.card,
+    position: "relative",
+  },
+  cardPressable: {
+    minHeight: uiTouchTarget,
+    borderRadius: uiRadii.card,
     // @ts-ignore web-only
     transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     cursor: Platform.OS === "web" ? "pointer" : undefined,
   } as any,
+  cardPressed: {
+    opacity: 0.78,
+  },
   cardFocused: {
     // @ts-ignore web-only
     outlineStyle: "solid",
@@ -346,6 +382,7 @@ const styles = StyleSheet.create({
   cardImage: {
     width: "100%",
     aspectRatio: 2 / 3,
+    borderRadius: uiRadii.card,
   },
   cardImageHovered: {
     opacity: 0.85,
@@ -357,26 +394,24 @@ const styles = StyleSheet.create({
   hoverOverlay: {
     position: "absolute",
     inset: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "flex-end",
+    alignItems: "flex-start",
+    padding: 12,
   } as any,
-  hoverPlayBtn: {
+  hoverAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 10,
-    // @ts-ignore web-only
-    cursor: "pointer",
-  } as any,
-  hoverPlayText: {
-    fontWeight: "800",
-    fontSize: 13,
+    gap: uiSpacing.sm,
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm,
+    borderRadius: uiRadii.control,
   },
-  cardInfo: { padding: 8 },
-  cardTitle: { fontSize: 13, fontWeight: "600" },
+  hoverActionText: {
+    ...uiTypography.label,
+  },
+  cardInfo: { paddingTop: 8, paddingHorizontal: 2, paddingBottom: 10 },
+  cardTitle: { fontSize: 14, fontWeight: "700" },
   cardSubtitle: { fontSize: 11, marginTop: 4 },
   progressContainer: {
     height: 3,
@@ -400,9 +435,9 @@ const styles = StyleSheet.create({
   },
   cardSelected: {
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 0 8px rgba(216, 180, 254, 0.3)" }
+      ? { boxShadow: "0 0 0 3px rgba(108,121,245,0.24)" }
       : {
-          shadowColor: "#d8b4fe",
+          shadowColor: "#6C79F5",
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: 0.3,
           shadowRadius: 8,
@@ -434,6 +469,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   } as any,
   contextMenuItem: {
+    minHeight: uiTouchTarget,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,

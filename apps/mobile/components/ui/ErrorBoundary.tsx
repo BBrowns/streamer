@@ -1,10 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import {
   createRedactedError,
   redactSensitiveText,
 } from "../../services/redaction";
+import { getWebFocusStyle } from "./designSystem";
+import i18n from "../../lib/i18n";
 
 interface Props {
   children: ReactNode;
@@ -68,36 +70,42 @@ class ErrorBoundaryInner extends Component<Props, State> {
       }
 
       const { colors } = this.props;
-      const bg = colors?.background || "#0a0a1a";
-      const text = colors?.text || "#e0e0ff";
-      const textSecondary = colors?.textSecondary || "#9ca3af";
-      const tint = colors?.tint || "#818cf8";
+      const bg = colors?.background || "#08090C";
+      const text = colors?.text || "#F4F5F7";
+      const textSecondary = colors?.textSecondary || "#9DA3AE";
+      const primary = colors?.primary || "#F4F5F7";
+      const onPrimary = colors?.onPrimary || "#08090C";
+      const focus = colors?.focus || "#8792FF";
 
       return (
         <View
           style={[styles.container, { backgroundColor: bg }]}
           accessibilityRole="alert"
-          accessibilityLabel="An error occurred"
+          accessibilityLabel={i18n.t("common.unexpectedError.title")}
         >
           <View style={styles.iconContainer}>
             <Text style={styles.emoji}>⚠️</Text>
           </View>
           <Text style={[styles.title, { color: text }]}>
-            Something went wrong
+            {i18n.t("common.unexpectedError.title")}
           </Text>
           <Text style={[styles.description, { color: textSecondary }]}>
-            {this.state.error?.message
-              ? redactSensitiveText(this.state.error.message)
-              : "An unexpected error occurred."}
+            {i18n.t("common.unexpectedError.description")}
           </Text>
           <Pressable
-            style={[styles.retryButton, { backgroundColor: tint }]}
+            style={({ pressed, focused }: any) => [
+              styles.retryButton,
+              { backgroundColor: primary },
+              pressed && { opacity: 0.72 },
+              Platform.OS === "web" && focused && getWebFocusStyle(focus),
+            ]}
             onPress={this.handleRetry}
             accessibilityRole="button"
-            accessibilityLabel="Retry"
-            accessibilityHint="Attempts to reload this section"
+            accessibilityLabel={i18n.t("common.retry")}
           >
-            <Text style={styles.retryText}>Try Again</Text>
+            <Text style={[styles.retryText, { color: onPrimary }]}>
+              {i18n.t("common.retry")}
+            </Text>
           </Pressable>
         </View>
       );
@@ -154,7 +162,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   retryText: {
-    color: "#ffffff",
     fontWeight: "700",
     fontSize: 15,
   },

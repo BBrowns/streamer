@@ -20,12 +20,16 @@ Current phase:
   golden-path automation, unified bridge/action preflight, mobile/server
   release configuration, recoverable offline/cast UX, and the focused
   accessibility/responsive visual-quality pass are in place.
-- Adaptive cinematic redesign phase: the unreleased worktree/branch introduces
-  semantic dark/light tokens, window classes, four primary destinations,
-  stable Home composition, provider-aware Search/discovery, Undo foundations,
-  visible media-language state, and synchronized PiP/background/cast
-  continuity. Treat this as an active milestone, not a completed full-app
-  redesign.
+- Adaptive UX foundation: PR #152 introduces semantic tokens, window classes,
+  four primary destinations, stable Home composition, provider-aware discovery,
+  Undo foundations, visible media-language state, and synchronized
+  PiP/background/cast continuity. Its title and scope intentionally describe a
+  foundation, not a completed visual redesign.
+- Obsidian Editorial overhaul: the stacked `codex/obsidian-ui-overhaul` branch
+  implements the screen-level art direction, routed Settings information
+  architecture, canonical Search experience, Inter typography, and dark/light
+  screenshot QA. It is ready for review, subject to CI and the explicitly
+  deferred real-device evidence below.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
@@ -344,22 +348,23 @@ Bridge behavior is safer and more explicit:
 
 ### UI/UX Progress
 
-The active direction is dark cinematic first with a fully supported neutral
-light mode. The earlier pastel-glass identity is legacy guidance. The current
-redesign foundation is substantial but is not yet the final
-Netflix/Disney+/Prime-quality product.
+The active direction is **Obsidian Editorial**: near-black or warm-neutral
+canvases, bundled Inter typography, restrained cobalt for selection/focus,
+neutral high-contrast Play actions, artwork-led colour, and fewer visible
+containers. The earlier pastel-glass identity is legacy guidance.
 
 Known useful direction:
 
 - Keep provider/provider-like rails, now surfaced through Home and Search
   discovery rather than a primary Discover tab.
-- Move primary flows toward visually calm, dark cinematic layouts with limited
-  translucency and consistent light-mode behavior.
+- Keep primary flows visually calm and media-led, with limited translucency,
+  purposeful containment, and equal dark/light hierarchy.
 - Avoid exposing source complexity as the default path.
-- Settings is now clearer but still not final. It groups Sources & Add-ons,
-  Playback & Downloads, Account & Sync, Application, About & Updates, and
-  Privacy & Data. Sources & Devices remains the detailed readiness/diagnostics
-  surface.
+- Settings uses Account, Playback, Downloads, Sources & Devices, Appearance,
+  Privacy, About, and Advanced routes. Compact through expanded windows show a
+  category overview or one detail page; only large windows show list-detail.
+- `/search` owns discovery, suggestions, results, and filters. The compatibility
+  `/search/results` route preserves parameters but is not a second experience.
 
 ## Current Known Gaps
 
@@ -445,22 +450,22 @@ Gateway lifecycle exists now, but these are still open:
   playback and seek behavior still need device validation.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
-### 4. UI/UX Implementation Is Complete; Evidence Gates Remain
+### 4. Obsidian UI/UX Overhaul And Evidence
 
-The new shell, Home composition, provider-aware Search/discovery flow, Undo
-notifications, semantic Detail/auth/onboarding surfaces, visible player track
-state, synchronized cast mini-controller, full-viewport unauthenticated routes,
-and semantic Settings account/session surfaces are implemented. Single and
-bulk download deletion retain confirmation, then defer the underlying mutation
-for seven seconds while Undo is available. Common AD/SDH/CC media-track labels
-are expanded for assistive clarity. Player failures can return directly to an
-auto-opened advanced source list; gateway stalls are contained as recoverable
-timeouts. Development builds also expose a source-independent player preview.
+The adaptive foundation provides the shell, Home composition, provider-aware
+search data, Undo notifications, player track state, cast mini-controller,
+full-viewport auth routes, recovery UI, and source-independent player preview.
+The stacked Obsidian pass replaces the remaining legacy palette and composition,
+rebuilds Settings and Search, and supplies dark/light screenshot evidence. Its
+renderer suite covers 17 scenarios per browser project: 32 pass and two
+project-aware duplicates are intentionally skipped. Settings/Search screenshots
+cover 390 x 844 and 1440 x 1000; layout assertions also cover 768 and 1024.
 
 The remaining work is validation or depends on trustworthy upstream metadata:
 
-- Search provider provenance is reliable and implemented. Add genre, language,
-  quality, or availability facets only when the upstream metadata is reliable.
+- Search provider provenance and partial-failure counts are reliable. Add genre,
+  language, quality, or richer availability facets only when upstream metadata
+  is reliable.
 - Validate Downloads, Series episode lists, settings panels, caption-safe
   layout, visible subtitle/audio state, large text, and focus-not-obscured
   behavior on native targets.
@@ -483,7 +488,11 @@ Before this can be considered production-ready:
 - Secrets/env management needs review.
 - Bridge, add-on URLs, auth, cast URLs, and remote media URLs need a focused security review.
 - Privacy export/delete flows should be verified end-to-end.
-- Golden path tests should cover browse -> Play Best -> fallback -> download -> cast.
+- Golden paths cover browse -> Play Best, automatic and manual fallback,
+  planner-backed download/cast eligibility, responsive primary surfaces,
+  routed Settings, canonical Search, provider partial failures, filter reset,
+  and Command Palette keyboard navigation. Packaged desktop and real native
+  playback/cast/download behavior still require target evidence.
 
 ## Completed Roadmap Through PR #141
 

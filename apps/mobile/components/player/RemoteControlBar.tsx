@@ -3,23 +3,61 @@ import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRemoteControl } from "../../hooks/useRemoteControl";
 import { useTheme } from "../../hooks/useTheme";
-import { BlurView } from "expo-blur";
-import Animated, {
-  SlideInDown,
-  SlideOutDown,
-  FadeIn,
-  FadeOut,
-} from "react-native-reanimated";
+import Animated, { SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useCastStore } from "../../stores/castStore";
 import { castService } from "../../services/CastService";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useTranslation } from "react-i18next";
+import { AppButton } from "../ui/AppButton";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 
 function formatCastTime(seconds = 0) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+function RemoteIconButton({
+  icon,
+  label,
+  onPress,
+  primary = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  primary?: boolean;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed, focused }: any) => [
+        styles.iconButton,
+        {
+          backgroundColor: primary ? colors.primary : colors.surfaceElevated,
+          opacity: pressed ? 0.76 : 1,
+        },
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons
+        name={icon}
+        size={primary ? 22 : 19}
+        color={primary ? colors.onPrimary : colors.text}
+      />
+    </Pressable>
+  );
 }
 
 export function RemoteControlBar() {
@@ -27,7 +65,8 @@ export function RemoteControlBar() {
   const activeCast = useCastStore((state) => state.activeCast);
   const setCastPaused = useCastStore((state) => state.setCastPaused);
   const setCastStatus = useCastStore((state) => state.setCastStatus);
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
   const router = useRouter();
   const { isCompact } = useWindowClass();
   const reducedMotion = useReducedMotion();
@@ -111,19 +150,17 @@ export function RemoteControlBar() {
   return (
     <Animated.View
       entering={
-        reducedMotion
-          ? FadeIn.duration(120)
-          : SlideInDown.duration(400).springify()
+        reducedMotion ? undefined : SlideInDown.duration(400).springify()
       }
-      exiting={
-        reducedMotion ? FadeOut.duration(120) : SlideOutDown.duration(300)
-      }
+      exiting={reducedMotion ? undefined : SlideOutDown.duration(300)}
       style={[styles.wrapper, !isCompact && styles.wrapperWide]}
     >
-      <BlurView
-        intensity={90}
-        tint={isDark ? "dark" : "light"}
-        style={[styles.container, { borderColor: colors.border }]}
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.surfaceOverlay },
+          isCompact && styles.containerCompact,
+        ]}
       >
         <View style={styles.left}>
           <View
@@ -137,17 +174,32 @@ export function RemoteControlBar() {
           <View style={styles.info}>
             <Text style={[styles.deviceText, { color: colors.textSecondary }]}>
               {activeCast
-                ? `Casting to ${activeCast.device.name}`
-                : `Active on ${session.deviceName || "Another Device"}`}
+                ? t("player.remote.castingTo", {
+                    name: activeCast.device.name,
+                    defaultValue: "Casting to {{name}}",
+                  })
+                : t("player.remote.activeOn", {
+                    name:
+                      session.deviceName ||
+                      t("player.remote.anotherDevice", {
+                        defaultValue: "another device",
+                      }),
+                    defaultValue: "Active on {{name}}",
+                  })}
             </Text>
             <Text
               style={[styles.itemText, { color: colors.text }]}
               numberOfLines={1}
             >
-              {isPaused ? "Paused" : "Playing"}:{" "}
+              {isPaused
+                ? t("player.remote.paused", { defaultValue: "Paused" })
+                : t("player.remote.playing", { defaultValue: "Playing" })}
+              :{" "}
               {activeCast?.mediaInfo.title ||
                 session.itemTitle ||
-                "Unknown Content"}
+                t("player.remote.unknownContent", {
+                  defaultValue: "Unknown title",
+                })}
             </Text>
             {activeCast?.duration ? (
               <View style={styles.progressRow}>
@@ -184,51 +236,54 @@ export function RemoteControlBar() {
           </View>
         </View>
 
-        <View style={styles.right}>
+        <View style={[styles.right, isCompact && styles.rightCompact]}>
           {activeCast ? (
-            <Pressable
+            <RemoteIconButton
               onPress={() => handleSeek(-10)}
-              style={[styles.seekBtn, { backgroundColor: colors.card }]}
-              accessibilityRole="button"
-              accessibilityLabel="Seek cast back 10 seconds"
-            >
-              <Ionicons name="play-back" size={18} color={colors.text} />
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={handleTogglePlay}
-            style={[styles.controlBtn, { backgroundColor: colors.tint + "15" }]}
-            accessibilityRole="button"
-            accessibilityLabel={
-              isPaused ? "Resume remote playback" : "Pause remote playback"
-            }
-          >
-            <Ionicons
-              name={isPaused ? "play" : "pause"}
-              size={24}
-              color={colors.text}
+              icon="play-back"
+              label={t("player.remote.seekBack", {
+                defaultValue: "Seek cast back 10 seconds",
+              })}
             />
-          </Pressable>
-          {activeCast ? (
-            <Pressable
-              onPress={() => handleSeek(10)}
-              style={[styles.seekBtn, { backgroundColor: colors.card }]}
-              accessibilityRole="button"
-              accessibilityLabel="Seek cast forward 10 seconds"
-            >
-              <Ionicons name="play-forward" size={18} color={colors.text} />
-            </Pressable>
           ) : null}
-          <Pressable
+          <RemoteIconButton
+            onPress={handleTogglePlay}
+            icon={isPaused ? "play" : "pause"}
+            label={
+              isPaused
+                ? t("player.remote.resume", {
+                    defaultValue: "Resume remote playback",
+                  })
+                : t("player.remote.pause", {
+                    defaultValue: "Pause remote playback",
+                  })
+            }
+            primary
+          />
+          {activeCast ? (
+            <RemoteIconButton
+              onPress={() => handleSeek(10)}
+              icon="play-forward"
+              label={t("player.remote.seekForward", {
+                defaultValue: "Seek cast forward 10 seconds",
+              })}
+            />
+          ) : null}
+          <AppButton
             onPress={handleTakeOver}
-            style={[styles.takeOverBtn, { backgroundColor: colors.tint }]}
-          >
-            <Text style={[styles.takeOverText, { color: colors.onTint }]}>
-              {activeCast ? "Open player" : "Take Over"}
-            </Text>
-          </Pressable>
+            variant="secondary"
+            size="small"
+            icon="expand-outline"
+            label={
+              activeCast
+                ? t("player.remote.openPlayer", {
+                    defaultValue: "Open player",
+                  })
+                : t("player.remote.takeOver", { defaultValue: "Take over" })
+            }
+          />
         </View>
-      </BlurView>
+      </View>
     </Animated.View>
   );
 }
@@ -252,10 +307,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 12,
-    borderRadius: 20,
+    padding: uiSpacing.md,
+    borderRadius: uiRadii.sheet,
     overflow: "hidden",
-    borderWidth: 1,
+    borderWidth: 0,
     ...(Platform.OS === "web"
       ? { boxShadow: "0 4px 10px rgba(0, 0, 0, 0.3)" }
       : {
@@ -266,17 +321,21 @@ const styles = StyleSheet.create({
         }),
     elevation: 8,
   } as any,
+  containerCompact: {
+    alignItems: "stretch",
+    flexDirection: "column",
+    gap: uiSpacing.md,
+  },
   left: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    gap: 12,
+    gap: uiSpacing.md,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "rgba(0, 242, 255, 0.1)",
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: uiRadii.control,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -297,45 +356,34 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   progressFill: { height: "100%" },
-  timeText: { fontSize: 10, fontVariant: ["tabular-nums"] },
+  timeText: {
+    ...uiTypography.caption,
+    fontSize: 10,
+    fontVariant: ["tabular-nums"],
+  },
   deviceText: {
-    color: "#94a3b8",
-    fontSize: 11,
-    fontWeight: "700",
+    ...uiTypography.sectionLabel,
+    fontSize: 10,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   itemText: {
-    color: "#ffffff",
+    ...uiTypography.label,
     fontSize: 14,
-    fontWeight: "600",
   },
   right: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: uiSpacing.sm,
   },
-  controlBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  rightCompact: {
+    alignSelf: "flex-end",
+  },
+  iconButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: uiRadii.control,
     justifyContent: "center",
     alignItems: "center",
-  },
-  seekBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  takeOverBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-  takeOverText: {
-    fontSize: 13,
-    fontWeight: "800",
   },
 });

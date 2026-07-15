@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
+import { AppButton } from "../ui/AppButton";
+import { uiRadii, uiTypography } from "../ui/designSystem";
 
 interface ResumePromptProps {
   onResponse: (resume: boolean) => void;
@@ -42,27 +44,19 @@ export const ResumePrompt: React.FC<ResumePromptProps> = ({
           {title}
         </Text>
         <View style={styles.resumeBtns}>
-          <Pressable
-            style={[
-              styles.resumeBtnGhost,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
+          <AppButton
+            label={t("player.resume.startOver", {
+              defaultValue: "Start over",
+            })}
+            variant="secondary"
             onPress={() => onResponse(false)}
-          >
-            <Text style={[styles.resumeBtnGhostText, { color: colors.text }]}>
-              {t("player.resume.startOver", { defaultValue: "Start over" })}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.resumeBtnPrimary, { backgroundColor: colors.tint }]}
+          />
+          <AppButton
+            label={t("player.resume.resume", { defaultValue: "Resume" })}
+            icon="play"
+            variant="primary"
             onPress={() => onResponse(true)}
-          >
-            <Text
-              style={[styles.resumeBtnPrimaryText, { color: colors.onTint }]}
-            >
-              {t("player.resume.resume", { defaultValue: "Resume" })}
-            </Text>
-          </Pressable>
+          />
         </View>
       </View>
     </View>
@@ -92,14 +86,13 @@ const styles = StyleSheet.create({
   },
   resumeBox: {
     padding: 30,
-    borderRadius: 24,
-    borderWidth: 1,
+    borderRadius: uiRadii.sheet,
+    borderWidth: 0,
     alignItems: "center",
     maxWidth: 340,
   },
   resumeTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+    ...uiTypography.title,
     marginBottom: 8,
   },
   resumeSub: {
@@ -110,22 +103,5 @@ const styles = StyleSheet.create({
   resumeBtns: {
     flexDirection: "row",
     gap: 12,
-  },
-  resumeBtnGhost: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  resumeBtnGhostText: {
-    fontWeight: "600",
-  },
-  resumeBtnPrimary: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  resumeBtnPrimaryText: {
-    fontWeight: "bold",
   },
 });

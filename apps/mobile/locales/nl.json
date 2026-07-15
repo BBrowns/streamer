@@ -7,7 +7,105 @@
     "downloads": "Downloads",
     "settings": "Instellingen"
   },
+  "search": {
+    "eyebrow": "Ontdekken",
+    "title": "Vind je volgende verhaal",
+    "placeholder": "Zoek films en series",
+    "a11y": {
+      "field": "Zoek films en series",
+      "openDetails": "Open titeldetails",
+      "poster": "Poster van {{title}}"
+    },
+    "actions": {
+      "clearSearch": "Zoekopdracht wissen"
+    },
+    "types": {
+      "all": "Alles",
+      "movie": "Film",
+      "series": "Serie",
+      "moviePlural": "Films",
+      "seriesPlural": "Series"
+    },
+    "recent": {
+      "title": "Recente zoekopdrachten",
+      "clear": "Wissen",
+      "open": "Zoek naar {{query}}",
+      "remove": "Verwijder {{query}} uit recente zoekopdrachten"
+    },
+    "discovery": {
+      "title": "Blader door je catalogi",
+      "subtitle": "Nieuwe keuzes uit je geïnstalleerde add-ons.",
+      "noProvidersTitle": "Voeg een contentbron toe",
+      "noProvidersDescription": "Installeer een add-on om films en series te zoeken en ontdekken.",
+      "noCatalogsTitle": "Geen catalogi voor deze weergave",
+      "noCatalogsDescription": "Je geïnstalleerde add-ons bieden geen catalogi voor het geselecteerde titeltype.",
+      "catalogErrorTitle": "Catalogus niet beschikbaar",
+      "catalogErrorDescription": "Deze catalogus kon niet worden geladen. Probeer het opnieuw.",
+      "manageAddons": "Add-ons beheren"
+    },
+    "suggestions": {
+      "noMatch": "Nog geen titelsuggesties.",
+      "showAll": "Toon alle resultaten voor ‘{{query}}’"
+    },
+    "command": {
+      "label": "Snel zoeken",
+      "noRecent": "Geen recente zoekopdrachten",
+      "minimum": "Typ minimaal 2 tekens om te zoeken",
+      "noResults": "Geen resultaten voor ‘{{query}}’",
+      "errorTitle": "Zoeken is niet beschikbaar",
+      "errorDescription": "Controleer je verbinding en probeer het opnieuw.",
+      "navigate": "Navigeren",
+      "open": "Openen",
+      "close": "Sluiten"
+    },
+    "filters": {
+      "title": "Filters",
+      "subtitle": "Verfijn deze resultaten",
+      "type": "Filter op titeltype",
+      "year": "Jaar",
+      "provider": "Bron",
+      "sort": "Sorteren op",
+      "anyYear": "Elk jaar",
+      "allProviders": "Alle bronnen",
+      "button": "Filters",
+      "open": "Open zoekfilters",
+      "close": "Sluit filters",
+      "reset": "Filters herstellen",
+      "sortBy": "Sorteren op {{sort}}"
+    },
+    "sort": {
+      "default": "Beste overeenkomst",
+      "title": "Titel A–Z",
+      "year": "Nieuwste"
+    },
+    "results": {
+      "summary": "{{count}} resultaten voor ‘{{query}}’",
+      "summary_one": "1 resultaat voor ‘{{query}}’",
+      "summary_other": "{{count}} resultaten voor ‘{{query}}’",
+      "searching": "Zoeken naar ‘{{query}}’…",
+      "detailHint": "Kies een titel voor details en beschikbare afspeelopties.",
+      "sources": "Beschikbaar via {{count}} bronnen",
+      "sources_one": "Beschikbaar via 1 bron",
+      "sources_other": "Beschikbaar via {{count}} bronnen"
+    },
+    "states": {
+      "partial": "Sommige bronnen waren niet bereikbaar. Resultaten van reagerende bronnen blijven zichtbaar.",
+      "errorTitle": "Zoeken kon niet worden geladen",
+      "errorDescription": "Controleer je verbinding en probeer opnieuw.",
+      "providersFailedTitle": "Bronnen zijn tijdelijk niet beschikbaar",
+      "providersFailedDescription": "Geen van je contentbronnen reageerde. Probeer het zo opnieuw.",
+      "noMatchTitle": "Geen titels gevonden",
+      "noMatchDescription": "Niets kwam overeen met ‘{{query}}’. Probeer een andere titel.",
+      "filterEmptyTitle": "Geen resultaten met deze filters",
+      "filterEmptyDescription": "Herstel je filters om alle overeenkomende titels te zien."
+    }
+  },
   "home": {
+    "hero": {
+      "eyebrow": "Uitgelicht · {{type}}",
+      "a11y": "Uitgelicht: {{title}}",
+      "hint": "Opent de titeldetails"
+    },
     "auth": {
       "title": "Streamer",
       "subtitle": "Je universum aan content, verzameld van het open web.",
@@ -78,7 +176,9 @@
     },
     "header": {
       "select": "Selecteer",
-      "cancel": "Annuleren"
+      "cancel": "Annuleren",
+      "back": "Terug naar instellingen",
+      "description": "Opgeslagen films, series en alles waarmee je verder kunt."
     },
     "filters": {
       "all": "Alle",
@@ -100,7 +200,19 @@
       "removeTitle": "Items verwijderen",
       "removeMessage": "Weet je zeker dat je {{count}} items uit je bibliotheek wilt verwijderen?",
       "bulkDeleteTitle": "Items verwijderen",
-      "bulkDeleteMessage": "Weet je zeker dat je {{count}} items wilt verwijderen? Dit kan niet ongedaan worden gemaakt."
+      "bulkDeleteMessage": "Weet je zeker dat je {{count}} items wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      "added": "Toegevoegd aan bibliotheek",
+      "removed": "Verwijderd uit bibliotheek"
+    },
+    "actions": {
+      "prompt": "Wat wil je doen?",
+      "viewDetails": "Details bekijken",
+      "remove": "Uit bibliotheek verwijderen",
+      "removeDownload": "Download verwijderen",
+      "undo": "Ongedaan maken",
+      "restore": "Herstellen",
+      "bulkRemoved": "{{count}} titels uit de bibliotheek verwijderd",
+      "bulkRemoved_one": "1 titel uit de bibliotheek verwijderd"
     }
   },
   "downloads": {
@@ -136,7 +248,9 @@
       "pause": "Pauzeren",
       "resume": "Hervatten",
       "retry": "Opnieuw proberen",
-      "play": "Afspelen"
+      "play": "Afspelen",
+      "verify": "Controleren",
+      "deleteDownload": "Download verwijderen"
     },
     "status": {
       "queued": "In wachtrij",
@@ -161,12 +275,65 @@
       "all": "Alles {{count}}",
       "active": "Actief {{count}}",
       "ready": "Offline {{count}}",
-      "attention": "Problemen {{count}}"
+      "attention": "Problemen {{count}}",
+      "label": "Downloads filteren"
     },
     "summary": {
       "active": "Actief",
       "ready": "Offline",
-      "storage": "Offline opslag"
+      "storage": "Offline opslag",
+      "needsVerification": "Controle nodig"
+    },
+    "storage": {
+      "externalCleanup": "Streamer kan alleen downloads verwijderen die door deze app worden beheerd. Gebruik de opslaginstellingen van je apparaat voor andere bestanden."
+    },
+    "smart": {
+      "title": "Slimme downloads",
+      "subtitle": "Optionele regels voor volgende afleveringen, opruimen, kwaliteit en opslag.",
+      "on": "Aan",
+      "off": "Uit",
+      "enable": "Slimme downloads inschakelen",
+      "enableSubtitle": "Meld je eerst aan voordat Streamer automatische afleveringsdownloads plant.",
+      "nextEpisode": "Volgende aflevering automatisch downloaden",
+      "nextEpisodeSubtitle": "Plant de volgende onbekeken aflevering wanneer een seriedownload klaar is.",
+      "autoDelete": "Bekeken downloads automatisch verwijderen",
+      "autoDeleteSubtitle": "Opruimen is optioneel en verwijdert nooit ongecontroleerde bestanden.",
+      "wifiOnly": "Alleen wifi",
+      "wifiOnlySubtitle": "Mobiele achtergronddownloads zijn platformbeperkt; deze voorkeur begrenst automatische plannen.",
+      "quality": "Voorkeurskwaliteit",
+      "storageLimit": "Limiet van {{count}} GB",
+      "hlsUnsupported": "HLS is offline nog niet ondersteund",
+      "plannedTitle": "Geplande volgende afleveringen",
+      "unknownSeries": "Serie"
+    },
+    "recovery": {
+      "pausedTitle": "Download gepauzeerd",
+      "pausedMessage": "Hervat wanneer je klaar bent om deze download voort te zetten.",
+      "resumeAction": "Hervatten",
+      "missingTitle": "Offline bestand niet beschikbaar",
+      "noManagedFileMessage": "Het beheerde bestand staat niet meer op dit apparaat.",
+      "missingFileMessage": "Het gedownloade bestand is niet gevonden. Bereid het opnieuw voor.",
+      "downloadAgainAction": "Opnieuw downloaden",
+      "verificationTitle": "Controle nodig",
+      "verificationMessage": "Controleer het lokale bestand voordat het als offline gereed wordt gemarkeerd.",
+      "verifyAction": "Bestand controleren",
+      "interruptedTitle": "Download onderbroken",
+      "interruptedMessage": "De overdracht stopte voordat hij klaar was. Je kunt hem veilig hervatten.",
+      "storageTitle": "Meer opslagruimte nodig",
+      "storageMessage": "Maak opslagruimte vrij voordat je deze download opnieuw probeert.",
+      "freeSpaceAction": "Opslag beheren",
+      "setupTitle": "Afspeelconfiguratie vraagt aandacht",
+      "setupMessage": "Open Bronnen & apparaten en controleer dit apparaat voordat je de download opnieuw probeert.",
+      "reviewSetupAction": "Configuratie bekijken",
+      "expiredTitle": "Kijkoptie verlopen",
+      "expiredMessage": "Deze kijkoptie is niet meer beschikbaar. Bereid de download opnieuw voor.",
+      "prepareAgainAction": "Opnieuw voorbereiden",
+      "unsupportedTitle": "Offline download niet beschikbaar",
+      "unsupportedMessage": "Deze kijkoptie kan niet offline worden opgeslagen.",
+      "removeAction": "Verwijderen",
+      "failedTitle": "Download vraagt aandacht",
+      "failedMessage": "Probeer de download opnieuw of kies een andere kijkoptie.",
+      "retryAction": "Opnieuw proberen"
     },
     "footer": {
       "verified": "Items worden pas als offline beschikbaar getoond nadat het lokale bestand is gecontroleerd."
@@ -182,6 +349,20 @@
   "onboarding": {
     "title": "Personaliseren",
     "subtitle": "Pas je ervaring aan voordat we beginnen.",
+    "intro": {
+      "streamingTitle": "Alles wat het kijken waard is",
+      "streamingDescription": "Films, series en je volgende aflevering in één rustige, filmische bibliotheek.",
+      "syncTitle": "Ga verder waar je was gebleven",
+      "syncDescription": "Begin op desktop, kijk verder op mobiel en houd je bibliotheek dichtbij.",
+      "playbackTitle": "Kijken op jouw manier",
+      "playbackDescription": "Kies je kijkopties één keer. Streamer houdt de details uit beeld."
+    },
+    "carousel": {
+      "stepLabel": "Introductiestap {{count}}",
+      "previous": "Vorige stap",
+      "next": "Volgende stap",
+      "getStarted": "Aan de slag"
+    },
     "appearance": "Uiterlijk",
     "addonsTitle": "Aanbevolen add-ons",
     "addonsSubtitle": "Sterk aanbevolen voor metadata en ondertiteling.",
@@ -192,14 +373,21 @@
     "setupCheck": {
       "title": "Setup controleren",
       "subtitle": "Streamer moet simpel voelen, maar afspelen hangt nog steeds af van je bronnen en apparaatstatus.",
-      "sources": "Bronnen & metadata",
-      "sourcesBody": "Installeer Cinemeta nu; voeg streaming-add-ons later toe via Instellingen.",
-      "bridge": "Desktop bridge",
-      "bridgeBody": "Desktop kan torrent/remux-afspelen voorbereiden en zijn LAN-URL delen.",
+      "sources": "Catalogus & kijkopties",
+      "sourcesBody": "Je startcatalogus staat klaar. Je kunt later meer kijkopties toevoegen via Instellingen.",
+      "bridge": "Extra afspeelondersteuning",
+      "bridgeBody": "Voor sommige titels helpt de desktopapp het afspelen automatisch voor te bereiden.",
       "offlineCast": "Downloads & casten",
-      "offlineCastBody": "Offline en casten zijn alleen beschikbaar wanneer een bron dit ondersteunt.",
+      "offlineCastBody": "Downloads en casten verschijnen automatisch wanneer ze beschikbaar zijn.",
       "privacy": "Privacy",
-      "privacyBody": "Ruwe stream-URL's, magnets en tokens worden niet opgenomen in diagnostiek."
+      "privacyBody": "Diagnostische rapporten verbergen gevoelige verbindingsgegevens."
+    },
+    "themeA11y": "Thema {{theme}}",
+    "addonA11y": "{{name}}. {{description}}",
+    "starterAddons": {
+      "cinemeta": "Een samengestelde catalogus met films en series.",
+      "openSubtitles": "Een uitgebreide ondertitelbibliotheek voor films en series.",
+      "torrentio": "Een optionele communitybron met kijkopties."
     },
     "finish": "Voltooien & Inloggen"
   },
@@ -259,7 +447,11 @@
     },
     "about": {
       "releasePolicy": "Desktop-updates worden handmatig gecontroleerd totdat de release-pipeline volledig is gevalideerd.",
-      "checkUpdates": "Controleer op updates"
+      "checkUpdates": "Controleren op updates",
+      "terms": "Gebruiksvoorwaarden",
+      "termsDescription": "Lees welke voorwaarden voor Streamer gelden",
+      "privacy": "Privacybeleid",
+      "privacyDescription": "Bekijk hoe Streamer met je gegevens omgaat"
     },
     "alerts": {
       "deleteAccountTitle": "Account verwijderen",
@@ -281,6 +473,204 @@
       "light": "Licht",
       "dark": "Donker",
       "system": "Systeem"
+    },
+    "overview": {
+      "title": "Instellingen",
+      "subtitle": "Je account, afspeelgedrag, downloads en appvoorkeuren.",
+      "categories": "Categorieën"
+    },
+    "navigation": {
+      "account": {
+        "title": "Account",
+        "description": "Profiel, Trakt, beveiliging en aangemelde apparaten"
+      },
+      "playback": {
+        "title": "Afspelen",
+        "description": "Kwaliteit, automatisch afspelen, audio en ondertitels"
+      },
+      "downloads": {
+        "title": "Downloads",
+        "description": "Slimme downloads, kwaliteit, opslag en opruimen"
+      },
+      "sources": {
+        "title": "Bronnen & apparaten",
+        "description": "Add-ons en beschikbaarheid voor afspelen"
+      },
+      "appearance": { "title": "Uiterlijk", "description": "Thema en taal" },
+      "privacy": {
+        "title": "Privacy",
+        "description": "Appvergrendeling, gegevensexport en accountverwijdering"
+      },
+      "about": { "title": "Over", "description": "Versie en desktopupdates" },
+      "advanced": {
+        "title": "Geavanceerd",
+        "description": "Verbindingen, runtime, herstel en diagnostiek"
+      }
+    },
+    "readiness": {
+      "readyTitle": "Klaar om af te spelen",
+      "attentionTitle": "Afspeelconfiguratie vraagt aandacht",
+      "readyDescription": "Dit apparaat is klaar voor ondersteund afspelen en downloads.",
+      "attentionDescription": "Direct afspelen kan nog werken. Controleer je configuratie voor elk brontype.",
+      "review": "Bekijken",
+      "checkAgain": "Opnieuw controleren"
+    },
+    "common": { "loading": "Laden…" },
+    "accountModals": {
+      "common": {
+        "cancel": "Annuleren",
+        "errorTitle": "Er ging iets mis",
+        "successTitle": "Opgeslagen"
+      },
+      "profile": {
+        "title": "Profiel bewerken",
+        "displayName": "Weergavenaam",
+        "save": "Opslaan",
+        "saveA11y": "Profielwijzigingen opslaan",
+        "updated": "Je profiel is bijgewerkt.",
+        "updateFailed": "Je profiel kon niet worden bijgewerkt."
+      },
+      "password": {
+        "title": "Wachtwoord wijzigen",
+        "current": "Huidig wachtwoord",
+        "new": "Nieuw wachtwoord (minimaal 8 tekens)",
+        "newA11y": "Nieuw wachtwoord, minimaal 8 tekens",
+        "update": "Wachtwoord bijwerken",
+        "updateA11y": "Wachtwoord bijwerken",
+        "minimumLength": "Het nieuwe wachtwoord moet minimaal 8 tekens lang zijn.",
+        "updated": "Je wachtwoord is gewijzigd.",
+        "updateFailed": "Je wachtwoord kon niet worden gewijzigd."
+      },
+      "sessions": {
+        "title": "Actieve sessies",
+        "done": "Gereed",
+        "justNow": "Zojuist",
+        "minutesAgo": "{{count}} min. geleden",
+        "hoursAgo": "{{count}} uur geleden",
+        "thisDevice": "Dit apparaat",
+        "unknownDevice": "Onbekend apparaat",
+        "unknownIp": "Onbekend IP-adres",
+        "revokeA11y": "Deze sessie intrekken",
+        "revokeTitle": "Sessie intrekken?",
+        "revokeDescription": "Hiermee wordt het gekoppelde apparaat afgemeld bij Streamer.",
+        "revoke": "Intrekken",
+        "revokeFailed": "De sessie kon niet worden ingetrokken."
+      }
+    },
+    "detail": {
+      "account": {
+        "editProfile": "Profiel bewerken",
+        "editProfileDescription": "Wijzig je naam en profielgegevens"
+      },
+      "downloads": {
+        "openDownloads": "Downloads openen",
+        "openDownloadsDescription": "Bekijk de wachtrij, offline titels en opslag"
+      },
+      "privacy": { "dangerZone": "Gevarenzone" }
+    },
+    "playbackPreferences": {
+      "quality": "Afspeelkwaliteit",
+      "qualityDescription": "Kies de maximale kwaliteit waarmee Streamer bronnen rangschikt.",
+      "auto": "Automatisch",
+      "audio": "Audiotaal",
+      "audioDescription": "Geef de voorkeur aan deze audiotrack wanneer die beschikbaar is.",
+      "subtitles": "Ondertitels",
+      "subtitlesDescription": "Kies de ondertiteling die bij het starten wordt geselecteerd.",
+      "autoplay": "Volgende aflevering automatisch afspelen",
+      "autoplayDescription": "Ga door met een serie wanneer de volgende aflevering bekend is.",
+      "languages": {
+        "off": "Uit",
+        "english": "Engels",
+        "dutch": "Nederlands",
+        "spanish": "Spaans"
+      }
+    },
+    "downloadPreferences": {
+      "smartDownloads": "Slimme downloads",
+      "smartDownloadsDescription": "Beheer geselecteerde afleveringen automatisch met je voorkeuren.",
+      "nextEpisode": "Volgende aflevering downloaden",
+      "nextEpisodeDescription": "Plan de volgende onbekeken aflevering wanneer een download klaar is.",
+      "wifiOnly": "Alleen wifi",
+      "wifiOnlyDescription": "Maak alleen automatische downloadplannen via wifi.",
+      "cleanup": "Bekeken downloads verwijderen",
+      "cleanupDescription": "Verwijder geverifieerde bekeken bestanden wanneer ruimte nodig is.",
+      "quality": "Downloadkwaliteit",
+      "qualityDescription": "Stel de maximale kwaliteit voor automatische downloads in.",
+      "best": "Beste",
+      "storageLimit": "Opslaglimiet",
+      "storageLimitDescription": "Kies hoeveel ruimte Slimme downloads op dit apparaat mag gebruiken."
+    },
+    "biometric": {
+      "prompt": "Authenticeer om biometrische ontgrendeling in te schakelen"
+    },
+    "update": {
+      "notLoaded": "De updatestatus is nog niet geladen.",
+      "checking": "Controleren op updates…",
+      "available": "Versie {{version}} is beschikbaar.",
+      "latest": "nieuwste",
+      "current": "Streamer is up-to-date ({{version}}).",
+      "unsupported": "Updatecontroles zijn beschikbaar in verpakte desktopversies.",
+      "failed": "Updatecontrole mislukt.",
+      "downloaded": "De desktopupdater heeft een update gedownload.",
+      "version": "Huidige versie: {{version}}"
+    },
+    "sourcesSection": {
+      "addonsTitle": "Contentbronnen",
+      "addonsDescription": "Installeer en beheer de add-ons die je catalogus leveren.",
+      "pageDescription": "Bekijk afspeelbeschikbaarheid, verbonden apparaten en contentbronnen."
+    },
+    "advancedSection": {
+      "copyDiagnostics": "Diagnostiek kopiëren",
+      "copying": "Kopiëren…",
+      "recheckRuntime": "Runtime opnieuw controleren",
+      "repairSteps": "Herstelstappen",
+      "useLanUrl": "Netwerkadres gebruiken",
+      "restarting": "Herstarten…",
+      "restart": "Service herstarten",
+      "cleaning": "Opruimen…",
+      "cleanCache": "Cache opruimen",
+      "lanWarningTitle": "Gebruik het netwerkadres van de desktopapp",
+      "lanWarningDescription": "Het lokale adres werkt alleen op dit apparaat. Gebruik het netwerkadres van de desktopapp voor afspelen, downloads of casten vanaf een ander apparaat.",
+      "devicesTitle": "Apparaten & casten",
+      "devicesDescription": "Gebruik de desktopapp voor afspeeldiensten op dit netwerk.",
+      "desktopBridge": "Desktopservice",
+      "connected": "Verbonden",
+      "casting": "Casten",
+      "castingReadyDescription": "Casten kan het actieve afspeelplan gebruiken.",
+      "ready": "Gereed",
+      "limited": "Beperkt",
+      "playbackTitle": "Afspelen & downloads",
+      "playbackDescription": "Gedetailleerde broninformatie staat hier alleen voor probleemoplossing.",
+      "directStreams": "Directe streams",
+      "directStreamsDescription": "Ondersteunde HTTP- en HLS-bronnen spelen zonder de desktopservice.",
+      "torrentStreams": "Torrentstreams",
+      "torrentStreamsDescription": "Torrentbronnen gebruiken de desktopservice voor voorbereiding en afspelen.",
+      "downloadsDescription": "Offline beschikbaarheid verschijnt nadat een lokaal bestand is geverifieerd.",
+      "directOnly": "Alleen direct",
+      "resolversTitle": "Externe resolvers",
+      "resolversDescription": "Optionele betaalde diensten zijn niet nodig voor de configuratie.",
+      "realDebridDescription": "Optionele betaalde resolver. Standaard uitgeschakeld en niet nodig voor de eerste configuratie.",
+      "technicalDescription": "Verbindingsinstellingen en diagnostiek voor probleemoplossing.",
+      "connectionSettings": "Verbindingsinstellingen",
+      "connectionDescription": "Serveradressen en de koppeltoken voor de desktopservice.",
+      "pairingToken": "Koppeltoken (optioneel)",
+      "pairingPlaceholder": "Alleen nodig wanneer de desktopservice een token vereist",
+      "diagnostics": "Geavanceerde diagnostiek",
+      "diagnosticsDescription": "Details over build, runtime, media-engine, cache en herstel.",
+      "repair": "Herstellen",
+      "checking": "Controleren",
+      "needsService": "Desktopservice nodig",
+      "serviceNeedsRepair": "Desktopservice moet worden hersteld",
+      "setupReadyDescription": "Direct en ondersteund torrentafspelen, downloads en casten kunnen deze configuratie gebruiken.",
+      "setupRepairDescription": "Direct afspelen kan nog werken, maar afspelen en downloads via de service moeten eerst worden hersteld.",
+      "diagnosticsExported": "Diagnostiek geëxporteerd",
+      "diagnosticsCopiedDescription": "Een veilig debugpakket is naar het klembord gekopieerd.",
+      "diagnosticsExportedDescription": "Een veilig debugpakket is geëxporteerd.",
+      "diagnosticsUnavailable": "Diagnostiek niet beschikbaar",
+      "diagnosticsUnavailableDescription": "De diagnostiek kon niet worden geëxporteerd.",
+      "cacheCleaned": "Cache opgeruimd",
+      "cacheCleanupFailed": "Cache opruimen mislukt",
+      "cacheCleanupFailedDescription": "Inactieve cache-items konden niet worden opgeruimd."
     },
     "onboarding": {
       "title": "Personaliseren",
@@ -316,6 +706,10 @@
     "empty": {
       "title": "Geen add-ons geïnstalleerd",
       "hint": "Probeer: https://v3-cinemeta.strem.io/manifest.json"
+    },
+    "fetchError": {
+      "title": "Add-ons konden niet laden",
+      "description": "Controleer je verbinding en probeer het opnieuw."
     }
   },
   "detail": {
@@ -336,6 +730,77 @@
     "watchlist": {
       "add": "+ Toevoegen aan bibliotheek",
       "remove": "✓ In bibliotheek"
+    },
+    "actionPanel": {
+      "findingSources": "Kijkopties zoeken",
+      "sourceCount": "{{count}} bronnen",
+      "sourceCount_one": "1 bron",
+      "noSources": "Nog geen bronnen",
+      "episodeCount": "{{count}} afleveringen",
+      "episodeCount_one": "1 aflevering",
+      "findingBest": "Beste optie zoeken",
+      "playBest": "Beste afspelen",
+      "preparing": "Voorbereiden",
+      "inLibrary": "In bibliotheek",
+      "add": "Toevoegen"
+    },
+    "sources": {
+      "episodes": "Afleveringen",
+      "more": "Meer bronnen",
+      "show": "Meer bronnen tonen",
+      "hide": "Meer bronnen verbergen",
+      "available": "Geavanceerd alternatief · {{count}} beschikbaar",
+      "groups": "Geavanceerd alternatief · {{count}} groepen",
+      "filterByQuality": "Bronnen filteren op {{quality}}"
+    },
+    "readiness": {
+      "finishSetupTitle": "Afspeelconfiguratie afronden",
+      "setupAttentionTitle": "Afspeelconfiguratie vraagt aandacht",
+      "openSourcesDetail": "Open Bronnen & apparaten om verbinding te maken met de desktopapp.",
+      "directMayWork": "Directe kijkopties kunnen op dit apparaat nog werken.",
+      "sourcesAction": "Bronnen & apparaten",
+      "extraSupportTitle": "Extra afspeelondersteuning nodig",
+      "extraSupportMessage": "Deze kijkoptie heeft hulp van de desktopapp nodig.",
+      "checkSupportDetail": "Controleer Bronnen & apparaten of kies een andere kijkoptie.",
+      "noSourcesTitle": "Geen kijkopties gevonden",
+      "noSourcesMessage": "Er kon geen beschikbare bron voor deze titel worden voorbereid.",
+      "noSourcesDetail": "Controleer je add-ons of probeer het later opnieuw.",
+      "noCompatibleTitle": "Geen compatibele kijkoptie",
+      "noCompatibleMessage": "De beschikbare opties kunnen op dit apparaat niet voor deze actie worden gebruikt.",
+      "noCompatibleDetail": "Kies een andere optie of controleer Bronnen & apparaten.",
+      "optionUnavailableTitle": "Kijkoptie niet beschikbaar",
+      "optionCouldNotStart": "Deze optie kon nu niet starten.",
+      "tryAgainOrMore": "Probeer opnieuw of open Meer bronnen.",
+      "optionCannotPlay": "Deze optie kan niet betrouwbaar op dit apparaat worden afgespeeld.",
+      "tryAnotherOption": "Kies een andere kijkoptie of lagere kwaliteit.",
+      "timeoutTitle": "Voorbereiden duurde te lang",
+      "timeoutMessage": "Deze kijkoptie werd niet op tijd gereed.",
+      "timeoutDetail": "Probeer het opnieuw of kies een andere kijkoptie.",
+      "networkTitle": "Verbindingsprobleem",
+      "networkMessage": "Maak opnieuw verbinding met internet en probeer het opnieuw.",
+      "unavailableMessage": "Deze actie is niet beschikbaar met de huidige kijkopties.",
+      "attemptedOptions": "Er zijn ook {{count}} andere kijkopties geprobeerd.",
+      "attemptedOptions_one": "Er is ook 1 andere kijkoptie geprobeerd.",
+      "setup": {
+        "play": "Verbind de desktopapp om deze titel af te spelen.",
+        "download": "Verbind de desktopapp om deze download voor te bereiden.",
+        "cast": "Verbind de desktopapp om deze titel te casten."
+      },
+      "setupNeedsAttention": {
+        "play": "Controleer dit apparaat voordat je opnieuw probeert af te spelen.",
+        "download": "Controleer dit apparaat voordat je de download opnieuw probeert.",
+        "cast": "Controleer dit apparaat voordat je opnieuw probeert te casten."
+      },
+      "sourceFailed": {
+        "play": "Een andere kijkoptie proberen",
+        "download": "Een andere downloadoptie proberen",
+        "cast": "Een andere castoptie proberen"
+      },
+      "unavailable": {
+        "play": "Afspelen niet beschikbaar",
+        "download": "Download niet beschikbaar",
+        "cast": "Casten niet beschikbaar"
+      }
     },
     "errors": {
       "notFound": "Inhoud niet gevonden",
@@ -416,6 +881,7 @@
       "title": "Afspelen hervatten?",
       "subtitle": "Je was gebleven bij {{time}}",
       "resume": "Hervatten",
+      "resumeFrom": "Hervatten vanaf {{time}}",
       "startOver": "Opnieuw beginnen"
     },
     "upsell": {
@@ -437,6 +903,9 @@
       "seekUnavailable": "Spoelen niet beschikbaar",
       "seekBackUnavailable": "Terugspoelen niet beschikbaar",
       "seekForwardUnavailable": "Vooruitspoelen niet beschikbaar",
+      "seekDurationUnavailable": "Spoelen is niet beschikbaar zolang de duur onbekend is.",
+      "seekLiveUnavailable": "Spoelen is niet beschikbaar voor deze livestream.",
+      "seekRemuxUnavailable": "Spoelen wordt beschikbaar zodra de voorbereiding klaar is.",
       "progress": "Afspeelvoortgang",
       "progressUnavailable": "Afspeelvoortgang niet beschikbaar",
       "live": "Live",
@@ -471,6 +940,20 @@
       "noSubtitles": "Geen ondertiteling beschikbaar.",
       "off": "Uit"
     },
+    "remote": {
+      "castingTo": "Casten naar {{name}}",
+      "activeOn": "Actief op {{name}}",
+      "anotherDevice": "een ander apparaat",
+      "paused": "Gepauzeerd",
+      "playing": "Wordt afgespeeld",
+      "unknownContent": "Onbekende titel",
+      "seekBack": "Cast 10 seconden terugspoelen",
+      "seekForward": "Cast 10 seconden vooruitspoelen",
+      "resume": "Afspelen op afstand hervatten",
+      "pause": "Afspelen op afstand pauzeren",
+      "openPlayer": "Player openen",
+      "takeOver": "Hier verder kijken"
+    },
     "status": {
       "planning": "Afspelen voorbereiden...",
       "checkingBridge": "Desktop bridge controleren...",
@@ -495,10 +978,10 @@
     },
     "errors": {
       "noStream": "Geen stream geselecteerd",
-      "bridgeUnavailable": "De desktop bridge is nog niet klaar. Open Bronnen & apparaten om de URL te controleren of de streaming-engine te repareren en probeer het daarna opnieuw.",
-      "playbackFailed": "Afspelen is mislukt voordat het eerste videoframe geladen kon worden.",
-      "playbackTimeout": "De stream leverde binnen 60 seconden geen afspeelbare video. De torrent kan traag, vastgelopen of niet compatibel zijn met deze speler.",
-      "unsupportedCodec": "Deze bron lijkt HEVC/H.265 of Dolby Vision te gebruiken. Deze desktop/web-speler kan dat niet betrouwbaar decoderen. Kies een H.264/x264-bron of een lagere MP4-kwaliteit.",
+      "bridgeUnavailable": "Afspeelondersteuning is nog niet klaar. Open Bronnen & apparaten, controleer dit apparaat en probeer het opnieuw.",
+      "playbackFailed": "Deze titel kon niet worden afgespeeld.",
+      "playbackTimeout": "Het voorbereiden duurde te lang. Probeer het opnieuw of kies een andere kijkoptie.",
+      "unsupportedCodec": "Deze kijkoptie kan niet betrouwbaar op dit apparaat worden afgespeeld. Kies een andere optie of lagere kwaliteit.",
       "openSourcesDevices": "Bronnen & apparaten",
       "chooseSource": "Kies een andere bron",
       "previewPlayer": "Voorbeeld van player",
@@ -507,12 +990,48 @@
     "cast": {
       "castingTo": "Casten naar {{name}}",
       "stop": "Stop met casten"
+    },
+    "casting": {
+      "active": "Aan het casten",
+      "to": "Casten naar {{name}}",
+      "stop": "Stop met casten"
+    },
+    "castRecovery": {
+      "devicesTitle": "Schermen niet beschikbaar",
+      "devicesMessage": "Streamer kon niet naar schermen in de buurt zoeken.",
+      "searchAgainAction": "Opnieuw zoeken",
+      "deviceTitle": "Scherm niet beschikbaar",
+      "deviceMessage": "Dit scherm is niet bereikbaar. Controleer of het online en op hetzelfde netwerk is.",
+      "refreshAction": "Schermen vernieuwen",
+      "incompatibleTitle": "Kijkoptie niet ondersteund",
+      "incompatibleMessage": "Dit scherm kan de voorbereide kijkoptie niet afspelen.",
+      "chooseDisplayAction": "Ander scherm kiezen",
+      "tryAnotherAction": "Andere optie proberen",
+      "sourceReachTitle": "Scherm kan deze optie niet bereiken",
+      "sourceReachMessage": "Bereid een andere kijkoptie voor die het scherm kan bereiken.",
+      "prepareAnotherAction": "Andere optie voorbereiden",
+      "supportTitle": "Extra afspeelondersteuning nodig",
+      "supportMessage": "Controleer Bronnen & apparaten voordat je opnieuw probeert te casten.",
+      "reviewSetupAction": "Configuratie bekijken",
+      "setupTitle": "Afspeelconfiguratie vraagt aandacht",
+      "setupMessage": "Open Bronnen & apparaten en controleer dit apparaat voordat je opnieuw cast.",
+      "failedTitle": "Casten is niet gestart",
+      "failedMessage": "Probeer het opnieuw of kies een andere kijkoptie.",
+      "tryAgainAction": "Opnieuw proberen"
     }
   },
   "common": {
     "loading": "Laden...",
     "error": "Fout",
     "retry": "Opnieuw proberen",
+    "cancel": "Annuleren",
+    "dismiss": "Sluiten",
+    "actions": { "viewDetails": "Details bekijken" },
+    "media": { "movie": "Film", "series": "Serie" },
+    "unexpectedError": {
+      "title": "Er ging iets mis",
+      "description": "Streamer kon dit scherm niet laden. Probeer het opnieuw."
+    },
     "themes": {
       "dark": "Donker",
       "light": "Licht",
@@ -521,12 +1040,21 @@
   },
   "notifications": {
     "title": "Notificaties",
-    "empty": "Geen notificaties"
+    "empty": "Geen notificaties",
+    "dismiss": "Notificatie sluiten"
+  },
+  "biometricLock": {
+    "prompt": "Ontgrendel Streamer om door te gaan",
+    "usePin": "Gebruik de toegangscode van je apparaat",
+    "title": "Streamer is vergrendeld",
+    "subtitle": "Bevestig je identiteit om terug te keren naar je bibliotheek.",
+    "unlock": "Streamer ontgrendelen"
   },
   "legal": {
     "privacyTitle": "Privacybeleid",
     "termsTitle": "Servicevoorwaarden",
     "lastUpdated": "Laatst bijgewerkt: {{date}}",
+    "updatedDate": "juli 2026",
     "sections": {
       "privacy": {
         "1": "1. Gegevensverzameling",
@@ -540,6 +1068,27 @@
         "3": "3. Gebruikersinhoud",
         "4": "4. Beperking van Aansprakelijkheid"
       }
+    },
+    "bodies": {
+      "privacy": {
+        "1": "Streamer bewaart de account- en afspeelgegevens die nodig zijn voor je bibliotheek, voortgang en apparaatsessies.",
+        "2": "Authenticatietokens en verbindingsgegevens zijn gevoelig en worden niet opgenomen in diagnostische exports.",
+        "3": "Geïnstalleerde add-ons en externe diensten hebben hun eigen privacybeleid. Controleer dit voordat je een account of bron koppelt.",
+        "4": "Je kunt je gegevens exporteren of je account verwijderen via Privacy-instellingen."
+      },
+      "terms": {
+        "1": "Door Streamer te gebruiken ga je akkoord met deze voorwaarden en de wetgeving die voor jou geldt.",
+        "2": "Gebruik Streamer en gekoppelde bronnen verantwoord. Je bent zelf verantwoordelijk voor de bronnen en content die je opent.",
+        "3": "Je blijft verantwoordelijk voor links, add-ons en andere configuratie die je aan de dienst toevoegt.",
+        "4": "Streamer wordt geleverd zonder garantie dat iedere externe bron of ieder apparaat beschikbaar blijft."
+      }
     }
+  },
+  "navigation": { "menu": "Menu", "back": "Terug" },
+  "catalog": {
+    "openMovieDetails": "Filmdetails openen",
+    "openSeriesDetails": "Seriedetails openen",
+    "scrollLeft": "Naar links scrollen",
+    "scrollRight": "Naar rechts scrollen"
   }
 }

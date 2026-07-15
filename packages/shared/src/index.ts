@@ -10,6 +10,7 @@ export * from "./types/playback";
 export * from "./types/playback-session";
 export * from "./types/build-metadata";
 export * from "./types/action-preflight";
+export * from "./types/search";
 
 // Zod Schemas
 export * from "./schemas/manifest.schema";

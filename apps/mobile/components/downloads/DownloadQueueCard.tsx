@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -18,7 +19,12 @@ import {
 import { AppButton } from "../ui/AppButton";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
-import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTypography,
+} from "../ui/designSystem";
 import { getDownloadRecovery } from "../../services/actionRecovery";
 import { useWindowClass } from "../../hooks/useWindowClass";
 
@@ -157,12 +163,16 @@ export function DownloadQueueCard({
         styles.card,
         compact && styles.cardCompact,
         {
-          borderColor: isError ? colors.error + "50" : colors.border,
+          borderColor: isError ? colors.error + "50" : "transparent",
         },
       ]}
     >
       <Pressable
-        style={styles.contentPressable}
+        style={({ pressed, focused }: any) => [
+          styles.contentPressable,
+          pressed && styles.contentPressed,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        ]}
         onPress={onOpen}
         accessibilityRole="button"
         accessibilityLabel={`${task.mediaInfo.title}. ${statusLabel}`}
@@ -199,8 +209,8 @@ export function DownloadQueueCard({
                   styles.progressTrack,
                   {
                     backgroundColor: isDark
-                      ? "rgba(255,255,255,0.1)"
-                      : "rgba(40,34,54,0.08)",
+                      ? "rgba(244,245,247,0.12)"
+                      : "rgba(16,18,22,0.10)",
                   },
                 ]}
               >
@@ -289,9 +299,10 @@ export function DownloadQueueCard({
 }
 
 const styles = StyleSheet.create({
+  contentPressed: { opacity: 0.76 },
   card: {
     borderWidth: 1,
-    borderRadius: uiRadii.md,
+    borderRadius: uiRadii.card,
     overflow: "hidden",
     minHeight: 162,
   },
@@ -327,10 +338,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "800",
-    letterSpacing: 0,
+    ...uiTypography.title,
+    fontSize: 17,
+    lineHeight: 22,
   },
   metadata: {
     marginTop: 5,
@@ -371,7 +381,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     minHeight: 52,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: uiSpacing.md,
     paddingVertical: uiSpacing.sm,
     flexDirection: "row",

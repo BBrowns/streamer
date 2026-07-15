@@ -14,6 +14,9 @@ import {
   type ToastType,
 } from "../../stores/toastStore";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useTheme } from "../../hooks/useTheme";
+import { useTranslation } from "react-i18next";
+import { getWebFocusStyle } from "./designSystem";
 
 // ─── Individual Toast ─────────────────────────────────────────────────────────
 function ToastItem({ toast }: { toast: Toast }) {
@@ -21,6 +24,8 @@ function ToastItem({ toast }: { toast: Toast }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
   const reducedMotion = useReducedMotion();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const enter = Animated.parallel([
@@ -76,19 +81,27 @@ function ToastItem({ toast }: { toast: Toast }) {
       info: "information-circle",
     };
   const color: Record<ToastType, string> = {
-    success: "#4ade80",
-    error: "#f87171",
-    info: "#d8b4fe",
+    success: colors.success,
+    error: colors.error,
+    info: colors.tint,
   };
 
   return (
     <Animated.View
       accessibilityLiveRegion={toast.type === "error" ? "assertive" : "polite"}
       accessibilityRole={toast.type === "error" ? "alert" : "none"}
-      style={[styles.toast, { opacity, transform: [{ translateY }] }]}
+      style={[
+        styles.toast,
+        {
+          opacity,
+          transform: [{ translateY }],
+          backgroundColor: colors.surfaceElevated,
+          borderColor: colors.border,
+        },
+      ]}
     >
       <Ionicons name={icon[toast.type]} size={20} color={color[toast.type]} />
-      <Text style={styles.message} numberOfLines={2}>
+      <Text style={[styles.message, { color: colors.text }]} numberOfLines={2}>
         {toast.message}
       </Text>
       {!!toast.actionLabel && !!toast.onAction && (
@@ -97,20 +110,30 @@ function ToastItem({ toast }: { toast: Toast }) {
             dismiss(toast.id);
             void toast.onAction?.();
           }}
-          style={styles.action}
+          style={({ pressed, focused }: any) => [
+            styles.action,
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
           accessibilityRole="button"
           accessibilityLabel={toast.actionLabel}
         >
-          <Text style={styles.actionText}>{toast.actionLabel}</Text>
+          <Text style={[styles.actionText, { color: colors.tint }]}>
+            {toast.actionLabel}
+          </Text>
         </Pressable>
       )}
       <Pressable
         onPress={() => dismiss(toast.id)}
-        hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss notification"
+        accessibilityLabel={t("notifications.dismiss")}
+        style={({ pressed, focused }: any) => [
+          styles.dismiss,
+          pressed && styles.pressed,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        ]}
       >
-        <Ionicons name="close" size={16} color="#6b7280" />
+        <Ionicons name="close" size={16} color={colors.textSecondary} />
       </Pressable>
     </Animated.View>
   );
@@ -148,9 +171,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#16161f",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -173,7 +194,6 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    color: "#e2e8f0",
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,
@@ -184,8 +204,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   actionText: {
-    color: "#c4b5fd",
     fontSize: 14,
     fontWeight: "800",
   },
+  dismiss: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pressed: { opacity: 0.7 },
 });

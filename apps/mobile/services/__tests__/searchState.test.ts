@@ -1,4 +1,10 @@
-import { parseSearchRouteState, searchRouteParams } from "../searchState";
+import {
+  clearSearchFilters,
+  getSearchOutcome,
+  legacySearchRedirectParams,
+  parseSearchRouteState,
+  searchRouteParams,
+} from "../searchState";
 
 describe("search route state", () => {
   it("parses valid shareable filters", () => {
@@ -28,7 +34,7 @@ describe("search route state", () => {
       type: "all",
       year: "all",
       provider: "all",
-      sort: "relevance",
+      sort: "default",
       mode: undefined,
     });
   });
@@ -40,7 +46,7 @@ describe("search route state", () => {
         type: "all",
         year: "all",
         provider: "all",
-        sort: "relevance",
+        sort: "default",
       }),
     ).toEqual({
       q: "Alien",
@@ -50,5 +56,47 @@ describe("search route state", () => {
       sort: undefined,
       mode: undefined,
     });
+  });
+
+  it("normalizes the legacy relevance alias to the default sort", () => {
+    expect(parseSearchRouteState({ sort: "relevance" }).sort).toBe("default");
+    expect(
+      legacySearchRedirectParams({ q: "Dune", sort: "relevance" }),
+    ).toMatchObject({ q: "Dune", sort: undefined });
+  });
+
+  it("clears every filter including provider", () => {
+    expect(clearSearchFilters()).toEqual({
+      type: "all",
+      year: "all",
+      provider: "all",
+      sort: "default",
+    });
+  });
+
+  it.each([
+    [{ isLoading: true }, "loading"],
+    [{ isError: true }, "transport-error"],
+    [{ attemptedProviders: 0 }, "no-providers"],
+    [
+      { attemptedProviders: 2, successfulProviders: 0, failedProviderCount: 2 },
+      "provider-error",
+    ],
+    [{ resultCount: 0 }, "no-match"],
+    [{ filteredResultCount: 0, activeFilterCount: 1 }, "filter-empty"],
+  ])("classifies distinct search outcomes", (overrides, expected) => {
+    expect(
+      getSearchOutcome({
+        isLoading: false,
+        isError: false,
+        attemptedProviders: 1,
+        successfulProviders: 1,
+        failedProviderCount: 0,
+        resultCount: 1,
+        filteredResultCount: 1,
+        activeFilterCount: 0,
+        ...overrides,
+      }),
+    ).toBe(expected);
   });
 });

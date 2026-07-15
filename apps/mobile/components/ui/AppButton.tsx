@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import {
   getWebFocusStyle,
-  getAccentForeground,
+  getPrimaryForeground,
   uiRadii,
   uiSpacing,
   uiTouchTarget,
@@ -28,6 +28,7 @@ type AppButtonProps = {
   icon?: keyof typeof Ionicons.glyphMap;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  testID?: string;
   variant?: AppButtonVariant;
   size?: AppButtonSize;
   disabled?: boolean;
@@ -42,6 +43,7 @@ export function AppButton({
   icon,
   accessibilityLabel,
   accessibilityHint,
+  testID,
   variant = "secondary",
   size = "medium",
   disabled = false,
@@ -54,13 +56,14 @@ export function AppButton({
   const isDanger = variant === "danger";
   const isGhost = variant === "ghost";
   const foreground = isPrimary
-    ? getAccentForeground(colors)
+    ? getPrimaryForeground(colors)
     : isDanger
       ? colors.error
-      : colors.tint;
+      : colors.text;
 
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       disabled={disabled || loading}
       accessibilityRole="button"
@@ -73,20 +76,20 @@ export function AppButton({
         fullWidth && styles.fullWidth,
         {
           backgroundColor: isPrimary
-            ? colors.tint
+            ? colors.primary
             : isGhost
               ? "transparent"
               : isDanger
                 ? colors.error + "14"
-                : colors.card,
+                : colors.surfaceElevated,
           borderColor: isPrimary
-            ? colors.tint
+            ? "transparent"
             : isDanger
               ? colors.error + "33"
-              : colors.border,
+              : "transparent",
           opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
         },
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         style,
       ]}
     >
@@ -115,7 +118,7 @@ export function AppButton({
 const styles = StyleSheet.create({
   button: {
     minHeight: uiTouchTarget,
-    borderRadius: uiRadii.sm,
+    borderRadius: uiRadii.control,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -126,7 +129,7 @@ const styles = StyleSheet.create({
     minHeight: uiTouchTarget,
     paddingHorizontal: uiSpacing.md,
     paddingVertical: uiSpacing.sm,
-    borderRadius: uiRadii.lg,
+    borderRadius: uiRadii.control,
   },
   medium: {
     paddingHorizontal: uiSpacing.lg,

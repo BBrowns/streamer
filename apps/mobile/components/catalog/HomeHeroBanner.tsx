@@ -1,27 +1,35 @@
-import React, { memo } from "react";
+import { memo } from "react";
 import {
-  View,
-  Text,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
-  Platform,
+  Text,
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
-import { getWebFocusStyle, uiTouchTarget } from "../ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import {
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
+import { useTranslation } from "react-i18next";
 
 const isWeb = Platform.OS === "web";
 
 function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
+  const { t } = useTranslation();
   const { isCompact, isLarge, windowClass } = useWindowClass();
   const showPoster = windowClass === "expanded" || isLarge;
-  const heroHeight = isCompact ? 430 : isLarge ? 520 : 480;
+  const heroHeight = isCompact ? 440 : isLarge ? 540 : 490;
   const handleNavigate = () => router.push(`/detail/${item.type}/${item.id}`);
 
   return (
@@ -29,23 +37,22 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
       style={({ pressed, focused }: any) => [
         styles.hero,
         {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
+          backgroundColor: colors.surfaceElevated,
           height: heroHeight,
-          opacity: pressed ? 0.94 : 1,
+          opacity: pressed ? 0.9 : 1,
         },
         isWeb && focused && getWebFocusStyle(colors.focus),
       ]}
       onPress={handleNavigate}
       accessibilityRole="button"
-      accessibilityLabel={`Featured: ${item.name}`}
-      accessibilityHint="Opens title details and playback options"
+      accessibilityLabel={t("home.hero.a11y", { title: item.name })}
+      accessibilityHint={t("home.hero.hint")}
     >
       <Image
         source={{ uri: item.poster }}
         style={styles.heroBackdrop}
         resizeMode="cover"
-        blurRadius={18}
+        blurRadius={10}
         accessibilityIgnoresInvertColors
       />
 
@@ -54,22 +61,14 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
           style={[
             styles.heroOverlay,
             {
-              background: isDark
-                ? "linear-gradient(90deg, rgba(8,10,15,0.98) 0%, rgba(8,10,15,0.84) 52%, rgba(8,10,15,0.45) 100%)"
-                : "linear-gradient(90deg, rgba(246,247,249,0.98) 0%, rgba(246,247,249,0.84) 52%, rgba(246,247,249,0.45) 100%)",
+              background:
+                "linear-gradient(90deg, rgba(8,9,12,0.98) 0%, rgba(8,9,12,0.87) 48%, rgba(8,9,12,0.35) 100%)",
             },
           ]}
         />
       ) : (
         <View
-          style={[
-            styles.heroOverlay,
-            {
-              backgroundColor: isDark
-                ? "rgba(8,10,15,0.80)"
-                : "rgba(246,247,249,0.78)",
-            },
-          ]}
+          style={[styles.heroOverlay, { backgroundColor: "rgba(8,9,12,0.76)" }]}
         />
       )}
 
@@ -77,37 +76,20 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
         style={[styles.heroContent, showPoster && styles.heroContentDesktop]}
       >
         <View style={styles.heroCopy}>
-          <View
-            style={[
-              styles.heroBadge,
-              {
-                backgroundColor: isDark
-                  ? "rgba(216,180,254,0.18)"
-                  : "rgba(167,139,250,0.16)",
-                borderColor: isDark
-                  ? "rgba(216,180,254,0.34)"
-                  : "rgba(167,139,250,0.28)",
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.heroBadgeText,
-                { color: isDark ? "#f2d7ff" : "#7c5bd6" },
-              ]}
-            >
-              {item.type === "movie" ? "MOVIE" : "SERIES"}
-            </Text>
-          </View>
+          <Text style={styles.heroEyebrow}>
+            {t("home.hero.eyebrow", {
+              type: t(
+                item.type === "movie"
+                  ? "common.media.movie"
+                  : "common.media.series",
+              ),
+            })}
+          </Text>
 
           <Text
             style={[
               styles.heroTitle,
-              {
-                color: colors.text,
-                fontSize: isLarge ? 48 : 34,
-                lineHeight: isLarge ? 54 : 39,
-              },
+              isLarge ? styles.heroTitleLarge : styles.heroTitleCompact,
             ]}
             numberOfLines={3}
           >
@@ -115,85 +97,36 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
           </Text>
 
           <View style={styles.heroMetaRow}>
-            {!!item.releaseInfo && (
-              <Text
-                style={[
-                  styles.heroMetaPill,
-                  {
-                    color: colors.textSecondary,
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.08)"
-                      : "rgba(255,255,255,0.62)",
-                  },
-                ]}
-              >
-                {item.releaseInfo}
-              </Text>
-            )}
-            {!!item.imdbRating && (
-              <Text style={styles.heroRating}>{item.imdbRating} IMDb</Text>
-            )}
+            {item.releaseInfo ? (
+              <Text style={styles.heroMeta}>{item.releaseInfo}</Text>
+            ) : null}
+            {item.imdbRating ? (
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={13} color="#E7B86A" />
+                <Text style={styles.heroMeta}>{item.imdbRating}</Text>
+              </View>
+            ) : null}
           </View>
 
-          {!!item.description && (
+          {item.description ? (
             <Text
-              style={[styles.heroDesc, { color: colors.textSecondary }]}
+              style={styles.heroDescription}
               numberOfLines={showPoster ? 3 : 2}
             >
               {item.description}
             </Text>
-          )}
+          ) : null}
 
-          <View style={styles.heroActions}>
-            <View
-              style={[
-                styles.heroPlayBtn,
-                {
-                  backgroundColor: colors.tint,
-                },
-              ]}
-            >
-              <Ionicons name="play" size={18} color={colors.onTint} />
-              <Text style={[styles.heroPlayText, { color: colors.onTint }]}>
-                Play
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.heroInfoBtn,
-                {
-                  backgroundColor: isDark
-                    ? "rgba(255,255,255,0.09)"
-                    : "rgba(255,255,255,0.58)",
-                  borderColor: "rgba(127,111,145,0.2)",
-                },
-              ]}
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={18}
-                color={colors.text}
-              />
-              <Text style={[styles.heroInfoText, { color: colors.text }]}>
-                Details
-              </Text>
-            </View>
+          <View style={styles.detailsButton}>
+            <Text style={styles.detailsButtonText}>
+              {t("common.actions.viewDetails")}
+            </Text>
+            <Ionicons name="arrow-forward" size={17} color="#08090C" />
           </View>
         </View>
 
-        {showPoster && (
-          <View
-            style={[
-              styles.posterShell,
-              {
-                backgroundColor: isDark
-                  ? "rgba(255,255,255,0.08)"
-                  : "rgba(255,255,255,0.62)",
-                borderColor: colors.border,
-              },
-            ]}
-          >
+        {showPoster ? (
+          <View style={styles.posterShell}>
             <Image
               source={{ uri: item.poster }}
               style={styles.heroPoster}
@@ -201,7 +134,7 @@ function HomeHeroBannerInner({ item }: { item: MetaPreview }) {
               accessibilityIgnoresInvertColors
             />
           </View>
-        )}
+        ) : null}
       </View>
     </Pressable>
   );
@@ -211,148 +144,113 @@ export const HomeHeroBanner = memo(HomeHeroBannerInner);
 
 const styles = StyleSheet.create({
   hero: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 30,
-    borderWidth: 1,
+    marginHorizontal: uiSpacing.lg,
+    marginTop: uiSpacing.md,
+    marginBottom: uiSpacing.xxxl,
+    borderRadius: uiRadii.hero,
     position: "relative",
-    marginBottom: 24,
     overflow: "hidden",
   },
   heroBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    width: "112%",
-    height: "112%",
-    left: -16,
-    top: -16,
+    width: "108%",
+    height: "108%",
+    left: -12,
+    top: -12,
   },
   heroOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
   } as any,
   heroContent: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
+    ...StyleSheet.absoluteFillObject,
+    padding: uiSpacing.xxl,
     justifyContent: "flex-end",
   },
   heroContentDesktop: {
-    padding: 44,
+    padding: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 42,
+    gap: 48,
   },
   heroCopy: {
     flex: 1,
-    maxWidth: 720,
+    maxWidth: 680,
   },
-  heroBadge: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-  },
-  heroBadgeText: {
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0,
+  heroEyebrow: {
+    ...uiTypography.sectionLabel,
+    color: "#B7BEFF",
+    marginBottom: uiSpacing.md,
+    textTransform: "uppercase",
   },
   heroTitle: {
-    fontWeight: "900",
-    letterSpacing: 0,
-    marginBottom: 10,
+    fontFamily: uiTypography.display.fontFamily,
+    color: "#F4F5F7",
+    fontWeight: "800",
+    letterSpacing: -1,
+    marginBottom: uiSpacing.md,
+  },
+  heroTitleLarge: {
+    fontSize: 52,
+    lineHeight: 56,
+  },
+  heroTitleCompact: {
+    fontSize: 36,
+    lineHeight: 40,
   },
   heroMetaRow: {
+    minHeight: 20,
     flexDirection: "row",
-    gap: 8,
     alignItems: "center",
-    flexWrap: "wrap",
-    marginBottom: 12,
+    gap: uiSpacing.lg,
+    marginBottom: uiSpacing.md,
   },
-  heroMetaPill: {
-    fontSize: 12,
-    fontWeight: "800",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+  heroMeta: {
+    ...uiTypography.label,
+    color: "#C5C9D0",
   },
-  heroRating: {
-    color: "#d99a48",
-    fontSize: 12,
-    fontWeight: "900",
-    backgroundColor: "rgba(255,217,168,0.2)",
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.xs,
   },
-  heroDesc: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 20,
+  heroDescription: {
+    ...uiTypography.body,
+    color: "#C5C9D0",
     maxWidth: 560,
+    marginBottom: uiSpacing.xl,
   },
-  heroActions: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  heroPlayBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 28,
-    paddingVertical: 13,
+  detailsButton: {
     minHeight: uiTouchTarget,
-    borderRadius: 999,
-    // @ts-ignore web-only
-    transition: "background-color 0.15s ease, transform 0.1s ease",
-    cursor: Platform.OS === "web" ? "pointer" : undefined,
-  } as any,
-  heroPlayText: {
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  heroInfoBtn: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    minHeight: uiTouchTarget,
-    borderRadius: 999,
-    borderWidth: 1,
-    // @ts-ignore web-only
-    transition:
-      "background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease",
-    cursor: Platform.OS === "web" ? "pointer" : undefined,
-  } as any,
-  heroInfoText: {
-    fontWeight: "700",
-    fontSize: 15,
+    gap: uiSpacing.sm,
+    borderRadius: uiRadii.control,
+    backgroundColor: "#F4F5F7",
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.md,
+  },
+  detailsButtonText: {
+    ...uiTypography.control,
+    color: "#08090C",
   },
   posterShell: {
-    width: 230,
+    width: 224,
     aspectRatio: 2 / 3,
-    borderRadius: 26,
-    borderWidth: 1,
-    padding: 8,
+    borderRadius: uiRadii.card,
+    overflow: "hidden",
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 24px 44px rgba(44, 34, 54, 0.24)" }
-      : {}),
+      ? { boxShadow: "0 24px 56px rgba(0,0,0,0.42)" }
+      : {
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: 20 },
+          shadowOpacity: 0.38,
+          shadowRadius: 28,
+        }),
   } as any,
   heroPoster: {
     width: "100%",
     height: "100%",
-    borderRadius: 20,
   },
 });
