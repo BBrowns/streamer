@@ -239,6 +239,77 @@ export function SettingsChoiceRow({
   );
 }
 
+export function SettingsRadioRow({
+  title,
+  subtitle,
+  selected,
+  onPress,
+  testID,
+}: Pick<RowBaseProps, "title" | "subtitle" | "testID"> & {
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected, selected }}
+      onPress={onPress}
+      style={({ focused, pressed }: any) => [
+        styles.row,
+        styles.radioRow,
+        selected && { backgroundColor: colors.tint + "12" },
+        pressed && styles.pressed,
+        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+      ]}
+    >
+      <RowText title={title} subtitle={subtitle} />
+      <View
+        style={[
+          styles.radioIndicator,
+          {
+            borderColor: selected ? colors.tint : colors.border,
+            backgroundColor: selected ? colors.tint : "transparent",
+          },
+        ]}
+      >
+        {selected && (
+          <Ionicons name="checkmark" size={16} color={colors.onTint} />
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+export function SettingsInfoRow({
+  title,
+  value,
+  testID,
+}: {
+  title: string;
+  value: string;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View testID={testID} style={[styles.row, styles.infoRow]}>
+      <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
+        {title}
+      </Text>
+      <Text
+        selectable
+        numberOfLines={2}
+        style={[styles.infoValue, { color: colors.text }]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export function SettingsRowGroup({ children }: { children: ReactNode }) {
   const { colors } = useTheme();
   const items = Children.toArray(children);
@@ -292,6 +363,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 0,
+  },
+  radioRow: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 0,
+  },
+  radioIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoRow: {
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 0,
+  },
+  infoLabel: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  infoValue: {
+    flex: 1.4,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+    textAlign: "right",
   },
   icon: {
     width: 28,

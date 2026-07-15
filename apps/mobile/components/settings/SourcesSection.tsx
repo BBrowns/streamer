@@ -1,101 +1,23 @@
-import React, { useCallback, useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  Alert,
-  StyleSheet,
-  Platform,
-} from "react-native";
-import { useTranslation } from "react-i18next";
-import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuthStore } from "../../stores/authStore";
+import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import type { BridgeDiagnostics } from "../../services/streamEngine/StreamEngineManager";
+import { usePlaybackEnvironmentStatus } from "../../hooks/usePlaybackEnvironmentStatus";
 import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass } from "../../hooks/useWindowClass";
-import {
-  streamEngineManager,
-  type BridgeDiagnostics,
-  type BridgeStatus,
-} from "../../services/streamEngine/StreamEngineManager";
-import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
-import { diagnosticsFromDesktopBridge } from "../../services/streamEngine/desktopBridgeDiagnostics";
-import type { DesktopBridgeInfo } from "../../services/desktop-bridge";
-import { hapticSelection, hapticSuccess } from "../../lib/haptics";
-import { AppButton } from "../ui/AppButton";
-import { StatusPill } from "../ui/StatusPill";
-import { Surface } from "../ui/Surface";
-import { TextField } from "../ui/TextField";
+import { hapticSelection } from "../../lib/haptics";
 import {
   clientBuildMetadata,
   formatBuildLabel,
 } from "../../services/buildMetadata";
-import {
-  createDebugBundle,
-  exportDebugBundle,
-} from "../../services/debugBundle";
-import { getBridgeAuthHeaders } from "../../services/bridgeAuth";
-import { formatBytes } from "../downloads/downloadPresentation";
-import { preflightBridgeAction } from "../../services/actionPreflight";
+import { AppButton } from "../ui/AppButton";
 import { getWebFocusStyle } from "../ui/designSystem";
-
-function formatBridgeReason(reason: string) {
-  switch (reason) {
-    case "native-architecture-mismatch":
-      return "Native module architecture mismatch";
-    case "native-load-failed":
-      return "Native torrent module failed to load";
-    case "missing-stream-server-build":
-      return "Stream bridge build is missing";
-    case "bridge-port-owned-by-other-process":
-      return "Bridge port is already in use";
-    case "invalid-url":
-      return "Invalid bridge URL";
-    default:
-      return reason.replace(/-/g, " ");
-  }
-}
-
-function formatSelfTestStatus(status: string) {
-  switch (status) {
-    case "pass":
-      return "Passed";
-    case "warn":
-      return "Warning";
-    case "fail":
-      return "Failed";
-    default:
-      return status;
-  }
-}
-
-function formatRemuxRuntimeStatus(runtime: BridgeDiagnostics["remuxRuntime"]) {
-  if (!runtime) return null;
-  return runtime.available ? "Available" : "Unavailable";
-}
-
-function formatRemuxCacheStatus(cache: BridgeDiagnostics["remuxCache"]) {
-  if (!cache) return null;
-  return `${cache.entryCount ?? 0} files · ${cache.pendingCount ?? 0} pending`;
-}
-
-function formatTorrentCacheStatus(cache: BridgeDiagnostics["torrentCache"]) {
-  if (!cache) return null;
-  const used = formatBytes(cache.totalBytes ?? 0) ?? "0 B";
-  const max = formatBytes(cache.maxBytes ?? 0);
-  const usage = max ? `${used} / ${max}` : used;
-  return `${cache.entryCount ?? 0} entries · ${usage}`;
-}
-
-function formatTorrentCacheCleanupResult(cleanup: {
-  removedEntries?: number;
-  freedBytes?: number;
-}) {
-  const removedEntries = cleanup.removedEntries ?? 0;
-  const entryLabel = removedEntries === 1 ? "entry" : "entries";
-  const freed = formatBytes(cleanup.freedBytes ?? 0) ?? "0 B";
-  return `Removed ${removedEntries} inactive cache ${entryLabel} and freed ${freed}.`;
-}
+import { StatusPill } from "../ui/StatusPill";
+import { Surface } from "../ui/Surface";
+import { TextField } from "../ui/TextField";
+import { SettingsActionRow, SettingsRowGroup } from "./SettingsRows";
 
 type CapabilityTone = "success" | "warning" | "error" | "neutral" | "info";
 
@@ -114,9 +36,7 @@ function SettingsSubheading({
         {title}
       </Text>
       {!!subtitle && (
-        <Text
-          style={[styles.subheadingSubtitle, { color: colors.textSecondary }]}
-        >
+        <Text style={[styles.subheadingCopy, { color: colors.textSecondary }]}>
           {subtitle}
         </Text>
       )}
@@ -129,1007 +49,537 @@ function CapabilityRow({
   title,
   subtitle,
   status,
-  tone = "neutral",
+  tone,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   status: string;
-  tone?: CapabilityTone;
+  tone: CapabilityTone;
 }) {
   const { colors } = useTheme();
-  const { isCompact: isNarrow } = useWindowClass();
+  const { isCompact } = useWindowClass();
 
   return (
     <View style={styles.capabilityRow}>
-      <View
-        style={[styles.iconContainer, { backgroundColor: colors.tint + "20" }]}
-      >
-        <Ionicons name={icon} size={19} color={colors.tint} />
+      <View style={styles.capabilityIcon}>
+        <Ionicons name={icon} size={21} color={colors.textSecondary} />
       </View>
       <View style={styles.capabilityText}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
+        <Text style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.rowCopy, { color: colors.textSecondary }]}>
           {subtitle}
         </Text>
-        {isNarrow && (
-          <View style={styles.inlineStatus}>
+        {isCompact && (
+          <View style={styles.compactStatus}>
             <StatusPill label={status} tone={tone} />
           </View>
         )}
       </View>
-      {!isNarrow && <StatusPill label={status} tone={tone} />}
+      {!isCompact && <StatusPill label={status} tone={tone} />}
     </View>
   );
 }
 
+function Divider() {
+  const { colors } = useTheme();
+  return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
+}
+
 export function SourcesSection({
   showHeader = true,
-  mode = "all",
 }: {
   showHeader?: boolean;
-  mode?: "all" | "consumer" | "advanced";
 }) {
   const { t } = useTranslation();
-  const router = useRouter();
-  const {
-    backendUrl,
-    streamServerUrl,
-    streamServerToken,
-    setServerUrls,
-    setStreamServerToken,
-  } = useAuthStore();
   const { colors } = useTheme();
-
-  const [tempBackend, setTempBackend] = useState(backendUrl || "");
-  const [tempStream, setTempStream] = useState(streamServerUrl || "");
-  const [tempStreamToken, setTempStreamToken] = useState(
-    streamServerToken || "",
-  );
-  const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
-  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(
-    streamEngineManager.bridgeStatus,
-  );
-  const [bridgeDiagnostics, setBridgeDiagnostics] = useState<BridgeDiagnostics>(
-    streamEngineManager.getBridgeDiagnostics(),
-  );
-  const [isRestartingBridge, setIsRestartingBridge] = useState(false);
-  const [isCleaningTorrentCache, setIsCleaningTorrentCache] = useState(false);
-  const [isCopyingDiagnostics, setIsCopyingDiagnostics] = useState(false);
-  const [showConnectionSettings, setShowConnectionSettings] = useState(false);
-  const [showAdvancedDiagnostics, setShowAdvancedDiagnostics] = useState(false);
-
-  const refreshDesktopBridgeInfo = useCallback(
-    async (isCancelled?: () => boolean) => {
-      if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) {
-        return null;
-      }
-
-      try {
-        const info = await window.desktopBridge.getBridgeInfo();
-        if (!isCancelled?.()) {
-          setBridgeInfo(info);
-          if (info.pairingToken) {
-            setTempStreamToken(info.pairingToken);
-          }
-          if (info.lanUrl) {
-            setTempStream((current) => current || info.lanUrl);
-          }
-        }
-        return info;
-      } catch {
-        if (!isCancelled?.()) setBridgeInfo(null);
-        return null;
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const refreshBridge = async () => {
-      await refreshDesktopBridgeInfo(() => cancelled);
-      await streamEngineManager.detectBridge();
-      if (!cancelled) {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      }
-    };
-
-    refreshBridge().catch(() => {
-      if (!cancelled) {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      }
-    });
-    const timer = setInterval(() => {
-      refreshBridge().catch(() => {
-        if (!cancelled) {
-          setBridgeStatus(streamEngineManager.bridgeStatus);
-          setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-        }
-      });
-    }, 8000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [refreshDesktopBridgeInfo]);
-
-  const handleSave = async () => {
-    setServerUrls(tempBackend.trim() || null, tempStream.trim() || null);
-    await setStreamServerToken(tempStreamToken.trim() || null);
-    streamEngineManager
-      .detectBridge()
-      .then(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      })
-      .catch(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      });
-    hapticSuccess();
-    Alert.alert(
-      t("settings.advanced.successTitle"),
-      t("settings.advanced.successMessage"),
-    );
-  };
-
-  const handleReset = () => {
-    setTempBackend("");
-    setTempStream("");
-    setTempStreamToken("");
-    setServerUrls(null, null);
-    void setStreamServerToken(null);
-    streamEngineManager
-      .detectBridge()
-      .then(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      })
-      .catch(() => {
-        setBridgeStatus(streamEngineManager.bridgeStatus);
-        setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      });
-    hapticSelection();
-  };
-
-  const handleCheckBridge = async () => {
-    hapticSelection();
-    await refreshDesktopBridgeInfo();
-    await streamEngineManager.detectBridge();
-    setBridgeStatus(streamEngineManager.bridgeStatus);
-    setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-  };
-
-  const handleRecheckRuntime = async () => {
-    hapticSelection();
-    await refreshDesktopBridgeInfo();
-    await streamEngineManager.detectBridge();
-    setBridgeStatus(streamEngineManager.bridgeStatus);
-    setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-  };
-
-  const handleRestartBridge = async () => {
-    if (!window.desktopBridge?.restartBridge) return;
-
-    hapticSelection();
-    setIsRestartingBridge(true);
-    try {
-      const info = await window.desktopBridge.restartBridge();
-      setBridgeInfo(info);
-      if (info.localUrl) {
-        setTempStream(info.localUrl);
-      }
-      if (info.pairingToken) {
-        setTempStreamToken(info.pairingToken);
-      }
-      await streamEngineManager.detectBridge();
-      setBridgeStatus(streamEngineManager.bridgeStatus);
-      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-    } catch {
-      setBridgeStatus(streamEngineManager.bridgeStatus);
-      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-    } finally {
-      setIsRestartingBridge(false);
-    }
-  };
-
-  const desktopDiagnostics = diagnosticsFromDesktopBridge(bridgeInfo);
-  const effectiveBridgeDiagnostics = desktopDiagnostics || bridgeDiagnostics;
-  const effectiveBridgeStatus = desktopDiagnostics?.status || bridgeStatus;
-  const bridgePresentation = getBridgeStatusPresentation(
-    effectiveBridgeStatus,
-    effectiveBridgeDiagnostics,
-  );
-  const bridgeUrl =
-    bridgeInfo?.lanUrl || streamServerUrl || streamEngineManager.getBridgeUrl();
-  const torrentPreflight = preflightBridgeAction("play", {
-    diagnostics: effectiveBridgeDiagnostics,
-    url: bridgeUrl,
-    sourceKind: "torrent",
-  });
-  const downloadPreflight = preflightBridgeAction("download", {
-    diagnostics: effectiveBridgeDiagnostics,
-    url: bridgeUrl,
-    sourceKind: "torrent",
-  });
-  const castPreflight = preflightBridgeAction("cast", {
-    diagnostics: effectiveBridgeDiagnostics,
-    url: bridgeUrl,
-    sourceKind: "direct",
-  });
-  const bridgeUrlNeedsLan =
-    torrentPreflight.reason === "bridge_loopback_unreachable";
-  const bridgeRuntimeLabel =
-    effectiveBridgeDiagnostics.platform &&
-    effectiveBridgeDiagnostics.processArch
-      ? `${effectiveBridgeDiagnostics.platform}/${effectiveBridgeDiagnostics.processArch}`
-      : null;
-
-  const bridgeSelfTest = effectiveBridgeDiagnostics.selfTest;
-  const bridgeRepair = effectiveBridgeDiagnostics.repair;
-  const desktopBuildMetadata =
-    bridgeInfo?.build || bridgeInfo?.diagnostics?.build || null;
-  const bridgeBuildMetadata = bridgeInfo?.diagnostics?.health?.build || null;
-  const remuxRuntime = effectiveBridgeDiagnostics.remuxRuntime;
-  const remuxRuntimeStatus = formatRemuxRuntimeStatus(remuxRuntime);
-  const remuxCacheStatus = formatRemuxCacheStatus(
-    effectiveBridgeDiagnostics.remuxCache,
-  );
-  const torrentCacheStatus = formatTorrentCacheStatus(
-    effectiveBridgeDiagnostics.torrentCache,
-  );
-  const bridgeRepairSteps = bridgeRepair?.steps ?? [];
-  const bridgeRepairTitle =
-    bridgeRepair?.title || t("settings.advancedSection.repairSteps");
-  const bridgeRepairDetail = bridgeRepair?.detail || bridgePresentation.detail;
-  const bridgeReady = torrentPreflight.ready;
-  const bridgeNeedsRepair = [
-    "bridge_runtime_unsupported",
-    "gateway_unavailable",
-    "torrent_engine_unavailable",
-    "remux_unavailable",
-  ].includes(torrentPreflight.reason);
-  const bridgeTone: CapabilityTone = bridgeReady
+  const router = useRouter();
+  const environment = usePlaybackEnvironmentStatus();
+  const readinessTone: CapabilityTone = environment.bridgeReady
     ? "success"
-    : bridgeNeedsRepair
+    : environment.bridgeNeedsRepair
       ? "error"
       : "warning";
-  const torrentCapabilityStatus = bridgeReady
-    ? t("settings.advancedSection.ready")
-    : bridgeNeedsRepair
-      ? t("settings.advancedSection.repair")
-      : torrentPreflight.reason === "bridge_checking"
-        ? t("settings.advancedSection.checking")
-        : t("settings.advancedSection.needsService");
-  const torrentCapabilityTone: CapabilityTone = bridgeReady
-    ? "success"
-    : bridgeNeedsRepair
-      ? "error"
-      : "warning";
-  const bridgeHeadline = bridgeReady
-    ? t("settings.readiness.readyTitle")
-    : bridgeNeedsRepair
-      ? t("settings.advancedSection.serviceNeedsRepair")
-      : bridgePresentation.title;
-  const bridgeSummary = bridgeReady
-    ? t("settings.advancedSection.setupReadyDescription")
-    : bridgeNeedsRepair
-      ? t("settings.advancedSection.setupRepairDescription")
-      : `Direct streams can still work. ${torrentPreflight.message}`;
-
-  const handleShowBridgeRepairSteps = () => {
-    const body =
-      bridgeRepairSteps.length > 0
-        ? `${bridgeRepairDetail}\n\n${bridgeRepairSteps
-            .map((step, index) => `${index + 1}. ${step}`)
-            .join("\n\n")}`
-        : bridgeRepairDetail;
-
-    Alert.alert(bridgeRepairTitle, body);
-  };
-
-  const handleCopyDiagnostics = async () => {
-    setIsCopyingDiagnostics(true);
-    try {
-      const result = await exportDebugBundle(
-        createDebugBundle({
-          context: {
-            screen: "sources-devices",
-            bridgeStatus: effectiveBridgeStatus,
-            bridgeReason: effectiveBridgeDiagnostics.reason,
-          },
-        }),
-      );
-      Alert.alert(
-        t("settings.advancedSection.diagnosticsExported"),
-        result.method === "clipboard"
-          ? t("settings.advancedSection.diagnosticsCopiedDescription")
-          : t("settings.advancedSection.diagnosticsExportedDescription"),
-      );
-    } catch {
-      Alert.alert(
-        t("settings.advancedSection.diagnosticsUnavailable"),
-        t("settings.advancedSection.diagnosticsUnavailableDescription"),
-      );
-    } finally {
-      setIsCopyingDiagnostics(false);
-    }
-  };
-
-  const handleCleanTorrentCache = async () => {
-    if (!bridgeUrl) return;
-
-    hapticSelection();
-    setIsCleaningTorrentCache(true);
-    try {
-      const res = await fetch(
-        `${bridgeUrl.replace(/\/$/, "")}/api/cache/torrent/cleanup`,
-        {
-          method: "POST",
-          headers: getBridgeAuthHeaders(),
-        },
-      );
-      if (!res.ok) {
-        throw new Error(`Torrent cache cleanup failed (${res.status})`);
-      }
-
-      const data = await res.json();
-      await refreshDesktopBridgeInfo();
-      await streamEngineManager.detectBridge();
-      setBridgeStatus(streamEngineManager.bridgeStatus);
-      setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
-      hapticSuccess();
-      Alert.alert(
-        t("settings.advancedSection.cacheCleaned", {
-          defaultValue: "Torrent cache cleaned",
-        }),
-        formatTorrentCacheCleanupResult(data.cleanup ?? {}),
-      );
-    } catch {
-      Alert.alert(
-        t("settings.advancedSection.cacheCleanupFailed"),
-        t("settings.advancedSection.cacheCleanupFailedDescription"),
-      );
-    } finally {
-      setIsCleaningTorrentCache(false);
-    }
-  };
 
   return (
-    <View style={styles.container}>
+    <View testID="sources-consumer-section" style={styles.container}>
       {showHeader && (
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.title, { color: colors.text }]}>
-              {t("settings.advanced.title", {
-                defaultValue: "Sources & Devices",
-              })}
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {t("settings.sourcesSection.pageDescription")}
-            </Text>
-          </View>
-        </View>
+        <SettingsSubheading
+          title={t("settings.navigation.sources.title", {
+            defaultValue: "Sources & Devices",
+          })}
+          subtitle={t("settings.sourcesSection.pageDescription")}
+        />
       )}
 
       <Surface
         variant={
-          bridgeReady ? "accent" : bridgeNeedsRepair ? "warning" : "default"
+          environment.bridgeReady
+            ? "accent"
+            : environment.bridgeNeedsRepair
+              ? "warning"
+              : "default"
         }
         style={styles.readinessCard}
       >
-        <View style={styles.bridgeHeader}>
-          <StatusPill
-            label={
-              mode === "consumer"
-                ? bridgeReady
-                  ? t("settings.readiness.readyTitle", {
-                      defaultValue: "Ready to play",
-                    })
-                  : t("settings.readiness.attentionTitle", {
-                      defaultValue: "Needs attention",
-                    })
-                : bridgePresentation.title
-            }
-            tone={bridgeTone}
-            icon={
-              bridgeTone === "success"
-                ? "checkmark-circle-outline"
-                : bridgeTone === "error"
-                  ? "alert-circle-outline"
-                  : "warning-outline"
-            }
-          />
-        </View>
-        <Text style={[styles.readinessTitle, { color: colors.text }]}>
-          {mode === "consumer"
-            ? bridgeReady
-              ? t("settings.readiness.readyTitle")
+        <StatusPill
+          label={
+            environment.bridgeReady
+              ? t("settings.readiness.readyTitle", {
+                  defaultValue: "Ready to play",
+                })
               : t("settings.readiness.attentionTitle", {
-                  defaultValue: "Playback setup needs attention",
+                  defaultValue: "Needs attention",
                 })
-            : bridgeHeadline}
+          }
+          tone={readinessTone}
+          icon={
+            environment.bridgeReady
+              ? "checkmark-circle-outline"
+              : "alert-circle-outline"
+          }
+        />
+        <Text style={[styles.readinessTitle, { color: colors.text }]}>
+          {environment.bridgeReady
+            ? t("settings.readiness.readyTitle")
+            : t("settings.readiness.attentionTitle")}
         </Text>
-        <Text style={[styles.bridgeText, { color: colors.textSecondary }]}>
-          {mode === "consumer"
-            ? bridgeReady
-              ? t("settings.readiness.readyDescription", {
-                  defaultValue:
-                    "This device is ready for supported playback and downloads.",
-                })
-              : t("settings.readiness.attentionDescription", {
-                  defaultValue:
-                    "Direct playback may still work. Review your setup for every source type.",
-                })
-            : bridgeSummary}
+        <Text style={[styles.readinessCopy, { color: colors.textSecondary }]}>
+          {environment.bridgeReady
+            ? t("settings.readiness.readyDescription")
+            : t("settings.readiness.attentionDescription")}
         </Text>
-        <View style={styles.actionRow}>
+        <View style={styles.actions}>
           <AppButton
             label={t("settings.readiness.checkAgain", {
               defaultValue: "Check again",
             })}
             icon="refresh-outline"
-            size="small"
             variant="ghost"
-            onPress={handleCheckBridge}
+            size="small"
+            loading={environment.isChecking}
+            disabled={environment.isChecking}
+            onPress={() => void environment.refreshEnvironment()}
           />
-          {mode !== "consumer" &&
-            Platform.OS === "web" &&
-            window.desktopBridge?.getBridgeInfo && (
-              <AppButton
-                label={t("settings.advancedSection.recheckRuntime", {
-                  defaultValue: "Re-check runtime",
-                })}
-                icon="pulse-outline"
-                size="small"
-                variant="ghost"
-                onPress={handleRecheckRuntime}
-              />
-            )}
-          {mode !== "consumer" && bridgeRepair?.required && (
-            <AppButton
-              label={t("settings.advancedSection.repairSteps", {
-                defaultValue: "Repair steps",
-              })}
-              icon="build-outline"
-              size="small"
-              variant="ghost"
-              onPress={handleShowBridgeRepairSteps}
-            />
-          )}
-          {mode !== "consumer" && bridgeInfo?.lanUrl && (
-            <AppButton
-              label={t("settings.advancedSection.useLanUrl")}
-              icon="copy-outline"
-              size="small"
-              variant="ghost"
-              onPress={() => {
-                setTempStream(bridgeInfo.lanUrl);
-                if (bridgeInfo.pairingToken) {
-                  setTempStreamToken(bridgeInfo.pairingToken);
-                }
-                hapticSelection();
-              }}
-            />
-          )}
-          {mode !== "consumer" &&
-            Platform.OS === "web" &&
-            window.desktopBridge?.restartBridge && (
-              <AppButton
-                label={
-                  isRestartingBridge
-                    ? t("settings.advancedSection.restarting")
-                    : t("settings.advancedSection.restart")
-                }
-                icon="reload-outline"
-                size="small"
-                variant="ghost"
-                onPress={handleRestartBridge}
-                disabled={isRestartingBridge}
-                loading={isRestartingBridge}
-              />
-            )}
-          {mode !== "consumer" && !!torrentCacheStatus && (
-            <AppButton
-              label={
-                isCleaningTorrentCache
-                  ? t("settings.advancedSection.cleaning")
-                  : t("settings.advancedSection.cleanCache", {
-                      defaultValue: "Clean cache",
-                    })
-              }
-              icon="trash-outline"
-              size="small"
-              variant="ghost"
-              onPress={handleCleanTorrentCache}
-              disabled={isCleaningTorrentCache}
-              loading={isCleaningTorrentCache}
-            />
-          )}
-          {mode !== "consumer" && (
-            <AppButton
-              label={
-                isCopyingDiagnostics
-                  ? t("settings.advancedSection.copying", {
-                      defaultValue: "Copying…",
-                    })
-                  : t("settings.advancedSection.copyDiagnostics", {
-                      defaultValue: "Copy diagnostics",
-                    })
-              }
-              icon="document-text-outline"
-              size="small"
-              variant="ghost"
-              onPress={handleCopyDiagnostics}
-              disabled={isCopyingDiagnostics}
-              loading={isCopyingDiagnostics}
-            />
-          )}
         </View>
       </Surface>
 
-      {mode !== "consumer" && bridgeUrlNeedsLan && (
-        <Surface variant="warning" style={styles.warningBox}>
-          <Ionicons name="warning-outline" size={16} color={colors.warning} />
-          <View style={styles.warningTextContainer}>
-            <Text style={[styles.warningTitle, { color: colors.text }]}>
-              {t("settings.advancedSection.lanWarningTitle", {
-                defaultValue: "Use the desktop bridge LAN URL",
-              })}
+      <SettingsSubheading
+        title={t("settings.sourcesSection.contentAddonsTitle", {
+          defaultValue: "Content Add-ons",
+        })}
+        subtitle={t("settings.sourcesSection.addonsDescription", {
+          defaultValue:
+            "Install and manage the add-ons that provide your catalog.",
+        })}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t("settings.items.manageAddons")}
+        onPress={() => {
+          hapticSelection();
+          router.push("/addons");
+        }}
+        style={({ pressed, focused }: any) => [
+          styles.focusable,
+          pressed && styles.pressed,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        ]}
+      >
+        <Surface style={styles.navigationCard}>
+          <Ionicons
+            name="extension-puzzle-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+          <View style={styles.capabilityText}>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>
+              {t("settings.items.manageAddons")}
             </Text>
-            <Text style={[styles.warningBodyText, { color: colors.warning }]}>
-              {t("settings.advancedSection.lanWarningDescription", {
-                defaultValue:
-                  "localhost only points at this device. Paste the desktop bridge LAN URL before using torrent playback, downloads, or casting here.",
-              })}
+            <Text style={[styles.rowCopy, { color: colors.textSecondary }]}>
+              {t("settings.subtitles.manageAddons")}
             </Text>
           </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
         </Surface>
+      </Pressable>
+
+      <SettingsSubheading
+        title={t("settings.sourcesSection.playbackDevicesTitle", {
+          defaultValue: "Playback & devices",
+        })}
+        subtitle={t("settings.sourcesSection.playbackDevicesDescription", {
+          defaultValue:
+            "See whether this device can prepare local playback and casting.",
+        })}
+      />
+      <Surface style={styles.capabilityCard}>
+        <CapabilityRow
+          icon="desktop-outline"
+          title={t("settings.sourcesSection.localPlaybackService", {
+            defaultValue: "Local Playback Service",
+          })}
+          subtitle={
+            environment.bridgeReady
+              ? t("settings.sourcesSection.localPlaybackReady", {
+                  defaultValue:
+                    "Local playback and offline preparation are available.",
+                })
+              : t("settings.sourcesSection.localPlaybackLimited", {
+                  defaultValue:
+                    "Some source types may need a desktop setup check.",
+                })
+          }
+          status={
+            environment.bridgeReady
+              ? t("settings.advancedSection.ready")
+              : t("settings.advancedSection.limited")
+          }
+          tone={environment.bridgeReady ? "success" : "warning"}
+        />
+        <Divider />
+        <CapabilityRow
+          icon="radio-outline"
+          title={t("settings.sourcesSection.castingDevices", {
+            defaultValue: "Casting & Devices",
+          })}
+          subtitle={
+            environment.castPreflight.ready
+              ? t("settings.advancedSection.castingReadyDescription")
+              : t("settings.sourcesSection.castingLimited", {
+                  defaultValue:
+                    "Casting is available for compatible sources and devices.",
+                })
+          }
+          status={
+            environment.castPreflight.ready
+              ? t("settings.advancedSection.ready")
+              : t("settings.advancedSection.limited")
+          }
+          tone={environment.castPreflight.ready ? "success" : "warning"}
+        />
+      </Surface>
+    </View>
+  );
+}
+
+export function AdvancedSourcesSection({
+  showHeader = true,
+}: {
+  showHeader?: boolean;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const environment = usePlaybackEnvironmentStatus();
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const diagnostics = environment.effectiveDiagnostics;
+  const repair = environment.repair;
+
+  return (
+    <View testID="sources-advanced-section" style={styles.container}>
+      {showHeader && (
+        <SettingsSubheading
+          title={t("settings.navigation.advanced.title", {
+            defaultValue: "Advanced",
+          })}
+          subtitle={t("settings.navigation.advanced.description")}
+        />
       )}
 
-      {mode !== "advanced" && (
-        <>
-          <SettingsSubheading
-            title={t("settings.sourcesSection.addonsTitle", {
-              defaultValue: "Content sources",
-            })}
-            subtitle={t("settings.sourcesSection.addonsDescription", {
-              defaultValue:
-                "Install and manage the add-ons that provide your catalog.",
-            })}
-          />
-          <Pressable
-            onPress={() => {
-              hapticSelection();
-              router.push("/addons");
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={t("settings.items.manageAddons")}
-            style={({ pressed, focused }: any) => [
-              styles.focusableRow,
-              pressed && styles.pressed,
-              Platform.OS === "web" &&
-                focused &&
-                getWebFocusStyle(colors.focus),
-            ]}
-          >
-            <Surface
-              variant={mode === "consumer" ? "default" : "accent"}
-              style={styles.addonsCard}
-            >
-              <View
-                style={[
-                  styles.iconContainer,
-                  {
-                    backgroundColor:
-                      mode === "consumer" ? "transparent" : colors.tint + "20",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="extension-puzzle-outline"
-                  size={20}
-                  color={colors.tint}
-                />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>
-                  {t("settings.items.manageAddons")}
-                </Text>
-                <Text
-                  style={[styles.cardSubtitle, { color: colors.textSecondary }]}
-                >
-                  {t("settings.subtitles.manageAddons")}
-                </Text>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </Surface>
-          </Pressable>
-        </>
-      )}
-
-      {mode !== "consumer" && (
-        <>
-          <SettingsSubheading
-            title={t("settings.advancedSection.devicesTitle")}
-            subtitle={t("settings.advancedSection.devicesDescription")}
-          />
-          <Surface style={styles.sectionCard}>
-            <CapabilityRow
-              icon="desktop-outline"
-              title={t("settings.advancedSection.desktopBridge")}
-              subtitle={bridgeReady ? bridgeUrl : bridgePresentation.detail}
-              status={
-                bridgeReady
-                  ? t("settings.advancedSection.connected")
-                  : bridgePresentation.badge
-              }
-              tone={bridgeTone}
-            />
-            <View
-              style={[styles.rowDivider, { backgroundColor: colors.border }]}
-            />
-            <CapabilityRow
-              icon="radio-outline"
-              title={t("settings.advancedSection.casting")}
-              subtitle={
-                castPreflight.ready
-                  ? t("settings.advancedSection.castingReadyDescription")
-                  : castPreflight.message
-              }
-              status={
-                castPreflight.ready
-                  ? t("settings.advancedSection.ready")
-                  : t("settings.advancedSection.limited")
-              }
-              tone={castPreflight.ready ? "success" : "warning"}
-            />
-          </Surface>
-
-          <SettingsSubheading
-            title={t("settings.advancedSection.playbackTitle")}
-            subtitle={t("settings.advancedSection.playbackDescription")}
-          />
-          <Surface style={styles.sectionCard}>
-            <CapabilityRow
-              icon="play-circle-outline"
-              title={t("settings.advancedSection.directStreams")}
-              subtitle={t("settings.advancedSection.directStreamsDescription")}
-              status={t("settings.advancedSection.ready")}
-              tone="success"
-            />
-            <View
-              style={[styles.rowDivider, { backgroundColor: colors.border }]}
-            />
-            <CapabilityRow
-              icon="magnet-outline"
-              title={t("settings.advancedSection.torrentStreams")}
-              subtitle={
-                torrentPreflight.ready
-                  ? t("settings.advancedSection.torrentStreamsDescription")
-                  : torrentPreflight.message
-              }
-              status={torrentCapabilityStatus}
-              tone={torrentCapabilityTone}
-            />
-            <View
-              style={[styles.rowDivider, { backgroundColor: colors.border }]}
-            />
-            <CapabilityRow
-              icon="cloud-download-outline"
-              title={t("settings.navigation.downloads.title")}
-              subtitle={t("settings.advancedSection.downloadsDescription")}
-              status={
-                downloadPreflight.ready
-                  ? t("settings.advancedSection.ready")
-                  : t("settings.advancedSection.directOnly")
-              }
-              tone={downloadPreflight.ready ? "success" : "warning"}
-            />
-          </Surface>
-
-          <SettingsSubheading
-            title={t("settings.advancedSection.resolversTitle")}
-            subtitle={t("settings.advancedSection.resolversDescription")}
-          />
-          <Surface variant="accent" style={styles.serviceCard}>
-            <View style={styles.bridgeHeader}>
-              <Ionicons name="diamond-outline" size={16} color={colors.tint} />
-              <Text style={[styles.bridgeTitle, { color: colors.text }]}>
-                Real-Debrid
+      <SettingsSubheading
+        title={t("settings.advancedSection.connectionSettings", {
+          defaultValue: "Server & pairing",
+        })}
+        subtitle={t("settings.advancedSection.connectionDescription")}
+      />
+      <Surface style={styles.formCard}>
+        <TextField
+          label={t("settings.advanced.backendLabel", {
+            defaultValue: "Backend API URL",
+          })}
+          value={environment.backendInput}
+          onChangeText={environment.setBackendInput}
+          placeholder="e.g. http://192.168.1.50:3001"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TextField
+          label={t("settings.advanced.streamLabel", {
+            defaultValue: "Streaming Service URL",
+          })}
+          value={environment.streamInput}
+          onChangeText={environment.setStreamInput}
+          placeholder="e.g. http://192.168.1.50:11470"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TextField
+          label={t("settings.advancedSection.pairingToken", {
+            defaultValue: "Pairing token",
+          })}
+          value={environment.pairingTokenInput}
+          onChangeText={environment.setPairingTokenInput}
+          placeholder={t("settings.advancedSection.pairingPlaceholder")}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+        {environment.bridgeUrlNeedsLan && (
+          <Surface variant="warning" style={styles.inlineNotice}>
+            <Ionicons name="warning-outline" size={18} color={colors.warning} />
+            <View style={styles.capabilityText}>
+              <Text style={[styles.rowTitle, { color: colors.text }]}>
+                {t("settings.advancedSection.lanWarningTitle", {
+                  defaultValue: "Use the desktop service LAN address",
+                })}
+              </Text>
+              <Text style={[styles.rowCopy, { color: colors.textSecondary }]}>
+                {t("settings.advancedSection.lanWarningDescription")}
               </Text>
             </View>
-            <Text style={[styles.bridgeText, { color: colors.textSecondary }]}>
-              {t("settings.advancedSection.realDebridDescription")}
-            </Text>
           </Surface>
-
-          <SettingsSubheading
-            title={t("settings.navigation.advanced.title")}
-            subtitle={t("settings.advancedSection.technicalDescription")}
+        )}
+        {!!environment.bridgeInfo?.lanUrl && (
+          <AppButton
+            label={t("settings.advancedSection.useLanUrl")}
+            icon="link-outline"
+            size="small"
+            variant="ghost"
+            onPress={() => {
+              environment.setStreamInput(environment.bridgeInfo!.lanUrl);
+              if (environment.bridgeInfo?.pairingToken) {
+                environment.setPairingTokenInput(
+                  environment.bridgeInfo.pairingToken,
+                );
+              }
+            }}
           />
-          <Surface style={styles.sectionCard}>
-            <Pressable
-              style={({ pressed, focused }: any) => [
-                styles.disclosureRow,
-                pressed && styles.pressed,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-              onPress={() => setShowConnectionSettings((value) => !value)}
-              accessibilityRole="button"
-              accessibilityLabel={t(
-                "settings.advancedSection.connectionSettings",
-              )}
-              accessibilityState={{ expanded: showConnectionSettings }}
-            >
-              <View style={styles.textContainerNoMargin}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>
-                  {t("settings.advancedSection.connectionSettings")}
-                </Text>
-                <Text
-                  style={[styles.cardSubtitle, { color: colors.textSecondary }]}
-                >
-                  {t("settings.advancedSection.connectionDescription")}
-                </Text>
-              </View>
-              <Ionicons
-                name={showConnectionSettings ? "chevron-up" : "chevron-down"}
-                size={18}
-                color={colors.textSecondary}
-              />
-            </Pressable>
+        )}
+        <Surface variant="warning" style={styles.inlineNotice}>
+          <Ionicons name="warning-outline" size={18} color={colors.warning} />
+          <Text style={[styles.noticeCopy, { color: colors.textSecondary }]}>
+            {t("settings.advanced.warning")}
+          </Text>
+        </Surface>
+        <View style={styles.footer}>
+          <AppButton
+            label={t("settings.advanced.restore")}
+            onPress={environment.resetConnections}
+            variant="secondary"
+            size="large"
+            fullWidth
+          />
+          <AppButton
+            label={t("settings.advanced.apply")}
+            onPress={() => void environment.saveConnections()}
+            variant="primary"
+            size="large"
+            fullWidth
+          />
+        </View>
+      </Surface>
 
-            {showConnectionSettings && (
-              <View style={styles.disclosureContent}>
-                <TextField
-                  label={t("settings.advanced.backendLabel")}
-                  value={tempBackend}
-                  onChangeText={setTempBackend}
-                  placeholder="e.g. http://192.168.1.50:3001"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+      <SettingsSubheading
+        title={t("settings.advancedSection.serviceMaintenance", {
+          defaultValue: "Playback service maintenance",
+        })}
+        subtitle={t("settings.advancedSection.serviceMaintenanceDescription", {
+          defaultValue:
+            "Re-check, repair, clean cached files or export diagnostics.",
+        })}
+      />
+      <SettingsRowGroup>
+        <SettingsActionRow
+          icon="pulse-outline"
+          title={t("settings.advancedSection.recheckRuntime", {
+            defaultValue: "Re-check runtime",
+          })}
+          subtitle={environment.presentation.detail}
+          loading={environment.isChecking}
+          disabled={environment.isChecking}
+          onPress={() => void environment.refreshEnvironment()}
+        />
+        {environment.canRestart && (
+          <SettingsActionRow
+            icon="reload-outline"
+            title={t("settings.advancedSection.restart", {
+              defaultValue: "Restart playback service",
+            })}
+            subtitle={t("settings.advancedSection.restartDescription", {
+              defaultValue: "Restart the local desktop playback process.",
+            })}
+            loading={environment.isRestarting}
+            disabled={environment.isRestarting}
+            onPress={() => void environment.restartService()}
+          />
+        )}
+        {!!repair?.required && (
+          <SettingsActionRow
+            icon="build-outline"
+            title={t("settings.advancedSection.repairSteps", {
+              defaultValue: "Repair steps",
+            })}
+            subtitle={repair.detail || environment.presentation.detail}
+            onPress={environment.showRepairSteps}
+          />
+        )}
+        {!!environment.torrentCacheLabel && (
+          <SettingsActionRow
+            icon="trash-outline"
+            title={t("settings.advancedSection.cleanPlaybackCache", {
+              defaultValue: "Clean playback cache",
+            })}
+            subtitle={environment.torrentCacheLabel}
+            loading={environment.isCleaningCache}
+            disabled={environment.isCleaningCache}
+            onPress={() => void environment.cleanCache()}
+          />
+        )}
+        <SettingsActionRow
+          icon="document-text-outline"
+          title={t("settings.advancedSection.exportDiagnostics", {
+            defaultValue: "Export diagnostics",
+          })}
+          subtitle={t("settings.advancedSection.diagnosticsDescription")}
+          loading={environment.isExportingDiagnostics}
+          disabled={environment.isExportingDiagnostics}
+          onPress={() => void environment.exportDiagnostics()}
+        />
+      </SettingsRowGroup>
 
-                <TextField
-                  label={t("settings.advanced.streamLabel")}
-                  value={tempStream}
-                  onChangeText={setTempStream}
-                  placeholder="e.g. http://192.168.1.50:11470"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-
-                <TextField
-                  label={t("settings.advancedSection.pairingToken")}
-                  value={tempStreamToken}
-                  onChangeText={setTempStreamToken}
-                  placeholder={t("settings.advancedSection.pairingPlaceholder")}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                />
-
-                <Surface variant="warning" style={styles.warningBox}>
-                  <Ionicons
-                    name="warning-outline"
-                    size={16}
-                    color={colors.warning}
-                  />
-                  <Text style={[styles.warningText, { color: colors.warning }]}>
-                    {t("settings.advanced.warning")}
-                  </Text>
-                </Surface>
-
-                <View style={styles.footer}>
-                  <AppButton
-                    label={t("settings.advanced.restore")}
-                    onPress={handleReset}
-                    variant="secondary"
-                    size="large"
-                    fullWidth
-                  />
-                  <AppButton
-                    label={t("settings.advanced.apply")}
-                    onPress={handleSave}
-                    variant="primary"
-                    size="large"
-                    fullWidth
-                  />
-                </View>
-              </View>
-            )}
-
-            <View
-              style={[styles.rowDivider, { backgroundColor: colors.border }]}
-            />
-
-            <Pressable
-              style={({ pressed, focused }: any) => [
-                styles.disclosureRow,
-                pressed && styles.pressed,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-              onPress={() => setShowAdvancedDiagnostics((value) => !value)}
-              accessibilityRole="button"
-              accessibilityLabel={t("settings.advancedSection.diagnostics")}
-              accessibilityState={{ expanded: showAdvancedDiagnostics }}
-            >
-              <View style={styles.textContainerNoMargin}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>
-                  {t("settings.advancedSection.diagnostics", {
-                    defaultValue: "Advanced diagnostics",
+      <SettingsSubheading
+        title={t("settings.advancedSection.technicalDetails", {
+          defaultValue: "Technical details",
+        })}
+        subtitle={t("settings.advancedSection.technicalDescription")}
+      />
+      <Surface style={styles.disclosureCard}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showTechnicalDetails }}
+          accessibilityLabel={t("settings.advancedSection.technicalDetails", {
+            defaultValue: "Technical details",
+          })}
+          onPress={() => setShowTechnicalDetails((visible) => !visible)}
+          style={({ pressed, focused }: any) => [
+            styles.disclosureRow,
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <View style={styles.capabilityText}>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>
+              {t("settings.advancedSection.runtimeBuildDetails", {
+                defaultValue: "Runtime and build details",
+              })}
+            </Text>
+            <Text style={[styles.rowCopy, { color: colors.textSecondary }]}>
+              {showTechnicalDetails
+                ? t("settings.advancedSection.hideTechnical", {
+                    defaultValue: "Hide internal status and version details.",
+                  })
+                : t("settings.advancedSection.showTechnical", {
+                    defaultValue: "Show internal status and version details.",
                   })}
-                </Text>
-                <Text
-                  style={[styles.cardSubtitle, { color: colors.textSecondary }]}
-                >
-                  {t("settings.advancedSection.diagnosticsDescription")}
-                </Text>
-              </View>
-              <Ionicons
-                name={showAdvancedDiagnostics ? "chevron-up" : "chevron-down"}
-                size={18}
-                color={colors.textSecondary}
-              />
-            </Pressable>
+            </Text>
+          </View>
+          <Ionicons
+            name={showTechnicalDetails ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+        {showTechnicalDetails && (
+          <View
+            style={[styles.technicalContent, { borderTopColor: colors.border }]}
+          >
+            <TechnicalDetails diagnostics={diagnostics} />
+          </View>
+        )}
+      </Surface>
+    </View>
+  );
+}
 
-            {showAdvancedDiagnostics && (
-              <View style={styles.disclosureContent}>
-                <Text
-                  selectable
-                  style={[
-                    styles.diagnosticsText,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  App build: {formatBuildLabel(clientBuildMetadata)}
-                </Text>
-                {!!desktopBuildMetadata && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Desktop build: {formatBuildLabel(desktopBuildMetadata)}
-                  </Text>
-                )}
-                {!!bridgeBuildMetadata && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Bridge build: {formatBuildLabel(bridgeBuildMetadata)}
-                  </Text>
-                )}
-                {!!bridgeSelfTest && (
-                  <>
-                    <Text
-                      selectable
-                      style={[
-                        styles.diagnosticsText,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      Self-test: {formatSelfTestStatus(bridgeSelfTest.status)}
-                    </Text>
-                    {bridgeSelfTest.checks?.map((check) => (
-                      <Text
-                        key={check.name}
-                        selectable
-                        style={[
-                          styles.diagnosticsText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {check.name}: {check.message}
-                      </Text>
-                    ))}
-                  </>
-                )}
-                {!!effectiveBridgeDiagnostics.reason && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Reason:{" "}
-                    {formatBridgeReason(effectiveBridgeDiagnostics.reason)}
-                  </Text>
-                )}
-                {!!effectiveBridgeDiagnostics.message && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {effectiveBridgeDiagnostics.message}
-                  </Text>
-                )}
-                {!!bridgeRuntimeLabel && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Runtime: {bridgeRuntimeLabel}
-                    {effectiveBridgeDiagnostics.nativeArch
-                      ? ` · Native: ${effectiveBridgeDiagnostics.nativeArch}`
-                      : ""}
-                  </Text>
-                )}
-                {!!remuxRuntimeStatus && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    FFmpeg: {remuxRuntimeStatus}
-                  </Text>
-                )}
-                {!!remuxRuntime?.message && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {remuxRuntime.message}
-                  </Text>
-                )}
-                {!!remuxCacheStatus && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Remux cache: {remuxCacheStatus}
-                  </Text>
-                )}
-                {!!torrentCacheStatus && (
-                  <Text
-                    selectable
-                    style={[
-                      styles.diagnosticsText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Torrent cache: {torrentCacheStatus}
-                  </Text>
-                )}
-              </View>
-            )}
-          </Surface>
-        </>
-      )}
+function TechnicalDetails({ diagnostics }: { diagnostics: BridgeDiagnostics }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const entries: Array<[string, string | null | undefined]> = [
+    [
+      t("settings.advancedSection.appBuildLabel", {
+        defaultValue: "App build",
+      }),
+      formatBuildLabel(clientBuildMetadata),
+    ],
+    [
+      t("settings.advancedSection.statusLabel", { defaultValue: "Status" }),
+      diagnostics.status,
+    ],
+    [
+      t("settings.advancedSection.reasonLabel", { defaultValue: "Reason" }),
+      diagnostics.reason?.replace(/-/g, " "),
+    ],
+    [
+      t("settings.advancedSection.messageLabel", { defaultValue: "Message" }),
+      diagnostics.message,
+    ],
+    [
+      t("settings.advancedSection.runtimeLabel", { defaultValue: "Runtime" }),
+      diagnostics.platform && diagnostics.processArch
+        ? `${diagnostics.platform}/${diagnostics.processArch}`
+        : null,
+    ],
+    [
+      t("settings.advancedSection.nativeRuntimeLabel", {
+        defaultValue: "Native runtime",
+      }),
+      diagnostics.nativeArch ? String(diagnostics.nativeArch) : null,
+    ],
+    [
+      t("settings.advancedSection.ffmpegLabel", { defaultValue: "FFmpeg" }),
+      diagnostics.remuxRuntime
+        ? diagnostics.remuxRuntime.available
+          ? "Available"
+          : "Unavailable"
+        : null,
+    ],
+    [
+      t("settings.advancedSection.remuxCacheLabel", {
+        defaultValue: "Remux cache",
+      }),
+      diagnostics.remuxCache
+        ? `${diagnostics.remuxCache.entryCount ?? 0} files · ${diagnostics.remuxCache.pendingCount ?? 0} pending`
+        : null,
+    ],
+  ];
+  const selfTestChecks = diagnostics.selfTest?.checks ?? [];
+
+  return (
+    <View style={styles.technicalList}>
+      {entries
+        .filter((entry): entry is [string, string] => Boolean(entry[1]))
+        .map(([label, value]) => (
+          <Text
+            key={label}
+            selectable
+            style={[styles.technicalText, { color: colors.textSecondary }]}
+          >
+            {label}: {value}
+          </Text>
+        ))}
+      {selfTestChecks.map((check) => (
+        <Text
+          key={check.name}
+          selectable
+          style={[styles.technicalText, { color: colors.textSecondary }]}
+        >
+          {check.name}: {check.message}
+        </Text>
+      ))}
     </View>
   );
 }
@@ -1138,164 +588,131 @@ const styles = StyleSheet.create({
   container: {
     gap: 16,
   },
-  header: {
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  subtitle: {
-    fontSize: 14,
-    marginTop: 4,
-    opacity: 0.8,
-  },
   subheading: {
     gap: 3,
     marginTop: 4,
   },
   subheadingTitle: {
     fontSize: 14,
-    fontWeight: "900",
+    lineHeight: 20,
+    fontWeight: "800",
   },
-  subheadingSubtitle: {
+  subheadingCopy: {
     fontSize: 12,
     lineHeight: 17,
   },
-  addonsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  focusableRow: { borderRadius: 12 },
   readinessCard: {
     gap: 10,
   },
   readinessTitle: {
     fontSize: 22,
+    lineHeight: 28,
     fontWeight: "900",
-    letterSpacing: 0,
   },
-  bridgeCard: {
-    gap: 10,
+  readinessCopy: {
+    fontSize: 13,
+    lineHeight: 19,
   },
-  sectionCard: {
-    gap: 0,
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  focusable: {
+    borderRadius: 12,
+  },
+  navigationCard: {
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  capabilityCard: {
+    paddingVertical: 0,
   },
   capabilityRow: {
-    minHeight: 76,
+    minHeight: 74,
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
     paddingVertical: 12,
   },
-  rowDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 52,
-    opacity: 0.7,
-  },
-  serviceCard: {
-    gap: 8,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+  capabilityIcon: {
+    width: 32,
+    minHeight: 36,
     justifyContent: "center",
     alignItems: "center",
-  },
-  textContainer: {
-    flex: 1,
-    marginLeft: 12,
   },
   capabilityText: {
     flex: 1,
     minWidth: 0,
   },
-  textContainerNoMargin: {
-    flex: 1,
-    minWidth: 0,
-  },
-  inlineStatus: {
-    marginTop: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  bridgeHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  bridgeTitle: {
-    fontSize: 14,
+  rowTitle: {
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: "700",
   },
-  bridgeText: {
+  rowCopy: {
+    marginTop: 3,
     fontSize: 13,
     lineHeight: 18,
   },
-  bridgeUrlText: {
-    fontSize: 12,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    opacity: 0.7,
+  compactStatus: {
+    marginTop: 8,
+    alignSelf: "flex-start",
   },
-  diagnosticsBox: {
-    gap: 4,
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 44,
   },
-  diagnosticsText: {
-    fontSize: 11,
-    fontWeight: "600",
-    lineHeight: 16,
+  formCard: {
+    gap: 16,
   },
-  actionRow: {
+  inlineNotice: {
+    minHeight: 44,
     flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-    marginTop: 4,
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 10,
   },
-  warningBox: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  warningTextContainer: {
+  noticeCopy: {
     flex: 1,
-    gap: 3,
-    marginLeft: 10,
-  },
-  warningTitle: {
     fontSize: 13,
-    fontWeight: "800",
-  },
-  warningBodyText: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  warningText: {
-    fontSize: 12,
-    marginLeft: 10,
-    flex: 1,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   footer: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 8,
+  },
+  disclosureCard: {
+    padding: 0,
+    overflow: "hidden",
   },
   disclosureRow: {
     minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  disclosureContent: {
-    gap: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
+  technicalContent: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    padding: 16,
   },
-  pressed: { opacity: 0.7 },
+  technicalList: {
+    gap: 6,
+  },
+  technicalText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: "Menlo",
+      android: "monospace",
+      default: "monospace",
+    }),
+  },
+  pressed: {
+    opacity: 0.7,
+  },
 });

@@ -190,6 +190,7 @@ function NavLink({
                 ? "rgba(255,255,255,0.04)"
                 : "rgba(0,0,0,0.03)",
             },
+          isWeb && !isKeyboardFocused && styles.navLinkPointerFocused,
           isWeb && isKeyboardFocused && styles.navLinkFocused,
           isWeb && isKeyboardFocused && { outlineColor: colors.focus },
           pressed && {
@@ -316,6 +317,11 @@ const styles = StyleSheet.create({
     outlineWidth: 3,
     outlineColor: "transparent",
     outlineOffset: 2,
+  } as any,
+  navLinkPointerFocused: {
+    // @ts-ignore web-only
+    outlineStyle: "none",
+    outlineWidth: 0,
   } as any,
   activeBar: {
     position: "absolute",

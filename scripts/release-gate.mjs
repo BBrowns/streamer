@@ -239,6 +239,29 @@ function checkMobileReleaseConfig() {
   }
 }
 
+function checkDesktopBuildMetadataValidation() {
+  requireText(
+    "apps/desktop/scripts/validate-release-config.cjs",
+    "STREAMER_APP_VERSION",
+    "desktop product-version release stamp validation",
+  );
+  requireText(
+    "apps/desktop/scripts/validate-release-config.cjs",
+    "STREAMER_GIT_SHA",
+    "desktop Git SHA release stamp validation",
+  );
+  requireText(
+    "apps/desktop/scripts/validate-release-config.cjs",
+    "STREAMER_BUILD_CHANNEL",
+    "desktop build-channel release stamp validation",
+  );
+  requireText(
+    "apps/desktop/package.json",
+    "--require-build-metadata",
+    "release packaging metadata gate",
+  );
+}
+
 function checkDependencySecurity() {
   requireFile(".nvmrc");
   requireFile("patches/castv2+0.1.10.patch");
@@ -452,6 +475,7 @@ checkProductionDefaults();
 checkSecurityCoverage();
 checkDependencySecurity();
 checkMobileReleaseConfig();
+checkDesktopBuildMetadataValidation();
 writeSummary();
 
 if (failures.length > 0) {

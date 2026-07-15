@@ -13,7 +13,7 @@
     "package:dir": "electron-builder --dir --config electron-builder.json",
     "prepackage:mac": "npm run build --workspace=@streamer/stream-server && npm run build && npm run vendor",
     "package:mac": "electron-builder --mac --config electron-builder.json",
-    "prepackage:mac:release": "npm run build --workspace=@streamer/stream-server && npm run build && npm run vendor && npm run release:check",
+    "prepackage:mac:release": "npm run build --workspace=@streamer/stream-server && npm run build && npm run vendor && npm run release:check -- --require-build-metadata",
     "package:mac:release": "electron-builder --mac --config electron-builder.release.json",
     "predev": "npm run build --workspace=@streamer/stream-server && npm run build",
     "dev": "electron dist/main.js",

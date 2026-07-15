@@ -19,11 +19,11 @@ import { useTrakt } from "../../hooks/useTrakt";
 import { useSessions } from "../../hooks/useSessions";
 import { useAccount } from "../../hooks/useAccount";
 import { clearQueryCache } from "../../services/queryPersister";
-import type { DesktopUpdateState } from "../../services/desktop-bridge";
-import {
-  clientBuildMetadata,
-  formatBuildLabel,
-} from "../../services/buildMetadata";
+import type {
+  DesktopBridgeInfo,
+  DesktopUpdateState,
+} from "../../services/desktop-bridge";
+import { clientBuildMetadata } from "../../services/buildMetadata";
 import { hapticSelection, hapticWarning } from "../../lib/haptics";
 import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
 import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
@@ -34,7 +34,7 @@ import { PageHeader } from "../ui/PageHeader";
 import { PageLayout } from "../ui/PageLayout";
 import { AppearanceSection } from "./AppearanceSection";
 import { LanguageSection } from "./LanguageSection";
-import { SourcesSection } from "./SourcesSection";
+import { AdvancedSourcesSection, SourcesSection } from "./SourcesSection";
 import { PersonalizationSection } from "./PersonalizationSection";
 import { DownloadsSettingsSection } from "./DownloadsSettingsSection";
 import { ChangePasswordModal } from "./ChangePasswordModal";
@@ -42,6 +42,7 @@ import { EditProfileModal } from "./EditProfileModal";
 import { ActiveSessionsModal } from "./ActiveSessionsModal";
 import {
   SettingsActionRow,
+  SettingsInfoRow,
   SettingsNavRow,
   SettingsRowGroup,
   SettingsToggleRow,
@@ -51,6 +52,7 @@ import {
   SETTINGS_SECTIONS,
   type SettingsSectionId,
 } from "./settingsSections";
+import { resolveAboutBuildInfo } from "./aboutBuildInfo";
 
 function formatUpdateStatus(
   state: DesktopUpdateState | null,
@@ -274,6 +276,7 @@ function SettingsDetail({
     desktopUpdateState: DesktopUpdateState | null;
     checkingUpdates: boolean;
     canCheckUpdates: boolean;
+    desktopBridgeInfo: DesktopBridgeInfo | null;
   };
 }) {
   const { t } = useTranslation();
@@ -379,7 +382,7 @@ function SettingsDetail({
           </View>
         );
       case "sources":
-        return <SourcesSection showHeader={false} mode="consumer" />;
+        return <SourcesSection showHeader={false} />;
       case "appearance":
         return (
           <View style={styles.detailStack}>
@@ -445,7 +448,16 @@ function SettingsDetail({
             </View>
           </View>
         );
-      case "about":
+      case "about": {
+        const notAvailable = t("settings.about.notAvailable", {
+          defaultValue: "Not available",
+        });
+        const buildInfo = resolveAboutBuildInfo({
+          clientBuild: clientBuildMetadata,
+          desktopInfo: account.desktopBridgeInfo,
+          updateVersion: account.desktopUpdateState?.currentVersion,
+        });
+
         return (
           <View style={styles.detailStack}>
             <View style={[styles.aboutCard, { backgroundColor: colors.card }]}>
@@ -460,10 +472,49 @@ function SettingsDetail({
                     { color: colors.textSecondary },
                   ]}
                 >
-                  {formatBuildLabel(clientBuildMetadata)}
+                  {t("settings.about.productDescription", {
+                    defaultValue: "Movies and series, across your devices.",
+                  })}
                 </Text>
               </View>
             </View>
+            <SettingsRowGroup>
+              <SettingsInfoRow
+                testID="about-streamer-version"
+                title={t("settings.about.streamerApp", {
+                  defaultValue: "Streamer app",
+                })}
+                value={buildInfo.streamerVersion}
+              />
+              <SettingsInfoRow
+                testID="about-desktop-version"
+                title={t("settings.about.desktopShell", {
+                  defaultValue: "Desktop shell",
+                })}
+                value={buildInfo.desktopVersion || notAvailable}
+              />
+              <SettingsInfoRow
+                testID="about-electron-version"
+                title={t("settings.about.electronRuntime", {
+                  defaultValue: "Electron runtime",
+                })}
+                value={buildInfo.electronVersion || notAvailable}
+              />
+              <SettingsInfoRow
+                testID="about-build-sha"
+                title={t("settings.about.buildSha", {
+                  defaultValue: "Build SHA",
+                })}
+                value={buildInfo.buildSha}
+              />
+              <SettingsInfoRow
+                testID="about-build-channel"
+                title={t("settings.about.channel", {
+                  defaultValue: "Channel",
+                })}
+                value={buildInfo.channel || notAvailable}
+              />
+            </SettingsRowGroup>
             <Text style={[styles.bodyCopy, { color: colors.textSecondary }]}>
               {t("settings.about.releasePolicy")}
             </Text>
@@ -495,8 +546,9 @@ function SettingsDetail({
             )}
           </View>
         );
+      }
       case "advanced":
-        return <SourcesSection showHeader={false} mode="advanced" />;
+        return <AdvancedSourcesSection showHeader={false} />;
     }
   })();
 
@@ -546,6 +598,8 @@ function SettingsExperienceContent({
       : undefined;
   const [desktopUpdateState, setDesktopUpdateState] =
     useState<DesktopUpdateState | null>(null);
+  const [desktopBridgeInfo, setDesktopBridgeInfo] =
+    useState<DesktopBridgeInfo | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
 
   useEffect(() => {
@@ -580,6 +634,26 @@ function SettingsExperienceContent({
     return () => {
       cancelled = true;
       unsubscribe?.();
+    };
+  }, [desktopBridgeApi]);
+
+  useEffect(() => {
+    if (!desktopBridgeApi?.getBridgeInfo) return;
+    let cancelled = false;
+
+    desktopBridgeApi
+      .getBridgeInfo()
+      .then((info) => {
+        if (!cancelled) {
+          setDesktopBridgeInfo(info as DesktopBridgeInfo);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDesktopBridgeInfo(null);
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, [desktopBridgeApi]);
 
@@ -704,6 +778,7 @@ function SettingsExperienceContent({
       desktopUpdateState,
       checkingUpdates,
       canCheckUpdates: !!desktopBridgeApi?.getUpdateStatus,
+      desktopBridgeInfo,
     },
   };
 
