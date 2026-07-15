@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { ContentTabs } from "../ContentTabs";
 
 const mockHapticSelection = jest.fn();
@@ -12,6 +13,9 @@ jest.mock("../../../hooks/useTheme", () => ({
       textSecondary: "#9DA3AE",
       tint: "#6C79F5",
       focus: "#8E98FF",
+      card: "#111318",
+      border: "#2B2E35",
+      surfaceElevated: "#181B21",
     },
   }),
 }));
@@ -55,5 +59,34 @@ describe("ContentTabs", () => {
 
     expect(onChange).toHaveBeenCalledWith("movie");
     expect(mockHapticSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the same accessible tabs as a compact segmented selector", () => {
+    const screen = render(
+      <ContentTabs
+        testID="catalog-type-tabs"
+        variant="segmented"
+        accessibilityLabel="Content type"
+        options={[
+          { label: "All", value: "all" },
+          { label: "Movies", value: "movie" },
+          { label: "Series", value: "series" },
+        ]}
+        value="movie"
+        onChange={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("catalog-type-tabs")).toBeTruthy();
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    expect(
+      screen.getByRole("tab", { name: "Movies" }).props.accessibilityState,
+    ).toEqual({ selected: true });
+    expect(
+      StyleSheet.flatten(
+        screen.getByRole("tab", { name: "Movies" }).props.style,
+      ),
+    ).toMatchObject({ minHeight: 44, width: 90 });
+    expect(screen.queryByTestId("content-tab-indicator-movie")).toBeNull();
   });
 });

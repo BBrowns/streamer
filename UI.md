@@ -326,17 +326,21 @@ as navigation rather than a row of oversized buttons.
 
 ### 4.5 `ContentTabs`
 
-Quiet horizontal text navigation for peer content views. Every tab keeps a
-44-pixel target, exposes the selected state to assistive technology, and uses a
-two-pixel cobalt indicator instead of a filled pill. Search and Library share
-this primitive.
+Quiet navigation for peer content views. Every tab keeps a 44-pixel target and
+exposes the selected state to assistive technology. The underline variant uses
+a two-pixel cobalt indicator; the compact segmented variant groups short view
+choices inside one restrained surface. Search uses the segmented treatment for
+All, Movies, and Series while Library keeps the editorial underline. Both share
+the same primitive and interaction contract.
 
 ### 4.6 `SearchField`
 
 The canonical themed search input. It owns search icon placement, focus
 treatment, loading state, clear action, placeholder behaviour, and the optional
-inline `⌘K` hint. Search and `CommandPalette` share it so their interaction and
-accessibility contracts cannot drift.
+inline `⌘K` hint. Its underline and compact surface variants share the same
+interaction contract. Search uses the surface variant beside its heading from
+840 pixels and as a bounded, right-aligned utility field beneath it on narrower
+layouts; `CommandPalette` keeps the editorial underline.
 
 `components/search/RecentSearches.tsx` complements the input with page and
 compact variants. It renders a restrained divided list rather than a card or
@@ -365,13 +369,14 @@ older result links. The old Discover tab redirects to `/search`; discovery is
 the normal zero-query state rather than a hidden route mode.
 The screen provides:
 
-- a sticky editable search input
+- a sticky editable search input beside the heading in expanded and large
+  layouts, and below it at smaller window classes
 - a restrained recent-search list and installed-provider catalog rails
 - debounced poster/title suggestions from two characters
 - debounced progress plus poster/title suggestions while results load
 - partial-provider, retryable error, no-provider, and no-results states
 - shareable/restorable query, type, year, provider, and sort URL state
-- text-tab type navigation (`All`, `Movies`, `Series`)
+- a compact segmented type selector (`All`, `Movies`, `Series`)
 - labelled year/provider/sort controls in a compact-through-expanded sheet
 - a fixed filter sidebar beside results only in the large window class
 

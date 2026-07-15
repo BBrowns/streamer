@@ -226,6 +226,12 @@ export function SearchScreen() {
     provider: providerFilter,
     sort,
   });
+  const secondaryFilterCount = countActiveSearchFilters({
+    type: "all",
+    year: yearFilter,
+    provider: providerFilter,
+    sort,
+  });
   const outcome = submittedQuery
     ? getSearchOutcome({
         isLoading: fullSearch.isLoading,
@@ -283,6 +289,7 @@ export function SearchScreen() {
     2,
     Math.min(6, Math.floor((width - (isLarge ? 528 : 48)) / 150)),
   );
+  const inlineSearch = width >= 840;
   const sortLabel = t(`search.sort.${sort}`);
 
   const openSuggestion = useCallback(
@@ -300,7 +307,12 @@ export function SearchScreen() {
         style={[styles.stickyHeader, { backgroundColor: colors.background }]}
       >
         <ContentBoundary padded={false} style={styles.stickyHeaderContent}>
-          <View style={styles.headingRow}>
+          <View
+            style={[
+              styles.headingRow,
+              inlineSearch ? styles.headingRowInline : styles.headingRowStacked,
+            ]}
+          >
             <View style={styles.headingCopy}>
               <Text style={[styles.eyebrow, { color: colors.tint }]}>
                 {t("search.eyebrow")}
@@ -309,83 +321,91 @@ export function SearchScreen() {
                 {t("search.title")}
               </Text>
             </View>
-          </View>
 
-          <View style={styles.searchArea}>
-            <SearchField
-              testID="search-field"
-              value={inputValue}
-              onChangeText={setInputValue}
-              onClear={clearSearch}
-              clearAccessibilityLabel={t("search.actions.clearSearch")}
-              loading={
-                inputValue.trim().length >= 2 &&
-                (suggestions.isDebouncing || suggestions.isFetching)
-              }
-              shortcutHint={
-                Platform.OS === "web" && !isCompact && !isLarge
-                  ? "⌘K"
-                  : undefined
-              }
-              onSubmitEditing={() => submitSearch(inputValue)}
-              placeholder={t("search.placeholder")}
-              accessibilityLabel={t("search.a11y.field")}
-            />
+            <View
+              style={[
+                styles.searchArea,
+                inlineSearch
+                  ? styles.searchAreaInline
+                  : styles.searchAreaStacked,
+                !inlineSearch && isCompact && styles.searchAreaCompact,
+              ]}
+            >
+              <SearchField
+                testID="search-field"
+                variant="surface"
+                value={inputValue}
+                onChangeText={setInputValue}
+                onClear={clearSearch}
+                clearAccessibilityLabel={t("search.actions.clearSearch")}
+                loading={
+                  inputValue.trim().length >= 2 &&
+                  (suggestions.isDebouncing || suggestions.isFetching)
+                }
+                shortcutHint={
+                  Platform.OS === "web" && !isCompact ? "⌘K" : undefined
+                }
+                onSubmitEditing={() => submitSearch(inputValue)}
+                placeholder={t("search.placeholder")}
+                accessibilityLabel={t("search.a11y.field")}
+              />
 
-            {showSuggestions && (
-              <View
-                testID="search-suggestions"
-                style={[
-                  styles.suggestions,
-                  { backgroundColor: colors.surfaceElevated },
-                ]}
-              >
-                {suggestionResults.map((item) => (
-                  <SearchResultCard
-                    key={`${item.type}:${item.id}`}
-                    item={item}
-                    compact
-                    onPress={() => openSuggestion(item)}
-                  />
-                ))}
-                {!suggestions.isFetching && suggestionResults.length === 0 && (
-                  <Text
-                    style={[
-                      styles.suggestionEmpty,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {t("search.suggestions.noMatch")}
-                  </Text>
-                )}
-                <Pressable
-                  onPress={() => submitSearch(inputValue)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("search.suggestions.showAll", {
-                    query: inputValue.trim(),
-                  })}
-                  style={({ pressed, focused }: any) => [
-                    styles.showAll,
-                    { borderTopColor: colors.border },
-                    pressed && styles.pressed,
-                    Platform.OS === "web" &&
-                      focused &&
-                      getWebFocusStyle(colors.focus),
+              {showSuggestions && (
+                <View
+                  testID="search-suggestions"
+                  style={[
+                    styles.suggestions,
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
-                  <Text style={[styles.showAllText, { color: colors.tint }]}>
-                    {t("search.suggestions.showAll", {
+                  {suggestionResults.map((item) => (
+                    <SearchResultCard
+                      key={`${item.type}:${item.id}`}
+                      item={item}
+                      compact
+                      onPress={() => openSuggestion(item)}
+                    />
+                  ))}
+                  {!suggestions.isFetching &&
+                    suggestionResults.length === 0 && (
+                      <Text
+                        style={[
+                          styles.suggestionEmpty,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {t("search.suggestions.noMatch")}
+                      </Text>
+                    )}
+                  <Pressable
+                    onPress={() => submitSearch(inputValue)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("search.suggestions.showAll", {
                       query: inputValue.trim(),
                     })}
-                  </Text>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={17}
-                    color={colors.tint}
-                  />
-                </Pressable>
-              </View>
-            )}
+                    style={({ pressed, focused }: any) => [
+                      styles.showAll,
+                      { borderTopColor: colors.border },
+                      pressed && styles.pressed,
+                      Platform.OS === "web" &&
+                        focused &&
+                        getWebFocusStyle(colors.focus),
+                    ]}
+                  >
+                    <Text style={[styles.showAllText, { color: colors.tint }]}>
+                      {t("search.suggestions.showAll", {
+                        query: inputValue.trim(),
+                      })}
+                    </Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={17}
+                      color={colors.tint}
+                    />
+                  </Pressable>
+                </View>
+              )}
+            </View>
           </View>
         </ContentBoundary>
       </View>
@@ -421,17 +441,9 @@ export function SearchScreen() {
                   </Text>
                 </View>
                 <View style={styles.discoveryTypeControl}>
-                  <Text
-                    style={[
-                      styles.discoveryTypeLabel,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {t("search.filters.contentType", {
-                      defaultValue: "Content type",
-                    })}
-                  </Text>
                   <ContentTabs
+                    testID="search-discovery-type-tabs"
+                    variant="segmented"
                     options={typeOptions}
                     value={typeFilter}
                     onChange={(value) => {
@@ -451,6 +463,8 @@ export function SearchScreen() {
             <View style={styles.resultsPage}>
               <View style={styles.toolbar}>
                 <ContentTabs
+                  testID="search-results-type-tabs"
+                  variant="segmented"
                   options={typeOptions}
                   value={typeFilter}
                   onChange={(value) => {
@@ -488,7 +502,9 @@ export function SearchScreen() {
                         ]}
                       >
                         {t("search.filters.button")}
-                        {activeFilterCount > 0 ? ` ${activeFilterCount}` : ""}
+                        {secondaryFilterCount > 0
+                          ? ` ${secondaryFilterCount}`
+                          : ""}
                       </Text>
                     </Pressable>
                     <Pressable
@@ -679,9 +695,16 @@ const styles = StyleSheet.create({
   },
   headingRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
     justifyContent: "space-between",
-    marginBottom: 18,
+  },
+  headingRowInline: {
+    alignItems: "flex-end",
+    gap: 32,
+  },
+  headingRowStacked: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 14,
   },
   headingCopy: { gap: 2 },
   eyebrow: {
@@ -697,12 +720,23 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.7,
   },
-  searchArea: { position: "relative", width: "100%", maxWidth: 760 },
+  searchArea: { position: "relative" },
+  searchAreaInline: { flex: 1, minWidth: 320, maxWidth: 440 },
+  searchAreaStacked: {
+    width: "72%",
+    minWidth: 320,
+    maxWidth: 440,
+    alignSelf: "flex-end",
+  },
+  searchAreaCompact: {
+    width: "100%",
+    minWidth: 0,
+  },
   suggestions: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: 56,
+    top: 58,
     maxHeight: 500,
     borderRadius: 12,
     paddingHorizontal: 14,
@@ -749,15 +783,7 @@ const styles = StyleSheet.create({
   },
   discoveryHeadingCopy: { flexGrow: 1, minWidth: 220 },
   discoveryTypeControl: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 10,
-  },
-  discoveryTypeLabel: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "700",
+    alignItems: "flex-start",
   },
   discoveryTypeFilter: { marginTop: 0 },
   resultsPage: { paddingHorizontal: 24 },

@@ -741,6 +741,52 @@ test("Obsidian Search keeps discovery and results media-first", async ({
   await expect(page.getByTestId("search-screen")).toBeVisible();
   await settleVisualTheme(page, "dark", "search-screen");
   await expect(page.getByTestId("search-discovery")).toBeVisible();
+  const searchShell = page.getByTestId("search-field-container");
+  const typeTabs = page.getByTestId("search-discovery-type-tabs");
+  await expect(searchShell).toBeVisible();
+  await expect(typeTabs).toBeVisible();
+  await expect(typeTabs.getByRole("tab")).toHaveCount(3);
+  await expect(typeTabs.getByRole("tab", { name: "All" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const searchShellBox = await searchShell.boundingBox();
+  const typeTabsBox = await typeTabs.boundingBox();
+  expect(searchShellBox).not.toBeNull();
+  expect(searchShellBox!.height).toBeGreaterThanOrEqual(44);
+  expect(searchShellBox!.height).toBeLessThanOrEqual(54);
+  expect(searchShellBox!.width).toBeLessThanOrEqual(442);
+  expect(typeTabsBox).not.toBeNull();
+  expect(typeTabsBox!.height).toBeGreaterThanOrEqual(44);
+  expect(typeTabsBox!.height).toBeLessThanOrEqual(54);
+  expect(typeTabsBox!.width).toBeLessThanOrEqual(290);
+
+  const viewport = page.viewportSize();
+  const titleBox = await page
+    .getByText("Find your next story", { exact: true })
+    .boundingBox();
+  expect(viewport).not.toBeNull();
+  expect(titleBox).not.toBeNull();
+  if (viewport!.width >= 840) {
+    expect(searchShellBox!.x).toBeGreaterThan(titleBox!.x + titleBox!.width);
+  } else {
+    expect(searchShellBox!.y).toBeGreaterThanOrEqual(
+      titleBox!.y + titleBox!.height,
+    );
+  }
+
+  const movieTab = typeTabs.getByRole("tab", { name: "Movies" });
+  await movieTab.click();
+  await expect(movieTab).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBe("movie");
+  const allTab = typeTabs.getByRole("tab", { name: "All" });
+  await allTab.click();
+  await expect(allTab).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBeNull();
   await expectNoHorizontalPageOverflow(page);
   await page.screenshot({
     path: testInfo.outputPath(
@@ -881,7 +927,9 @@ test("a failed discovery catalog stays compact while healthy rails remain", asyn
   await loginToFixtureShell(page, "catalog-partial");
   await page.goto("/search");
 
-  await expect(page.getByText("Content type", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("tablist", { name: "Content type" }),
+  ).toBeVisible();
   const error = page.getByTestId(
     "search-discovery-rail-error-fixture-addon-featured",
   );
