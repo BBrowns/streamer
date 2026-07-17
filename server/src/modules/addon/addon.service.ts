@@ -144,7 +144,10 @@ export class AddonService {
   }
 
   /** Uninstall an add-on */
-  async uninstall(userId: string, addonId: string): Promise<void> {
+  async uninstall(
+    userId: string,
+    addonId: string,
+  ): Promise<{ id: string; transportUrl: string }> {
     const addon = await prisma.installedAddon.findFirst({
       where: { id: addonId, userId },
     });
@@ -155,6 +158,7 @@ export class AddonService {
 
     await prisma.installedAddon.delete({ where: { id: addonId } });
     logger.info({ userId, addonId }, "Add-on uninstalled");
+    return { id: addon.id, transportUrl: addon.transportUrl };
   }
 }
 

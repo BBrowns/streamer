@@ -7,6 +7,7 @@ export class AddonController {
     const { transportUrl } = (c.req as any).valid("json");
     const user = c.get("user");
     const addon = await addonService.install(user.userId, transportUrl);
+    aggregatorService.invalidateSearchCacheForUser(user.userId);
     return c.json(addon, 201);
   }
 
@@ -47,7 +48,12 @@ export class AddonController {
   async uninstall(c: Context) {
     const user = c.get("user");
     const id = c.req.param("id")!;
-    await addonService.uninstall(user.userId, id);
+    const removed = await addonService.uninstall(user.userId, id);
+    aggregatorService.removeAddonStateForUser(
+      user.userId,
+      removed.id,
+      removed.transportUrl,
+    );
     return new Response(null, { status: 204 });
   }
 }

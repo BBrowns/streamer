@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
-  FlatList,
   Modal,
   Platform,
   Pressable,
@@ -13,14 +12,17 @@ import {
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { SearchMetaPreview } from "../../hooks/useSearch";
-import { useGlobalSearch } from "../../hooks/useGlobalSearch";
+import { useSearchController } from "../../hooks/useSearchController";
 import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
-import { SearchService } from "../../services/SearchService";
-import { moveSearchSelection } from "../../services/searchController";
+import {
+  SEARCH_MINIMUM_LENGTH,
+  getSearchSelectionDirection,
+  normalizeSearchQueryInput,
+  resolveCommandPaletteAction,
+} from "../../services/searchController";
 import { RecentSearches } from "../search/RecentSearches";
-import { SearchResultCard } from "../search/SearchResultCard";
-import { AppButton } from "./AppButton";
+import { SearchSuggestions } from "../search/SearchSuggestions";
 import { SearchField } from "./SearchField";
 
 interface CommandPaletteProps {
@@ -29,9 +31,6 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
-  const [query, setQuery] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<TextInput>(null);
   const scale = useRef(new Animated.Value(0.98)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -39,18 +38,25 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
-  const search = useGlobalSearch(query);
-  const results = search.data?.metas ?? [];
-
-  const loadRecent = useCallback(async () => {
-    setRecentSearches(await SearchService.getRecentSearches());
-  }, []);
+  const searchController = useSearchController({ enabled: visible });
+  const {
+    query,
+    setQuery,
+    clearQuery,
+    recentSearches,
+    rememberSearch,
+    clearRecentSearches,
+    suggestions,
+    suggestionSearch,
+    state,
+    selectedIndex,
+    moveSelection,
+    getSelectionSnapshot,
+  } = searchController;
 
   useEffect(() => {
     if (!visible) return;
-    setQuery("");
-    setSelectedIndex(-1);
-    loadRecent();
+    clearQuery();
     const focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
     if (reducedMotion) {
       scale.setValue(1);
@@ -71,11 +77,7 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
       ]).start();
     }
     return () => clearTimeout(focusTimer);
-  }, [loadRecent, opacity, reducedMotion, scale, visible]);
-
-  useEffect(() => {
-    setSelectedIndex(results.length > 0 ? 0 : -1);
-  }, [results.length, search.debouncedQuery]);
+  }, [clearQuery, opacity, reducedMotion, scale, visible]);
 
   useEffect(() => {
     if (!visible) {
@@ -84,64 +86,75 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
     }
   }, [opacity, scale, visible]);
 
-  const saveSearch = useCallback(
-    async (value: string) => {
-      const clean = value.trim();
-      if (!clean) return;
-      await SearchService.addRecentSearch(clean);
-      await loadRecent();
-    },
-    [loadRecent],
-  );
-
   const openItem = useCallback(
-    async (item: SearchMetaPreview) => {
-      await saveSearch(query || item.name);
+    (item: SearchMetaPreview) => {
+      void rememberSearch(query || item.name);
       onClose();
       router.push(`/detail/${item.type}/${item.id}`);
     },
-    [onClose, query, router, saveSearch],
+    [onClose, query, rememberSearch, router],
   );
 
-  const submit = useCallback(async () => {
-    if (selectedIndex >= 0 && results[selectedIndex]) {
-      await openItem(results[selectedIndex]);
+  const openAllResults = useCallback(
+    (value: string) => {
+      const clean = normalizeSearchQueryInput(value);
+      if (clean.length < SEARCH_MINIMUM_LENGTH) return;
+      void rememberSearch(clean);
+      onClose();
+      router.push({ pathname: "/search", params: { q: clean } });
+    },
+    [onClose, rememberSearch, router],
+  );
+
+  const submit = useCallback(() => {
+    const selection = getSelectionSnapshot();
+    const action = resolveCommandPaletteAction({
+      deliberatelyNavigated: selection.deliberatelyNavigated,
+      selectedIndex: selection.selectedIndex,
+      suggestionCount: suggestions.length,
+    });
+    if (action.kind === "suggestion" && suggestions[action.index]) {
+      openItem(suggestions[action.index]);
       return;
     }
-    const clean = query.trim();
-    if (clean.length < 2) return;
-    await saveSearch(clean);
-    onClose();
-    router.push({ pathname: "/search", params: { q: clean } });
-  }, [onClose, openItem, query, results, router, saveSearch, selectedIndex]);
+    openAllResults(query);
+  }, [getSelectionSnapshot, openAllResults, openItem, query, suggestions]);
 
   const handleKeyPress = useCallback(
     (event: any) => {
-      const key = event.nativeEvent?.key;
-      if (key === "ArrowDown") {
+      const key = event.nativeEvent?.key ?? event.key;
+      const direction = getSearchSelectionDirection(key);
+      if (direction) {
         event.preventDefault?.();
-        setSelectedIndex((current) =>
-          moveSearchSelection(current, results.length, "next"),
-        );
-      } else if (key === "ArrowUp") {
-        event.preventDefault?.();
-        setSelectedIndex((current) =>
-          moveSearchSelection(current, results.length, "previous"),
-        );
+        moveSelection(direction);
       } else if (key === "Escape") {
         event.preventDefault?.();
         onClose();
       }
     },
-    [onClose, results.length],
+    [moveSelection, onClose],
   );
 
-  const clearHistory = useCallback(async () => {
-    await SearchService.clearRecentSearches();
-    setRecentSearches([]);
-  }, []);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !visible || typeof document === "undefined") {
+      return;
+    }
+    const handleWebKeyDown = (event: KeyboardEvent) => {
+      const direction = getSearchSelectionDirection(event.key);
+      if (direction) {
+        event.preventDefault();
+        moveSelection(direction);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleWebKeyDown, true);
+    return () =>
+      document.removeEventListener("keydown", handleWebKeyDown, true);
+  }, [moveSelection, onClose, visible]);
 
-  const isSearching = search.isDebouncing || search.isFetching;
+  const isSearching = state === "loading-suggestions";
 
   return (
     <Modal
@@ -151,7 +164,7 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable
+      <View
         style={[
           styles.backdrop,
           {
@@ -160,8 +173,14 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
               : "rgba(20,22,28,0.42)",
           },
         ]}
-        onPress={onClose}
       >
+        <Pressable
+          testID="command-palette-backdrop"
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t("search.command.close")}
+        />
         <Animated.View
           testID="command-palette"
           accessibilityViewIsModal
@@ -181,11 +200,11 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
             testID="command-search-field"
             value={query}
             onChangeText={setQuery}
-            onClear={() => setQuery("")}
+            onClear={clearQuery}
             clearAccessibilityLabel={t("search.actions.clearSearch")}
             loading={isSearching}
             placeholder={t("search.placeholder")}
-            onKeyPress={handleKeyPress}
+            onKeyPress={Platform.OS === "web" ? undefined : handleKeyPress}
             onSubmitEditing={submit}
             accessibilityLabel={t("search.a11y.field")}
             inputStyle={styles.commandInput}
@@ -195,8 +214,8 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
             <RecentSearches
               variant="compact"
               items={recentSearches}
-              onSelect={setQuery}
-              onClear={() => void clearHistory()}
+              onSelect={(value) => void openAllResults(value)}
+              onClear={() => void clearRecentSearches()}
             />
           ) : query.trim().length < 2 ? (
             <View style={styles.hint}>
@@ -204,53 +223,21 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
                 {t("search.command.minimum")}
               </Text>
             </View>
-          ) : search.isError ? (
-            <View style={styles.hint}>
-              <Text style={[styles.errorTitle, { color: colors.text }]}>
-                {t("search.command.errorTitle", {
-                  defaultValue: "Search is unavailable",
-                })}
-              </Text>
-              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-                {t("search.command.errorDescription", {
-                  defaultValue: "Check your connection and try again.",
-                })}
-              </Text>
-              <AppButton
-                label={t("common.retry")}
-                variant="secondary"
-                icon="refresh-outline"
-                onPress={() => search.refetch()}
-              />
-            </View>
-          ) : !isSearching && results.length === 0 ? (
-            <View style={styles.hint}>
-              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-                {t("search.command.noResults", { query })}
-              </Text>
-            </View>
           ) : (
-            <FlatList
-              data={results}
-              keyExtractor={(item) => `${item.type}:${item.id}`}
-              keyboardShouldPersistTaps="handled"
-              style={styles.list}
-              renderItem={({ item, index }) => (
-                <View
-                  style={[
-                    styles.result,
-                    selectedIndex === index && {
-                      backgroundColor: colors.tint + "14",
-                    },
-                  ]}
-                >
-                  <SearchResultCard
-                    item={item}
-                    compact
-                    onPress={() => openItem(item)}
-                  />
-                </View>
-              )}
+            <SearchSuggestions
+              testID="command-search-suggestions"
+              variant="palette"
+              query={query.trim()}
+              items={suggestions}
+              state={state}
+              selectedIndex={selectedIndex}
+              onSelect={(item) => void openItem(item)}
+              onShowAll={() => void openAllResults(query)}
+              onRetry={() => suggestionSearch.refetch()}
+              onManageAddons={() => {
+                onClose();
+                router.push("/addons");
+              }}
             />
           )}
 
@@ -263,7 +250,7 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
             </Text>
           </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -291,19 +278,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: "600",
   },
-  list: { maxHeight: 390, paddingHorizontal: 10 },
-  result: { borderRadius: 10, paddingHorizontal: 8 },
   hint: {
     minHeight: 190,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-  },
-  errorTitle: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "800",
-    textAlign: "center",
   },
   hintText: {
     fontSize: 14,

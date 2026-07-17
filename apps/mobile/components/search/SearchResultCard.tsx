@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import type { SearchMetaPreview } from "../../hooks/useSearch";
 import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { getWebFocusStyle } from "../ui/designSystem";
 
 type SearchCardItem = MetaPreview | SearchMetaPreview;
@@ -43,23 +44,36 @@ function SearchResultCardInner({
     if (onPress) onPress();
     else router.push(`/detail/${item.type}/${item.id}`);
   }, [item.id, item.type, onPress, router]);
+  const { isKeyboardFocused, webPressableProps } =
+    useWebPressableActivation(openDetail);
 
   const year = releaseYear(item);
   const sources = providerCount(item);
+  const accessibilityLabel = [
+    item.name,
+    t(`search.types.${item.type}`),
+    year,
+    item.imdbRating,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Pressable
+      {...webPressableProps}
       testID={`search-result-${item.type}-${item.id}`}
       onPress={openDetail}
       accessibilityRole="link"
-      accessibilityLabel={item.name}
+      accessibilityLabel={accessibilityLabel}
       accessibilityHint={t("search.a11y.openDetails")}
-      style={({ pressed, hovered, focused }: any) => [
+      style={({ pressed, hovered }: any) => [
         styles.card,
         !reducedMotion && styles.animatedCard,
         compact && styles.compactCard,
         Platform.OS === "web" && hovered && !reducedMotion && styles.hovered,
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        Platform.OS === "web" &&
+          isKeyboardFocused &&
+          getWebFocusStyle(colors.focus),
         pressed && { opacity: 0.76 },
       ]}
     >

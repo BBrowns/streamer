@@ -8,6 +8,8 @@ export interface MetaPreview {
   releaseInfo?: string;
   released?: string;
   imdbRating?: string;
+  aliases?: string[];
+  alternativeTitles?: string[];
 }
 
 /** Episode/video within a series */

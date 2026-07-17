@@ -300,27 +300,54 @@ function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   message: string,
+  onTimeout?: () => void,
 ): Promise<T> {
-  if (timeoutMs <= 0) {
-    return Promise.reject(new PlaybackResolutionTimeoutError(message));
-  }
-
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new PlaybackResolutionTimeoutError(message)),
-      timeoutMs,
-    );
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (callback: () => void) => {
+      if (settled) return;
+
+      settled = true;
+
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+
+      callback();
+    };
+
+    const handleTimeout = () => {
+      finish(() => {
+        // Mark the wrapper as settled before aborting the engine.
+        // The cancellation rejection from the engine is therefore consumed
+        // as a late result instead of replacing the timeout.
+        try {
+          onTimeout?.();
+        } catch (cleanupError) {
+          console.warn(
+            "[PlaybackSession] Failed to stop timed-out engine:",
+            cleanupError,
+          );
+        }
+
+        reject(new PlaybackResolutionTimeoutError(message));
+      });
+    };
 
     promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(error)),
     );
+
+    if (timeoutMs <= 0) {
+      handleTimeout();
+      return;
+    }
+
+    timer = setTimeout(handleTimeout, timeoutMs);
   });
 }
 
@@ -619,6 +646,7 @@ async function attemptCandidate(
         download: "Download source preparation timed out.",
         cast: "Cast source preparation timed out.",
       }),
+      () => stopActiveEngine(sessionId),
     );
     const latestSession = getSession(sessionId);
     if (!latestSession || isTerminal(latestSession)) {
@@ -1034,10 +1062,12 @@ export function completePlaybackSession(sessionId: string) {
 }
 
 export function cancelPlaybackSession(sessionId: string, reason?: string) {
-  stopActiveEngine(sessionId);
-  clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
+
   if (session && !isTerminal(session)) {
     usePlaybackSessionStore.getState().cancelSession(sessionId, reason);
   }
+
+  stopActiveEngine(sessionId);
+  clearSessionBreadcrumbState(sessionId);
 }

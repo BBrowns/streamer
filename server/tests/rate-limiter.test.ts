@@ -187,4 +187,59 @@ describe("Rate Limiter Middleware (Redis)", () => {
       ).status,
     ).toBe(200);
   });
+
+  it("can enforce a stable per-user limit independently of client address", async () => {
+    const limiter = createSlidingWindowLimiter(
+      {
+        windowMs: 60_000,
+        max: 1,
+        message: "Too many searches",
+        keyPrefix: "search-user-test",
+        keyResolver: (c) => `user:${(c as any).get("user").userId}`,
+      },
+      {
+        redisClient: null,
+        instanceMode: "single",
+        trustProxyHops: 1,
+        bypassInTests: false,
+      },
+    );
+    const protectedApp = new Hono();
+    protectedApp.use("*", async (c, next) => {
+      (c as any).set("user", { userId: c.req.header("x-user-id") });
+      await next();
+    });
+    protectedApp.get("/search", limiter, (c) => c.text("ok"));
+
+    expect(
+      (
+        await protectedApp.request("/search", {
+          headers: {
+            "x-user-id": "user-a",
+            "x-forwarded-for": "1.1.1.1",
+          },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await protectedApp.request("/search", {
+          headers: {
+            "x-user-id": "user-a",
+            "x-forwarded-for": "2.2.2.2",
+          },
+        })
+      ).status,
+    ).toBe(429);
+    expect(
+      (
+        await protectedApp.request("/search", {
+          headers: {
+            "x-user-id": "user-b",
+            "x-forwarded-for": "2.2.2.2",
+          },
+        })
+      ).status,
+    ).toBe(200);
+  });
 });

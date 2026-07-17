@@ -7,6 +7,7 @@ import { useWebPressableActivation } from "../../hooks/useWebPressableActivation
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { isFullScreenRoute } from "./desktopShellRoutes";
 import { useTranslation } from "react-i18next";
+import { getSearchShortcutLabel } from "../../services/searchController";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ const NAV_ITEMS = [
     icon: "search-outline" as const,
     activeIcon: "search" as const,
     labelKey: "tabs.search",
-    shortcut: "⌘K",
+    shortcut: undefined,
   },
   {
     href: "/library",
@@ -53,6 +54,12 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
   const isExpanded = windowClass === "expanded";
   const sideWindowClass = windowClass === "compact" ? "medium" : windowClass;
   const isImmersiveRoute = isFullScreenRoute(pathname);
+  const searchShortcut =
+    Platform.OS === "web"
+      ? getSearchShortcutLabel(
+          typeof navigator === "undefined" ? undefined : navigator.platform,
+        )
+      : undefined;
 
   if (!hasSideNavigation) return <>{children}</>;
 
@@ -123,7 +130,9 @@ export function DesktopLayout({ children }: DesktopLayoutProps) {
                 label={t(item.labelKey)}
                 active={active}
                 windowClass={sideWindowClass}
-                shortcut={item.shortcut}
+                shortcut={
+                  item.href === "/search" ? searchShortcut : item.shortcut
+                }
               />
             );
           })}

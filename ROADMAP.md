@@ -71,7 +71,7 @@ Implemented through PR #151:
   offer refresh, fallback, or bridge repair without retrying loopback URLs.
 - PR #152 introduces the adaptive UX foundation: semantic state tokens,
   compact/medium/expanded/large window classes, four primary destinations,
-  deduplicated Home composition, unified Search/discovery state, recoverable
+  deduplicated Home composition, canonical Search state, recoverable
   removal actions, and PiP/background/cast continuity. The stacked Obsidian
   branch owns the subsequent visual and information-architecture overhaul.
 
@@ -103,15 +103,17 @@ The next priorities are based on observed gaps, not old roadmap numbering:
 
 ## Active Roadmap
 
-### Ready for Review: Obsidian Editorial UI/UX Overhaul
+### In Review: Adaptive UX Correctness And Search Reliability
 
-Goal: finish the screen-level visual and information-architecture redesign
-without changing the playback control plane or exposing source complexity as
-the default experience.
+Goal: harden the merged screen-level redesign without changing the playback
+control plane or exposing source complexity as the default experience.
 
-PR #152 is deliberately scoped and titled as the adaptive UX foundation. It
-contains the responsive shell, discovery state, accessibility, recovery, and
-playback-continuity work listed below; it is not the visual-overhaul PR.
+Merged PR #152 contains the responsive shell and stacked Obsidian screen pass.
+Merged PR #154 owns the broader correctness, player-recovery, and QA work. The
+active follow-up completes the capability-aware Search work listed below,
+including bounded provider fan-out, stable cursor failure semantics,
+account-scoped recents, immediate add-on cache invalidation, and retention of
+usable cached results during background and next-page failures.
 
 Implemented in the foundation draft:
 
@@ -119,10 +121,11 @@ Implemented in the foundation draft:
 - Compact bottom navigation and medium/expanded/large rail/sidebar behavior.
 - Stable Home hero/rail composition with canonical deduplication and honest
   released-date labeling.
-- One Search/discovery destination with URL-restorable type/year/sort state and
-  a responsive advanced-filter surface.
-- Search provenance returned by the server, canonical `type:id` deduplication,
-  and a URL-restorable provider facet.
+- Home-owned passive discovery plus one active Search destination with
+  URL-restorable type/year/sort state and a responsive advanced-filter surface.
+- Capability-aware Search provenance, canonical `type:id` deduplication,
+  deterministic relevance ranking, bounded suggestion/result modes, and a
+  URL-restorable provider facet.
 - Undo for Library and Continue Watching removal.
 - PiP/background configuration, accessible player status announcements, and a
   cast session that survives route navigation with synchronized status,
@@ -155,9 +158,10 @@ Implemented by the stacked Obsidian overhaul:
   windows and a true independently scrolling list-detail layout only on large.
 - A consumer-facing Settings hierarchy that separates Account, Playback,
   Downloads, Sources & Devices, Appearance, Privacy, About, and Advanced.
-- Search discovery on the canonical `/search` route, debounced title
-  suggestions, media-first results, mobile filter sheets, large-screen filter
-  sidebar, and explicit partial-provider states.
+- Active title retrieval on the canonical `/search` route, shared debounced
+  quick-search suggestions, media-first poster-grid results, mobile filter
+  sheets, a large-screen filter sidebar, and explicit partial/no-searchable-
+  provider states. Provider catalog rails remain on Home.
 - Screenshot-driven dark/light regression evidence for Settings and Search at
   390 x 844 and 1440 x 1000, plus overflow and pane assertions at 768 and 1024
   pixel widths.

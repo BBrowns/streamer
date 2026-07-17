@@ -17,4 +17,7 @@ export interface SearchResponse {
   successfulProviders: number;
   failedProviderIds: string[];
   partial: boolean;
+  truncated: boolean;
+  total: number;
+  nextCursor?: string;
 }

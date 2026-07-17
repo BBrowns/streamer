@@ -8,8 +8,8 @@
     "settings": "Instellingen"
   },
   "search": {
-    "eyebrow": "Ontdekken",
-    "title": "Vind je volgende verhaal",
+    "eyebrow": "Zoeken",
+    "title": "Vind een film of serie",
     "placeholder": "Zoek films en series",
     "a11y": {
       "field": "Zoek films en series",
@@ -45,6 +45,8 @@
       "manageAddons": "Add-ons beheren"
     },
     "suggestions": {
+      "label": "Titelsuggesties",
+      "loading": "Titelsuggesties zoeken…",
       "noMatch": "Nog geen titelsuggesties.",
       "showAll": "Toon alle resultaten voor ‘{{query}}’"
     },
@@ -81,10 +83,13 @@
       "year": "Nieuwste"
     },
     "results": {
-      "summary": "{{count}} resultaten voor ‘{{query}}’",
-      "summary_one": "1 resultaat voor ‘{{query}}’",
-      "summary_other": "{{count}} resultaten voor ‘{{query}}’",
+      "summary": "Resultaten voor ‘{{query}}’ · {{count}} resultaten",
+      "summary_one": "Resultaten voor ‘{{query}}’ · 1 resultaat",
+      "summary_other": "Resultaten voor ‘{{query}}’ · {{count}} resultaten",
       "searching": "Zoeken naar ‘{{query}}’…",
+      "preparingFilters": "Alle resultaten laden voordat filters worden toegepast… {{count}} titels geladen.",
+      "loadMore": "Meer resultaten laden",
+      "loadingMore": "Meer resultaten laden…",
       "detailHint": "Kies een titel voor details en beschikbare afspeelopties.",
       "sources": "Beschikbaar via {{count}} bronnen",
       "sources_one": "Beschikbaar via 1 bron",
@@ -92,6 +97,11 @@
     },
     "states": {
       "partial": "Sommige bronnen waren niet bereikbaar. Resultaten van reagerende bronnen blijven zichtbaar.",
+      "partialCompact": "Sommige bronnen konden niet worden doorzocht.",
+      "truncated": "Een begrensde set resultaten wordt getoond. Verfijn je zoekopdracht voor specifiekere resultaten.",
+      "truncatedCompact": "Een beperkte set resultaten wordt getoond. Verfijn je zoekopdracht voor meer.",
+      "noSearchProviderTitle": "Een doorzoekbare catalogus is vereist",
+      "noSearchProviderDescription": "Je geïnstalleerde add-ons bieden geen titelzoekfunctie. Installeer een doorzoekbare catalogus-add-on om films en series te vinden.",
       "errorTitle": "Zoeken kon niet worden geladen",
       "errorDescription": "Controleer je verbinding en probeer opnieuw.",
       "providersFailedTitle": "Bronnen zijn tijdelijk niet beschikbaar",
@@ -99,7 +109,9 @@
       "noMatchTitle": "Geen titels gevonden",
       "noMatchDescription": "Niets kwam overeen met ‘{{query}}’. Probeer een andere titel.",
       "filterEmptyTitle": "Geen resultaten met deze filters",
-      "filterEmptyDescription": "Herstel je filters om alle overeenkomende titels te zien."
+      "filterEmptyDescription": "Herstel je filters om alle overeenkomende titels te zien.",
+      "filterLimitTitle": "Verfijn deze zoekopdracht om filters te gebruiken",
+      "filterLimitDescription": "Er zijn te veel resultaten om volledig en veilig te filteren. Zoek op een specifiekere titel of herstel de filters."
     }
   },
   "home": {

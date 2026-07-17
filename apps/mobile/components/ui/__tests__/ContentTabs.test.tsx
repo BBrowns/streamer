@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
-import { ContentTabs } from "../ContentTabs";
+import { Platform, StyleSheet } from "react-native";
+import { ContentTabs, getContentTabNavigationIndex } from "../ContentTabs";
 
 const mockHapticSelection = jest.fn();
 
@@ -88,5 +88,49 @@ describe("ContentTabs", () => {
       ),
     ).toMatchObject({ minHeight: 44, width: 90 });
     expect(screen.queryByTestId("content-tab-indicator-movie")).toBeNull();
+  });
+
+  it("uses roving tab stops and activates the next tab with arrow keys on web", () => {
+    const originalOS = Platform.OS;
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "web",
+    });
+    const onChange = jest.fn();
+    const screen = render(
+      <ContentTabs
+        accessibilityLabel="Content type"
+        options={[
+          { label: "All", value: "all" },
+          { label: "Movies", value: "movie" },
+          { label: "Series", value: "series" },
+        ]}
+        value="movie"
+        onChange={onChange}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "All" }).props.tabIndex).toBe(-1);
+    expect(screen.getByRole("tab", { name: "Movies" }).props.tabIndex).toBe(0);
+    fireEvent(screen.getByRole("tab", { name: "Movies" }), "keyDown", {
+      key: "ArrowRight",
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    });
+    expect(onChange).toHaveBeenCalledWith("series");
+
+    screen.unmount();
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: originalOS,
+    });
+  });
+
+  it("calculates wraparound and boundary tab navigation", () => {
+    expect(getContentTabNavigationIndex(0, 3, "ArrowLeft")).toBe(2);
+    expect(getContentTabNavigationIndex(2, 3, "ArrowRight")).toBe(0);
+    expect(getContentTabNavigationIndex(1, 3, "Home")).toBe(0);
+    expect(getContentTabNavigationIndex(1, 3, "End")).toBe(2);
+    expect(getContentTabNavigationIndex(1, 3, "Enter")).toBeNull();
   });
 });

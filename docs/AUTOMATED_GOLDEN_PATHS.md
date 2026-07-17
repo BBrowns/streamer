@@ -8,7 +8,7 @@ developer account.
 
 ## Browser Coverage
 
-The 22 browser scenarios run at all four supported evidence sizes:
+The 28 browser scenarios run at all four supported evidence sizes:
 
 | Project                | Viewport    | Window intent                  |
 | ---------------------- | ----------- | ------------------------------ |
@@ -36,19 +36,22 @@ They cover:
 - Obsidian Settings overview/detail routing, mutually exclusive Sources and
   Advanced responsibilities, dark/light captures, and legacy `/sources`
   compatibility.
-- Canonical Search discovery, suggestions, results, compact filter sheet,
-  large filter sidebar, partial-provider recovery, per-catalog inline failure,
-  URL-normalized reset, and legacy `/search/results` compatibility.
+- Active Search idle/recents, bounded suggestions, submitted poster-grid
+  results, compact filter sheet, large filter sidebar, no-match,
+  no-searchable-provider, provider-outage, and partial-provider states.
+- Search URL normalization, reset, clear/resubmit, browser back/forward state,
+  and legacy `/search/results` compatibility.
 - Pointer focus without a persistent ring and a strong three-pixel keyboard
   `:focus-visible` treatment on the actual focused node.
 - Command Palette arrow-key selection and Enter activation against the same
   Search model.
 
 Dark and light screenshots are emitted for Settings overview/detail and Search
-landing/suggestions/results/filters. Intermediate pane and overflow behavior is
-asserted directly at 768 x 1024 and 1024 x 768. Three desktop-only scenarios
-are skipped in the other projects, so the complete browser schedule is 88
-cases: 79 executable assertions and 9 intentional project-aware skips.
+idle/recents/suggestions/results/filters/no-results/no-provider/partial states.
+Intermediate pane and overflow behavior is asserted directly at 768 x 1024 and
+1024 x 768. Six viewport- or desktop-specific scenarios are skipped in each
+non-desktop project, so the complete browser schedule is 112 cases: 94
+executable assertions and 18 intentional project-aware skips.
 
 ## Real Electron Smoke
 

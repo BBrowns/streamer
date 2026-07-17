@@ -86,6 +86,7 @@ export default function AddonsScreen() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["addons"] });
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      void queryClient.invalidateQueries({ queryKey: ["search"] });
       setAddonUrl("");
       setInstallFeedback({
         tone: "success",
@@ -110,6 +111,7 @@ export default function AddonsScreen() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["addons"] });
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      void queryClient.invalidateQueries({ queryKey: ["search"] });
       setRemovalError(null);
     },
     onError: (error: unknown, id: string) => {

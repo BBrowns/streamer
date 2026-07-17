@@ -74,7 +74,74 @@ components:
           type: string
         imdbRating:
           type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        alternativeTitles:
+          type: array
+          items:
+            type: string
       required: [id, type, name, poster]
+
+    SearchProviderFacet:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required: [id, name]
+
+    SearchResponse:
+      type: object
+      properties:
+        metas:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetaPreview'
+        total:
+          type: integer
+          minimum: 0
+        nextCursor:
+          type: string
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchProviderFacet'
+        providersByContent:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        attemptedProviders:
+          type: integer
+          minimum: 0
+        successfulProviders:
+          type: integer
+          minimum: 0
+        failedProviderIds:
+          type: array
+          items:
+            type: string
+        partial:
+          type: boolean
+        truncated:
+          type: boolean
+          description: >-
+            True when internal safety limits truncated an otherwise successful
+            result set. This is distinct from provider failure.
+      required:
+        - metas
+        - total
+        - providers
+        - providersByContent
+        - attemptedProviders
+        - successfulProviders
+        - failedProviderIds
+        - partial
+        - truncated
 
     MetaDetail:
       allOf:
@@ -457,6 +524,64 @@ paths:
           description: Add-on uninstalled
         '404':
           description: Add-on not found
+
+  /api/search:
+    get:
+      tags: [Aggregator]
+      summary: Search installed searchable metadata catalogs
+      description: >-
+        Searches only movie and series catalogs that explicitly declare the
+        Stremio search extra. Results are normalized, relevance-ranked,
+        deduplicated by type and canonical ID, and retain provider provenance.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 200
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, movie, series]
+            default: all
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [suggestions, results]
+            default: results
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            oneOf:
+              - type: string
+                pattern: "^\\d+$"
+                description: Legacy numeric offset.
+              - type: string
+                minLength: 16
+                maxLength: 512
+                pattern: '^[A-Za-z0-9_-]+$'
+                description: Opaque snapshot cursor returned by nextCursor.
+      responses:
+        '200':
+          description: Ranked search page with provider health and provenance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Invalid query, type, mode, limit, or cursor
 
   /api/catalog/{type}:
     get:

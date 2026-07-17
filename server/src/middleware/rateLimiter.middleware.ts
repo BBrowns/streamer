@@ -26,6 +26,11 @@ interface RateLimiterOptions {
   max: number;
   message: string;
   keyPrefix?: string;
+  /**
+   * Overrides the default client-address identity. The resolved value is
+   * hashed before it reaches either backing store.
+   */
+  keyResolver?: (c: Context) => string;
 }
 
 const memoryStore = new Map<string, WindowRecord>();
@@ -162,7 +167,7 @@ export function createSlidingWindowLimiter(
   options: RateLimiterOptions,
   dependencies: RateLimiterDependencies = {},
 ) {
-  const { windowMs, max, message, keyPrefix = "" } = options;
+  const { windowMs, max, message, keyPrefix = "", keyResolver } = options;
 
   return async (c: Context, next: Next) => {
     if (
@@ -180,7 +185,8 @@ export function createSlidingWindowLimiter(
     const client =
       dependencies.redisClient === undefined ? redis : dependencies.redisClient;
     const address = resolveRateLimitClientAddress(c, trustProxyHops);
-    const key = `ratelimit:${keyPrefix}:${hashClientAddress(address)}`;
+    const identity = keyResolver?.(c) || address;
+    const key = `ratelimit:${keyPrefix}:${hashClientAddress(identity)}`;
     const now = Date.now();
 
     let count: number;
@@ -239,6 +245,18 @@ export const catalogRateLimiter = createSlidingWindowLimiter({
   max: 200,
   message: "Too many catalog requests, please try again later",
   keyPrefix: "catalog",
+});
+
+/**
+ * Search fans out to third-party providers, so protect it independently from
+ * cheap API reads. Authentication runs first and supplies the stable user key.
+ */
+export const searchRateLimiter = createSlidingWindowLimiter({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "Too many searches, please try again shortly",
+  keyPrefix: "search-user",
+  keyResolver: (c) => `user:${c.get("user")?.userId ?? "unknown"}`,
 });
 
 export function _resetStore(): void {

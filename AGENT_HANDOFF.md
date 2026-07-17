@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-07-14.
+> Last updated: 2026-07-16.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -20,23 +20,23 @@ Current phase:
   golden-path automation, unified bridge/action preflight, mobile/server
   release configuration, recoverable offline/cast UX, and the focused
   accessibility/responsive visual-quality pass are in place.
-- Adaptive UX foundation: PR #152 introduces semantic tokens, window classes,
-  four primary destinations, stable Home composition, provider-aware discovery,
-  Undo foundations, visible media-language state, and synchronized
-  PiP/background/cast continuity. Its title and scope intentionally describe a
-  foundation, not a completed visual redesign.
-- Obsidian Editorial overhaul: the stacked `codex/obsidian-ui-overhaul` branch
-  implements the screen-level art direction, routed Settings information
-  architecture, canonical Search experience, Inter typography, and dark/light
-  screenshot QA. It is ready for review, subject to CI and the explicitly
-  deferred real-device evidence below.
+- Adaptive and Obsidian UI foundation: merged PR #152 contains the semantic
+  tokens, window classes, primary navigation, screen-level art direction,
+  routed Settings architecture, Inter typography, and dark/light renderer QA.
+- Correctness and polish: merged PR #154 adds verified offline state, exclusive
+  cast states, player recovery, source-preparation cancellation, exact quality
+  preferences, and the first refinement pass. The active follow-up makes Search
+  capability-aware: provider rails stay on Home; `/search` owns recent queries,
+  suggestions, results, and filters. Search fan-out, cached result continuity,
+  account-scoped recents, cursor stability, and resilience diagnostics are
+  bounded and recoverable in the follow-up branch.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
-The active implementation roadmap is complete through **PR #151** in
-[ROADMAP.md](./ROADMAP.md). Real-target QA and RC evidence remain intentionally
-deferred until the required targets and release credentials are available. PR
-#142 is the roadmap truth-sync that defined this post-#141 phase.
+The merged implementation roadmap is complete through **PR #154** in
+[ROADMAP.md](./ROADMAP.md); the capability-aware Search follow-up is the active
+branch. Real-target QA and RC evidence remain intentionally deferred until the
+required targets and release credentials are available.
 
 PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
 11.18 are the supported toolchain, production high/critical audit findings
@@ -355,16 +355,17 @@ containers. The earlier pastel-glass identity is legacy guidance.
 
 Known useful direction:
 
-- Keep provider/provider-like rails, now surfaced through Home and Search
-  discovery rather than a primary Discover tab.
+- Keep provider/provider-like rails on Home. Search is reserved for active
+  retrieval and must not duplicate full discovery rails.
 - Keep primary flows visually calm and media-led, with limited translucency,
   purposeful containment, and equal dark/light hierarchy.
 - Avoid exposing source complexity as the default path.
 - Settings uses Account, Playback, Downloads, Sources & Devices, Appearance,
   Privacy, About, and Advanced routes. Compact through expanded windows show a
   category overview or one detail page; only large windows show list-detail.
-- `/search` owns discovery, suggestions, results, and filters. The compatibility
-  `/search/results` route preserves parameters but is not a second experience.
+- `/search` owns recent searches, suggestions, submitted results, and filters.
+  Home owns passive discovery. The compatibility `/search/results` route
+  preserves parameters but is not a second experience.
 
 ## Current Known Gaps
 
@@ -452,14 +453,20 @@ Gateway lifecycle exists now, but these are still open:
 
 ### 4. Obsidian UI/UX Overhaul And Evidence
 
-The adaptive foundation provides the shell, Home composition, provider-aware
-search data, Undo notifications, player track state, cast mini-controller,
-full-viewport auth routes, recovery UI, and source-independent player preview.
-The stacked Obsidian pass replaces the remaining legacy palette and composition,
-rebuilds Settings and Search, and supplies dark/light screenshot evidence. Its
-renderer suite covers 17 scenarios per browser project: 32 pass and two
-project-aware duplicates are intentionally skipped. Settings/Search screenshots
-cover 390 x 844 and 1440 x 1000; layout assertions also cover 768 and 1024.
+The merged adaptive and Obsidian work provides the shell, Home composition,
+Undo notifications, player track state, cast mini-controller, full-viewport
+auth routes, recovery UI, routed Settings, and the editorial theme. The
+post-#154 Search follow-up separates Home-owned discovery from capability-aware
+title Search, including deterministic relevance, bounded suggestion/results
+modes, provider provenance, partial failure, and a shared Command Palette
+controller.
+
+The current renderer matrix schedules 112 cases: 94 pass, 18 project-aware
+cases are intentionally skipped, and none fail. Search has 64 dark/light PNGs
+covering idle, recents, suggestions, results, filters, no results, partial
+results, and no searchable provider across 390 x 844, 768 x 1024, 1024 x 768,
+and 1440 x 1000. See
+[docs/qa-runs/2026-07-16-search-correctness.md](./docs/qa-runs/2026-07-16-search-correctness.md).
 
 The remaining work is validation or depends on trustworthy upstream metadata:
 

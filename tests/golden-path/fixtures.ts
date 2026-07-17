@@ -19,7 +19,9 @@ export type GoldenPathScenario =
   | "download-unsupported"
   | "cast-ready"
   | "search-partial"
-  | "catalog-partial";
+  | "search-empty"
+  | "search-no-provider"
+  | "search-unavailable";
 
 export const FIXTURE_MOVIE_ID = "golden-path-movie";
 const FIXTURE_SERIES_ID = "golden-path-series";
@@ -383,23 +385,54 @@ export async function installGoldenPathRoutes(
         return;
       }
       if (url.pathname === "/api/search") {
-        const providers = [
-          { id: catalogAddon.id, name: catalogAddon.manifest.name },
-        ];
+        const requestedType = url.searchParams.get("type") ?? "all";
+        const requestedMode = url.searchParams.get("mode") ?? "results";
+        const requestedLimit = Math.max(
+          1,
+          Math.min(
+            Number(url.searchParams.get("limit")) ||
+              (requestedMode === "suggestions" ? 6 : 40),
+            requestedMode === "suggestions" ? 6 : 100,
+          ),
+        );
+        const hasSearchProvider = scenario !== "search-no-provider";
+        const providerUnavailable = scenario === "search-unavailable";
+        const shouldReturnResults =
+          hasSearchProvider &&
+          !providerUnavailable &&
+          scenario !== "search-empty";
+        const matchingResults = shouldReturnResults
+          ? searchPreviews.filter(
+              (item) => requestedType === "all" || item.type === requestedType,
+            )
+          : [];
+        const metas = matchingResults.slice(0, requestedLimit);
+        const providers = hasSearchProvider
+          ? [{ id: catalogAddon.id, name: catalogAddon.manifest.name }]
+          : [];
+        const failedProviderIds =
+          scenario === "search-partial"
+            ? ["fixture-unavailable"]
+            : providerUnavailable
+              ? [catalogAddon.id]
+              : [];
         await json(route, {
-          metas: searchPreviews,
+          metas,
+          total: matchingResults.length,
           providers,
           providersByContent: Object.fromEntries(
-            searchPreviews.map((item) => [
-              `${item.type}:${item.id}`,
-              [catalogAddon.id],
-            ]),
+            metas.map((item) => [`${item.type}:${item.id}`, [catalogAddon.id]]),
           ),
-          attemptedProviders: scenario === "search-partial" ? 2 : 1,
-          successfulProviders: 1,
-          failedProviderIds:
-            scenario === "search-partial" ? ["fixture-unavailable"] : [],
+          attemptedProviders: !hasSearchProvider
+            ? 0
+            : scenario === "search-partial"
+              ? 2
+              : 1,
+          successfulProviders:
+            hasSearchProvider && !providerUnavailable ? 1 : 0,
+          failedProviderIds,
           partial: scenario === "search-partial",
+          truncated: false,
         });
         return;
       }
@@ -457,10 +490,6 @@ export async function installGoldenPathRoutes(
       if (
         url.pathname.startsWith(`/api/addons/${catalogAddon.id}/catalog/movie/`)
       ) {
-        if (scenario === "catalog-partial") {
-          await json(route, { error: "Fixture catalog unavailable." }, 503);
-          return;
-        }
         await json(route, {
           metas: searchPreviews.filter((item) => item.type === "movie"),
         });

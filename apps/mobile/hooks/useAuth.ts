@@ -31,6 +31,14 @@ export function useAuth() {
       api.post("/api/addons", { transportUrl: url }),
     );
 
+    if (result.installed.length + result.alreadyInstalled.length > 0) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["addons"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalog"] }),
+        queryClient.invalidateQueries({ queryKey: ["search"] }),
+      ]);
+    }
+
     if (result.failed.length === 0) {
       resetPendingAddons();
       return;

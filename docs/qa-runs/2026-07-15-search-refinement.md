@@ -1,5 +1,8 @@
 # Search Editorial Refinement QA - 2026-07-15
 
+> Historical snapshot. The active Search model and current counts are recorded
+> in [2026-07-16-search-correctness.md](./2026-07-16-search-correctness.md).
+
 Scope: follow-up refinement of the Obsidian Search landing experience after
 visual review. The oversized search card and catalog pills were replaced with
 an editorial search line, quiet recent-search rows, and shared text tabs.

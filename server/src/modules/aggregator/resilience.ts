@@ -39,23 +39,34 @@ export class NonRetryableUpstreamError extends Error {
   }
 }
 
+export interface ResilienceRegistryOptions {
+  maxEntries?: number;
+  ttlMs?: number;
+  now?: () => number;
+}
+
 export class ResilienceRegistry {
   private policies = new Map<string, IPolicy>();
   private metrics = new Map<string, ResilienceMetrics>();
-  /** Track last access time for LRU eviction */
   private accessLog = new Map<string, number>();
-  private readonly maxEntries = env.nodeEnv === "test" ? 100 : 1000;
+  private readonly maxEntries: number;
+  private readonly ttlMs: number;
+  private readonly now: () => number;
 
-  constructor() {}
+  constructor(options: ResilienceRegistryOptions = {}) {
+    this.maxEntries =
+      options.maxEntries ?? (env.nodeEnv === "test" ? 100 : 1000);
+    this.ttlMs = options.ttlMs ?? 60 * 60 * 1000;
+    this.now = options.now ?? Date.now;
+  }
 
   /** Get a policy for an add-on, creating it if needed. */
   getPolicy(addonId: string): IPolicy {
-    this.accessLog.set(addonId, Date.now());
+    this.touch(addonId);
 
     let policy = this.policies.get(addonId);
     if (!policy) {
-      this.evictIfFull();
-      policy = this.createPolicy(addonId);
+      policy = this.createPolicy(addonId, this.getOrCreateMetrics(addonId));
       this.policies.set(addonId, policy);
     }
 
@@ -64,22 +75,19 @@ export class ResilienceRegistry {
 
   /** Get metrics for an add-on. */
   getMetrics(addonId: string): ResilienceMetrics {
-    let m = this.metrics.get(addonId);
-    if (!m) {
-      m = {
-        timeouts: 0,
-        retries: 0,
-        circuitOpens: 0,
-        bulkheadRejections: 0,
-        lastFailure: null,
-      };
-      this.metrics.set(addonId, m);
-    }
-    return m;
+    this.touch(addonId);
+    return this.getOrCreateMetrics(addonId);
+  }
+
+  /** Read existing metrics without extending an idle entry's lifetime. */
+  peekMetrics(addonId: string): ResilienceMetrics | undefined {
+    this.pruneExpired();
+    return this.metrics.get(addonId);
   }
 
   /** Get all metrics summary. */
   getAllMetrics(): Record<string, ResilienceMetrics> {
+    this.pruneExpired();
     const result: Record<string, ResilienceMetrics> = {};
     for (const [id, m] of this.metrics.entries()) {
       result[id] = m;
@@ -87,9 +95,44 @@ export class ResilienceRegistry {
     return result;
   }
 
-  /** Evict the least recently used entry if at capacity. */
+  /** Remove every policy, metric and access record for one installation. */
+  remove(addonId: string): void {
+    this.policies.delete(addonId);
+    this.metrics.delete(addonId);
+    this.accessLog.delete(addonId);
+  }
+
+  private getOrCreateMetrics(addonId: string): ResilienceMetrics {
+    let metrics = this.metrics.get(addonId);
+    if (!metrics) {
+      metrics = {
+        timeouts: 0,
+        retries: 0,
+        circuitOpens: 0,
+        bulkheadRejections: 0,
+        lastFailure: null,
+      };
+      this.metrics.set(addonId, metrics);
+    }
+    return metrics;
+  }
+
+  private touch(addonId: string): void {
+    this.pruneExpired();
+    if (!this.accessLog.has(addonId)) this.evictIfFull();
+    this.accessLog.set(addonId, this.now());
+  }
+
+  private pruneExpired(): void {
+    const cutoff = this.now() - this.ttlMs;
+    for (const [id, accessedAt] of this.accessLog) {
+      if (accessedAt <= cutoff) this.remove(id);
+    }
+  }
+
+  /** Evict the least recently used entry, including its metrics. */
   private evictIfFull(): void {
-    if (this.policies.size < this.maxEntries) return;
+    if (this.accessLog.size < this.maxEntries) return;
 
     let oldestId: string | null = null;
     let oldestTime = Infinity;
@@ -102,11 +145,7 @@ export class ResilienceRegistry {
     }
 
     if (oldestId) {
-      this.policies.delete(oldestId);
-      this.accessLog.delete(oldestId);
-      // We keep the metrics even if policy is evicted for long-term tracking
-      // but maybe we should prune those too if they are very old?
-      // For now, just policies (which hold the expensive state like circuit breaker instances).
+      this.remove(oldestId);
       logger.debug(
         { addonId: oldestId },
         "Evicting resilience policy from registry (LRU)",
@@ -114,8 +153,7 @@ export class ResilienceRegistry {
     }
   }
 
-  private createPolicy(addonId: string): IPolicy {
-    const metrics = this.getMetrics(addonId);
+  private createPolicy(addonId: string, metrics: ResilienceMetrics): IPolicy {
     const retryableFailures = handleWhen(
       (error) => !(error instanceof NonRetryableUpstreamError),
     );

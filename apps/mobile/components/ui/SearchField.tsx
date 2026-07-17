@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
 
 type SearchFieldProps = Omit<TextInputProps, "style"> & {
@@ -51,6 +52,8 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
   ) {
     const { colors } = useTheme();
     const [focused, setFocused] = useState(false);
+    const { isKeyboardFocused: isClearFocused, webPressableProps: clearProps } =
+      useWebPressableActivation(onClear);
 
     return (
       <View
@@ -118,14 +121,15 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
         ) : null}
         {value.length > 0 ? (
           <Pressable
+            {...clearProps}
             onPress={onClear}
             accessibilityRole="button"
             accessibilityLabel={clearAccessibilityLabel}
-            style={({ pressed, focused: clearFocused }: any) => [
+            style={({ pressed }: any) => [
               styles.clearButton,
               pressed && styles.pressed,
               Platform.OS === "web" &&
-                clearFocused &&
+                isClearFocused &&
                 getWebFocusStyle(colors.focus),
             ]}
           >

@@ -1,3 +1,5 @@
+import { normalizeSearchQueryInput } from "./searchController";
+
 export type SearchTypeFilter = "all" | "movie" | "series";
 export type SearchSort = "default" | "title" | "year";
 
@@ -7,7 +9,6 @@ export interface SearchRouteState {
   year: string;
   provider: string;
   sort: SearchSort;
-  mode?: "discover";
 }
 
 export const DEFAULT_SEARCH_FILTERS = {
@@ -16,6 +17,37 @@ export const DEFAULT_SEARCH_FILTERS = {
   provider: "all",
   sort: "default" as const,
 };
+
+export const MAX_COMPLETE_SEARCH_FILTER_PAGES = 20;
+
+export type SearchFilterPaginationState =
+  | "ready"
+  | "loading"
+  | "limit"
+  | "error";
+
+/**
+ * Secondary filters and client-side sorting are only correct after every
+ * cursor page has been loaded. The page cap prevents a broken or unbounded
+ * cursor chain from leaving Search in a permanent loading loop.
+ */
+export function getSearchFilterPaginationState(input: {
+  activeSecondaryFilterCount: number;
+  hasNextPage: boolean;
+  pageCount: number;
+  isNextPageError: boolean;
+  maxPageCount?: number;
+}): SearchFilterPaginationState {
+  if (input.activeSecondaryFilterCount <= 0) return "ready";
+  if (input.isNextPageError) return "error";
+  if (!input.hasNextPage) return "ready";
+  if (
+    input.pageCount >= (input.maxPageCount ?? MAX_COMPLETE_SEARCH_FILTER_PAGES)
+  ) {
+    return "limit";
+  }
+  return "loading";
+}
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -26,10 +58,8 @@ export function parseSearchRouteState(
 ): SearchRouteState {
   const type = first(params.type);
   const sort = first(params.sort);
-  const mode = first(params.mode);
-
   return {
-    q: first(params.q)?.trim() ?? "",
+    q: normalizeSearchQueryInput(first(params.q) ?? ""),
     type: type === "movie" || type === "series" ? type : "all",
     year: /^\d{4}$/.test(first(params.year) ?? "")
       ? first(params.year)!
@@ -37,7 +67,6 @@ export function parseSearchRouteState(
     provider: first(params.provider)?.trim() || "all",
     // `relevance` is retained as a backwards-compatible alias.
     sort: sort === "title" || sort === "year" ? sort : "default",
-    mode: mode === "discover" ? "discover" : undefined,
   };
 }
 
@@ -50,7 +79,6 @@ export function searchRouteParams(
     year: state.year === "all" ? undefined : state.year,
     provider: state.provider === "all" ? undefined : state.provider,
     sort: state.sort === "default" ? undefined : state.sort,
-    mode: state.mode,
   };
 }
 
@@ -93,12 +121,20 @@ export function getSearchOutcome(input: {
   resultCount: number;
   filteredResultCount: number;
   activeFilterCount: number;
+  unfilteredResultCount?: number;
 }): SearchOutcome {
   if (input.isLoading) return "loading";
   if (input.isError) return "transport-error";
   if (input.attemptedProviders === 0) return "no-providers";
   if (input.successfulProviders === 0 && input.failedProviderCount > 0) {
     return "provider-error";
+  }
+  if (
+    input.resultCount === 0 &&
+    input.activeFilterCount > 0 &&
+    (input.unfilteredResultCount ?? 0) > 0
+  ) {
+    return "filter-empty";
   }
   if (input.resultCount === 0) return "no-match";
   if (input.filteredResultCount === 0 && input.activeFilterCount > 0) {

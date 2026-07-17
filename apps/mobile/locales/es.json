@@ -8,8 +8,8 @@
     "settings": "Ajustes"
   },
   "search": {
-    "eyebrow": "Descubrir",
-    "title": "Encuentra tu próxima historia",
+    "eyebrow": "Buscar",
+    "title": "Encuentra una película o serie",
     "placeholder": "Buscar películas y series",
     "a11y": {
       "field": "Buscar películas y series",
@@ -45,6 +45,8 @@
       "manageAddons": "Gestionar complementos"
     },
     "suggestions": {
+      "label": "Sugerencias de títulos",
+      "loading": "Buscando sugerencias de títulos…",
       "noMatch": "Todavía no hay sugerencias de títulos.",
       "showAll": "Mostrar todos los resultados de «{{query}}»"
     },
@@ -81,10 +83,13 @@
       "year": "Más recientes"
     },
     "results": {
-      "summary": "{{count}} resultados para «{{query}}»",
-      "summary_one": "1 resultado para «{{query}}»",
-      "summary_other": "{{count}} resultados para «{{query}}»",
+      "summary": "Resultados para «{{query}}» · {{count}} resultados",
+      "summary_one": "Resultados para «{{query}}» · 1 resultado",
+      "summary_other": "Resultados para «{{query}}» · {{count}} resultados",
       "searching": "Buscando «{{query}}»…",
+      "preparingFilters": "Cargando todas las coincidencias antes de aplicar filtros… {{count}} títulos cargados.",
+      "loadMore": "Cargar más resultados",
+      "loadingMore": "Cargando más resultados…",
       "detailHint": "Elige un título para ver detalles y opciones de reproducción.",
       "sources": "Disponible en {{count}} fuentes",
       "sources_one": "Disponible en 1 fuente",
@@ -92,6 +97,11 @@
     },
     "states": {
       "partial": "No se pudo contactar con algunas fuentes. Se muestran los resultados disponibles.",
+      "partialCompact": "No se pudieron buscar algunas fuentes.",
+      "truncated": "Se muestra un conjunto limitado de coincidencias. Refina la búsqueda para obtener resultados más específicos.",
+      "truncatedCompact": "Se muestra un conjunto limitado de coincidencias. Refina la búsqueda para ver más.",
+      "noSearchProviderTitle": "Se necesita un catálogo con búsqueda",
+      "noSearchProviderDescription": "Tus complementos instalados no permiten buscar títulos. Instala un complemento de catálogo con búsqueda para encontrar películas y series.",
       "errorTitle": "No se pudo cargar la búsqueda",
       "errorDescription": "Comprueba tu conexión y vuelve a intentarlo.",
       "providersFailedTitle": "Las fuentes no están disponibles temporalmente",
@@ -99,7 +109,9 @@
       "noMatchTitle": "No se encontraron títulos",
       "noMatchDescription": "Nada coincide con «{{query}}». Prueba con otro título.",
       "filterEmptyTitle": "No hay resultados con estos filtros",
-      "filterEmptyDescription": "Restablece los filtros para ver todos los títulos coincidentes."
+      "filterEmptyDescription": "Restablece los filtros para ver todos los títulos coincidentes.",
+      "filterLimitTitle": "Refina la búsqueda para usar estos filtros",
+      "filterLimitDescription": "Hay demasiados resultados para cargarlos y filtrarlos por completo de forma segura. Busca un título más específico o restablece los filtros."
     }
   },
   "home": {
