@@ -12,6 +12,7 @@
     "start": "node dist/index.js",
     "pretest": "prisma generate",
     "test": "vitest run",
+    "test:integration": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",

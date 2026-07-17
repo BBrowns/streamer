@@ -187,8 +187,8 @@ least one add-on.
 ## Testing
 
 ```bash
-# Server — unit & integration tests (Vitest + Testcontainers PostgreSQL)
-npm run test --workspace=server
+# Server — unit & integration tests (Vitest + isolated Testcontainers PostgreSQL)
+npm run test:server:integration
 
 # Mobile — unit tests (Jest + Testing Library)
 npm run test --workspace=apps/mobile
@@ -206,6 +206,19 @@ k6 run server/tests/k6-load-test.js
 # Mobile E2E — Detox on iOS Simulator
 npm run test:e2e --workspace=apps/mobile
 ```
+
+Server tests never use the normal `DATABASE_URL` from `server/.env`. Locally,
+they start and remove an ephemeral PostgreSQL container automatically. Start
+Docker Desktop before running them. If Docker is unavailable but you have a
+purpose-made disposable test database, pass it explicitly:
+
+```bash
+STREAMER_TEST_DATABASE_URL='postgresql://user:password@host:5432/streamer_test?schema=public' \
+  npm run test:server:integration
+```
+
+Do not point `STREAMER_TEST_DATABASE_URL` at a development or production
+database: the integration suites apply the Prisma schema and create test data.
 
 ---
 
