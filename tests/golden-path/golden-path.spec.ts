@@ -5,6 +5,7 @@ import {
   installGoldenPathRoutes,
   type GoldenPathScenario,
 } from "./fixtures";
+import { expectAccessibleSurface } from "./accessibility";
 
 async function loginToFixtureShell(
   page: Page,
@@ -729,6 +730,41 @@ test("Sources and Advanced expose mutually exclusive responsibilities", async ({
   ).toHaveCount(0);
   await expect(page.getByTestId("sources-consumer-section")).toHaveCount(0);
   await expectNoHorizontalPageOverflow(page);
+});
+
+test("key non-media UI states meet WCAG A/AA accessibility rules", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !["phone-web", "desktop-renderer"].includes(testInfo.project.name),
+    "Axe covers the compact and large window classes; visual golden paths cover the intermediate layouts.",
+  );
+
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page);
+  await expect(page.getByTestId("home-screen")).toBeVisible();
+  await expectAccessibleSurface(page, '[data-testid="home-screen"]', "Home");
+
+  await page.goto("/settings/playback");
+  await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
+  await expectAccessibleSurface(
+    page,
+    '[data-testid="settings-screen"]',
+    "Settings playback",
+  );
+
+  await page.goto("/search?q=Golden");
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expectAccessibleSurface(
+    page,
+    '[data-testid="search-screen"]',
+    "Search results",
+  );
+
+  await page.keyboard.press("Meta+k");
+  const commandPalette = page.getByTestId("command-palette");
+  await expect(commandPalette).toBeVisible();
+  await expectAccessibleSurface(page, '[role="dialog"]', "Command palette");
 });
 
 test("Search keeps active retrieval focused and results media-first", async ({

@@ -74,6 +74,16 @@ export function getWebFocusStyle(color: string) {
   } as const;
 }
 
+/**
+ * React Native accessibilityState serves native assistive technology, but the
+ * web renderer needs an explicit ARIA state for custom Pressable controls.
+ * Keep this as a small shared bridge so switches, checkboxes, and radios stay
+ * semantically equivalent across platforms.
+ */
+export function getWebAriaChecked(checked: boolean) {
+  return Platform.OS === "web" ? { "aria-checked": checked } : {};
+}
+
 export function getAccentForeground(colors: ThemeColors) {
   return colors.onTint;
 }

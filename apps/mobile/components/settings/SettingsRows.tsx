@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
-import { getWebFocusStyle } from "../ui/designSystem";
+import { getWebAriaChecked, getWebFocusStyle } from "../ui/designSystem";
 import { AppSwitch } from "../ui/AppSwitch";
 import type { SettingsSectionDefinition } from "./settingsSections";
 
@@ -291,6 +291,7 @@ export function SettingsMultiSelectRow<T extends string>({
                   checked: selected,
                   disabled: option.disabled,
                 }}
+                {...getWebAriaChecked(selected)}
                 disabled={option.disabled}
                 onPress={() => onToggle(option.value)}
                 style={({ focused, pressed }: any) => [
@@ -342,6 +343,7 @@ export function SettingsRadioRow({
       testID={testID}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected, selected }}
+      {...getWebAriaChecked(selected)}
       onPress={onPress}
       style={({ focused, pressed }: any) => [
         styles.row,

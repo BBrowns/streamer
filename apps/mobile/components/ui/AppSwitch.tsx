@@ -7,7 +7,11 @@ import {
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
-import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
+import {
+  getWebAriaChecked,
+  getWebFocusStyle,
+  uiTouchTarget,
+} from "./designSystem";
 
 type AppSwitchProps = {
   value: boolean;
@@ -30,6 +34,7 @@ export function AppSwitch({
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: value, disabled }}
+      {...getWebAriaChecked(value)}
       disabled={disabled}
       onPress={() => onValueChange(!value)}
       style={({ focused, pressed }: any) => [

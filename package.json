@@ -22,6 +22,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "npm run db:generate --workspace=server && turbo run typecheck",
+    "verify:quick": "npm run format:check && npm run lint && npm run typecheck:all && npm run test --workspace=@streamer/shared",
+    "verify:full": "npm run verify:quick && npm run test:all && npm run build && npm run mobile:config:check && npm run test:golden-path && npm run test:electron-smoke && npm run security:install-scripts && npm run security:audit && npm run release:gate",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "test:all": "turbo run test",
@@ -41,6 +43,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.60.0",
     "@prisma/config": "^7.8.0",
     "dotenv": "^17.4.2",

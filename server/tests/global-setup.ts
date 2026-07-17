@@ -6,6 +6,7 @@ import {
 let container: StartedPostgreSqlContainer | undefined;
 let originalDatabaseUrl: string | undefined;
 let originalNodeEnv: string | undefined;
+let originalLogLevel: string | undefined;
 
 function isPostgresUrl(value: string): boolean {
   return value.startsWith("postgresql://") || value.startsWith("postgres://");
@@ -24,7 +25,7 @@ function redactDatabaseUrl(value: string): string {
 }
 
 function restoreEnvironmentValue(
-  key: "DATABASE_URL" | "NODE_ENV",
+  key: "DATABASE_URL" | "NODE_ENV" | "LOG_LEVEL",
   value?: string,
 ) {
   if (value === undefined) {
@@ -37,7 +38,9 @@ function restoreEnvironmentValue(
 export async function setup() {
   originalDatabaseUrl = process.env.DATABASE_URL;
   originalNodeEnv = process.env.NODE_ENV;
+  originalLogLevel = process.env.LOG_LEVEL;
   process.env.NODE_ENV = "test";
+  process.env.LOG_LEVEL = process.env.STREAMER_TEST_LOG_LEVEL || "silent";
 
   // A developer's DATABASE_URL is intentionally ignored. Local tests must not
   // touch the development database by accident. CI can opt into its service
@@ -82,6 +85,7 @@ export async function setup() {
   } catch (error) {
     restoreEnvironmentValue("DATABASE_URL", originalDatabaseUrl);
     restoreEnvironmentValue("NODE_ENV", originalNodeEnv);
+    restoreEnvironmentValue("LOG_LEVEL", originalLogLevel);
     const detail = error instanceof Error ? ` ${error.message}` : "";
     throw new Error(
       "Unable to start the isolated PostgreSQL test database. Start Docker Desktop (or another Docker-compatible daemon), then rerun the test. " +
@@ -103,4 +107,5 @@ export async function teardown() {
 
   restoreEnvironmentValue("DATABASE_URL", originalDatabaseUrl);
   restoreEnvironmentValue("NODE_ENV", originalNodeEnv);
+  restoreEnvironmentValue("LOG_LEVEL", originalLogLevel);
 }

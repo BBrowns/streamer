@@ -14,7 +14,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import type { SearchSort } from "../../services/searchState";
-import { getWebFocusStyle } from "../ui/designSystem";
+import { getWebAriaChecked, getWebFocusStyle } from "../ui/designSystem";
 
 export interface SearchFilterOption<T extends string = string> {
   label: string;
@@ -147,6 +147,7 @@ function ChoiceRow<T extends string>({
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       accessibilityLabel={option.label}
+      {...getWebAriaChecked(selected)}
       style={({ pressed, hovered }: any) => [
         styles.choice,
         selected && { backgroundColor: colors.tint + "18" },

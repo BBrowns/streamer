@@ -186,6 +186,26 @@ least one add-on.
 
 ## Testing
 
+Use the quick command while iterating. It catches formatting, lint, type and
+shared-contract regressions without requiring Docker or a browser download:
+
+```bash
+npm run verify:quick
+```
+
+Before opening or marking a PR ready, run the complete local gate when the
+required runtimes are available. It adds every workspace test suite, the
+isolated PostgreSQL integration suite, browser golden paths, Electron smoke,
+build, release configuration and release gate checks:
+
+```bash
+npm run verify:full
+```
+
+`verify:full` requires Docker Desktop for the server test container, the
+Playwright Chromium browser installed by the repository setup/CI, and network
+access for the production dependency audit.
+
 ```bash
 # Server — unit & integration tests (Vitest + isolated Testcontainers PostgreSQL)
 npm run test:server:integration
@@ -219,6 +239,8 @@ STREAMER_TEST_DATABASE_URL='postgresql://user:password@host:5432/streamer_test?s
 
 Do not point `STREAMER_TEST_DATABASE_URL` at a development or production
 database: the integration suites apply the Prisma schema and create test data.
+Set `STREAMER_TEST_LOG_LEVEL=debug` only when diagnosing a failing server test;
+the default is intentionally quiet so failures remain readable.
 
 ---
 
