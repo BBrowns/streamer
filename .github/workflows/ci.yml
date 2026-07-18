@@ -33,6 +33,8 @@ jobs:
         run: npm run lint
       - name: Type Check All Workspaces
         run: npm run typecheck:all
+      - name: Verify native evidence preflight contract
+        run: npm run native:evidence:preflight:test
       - name: Validate Mobile Release Configuration
         run: npm run mobile:config:check
 

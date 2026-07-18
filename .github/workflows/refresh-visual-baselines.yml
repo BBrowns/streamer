@@ -1,0 +1,43 @@
+name: Refresh Visual Baselines
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type refresh to generate reviewable Linux snapshot artifacts"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-linux-baselines:
+    if: github.event.inputs.confirmation == 'refresh'
+    name: Generate Linux visual baseline artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - run: npx --yes npm@11.18.0 ci --no-audit --no-fund
+      - name: Restore Playwright browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Generate reviewable Linux baselines
+        run: npm run test:visual -- --update-snapshots
+      - name: Upload Linux baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-linux
+          path: tests/golden-path/visual-regression.spec.ts-snapshots/linux/
+          if-no-files-found: error
+          retention-days: 14

@@ -65,6 +65,10 @@ function checkCiWorkflow() {
   const requiredSnippets = [
     ["npm run format:check", "format check"],
     ["npm run typecheck:all", "all-workspace typecheck"],
+    [
+      "npm run native:evidence:preflight:test",
+      "native evidence preflight contract",
+    ],
     ["npm run mobile:config:check", "mobile release config validation"],
     ["npm run test --workspace=@streamer/shared", "shared tests"],
     ["npm run test --workspace=server -- --coverage", "server coverage tests"],
@@ -124,6 +128,8 @@ function checkDocs() {
   requireFile("docs/SERVER_PRODUCTION.md");
   requireFile("playwright.config.ts");
   requireFile("tests/golden-path/golden-path.spec.ts");
+  requireFile("tests/golden-path/visual-regression.spec.ts");
+  requireFile("scripts/native-evidence-preflight.mjs");
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
@@ -151,6 +157,16 @@ function checkDocs() {
     "AGENT_HANDOFF.md",
     "docs/AUTOMATED_GOLDEN_PATHS.md",
     "automated golden-path documentation link",
+  );
+  requireText(
+    "package.json",
+    '"native:evidence:preflight": "node scripts/native-evidence-preflight.mjs"',
+    "native evidence preflight command",
+  );
+  requireText(
+    "docs/AUTOMATED_GOLDEN_PATHS.md",
+    "## Versioned Visual Baselines",
+    "versioned visual baseline documentation",
   );
   requireText("docs/QA_MATRIX.md", "## Release Blockers", "release blockers");
   requireText("docs/QA_MATRIX.md", "Unknown", "unknown target states");

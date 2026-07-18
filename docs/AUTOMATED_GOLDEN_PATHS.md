@@ -8,7 +8,7 @@ developer account.
 
 ## Browser Coverage
 
-The 28 browser scenarios run at all four supported evidence sizes:
+The semantic browser scenarios run at all four supported evidence sizes:
 
 | Project                | Viewport    | Window intent                  |
 | ---------------------- | ----------- | ------------------------------ |
@@ -46,12 +46,33 @@ They cover:
 - Command Palette arrow-key selection and Enter activation against the same
   Search model.
 
-Dark and light screenshots are emitted for Settings overview/detail and Search
+## Versioned Visual Baselines
+
+The focused `visual-regression.spec.ts` suite makes Home, Settings overview,
+and submitted Search results into source-controlled pixel baselines. It covers
+dark and light mode at the compact phone and large desktop window classes.
+The fixture data, loaded font, images, motion, caret, scale, and screenshot
+path are deterministic. Baselines are stored per OS, so Linux CI never compares
+its Chromium output against a macOS image. A comparison permits at most 500
+changed pixels at a 0.1 color threshold; it is intentionally tight enough to
+catch material composition changes.
+
+After reviewed Linux snapshots are committed, Linux CI runs these comparisons
+automatically as part of `test:golden-path`. Before that, it skips the visual
+case explicitly instead of comparing against a baseline from the wrong OS.
+Use **Refresh Visual Baselines** with its `refresh` confirmation to generate a
+reviewable Linux artifact; it cannot push or alter the branch. Download, review,
+and commit that artifact deliberately. On macOS, `test:visual` uses the
+separate Darwin baseline. Do not accept `--update-snapshots` output without a
+visual review.
+
+The broader semantic suite separately exercises Settings detail and the Search
 idle/recents/suggestions/results/filters/no-results/no-provider/partial states.
 Intermediate pane and overflow behavior is asserted directly at 768 x 1024 and
-1024 x 768. Six viewport- or desktop-specific scenarios are skipped in each
-non-desktop project, so the complete browser schedule is 112 cases: 94
-executable assertions and 18 intentional project-aware skips.
+1024 x 768. Project-aware semantic skips remain explicit in the test output.
+The focused visual suite has four theme/window test cases with three screenshot
+assertions each, for twelve platform-specific pixel comparisons; macOS runs
+them only through `npm run test:visual`.
 
 ## Real Electron Smoke
 
@@ -76,6 +97,10 @@ without a display skip this one smoke case explicitly; use Xvfb to execute it.
 ```bash
 npx playwright install chromium
 npm run test:golden-path
+
+# Run or intentionally refresh the source-controlled pixel baselines.
+npm run test:visual
+npm run test:visual -- --update-snapshots
 ```
 
 To run only the real-shell contract:
@@ -97,8 +122,11 @@ fresh deterministic run.
 ## Evidence Boundary
 
 Browser projects prove responsive renderer behavior, not native iOS or Android
-layout or playback. The Electron smoke proves the development main/preload IPC
-composition, version labels, managed-file inspection, and zoom behavior; it
-does not prove a packaged sidecar, torrent engine, real download decode, or
-release signing. Native and packaged support claims remain unchanged until
-their target-specific QA runs are recorded.
+layout or playback. `npm run native:evidence:preflight` can tell whether the
+local Detox target, SDK, runtime, and AVD prerequisites are present, but it is
+strictly read-only and is not a simulator, emulator, or physical-device pass.
+The Electron smoke proves the development main/preload IPC composition, version
+labels, managed-file inspection, and zoom behavior; it does not prove a
+packaged sidecar, torrent engine, real download decode, or release signing.
+Native and packaged support claims remain unchanged until their target-specific
+QA runs are recorded.

@@ -186,8 +186,9 @@ least one add-on.
 
 ## Testing
 
-Use the quick command while iterating. It catches formatting, lint, type and
-shared-contract regressions without requiring Docker or a browser download:
+Use the quick command while iterating. It catches formatting, lint, type,
+native-preflight-contract, and shared-contract regressions without requiring
+Docker or a browser download:
 
 ```bash
 npm run verify:quick
@@ -205,6 +206,25 @@ npm run verify:full
 `verify:full` requires Docker Desktop for the server test container, the
 Playwright Chromium browser installed by the repository setup/CI, and network
 access for the production dependency audit.
+
+Use the native evidence preflight before scheduling an iOS or Android run. It
+only inspects the configured Detox targets and local SDK/runtime files; it does
+not boot a simulator or emulator, start `adb`, or query a physical device:
+
+```bash
+npm run native:evidence:preflight
+# Machine-readable result for a local QA record or CI artifact:
+npm run native:evidence:preflight -- --json
+```
+
+Run the small, versioned visual-regression subset locally when changing a
+rendered screen. Its Home, Settings, and Search baselines complement the
+semantic golden paths; refresh an image only after deliberate visual review:
+
+```bash
+npm run test:visual
+npm run test:visual -- --update-snapshots
+```
 
 ```bash
 # Server — unit & integration tests (Vitest + isolated Testcontainers PostgreSQL)

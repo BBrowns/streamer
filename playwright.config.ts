@@ -12,7 +12,19 @@ export default defineConfig({
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    // Pixel output is platform-specific. Keep independently reviewed Darwin
+    // and Linux baselines so CI never compares Linux Chromium to a macOS image.
+    toHaveScreenshot: {
+      animations: "disabled",
+      caret: "hide",
+      scale: "css",
+      maxDiffPixels: 500,
+      threshold: 0.1,
+      pathTemplate: "{testDir}/{testFilePath}-snapshots/{platform}/{arg}{ext}",
+    },
+  },
   reporter: [
     ["list"],
     ["html", { outputFolder: "artifacts/playwright-report", open: "never" }],
