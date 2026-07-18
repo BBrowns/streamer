@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "../../hooks/useTheme";
 import {
+  getWebAriaChecked,
   getWebFocusStyle,
   uiRadii,
   uiSpacing,
@@ -75,6 +76,7 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="radio"
             accessibilityState={{ checked: isActive }}
             accessibilityLabel={opt.label}
+            {...getWebAriaChecked(isActive)}
           >
             {opt.emoji ? (
               <Text style={styles.emoji}>{opt.emoji}</Text>
@@ -85,7 +87,7 @@ export function SegmentedControl<T extends string>({
               numberOfLines={2}
               style={[
                 styles.label,
-                { color: isActive ? colors.tint : colors.textSecondary },
+                { color: isActive ? colors.text : colors.textSecondary },
               ]}
             >
               {opt.label}

@@ -28,12 +28,13 @@ the visual energy; the application chrome stays quiet and predictable.
 
 The long-term references are closer to Apple TV/Vision Pro-style media surfaces, StreamX-like Apple platform structure, Infuse, Plex, Netflix, Disney+, and Prime Video than to a technical source browser.
 
-PR #152 is the adaptive UX foundation: it established the responsive shell,
-discovery state, playback recovery, and accessibility contracts. The stacked
-Obsidian overhaul is the screen-level visual and information-architecture pass.
-Both phases preserve the session-driven playback architecture.
+Merged PR #152 contains the adaptive UX foundation and its stacked Obsidian
+screen pass: responsive shell, Home-owned discovery, playback recovery,
+accessibility contracts, and the visual/information architecture. Merged PR
+#154 adds the broader correctness pass; the current Search follow-up preserves
+the session-driven playback architecture.
 
-Current UI phase (stacked redesign implementation):
+Current UI phase (correctness and polish):
 
 - Keep the existing Expo/React Native stack.
 - Use the shared semantic palette and `useWindowClass()` for all new core UI.
@@ -42,10 +43,11 @@ Current UI phase (stacked redesign implementation):
 - Home uses one canonical `type:id` identity for hero and primary rails, with
   Continue Watching excluded from repeated recommendations. Provider rails
   also exclude content already claimed by those primary surfaces.
-- Search is the single discovery destination. `/search` owns discovery,
-  suggestions, results, and filters; `/search/results` only preserves compatible
-  links and parameters. Search responses include provider provenance and partial
-  provider-failure metadata.
+- Home owns passive discovery and provider catalog rails. `/search` owns active
+  title retrieval: recent searches, suggestions, submitted results, and result
+  filters. `/search/results` only preserves compatible links and parameters.
+  Search responses include provider provenance and partial provider-failure
+  metadata.
 - Settings uses a compact category overview and `/settings/[section]` detail
   routes. A true list-detail layout appears only in the large window class.
 - Home, Detail, Library, Downloads, auth/onboarding, player sheets, Search, and
@@ -117,7 +119,7 @@ Shared primitives in production code:
 - `components/ui/ContentTabs.tsx` for quiet peer-view navigation such as All,
   Movies, and Series. It intentionally uses text and a selected underline
   instead of filter pills.
-- `components/ui/MediaRail.tsx` for shared Home, Search, and provider rails,
+- `components/ui/MediaRail.tsx` for shared Home and provider catalog rails,
   including bounded scroll offsets, complete end spacing, disabled end arrows,
   keyboard/pointer controls, and subtle edge fades.
 - `components/ui/SelectionActionBar.tsx` for Library and Downloads bulk mode.
@@ -330,17 +332,17 @@ Quiet navigation for peer content views. Every tab keeps a 44-pixel target and
 exposes the selected state to assistive technology. The underline variant uses
 a two-pixel cobalt indicator; the compact segmented variant groups short view
 choices inside one restrained surface. Search uses the segmented treatment for
-All, Movies, and Series while Library keeps the editorial underline. Both share
-the same primitive and interaction contract.
+All, Movies, and Series only after a query is submitted; Library keeps the
+editorial underline. Both share the same primitive and interaction contract.
 
 ### 4.6 `SearchField`
 
 The canonical themed search input. It owns search icon placement, focus
 treatment, loading state, clear action, placeholder behaviour, and the optional
-inline `⌘K` hint. Its underline and compact surface variants share the same
-interaction contract. Search uses the surface variant beside its heading from
-840 pixels and as a bounded, right-aligned utility field beneath it on narrower
-layouts; `CommandPalette` keeps the editorial underline.
+inline platform shortcut hint. Its underline and compact surface variants share
+the same interaction contract. Search uses one prominent, bounded surface field
+at the top of the content column and keeps it left-aligned with the page copy;
+`CommandPalette` keeps the editorial underline.
 
 `components/search/RecentSearches.tsx` complements the input with page and
 compact variants. It renders a restrained divided list rather than a card or
@@ -356,33 +358,43 @@ A thin horizontal progress bar rendered below catalog cards to indicate watch pr
 
 ### 4.9 `CommandPalette`
 
-A keyboard-driven search overlay (web/desktop). Triggered by `⌘K`. Renders a
-modal with a text input and live, keyboard-selectable suggestions using the same
-debounced search controller as `/search`; Enter opens the canonical
-`/search?q=...` route. Recent searches use the shared `SearchService` storage.
+A keyboard-driven search overlay (web/desktop), triggered by `⌘K` on macOS and
+`Ctrl+K` on Windows/Linux. It renders recent searches and at most six live,
+keyboard-selectable suggestions using the same controller, endpoint mode,
+ranking, and persistence as `/search`. Enter opens a highlighted title only
+after deliberate arrow-key navigation; otherwise it opens the canonical
+`/search?q=...` results route.
 
 ### 4.9.1 Unified Search Screen
 
 `app/(tabs)/search.tsx` is the single `/search` destination.
 `/search/results?q=...` remains a compatibility route for existing callers and
-older result links. The old Discover tab redirects to `/search`; discovery is
-the normal zero-query state rather than a hidden route mode.
+older result links. The old Discover tab redirects to `/search`; Home remains
+the destination for passive catalog discovery.
 The screen provides:
 
-- a sticky editable search input beside the heading in expanded and large
-  layouts, and below it at smaller window classes
-- a restrained recent-search list and installed-provider catalog rails
-- debounced poster/title suggestions from two characters
-- debounced progress plus poster/title suggestions while results load
-- partial-provider, retryable error, no-provider, and no-results states
+- a sticky, editable, left-aligned search input at the top of every window class
+- a restrained recent-search list without duplicated Home catalog rails
+- debounced poster/title suggestions from two characters, capped at six by the
+  server, plus an explicit all-results row
+- cancellable suggestion and result requests with separate timeout budgets
+- partial-provider, bounded-result, retryable error, no-searchable-provider,
+  and no-results states; internal truncation is not presented as a provider
+  outage
 - shareable/restorable query, type, year, provider, and sort URL state
-- a compact segmented type selector (`All`, `Movies`, `Series`)
+- a compact segmented type selector (`All`, `Movies`, `Series`) shown only for
+  submitted results
 - labelled year/provider/sort controls in a compact-through-expanded sheet
 - a fixed filter sidebar beside results only in the large window class
+- a responsive 2:3 poster grid for submitted results
 
-Search filters are intentionally applied client-side over `/api/search?q=...`
-results. Add-on search support is not uniform enough to make provider/genre/
-quality filtering a reliable backend contract yet. Do not expose source picking
+`/api/search` validates query, type, mode, limit, and cursor. It fans out only to
+movie/series catalog definitions that explicitly declare the Stremio `search`
+extra, ranks normalized title matches deterministically, merges provider
+provenance, and returns a bounded page. Type is a server search parameter;
+year/provider/sort remain secondary client refinements because add-on metadata
+is not uniform enough to make those reliable backend facets. Do not infer genre,
+language, or playback availability from labels, and do not expose source picking
 as the primary search UX.
 
 ### 4.10 `DesktopLayout`

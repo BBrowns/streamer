@@ -10,6 +10,12 @@ env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
   NPM_VERSION: "11.18.0"
 
+# A newer commit on the same PR supersedes every earlier CI run. Main/master
+# releases retain their full history and are never cancelled by this policy.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint-and-typecheck:
     name: Lint & Type Check
@@ -27,6 +33,10 @@ jobs:
         run: npm run lint
       - name: Type Check All Workspaces
         run: npm run typecheck:all
+      - name: Verify native evidence preflight contract
+        run: npm run native:evidence:preflight:test
+      - name: Verify visual baseline artifact contract
+        run: npm run visual:baseline:manifest:test
       - name: Validate Mobile Release Configuration
         run: npm run mobile:config:check
 
@@ -119,6 +129,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public
+      STREAMER_TEST_DATABASE_URL: postgresql://streamer:streamer_dev@localhost:5432/streamer_db?schema=public
       JWT_SECRET: ci-test-secret
       NODE_ENV: test
     steps:
@@ -246,7 +257,7 @@ jobs:
 
   test-golden-path:
     name: Golden Path Browser Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint-and-typecheck, format-check]
     steps:
       - uses: actions/checkout@v4
@@ -255,6 +266,13 @@ jobs:
           node-version-file: ".nvmrc"
           cache: "npm"
       - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - name: Restore Playwright browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run deterministic product flows
@@ -287,6 +305,48 @@ jobs:
         with:
           name: ci-summary-golden-path-tests
           path: artifacts/ci-summaries/golden-path-tests.md
+          retention-days: 14
+
+  visual-baseline-candidate:
+    name: Visual Baseline Candidate (Linux)
+    # This artifact-only job lets an unmerged PR bootstrap Linux snapshots.
+    # The manual refresh workflow is deliberately available after its first
+    # merge to the default branch; GitHub cannot dispatch it from a new PR.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    needs: [lint-and-typecheck, format-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - name: Restore Playwright browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Generate reviewable Linux baselines
+        run: npm run test:visual -- --update-snapshots
+      - name: Record baseline provenance
+        run: >-
+          npm run visual:baseline:manifest --
+          --platform linux
+          --source-commit ${{ github.sha }}
+          --output artifacts/visual-baselines/linux-manifest.json
+      - name: Upload Linux baseline candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baseline-candidate-linux
+          path: |
+            tests/golden-path/visual-regression.spec.ts-snapshots/linux/
+            artifacts/visual-baselines/linux-manifest.json
+          if-no-files-found: error
           retention-days: 14
 
   build-check:

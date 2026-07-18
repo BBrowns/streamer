@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import {
   Platform,
   Pressable,
@@ -10,6 +10,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { hapticSelection } from "../../lib/haptics";
 import { getWebFocusStyle, uiTouchTarget, uiTypography } from "./designSystem";
 
@@ -17,6 +18,21 @@ export type ContentTabOption<T extends string = string> = {
   label: string;
   value: T;
 };
+
+export function getContentTabNavigationIndex(
+  currentIndex: number,
+  optionCount: number,
+  key: string,
+) {
+  if (optionCount <= 0) return null;
+  if (key === "Home") return 0;
+  if (key === "End") return optionCount - 1;
+  if (key === "ArrowRight") return (currentIndex + 1) % optionCount;
+  if (key === "ArrowLeft") {
+    return (currentIndex - 1 + optionCount) % optionCount;
+  }
+  return null;
+}
 
 type ContentTabsProps<T extends string> = {
   options: readonly ContentTabOption<T>[];
@@ -41,13 +57,33 @@ export function ContentTabs<T extends string>({
   style,
   testID,
 }: ContentTabsProps<T>) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
+  const tabRefs = useRef<any[]>([]);
   const handleChange = useCallback(
     (nextValue: T) => {
       hapticSelection();
       onChange(nextValue);
     },
     [onChange],
+  );
+  const handleTabKeyDown = useCallback(
+    (event: any, currentIndex: number) => {
+      const key = event.nativeEvent?.key ?? event.key;
+      const nextIndex = getContentTabNavigationIndex(
+        currentIndex,
+        options.length,
+        key,
+      );
+      if (nextIndex === null) return false;
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      const nextOption = options[nextIndex];
+      if (!nextOption) return true;
+      handleChange(nextOption.value);
+      tabRefs.current[nextIndex]?.focus?.();
+      return true;
+    },
+    [handleChange, options],
   );
 
   return (
@@ -69,56 +105,101 @@ export function ContentTabs<T extends string>({
         variant === "segmented" && styles.segmentedContent,
       ]}
     >
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="tab"
-            accessibilityLabel={option.label}
-            accessibilityState={{ selected }}
-            aria-selected={Platform.OS === "web" ? selected : undefined}
-            onPress={() => handleChange(option.value)}
-            style={({ hovered, pressed, focused }: any) => [
-              styles.tab,
-              variant === "segmented" && styles.segmentedTab,
-              variant === "segmented" &&
-                selected && {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.tint + (isDark ? "66" : "42"),
-                },
-              Platform.OS === "web" &&
-                hovered &&
-                !selected && {
-                  backgroundColor: isDark
-                    ? "rgba(244,245,247,0.04)"
-                    : "rgba(16,18,22,0.04)",
-                },
-              pressed && styles.pressed,
-              Platform.OS === "web" &&
-                focused &&
-                getWebFocusStyle(colors.focus),
-            ]}
-          >
-            <Text
-              style={[
-                styles.label,
-                { color: selected ? colors.text : colors.textSecondary },
-                selected && styles.labelSelected,
-              ]}
-            >
-              {option.label}
-            </Text>
-            {selected && variant === "underline" && (
-              <View
-                testID={`content-tab-indicator-${option.value}`}
-                style={[styles.indicator, { backgroundColor: colors.tint }]}
-              />
-            )}
-          </Pressable>
-        );
-      })}
+      {options.map((option, index) => (
+        <ContentTab
+          key={option.value}
+          option={option}
+          selected={option.value === value}
+          variant={variant}
+          onChange={handleChange}
+          onKeyDown={(event) => handleTabKeyDown(event, index)}
+          registerRef={(node) => {
+            tabRefs.current[index] = node;
+          }}
+        />
+      ))}
     </ScrollView>
+  );
+}
+
+function ContentTab<T extends string>({
+  option,
+  selected,
+  variant,
+  onChange,
+  onKeyDown,
+  registerRef,
+}: {
+  option: ContentTabOption<T>;
+  selected: boolean;
+  variant: "underline" | "segmented";
+  onChange: (value: T) => void;
+  onKeyDown: (event: any) => boolean;
+  registerRef: (node: any) => void;
+}) {
+  const { colors, isDark } = useTheme();
+  const activate = useCallback(
+    () => onChange(option.value),
+    [onChange, option],
+  );
+  const { isKeyboardFocused, webPressableProps } =
+    useWebPressableActivation(activate);
+  const handleKeyDown = useCallback(
+    (event: any) => {
+      if (onKeyDown(event)) return;
+      (webPressableProps as any).onKeyDown?.(event);
+    },
+    [onKeyDown, webPressableProps],
+  );
+
+  return (
+    <Pressable
+      {...webPressableProps}
+      ref={registerRef}
+      tabIndex={Platform.OS === "web" ? (selected ? 0 : -1) : undefined}
+      {...(Platform.OS === "web" ? ({ onKeyDown: handleKeyDown } as any) : {})}
+      accessibilityRole="tab"
+      accessibilityLabel={option.label}
+      accessibilityState={{ selected }}
+      aria-selected={Platform.OS === "web" ? selected : undefined}
+      onPress={activate}
+      style={({ hovered, pressed }: any) => [
+        styles.tab,
+        variant === "segmented" && styles.segmentedTab,
+        variant === "segmented" &&
+          selected && {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.tint + (isDark ? "66" : "42"),
+          },
+        Platform.OS === "web" &&
+          hovered &&
+          !selected && {
+            backgroundColor: isDark
+              ? "rgba(244,245,247,0.04)"
+              : "rgba(16,18,22,0.04)",
+          },
+        pressed && styles.pressed,
+        Platform.OS === "web" &&
+          isKeyboardFocused &&
+          getWebFocusStyle(colors.focus),
+      ]}
+    >
+      <Text
+        style={[
+          styles.label,
+          { color: selected ? colors.text : colors.textSecondary },
+          selected && styles.labelSelected,
+        ]}
+      >
+        {option.label}
+      </Text>
+      {selected && variant === "underline" && (
+        <View
+          testID={`content-tab-indicator-${option.value}`}
+          style={[styles.indicator, { backgroundColor: colors.tint }]}
+        />
+      )}
+    </Pressable>
   );
 }
 

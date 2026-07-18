@@ -430,7 +430,7 @@ export default function DownloadsScreen() {
             actionLabel={t("downloads.empty.action", {
               defaultValue: "Browse movies and shows",
             })}
-            onAction={() => router.push("/search?mode=discover")}
+            onAction={() => router.push("/search")}
           />
         </View>
         <View style={styles.emptySmartStatus}>

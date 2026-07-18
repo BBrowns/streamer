@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Platform,
   Pressable,
@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
+import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { getWebFocusStyle, uiTouchTarget } from "../ui/designSystem";
 
 type RecentSearchesProps = {
@@ -37,6 +38,8 @@ export function RecentSearches({
   const { colors } = useTheme();
   const { t } = useTranslation();
   const visibleItems = items.slice(0, limit);
+  const { isKeyboardFocused: isClearFocused, webPressableProps: clearProps } =
+    useWebPressableActivation(onClear);
 
   if (visibleItems.length === 0 && !showEmpty) return null;
 
@@ -55,14 +58,15 @@ export function RecentSearches({
         </Text>
         {visibleItems.length > 0 ? (
           <Pressable
+            {...clearProps}
             onPress={onClear}
             accessibilityRole="button"
             accessibilityLabel={t("search.recent.clear")}
-            style={({ pressed, focused }: any) => [
+            style={({ pressed }: any) => [
               styles.clearButton,
               pressed && styles.pressed,
               Platform.OS === "web" &&
-                focused &&
+                isClearFocused &&
                 getWebFocusStyle(colors.focus),
             ]}
           >
@@ -76,55 +80,12 @@ export function RecentSearches({
       {visibleItems.length > 0 ? (
         <View style={styles.list}>
           {visibleItems.map((query) => (
-            <View
+            <RecentSearchRow
               key={query}
-              style={[styles.row, { borderTopColor: colors.border }]}
-            >
-              <Pressable
-                onPress={() => onSelect(query)}
-                accessibilityRole="button"
-                accessibilityLabel={t("search.recent.open", { query })}
-                style={({ pressed, focused }: any) => [
-                  styles.mainAction,
-                  pressed && styles.pressed,
-                  Platform.OS === "web" &&
-                    focused &&
-                    getWebFocusStyle(colors.focus),
-                ]}
-              >
-                <Ionicons
-                  name="time-outline"
-                  size={16}
-                  color={colors.textSecondary}
-                />
-                <Text
-                  style={[styles.query, { color: colors.text }]}
-                  numberOfLines={1}
-                >
-                  {query}
-                </Text>
-              </Pressable>
-              {onRemove ? (
-                <Pressable
-                  onPress={() => onRemove(query)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("search.recent.remove", { query })}
-                  style={({ pressed, focused }: any) => [
-                    styles.removeButton,
-                    pressed && styles.pressed,
-                    Platform.OS === "web" &&
-                      focused &&
-                      getWebFocusStyle(colors.focus),
-                  ]}
-                >
-                  <Ionicons
-                    name="close"
-                    size={17}
-                    color={colors.textSecondary}
-                  />
-                </Pressable>
-              ) : null}
-            </View>
+              query={query}
+              onSelect={onSelect}
+              onRemove={onRemove}
+            />
           ))}
         </View>
       ) : (
@@ -132,6 +93,65 @@ export function RecentSearches({
           {t("search.command.noRecent")}
         </Text>
       )}
+    </View>
+  );
+}
+
+function RecentSearchRow({
+  query,
+  onSelect,
+  onRemove,
+}: {
+  query: string;
+  onSelect: (query: string) => void;
+  onRemove?: (query: string) => void;
+}) {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const open = useCallback(() => onSelect(query), [onSelect, query]);
+  const remove = useCallback(() => onRemove?.(query), [onRemove, query]);
+  const { isKeyboardFocused: isOpenFocused, webPressableProps: openProps } =
+    useWebPressableActivation(open);
+  const { isKeyboardFocused: isRemoveFocused, webPressableProps: removeProps } =
+    useWebPressableActivation(remove);
+
+  return (
+    <View style={[styles.row, { borderTopColor: colors.border }]}>
+      <Pressable
+        {...openProps}
+        onPress={open}
+        accessibilityRole="button"
+        accessibilityLabel={t("search.recent.open", { query })}
+        style={({ pressed }: any) => [
+          styles.mainAction,
+          pressed && styles.pressed,
+          Platform.OS === "web" &&
+            isOpenFocused &&
+            getWebFocusStyle(colors.focus),
+        ]}
+      >
+        <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+        <Text style={[styles.query, { color: colors.text }]} numberOfLines={1}>
+          {query}
+        </Text>
+      </Pressable>
+      {onRemove ? (
+        <Pressable
+          {...removeProps}
+          onPress={remove}
+          accessibilityRole="button"
+          accessibilityLabel={t("search.recent.remove", { query })}
+          style={({ pressed }: any) => [
+            styles.removeButton,
+            pressed && styles.pressed,
+            Platform.OS === "web" &&
+              isRemoveFocused &&
+              getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <Ionicons name="close" size={17} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

@@ -8,7 +8,7 @@ developer account.
 
 ## Browser Coverage
 
-The 22 browser scenarios run at all four supported evidence sizes:
+The semantic browser scenarios run at all four supported evidence sizes:
 
 | Project                | Viewport    | Window intent                  |
 | ---------------------- | ----------- | ------------------------------ |
@@ -36,19 +36,44 @@ They cover:
 - Obsidian Settings overview/detail routing, mutually exclusive Sources and
   Advanced responsibilities, dark/light captures, and legacy `/sources`
   compatibility.
-- Canonical Search discovery, suggestions, results, compact filter sheet,
-  large filter sidebar, partial-provider recovery, per-catalog inline failure,
-  URL-normalized reset, and legacy `/search/results` compatibility.
+- Active Search idle/recents, bounded suggestions, submitted poster-grid
+  results, compact filter sheet, large filter sidebar, no-match,
+  no-searchable-provider, provider-outage, and partial-provider states.
+- Search URL normalization, reset, clear/resubmit, browser back/forward state,
+  and legacy `/search/results` compatibility.
 - Pointer focus without a persistent ring and a strong three-pixel keyboard
   `:focus-visible` treatment on the actual focused node.
 - Command Palette arrow-key selection and Enter activation against the same
   Search model.
 
-Dark and light screenshots are emitted for Settings overview/detail and Search
-landing/suggestions/results/filters. Intermediate pane and overflow behavior is
-asserted directly at 768 x 1024 and 1024 x 768. Three desktop-only scenarios
-are skipped in the other projects, so the complete browser schedule is 88
-cases: 79 executable assertions and 9 intentional project-aware skips.
+## Versioned Visual Baselines
+
+The focused `visual-regression.spec.ts` suite makes Home, Settings overview,
+and submitted Search results into source-controlled pixel baselines. It covers
+dark and light mode at the compact phone and large desktop window classes.
+The fixture data, loaded font, images, motion, caret, scale, and screenshot
+path are deterministic. Baselines are stored per OS, so Linux CI never compares
+its Chromium output against a macOS image. A comparison permits at most 500
+changed pixels at a 0.1 color threshold; it is intentionally tight enough to
+catch material composition changes.
+
+Linux CI requires the full reviewed baseline set and fails early if an image is
+missing. The reviewed twelve-image Linux set is committed alongside the
+separate Darwin set. On a same-repository PR, the parallel **Visual Baseline
+Candidate (Linux)** job produces a replacement artifact with hashes and its
+source commit; **Refresh Visual Baselines** offers the same flow behind an
+explicit `refresh` confirmation after this workflow reaches the default branch.
+Neither job can push or alter a branch. On macOS, `test:visual` uses the
+separate Darwin baseline. Do not accept `--update-snapshots` output without a
+visual review.
+
+The broader semantic suite separately exercises Settings detail and the Search
+idle/recents/suggestions/results/filters/no-results/no-provider/partial states.
+Intermediate pane and overflow behavior is asserted directly at 768 x 1024 and
+1024 x 768. Project-aware semantic skips remain explicit in the test output.
+The focused visual suite has four theme/window test cases with three screenshot
+assertions each, for twelve platform-specific pixel comparisons; macOS runs
+them only through `npm run test:visual`.
 
 ## Real Electron Smoke
 
@@ -73,6 +98,10 @@ without a display skip this one smoke case explicitly; use Xvfb to execute it.
 ```bash
 npx playwright install chromium
 npm run test:golden-path
+
+# Run or intentionally refresh the source-controlled pixel baselines.
+npm run test:visual
+npm run test:visual -- --update-snapshots
 ```
 
 To run only the real-shell contract:
@@ -94,8 +123,11 @@ fresh deterministic run.
 ## Evidence Boundary
 
 Browser projects prove responsive renderer behavior, not native iOS or Android
-layout or playback. The Electron smoke proves the development main/preload IPC
-composition, version labels, managed-file inspection, and zoom behavior; it
-does not prove a packaged sidecar, torrent engine, real download decode, or
-release signing. Native and packaged support claims remain unchanged until
-their target-specific QA runs are recorded.
+layout or playback. `npm run native:evidence:preflight` can tell whether the
+local Detox target, SDK, runtime, and AVD prerequisites are present, but it is
+strictly read-only and is not a simulator, emulator, or physical-device pass.
+The Electron smoke proves the development main/preload IPC composition, version
+labels, managed-file inspection, and zoom behavior; it does not prove a
+packaged sidecar, torrent engine, real download decode, or release signing.
+Native and packaged support claims remain unchanged until their target-specific
+QA runs are recorded.

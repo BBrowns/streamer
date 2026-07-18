@@ -1,6 +1,6 @@
 # Playback QA Matrix
 
-Last updated: 2026-07-15.
+Last updated: 2026-07-18.
 
 This matrix tracks real target validation for Streamer playback, downloads,
 casting, bridge health, and remux behavior. A target is not considered supported
@@ -31,14 +31,14 @@ tests alone.
 
 ## Current Target Status
 
-| Runtime                    | Current status | Evidence                                                                                                                                                                             |
-| -------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| macOS desktop packaged app | Unknown        | No packaged-app run recorded yet.                                                                                                                                                    |
-| Electron/web dev runtime   | Partial        | Real main/preload smoke passed for build labels, `inspectFile`, and 125%/150% zoom; no packaged playback claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md). |
-| iOS Simulator              | Blocked        | Disposable prebuild and Pods passed; Xcode could not build because the required iOS 26.5 platform/runtime is not installed.                                                          |
-| iPhone physical device     | Unknown        | No run recorded yet.                                                                                                                                                                 |
-| Android physical/emulator  | Not run        | Android SDK/AVD and `adb` were unavailable; browser emulation is not counted as native evidence.                                                                                     |
-| Browser web                | Partial        | Deterministic responsive renderer and recovery flows passed; no real-source first-frame claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md).                  |
+| Runtime                    | Current status | Evidence                                                                                                                                                                                                                                                                                                         |
+| -------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS desktop packaged app | Unknown        | No packaged-app run recorded yet.                                                                                                                                                                                                                                                                                |
+| Electron/web dev runtime   | Partial        | Real main/preload smoke passed for build labels, `inspectFile`, and 125%/150% zoom; no packaged playback claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md).                                                                                                                             |
+| iOS Simulator              | Blocked        | Read-only preflight sees the iPhoneSimulator SDK plus iOS 17.2/26.2 runtimes, but no matching iPhone 15 runtime for SDK 26.5 and no generated Expo `ios/` project to prove deployment compatibility. See the [July 18 preflight](./qa-runs/2026-07-18-native-evidence-preflight.md).                             |
+| iPhone physical device     | Unknown        | No run recorded yet.                                                                                                                                                                                                                                                                                             |
+| Android physical/emulator  | Not run        | SDK/tool files exist, but the configured Detox AVD is absent. The read-only preflight deliberately does not start `adb` or an emulator; browser emulation is not native evidence. See the [July 18 preflight](./qa-runs/2026-07-18-native-evidence-preflight.md).                                                |
+| Browser web                | Partial        | Deterministic responsive renderer and recovery flows passed. Reviewed Darwin and Linux Home/Settings/Search baselines now pass in CI; no real-source first-frame claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md) and [July 18 visual run](./qa-runs/2026-07-18-visual-regression.md). |
 
 ## Reference Fixtures
 

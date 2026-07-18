@@ -1,0 +1,6 @@
+# Local Codex/Graphify working artifacts are intentionally not source files.
+# Keep them visible to Git; only prevent them from invalidating application
+# formatting checks during local development.
+.codex/
+graphify-out/
+AGENTS.md

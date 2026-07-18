@@ -1,5 +1,6 @@
 import {
   clearSearchFilters,
+  getSearchFilterPaginationState,
   getSearchOutcome,
   legacySearchRedirectParams,
   parseSearchRouteState,
@@ -10,19 +11,18 @@ describe("search route state", () => {
   it("parses valid shareable filters", () => {
     expect(
       parseSearchRouteState({
-        q: " Dune ",
+        q: "  Dune   Part Two ",
         type: "movie",
         year: "2024",
         provider: "addon-1",
         sort: "year",
       }),
     ).toEqual({
-      q: "Dune",
+      q: "Dune Part Two",
       type: "movie",
       year: "2024",
       provider: "addon-1",
       sort: "year",
-      mode: undefined,
     });
   });
 
@@ -35,7 +35,6 @@ describe("search route state", () => {
       year: "all",
       provider: "all",
       sort: "default",
-      mode: undefined,
     });
   });
 
@@ -54,7 +53,6 @@ describe("search route state", () => {
       year: undefined,
       provider: undefined,
       sort: undefined,
-      mode: undefined,
     });
   });
 
@@ -72,6 +70,44 @@ describe("search route state", () => {
       provider: "all",
       sort: "default",
     });
+  });
+
+  it.each([
+    [0, true, 1, false, "ready"],
+    [1, true, 1, false, "loading"],
+    [1, false, 3, false, "ready"],
+    [1, true, 20, false, "limit"],
+    [1, true, 2, true, "error"],
+  ])(
+    "classifies complete secondary-filter pagination (%s, %s, %s, %s)",
+    (
+      activeSecondaryFilterCount,
+      hasNextPage,
+      pageCount,
+      isNextPageError,
+      expected,
+    ) => {
+      expect(
+        getSearchFilterPaginationState({
+          activeSecondaryFilterCount: Number(activeSecondaryFilterCount),
+          hasNextPage: Boolean(hasNextPage),
+          pageCount: Number(pageCount),
+          isNextPageError: Boolean(isNextPageError),
+        }),
+      ).toBe(expected);
+    },
+  );
+
+  it("supports a lower page cap for bounded pagination tests", () => {
+    expect(
+      getSearchFilterPaginationState({
+        activeSecondaryFilterCount: 1,
+        hasNextPage: true,
+        pageCount: 2,
+        isNextPageError: false,
+        maxPageCount: 2,
+      }),
+    ).toBe("limit");
   });
 
   it.each([
@@ -98,5 +134,35 @@ describe("search route state", () => {
         ...overrides,
       }),
     ).toBe(expected);
+  });
+
+  it("classifies an empty server-side type slice as filter-empty when all types matched", () => {
+    expect(
+      getSearchOutcome({
+        isLoading: false,
+        isError: false,
+        attemptedProviders: 1,
+        successfulProviders: 1,
+        failedProviderCount: 0,
+        resultCount: 0,
+        filteredResultCount: 0,
+        activeFilterCount: 1,
+        unfilteredResultCount: 3,
+      }),
+    ).toBe("filter-empty");
+
+    expect(
+      getSearchOutcome({
+        isLoading: false,
+        isError: false,
+        attemptedProviders: 1,
+        successfulProviders: 1,
+        failedProviderCount: 0,
+        resultCount: 0,
+        filteredResultCount: 0,
+        activeFilterCount: 1,
+        unfilteredResultCount: 0,
+      }),
+    ).toBe("no-match");
   });
 });

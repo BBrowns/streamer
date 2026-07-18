@@ -89,13 +89,16 @@ real development-shell smoke:
 ```bash
 npm run test:golden-path
 npm run test:electron-smoke
+npm run native:evidence:preflight
 ```
 
 The browser projects cover 390 x 844, 768 x 1024, 1024 x 768, and 1440 x 1000.
 The Electron smoke uses the real main/preload IPC composition for version
 labels, managed-file inspection, and 125%/150% zoom. Keep these evidence limits
 explicit: Chromium viewport emulation is not native iOS/Android proof, and a
-development Electron smoke is not a packaged sidecar or signing test.
+development Electron smoke is not a packaged sidecar or signing test. The
+native preflight is read-only: it reports configured Detox/SDK/AVD prerequisites
+and next actions without booting a target, and does not count as a native pass.
 
 ## Log Capture
 

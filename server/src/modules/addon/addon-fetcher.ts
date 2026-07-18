@@ -12,7 +12,10 @@ export type AddonSourcePolicyCode =
 export interface FetchSafeAddonJsonOptions {
   kind: AddonFetchKind;
   timeoutMs?: number;
+  /** May lower, but never raise, the default body limit for this request. */
+  maxResponseBytes?: number;
   maxRedirects?: number;
+  signal?: AbortSignal;
   axiosOptions?: Pick<AxiosRequestConfig, "httpAgent" | "httpsAgent">;
 }
 
@@ -55,8 +58,18 @@ function getPayloadSizeBytes(data: unknown) {
   return Buffer.byteLength(JSON.stringify(data), "utf8");
 }
 
-function assertPayloadSize(data: unknown, kind: AddonFetchKind) {
-  const maxBytes = ADDON_RESPONSE_LIMIT_BYTES[kind];
+function resolveResponseLimit(options: FetchSafeAddonJsonOptions) {
+  const defaultLimit = ADDON_RESPONSE_LIMIT_BYTES[options.kind];
+  if (options.maxResponseBytes === undefined) return defaultLimit;
+  if (!Number.isSafeInteger(options.maxResponseBytes)) return defaultLimit;
+  return Math.max(1, Math.min(defaultLimit, options.maxResponseBytes));
+}
+
+function assertPayloadSize(
+  data: unknown,
+  kind: AddonFetchKind,
+  maxBytes: number,
+) {
   const sizeBytes = getPayloadSizeBytes(data);
   if (sizeBytes > maxBytes) {
     throw new AddonSourcePolicyError(
@@ -92,11 +105,12 @@ export async function fetchSafeAddonJson(
 
   await assertSafeAddonUrl(url);
 
-  const maxBytes = ADDON_RESPONSE_LIMIT_BYTES[options.kind];
+  const maxBytes = resolveResponseLimit(options);
   let response;
   try {
     response = await axios.get(url, {
       timeout: options.timeoutMs ?? env.addonTimeoutMs,
+      signal: options.signal,
       maxRedirects: 0,
       maxContentLength: maxBytes,
       maxBodyLength: maxBytes,
@@ -131,6 +145,6 @@ export async function fetchSafeAddonJson(
     );
   }
 
-  assertPayloadSize(response.data, options.kind);
+  assertPayloadSize(response.data, options.kind, maxBytes);
   return response.data;
 }

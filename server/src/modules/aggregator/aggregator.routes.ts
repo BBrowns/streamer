@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { HonoEnv } from "../../types/hono.js";
 import { zValidator } from "@hono/zod-validator";
 import { aggregatorController } from "./aggregator.controller.js";
-import { catalogRateLimiter } from "../../middleware/rateLimiter.middleware.js";
+import {
+  catalogRateLimiter,
+  searchRateLimiter,
+} from "../../middleware/rateLimiter.middleware.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import {
   aggregatorSearchSchema,
@@ -19,6 +22,7 @@ const routes = aggregatorRouter
   .get(
     "/search",
     authMiddleware,
+    searchRateLimiter,
     zValidator("query", aggregatorSearchSchema),
     (c) => aggregatorController.search(c),
   )
@@ -54,6 +58,8 @@ const routes = aggregatorRouter
     zValidator("json", aggregatorResolveBulkSchema),
     (c) => aggregatorController.resolveStreamsBulk(c),
   )
-  .get("/resilience", (c) => aggregatorController.getResilienceMetrics(c));
+  .get("/resilience", authMiddleware, (c) =>
+    aggregatorController.getResilienceMetrics(c),
+  );
 
 export type AggregatorRoutes = typeof routes;

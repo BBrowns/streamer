@@ -2,9 +2,9 @@ import type { Context } from "hono";
 import { env } from "../../config/env.js";
 import {
   aggregatorService,
+  InvalidSearchCursorError,
   MetadataProvidersUnavailableError,
 } from "./aggregator.service.js";
-import { resilienceRegistry } from "./resilience.js";
 import { SessionService } from "../auth/session.service.js";
 
 export class AggregatorController {
@@ -144,22 +144,42 @@ export class AggregatorController {
   }
 
   async search(c: Context) {
-    const { q } = (c.req as any).valid("query");
+    const { q, type, mode, limit, cursor } = (c.req as any).valid("query");
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
-    const result = await aggregatorService.searchWithProvenance(
-      user.userId,
-      q.trim(),
-      requestId,
-    );
+    let result;
+    try {
+      result = await aggregatorService.searchWithProvenance(
+        user.userId,
+        q.trim(),
+        requestId,
+        {
+          type,
+          mode,
+          limit,
+          cursor,
+          signal: c.req.raw.signal,
+        },
+      );
+    } catch (error) {
+      if (error instanceof InvalidSearchCursorError) {
+        return c.json(
+          { error: "Search cursor is invalid.", code: "INVALID_SEARCH_CURSOR" },
+          400,
+        );
+      }
+      throw error;
+    }
 
     return c.json(result);
   }
 
   async getResilienceMetrics(c: Context) {
-    const requestId = c.get("requestId");
-    return c.json(resilienceRegistry.getAllMetrics());
+    const user = c.get("user");
+    return c.json(
+      await aggregatorService.getResilienceDiagnostics(user.userId),
+    );
   }
 }
 

@@ -3,9 +3,12 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { serverBuildMetadata } from "../../config/build-metadata.js";
 import { checkServerReadiness } from "../../services/readiness.service.js";
+import { authMiddleware } from "../../middleware/auth.middleware.js";
+import type { HonoEnv } from "../../types/hono.js";
+import { aggregatorService } from "../aggregator/aggregator.service.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
 
-export const systemRouter = new OpenAPIHono();
+export const systemRouter = new OpenAPIHono<HonoEnv>();
 
 const BuildMetadataSchema = z.object({
   appVersion: z.string(),
@@ -117,29 +120,44 @@ systemRouter.openapi(readinessRoute, readinessHandler);
 export const resilienceMetricsRoute = createRoute({
   method: "get",
   path: "/api/aggregator/resilience",
+  middleware: [authMiddleware],
   responses: {
     200: {
       content: {
         "application/json": {
-          schema: z.record(z.string(), z.any()).openapi({
-            title: "ResilienceMetrics",
-            example: {
-              "addon-1": {
-                circuitBreaker: "Closed",
-                retries: 5,
-                timeouts: 2,
-              },
-            },
+          schema: z.object({
+            providers: z.array(
+              z.object({
+                provider: z.string(),
+                metrics: z.object({
+                  timeouts: z.number().int().nonnegative(),
+                  retries: z.number().int().nonnegative(),
+                  circuitOpens: z.number().int().nonnegative(),
+                  bulkheadRejections: z.number().int().nonnegative(),
+                  lastFailure: z.union([z.date(), z.string()]).nullable(),
+                }),
+              }),
+            ),
+            totals: z.object({
+              timeouts: z.number().int().nonnegative(),
+              retries: z.number().int().nonnegative(),
+              circuitOpens: z.number().int().nonnegative(),
+              bulkheadRejections: z.number().int().nonnegative(),
+              lastFailure: z.union([z.date(), z.string()]).nullable(),
+            }),
+            truncated: z.boolean(),
           }),
         },
       },
-      description:
-        "Returns circuit breaker and resilience metrics for all add-ons",
+      description: "Returns redacted resilience metrics for the current user",
     },
   },
 });
 
 systemRouter.openapi(resilienceMetricsRoute, async (c) => {
-  const { resilienceRegistry } = await import("../aggregator/resilience.js");
-  return c.json(resilienceRegistry.getAllMetrics());
+  const user = c.get("user");
+  return c.json(
+    await aggregatorService.getResilienceDiagnostics(user.userId),
+    200,
+  );
 });

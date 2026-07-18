@@ -8,8 +8,8 @@
     "settings": "Settings"
   },
   "search": {
-    "eyebrow": "Discover",
-    "title": "Find your next story",
+    "eyebrow": "Search",
+    "title": "Find a movie or series",
     "placeholder": "Search movies and series",
     "a11y": {
       "field": "Search movies and series",
@@ -45,6 +45,8 @@
       "manageAddons": "Manage add-ons"
     },
     "suggestions": {
+      "label": "Title suggestions",
+      "loading": "Finding title suggestions…",
       "noMatch": "No title suggestions yet.",
       "showAll": "Show all results for “{{query}}”"
     },
@@ -81,10 +83,13 @@
       "year": "Newest"
     },
     "results": {
-      "summary": "{{count}} results for “{{query}}”",
-      "summary_one": "1 result for “{{query}}”",
-      "summary_other": "{{count}} results for “{{query}}”",
+      "summary": "Results for “{{query}}” · {{count}} results",
+      "summary_one": "Results for “{{query}}” · 1 result",
+      "summary_other": "Results for “{{query}}” · {{count}} results",
       "searching": "Searching for “{{query}}”…",
+      "preparingFilters": "Loading all matches before applying filters… {{count}} titles loaded.",
+      "loadMore": "Load more results",
+      "loadingMore": "Loading more results…",
       "detailHint": "Choose a title to view details and available playback options.",
       "sources": "Available from {{count}} sources",
       "sources_one": "Available from 1 source",
@@ -92,6 +97,11 @@
     },
     "states": {
       "partial": "Some sources could not be reached. Showing results from the sources that responded.",
+      "partialCompact": "Some sources could not be searched.",
+      "truncated": "Showing a bounded set of matches. Refine your search to see more specific results.",
+      "truncatedCompact": "Showing a limited set of matches. Refine your search for more.",
+      "noSearchProviderTitle": "A searchable catalog is required",
+      "noSearchProviderDescription": "Your installed add-ons do not provide title search. Install a searchable catalog add-on to find movies and series.",
       "errorTitle": "Search could not load",
       "errorDescription": "Check your connection and try the search again.",
       "providersFailedTitle": "Sources are temporarily unavailable",
@@ -99,7 +109,9 @@
       "noMatchTitle": "No titles found",
       "noMatchDescription": "Nothing matched “{{query}}”. Try a different title.",
       "filterEmptyTitle": "No results with these filters",
-      "filterEmptyDescription": "Reset your filters to see all matching titles."
+      "filterEmptyDescription": "Reset your filters to see all matching titles.",
+      "filterLimitTitle": "Refine this search to use these filters",
+      "filterLimitDescription": "There are too many matches to load safely for complete filtering. Try a more specific title or reset the filters."
     }
   },
   "home": {

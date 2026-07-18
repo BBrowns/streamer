@@ -74,4 +74,72 @@ describe("Add-ons removal", () => {
     screen.unmount();
     queryClient.clear();
   });
+
+  it("invalidates title search after installing an add-on", async () => {
+    (api.post as jest.Mock).mockResolvedValue({ data: installedAddon });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const invalidateQueries = jest
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue(undefined);
+    const screen = render(
+      <QueryClientProvider client={queryClient}>
+        <AddonsScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Example Provider")).toBeTruthy(),
+    );
+    fireEvent.changeText(
+      screen.getByLabelText("Manifest URL"),
+      "https://new-addon.test/manifest.json",
+    );
+    fireEvent.press(screen.getByLabelText("addons.install.button"));
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["search"],
+      }),
+    );
+    screen.unmount();
+    queryClient.clear();
+  });
+
+  it("invalidates title search after removing an add-on", async () => {
+    (api.delete as jest.Mock).mockResolvedValue({});
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const invalidateQueries = jest
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue(undefined);
+    const screen = render(
+      <QueryClientProvider client={queryClient}>
+        <AddonsScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Example Provider")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("addons.installed.confirmRemove"));
+    const confirmationButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
+    confirmationButtons[1].onPress();
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ["search"],
+      }),
+    );
+    screen.unmount();
+    queryClient.clear();
+  });
 });

@@ -195,7 +195,7 @@ function HomeProviderRails({
         eyebrow="PROVIDERS"
         title={t("home.sections.fromProviders")}
         actionLabel={t("tabs.discover")}
-        onAction={() => router.push("/search?mode=discover")}
+        onAction={() => router.push("/search")}
       />
       {catalogRows.map(({ catalog, addon }) => (
         <CatalogRow

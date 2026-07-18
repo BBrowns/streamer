@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { visualBaselineFileNames } from "./visual-baseline-manifest.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
@@ -65,6 +66,14 @@ function checkCiWorkflow() {
   const requiredSnippets = [
     ["npm run format:check", "format check"],
     ["npm run typecheck:all", "all-workspace typecheck"],
+    [
+      "npm run native:evidence:preflight:test",
+      "native evidence preflight contract",
+    ],
+    [
+      "npm run visual:baseline:manifest:test",
+      "visual baseline artifact contract",
+    ],
     ["npm run mobile:config:check", "mobile release config validation"],
     ["npm run test --workspace=@streamer/shared", "shared tests"],
     ["npm run test --workspace=server -- --coverage", "server coverage tests"],
@@ -124,6 +133,14 @@ function checkDocs() {
   requireFile("docs/SERVER_PRODUCTION.md");
   requireFile("playwright.config.ts");
   requireFile("tests/golden-path/golden-path.spec.ts");
+  requireFile("tests/golden-path/visual-regression.spec.ts");
+  requireFile("scripts/native-evidence-preflight.mjs");
+  requireFile("scripts/visual-baseline-manifest.mjs");
+  for (const baselineFile of visualBaselineFileNames) {
+    requireFile(
+      `tests/golden-path/visual-regression.spec.ts-snapshots/linux/${baselineFile}`,
+    );
+  }
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
@@ -136,8 +153,8 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The active implementation roadmap is complete through **PR #151**",
-    "implementation roadmap is complete through PR #151",
+    "The merged implementation roadmap is complete through **PR #154**",
+    "merged implementation roadmap is complete through PR #154",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
@@ -151,6 +168,21 @@ function checkDocs() {
     "AGENT_HANDOFF.md",
     "docs/AUTOMATED_GOLDEN_PATHS.md",
     "automated golden-path documentation link",
+  );
+  requireText(
+    "package.json",
+    '"native:evidence:preflight": "node scripts/native-evidence-preflight.mjs"',
+    "native evidence preflight command",
+  );
+  requireText(
+    "package.json",
+    '"visual:baseline:manifest": "node scripts/visual-baseline-manifest.mjs"',
+    "visual baseline manifest command",
+  );
+  requireText(
+    "docs/AUTOMATED_GOLDEN_PATHS.md",
+    "## Versioned Visual Baselines",
+    "versioned visual baseline documentation",
   );
   requireText("docs/QA_MATRIX.md", "## Release Blockers", "release blockers");
   requireText("docs/QA_MATRIX.md", "Unknown", "unknown target states");

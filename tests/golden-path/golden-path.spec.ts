@@ -5,6 +5,7 @@ import {
   installGoldenPathRoutes,
   type GoldenPathScenario,
 } from "./fixtures";
+import { expectAccessibleSurface } from "./accessibility";
 
 async function loginToFixtureShell(
   page: Page,
@@ -731,7 +732,42 @@ test("Sources and Advanced expose mutually exclusive responsibilities", async ({
   await expectNoHorizontalPageOverflow(page);
 });
 
-test("Obsidian Search keeps discovery and results media-first", async ({
+test("key non-media UI states meet WCAG A/AA accessibility rules", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !["phone-web", "desktop-renderer"].includes(testInfo.project.name),
+    "Axe covers the compact and large window classes; visual golden paths cover the intermediate layouts.",
+  );
+
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page);
+  await expect(page.getByTestId("home-screen")).toBeVisible();
+  await expectAccessibleSurface(page, '[data-testid="home-screen"]', "Home");
+
+  await page.goto("/settings/playback");
+  await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
+  await expectAccessibleSurface(
+    page,
+    '[data-testid="settings-screen"]',
+    "Settings playback",
+  );
+
+  await page.goto("/search?q=Golden");
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expectAccessibleSurface(
+    page,
+    '[data-testid="search-screen"]',
+    "Search results",
+  );
+
+  await page.keyboard.press("Meta+k");
+  const commandPalette = page.getByTestId("command-palette");
+  await expect(commandPalette).toBeVisible();
+  await expectAccessibleSurface(page, '[role="dialog"]', "Command palette");
+});
+
+test("Search keeps active retrieval focused and results media-first", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
@@ -740,58 +776,28 @@ test("Obsidian Search keeps discovery and results media-first", async ({
 
   await expect(page.getByTestId("search-screen")).toBeVisible();
   await settleVisualTheme(page, "dark", "search-screen");
-  await expect(page.getByTestId("search-discovery")).toBeVisible();
+  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-results-type-tabs")).toHaveCount(0);
+  await expect(page.getByTestId("search-discovery")).toHaveCount(0);
   const searchShell = page.getByTestId("search-field-container");
-  const typeTabs = page.getByTestId("search-discovery-type-tabs");
   await expect(searchShell).toBeVisible();
-  await expect(typeTabs).toBeVisible();
-  await expect(typeTabs.getByRole("tab")).toHaveCount(3);
-  await expect(typeTabs.getByRole("tab", { name: "All" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
   const searchShellBox = await searchShell.boundingBox();
-  const typeTabsBox = await typeTabs.boundingBox();
   expect(searchShellBox).not.toBeNull();
-  expect(searchShellBox!.height).toBeGreaterThanOrEqual(44);
-  expect(searchShellBox!.height).toBeLessThanOrEqual(54);
-  expect(searchShellBox!.width).toBeLessThanOrEqual(442);
-  expect(typeTabsBox).not.toBeNull();
-  expect(typeTabsBox!.height).toBeGreaterThanOrEqual(44);
-  expect(typeTabsBox!.height).toBeLessThanOrEqual(54);
-  expect(typeTabsBox!.width).toBeLessThanOrEqual(290);
+  expect(searchShellBox!.height).toBeGreaterThanOrEqual(56);
+  expect(searchShellBox!.height).toBeLessThanOrEqual(64);
+  expect(searchShellBox!.width).toBeLessThanOrEqual(762);
 
-  const viewport = page.viewportSize();
   const titleBox = await page
-    .getByText("Find your next story", { exact: true })
+    .getByText("Find a movie or series", { exact: true })
     .boundingBox();
-  expect(viewport).not.toBeNull();
   expect(titleBox).not.toBeNull();
-  if (viewport!.width >= 840) {
-    expect(searchShellBox!.x).toBeGreaterThan(titleBox!.x + titleBox!.width);
-  } else {
-    expect(searchShellBox!.y).toBeGreaterThanOrEqual(
-      titleBox!.y + titleBox!.height,
-    );
-  }
-
-  const movieTab = typeTabs.getByRole("tab", { name: "Movies" });
-  await movieTab.click();
-  await expect(movieTab).toHaveAttribute("aria-selected", "true");
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("type"))
-    .toBe("movie");
-  const allTab = typeTabs.getByRole("tab", { name: "All" });
-  await allTab.click();
-  await expect(allTab).toHaveAttribute("aria-selected", "true");
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("type"))
-    .toBeNull();
+  expect(Math.abs(searchShellBox!.x - titleBox!.x)).toBeLessThanOrEqual(2);
+  expect(searchShellBox!.y).toBeGreaterThanOrEqual(
+    titleBox!.y + titleBox!.height,
+  );
   await expectNoHorizontalPageOverflow(page);
   await page.screenshot({
-    path: testInfo.outputPath(
-      `search-discovery-dark-${testInfo.project.name}.png`,
-    ),
+    path: testInfo.outputPath(`search-empty-dark-${testInfo.project.name}.png`),
     fullPage: true,
     animations: "disabled",
   });
@@ -799,6 +805,9 @@ test("Obsidian Search keeps discovery and results media-first", async ({
   let searchField = page.getByTestId("search-field");
   await searchField.fill("Golden");
   await expect(page.getByTestId("search-suggestions")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Show all results for “Golden”" }),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath(
       `search-suggestions-dark-${testInfo.project.name}.png`,
@@ -808,11 +817,11 @@ test("Obsidian Search keeps discovery and results media-first", async ({
 
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.reload();
-  await expect(page.getByTestId("search-discovery")).toBeVisible();
+  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
   await settleVisualTheme(page, "light", "search-screen");
   await page.screenshot({
     path: testInfo.outputPath(
-      `search-discovery-light-${testInfo.project.name}.png`,
+      `search-empty-light-${testInfo.project.name}.png`,
     ),
     fullPage: true,
     animations: "disabled",
@@ -830,6 +839,31 @@ test("Obsidian Search keeps discovery and results media-first", async ({
 
   await searchField.press("Enter");
   await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  const typeTabs = page.getByTestId("search-results-type-tabs");
+  await expect(typeTabs).toBeVisible();
+  await expect(typeTabs.getByRole("tab")).toHaveCount(3);
+  await expect(typeTabs.getByRole("tab", { name: "All" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const typeTabsBox = await typeTabs.boundingBox();
+  expect(typeTabsBox).not.toBeNull();
+  expect(typeTabsBox!.height).toBeGreaterThanOrEqual(44);
+  expect(typeTabsBox!.height).toBeLessThanOrEqual(54);
+  expect(typeTabsBox!.width).toBeLessThanOrEqual(290);
+
+  const movieTab = typeTabs.getByRole("tab", { name: "Movies" });
+  await movieTab.click();
+  await expect(movieTab).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBe("movie");
+  const allTab = typeTabs.getByRole("tab", { name: "All" });
+  await allTab.click();
+  await expect(allTab).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBeNull();
   const resultsBox = await page
     .getByTestId("search-results-grid")
     .boundingBox();
@@ -921,32 +955,83 @@ test("Obsidian Search keeps discovery and results media-first", async ({
   });
 });
 
-test("a failed discovery catalog stays compact while healthy rails remain", async ({
+test("Search distinguishes a completed search with no results", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page, "search-empty");
+  await page.goto("/search?q=Impossible%20Fixture");
+  await expect(
+    page.getByText("No titles found", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-no-results-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(
+    page.getByText("No titles found", { exact: true }),
+  ).toBeVisible();
+  await settleVisualTheme(page, "light", "search-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-no-results-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
+test("Search explains when no searchable provider is installed", async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginToFixtureShell(page, "search-no-provider");
+  await page.goto("/search?q=The%20Matrix");
+  await expect(
+    page.getByText("A searchable catalog is required", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Manage add-ons" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-no-provider-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(
+    page.getByText("A searchable catalog is required", { exact: true }),
+  ).toBeVisible();
+  await settleVisualTheme(page, "light", "search-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-no-provider-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+});
+
+test("Search distinguishes unavailable providers from missing capability", async ({
   page,
 }) => {
-  await loginToFixtureShell(page, "catalog-partial");
-  await page.goto("/search");
-
+  await loginToFixtureShell(page, "search-unavailable");
+  await page.goto("/search?q=The%20Matrix");
   await expect(
-    page.getByRole("tablist", { name: "Content type" }),
+    page.getByText("Sources are temporarily unavailable", { exact: true }),
   ).toBeVisible();
-  const error = page.getByTestId(
-    "search-discovery-rail-error-fixture-addon-featured",
-  );
-  await expect(error).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(
-    error.getByText("Featured films", { exact: true }),
-  ).toBeVisible();
-  await expect(error.getByText(/Streamer Selects/)).toBeVisible();
-  await expect(error.getByRole("button", { name: "Retry" })).toBeVisible();
-  await expect(
-    page.getByText("Series to discover", { exact: true }),
-  ).toBeVisible();
-
-  const errorBox = await error.boundingBox();
-  expect(errorBox).not.toBeNull();
-  expect(errorBox!.height).toBeLessThanOrEqual(100);
-  await expectNoHorizontalPageOverflow(page);
+    page.getByText("A searchable catalog is required", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("Settings and Search adapt without overflow at intermediate widths", async ({
@@ -1009,7 +1094,7 @@ test("legacy Settings and Search URLs redirect to canonical routes", async ({
   expect(canonicalUrl.searchParams.has("sort")).toBe(false);
 });
 
-test("Command Palette supports arrow navigation and Enter", async ({
+test("Command Palette distinguishes submit from deliberate title navigation", async ({
   page,
 }) => {
   await loginToFixtureShell(page);
@@ -1021,17 +1106,137 @@ test("Command Palette supports arrow navigation and Enter", async ({
   await expect(
     page.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
   ).toBeVisible();
-  await field.press("ArrowDown");
-  await field.press("ArrowUp");
   await field.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=Golden/);
+
+  await page.keyboard.press("Control+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  const controlField = page.getByTestId("command-search-field");
+  await controlField.fill("Golden");
+  await expect(
+    page.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
+  ).toBeVisible();
+  await controlField.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=Golden/);
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  const reopenedField = page.getByTestId("command-search-field");
+  await reopenedField.fill("Golden");
+  const firstPaletteSuggestion = page.getByTestId(
+    `search-suggestion-movie-${FIXTURE_MOVIE_ID}`,
+  );
+  // The submitted Search page underneath the modal contains the same result
+  // card. Wait for the palette's debounced suggestion before navigating it.
+  await expect(firstPaletteSuggestion).toBeVisible();
+  await reopenedField.press("ArrowDown");
+  await expect(page.getByTestId("search-suggestion-announcement")).toHaveText(
+    "Golden Path Adventure",
+  );
+  await reopenedField.press("Enter");
   await expect(page).toHaveURL(
     new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
   );
 });
 
-test("partial provider failures keep successful Search results visible", async ({
+test("Command Palette keeps the all-results row keyboard reachable", async ({
   page,
 }) => {
+  await loginToFixtureShell(page);
+  await page.keyboard.press("Meta+k");
+  const field = page.getByTestId("command-search-field");
+  await field.fill("Golden");
+  await expect(page.getByTestId("command-search-suggestions")).toBeVisible();
+  await expect(
+    page.getByTestId(`search-suggestion-movie-${FIXTURE_MOVIE_ID}`),
+  ).toBeVisible();
+  await field.press("ArrowDown");
+  await field.press("ArrowUp");
+  await expect(
+    page.getByTestId("search-suggestion-announcement"),
+  ).toContainText("Show all results");
+  await field.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=Golden/);
+});
+
+test("Search clear, resubmit, back, and forward restore route state", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "Browser-history state is exercised once in the desktop renderer.",
+  );
+  await loginToFixtureShell(page);
+  await page.goto("/search");
+
+  let field = page.getByTestId("search-field");
+  await field.fill("Golden");
+  await field.press("Enter");
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+
+  const typeTabs = page.getByTestId("search-results-type-tabs");
+  await typeTabs.getByRole("tab", { name: "Movies" }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBe("movie");
+
+  await page.goBack();
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("Golden");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBeNull();
+  await expect(
+    page.getByTestId("search-results-type-tabs").getByRole("tab", {
+      name: "All",
+    }),
+  ).toHaveAttribute("aria-selected", "true");
+
+  await page.goBack();
+  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-results-type-tabs")).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/search");
+  await expect.poll(() => new URL(page.url()).search).toBe("");
+
+  await page.goForward();
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("Golden");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBeNull();
+
+  await page.goForward();
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("type"))
+    .toBe("movie");
+  await expect(
+    page.getByTestId("search-results-type-tabs").getByRole("tab", {
+      name: "Movies",
+    }),
+  ).toHaveAttribute("aria-selected", "true");
+
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect.poll(() => new URL(page.url()).search).toBe("");
+
+  field = page.getByTestId("search-field");
+  await field.fill("Golden");
+  await field.press("Enter");
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe("Golden");
+});
+
+test("partial provider failures keep successful Search results visible", async ({
+  page,
+}, testInfo) => {
   await loginToFixtureShell(page, "search-partial");
   await page.goto("/search?q=Golden");
 
@@ -1039,6 +1244,27 @@ test("partial provider failures keep successful Search results visible", async (
   await expect(
     page.getByText(/Some sources could not be reached/i),
   ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-partial-dark-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.reload();
+  await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await expect(
+    page.getByText(/Some sources could not be reached/i),
+  ).toBeVisible();
+  await settleVisualTheme(page, "light", "search-screen");
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `search-partial-light-${testInfo.project.name}.png`,
+    ),
+    fullPage: true,
+    animations: "disabled",
+  });
 });
 
 test("resetting Search filters clears provider and URL state", async ({

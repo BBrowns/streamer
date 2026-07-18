@@ -1,5 +1,7 @@
 import { PALETTE } from "../../../constants/theme";
+import { Platform } from "react-native";
 import {
+  getWebAriaChecked,
   getWebFocusStyle,
   getSoftOverlayColor,
   getSurfaceColors,
@@ -57,6 +59,24 @@ describe("design system tokens", () => {
       outlineColor: "#a78bfa",
       outlineOffset: 2,
     });
+  });
+
+  it("exposes checked state as ARIA only for web controls", () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      value: "web",
+    });
+
+    try {
+      expect(getWebAriaChecked(true)).toEqual({ "aria-checked": true });
+      expect(getWebAriaChecked(false)).toEqual({ "aria-checked": false });
+    } finally {
+      Object.defineProperty(Platform, "OS", {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
   });
 
   it("maps surface and status tones through theme colors", () => {

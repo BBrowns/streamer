@@ -730,4 +730,68 @@ describe("PlaybackSessionPlaybackService", () => {
     });
     expect(resolveEngine).not.toHaveBeenCalled();
   });
+
+  it("keeps a torrent timeout as the failure when engine cleanup rejects with cancellation", async () => {
+    jest.useFakeTimers({
+      doNotFake: ["Date"],
+    });
+
+    try {
+      const primary = {
+        infoHash: "abc123",
+        title: "Slow torrent",
+      } as Stream;
+
+      const fallback = {
+        url: "https://cdn.example.test/fallback.mp4",
+        title: "Direct fallback",
+      } as Stream;
+
+      let rejectPrimary!: (error: unknown) => void;
+
+      const primaryEngine = makeEngine(
+        () =>
+          new Promise<string>((_resolve, reject) => {
+            rejectPrimary = reject;
+          }),
+      );
+
+      primaryEngine.stop.mockImplementation(() => {
+        rejectPrimary(new StreamEngineCancellationError());
+      });
+
+      const fallbackEngine = makeEngine(async () => fallback.url!);
+
+      resolveEngine.mockImplementation((stream) =>
+        stream.infoHash ? primaryEngine : fallbackEngine,
+      );
+
+      const session = createSession(primary, fallback);
+      const resolution = resolvePlaybackSession(session.id);
+
+      await jest.advanceTimersByTimeAsync(95_000);
+
+      const result = await resolution;
+
+      expect(result).toMatchObject({
+        ok: true,
+        uri: fallback.url,
+      });
+
+      expect(primaryEngine.stop).toHaveBeenCalled();
+      expect(fallbackEngine.getPlaybackUri).toHaveBeenCalled();
+
+      const updated = usePlaybackSessionStore.getState().sessions[session.id];
+
+      expect(updated.status).toBe("ready");
+      expect(updated.attempts[0]).toMatchObject({
+        status: "failed",
+        error: {
+          code: "GATEWAY_TIMEOUT",
+        },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
