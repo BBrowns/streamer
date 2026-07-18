@@ -57,14 +57,15 @@ its Chromium output against a macOS image. A comparison permits at most 500
 changed pixels at a 0.1 color threshold; it is intentionally tight enough to
 catch material composition changes.
 
-After reviewed Linux snapshots are committed, Linux CI runs these comparisons
-automatically as part of `test:golden-path`. Before that, it skips the visual
-case explicitly instead of comparing against a baseline from the wrong OS.
-Use **Refresh Visual Baselines** with its `refresh` confirmation to generate a
-reviewable Linux artifact; it cannot push or alter the branch. Download, review,
-and commit that artifact deliberately. On macOS, `test:visual` uses the
-separate Darwin baseline. Do not accept `--update-snapshots` output without a
-visual review.
+Linux CI requires the full reviewed baseline set and fails early if an image is
+missing. On a same-repository PR, the parallel **Visual Baseline Candidate
+(Linux)** job produces an exact twelve-image artifact plus hashes and its source
+commit so the first Linux baseline can be reviewed and committed without
+trusting a macOS rendering. After this workflow reaches the default branch,
+**Refresh Visual Baselines** offers the same artifact flow behind an explicit
+`refresh` confirmation. Neither job can push or alter a branch. On macOS,
+`test:visual` uses the separate Darwin baseline. Do not accept
+`--update-snapshots` output without a visual review.
 
 The broader semantic suite separately exercises Settings detail and the Search
 idle/recents/suggestions/results/filters/no-results/no-provider/partial states.

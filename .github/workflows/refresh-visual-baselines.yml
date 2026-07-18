@@ -12,10 +12,23 @@ permissions:
   contents: read
 
 jobs:
+  validate-confirmation:
+    name: Validate refresh confirmation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require explicit confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$CONFIRMATION" != "refresh" ]; then
+            echo "Enter refresh to generate a visual baseline artifact." >&2
+            exit 1
+          fi
+
   refresh-linux-baselines:
-    if: github.event.inputs.confirmation == 'refresh'
     name: Generate Linux visual baseline artifact
-    runs-on: ubuntu-latest
+    needs: validate-confirmation
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,10 +47,18 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Generate reviewable Linux baselines
         run: npm run test:visual -- --update-snapshots
+      - name: Record baseline provenance
+        run: >-
+          npm run visual:baseline:manifest --
+          --platform linux
+          --source-commit ${{ github.sha }}
+          --output artifacts/visual-baselines/linux-manifest.json
       - name: Upload Linux baseline artifact
         uses: actions/upload-artifact@v4
         with:
           name: visual-baselines-linux
-          path: tests/golden-path/visual-regression.spec.ts-snapshots/linux/
+          path: |
+            tests/golden-path/visual-regression.spec.ts-snapshots/linux/
+            artifacts/visual-baselines/linux-manifest.json
           if-no-files-found: error
           retention-days: 14

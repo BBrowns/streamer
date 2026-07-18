@@ -26,7 +26,7 @@ function hasApprovedPlatformBaselines(
   scheme: "dark" | "light",
 ) {
   return snapshotNames(scheme, testInfo.project.name).every((name) =>
-    existsSync(testInfo.snapshotPath(name)),
+    existsSync(testInfo.snapshotPath(name, { kind: "screenshot" })),
   );
 }
 
@@ -39,10 +39,8 @@ function skipUnsupportedVisualEnvironment(
     "Visual baselines cover the compact and large window classes; semantic golden paths cover the intermediate layouts.",
   );
   test.skip(
-    !visualBaselineUpdateEnabled &&
-      (process.platform !== "linux" ||
-        !hasApprovedPlatformBaselines(testInfo, scheme)),
-    "No approved platform baseline is available. Set STREAMER_VISUAL_BASELINES=1 only for a deliberate visual review or snapshot refresh.",
+    !visualBaselineUpdateEnabled && process.platform !== "linux",
+    "Run platform-specific visual baselines deliberately with STREAMER_VISUAL_BASELINES=1 outside Linux CI.",
   );
 }
 
@@ -79,6 +77,17 @@ for (const scheme of ["dark", "light"] as const) {
     page,
   }, testInfo) => {
     skipUnsupportedVisualEnvironment(testInfo, scheme);
+
+    // Linux is the CI evidence platform. Once the bootstrap artifact has been
+    // reviewed and committed, its baseline must stay complete; a missing image
+    // is a failure rather than a silently skipped visual check.
+    if (!visualBaselineUpdateEnabled && process.platform === "linux") {
+      expect(
+        hasApprovedPlatformBaselines(testInfo, scheme),
+        "Every Linux visual baseline must be reviewed and committed before CI can pass.",
+      ).toBe(true);
+    }
+
     await loginToFixtureShell(page, scheme);
 
     await expect(page.getByTestId("home-hero")).toBeVisible();

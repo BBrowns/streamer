@@ -17,9 +17,12 @@
 
 `npm run test:visual -- --update-snapshots` generated 12 reviewed Darwin PNGs,
 and `npm run test:visual` compared all 12 successfully (4 test cases passed).
-The Linux baseline is intentionally separate. It must be generated through the
-manual **Refresh Visual Baselines** workflow, visually reviewed, and committed
-before the regular Linux CI job is considered visual-regression evidence.
+The Linux baseline is intentionally separate. The same-repository PR job
+**Visual Baseline Candidate (Linux)** produces the initial twelve-image artifact
+with hashes and source-commit provenance; after its workflow reaches the
+default branch, **Refresh Visual Baselines** provides the recurring equivalent.
+Review and commit the artifact before treating the regular Linux CI job as
+visual-regression evidence.
 
 ## Evidence boundary
 

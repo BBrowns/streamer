@@ -69,6 +69,10 @@ function checkCiWorkflow() {
       "npm run native:evidence:preflight:test",
       "native evidence preflight contract",
     ],
+    [
+      "npm run visual:baseline:manifest:test",
+      "visual baseline artifact contract",
+    ],
     ["npm run mobile:config:check", "mobile release config validation"],
     ["npm run test --workspace=@streamer/shared", "shared tests"],
     ["npm run test --workspace=server -- --coverage", "server coverage tests"],
@@ -130,6 +134,7 @@ function checkDocs() {
   requireFile("tests/golden-path/golden-path.spec.ts");
   requireFile("tests/golden-path/visual-regression.spec.ts");
   requireFile("scripts/native-evidence-preflight.mjs");
+  requireFile("scripts/visual-baseline-manifest.mjs");
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
@@ -162,6 +167,11 @@ function checkDocs() {
     "package.json",
     '"native:evidence:preflight": "node scripts/native-evidence-preflight.mjs"',
     "native evidence preflight command",
+  );
+  requireText(
+    "package.json",
+    '"visual:baseline:manifest": "node scripts/visual-baseline-manifest.mjs"',
+    "visual baseline manifest command",
   );
   requireText(
     "docs/AUTOMATED_GOLDEN_PATHS.md",
