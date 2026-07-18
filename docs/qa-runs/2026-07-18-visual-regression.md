@@ -21,8 +21,11 @@ The Linux set was generated separately by PR CI run
 [`29641900162`](https://github.com/BBrowns/streamer/actions/runs/29641900162),
 which produced all twelve expected files plus an exact SHA-256 manifest from
 source commit `116be9f6290cfb9553718ea29018e8d2a40e6199`. Local verification
-reproduced that manifest exactly before the Linux PNGs were committed. The next
-regular Linux CI run performs the actual comparison against this reviewed set.
+reproduced that manifest exactly before the Linux PNGs were committed. The
+subsequent regular Linux CI run
+[`29642118986`](https://github.com/BBrowns/streamer/actions/runs/29642118986)
+then passed **Golden Path Browser Tests**, including the actual comparison
+against this reviewed set.
 
 ## Evidence boundary
 
