@@ -17,12 +17,12 @@
 
 `npm run test:visual -- --update-snapshots` generated 12 reviewed Darwin PNGs,
 and `npm run test:visual` compared all 12 successfully (4 test cases passed).
-The Linux baseline is intentionally separate. The same-repository PR job
-**Visual Baseline Candidate (Linux)** produces the initial twelve-image artifact
-with hashes and source-commit provenance; after its workflow reaches the
-default branch, **Refresh Visual Baselines** provides the recurring equivalent.
-Review and commit the artifact before treating the regular Linux CI job as
-visual-regression evidence.
+The Linux set was generated separately by PR CI run
+[`29641900162`](https://github.com/BBrowns/streamer/actions/runs/29641900162),
+which produced all twelve expected files plus an exact SHA-256 manifest from
+source commit `116be9f6290cfb9553718ea29018e8d2a40e6199`. Local verification
+reproduced that manifest exactly before the Linux PNGs were committed. The next
+regular Linux CI run performs the actual comparison against this reviewed set.
 
 ## Evidence boundary
 

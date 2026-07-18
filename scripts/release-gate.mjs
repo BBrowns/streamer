@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { visualBaselineFileNames } from "./visual-baseline-manifest.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
@@ -135,6 +136,11 @@ function checkDocs() {
   requireFile("tests/golden-path/visual-regression.spec.ts");
   requireFile("scripts/native-evidence-preflight.mjs");
   requireFile("scripts/visual-baseline-manifest.mjs");
+  for (const baselineFile of visualBaselineFileNames) {
+    requireFile(
+      `tests/golden-path/visual-regression.spec.ts-snapshots/linux/${baselineFile}`,
+    );
+  }
   requireText(
     "AGENT_HANDOFF.md",
     "## Current Project Phase",
