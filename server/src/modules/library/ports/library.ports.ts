@@ -1,5 +1,4 @@
 import { ContentType } from "@prisma/client";
-import type { LibraryItem, WatchProgress } from "@streamer/shared";
 
 /** Port: Library item persistence */
 export interface ILibraryRepository {
@@ -22,6 +21,10 @@ export interface ILibraryRepository {
 /** Port: Watch progress persistence */
 export interface IWatchProgressRepository {
   findByUser(userId: string, limit?: number): Promise<WatchProgressRecord[]>;
+  findHistoryByUser(
+    userId: string,
+    options: { limit: number; cursor?: { lastWatched: Date; id: string } },
+  ): Promise<WatchProgressRecord[]>;
   upsert(data: {
     userId: string;
     type: ContentType;
@@ -34,6 +37,8 @@ export interface IWatchProgressRepository {
     poster?: string | null;
   }): Promise<WatchProgressRecord>;
   delete(userId: string, itemId: string): Promise<void>;
+  deleteById(userId: string, historyId: string): Promise<boolean>;
+  deleteAll(userId: string): Promise<void>;
 }
 
 /** Internal domain record for a library item */

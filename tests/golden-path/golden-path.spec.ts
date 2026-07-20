@@ -776,9 +776,12 @@ test("Search keeps active retrieval focused and results media-first", async ({
 
   await expect(page.getByTestId("search-screen")).toBeVisible();
   await settleVisualTheme(page, "dark", "search-screen");
-  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
+  await expect(page.getByTestId("search-discovery-type-tabs")).toBeVisible();
+  await expect(
+    page.getByTestId("catalog-rail-fixture-addon-movie-featured"),
+  ).toBeVisible();
   await expect(page.getByTestId("search-results-type-tabs")).toHaveCount(0);
-  await expect(page.getByTestId("search-discovery")).toHaveCount(0);
   const searchShell = page.getByTestId("search-field-container");
   await expect(searchShell).toBeVisible();
   const searchShellBox = await searchShell.boundingBox();
@@ -817,7 +820,7 @@ test("Search keeps active retrieval focused and results media-first", async ({
 
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.reload();
-  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
   await settleVisualTheme(page, "light", "search-screen");
   await page.screenshot({
     path: testInfo.outputPath(
@@ -931,7 +934,7 @@ test("Search keeps active retrieval focused and results media-first", async ({
   });
 
   await page.goto("/search");
-  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
   await expect(page.getByText("Golden", { exact: true })).toBeVisible();
   await settleVisualTheme(page, "dark", "search-screen");
   await page.screenshot({
@@ -944,7 +947,7 @@ test("Search keeps active retrieval focused and results media-first", async ({
 
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.reload();
-  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
   await settleVisualTheme(page, "light", "search-screen");
   await page.screenshot({
     path: testInfo.outputPath(
@@ -1196,7 +1199,7 @@ test("Search clear, resubmit, back, and forward restore route state", async ({
   ).toHaveAttribute("aria-selected", "true");
 
   await page.goBack();
-  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
   await expect(page.getByTestId("search-results-type-tabs")).toHaveCount(0);
   await expect.poll(() => new URL(page.url()).pathname).toBe("/search");
   await expect.poll(() => new URL(page.url()).search).toBe("");
@@ -1222,7 +1225,7 @@ test("Search clear, resubmit, back, and forward restore route state", async ({
   ).toHaveAttribute("aria-selected", "true");
 
   await page.getByRole("button", { name: "Clear search" }).click();
-  await expect(page.getByTestId("recent-searches-page")).toBeVisible();
+  await expect(page.getByTestId("search-discovery")).toBeVisible();
   await expect.poll(() => new URL(page.url()).search).toBe("");
 
   field = page.getByTestId("search-field");

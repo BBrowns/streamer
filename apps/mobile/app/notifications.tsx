@@ -1,163 +1,384 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import type { InAppNotification } from "@streamer/shared";
+import { useCallback, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
   ActivityIndicator,
   Platform,
+  Pressable,
+  RefreshControl,
+  SectionList,
   StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { useNotifications } from "../hooks/useNotifications";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useTheme } from "../hooks/useTheme";
 import { useTranslation } from "react-i18next";
-import { getWebFocusStyle } from "../components/ui/designSystem";
+import {
+  formatNotificationTimestamp,
+  groupNotificationsByRecency,
+  type NotificationGroup,
+} from "../components/notifications/notificationPresentation";
+import { AppButton } from "../components/ui/AppButton";
+import { ContentBoundary } from "../components/ui/ContentBoundary";
+import { EmptyState } from "../components/ui/EmptyState";
+import { PageHeader } from "../components/ui/PageHeader";
+import { PageLayout } from "../components/ui/PageLayout";
+import {
+  getWebFocusStyle,
+  uiLayout,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../components/ui/designSystem";
+import { useNotifications } from "../hooks/useNotifications";
+import { useTheme } from "../hooks/useTheme";
+import { useWebPressableActivation } from "../hooks/useWebPressableActivation";
+
+const groupTranslationKeys = {
+  today: "notifications.groups.today",
+  thisWeek: "notifications.groups.thisWeek",
+  earlier: "notifications.groups.earlier",
+} as const;
 
 export default function NotificationsScreen() {
-  const { notifications, isLoading, markAsRead } = useNotifications();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    isError,
+    isRefetching,
+    refetch,
+    markAsRead,
+    markAllAsRead,
+  } = useNotifications();
+  const [failedNotificationId, setFailedNotificationId] = useState<
+    string | null
+  >(null);
+  const groups = useMemo(
+    () => groupNotificationsByRecency(notifications),
+    [notifications],
+  );
+  const retryFailedNotification = useCallback(() => {
+    if (!failedNotificationId) return;
+    markAsRead.mutate(failedNotificationId, {
+      onSuccess: () => setFailedNotificationId(null),
+    });
+  }, [failedNotificationId, markAsRead]);
+  const markNotificationRead = useCallback(
+    (notificationId: string) => {
+      markAsRead.mutate(notificationId, {
+        onSuccess: () => setFailedNotificationId(null),
+        onError: () => setFailedNotificationId(notificationId),
+      });
+    },
+    [markAsRead],
+  );
 
-  if (isLoading) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.tint} />
-      </View>
-    );
-  }
-
-  if (notifications.length === 0) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <MaterialCommunityIcons
-          name="bell-off-outline"
-          size={48}
-          color={colors.textSecondary}
-        />
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          {t("notifications.empty")}
-        </Text>
-      </View>
-    );
-  }
+  const description = unreadCount
+    ? t("notifications.unreadCount", { count: unreadCount })
+    : t("notifications.allCaughtUpDescription");
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed, focused }: any) => [
-              styles.notificationCard,
-              {
-                backgroundColor: colors.card,
-                borderColor: "transparent",
-              },
-              !item.read && {
-                backgroundColor: colors.tint + "12",
-              },
-              pressed && { opacity: 0.72 },
-              Platform.OS === "web" &&
-                focused &&
-                getWebFocusStyle(colors.focus),
-            ]}
-            onPress={() => {
-              if (!item.read) markAsRead.mutate(item.id);
-            }}
-          >
-            <View style={styles.iconContainer}>
-              <MaterialCommunityIcons
-                name="bell-outline"
-                size={24}
-                color={item.read ? colors.textSecondary : colors.tint}
+    <PageLayout contained={false} testID="notifications-screen">
+      <ContentBoundary
+        maxWidth={uiLayout.readingMaxWidth}
+        style={styles.contentBoundary}
+      >
+        <PageHeader
+          eyebrow={t("notifications.eyebrow")}
+          title={t("notifications.title")}
+          description={description}
+          actions={
+            unreadCount > 0 ? (
+              <AppButton
+                testID="notifications-mark-all-read"
+                label={t("notifications.markAllRead")}
+                icon="checkmark-done-outline"
+                variant="ghost"
+                loading={markAllAsRead.isPending}
+                onPress={() => markAllAsRead.mutate()}
+                accessibilityLabel={t("notifications.markAllReadA11y", {
+                  count: unreadCount,
+                })}
+                accessibilityHint={t("notifications.markAllReadHint")}
               />
-            </View>
-            <View style={styles.textContainer}>
+            ) : null
+          }
+        />
+
+        {markAllAsRead.isError ? (
+          <ActionError
+            message={t("notifications.markAllReadError")}
+            onRetry={() => markAllAsRead.mutate()}
+          />
+        ) : null}
+        {failedNotificationId ? (
+          <ActionError
+            message={t("notifications.markReadError")}
+            onRetry={retryFailedNotification}
+          />
+        ) : null}
+
+        {isLoading ? (
+          <View
+            accessibilityLabel={t("notifications.loading")}
+            style={styles.loadingState}
+          >
+            <ActivityIndicator color={colors.tint} />
+          </View>
+        ) : isError ? (
+          <EmptyState
+            testID="notifications-error-state"
+            icon="cloud-offline-outline"
+            title={t("notifications.errorTitle")}
+            description={t("notifications.errorDescription")}
+            actionLabel={t("common.retry")}
+            onAction={() => void refetch()}
+            fill
+          />
+        ) : notifications.length === 0 ? (
+          <EmptyState
+            testID="notifications-empty-state"
+            icon="checkmark-circle-outline"
+            title={t("notifications.emptyTitle")}
+            description={t("notifications.emptyDescription")}
+            fill
+          />
+        ) : (
+          <SectionList<InAppNotification, NotificationGroup>
+            testID="notifications-list"
+            sections={groups}
+            style={styles.list}
+            keyExtractor={(item) => item.id}
+            renderSectionHeader={({ section }) => (
               <Text
-                style={[
-                  styles.title,
-                  { color: colors.text },
-                  !item.read && styles.unreadTitle,
-                ]}
+                accessibilityRole="header"
+                style={[styles.sectionHeader, { color: colors.textSecondary }]}
               >
-                {item.title}
+                {t(groupTranslationKeys[section.key])}
               </Text>
-              <Text style={[styles.message, { color: colors.textSecondary }]}>
-                {item.message}
-              </Text>
-              <Text
-                style={[styles.date, { color: colors.textSecondary + "90" }]}
-              >
-                {new Date(item.createdAt).toLocaleString()}
-              </Text>
-            </View>
-            {!item.read && (
-              <View
-                style={[styles.unreadDot, { backgroundColor: colors.tint }]}
+            )}
+            renderItem={({ item }) => (
+              <NotificationRow
+                notification={item}
+                timestamp={formatNotificationTimestamp(
+                  item.createdAt,
+                  i18n.language,
+                )}
+                busy={markAsRead.isPending && markAsRead.variables === item.id}
+                onMarkAsRead={markNotificationRead}
               />
             )}
-          </Pressable>
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={() => void refetch()}
+                tintColor={colors.tint}
+              />
+            }
+            contentContainerStyle={styles.listContent}
+            stickySectionHeadersEnabled={false}
+            showsVerticalScrollIndicator={false}
+          />
         )}
+      </ContentBoundary>
+    </PageLayout>
+  );
+}
+
+function ActionError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+
+  return (
+    <View
+      accessibilityRole="alert"
+      style={[styles.actionError, { backgroundColor: colors.error + "14" }]}
+    >
+      <Ionicons name="warning-outline" size={18} color={colors.error} />
+      <Text style={[styles.actionErrorText, { color: colors.text }]}>
+        {message}
+      </Text>
+      <AppButton
+        label={t("common.retry")}
+        onPress={onRetry}
+        variant="ghost"
+        size="small"
       />
     </View>
   );
 }
 
+function NotificationRow({
+  notification,
+  timestamp,
+  busy,
+  onMarkAsRead,
+}: {
+  notification: InAppNotification;
+  timestamp: string;
+  busy: boolean;
+  onMarkAsRead: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+  const activate = useCallback(() => {
+    if (!notification.read && !busy) onMarkAsRead(notification.id);
+  }, [busy, notification.id, notification.read, onMarkAsRead]);
+  const { isKeyboardFocused, webPressableProps } =
+    useWebPressableActivation(activate);
+  const isUnread = !notification.read;
+  const body = (
+    <>
+      <View style={styles.iconColumn}>
+        <Ionicons
+          name={isUnread ? "notifications-outline" : "checkmark-outline"}
+          size={20}
+          color={isUnread ? colors.tint : colors.textSecondary}
+        />
+      </View>
+      <View style={styles.copy}>
+        <Text
+          numberOfLines={2}
+          style={[
+            styles.title,
+            { color: colors.text },
+            isUnread && styles.titleUnread,
+          ]}
+        >
+          {notification.title}
+        </Text>
+        <Text
+          numberOfLines={3}
+          style={[styles.message, { color: colors.textSecondary }]}
+        >
+          {notification.message}
+        </Text>
+        {timestamp ? (
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            {timestamp}
+          </Text>
+        ) : null}
+      </View>
+      {isUnread ? (
+        <View
+          accessibilityLabel={t("notifications.unread")}
+          style={[styles.unreadDot, { backgroundColor: colors.tint }]}
+        />
+      ) : null}
+    </>
+  );
+
+  if (!isUnread) {
+    return (
+      <View
+        testID={`notification-${notification.id}`}
+        style={[styles.row, { backgroundColor: colors.card }]}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      {...webPressableProps}
+      testID={`notification-${notification.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={t("notifications.markAsReadA11y", {
+        title: notification.title,
+      })}
+      accessibilityHint={t("notifications.markAsReadHint")}
+      accessibilityState={{ busy }}
+      disabled={busy}
+      onPress={activate}
+      style={({ hovered, pressed }: any) => [
+        styles.row,
+        {
+          backgroundColor: isDark ? colors.tint + "12" : colors.tint + "0C",
+          borderColor: colors.tint + "42",
+          opacity: busy ? 0.56 : pressed ? 0.76 : 1,
+        },
+        Platform.OS === "web" && hovered && !busy
+          ? {
+              backgroundColor: isDark ? colors.tint + "1C" : colors.tint + "16",
+            }
+          : null,
+        Platform.OS === "web" && isKeyboardFocused
+          ? getWebFocusStyle(colors.focus)
+          : null,
+      ]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  contentBoundary: {
     flex: 1,
+    paddingTop: uiSpacing.xxl,
+    paddingBottom: uiSpacing.section,
   },
-  center: {
+  loadingState: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 16,
+    justifyContent: "center",
   },
   listContent: {
-    padding: 16,
-    gap: 12,
+    paddingBottom: uiSpacing.section,
+    gap: uiSpacing.sm,
   },
-  notificationCard: {
-    minHeight: 72,
-    flexDirection: "row",
-    borderRadius: 12,
-    padding: 16,
+  list: { flex: 1 },
+  sectionHeader: {
+    ...uiTypography.sectionLabel,
+    marginTop: uiSpacing.xxl,
+    marginBottom: uiSpacing.sm,
+    textTransform: "uppercase",
+  },
+  row: {
+    minHeight: 88,
+    borderRadius: uiRadii.card,
     borderWidth: 1,
+    borderColor: "transparent",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: uiSpacing.lg,
+    gap: uiSpacing.md,
   },
-  iconContainer: {
-    marginRight: 16,
+  iconColumn: {
+    width: uiTouchTarget - 8,
+    minHeight: uiTouchTarget - 8,
+    alignItems: "center",
     justifyContent: "center",
   },
-  textContainer: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  unreadTitle: {
-    fontWeight: "bold",
-  },
-  message: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  date: {
-    fontSize: 12,
-  },
+  copy: { flex: 1, minWidth: 0 },
+  title: { ...uiTypography.label },
+  titleUnread: { fontFamily: uiTypography.control.fontFamily },
+  message: { ...uiTypography.body, marginTop: uiSpacing.xxs },
+  timestamp: { ...uiTypography.caption, marginTop: uiSpacing.sm },
   unreadDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    alignSelf: "center",
-    marginLeft: 8,
+    borderRadius: uiRadii.pill,
+    marginTop: uiSpacing.sm,
   },
+  actionError: {
+    minHeight: uiTouchTarget,
+    borderRadius: uiRadii.control,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.sm,
+    paddingLeft: uiSpacing.md,
+    marginBottom: uiSpacing.lg,
+  },
+  actionErrorText: { ...uiTypography.caption, flex: 1 },
 });

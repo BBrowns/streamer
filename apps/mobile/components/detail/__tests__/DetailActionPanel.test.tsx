@@ -15,6 +15,7 @@ jest.mock("react-i18next", () => ({
         "detail.actionPanel.playBest": "Play Best",
         "detail.actionPanel.preparing": "Preparing",
         "detail.actionPanel.inLibrary": "In Library",
+        "detail.actionPanel.watchTrailer": "Watch trailer",
         "common.actions.play": "Play",
         "common.actions.castToDevice": "Cast to device",
         "common.actions.addToLibrary": "Add to Library",
@@ -58,6 +59,7 @@ function renderPanel(overrides = {}) {
     onDownload: jest.fn(),
     onCast: jest.fn(),
     onToggleLibrary: jest.fn(),
+    onWatchTrailer: jest.fn(),
   };
 
   return {
@@ -109,6 +111,26 @@ describe("DetailActionPanel", () => {
 
     expect(callbacks.onToggleLibrary).toHaveBeenCalledTimes(1);
     expect(callbacks.onPlayBest).not.toHaveBeenCalled();
+  });
+
+  it("only shows the trailer action when metadata provides a safe trailer", () => {
+    const { queryByText, rerender, callbacks, getByText } = renderPanel();
+
+    expect(queryByText("Watch trailer")).toBeNull();
+
+    rerender(
+      <DetailActionPanel
+        castType="movie"
+        sourceCount={12}
+        hasPlayableSources
+        inLibrary={false}
+        {...callbacks}
+        hasTrailer
+      />,
+    );
+
+    fireEvent.press(getByText("Watch trailer"));
+    expect(callbacks.onWatchTrailer).toHaveBeenCalledTimes(1);
   });
 
   it("disables movie playback actions when no source exists", () => {

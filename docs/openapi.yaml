@@ -331,6 +331,26 @@ components:
           format: date-time
       required: [id, userId, type, itemId, currentTime, duration, title, lastWatched]
 
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        message:
+          type: string
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, title, message, read, createdAt]
+
 paths:
   /health:
     get:
@@ -771,6 +791,70 @@ paths:
                   inLibrary:
                     type: boolean
 
+  /api/library/history:
+    get:
+      tags: [Library]
+      summary: Get the user's watch history
+      description: Returns watched and in-progress titles in stable newest-first cursor order. Completed titles are included.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Opaque cursor returned by the previous page.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 24
+      responses:
+        '200':
+          description: A page of watch-history entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WatchProgress'
+                  nextCursor:
+                    type: string
+                required: [items]
+    delete:
+      tags: [Library]
+      summary: Clear the user's watch history
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Watch history cleared
+
+  /api/library/history/{historyId}:
+    delete:
+      tags: [Library]
+      summary: Remove one watch-history entry
+      description: Removes exactly one movie or episode entry and leaves other episodes of the same series intact.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: historyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Watch-history entry removed
+        '404':
+          description: Watch-history entry not found
+
   /api/library/progress:
     get:
       tags: [Library]
@@ -833,3 +917,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WatchProgress'
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: Get recent in-app notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Recent notifications for the signed-in user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                required: [notifications]
+    post:
+      tags: [Notifications]
+      summary: Create an in-app notification for the signed-in user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 180
+                message:
+                  type: string
+                  maxLength: 2000
+              required: [title, message]
+      responses:
+        '201':
+          description: Notification created
+
+  /api/notifications/read-all:
+    patch:
+      tags: [Notifications]
+      summary: Mark all unread notifications as read
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  updatedCount:
+                    type: integer
+                    minimum: 0
+                required: [status, updatedCount]
+
+  /api/notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark one notification as read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification marked as read
+        '404':
+          description: Notification not found

@@ -9,7 +9,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../hooks/useTheme";
 import type { VideoPlayer } from "expo-video";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +23,7 @@ import {
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { playerChrome } from "./playerChrome";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -70,11 +70,11 @@ function formatTime(seconds: number) {
 }
 
 const SEEK_STEP_SECONDS = 10;
-const PLAYER_TEXT = "#F4F5F7";
-const PLAYER_MUTED_TEXT = "#B7BDC8";
-const PLAYER_CONTROL_BACKGROUND = "rgba(8, 9, 12, 0.62)";
-const PLAYER_CONTROL_HOVER = "rgba(24, 27, 33, 0.92)";
-const PLAYER_CONTROL_BORDER = "rgba(255, 255, 255, 0.15)";
+const PLAYER_TEXT = playerChrome.text;
+const PLAYER_MUTED_TEXT = playerChrome.textMuted;
+const PLAYER_CONTROL_BACKGROUND = playerChrome.surface;
+const PLAYER_CONTROL_HOVER = playerChrome.surfaceHover;
+const PLAYER_CONTROL_BORDER = playerChrome.border;
 
 type SliderKeyboardAction = "decrement" | "increment" | "minimum" | "maximum";
 
@@ -139,7 +139,6 @@ export function PlayerControls({
   onOpenCast,
   onRetry,
 }: PlayerControlsProps) {
-  const { colors } = useTheme();
   const { t } = useTranslation();
   const { isCompact } = useWindowClass();
   const reducedMotion = useReducedMotion();
@@ -299,6 +298,7 @@ export function PlayerControls({
         styles.container,
         Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
       ]}
+      testID="player-controls-cinematic"
     >
       <View
         style={[
@@ -311,7 +311,7 @@ export function PlayerControls({
           icon="play-back"
           label={seekBackLabel}
           onPress={() => seekBy(-SEEK_STEP_SECONDS)}
-          colors={colors}
+          reducedMotion={reducedMotion}
           disabled={!hasTimeline}
         />
         <Pressable
@@ -323,8 +323,13 @@ export function PlayerControls({
               borderColor: "rgba(255,255,255,0.26)",
               opacity: pressed ? 0.82 : 1,
             },
-            hovered && styles.playHoveredButton,
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+            hovered &&
+              (reducedMotion
+                ? styles.playHoveredButtonReducedMotion
+                : styles.playHoveredButton),
+            Platform.OS === "web" &&
+              focused &&
+              getWebFocusStyle(playerChrome.focus),
           ]}
           onPress={onPlayPause}
           accessibilityRole="button"
@@ -341,7 +346,7 @@ export function PlayerControls({
           icon="play-forward"
           label={seekForwardLabel}
           onPress={() => seekBy(SEEK_STEP_SECONDS)}
-          colors={colors}
+          reducedMotion={reducedMotion}
           disabled={!hasTimeline}
         />
       </View>
@@ -377,7 +382,7 @@ export function PlayerControls({
                 styles.scrubberContainer,
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(colors.focus),
+                  getWebFocusStyle(playerChrome.focus),
               ]}
               accessibilityRole="adjustable"
               accessibilityLabel={progressLabel}
@@ -428,7 +433,7 @@ export function PlayerControls({
                 style={[
                   styles.scrubberTrack,
                   {
-                    backgroundColor: "rgba(255,255,255,0.28)",
+                    backgroundColor: playerChrome.track,
                     opacity: hasTimeline ? 1 : 0.58,
                   },
                 ]}
@@ -438,7 +443,7 @@ export function PlayerControls({
                     styles.scrubberFill,
                     {
                       width: `${progressPercent}%`,
-                      backgroundColor: colors.tint,
+                      backgroundColor: playerChrome.accent,
                     },
                   ]}
                 />
@@ -486,33 +491,24 @@ export function PlayerControls({
                 <StatusPill
                   icon="information-circle-outline"
                   label={sourceLabel}
-                  colors={colors}
                 />
               ) : null}
               {downloadStatus ? (
-                <StatusPill
-                  icon="cloud-done"
-                  label={downloadStatus}
-                  colors={colors}
-                />
+                <StatusPill icon="cloud-done" label={downloadStatus} />
               ) : null}
-              {castStatus ? (
-                <StatusPill icon="tv" label={castStatus} colors={colors} />
-              ) : null}
+              {castStatus ? <StatusPill icon="tv" label={castStatus} /> : null}
               {fallbackReason ? (
                 <StatusPill
                   icon="git-compare"
                   label={t("player.controls.fallbackActive", {
                     defaultValue: "Trying fallback",
                   })}
-                  colors={colors}
                 />
               ) : null}
               {capabilityMessage && !compactLayout ? (
                 <StatusPill
                   icon={capabilities?.isRemux ? "construct" : "radio"}
                   label={capabilityMessage}
-                  colors={colors}
                 />
               ) : null}
             </View>
@@ -533,7 +529,7 @@ export function PlayerControls({
                   }
                   label={volumeLabel}
                   onPress={onToggleMute}
-                  colors={colors}
+                  reducedMotion={reducedMotion}
                 />
               ) : null}
               {capabilities?.canUseVolume && onVolumeChange ? (
@@ -543,7 +539,7 @@ export function PlayerControls({
                     styles.volumeSlider,
                     Platform.OS === "web" &&
                       focused &&
-                      getWebFocusStyle(colors.focus),
+                      getWebFocusStyle(playerChrome.focus),
                   ]}
                   onLayout={(event) =>
                     setVolumeTrackWidth(event.nativeEvent.layout.width)
@@ -599,7 +595,7 @@ export function PlayerControls({
                     defaultValue: "Audio, subtitles, and source",
                   })}
                   onPress={onOpenSettings}
-                  colors={colors}
+                  reducedMotion={reducedMotion}
                 />
               ) : null}
               {capabilities?.canCast && onOpenCast ? (
@@ -607,7 +603,7 @@ export function PlayerControls({
                   icon="tv"
                   label={t("player.controls.cast", { defaultValue: "Cast" })}
                   onPress={onOpenCast}
-                  colors={colors}
+                  reducedMotion={reducedMotion}
                 />
               ) : null}
               {capabilities?.canRetry && onRetry ? (
@@ -617,7 +613,7 @@ export function PlayerControls({
                     defaultValue: "Retry source",
                   })}
                   onPress={onRetry}
-                  colors={colors}
+                  reducedMotion={reducedMotion}
                 />
               ) : null}
               {capabilities?.canUseFullscreen && onToggleFullscreen ? (
@@ -627,7 +623,7 @@ export function PlayerControls({
                     defaultValue: "Fullscreen",
                   })}
                   onPress={onToggleFullscreen}
-                  colors={colors}
+                  reducedMotion={reducedMotion}
                 />
               ) : null}
             </View>
@@ -642,13 +638,13 @@ function ControlButton({
   icon,
   label,
   onPress,
-  colors,
+  reducedMotion,
   disabled = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
-  colors: ReturnType<typeof useTheme>["colors"];
+  reducedMotion: boolean;
   disabled?: boolean;
 }) {
   return (
@@ -661,8 +657,14 @@ function ControlButton({
           borderColor: PLAYER_CONTROL_BORDER,
           opacity: disabled ? 0.38 : pressed ? 0.78 : 1,
         },
-        hovered && !disabled && styles.hoveredButton,
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        hovered &&
+          !disabled &&
+          (reducedMotion
+            ? styles.hoveredButtonReducedMotion
+            : styles.hoveredButton),
+        Platform.OS === "web" &&
+          focused &&
+          getWebFocusStyle(playerChrome.focus),
       ]}
       onPress={onPress}
       disabled={disabled}
@@ -682,13 +684,13 @@ function ActionButton({
   icon,
   label,
   onPress,
-  colors,
+  reducedMotion,
   compact = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
-  colors: ReturnType<typeof useTheme>["colors"];
+  reducedMotion: boolean;
   compact?: boolean;
 }) {
   return (
@@ -700,8 +702,13 @@ function ActionButton({
           borderColor: PLAYER_CONTROL_BORDER,
           opacity: pressed ? 0.76 : 1,
         },
-        hovered && styles.hoveredButton,
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        hovered &&
+          (reducedMotion
+            ? styles.hoveredButtonReducedMotion
+            : styles.hoveredButton),
+        Platform.OS === "web" &&
+          focused &&
+          getWebFocusStyle(playerChrome.focus),
       ]}
       onPress={onPress}
       hitSlop={compact ? 6 : undefined}
@@ -716,11 +723,9 @@ function ActionButton({
 function StatusPill({
   icon,
   label,
-  colors,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  colors: ReturnType<typeof useTheme>["colors"];
 }) {
   return (
     <View
@@ -732,7 +737,7 @@ function StatusPill({
         },
       ]}
     >
-      <Ionicons name={icon} size={14} color={colors.tint} />
+      <Ionicons name={icon} size={14} color={playerChrome.accent} />
       <Text
         numberOfLines={1}
         style={[styles.statusPillText, { color: PLAYER_MUTED_TEXT }]}
@@ -795,9 +800,15 @@ const styles = StyleSheet.create({
     backgroundColor: PLAYER_CONTROL_HOVER,
     transform: [{ scale: 1.035 }],
   },
+  hoveredButtonReducedMotion: {
+    backgroundColor: PLAYER_CONTROL_HOVER,
+  },
   playHoveredButton: {
     backgroundColor: "#FFFFFF",
     transform: [{ scale: 1.035 }],
+  },
+  playHoveredButtonReducedMotion: {
+    backgroundColor: "#FFFFFF",
   },
   bottomControls: {
     paddingHorizontal: uiSpacing.xxl,

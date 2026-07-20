@@ -2,7 +2,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Pressable,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import { DetailActionPanel } from "./DetailActionPanel";
 import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
 import { useTranslation } from "react-i18next";
 import { MoreSourcesPanel } from "./MoreSourcesPanel";
+import { MediaArtwork } from "../ui/MediaArtwork";
 
 export function DesktopDetailLayout({
   id,
@@ -26,6 +26,8 @@ export function DesktopDetailLayout({
   initiallyOpenSources,
   inLibrary,
   handleToggleLibrary,
+  trailerUrl,
+  onWatchTrailer,
   handlePlayStream,
   handlePlayCandidate,
   handleDownloadStream,
@@ -143,11 +145,13 @@ export function DesktopDetailLayout({
         streamsLoading={streamsLoading}
         hasPlayableSources={hasMovieSources}
         inLibrary={!!inLibrary}
+        hasTrailer={!!trailerUrl}
         planningAction={planningAction}
         onPlayBest={() => handlePlayStream()}
         onDownload={() => handleDownloadStream()}
         onCast={handleCastStream ? () => handleCastStream() : undefined}
         onToggleLibrary={handleToggleLibrary}
+        onWatchTrailer={onWatchTrailer}
         style={styles.detailActionPanel}
       />
 
@@ -213,10 +217,11 @@ export function DesktopDetailLayout({
       style={[styles.containerDesktop, { backgroundColor: colors.background }]}
     >
       {!!meta.background && (
-        <Image
-          source={{ uri: meta.background }}
+        <MediaArtwork
+          uri={meta.background}
+          variant="backdrop"
+          accessible={false}
           style={styles.ambientBackdrop}
-          resizeMode="cover"
         />
       )}
       <View
@@ -263,20 +268,13 @@ export function DesktopDetailLayout({
             },
           ]}
         >
-          {!!meta.poster ? (
-            <Image
-              source={{ uri: meta.poster }}
-              style={[
-                styles.desktopPoster,
-                { backgroundColor: colors.surfaceElevated },
-              ]}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.posterFallback}>
-              <Ionicons name="film-outline" size={44} color={colors.tint} />
-            </View>
-          )}
+          <MediaArtwork
+            uri={meta.poster}
+            title={meta.name}
+            variant="poster"
+            accessibilityLabel={`${meta.name} poster`}
+            style={styles.desktopPoster}
+          />
         </View>
       </View>
 
@@ -350,11 +348,6 @@ const styles = StyleSheet.create({
   desktopPoster: {
     width: "100%",
     height: "100%",
-  },
-  posterFallback: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
   },
   desktopInfoPanel: {
     flex: 1,

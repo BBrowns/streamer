@@ -40,4 +40,13 @@ export class NotificationService {
       data: { read: true },
     });
   }
+
+  /** Marks only this user's unread notifications as read. */
+  static async markAllAsRead(userId: string) {
+    const result = await prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
+    return result.count;
+  }
 }

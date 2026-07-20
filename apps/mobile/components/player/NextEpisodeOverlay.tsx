@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
+import { getWebFocusStyle } from "../ui/designSystem";
+import { playerChrome } from "./playerChrome";
 
 interface NextEpisodeOverlayProps {
   isVisible: boolean;
@@ -23,7 +24,6 @@ export function NextEpisodeOverlay({
   onCancel,
   countdownSeconds = 10,
 }: NextEpisodeOverlayProps) {
-  const { colors } = useTheme();
   const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState(countdownSeconds);
 
@@ -49,37 +49,40 @@ export function NextEpisodeOverlay({
 
   return (
     <View
-      style={[styles.container, { backgroundColor: colors.scrim }]}
+      style={[styles.container, { backgroundColor: playerChrome.scrim }]}
       accessibilityLiveRegion="polite"
     >
       <View
         style={[
           styles.card,
           {
-            backgroundColor: colors.surfaceElevated,
-            borderColor: colors.border,
+            backgroundColor: playerChrome.surfaceStrong,
+            borderColor: playerChrome.border,
           },
         ]}
       >
-        <Text style={[styles.upNext, { color: colors.tint }]}>
+        <Text style={[styles.upNext, { color: playerChrome.accent }]}>
           {t("player.upsell.upNext")}
         </Text>
-        <Text style={[styles.title, { color: colors.text }]}>
+        <Text style={[styles.title, { color: playerChrome.text }]}>
           {nextEpisode.title}
         </Text>
-        <Text style={[styles.info, { color: colors.textSecondary }]}>
+        <Text style={[styles.info, { color: playerChrome.textMuted }]}>
           S{nextEpisode.season} E{nextEpisode.episode}
         </Text>
 
         <View
-          style={[styles.progressContainer, { backgroundColor: colors.border }]}
+          style={[
+            styles.progressContainer,
+            { backgroundColor: playerChrome.border },
+          ]}
         >
           <View
             style={[
               styles.progressBar,
               {
                 width: `${(timeLeft / countdownSeconds) * 100}%`,
-                backgroundColor: colors.tint,
+                backgroundColor: playerChrome.accent,
               },
             ]}
           />
@@ -87,22 +90,44 @@ export function NextEpisodeOverlay({
 
         <View style={styles.actions}>
           <Pressable
-            style={[
+            style={({ pressed, focused }: any) => [
               styles.cancelButton,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              {
+                backgroundColor: playerChrome.surface,
+                borderColor: playerChrome.border,
+                opacity: pressed ? 0.78 : 1,
+              },
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(playerChrome.focus),
             ]}
             onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityLabel={t("player.upsell.cancel")}
           >
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.cancelText, { color: playerChrome.textMuted }]}
+            >
               {t("player.upsell.cancel")}
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.watchNowButton, { backgroundColor: colors.primary }]}
+            style={({ pressed, focused }: any) => [
+              styles.watchNowButton,
+              {
+                backgroundColor: playerChrome.text,
+                opacity: pressed ? 0.82 : 1,
+              },
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(playerChrome.focus),
+            ]}
             onPress={onWatchedNow}
+            accessibilityRole="button"
+            accessibilityLabel={t("player.upsell.watchNow", { timeLeft })}
           >
-            <Ionicons name="play" size={20} color={colors.onPrimary} />
-            <Text style={[styles.watchNowText, { color: colors.onPrimary }]}>
+            <Ionicons name="play" size={20} color={playerChrome.canvas} />
+            <Text style={[styles.watchNowText, { color: playerChrome.canvas }]}>
               {t("player.upsell.watchNow", { timeLeft })}
             </Text>
           </Pressable>

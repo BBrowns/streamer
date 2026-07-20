@@ -18,6 +18,10 @@ export interface ResourceDefinition {
   idPrefixes?: string[];
 }
 
+export interface AddonBehaviorHints {
+  configurationRequired?: boolean;
+}
+
 export interface AddonManifest {
   id: string;
   version: string;
@@ -28,6 +32,7 @@ export interface AddonManifest {
   types: string[];
   catalogs: CatalogDefinition[];
   idPrefixes?: string[];
+  behaviorHints?: AddonBehaviorHints;
 }
 
 /** Stored add-on record in the database */

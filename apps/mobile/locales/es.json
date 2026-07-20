@@ -34,9 +34,11 @@
     },
     "discovery": {
       "title": "Explora tus catálogos",
-      "subtitle": "Novedades de tus complementos instalados.",
+      "subtitle": "Títulos de tus complementos instalados.",
       "noProvidersTitle": "Añade una fuente de contenido",
       "noProvidersDescription": "Instala un complemento para buscar y explorar películas y series.",
+      "noBrowseableCatalogsTitle": "Añade un catálogo para explorar títulos",
+      "noBrowseableCatalogsDescription": "Tus complementos instalados ofrecen opciones de reproducción, pero ninguno ofrece un catálogo de películas o series. Añade Cinemeta u otro complemento de catálogo para explorar títulos.",
       "noCatalogsTitle": "No hay catálogos para esta vista",
       "noCatalogsDescription": "Tus complementos instalados no ofrecen catálogos para el tipo de título seleccionado.",
       "catalogErrorTitle": "Catálogo no disponible",
@@ -160,6 +162,10 @@
     "empty": {
       "title": "No se encontró contenido",
       "description": "Instala algunos complementos en Ajustes para empezar a explorar.",
+      "streamOnlyTitle": "Añade un catálogo para explorar títulos",
+      "streamOnlyDescription": "Tus complementos instalados ofrecen opciones de reproducción, pero ninguno ofrece un catálogo de películas o series. Añade un complemento de catálogo para descubrir títulos.",
+      "catalogUnavailableTitle": "Aún no hay títulos disponibles",
+      "catalogUnavailableDescription": "Tu fuente de catálogo está instalada, pero todavía no ha devuelto títulos. Actualiza tus catálogos o inténtalo de nuevo en un momento.",
       "action": "Gestionar complementos",
       "retryTitle": "No se pudo cargar Inicio",
       "retryDescription": "Actualiza tus catálogos o comprueba la conexión.",
@@ -199,7 +205,8 @@
       "all": "Todo",
       "movies": "Películas",
       "series": "Series",
-      "offline": "Sin conexión"
+      "offline": "Sin conexión",
+      "history": "Historial"
     },
     "empty": {
       "title": "Aún no hay elementos",
@@ -232,6 +239,21 @@
       "restore": "Restaurar",
       "bulkRemoved": "{{count}} títulos eliminados de la biblioteca",
       "bulkRemoved_one": "1 título eliminado de la biblioteca"
+    },
+    "history": {
+      "emptyTitle": "Aún no hay historial",
+      "emptyDescription": "Los títulos que veas aparecerán aquí, incluidos los que hayas terminado.",
+      "lastWatched": "Visto el {{date}}",
+      "clearTitle": "¿Borrar el historial?",
+      "clearMessage": "Esto elimina permanentemente del historial todos los títulos vistos y su progreso. Tu biblioteca y descargas no cambian.",
+      "clearAction": "Borrar historial",
+      "clearFailed": "No se pudo borrar el historial.",
+      "cleared": "Historial borrado.",
+      "removeTitle": "¿Eliminar del historial?",
+      "removeMessage": "¿Eliminar \"{{title}}\" de tu historial?",
+      "removeAction": "Eliminar del historial",
+      "removeFailed": "No se pudo eliminar esta entrada del historial.",
+      "removed": "Eliminado del historial."
     }
   },
   "downloads": {
@@ -782,6 +804,7 @@
       "button": "Instalar",
       "success": "¡Complemento instalado!",
       "successDetail": "El nuevo contenido aparecerá en Descubrir.",
+      "configurationRequiredDetail": "Esta fuente se añadió, pero necesita configuración antes de poder ofrecer contenido.",
       "error": "Error de instalación"
     },
     "installed": {
@@ -790,6 +813,7 @@
       "remove": "Eliminar",
       "cancel": "Cancelar",
       "confirmRemove": "¿Eliminar \"{{name}}\"?",
+      "configurationRequired": "Se necesita configuración antes de que esta fuente pueda ofrecer contenido",
       "removeError": "No se pudo eliminar este complemento. Inténtalo de nuevo."
     },
     "empty": {
@@ -834,7 +858,9 @@
       "playBest": "Reproducir la mejor",
       "preparing": "Preparando",
       "inLibrary": "En la biblioteca",
-      "add": "Añadir"
+      "add": "Añadir",
+      "watchTrailer": "Ver tráiler",
+      "trailerUnavailable": "No se pudo abrir el tráiler en este dispositivo."
     },
     "sources": {
       "episodes": "Episodios",
@@ -1189,7 +1215,29 @@
   },
   "notifications": {
     "title": "Notificaciones",
+    "eyebrow": "Bandeja de entrada",
+    "unreadCount_one": "{{count}} notificación sin leer",
+    "unreadCount_other": "{{count}} notificaciones sin leer",
+    "allCaughtUpDescription": "Estás al día.",
     "empty": "No hay notificaciones",
+    "emptyTitle": "Estás al día",
+    "emptyDescription": "Las descargas y actualizaciones de la cuenta aparecerán aquí.",
+    "loading": "Cargando notificaciones",
+    "errorTitle": "No se pudieron cargar las notificaciones",
+    "errorDescription": "Comprueba tu conexión e inténtalo de nuevo.",
+    "unread": "Sin leer",
+    "markAllRead": "Marcar todo como leído",
+    "markAllReadA11y": "Marcar las {{count}} notificaciones sin leer como leídas",
+    "markAllReadHint": "Marca todas las notificaciones sin leer como leídas.",
+    "markAllReadError": "No se pudieron marcar todas las notificaciones como leídas.",
+    "markAsReadA11y": "Marcar {{title}} como leída",
+    "markAsReadHint": "Marca esta notificación como leída.",
+    "markReadError": "No se pudo actualizar esta notificación.",
+    "groups": {
+      "today": "Hoy",
+      "thisWeek": "Esta semana",
+      "earlier": "Antes"
+    },
     "dismiss": "Cerrar notificación"
   },
   "biometricLock": {

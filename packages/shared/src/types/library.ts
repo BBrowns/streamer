@@ -24,6 +24,12 @@ export interface WatchProgress {
   lastWatched: string;
 }
 
+/** A cursor page of watched and in-progress titles for the personal history. */
+export interface WatchHistoryPage {
+  items: WatchProgress[];
+  nextCursor?: string;
+}
+
 /** Request to add an item to the library */
 export interface AddToLibraryRequest {
   type: "movie" | "series";

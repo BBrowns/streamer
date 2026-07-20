@@ -509,6 +509,10 @@ export async function installGoldenPathRoutes(
         await json(route, { items: [] });
         return;
       }
+      if (url.pathname === "/api/library/history") {
+        await json(route, { items: [] });
+        return;
+      }
       if (url.pathname.startsWith("/api/library/progress/")) {
         await json(route, null);
         return;

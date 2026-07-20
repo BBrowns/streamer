@@ -11,11 +11,17 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { InstalledAddon } from "@streamer/shared";
 import { AxiosError } from "axios";
 import { useAuthStore } from "../../stores/authStore";
+import {
+  addonQueryKeys,
+  removeInstalledAddon,
+  upsertInstalledAddon,
+  useAddons,
+} from "../../hooks/useAddons";
 import { useTheme } from "../../hooks/useTheme";
 import { api } from "../../services/api";
 import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
@@ -48,7 +54,7 @@ function getMutationError(error: unknown, fallback: string) {
 }
 
 export default function AddonsScreen() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userId = useAuthStore((state) => state.user?.id);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -68,29 +74,30 @@ export default function AddonsScreen() {
     isError,
     isRefetching,
     refetch,
-  } = useQuery<InstalledAddon[]>({
-    queryKey: ["addons"],
-    queryFn: async () => {
-      const { data } = await api.get("/api/addons");
-      return data.addons;
-    },
-    enabled: isAuthenticated,
-  });
+  } = useAddons();
 
   const installMutation = useMutation({
     onMutate: () => setInstallFeedback(null),
-    mutationFn: async (url: string) => {
+    mutationFn: async (url: string): Promise<InstalledAddon> => {
       const { data } = await api.post("/api/addons", { transportUrl: url });
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (addon) => {
+      queryClient.setQueryData<InstalledAddon[]>(
+        addonQueryKeys.list(userId),
+        (current) => upsertInstalledAddon(current, addon),
+      );
       void queryClient.invalidateQueries({ queryKey: ["addons"] });
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
       void queryClient.invalidateQueries({ queryKey: ["search"] });
       setAddonUrl("");
       setInstallFeedback({
         tone: "success",
-        message: t("addons.install.successDetail"),
+        message: t(
+          addon.manifest.behaviorHints?.configurationRequired
+            ? "addons.install.configurationRequiredDetail"
+            : "addons.install.successDetail",
+        ),
       });
     },
     onError: (error: unknown) => {
@@ -108,7 +115,11 @@ export default function AddonsScreen() {
     mutationFn: async (id: string) => {
       await api.delete(`/api/addons/${id}`);
     },
-    onSuccess: () => {
+    onSuccess: (_result, addonId) => {
+      queryClient.setQueryData<InstalledAddon[]>(
+        addonQueryKeys.list(userId),
+        (current) => removeInstalledAddon(current, addonId),
+      );
       void queryClient.invalidateQueries({ queryKey: ["addons"] });
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
       void queryClient.invalidateQueries({ queryKey: ["search"] });
@@ -262,6 +273,16 @@ export default function AddonsScreen() {
                             ? ` · ${localizedTypes.join(" · ")}`
                             : ""}
                         </Text>
+                        {item.manifest.behaviorHints?.configurationRequired ? (
+                          <Text
+                            style={[
+                              styles.addonSetupHint,
+                              { color: colors.warning },
+                            ]}
+                          >
+                            {t("addons.installed.configurationRequired")}
+                          </Text>
+                        ) : null}
                       </View>
                       <Pressable
                         accessibilityRole="button"
@@ -468,6 +489,10 @@ const styles = StyleSheet.create({
     marginTop: uiSpacing.xs,
   },
   addonMeta: {
+    ...uiTypography.caption,
+    marginTop: uiSpacing.xs,
+  },
+  addonSetupHint: {
     ...uiTypography.caption,
     marginTop: uiSpacing.xs,
   },

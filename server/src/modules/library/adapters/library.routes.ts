@@ -5,6 +5,11 @@ import { LibraryService } from "../domain/library.service.js";
 import { PrismaLibraryRepository } from "./prisma-library.repository.js";
 import { PrismaWatchProgressRepository } from "./prisma-progress.repository.js";
 import { authMiddleware } from "../../../middleware/auth.middleware.js";
+import { zValidator } from "@hono/zod-validator";
+import {
+  watchHistoryEntryParamsSchema,
+  watchHistoryQuerySchema,
+} from "@streamer/shared";
 
 import { PrismaTraktRepository } from "../../trakt/adapters/prisma-trakt.repository.js";
 import { TraktClient } from "../../trakt/adapters/trakt-client.js";
@@ -35,6 +40,19 @@ libraryRouter.post("", (c) => libraryController.addToLibrary(c));
 libraryRouter.delete("", (c) => libraryController.removeFromLibrary(c));
 libraryRouter.post("/bulk-remove", (c) => libraryController.bulkRemove(c));
 libraryRouter.get("/check/:itemId", (c) => libraryController.isInLibrary(c));
+
+// Watch History is intentionally separate from saved Library membership.
+libraryRouter.get(
+  "/history",
+  zValidator("query", watchHistoryQuerySchema),
+  (c) => libraryController.getWatchHistory(c),
+);
+libraryRouter.delete("/history", (c) => libraryController.clearWatchHistory(c));
+libraryRouter.delete(
+  "/history/:historyId",
+  zValidator("param", watchHistoryEntryParamsSchema),
+  (c) => libraryController.removeWatchHistoryEntry(c),
+);
 
 // Watch Progress / Continue Watching
 libraryRouter.get("/progress", (c) => libraryController.getContinueWatching(c));

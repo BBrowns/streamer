@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import type { HonoEnv } from "../../types/hono.js";
 import { sessionController } from "./session.controller.js";
 
-export const sessionRouter = new Hono<{ Variables: { userId: string } }>();
+export const sessionRouter = new Hono<HonoEnv>();
 
 sessionRouter.use("*", authMiddleware);
 

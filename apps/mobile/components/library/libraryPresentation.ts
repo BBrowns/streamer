@@ -1,30 +1,55 @@
-import type { LibraryItem } from "@streamer/shared";
+import type { LibraryItem, WatchProgress } from "@streamer/shared";
 import type { WindowClass } from "../../hooks/useWindowClass";
 import {
   isTaskOfflinePlayable,
   type DownloadTask,
 } from "../../stores/downloadStore";
 
-export type LibraryFilter = "all" | "movie" | "series" | "offline";
+export type LibraryFilter = "all" | "movie" | "series" | "offline" | "history";
 
 export type LibraryCardItem = Pick<
   LibraryItem,
   "id" | "itemId" | "type" | "title" | "poster"
 >;
 
-export type LibraryGridItem = {
-  key: string;
-  selectionKey: string;
-  kind: "library" | "offline";
-  item: LibraryCardItem;
-  downloadTaskId?: string;
-};
+export type LibraryGridItem =
+  | {
+      key: string;
+      selectionKey: string;
+      kind: "library" | "offline";
+      item: LibraryCardItem;
+      downloadTaskId?: string;
+    }
+  | {
+      key: string;
+      selectionKey: string;
+      kind: "history";
+      item: LibraryCardItem;
+      history: WatchProgress;
+    };
 
 export function buildLibraryGridItems(
   items: LibraryItem[] | undefined,
   tasks: Record<string, DownloadTask>,
   filter: LibraryFilter,
+  history: WatchProgress[] = [],
 ): LibraryGridItem[] {
+  if (filter === "history") {
+    return history.map((entry) => ({
+      key: `history:${entry.id}`,
+      selectionKey: `history:${entry.id}`,
+      kind: "history" as const,
+      history: entry,
+      item: {
+        id: entry.id,
+        itemId: entry.itemId,
+        type: entry.type,
+        title: entry.title,
+        poster: entry.poster ?? null,
+      },
+    }));
+  }
+
   if (filter === "offline") {
     return Object.values(tasks)
       .filter(isTaskOfflinePlayable)
@@ -64,7 +89,7 @@ export function canStartLibrarySelection(
   filter: LibraryFilter,
   itemCount: number,
 ) {
-  return filter !== "offline" && itemCount > 0;
+  return filter !== "offline" && filter !== "history" && itemCount > 0;
 }
 
 function clamp(value: number, minimum: number, maximum: number) {

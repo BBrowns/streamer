@@ -4,6 +4,8 @@ import { ContinueWatchingRow } from "../ContinueWatchingRow";
 
 const mockPush = jest.fn();
 const mockRemoveMutate = jest.fn();
+const mockSetSessionStream = jest.fn();
+const mockPlayBest = jest.fn();
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -46,6 +48,18 @@ jest.mock("../../../hooks/useContinueWatching", () => ({
   useUpdateProgress: jest.fn(),
 }));
 
+jest.mock("../../../services/playback/PlaybackOrchestrator", () => ({
+  playBest: (...args: unknown[]) => mockPlayBest(...args),
+}));
+
+jest.mock("../../../stores/playerStore", () => ({
+  usePlayerStore: (
+    selector: (state: {
+      setSessionStream: typeof mockSetSessionStream;
+    }) => unknown,
+  ) => selector({ setSessionStream: mockSetSessionStream }),
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
@@ -54,6 +68,7 @@ jest.mock("react-i18next", () => ({
         "home.continueWatching.title": "Continue Watching",
         "home.continueWatching.movie": "Movie",
         "home.continueWatching.series": "Series",
+        "common.actions.resume": "Resume",
         "library.actions.viewDetails": "View Details",
         "search.a11y.openDetails": "Open title details",
         "home.continueWatching.emptyTitle": "Nothing in progress",
@@ -80,6 +95,8 @@ describe("ContinueWatchingRow", () => {
   beforeEach(() => {
     mockPush.mockClear();
     mockRemoveMutate.mockClear();
+    mockSetSessionStream.mockClear();
+    mockPlayBest.mockReset();
     hooks.useRemoveProgress.mockReturnValue({
       mutate: mockRemoveMutate,
       isPending: false,
@@ -89,7 +106,7 @@ describe("ContinueWatchingRow", () => {
     });
   });
 
-  it("opens title details without presenting a direct-play action", () => {
+  it("resumes directly through the planner and keeps details secondary", async () => {
     hooks.useContinueWatching.mockReturnValue({
       isLoading: false,
       data: [
@@ -115,8 +132,47 @@ describe("ContinueWatchingRow", () => {
     expect(screen.getByText("Example Episode")).toBeTruthy();
     expect(screen.getByText("S1 E2")).toBeTruthy();
     expect(screen.getByText("40m left · 33%")).toBeTruthy();
-    expect(screen.getByText("View Details")).toBeTruthy();
-    expect(screen.queryByText("Resume")).toBeNull();
+    expect(screen.getByText("Resume")).toBeTruthy();
+
+    mockPlayBest.mockResolvedValue({
+      ok: true,
+      stream: { url: "https://example.test/video.mp4" },
+      mediaInfo: {
+        type: "series",
+        itemId: "tt0903747",
+        title: "Example Episode",
+        poster: "https://images.example.test/poster.jpg",
+        season: 1,
+        episode: 2,
+      },
+      sessionId: "session-1",
+      candidateId: "candidate-1",
+    });
+
+    fireEvent.press(
+      screen.getByLabelText("Resume Example Episode, 40 minutes remaining"),
+    );
+
+    await Promise.resolve();
+
+    expect(mockPlayBest).toHaveBeenCalledWith({
+      type: "series",
+      id: "tt0903747",
+      title: "Example Episode",
+      poster: "https://images.example.test/poster.jpg",
+      season: 1,
+      episode: 2,
+    });
+    expect(mockSetSessionStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ itemId: "tt0903747" }),
+      "session-1",
+      "candidate-1",
+      null,
+      null,
+      { type: "resume", positionSeconds: 1200 },
+    );
+    expect(mockPush).toHaveBeenCalledWith("/player");
 
     fireEvent.press(
       screen.getAllByLabelText("View Details: Example Episode")[0],

@@ -3,10 +3,11 @@ import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import { upgradeWebSocket } from "../../config/websocket.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import type { HonoEnv } from "../../types/hono.js";
 import { syncService } from "./sync.service.js";
 import { logger } from "../../config/logger.js";
 
-export const syncRouter = new Hono<{ Variables: { userId: string } }>();
+export const syncRouter = new Hono<HonoEnv>();
 
 syncRouter.use("*", authMiddleware);
 
@@ -17,7 +18,7 @@ syncRouter.use("*", authMiddleware);
 syncRouter.get(
   "/events",
   upgradeWebSocket((c: Context) => {
-    const userId = c.get("userId") as string;
+    const { userId } = c.get("user");
     const deviceId = c.req.header("X-Device-Id");
     const connId = Math.random().toString(36).substring(2, 11);
 
@@ -35,7 +36,7 @@ syncRouter.get(
 
         logger.debug({ userId, connId }, "WebSocket connection opened");
       },
-      onMessage(event: { data: any }, ws: WSContext) {
+      onMessage(event: { data: any }) {
         try {
           const { event: type, data } = JSON.parse(event.data.toString());
 

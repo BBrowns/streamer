@@ -7,7 +7,11 @@ import type {
   LibraryItemRecord,
   WatchProgressRecord,
 } from "../ports/library.ports.js";
-import type { LibraryItem, WatchProgress } from "@streamer/shared";
+import type {
+  LibraryItem,
+  WatchHistoryPage,
+  WatchProgress,
+} from "@streamer/shared";
 
 import { TraktService } from "../../trakt/trakt.service.js";
 import { syncService } from "../../sync/sync.service.js";
@@ -167,6 +171,33 @@ export class LibraryService {
     return inProgress.map((r) => this.toWatchProgress(r));
   }
 
+  /**
+   * Returns every recorded title, including completed titles, in stable cursor
+   * order. History is independent from Library membership and offline files.
+   */
+  async getWatchHistory(
+    userId: string,
+    options: { cursor?: string; limit: number },
+  ): Promise<WatchHistoryPage> {
+    const cursor = options.cursor
+      ? decodeHistoryCursor(options.cursor)
+      : undefined;
+    const records = await this.progressRepo.findHistoryByUser(userId, {
+      cursor,
+      limit: options.limit + 1,
+    });
+    const hasMore = records.length > options.limit;
+    const items = records.slice(0, options.limit);
+    const last = items.at(-1);
+
+    return {
+      items: items.map((record) => this.toWatchProgress(record)),
+      ...(hasMore && last
+        ? { nextCursor: encodeHistoryCursor(last.lastWatched, last.id) }
+        : {}),
+    };
+  }
+
   /** Remove an item from Continue Watching without touching the library. */
   async removeProgress(userId: string, itemId: string): Promise<void> {
     await this.progressRepo.delete(userId, itemId);
@@ -175,6 +206,33 @@ export class LibraryService {
       action: "remove",
       itemId,
     });
+  }
+
+  /**
+   * Remove one watch-history entry without removing other episodes from the
+   * same series. Continue Watching intentionally keeps its existing
+   * item-level removal behaviour.
+   */
+  async removeWatchHistoryEntry(
+    userId: string,
+    historyId: string,
+  ): Promise<void> {
+    const deleted = await this.progressRepo.deleteById(userId, historyId);
+    if (!deleted) {
+      throw new AppError(404, "Watch history entry not found");
+    }
+
+    logger.info({ userId, historyId }, "Watch history entry removed");
+    syncService.broadcast(userId, "PROGRESS_UPDATE", {
+      action: "remove-history",
+      historyId,
+    });
+  }
+
+  async clearWatchHistory(userId: string): Promise<void> {
+    await this.progressRepo.deleteAll(userId);
+    logger.info({ userId }, "Watch history cleared");
+    syncService.broadcast(userId, "PROGRESS_UPDATE", { action: "clear" });
   }
 
   private toLibraryItem(record: LibraryItemRecord): LibraryItem {
@@ -203,5 +261,28 @@ export class LibraryService {
       poster: record.poster,
       lastWatched: record.lastWatched.toISOString(),
     };
+  }
+}
+
+export function encodeHistoryCursor(lastWatched: Date, id: string): string {
+  return Buffer.from(
+    `${lastWatched.toISOString()}\u0000${id}`,
+    "utf8",
+  ).toString("base64url");
+}
+
+export function decodeHistoryCursor(cursor: string): {
+  lastWatched: Date;
+  id: string;
+} {
+  try {
+    const [timestamp, id] = Buffer.from(cursor, "base64url")
+      .toString("utf8")
+      .split("\u0000");
+    const lastWatched = new Date(timestamp ?? "");
+    if (!id || Number.isNaN(lastWatched.getTime())) throw new Error("invalid");
+    return { lastWatched, id };
+  } catch {
+    throw new AppError(400, "Watch history cursor is invalid");
   }
 }

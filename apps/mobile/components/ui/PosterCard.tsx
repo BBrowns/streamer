@@ -1,4 +1,4 @@
-import React, { type ReactNode, useEffect, useState } from "react";
+import React, { type ReactNode } from "react";
 import {
   AccessibilityRole,
   AccessibilityState,
@@ -10,7 +10,6 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
@@ -21,6 +20,7 @@ import {
   uiSpacing,
   uiTypography,
 } from "./designSystem";
+import { MediaArtwork } from "./MediaArtwork";
 
 type PosterCardProps = {
   title: string;
@@ -63,13 +63,9 @@ export function PosterCard({
 }: PosterCardProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
-  const posterUri = typeof poster === "string" ? poster.trim() : "";
-  const [imageError, setImageError] = useState(!posterUri);
   const { isKeyboardFocused, webPressableProps } = useWebPressableActivation(
     onActivate ?? onPress,
   );
-
-  useEffect(() => setImageError(!posterUri), [posterUri]);
 
   return (
     <Pressable
@@ -103,27 +99,13 @@ export function PosterCard({
           { backgroundColor: colors.surfaceElevated },
         ]}
       >
-        {!imageError && posterUri ? (
-          <Image
-            source={{ uri: posterUri }}
-            style={styles.poster}
-            transition={reducedMotion ? 0 : 180}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            accessibilityLabel={`${title} poster`}
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <View style={styles.fallback}>
-            <Ionicons name="film-outline" size={28} color={colors.tint} />
-            <Text
-              numberOfLines={3}
-              style={[styles.fallbackTitle, { color: colors.textSecondary }]}
-            >
-              {title}
-            </Text>
-          </View>
-        )}
+        <MediaArtwork
+          uri={poster}
+          title={title}
+          variant="poster"
+          accessible={false}
+          style={styles.poster}
+        />
 
         {mediaOverlay}
 
@@ -222,17 +204,6 @@ const styles = StyleSheet.create({
   poster: {
     width: "100%",
     height: "100%",
-  },
-  fallback: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: uiSpacing.md,
-    padding: uiSpacing.lg,
-  },
-  fallbackTitle: {
-    ...uiTypography.label,
-    textAlign: "center",
   },
   selectedBadge: {
     position: "absolute",

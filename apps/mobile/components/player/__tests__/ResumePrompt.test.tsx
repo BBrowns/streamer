@@ -1,6 +1,8 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { ResumePrompt } from "../ResumePrompt";
+import { playerChrome } from "../playerChrome";
 
 describe("ResumePrompt", () => {
   it("shows the formatted resume position when provided", () => {
@@ -18,5 +20,10 @@ describe("ResumePrompt", () => {
 
     fireEvent.press(screen.getByText("Resume"));
     expect(onResponse).toHaveBeenCalledWith(true);
+
+    const promptStyle = StyleSheet.flatten(
+      screen.getByTestId("player-resume-prompt").props.style,
+    );
+    expect(promptStyle.backgroundColor).toBe(playerChrome.surfaceStrong);
   });
 });

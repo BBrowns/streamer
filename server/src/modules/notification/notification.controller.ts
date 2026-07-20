@@ -12,23 +12,21 @@ export class NotificationController {
 
   async markAsRead(c: Context) {
     const user = c.get("user");
-    const id = c.req.param("id");
-    if (!id) return c.json({ error: "Notification ID required" }, 400);
+    const { id } = (c.req as any).valid("param");
 
     const notification = await NotificationService.markAsRead(user.userId, id);
     return c.json({ status: "success", notification });
   }
 
+  async markAllAsRead(c: Context) {
+    const user = c.get("user");
+    const updatedCount = await NotificationService.markAllAsRead(user.userId);
+    return c.json({ status: "success", updatedCount });
+  }
+
   async createNotification(c: Context) {
     const user = c.get("user");
-    const { title, message } = await c.req.json<{
-      title: string;
-      message: string;
-    }>();
-
-    if (!title || !message) {
-      return c.json({ error: "Title and message are required" }, 400);
-    }
+    const { title, message } = (c.req as any).valid("json");
 
     const notification = await NotificationService.createNotification(
       user.userId,

@@ -1,39 +1,86 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  markAllNotificationsReadResponseSchema,
+  notificationsResponseSchema,
+  type InAppNotification,
+} from "@streamer/shared";
 import { api } from "../services/api";
 
-export interface Notification {
-  id: string;
-  userId: string;
-  title: string;
-  message: string;
-  read: boolean;
-  createdAt: string;
-}
+export type Notification = InAppNotification;
+
+export const notificationKeys = {
+  all: ["notifications"] as const,
+};
 
 export function useNotifications() {
   const queryClient = useQueryClient();
 
-  // Fetch all notifications
   const query = useQuery({
-    queryKey: ["notifications"],
+    queryKey: notificationKeys.all,
     queryFn: async () => {
       const { data } = await api.get<{ notifications: Notification[] }>(
         "/api/notifications",
       );
-      return data.notifications || [];
+      return notificationsResponseSchema.parse(data).notifications;
     },
-    // Poll every 30 seconds for new notifications
     refetchInterval: 30000,
   });
 
-  // Mark a single notification as read
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
       const { data } = await api.patch(`/api/notifications/${id}/read`);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: notificationKeys.all });
+      const previous = queryClient.getQueryData<Notification[]>(
+        notificationKeys.all,
+      );
+      queryClient.setQueryData<Notification[]>(
+        notificationKeys.all,
+        (current) =>
+          current?.map((notification) =>
+            notification.id === id
+              ? { ...notification, read: true }
+              : notification,
+          ),
+      );
+      return { previous };
+    },
+    onError: (_error, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(notificationKeys.all, context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    },
+  });
+
+  const markAllAsRead = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.patch("/api/notifications/read-all");
+      return markAllNotificationsReadResponseSchema.parse(data);
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: notificationKeys.all });
+      const previous = queryClient.getQueryData<Notification[]>(
+        notificationKeys.all,
+      );
+      queryClient.setQueryData<Notification[]>(
+        notificationKeys.all,
+        (current) =>
+          current?.map((notification) => ({ ...notification, read: true })),
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(notificationKeys.all, context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
     },
   });
 
@@ -42,6 +89,9 @@ export function useNotifications() {
     unreadCount: (query.data ?? []).filter((n) => !n.read).length,
     isLoading: query.isLoading,
     isError: query.isError,
+    refetch: query.refetch,
+    isRefetching: query.isRefetching,
     markAsRead,
+    markAllAsRead,
   };
 }

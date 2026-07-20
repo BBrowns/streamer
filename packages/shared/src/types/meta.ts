@@ -21,14 +21,25 @@ export interface VideoEntry {
   released: string;
 }
 
+/**
+ * A provider-declared trailer. `source` is usually a YouTube video id in the
+ * Stremio protocol, but can be an allowlisted HTTPS URL for trusted providers.
+ */
+export interface MediaTrailer {
+  source: string;
+  type?: string;
+}
+
 /** Full metadata for a single item */
 export interface MetaDetail extends MetaPreview {
   background?: string;
+  logo?: string;
   genres?: string[];
   cast?: string[];
   director?: string[];
   runtime?: string;
   videos?: VideoEntry[];
+  trailers?: MediaTrailer[];
 }
 
 /** Catalog response from an add-on */
