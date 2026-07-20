@@ -11,11 +11,13 @@ type DetailActionPanelProps = {
   streamsLoading?: boolean;
   hasPlayableSources: boolean;
   inLibrary: boolean;
+  hasTrailer?: boolean;
   planningAction?: "play" | "download" | "cast" | null;
   onPlayBest: () => void;
   onDownload: () => void;
   onCast?: () => void;
   onToggleLibrary: () => void;
+  onWatchTrailer?: () => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -23,11 +25,13 @@ export function DetailActionPanel({
   castType,
   hasPlayableSources,
   inLibrary,
+  hasTrailer = false,
   planningAction,
   onPlayBest,
   onDownload,
   onCast,
   onToggleLibrary,
+  onWatchTrailer,
   style,
 }: DetailActionPanelProps) {
   const { t } = useTranslation();
@@ -86,6 +90,17 @@ export function DetailActionPanel({
               />
             ) : null}
           </>
+        ) : null}
+
+        {hasTrailer && onWatchTrailer ? (
+          <AppButton
+            label={t("detail.actionPanel.watchTrailer")}
+            icon="play-circle-outline"
+            variant="secondary"
+            size="large"
+            onPress={onWatchTrailer}
+            style={styles.secondaryButton}
+          />
         ) : null}
 
         <AppButton

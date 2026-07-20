@@ -3,6 +3,7 @@ import type {
   CatalogDefinition,
   MetaPreview,
 } from "@streamer/shared";
+import { supportsCatalogType } from "@streamer/shared";
 
 export type SearchContentType = "all" | "movie" | "series";
 export type SearchMode = "suggestions" | "results";
@@ -126,7 +127,7 @@ export function getSearchableCatalogs(
   return manifest.catalogs.filter((catalog) => {
     if (catalog.type !== "movie" && catalog.type !== "series") return false;
     if (requestedType && catalog.type !== requestedType) return false;
-    if (!manifest.types.includes(catalog.type)) return false;
+    if (!supportsCatalogType(manifest, catalog.type, catalog.id)) return false;
     // Catalog definitions are the authoritative capability declaration here.
     // Some deployed Stremio add-ons expose working catalog routes but omit
     // `catalog` from `resources`; requiring both would create false negatives.

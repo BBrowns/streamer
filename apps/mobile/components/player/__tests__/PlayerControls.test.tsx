@@ -1,7 +1,8 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { getVolumeFromKeyboard, PlayerControls } from "../PlayerControls";
+import { playerChrome } from "../playerChrome";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -350,5 +351,27 @@ describe("PlayerControls", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     expect(onOpenCast).toHaveBeenCalledTimes(1);
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps secondary player controls cinema-dark independently of app theme", () => {
+    const screen = render(
+      <PlayerControls
+        player={createPlayer()}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        onOpenSettings={jest.fn()}
+        capabilities={{ canSeek: true, hasCaptions: true }}
+      />,
+    );
+
+    expect(screen.getByTestId("player-controls-cinematic")).toBeTruthy();
+    const settings = screen.getByLabelText("Audio, subtitles, and source");
+    const style = StyleSheet.flatten(settings.props.style);
+
+    expect(style.backgroundColor).toBe(playerChrome.surface);
+    expect(style.borderColor).toBe(playerChrome.border);
   });
 });

@@ -17,6 +17,8 @@ export interface DetailLayoutProps {
   setSelectedResolution: (res: string) => void;
   inLibrary: boolean;
   handleToggleLibrary: () => void;
+  trailerUrl?: string | null;
+  onWatchTrailer?: () => void;
   handlePlayStream: (
     stream?: Stream,
     episodeTitle?: string,

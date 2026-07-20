@@ -13,11 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useInfiniteCatalog } from "../../hooks/useInfiniteCatalog";
 import { useAuthStore } from "../../stores/authStore";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  CatalogDefinition,
-  InstalledAddon,
-  MetaPreview,
-} from "@streamer/shared";
+import type { LibraryItem, MetaPreview, WatchProgress } from "@streamer/shared";
 import {
   SkeletonLoader,
   SkeletonRow,
@@ -33,6 +29,7 @@ import { CatalogItemCard } from "../../components/catalog/CatalogItemCard";
 import { CatalogRow } from "../../components/catalog/CatalogRow";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useContinueWatching } from "../../hooks/useContinueWatching";
+import { useLibrary } from "../../hooks/useLibrary";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { buildHomeFeed } from "../../services/homeFeed";
 import { playBest } from "../../services/playback/PlaybackOrchestrator";
@@ -47,6 +44,8 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "../../components/ui/designSystem";
+import { rankProviderCatalogRows } from "../../services/homeDiscovery";
+import { buildCatalogDiscoveryRows } from "../../services/catalogDiscovery";
 
 function flattenCatalogPages(data: any): MetaPreview[] {
   return (
@@ -161,31 +160,28 @@ function HomeRail({
 
 function HomeProviderRails({
   excludeContentKeys,
+  library,
+  continueWatching,
 }: {
   excludeContentKeys: ReadonlySet<string>;
+  library: readonly LibraryItem[];
+  continueWatching: readonly WatchProgress[];
 }) {
   const router = useRouter();
   const { t } = useTranslation();
   const { data: addons } = useAddons();
 
   const catalogRows = useMemo(() => {
-    const rows: {
-      catalog: CatalogDefinition;
-      addon: InstalledAddon;
-    }[] = [];
+    const rows = buildCatalogDiscoveryRows(addons);
 
-    [...(addons ?? [])]
-      .sort((left, right) => left.installedAt.localeCompare(right.installedAt))
-      .forEach((addon) => {
-        addon.manifest.catalogs.forEach((catalog) => {
-          if (catalog.type === "movie" || catalog.type === "series") {
-            rows.push({ catalog, addon });
-          }
-        });
-      });
-
-    return rows.slice(0, 6);
-  }, [addons]);
+    return rankProviderCatalogRows(
+      rows.map((row, originalIndex) => ({ ...row, originalIndex })),
+      library ?? [],
+      continueWatching ?? [],
+    )
+      .slice(0, 6)
+      .map(({ addon, catalog }) => ({ addon, catalog }));
+  }, [addons, continueWatching, library]);
 
   if (catalogRows.length === 0) return null;
 
@@ -239,7 +235,9 @@ function HomeContent() {
 
   const movieCatalog = useInfiniteCatalog("movie");
   const seriesCatalog = useInfiniteCatalog("series");
+  const { data: addons = [] } = useAddons();
   const { data: continueWatchingItems = [] } = useContinueWatching();
+  const { data: libraryItems = [] } = useLibrary();
 
   const movieItems = useMemo(
     () => flattenCatalogPages(movieCatalog.data),
@@ -277,6 +275,10 @@ function HomeContent() {
   const isLoading =
     !isHydrated || movieCatalog.isLoading || seriesCatalog.isLoading;
   const hasAnyItems = movieItems.length > 0 || seriesItems.length > 0;
+  const hasBrowseableCatalog = useMemo(
+    () => buildCatalogDiscoveryRows(addons).length > 0,
+    [addons],
+  );
   const hasLoadError =
     !hasAnyItems && (movieCatalog.isError || seriesCatalog.isError);
 
@@ -386,9 +388,9 @@ function HomeContent() {
             router.push(`/detail/${heroItem.type}/${heroItem.id}`)
           }
         />
-      ) : (
+      ) : isLoading ? (
         <HomeSkeleton />
-      )}
+      ) : null}
 
       <ContinueWatchingRow
         excludeContentKey={
@@ -412,10 +414,30 @@ function HomeContent() {
         <View style={styles.stateWrap}>
           <EmptyState
             icon="cube-outline"
-            title={t("home.empty.title")}
-            description={t("home.empty.description")}
-            actionLabel={t("home.empty.action")}
-            onAction={() => router.push("/addons")}
+            title={t(
+              addons.length === 0
+                ? "home.empty.title"
+                : hasBrowseableCatalog
+                  ? "home.empty.catalogUnavailableTitle"
+                  : "home.empty.streamOnlyTitle",
+            )}
+            description={t(
+              addons.length === 0
+                ? "home.empty.description"
+                : hasBrowseableCatalog
+                  ? "home.empty.catalogUnavailableDescription"
+                  : "home.empty.streamOnlyDescription",
+            )}
+            actionLabel={t(
+              hasBrowseableCatalog
+                ? "home.empty.retryAction"
+                : "home.empty.action",
+            )}
+            onAction={
+              hasBrowseableCatalog
+                ? handleRefresh
+                : () => router.push("/addons")
+            }
           />
         </View>
       )}
@@ -444,7 +466,11 @@ function HomeContent() {
         isLoading={isLoading}
       />
 
-      <HomeProviderRails excludeContentKeys={claimedContentKeys} />
+      <HomeProviderRails
+        excludeContentKeys={claimedContentKeys}
+        library={libraryItems}
+        continueWatching={continueWatchingItems}
+      />
     </ScrollView>
   );
 }

@@ -4,6 +4,7 @@ import {
   RefreshControl,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter, useNavigation } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
@@ -13,6 +14,11 @@ import {
   useRemoveFromLibrary,
   useRemoveBulkFromLibrary,
 } from "../../hooks/useLibrary";
+import {
+  useClearWatchHistory,
+  useRemoveWatchHistoryEntry,
+  useWatchHistory,
+} from "../../hooks/useWatchHistory";
 import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo, useEffect } from "react";
@@ -38,6 +44,7 @@ import {
   getLibraryGridMetrics,
   type LibraryFilter,
 } from "../../components/library/libraryPresentation";
+import type { WatchProgress } from "@streamer/shared";
 import { SelectionActionBar } from "../../components/ui/SelectionActionBar";
 import {
   DESTRUCTIVE_UNDO_MS,
@@ -51,8 +58,17 @@ export default function LibraryScreen() {
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const { data: items, isLoading } = useLibrary();
+  const {
+    items: historyItems,
+    isLoading: isHistoryLoading,
+    isFetchingNextPage: isFetchingMoreHistory,
+    hasNextPage: hasMoreHistory,
+    fetchNextPage: fetchMoreHistory,
+  } = useWatchHistory();
   const removeFromLibrary = useRemoveFromLibrary();
   const bulkRemoveFromLibrary = useRemoveBulkFromLibrary();
+  const removeHistoryEntry = useRemoveWatchHistoryEntry();
+  const clearWatchHistory = useClearWatchHistory();
   const { t } = useTranslation();
   const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,14 +79,15 @@ export default function LibraryScreen() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const gridItems = useMemo(
-    () => buildLibraryGridItems(items, tasks, activeFilter),
-    [activeFilter, items, tasks],
+    () => buildLibraryGridItems(items, tasks, activeFilter, historyItems),
+    [activeFilter, historyItems, items, tasks],
   );
   const gridMetrics = useMemo(
     () => getLibraryGridMetrics(gridContainerWidth, windowClass),
     [gridContainerWidth, windowClass],
   );
   const canSelect = canStartLibrarySelection(activeFilter, gridItems.length);
+  const isHistoryView = activeFilter === "history";
   const selectionActionLabel = isSelectionMode
     ? t("library.header.cancel")
     : t("library.header.select");
@@ -80,6 +97,122 @@ export default function LibraryScreen() {
     setIsSelectionMode((current) => !current);
     setSelectedIds(new Set());
   }, [canSelect, isSelectionMode]);
+
+  const handleRemoveHistoryEntry = useCallback(
+    (historyId: string, title: string) => {
+      Alert.alert(
+        t("library.history.removeTitle", {
+          defaultValue: "Remove from watch history?",
+        }),
+        t("library.history.removeMessage", {
+          title,
+          defaultValue: `Remove \"${title}\" from your watch history?`,
+        }),
+        [
+          { text: t("library.header.cancel"), style: "cancel" },
+          {
+            text: t("library.history.removeAction", {
+              defaultValue: "Remove",
+            }),
+            style: "destructive",
+            onPress: () => {
+              void removeHistoryEntry
+                .mutateAsync(historyId)
+                .then(() => {
+                  hapticSuccess();
+                  useToastStore.getState().show(
+                    t("library.history.removed", {
+                      defaultValue: "Removed from watch history.",
+                    }),
+                    "info",
+                  );
+                })
+                .catch(() => {
+                  useToastStore.getState().show(
+                    t("library.history.removeFailed", {
+                      defaultValue: "Could not remove this history entry.",
+                    }),
+                    "error",
+                  );
+                });
+            },
+          },
+        ],
+      );
+    },
+    [removeHistoryEntry, t],
+  );
+
+  const handleClearHistory = useCallback(() => {
+    if (historyItems.length === 0 || clearWatchHistory.isPending) return;
+    Alert.alert(
+      t("library.history.clearTitle", {
+        defaultValue: "Clear watch history?",
+      }),
+      t("library.history.clearMessage", {
+        defaultValue:
+          "This permanently removes all watched titles and progress from your history. Your Library and downloads stay untouched.",
+      }),
+      [
+        { text: t("library.header.cancel"), style: "cancel" },
+        {
+          text: t("library.history.clearAction", { defaultValue: "Clear" }),
+          style: "destructive",
+          onPress: () => {
+            void clearWatchHistory
+              .mutateAsync()
+              .then(() => {
+                hapticSuccess();
+                useToastStore.getState().show(
+                  t("library.history.cleared", {
+                    defaultValue: "Watch history cleared.",
+                  }),
+                  "info",
+                );
+              })
+              .catch(() => {
+                useToastStore.getState().show(
+                  t("library.history.clearFailed", {
+                    defaultValue: "Could not clear watch history.",
+                  }),
+                  "error",
+                );
+              });
+          },
+        },
+      ],
+    );
+  }, [clearWatchHistory, historyItems.length, t]);
+
+  const handleLoadMoreHistory = useCallback(() => {
+    if (isHistoryView && hasMoreHistory && !isFetchingMoreHistory) {
+      void fetchMoreHistory();
+    }
+  }, [fetchMoreHistory, hasMoreHistory, isFetchingMoreHistory, isHistoryView]);
+
+  const getHistoryMetadata = useCallback(
+    (entry: WatchProgress) => {
+      const episode =
+        entry.season != null && entry.episode != null
+          ? `S${entry.season} E${entry.episode}`
+          : null;
+      const watchedAt = new Date(entry.lastWatched);
+      const date = Number.isNaN(watchedAt.getTime())
+        ? null
+        : new Intl.DateTimeFormat(undefined, {
+            month: "short",
+            day: "numeric",
+          }).format(watchedAt);
+      const lastWatched = date
+        ? t("library.history.lastWatched", {
+            date,
+            defaultValue: `Watched ${date}`,
+          })
+        : null;
+      return [episode, lastWatched].filter(Boolean).join(" · ") || undefined;
+    },
+    [t],
+  );
 
   useEffect(() => {
     setIsSelectionMode(false);
@@ -97,29 +230,34 @@ export default function LibraryScreen() {
     if (!canSelect) setIsSelectionMode(false);
   }, [canSelect, gridItems]);
 
+  const headerAction = isHistoryView ? (
+    historyItems.length > 0 ? (
+      <AppButton
+        label={t("library.history.clearAction", { defaultValue: "Clear" })}
+        variant="danger"
+        size="small"
+        loading={clearWatchHistory.isPending}
+        onPress={handleClearHistory}
+      />
+    ) : undefined
+  ) : canSelect || isSelectionMode ? (
+    <AppButton
+      label={selectionActionLabel}
+      variant="secondary"
+      onPress={toggleSelectionMode}
+    />
+  ) : undefined;
+
   // Setup header button
   useEffect(() => {
     if (!isAuthenticated) return;
     navigation.setOptions({
       headerRight: () =>
-        canSelect || isSelectionMode ? (
-          <AppButton
-            label={selectionActionLabel}
-            variant="ghost"
-            size="small"
-            onPress={toggleSelectionMode}
-            style={styles.headerAction}
-          />
+        headerAction ? (
+          <View style={styles.headerAction}>{headerAction}</View>
         ) : null,
     });
-  }, [
-    canSelect,
-    isAuthenticated,
-    isSelectionMode,
-    navigation,
-    selectionActionLabel,
-    toggleSelectionMode,
-  ]);
+  }, [headerAction, isAuthenticated, navigation]);
 
   const handleRemove = useCallback(
     (itemId: string) => {
@@ -271,25 +409,23 @@ export default function LibraryScreen() {
                   defaultValue:
                     "Saved films, series, and everything ready to continue.",
                 })}
-                actions={
-                  canSelect || isSelectionMode ? (
-                    <AppButton
-                      label={selectionActionLabel}
-                      variant="secondary"
-                      onPress={toggleSelectionMode}
-                    />
-                  ) : undefined
-                }
+                actions={headerAction}
                 style={styles.pageHeader}
               />
             ) : null}
-            <ContinueWatchingRow />
+            {!isHistoryView ? <ContinueWatchingRow /> : null}
             <ContentTabs
               options={[
                 { label: t("library.filters.all"), value: "all" },
                 { label: t("library.filters.movies"), value: "movie" },
                 { label: t("library.filters.series"), value: "series" },
                 { label: t("library.filters.offline"), value: "offline" },
+                {
+                  label: t("library.filters.history", {
+                    defaultValue: "History",
+                  }),
+                  value: "history",
+                },
               ]}
               value={activeFilter}
               onChange={(v) => setActiveFilter(v as typeof activeFilter)}
@@ -312,27 +448,51 @@ export default function LibraryScreen() {
           </>
         }
         ListEmptyComponent={
-          <EmptyState
-            icon={
-              activeFilter === "offline"
-                ? "cloud-download-outline"
-                : "bookmarks-outline"
-            }
-            title={
-              activeFilter === "offline"
-                ? t("downloads.empty.title")
-                : t("library.empty.title")
-            }
-            description={
-              activeFilter === "all"
-                ? t("library.empty.description")
-                : activeFilter === "movie"
-                  ? t("library.empty.noMovies")
-                  : activeFilter === "series"
-                    ? t("library.empty.noSeries")
-                    : t("downloads.empty.description")
-            }
-          />
+          isHistoryView && isHistoryLoading ? (
+            <View style={styles.historyLoading}>
+              <ActivityIndicator color={colors.tint} />
+            </View>
+          ) : (
+            <EmptyState
+              icon={
+                activeFilter === "history"
+                  ? "time-outline"
+                  : activeFilter === "offline"
+                    ? "cloud-download-outline"
+                    : "bookmarks-outline"
+              }
+              title={
+                activeFilter === "history"
+                  ? t("library.history.emptyTitle", {
+                      defaultValue: "No watch history yet",
+                    })
+                  : activeFilter === "offline"
+                    ? t("downloads.empty.title")
+                    : t("library.empty.title")
+              }
+              description={
+                activeFilter === "history"
+                  ? t("library.history.emptyDescription", {
+                      defaultValue:
+                        "Titles you watch will appear here, including completed ones.",
+                    })
+                  : activeFilter === "all"
+                    ? t("library.empty.description")
+                    : activeFilter === "movie"
+                      ? t("library.empty.noMovies")
+                      : activeFilter === "series"
+                        ? t("library.empty.noSeries")
+                        : t("downloads.empty.description")
+              }
+            />
+          )
+        }
+        ListFooterComponent={
+          isHistoryView && (isHistoryLoading || isFetchingMoreHistory) ? (
+            <View style={styles.historyLoading}>
+              <ActivityIndicator color={colors.tint} />
+            </View>
+          ) : null
         }
         refreshControl={
           <RefreshControl
@@ -352,14 +512,40 @@ export default function LibraryScreen() {
           <LibraryCard
             item={item.item}
             selectionKey={item.selectionKey}
-            downloadTaskId={item.downloadTaskId}
-            onRemove={item.kind === "library" ? handleRemove : undefined}
+            downloadTaskId={
+              item.kind === "history" ? undefined : item.downloadTaskId
+            }
+            historyEntry={item.kind === "history" ? item.history : undefined}
+            metadata={
+              item.kind === "history"
+                ? getHistoryMetadata(item.history)
+                : undefined
+            }
+            onRemove={
+              item.kind === "library"
+                ? handleRemove
+                : item.kind === "history"
+                  ? (historyId) =>
+                      handleRemoveHistoryEntry(historyId, item.item.title)
+                  : undefined
+            }
+            removeId={item.kind === "history" ? item.history.id : undefined}
+            removeLabel={
+              item.kind === "history"
+                ? t("library.history.removeAction", {
+                    defaultValue: "Remove from history",
+                  })
+                : undefined
+            }
+            showRemoveButton={item.kind === "history"}
             isSelectionMode={isSelectionMode}
             isSelected={selectedIds.has(item.selectionKey)}
             onToggleSelect={toggleSelect}
             style={{ width: gridMetrics.cardWidth }}
           />
         )}
+        onEndReached={handleLoadMoreHistory}
+        onEndReachedThreshold={0.4}
       />
 
       <SelectionActionBar
@@ -399,5 +585,9 @@ const styles = StyleSheet.create({
   },
   headerAction: {
     marginRight: uiSpacing.sm,
+  },
+  historyLoading: {
+    alignItems: "center",
+    paddingVertical: uiSpacing.xl,
   },
 });

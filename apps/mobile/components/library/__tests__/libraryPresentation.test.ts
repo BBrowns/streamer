@@ -1,4 +1,4 @@
-import type { LibraryItem } from "@streamer/shared";
+import type { LibraryItem, WatchProgress } from "@streamer/shared";
 import type { DownloadTask } from "../../../stores/downloadStore";
 import {
   buildLibraryGridItems,
@@ -26,6 +26,35 @@ const libraryItems = [
     addedAt: "2026-07-15T00:00:00.000Z",
   },
 ] satisfies LibraryItem[];
+
+const historyEntries = [
+  {
+    id: "history-episode-one",
+    userId: "user-1",
+    itemId: "series-1",
+    type: "series",
+    season: 1,
+    episode: 1,
+    currentTime: 1200,
+    duration: 1200,
+    title: "Episode one",
+    poster: null,
+    lastWatched: "2026-07-18T10:00:00.000Z",
+  },
+  {
+    id: "history-episode-two",
+    userId: "user-1",
+    itemId: "series-1",
+    type: "series",
+    season: 1,
+    episode: 2,
+    currentTime: 300,
+    duration: 1200,
+    title: "Episode two",
+    poster: null,
+    lastWatched: "2026-07-17T10:00:00.000Z",
+  },
+] satisfies WatchProgress[];
 
 function offlineTask(id: string, episode: number): DownloadTask {
   return {
@@ -108,6 +137,7 @@ describe("libraryPresentation", () => {
     expect(canStartLibrarySelection("all", 0)).toBe(false);
     expect(canStartLibrarySelection("movie", 1)).toBe(true);
     expect(canStartLibrarySelection("offline", 2)).toBe(false);
+    expect(canStartLibrarySelection("history", 2)).toBe(false);
   });
 
   it("filters library types and gives offline episodes unique task keys", () => {
@@ -127,6 +157,25 @@ describe("libraryPresentation", () => {
     expect(offline.map((item) => item.selectionKey)).toEqual([
       "download:first",
       "download:second",
+    ]);
+  });
+
+  it("keeps independently watched episodes addressable by their history row id", () => {
+    const history = buildLibraryGridItems(
+      libraryItems,
+      {},
+      "history",
+      historyEntries,
+    );
+
+    expect(history.map((item) => item.key)).toEqual([
+      "history:history-episode-one",
+      "history:history-episode-two",
+    ]);
+    expect(history.every((item) => item.kind === "history")).toBe(true);
+    expect(history.map((item) => item.selectionKey)).toEqual([
+      "history:history-episode-one",
+      "history:history-episode-two",
     ]);
   });
 });

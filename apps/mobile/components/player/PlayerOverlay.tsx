@@ -1,11 +1,13 @@
 import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { CastButton, AirPlayButton } from "./castModules";
 import type { StreamStats } from "../../services/streamEngine/IStreamEngine";
 import type { Stream } from "@streamer/shared";
 import { getWebFocusStyle } from "../ui/designSystem";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { playerChrome } from "./playerChrome";
 
 interface PlayerOverlayProps {
   currentStream: Stream;
@@ -28,18 +30,21 @@ export function PlayerOverlay({
   isPiPSupported = false,
   showInfoBar = true,
 }: PlayerOverlayProps) {
-  const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       {/* Top Bar */}
       <View
+        testID="player-top-chrome"
         pointerEvents="box-none"
         style={[
           styles.topBar,
           {
-            paddingTop: Platform.OS === "web" ? 16 : 56,
+            paddingTop:
+              Platform.OS === "web" ? 16 : Math.max(insets.top + 12, 24),
           },
         ]}
       >
@@ -48,24 +53,29 @@ export function PlayerOverlay({
           style={({ pressed, hovered, focused }: any) => [
             styles.closeButton,
             { opacity: pressed ? 0.76 : 1 },
-            hovered && styles.hoveredButton,
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+            hovered &&
+              (reducedMotion
+                ? styles.hoveredButtonReducedMotion
+                : styles.hoveredButton),
+            Platform.OS === "web" &&
+              focused &&
+              getWebFocusStyle(playerChrome.focus),
           ]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel={t("player.controls.close")}
         >
-          <Ionicons name="close" size={24} color="#F4F5F7" />
+          <Ionicons name="close" size={24} color={playerChrome.text} />
         </Pressable>
         <View style={styles.topControls}>
           {CastButton && Platform.OS !== "web" && (
             <CastButton
-              style={{ width: 44, height: 44, tintColor: colors.text }}
+              style={{ width: 44, height: 44, tintColor: playerChrome.text }}
             />
           )}
           {AirPlayButton && Platform.OS === "ios" && (
             <AirPlayButton
-              style={{ width: 44, height: 44, tintColor: colors.text }}
+              style={{ width: 44, height: 44, tintColor: playerChrome.text }}
             />
           )}
           {Platform.OS === "web" && onWebCast && (
@@ -73,8 +83,11 @@ export function PlayerOverlay({
               style={({ pressed, hovered, focused }: any) => [
                 styles.iconButton,
                 { opacity: pressed ? 0.76 : 1 },
-                hovered && styles.hoveredButton,
-                focused && getWebFocusStyle(colors.focus),
+                hovered &&
+                  (reducedMotion
+                    ? styles.hoveredButtonReducedMotion
+                    : styles.hoveredButton),
+                focused && getWebFocusStyle(playerChrome.focus),
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
@@ -82,7 +95,7 @@ export function PlayerOverlay({
                 defaultValue: "Cast to device",
               })}
             >
-              <MaterialIcons name="cast" size={20} color="#F4F5F7" />
+              <MaterialIcons name="cast" size={20} color={playerChrome.text} />
             </Pressable>
           )}
           {isPiPSupported && onTogglePiP && (
@@ -90,10 +103,13 @@ export function PlayerOverlay({
               style={({ pressed, hovered, focused }: any) => [
                 styles.iconButton,
                 { opacity: pressed ? 0.76 : 1 },
-                hovered && styles.hoveredButton,
+                hovered &&
+                  (reducedMotion
+                    ? styles.hoveredButtonReducedMotion
+                    : styles.hoveredButton),
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(colors.focus),
+                  getWebFocusStyle(playerChrome.focus),
               ]}
               onPress={onTogglePiP}
               accessibilityRole="button"
@@ -102,7 +118,7 @@ export function PlayerOverlay({
               <MaterialIcons
                 name="picture-in-picture-alt"
                 size={20}
-                color="#F4F5F7"
+                color={playerChrome.text}
               />
             </Pressable>
           )}
@@ -115,13 +131,13 @@ export function PlayerOverlay({
           style={[
             styles.infoBar,
             {
-              backgroundColor: colors.surfaceOverlay,
+              backgroundColor: playerChrome.surfaceStrong,
               borderTopWidth: 1,
-              borderTopColor: colors.border,
+              borderTopColor: playerChrome.border,
             },
           ]}
         >
-          <Text style={[styles.infoTitle, { color: colors.text }]}>
+          <Text style={[styles.infoTitle, { color: playerChrome.text }]}>
             🎬{" "}
             {currentStream.title ||
               currentStream.name ||
@@ -129,7 +145,9 @@ export function PlayerOverlay({
           </Text>
           <View style={styles.infoSubRow}>
             {stats.peers > 0 && (
-              <Text style={[styles.speedText, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.speedText, { color: playerChrome.textMuted }]}
+              >
                 ↓ {(stats.speed / 1024).toFixed(0)} KB/s · {stats.peers}{" "}
                 {t("player.controls.peers")}
               </Text>
@@ -160,14 +178,15 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 4,
+    backgroundColor: playerChrome.surface,
   },
   closeButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(8,9,12,0.68)",
+    borderColor: playerChrome.border,
+    backgroundColor: playerChrome.surfaceStrong,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -177,14 +196,17 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(8,9,12,0.68)",
+    borderColor: playerChrome.border,
+    backgroundColor: playerChrome.surfaceStrong,
     justifyContent: "center",
     alignItems: "center",
   },
   hoveredButton: {
-    backgroundColor: "rgba(24,27,33,0.92)",
+    backgroundColor: playerChrome.surfaceHover,
     transform: [{ scale: 1.04 }],
+  },
+  hoveredButtonReducedMotion: {
+    backgroundColor: playerChrome.surfaceHover,
   },
   infoBar: {
     alignSelf: "center",

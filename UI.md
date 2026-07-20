@@ -42,12 +42,17 @@ Current UI phase (correctness and polish):
   expanded, and large windows adapt to a rail/sidebar.
 - Home uses one canonical `type:id` identity for hero and primary rails, with
   Continue Watching excluded from repeated recommendations. Provider rails
-  also exclude content already claimed by those primary surfaces.
-- Home owns passive discovery and provider catalog rails. `/search` owns active
-  title retrieval: recent searches, suggestions, submitted results, and result
-  filters. `/search/results` only preserves compatible links and parameters.
-  Search responses include provider provenance and partial provider-failure
-  metadata.
+  also exclude content already claimed by those primary surfaces. Its existing
+  provider rails are ordered with account-local Library and Continue Watching
+  signals; this must not rename a provider catalog or invent recommendation
+  semantics.
+- Home remains the primary personalised discovery destination. An empty
+  `/search` route may also browse up to six compatible, installed provider
+  catalogs using their declared names and types, followed by recent searches.
+  `/search` owns active title retrieval: suggestions, submitted results, and
+  result filters. `/search/results` only preserves compatible links and
+  parameters. Search responses include provider provenance and partial
+  provider-failure metadata.
 - Settings uses a compact category overview and `/settings/[section]` detail
   routes. A true list-detail layout appears only in the large window class.
 - Home, Detail, Library, Downloads, auth/onboarding, player sheets, Search, and
@@ -96,6 +101,7 @@ Core Obsidian primitives:
 - `FilterSheet`
 - `ContentTabs`
 - `SearchField`
+- `MediaArtwork`
 - `StatusPill`
 - `PlaybackStatusPanel`
 - `EmptyState`
@@ -116,6 +122,9 @@ Shared primitives in production code:
 - `components/ui/SearchField.tsx` for the canonical search icon, focus line,
   loading, clear action, and inline keyboard shortcut used by Search and the
   Command Palette.
+- `components/ui/MediaArtwork.tsx` for resilient remote poster, backdrop, and
+  logo rendering: cached `expo-image` loading, recycled-source protection,
+  reduced-motion-aware transitions, and one token-based fallback treatment.
 - `components/ui/ContentTabs.tsx` for quiet peer-view navigation such as All,
   Movies, and Series. It intentionally uses text and a selected underline
   instead of filter pills.
@@ -134,7 +143,8 @@ adding another local button, switch, card, input, or page-layout style.
 
 The detail-screen action hierarchy now uses `DetailActionPanel` to keep **Play**
 primary for movies, keep series playback on episode rows, and keep Download,
-**Cast to device**, and **Add to Library** as secondary actions.
+**Cast to device**, **Watch trailer** (when safely declared by a provider), and
+**Add to Library** as secondary actions.
 
 The downloads queue now uses `AppButton`, `Surface`, `StatusPill`, and
 `SelectionActionBar` for queue cards, deferred bulk deletion, summary metrics,
@@ -348,6 +358,18 @@ at the top of the content column and keeps it left-aligned with the page copy;
 compact variants. It renders a restrained divided list rather than a card or
 chip cloud and is shared by Search and the Command Palette.
 
+### 4.6.1 `MediaArtwork`
+
+`MediaArtwork` is the shared remote-artwork boundary for `PosterCard` and the
+detail layouts. It accepts poster, backdrop, and logo variants and owns URI
+normalisation, `expo-image` memory/disk caching, recycling keys, source-change
+loading state, reduced-motion-aware transitions, and a quiet title/icon
+fallback. Use it instead of adding another per-screen `Image` error handler.
+
+It does not convert provider artwork into a recommendation signal or retain
+provider URLs outside the rendered view. A fallback means the image was absent
+or failed to load; it is not evidence that the title itself is unavailable.
+
 ### 4.7 `OfflineBanner`
 
 Polls `expo-network` for connectivity and shows a persistent top banner when offline. Displayed at the top of the `ListHeaderComponent` in the home screen's `FlatList`.
@@ -370,11 +392,13 @@ after deliberate arrow-key navigation; otherwise it opens the canonical
 `app/(tabs)/search.tsx` is the single `/search` destination.
 `/search/results?q=...` remains a compatibility route for existing callers and
 older result links. The old Discover tab redirects to `/search`; Home remains
-the destination for passive catalog discovery.
+the primary personalised discovery destination.
 The screen provides:
 
 - a sticky, editable, left-aligned search input at the top of every window class
-- a restrained recent-search list without duplicated Home catalog rails
+- an empty-query discovery landing with compatible installed-provider catalogs,
+  their declared names, a compact **Content type** selector, and recent searches
+  beneath it; it never fabricates Popular, New, or availability rails
 - debounced poster/title suggestions from two characters, capped at six by the
   server, plus an explicit all-results row
 - cancellable suggestion and result requests with separate timeout budgets
@@ -388,7 +412,13 @@ The screen provides:
 - a fixed filter sidebar beside results only in the large window class
 - a responsive 2:3 poster grid for submitted results
 
-`/api/search` validates query, type, mode, limit, and cursor. It fans out only to
+The empty-query browse landing reads add-on manifest catalog metadata locally;
+it shows only movie/series catalogs that the current catalog endpoint can fetch
+without unspecified required extras and whose provider does not still require
+configuration. Stream-only and setup-required providers remain visible in
+Add-ons but do not create empty browse rails. The landing is capped at six rows
+and preserves installed-provider names. `/api/search` validates query, type, mode, limit, and
+cursor. It fans out only to
 movie/series catalog definitions that explicitly declare the Stremio `search`
 extra, ranks normalized title matches deterministically, merges provider
 provenance, and returns a bounded page. Type is a server search parameter;
@@ -419,8 +449,10 @@ The card uses `aspectRatio: 2/3` (standard movie poster ratio) to ensure consist
 unpredictable dimensions and CDN availability. `CatalogItemCard` now trims
 poster URLs, resets image-error state when a refetch supplies a poster, uses
 `expo-image` memory/disk caching, and falls back to a title card on image
-failure. If popular rails show placeholders, debug whether the add-on catalog
-is returning empty/invalid poster URLs before changing the card UI.
+failure. `PosterCard` and both detail layouts use the shared `MediaArtwork`
+boundary for the same class of failure. If provider-named rails show
+placeholders, debug whether the add-on catalog is returning empty or invalid
+poster URLs before changing the card UI.
 
 ### 5.2 `ContinueWatchingRow`
 
@@ -431,6 +463,12 @@ label when available, remaining time, progress percentage, a primary Resume
 action, and a separate remove action. The remove action calls
 `DELETE /api/library/progress` and only removes watch progress; it does not
 delete the title from the user's library.
+
+Resume is not a navigation shortcut: it creates the existing planner/session
+flow and adds a runtime-only resume intent with the saved position before
+opening the player. Failed planning remains visible as recoverable feedback;
+the card's separate detail action still opens the title rather than promising
+direct playback.
 
 Avoid nesting `Pressable` or `AppButton` inside another `Pressable` in this
 component. React Native Web renders those as nested `<button>` elements and
@@ -474,6 +512,14 @@ PlayerScreen (app/player.tsx)
 ├── RemoteControlBar                — Chromecast / AirPlay remote UI (when casting)
 └── DesktopCastModal                — device selector modal for web/Electron
 ```
+
+All of this playback chrome uses the dedicated `components/player/playerChrome.ts`
+cinema-dark palette. It deliberately stays dark when the application is in
+warm-neutral light mode, because arbitrary video frames require stable contrast.
+Do not pull the normal page surface or primary-action colours into player
+controls. The close bar, timeline tray, Settings sheet, resume prompt, and
+next-episode prompt share that palette, visible keyboard focus, safe-area
+spacing, and reduced-motion behaviour.
 
 ### 6.2 `PlayerOverlay`
 
@@ -600,6 +646,13 @@ For series, it additionally renders the `EpisodeSelector` component to let the u
 resolves only the selected source, and passes remaining planned fallbacks into
 `playerStore`.
 
+**Provider-declared trailers:** `MetaDetail.trailers` is optional provider
+metadata. A secondary **Watch trailer** action appears only when
+`getSafeTrailerUrl()` accepts a YouTube video ID or an HTTPS URL on an
+allowlisted YouTube host. Opening it uses the platform link handler and shows
+recoverable feedback if no handler is available. Do not render arbitrary
+provider URLs or treat a missing trailer as a title/playback failure.
+
 **Advanced source display:** `More Sources` is closed and unplanned by default.
 Expanding it lazy-loads one consumer-facing `SourceChoice` list with reliable
 quality, size, language, and compatibility status. Choosing a candidate sends
@@ -623,6 +676,25 @@ or schema failure produces the recoverable
 `METADATA_TEMPORARILY_UNAVAILABLE` 503 response. A valid provider response still
 wins during partial failure. This prevents an add-on outage from being shown as
 if the title did not exist.
+
+### 7.1 Personal activity: Library, history, and notifications
+
+Library remains a record of saved membership, not a record of every title a
+person has watched. Its **History** tab is a separate, cursor-paginated view of
+watch-progress records, including completed movies and episodes. History
+entries use their own stable identity so episodes from the same series can be
+removed independently. Removing one entry or clearing history deletes only
+watch progress after confirmation; it never removes Library membership or
+offline files. The normal selection bar is unavailable in History, and
+Continue Watching is hidden there to keep the two concepts distinct.
+
+The notification route is a personal inbox rather than a toast archive. It
+groups the server's newest-first, bounded notification list into Today, This
+week, and Earlier; unread rows can be marked read individually, and the header
+can mark all unread rows read. Both actions optimistically update the local
+query cache, restore it after an error, and expose a retry state. Notifications
+currently have no trusted content target, so a row changes read state only; do
+not invent a deep link from its message text.
 
 ---
 
@@ -714,16 +786,17 @@ All server communication goes through **TanStack Query (React Query) v5** using 
 
 Each domain has a custom hook:
 
-| Hook                    | Query key               | Purpose                            |
-| ----------------------- | ----------------------- | ---------------------------------- |
-| `useCatalog(type)`      | `["catalog", type]`     | Fetches the main catalog grid      |
-| `useMeta(type, id)`     | `["meta", type, id]`    | Fetches detail metadata            |
-| `useStreams(type, id)`  | `["streams", type, id]` | Fetches available streams          |
-| `useLibrary()`          | `["library"]`           | User's saved items                 |
-| `useContinueWatching()` | `["continue-watching"]` | In-progress items (watch progress) |
-| `useAddons()`           | `["addons"]`            | User's installed add-ons           |
-| `useNotifications()`    | `["notifications"]`     | In-app notifications               |
-| `useSessions()`         | `["sessions"]`          | Active device sessions             |
+| Hook                    | Query key                     | Purpose                            |
+| ----------------------- | ----------------------------- | ---------------------------------- |
+| `useCatalog(type)`      | `["catalog", type]`           | Fetches the main catalog grid      |
+| `useMeta(type, id)`     | `["meta", type, id]`          | Fetches detail metadata            |
+| `useStreams(type, id)`  | `["streams", type, id]`       | Fetches available streams          |
+| `useLibrary()`          | `["library"]`                 | User's saved items                 |
+| `useContinueWatching()` | `["progress", "continue"]`    | In-progress items (watch progress) |
+| `useWatchHistory()`     | `["progress", "history", 24]` | Cursor-paginated personal history  |
+| `useAddons()`           | `["addons", userId]`          | Signed-in user's installed add-ons |
+| `useNotifications()`    | `["notifications"]`           | In-app notifications               |
+| `useSessions()`         | `["sessions"]`                | Active device sessions             |
 
 **Authentication interception:** `services/api.ts` has an Axios response interceptor that catches `401` responses, attempts a token refresh via `POST /api/auth/refresh`, and retries the original request. If the refresh fails (expired or revoked refresh token), the user is logged out. **Intricacy:** This interceptor uses a `Promise`-based queue to prevent multiple concurrent refresh attempts when several requests 401 simultaneously — without this, the refresh endpoint would be called N times in parallel and all but one would fail.
 
@@ -735,9 +808,14 @@ Each domain has a custom hook:
 
 ### High Priority
 
-#### 1. Image Fallback for Catalog Cards
+#### 1. Artwork Coverage and Native Performance
 
-`CatalogItemCard` and the detail screen poster render `<Image source={{ uri: poster }}>` with no `onError` handler. When an add-on returns a broken or expired poster URL (common with some Stremio add-ons), the result is a blank or broken image. Add an `onError` → replace `source` with a local placeholder asset (e.g. a blurred branded card background). A `useState` pattern switching between the remote URI and a `require('../assets/placeholder.png')` source handles this cleanly.
+`MediaArtwork` now gives `PosterCard` and detail posters/backdrops one safe
+remote-artwork loading and fallback contract. The next step is to migrate any
+remaining standalone media image renderer only when it has the same remote
+failure/recycling requirements, then profile long native rails before adding
+more caching or placeholder assets. Do not replace a failed provider image with
+an unrelated title image or use it as a content-availability signal.
 
 #### 2. Pagination / Infinite Scroll in Catalog
 

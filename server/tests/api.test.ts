@@ -183,6 +183,29 @@ describe("Auth Module", () => {
       expect(res.body.tokens.accessToken).toBeDefined();
     });
 
+    it("returns a retryable 503 when the database is temporarily unavailable", async () => {
+      (prisma.user.findUnique as any).mockRejectedValue(
+        Object.assign(
+          new Error("Can't reach database server at `127.0.0.1:5432`"),
+          {
+            name: "PrismaClientInitializationError",
+            errorCode: "P1001",
+          },
+        ),
+      );
+
+      const res = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "test@example.com", password: "correctpassword" });
+
+      expect(res.status).toBe(503);
+      expect(res.body).toMatchObject({
+        error: "Database temporarily unavailable. Please try again shortly.",
+        code: "DATABASE_UNAVAILABLE",
+      });
+      expect(res.headers["retry-after"]).toBe("5");
+    });
+
     it("should return 401 for wrong password", async () => {
       const passwordHash = await bcrypt.hash("correctpassword", 12);
       (prisma.user.findUnique as any).mockResolvedValue({

@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +26,8 @@ import {
 } from "../ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { MediaRail } from "../ui/MediaRail";
+import { playBest } from "../../services/playback/PlaybackOrchestrator";
+import { usePlayerStore } from "../../stores/playerStore";
 
 type ContinueWatchingRowProps = {
   showEmptyState?: boolean;
@@ -77,6 +79,8 @@ function ContinueWatchingCard({
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const setSessionStream = usePlayerStore((state) => state.setSessionStream);
+  const [isResuming, setIsResuming] = useState(false);
   const { isExpanded, isLarge } = useWindowClass();
   const isDesktop = isExpanded || isLarge;
   const cardWidth = isDesktop ? 360 : 286;
@@ -92,11 +96,52 @@ function ContinueWatchingCard({
   const handleOpenDetails = () => {
     router.push(`/detail/${item.type}/${item.itemId}`);
   };
+  const handleResume = useCallback(async () => {
+    if (isResuming) return;
+    setIsResuming(true);
+    try {
+      const result = await playBest({
+        type: item.type,
+        id: item.itemId,
+        title: item.title,
+        poster: item.poster ?? undefined,
+        season: item.season ?? undefined,
+        episode: item.episode ?? undefined,
+      });
+
+      if (!result.ok) {
+        useToastStore.getState().show(result.error.message, "error");
+        return;
+      }
+
+      setSessionStream(
+        result.stream,
+        result.mediaInfo,
+        result.sessionId,
+        result.candidateId,
+        null,
+        null,
+        { type: "resume", positionSeconds: item.currentTime },
+      );
+      router.push("/player");
+    } catch (error: any) {
+      useToastStore.getState().show(
+        error?.message ||
+          t("detail.errors.notPlayable", {
+            defaultValue: "Playback is unavailable right now.",
+          }),
+        "error",
+      );
+    } finally {
+      setIsResuming(false);
+    }
+  }, [isResuming, item, router, setSessionStream, t]);
   const { isKeyboardFocused, webPressableProps } =
     useWebPressableActivation(handleOpenDetails);
   const detailsLabel = t("library.actions.viewDetails", {
     defaultValue: "View Details",
   });
+  const resumeLabel = t("common.actions.resume", { defaultValue: "Resume" });
   const detailsAccessibilityLabel = `${detailsLabel}: ${item.title}`;
 
   return (
@@ -176,13 +221,39 @@ function ContinueWatchingCard({
       </Pressable>
       <View style={styles.actionRow}>
         <AppButton
-          label={detailsLabel}
-          accessibilityLabel={detailsAccessibilityLabel}
-          icon="arrow-forward"
+          label={resumeLabel}
+          accessibilityLabel={t("home.continueWatching.resumeA11y", {
+            title: item.title,
+            minutes: remainingMinutes,
+          })}
+          icon="play"
           size="small"
-          variant="secondary"
-          onPress={handleOpenDetails}
+          variant="primary"
+          loading={isResuming}
+          disabled={isResuming}
+          onPress={() => void handleResume()}
         />
+        <Pressable
+          onPress={handleOpenDetails}
+          accessibilityRole="button"
+          accessibilityLabel={detailsAccessibilityLabel}
+          style={({ pressed, hovered, focused }: any) => [
+            styles.detailsButton,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              opacity: pressed ? 0.72 : 1,
+            },
+            Platform.OS === "web" && hovered && { borderColor: colors.tint },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </Pressable>
         <Pressable
           onPress={() => onRemove(item.itemId)}
           disabled={isRemoving}
@@ -392,12 +463,20 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     gap: uiSpacing.sm,
     paddingHorizontal: uiSpacing.md,
     paddingBottom: uiSpacing.md,
   },
   iconButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderWidth: 1,
+    borderRadius: uiRadii.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailsButton: {
     width: uiTouchTarget,
     height: uiTouchTarget,
     borderWidth: 1,

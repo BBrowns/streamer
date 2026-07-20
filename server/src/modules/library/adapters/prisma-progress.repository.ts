@@ -29,6 +29,42 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
     }));
   }
 
+  async findHistoryByUser(
+    userId: string,
+    options: { limit: number; cursor?: { lastWatched: Date; id: string } },
+  ): Promise<WatchProgressRecord[]> {
+    const cursorFilter = options.cursor
+      ? {
+          OR: [
+            { lastWatched: { lt: options.cursor.lastWatched } },
+            {
+              lastWatched: options.cursor.lastWatched,
+              id: { lt: options.cursor.id },
+            },
+          ],
+        }
+      : undefined;
+    const records = await prisma.watchProgress.findMany({
+      where: { userId, ...(cursorFilter ?? {}) },
+      orderBy: [{ lastWatched: "desc" }, { id: "desc" }],
+      take: options.limit,
+    });
+
+    return records.map((r: any) => ({
+      id: r.id,
+      userId: r.userId,
+      type: r.type,
+      itemId: r.itemId,
+      season: r.season,
+      episode: r.episode,
+      currentTime: r.currentTime,
+      duration: r.duration,
+      title: r.title,
+      poster: r.poster,
+      lastWatched: r.lastWatched,
+    }));
+  }
+
   async upsert(data: {
     userId: string;
     type: ContentType;
@@ -88,5 +124,16 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
     await prisma.watchProgress.deleteMany({
       where: { userId, itemId },
     });
+  }
+
+  async deleteById(userId: string, historyId: string): Promise<boolean> {
+    const result = await prisma.watchProgress.deleteMany({
+      where: { userId, id: historyId },
+    });
+    return result.count === 1;
+  }
+
+  async deleteAll(userId: string): Promise<void> {
+    await prisma.watchProgress.deleteMany({ where: { userId } });
   }
 }

@@ -34,9 +34,11 @@
     },
     "discovery": {
       "title": "Blader door je catalogi",
-      "subtitle": "Nieuwe keuzes uit je geïnstalleerde add-ons.",
+      "subtitle": "Titels uit je geïnstalleerde add-ons.",
       "noProvidersTitle": "Voeg een contentbron toe",
       "noProvidersDescription": "Installeer een add-on om films en series te zoeken en ontdekken.",
+      "noBrowseableCatalogsTitle": "Voeg een catalogus toe om titels te bekijken",
+      "noBrowseableCatalogsDescription": "Je geïnstalleerde add-ons bieden afspeelopties, maar geen enkele biedt een film- of seriecatalogus. Voeg Cinemeta of een andere catalogus-add-on toe om titels te bekijken.",
       "noCatalogsTitle": "Geen catalogi voor deze weergave",
       "noCatalogsDescription": "Je geïnstalleerde add-ons bieden geen catalogi voor het geselecteerde titeltype.",
       "catalogErrorTitle": "Catalogus niet beschikbaar",
@@ -160,6 +162,10 @@
     "empty": {
       "title": "Geen content gevonden",
       "description": "Installeer enkele add-ons in Instellingen om te beginnen met browsen.",
+      "streamOnlyTitle": "Voeg een catalogus toe om titels te bekijken",
+      "streamOnlyDescription": "Je geïnstalleerde add-ons bieden afspeelopties, maar geen enkele biedt een film- of seriecatalogus. Voeg een catalogus-add-on toe om titels te ontdekken.",
+      "catalogUnavailableTitle": "Nog geen titels beschikbaar",
+      "catalogUnavailableDescription": "Je catalogusbron is geïnstalleerd, maar heeft nog geen titels teruggegeven. Vernieuw je catalogi of probeer het straks opnieuw.",
       "action": "Beheer add-ons",
       "retryTitle": "Home kon niet laden",
       "retryDescription": "Ververs je catalogi of controleer je verbinding.",
@@ -199,7 +205,8 @@
       "all": "Alle",
       "movies": "Films",
       "series": "Series",
-      "offline": "Offline"
+      "offline": "Offline",
+      "history": "Geschiedenis"
     },
     "empty": {
       "title": "Nog geen items",
@@ -232,6 +239,21 @@
       "restore": "Herstellen",
       "bulkRemoved": "{{count}} titels uit de bibliotheek verwijderd",
       "bulkRemoved_one": "1 titel uit de bibliotheek verwijderd"
+    },
+    "history": {
+      "emptyTitle": "Nog geen kijkgeschiedenis",
+      "emptyDescription": "Titels die je bekijkt verschijnen hier, ook als je ze al hebt afgerond.",
+      "lastWatched": "Bekeken op {{date}}",
+      "clearTitle": "Kijkgeschiedenis wissen?",
+      "clearMessage": "Hiermee verwijder je alle bekeken titels en voortgang permanent uit je geschiedenis. Je bibliotheek en downloads blijven behouden.",
+      "clearAction": "Geschiedenis wissen",
+      "clearFailed": "De kijkgeschiedenis kon niet worden gewist.",
+      "cleared": "Kijkgeschiedenis gewist.",
+      "removeTitle": "Uit kijkgeschiedenis verwijderen?",
+      "removeMessage": "\"{{title}}\" uit je kijkgeschiedenis verwijderen?",
+      "removeAction": "Uit geschiedenis verwijderen",
+      "removeFailed": "Dit geschiedenisitem kon niet worden verwijderd.",
+      "removed": "Uit kijkgeschiedenis verwijderd."
     }
   },
   "downloads": {
@@ -779,6 +801,7 @@
       "button": "Installeren",
       "success": "Add-on geïnstalleerd!",
       "successDetail": "Nieuwe inhoud verschijnt in Ontdekken.",
+      "configurationRequiredDetail": "Deze bron is toegevoegd, maar moet nog worden ingesteld voordat er content beschikbaar is.",
       "error": "Installatie mislukt"
     },
     "installed": {
@@ -787,6 +810,7 @@
       "remove": "Verwijder",
       "cancel": "Annuleren",
       "confirmRemove": "\"{{name}}\" verwijderen?",
+      "configurationRequired": "Instellen vereist voordat deze bron content kan bieden",
       "removeError": "Deze add-on kon niet worden verwijderd. Probeer het opnieuw."
     },
     "empty": {
@@ -831,7 +855,9 @@
       "playBest": "Beste afspelen",
       "preparing": "Voorbereiden",
       "inLibrary": "In bibliotheek",
-      "add": "Toevoegen"
+      "add": "Toevoegen",
+      "watchTrailer": "Trailer bekijken",
+      "trailerUnavailable": "De trailer kon niet op dit apparaat worden geopend."
     },
     "sources": {
       "episodes": "Afleveringen",
@@ -1186,7 +1212,29 @@
   },
   "notifications": {
     "title": "Notificaties",
+    "eyebrow": "Inbox",
+    "unreadCount_one": "{{count}} ongelezen notificatie",
+    "unreadCount_other": "{{count}} ongelezen notificaties",
+    "allCaughtUpDescription": "Je bent helemaal bij.",
     "empty": "Geen notificaties",
+    "emptyTitle": "Je bent helemaal bij",
+    "emptyDescription": "Downloads en accountupdates verschijnen hier.",
+    "loading": "Notificaties laden",
+    "errorTitle": "Notificaties konden niet laden",
+    "errorDescription": "Controleer je verbinding en probeer het opnieuw.",
+    "unread": "Ongelezen",
+    "markAllRead": "Alles als gelezen markeren",
+    "markAllReadA11y": "Markeer alle {{count}} ongelezen notificaties als gelezen",
+    "markAllReadHint": "Markeert elke ongelezen notificatie als gelezen.",
+    "markAllReadError": "Alle notificaties konden niet als gelezen worden gemarkeerd.",
+    "markAsReadA11y": "Markeer {{title}} als gelezen",
+    "markAsReadHint": "Markeert deze notificatie als gelezen.",
+    "markReadError": "Deze notificatie kon niet worden bijgewerkt.",
+    "groups": {
+      "today": "Vandaag",
+      "thisWeek": "Deze week",
+      "earlier": "Eerder"
+    },
     "dismiss": "Notificatie sluiten"
   },
   "biometricLock": {

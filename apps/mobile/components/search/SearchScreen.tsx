@@ -52,7 +52,7 @@ import { getWebFocusStyle } from "../ui/designSystem";
 import { PageLayout } from "../ui/PageLayout";
 import { SearchField } from "../ui/SearchField";
 import { FilterSheet, FilterSidebar } from "./SearchFilters";
-import { RecentSearches } from "./RecentSearches";
+import { SearchDiscovery } from "./SearchDiscovery";
 import { SearchResultCard } from "./SearchResultCard";
 import { SearchSuggestions } from "./SearchSuggestions";
 
@@ -591,18 +591,17 @@ export function SearchScreen() {
       >
         <ContentBoundary padded={false}>
           {!submittedQuery ? (
-            <View style={styles.landing}>
-              <RecentSearches
-                items={searchController.recentSearches}
-                onSelect={(query) => void submitSearch(query)}
-                onRemove={(query) =>
-                  void searchController.removeRecentSearch(query)
-                }
-                onClear={() => void searchController.clearRecentSearches()}
-                style={styles.recentSection}
-                showEmpty
-              />
-            </View>
+            <SearchDiscovery
+              recentSearches={searchController.recentSearches}
+              onSelectRecentSearch={(query) => void submitSearch(query)}
+              onRemoveRecentSearch={(query) =>
+                void searchController.removeRecentSearch(query)
+              }
+              onClearRecentSearches={() =>
+                void searchController.clearRecentSearches()
+              }
+              onManageAddons={() => router.push("/addons")}
+            />
           ) : (
             <View style={styles.resultsPage}>
               <View style={styles.resultsHeading}>
@@ -997,8 +996,6 @@ const styles = StyleSheet.create({
   } as any,
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 64 },
-  landing: { gap: 24 },
-  recentSection: { paddingHorizontal: 24, marginTop: 4 },
   resultsPage: { paddingHorizontal: 24 },
   toolbar: {
     minHeight: 52,

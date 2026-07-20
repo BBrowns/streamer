@@ -35,12 +35,9 @@ streamer/
 
 - **Node.js 24.18 LTS** (see `.nvmrc`; Node 25 is not supported)
 - **npm 11.18**
-- **PostgreSQL** — easiest via Docker:
-  ```bash
-  docker run --name streamer-db \
-    -e POSTGRES_PASSWORD=password \
-    -p 5432:5432 -d postgres
-  ```
+- **Docker Desktop** (recommended for local PostgreSQL). The repository's
+  Compose configuration owns the development database; start only that service
+  with `npm run dev:db`.
 - [k6](https://k6.io/docs/get-started/installation/) _(optional — load testing only)_
 
 ---
@@ -71,17 +68,34 @@ cp server/.env.example server/.env
 Edit `server/.env`:
 
 ```env
-DATABASE_URL=postgresql://postgres:password@localhost:5432/streamer
+DATABASE_URL=postgresql://streamer:streamer_dev@127.0.0.1:5432/streamer_db?schema=public
 JWT_SECRET=<a-long-random-secret-minimum-32-chars>
 ```
 
-### 3. Initialise the database
+### 3. Start the local database
+
+```bash
+npm run dev:db
+```
+
+This starts and waits for Compose's `db` service only. It does not start the
+containerised API service and therefore cannot conflict with local
+`npm run dev:server` on port 3001. It also never runs schema migrations.
+
+`npm run dev:server` performs the same preflight for a loopback
+`DATABASE_URL`: if PostgreSQL is unavailable, it starts only Compose's `db`
+service and waits for it. Use a separately managed local database by adding
+`STREAMER_DEV_DATABASE=external` to your shell or `server/.env`; the launcher
+will then never start Docker for that database. Remote database URLs are never
+Docker-managed.
+
+### 4. Initialise the database
 
 ```bash
 npm run db:push --workspace=server
 ```
 
-### 4. Start everything
+### 5. Start everything
 
 ```bash
 npm run dev
@@ -92,6 +106,8 @@ Or start services individually:
 
 ```bash
 npm run dev:server          # API server only — http://localhost:3001
+npm run dev:db              # Compose PostgreSQL only — waits until ready
+npm run dev:db:status       # Read-only Compose DB status
 npm run dev:stream-server   # P2P daemon only  — http://localhost:11470
 npm run dev:mobile          # Expo client only — press 'i' (iOS), 'a' (Android), 'w' (Web)
 npm run dev:desktop         # Electron shell   — requires mobile web running on :8081 first
@@ -325,6 +341,8 @@ Do not run broad temp-folder deletes such as `rm -rf /private/tmp/*`.
 npm run typecheck:all        # TypeScript across all workspaces
 npm run lint                 # ESLint (Turbo)
 npm run format               # Prettier (all files)
+npm run dev:db               # Start only the local Compose PostgreSQL service
+npm run dev:db:status        # Show the local Compose PostgreSQL service status
 npm run db:studio --workspace=server   # Prisma Studio (DB GUI)
 npm run db:seed --workspace=server     # Seed the database
 npm run package:dir --workspace=@streamer/desktop    # Build unpacked desktop app

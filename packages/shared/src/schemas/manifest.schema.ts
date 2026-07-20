@@ -22,6 +22,10 @@ export const resourceDefinitionSchema = z.union([
   }),
 ]);
 
+export const addonBehaviorHintsSchema = z.object({
+  configurationRequired: z.boolean().optional(),
+});
+
 export const addonManifestSchema = z.object({
   id: z.string().min(1),
   version: z.string().regex(/^\d+\.\d+\.\d+/, "Must be semver"),
@@ -32,6 +36,7 @@ export const addonManifestSchema = z.object({
   types: z.array(z.string()).min(1),
   catalogs: z.array(catalogDefinitionSchema),
   idPrefixes: z.array(z.string()).optional(),
+  behaviorHints: addonBehaviorHintsSchema.optional(),
 });
 
 export type AddonManifestInput = z.infer<typeof addonManifestSchema>;

@@ -20,6 +20,8 @@ import {
   type MetaDetail,
   type Stream,
   type SearchResponse,
+  requiresAddonConfiguration,
+  supportsCatalogType,
 } from "@streamer/shared";
 import { z } from "zod";
 import { StreamParser } from "./domain/stream-parser.js";
@@ -268,10 +270,23 @@ const searchOutboundBudget = new SearchOutboundBudget(
 
 const boundedOptionalShortStringFromPrimitive = z
   .union([z.string().max(MAX_SEARCH_SHORT_TEXT_LENGTH), z.number()])
-  .optional()
+  .nullish()
   .transform((value) =>
     value === undefined || value === null ? undefined : String(value),
   );
+
+const boundedOptionalString = (maxLength: number) =>
+  z
+    .string()
+    .max(maxLength)
+    .nullish()
+    .transform((value) => value ?? undefined);
+
+const boundedOptionalStringArray = z
+  .array(z.string().max(MAX_SEARCH_ALIAS_LENGTH))
+  .max(MAX_SEARCH_TITLE_ALIASES)
+  .nullish()
+  .transform((value) => value ?? undefined);
 
 const boundedSearchMetaPreviewSchema = metaPreviewSchema.extend({
   id: z.string().min(1).max(MAX_SEARCH_ID_LENGTH),
@@ -282,24 +297,33 @@ const boundedSearchMetaPreviewSchema = metaPreviewSchema.extend({
     .max(MAX_SEARCH_URL_LENGTH)
     .nullish()
     .transform((value) => value ?? ""),
-  description: z.string().max(MAX_SEARCH_DESCRIPTION_LENGTH).optional(),
+  description: boundedOptionalString(MAX_SEARCH_DESCRIPTION_LENGTH),
   releaseInfo: boundedOptionalShortStringFromPrimitive,
-  released: z.string().max(MAX_SEARCH_SHORT_TEXT_LENGTH).optional(),
+  released: boundedOptionalString(MAX_SEARCH_SHORT_TEXT_LENGTH),
   imdbRating: boundedOptionalShortStringFromPrimitive,
-  aliases: z
-    .array(z.string().max(MAX_SEARCH_ALIAS_LENGTH))
-    .max(MAX_SEARCH_TITLE_ALIASES)
-    .optional(),
-  alternativeTitles: z
-    .array(z.string().max(MAX_SEARCH_ALIAS_LENGTH))
-    .max(MAX_SEARCH_TITLE_ALIASES)
-    .optional(),
+  aliases: boundedOptionalStringArray,
+  alternativeTitles: boundedOptionalStringArray,
 });
 
+function normalizeBoundedSearchMetas(value: unknown) {
+  if (!Array.isArray(value)) return value;
+
+  const metas = value.flatMap((entry) => {
+    const parsed = boundedSearchMetaPreviewSchema.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+  // A complete non-empty malformed response is still a provider failure. This
+  // preserves existing partial-failure semantics while one bad title can no
+  // longer discard the rest of a provider catalog or trip its circuit.
+  return metas.length > 0 || value.length === 0 ? metas : value;
+}
+
 const strictSearchCatalogResponseSchema = z.object({
-  metas: z
-    .array(boundedSearchMetaPreviewSchema)
-    .max(MAX_RESULTS_PER_SEARCH_ATTEMPT),
+  metas: z.preprocess(
+    normalizeBoundedSearchMetas,
+    z.array(boundedSearchMetaPreviewSchema).max(MAX_RESULTS_PER_SEARCH_ATTEMPT),
+  ),
 });
 
 function boundSearchString(value: unknown, maxLength: number) {
@@ -1352,6 +1376,12 @@ export class AggregatorService {
     resource: string,
     contentType: string,
   ): boolean {
+    if (requiresAddonConfiguration(manifest)) return false;
+
+    if (resource === "catalog") {
+      return supportsCatalogType(manifest, contentType);
+    }
+
     const hasType = manifest.types.includes(contentType);
     const hasResource = manifest.resources.some((r) => {
       if (typeof r === "string") return r === resource;
@@ -1362,7 +1392,9 @@ export class AggregatorService {
 
   /** Find the first catalog ID for a given content type */
   private findCatalogId(manifest: AddonManifest, type: string): string | null {
-    const catalog = manifest.catalogs.find((c) => c.type === type);
+    const catalog = manifest.catalogs.find(
+      (c) => c.type === type && c.id.trim().length > 0,
+    );
     return catalog?.id ?? null;
   }
 }

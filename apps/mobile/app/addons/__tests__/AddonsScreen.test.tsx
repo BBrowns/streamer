@@ -142,4 +142,40 @@ describe("Add-ons removal", () => {
     screen.unmount();
     queryClient.clear();
   });
+
+  it("labels an installed source that needs setup before it can provide content", async () => {
+    (api.get as jest.Mock).mockResolvedValue({
+      data: {
+        addons: [
+          {
+            ...installedAddon,
+            manifest: {
+              ...installedAddon.manifest,
+              behaviorHints: { configurationRequired: true },
+            },
+          },
+        ],
+      },
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const screen = render(
+      <QueryClientProvider client={queryClient}>
+        <AddonsScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("addons.installed.configurationRequired"),
+      ).toBeTruthy(),
+    );
+
+    screen.unmount();
+    queryClient.clear();
+  });
 });

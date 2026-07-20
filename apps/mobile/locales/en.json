@@ -34,9 +34,11 @@
     },
     "discovery": {
       "title": "Browse your catalogs",
-      "subtitle": "Fresh picks from your installed add-ons.",
+      "subtitle": "Titles from your installed add-ons.",
       "noProvidersTitle": "Add a content source",
       "noProvidersDescription": "Install an add-on to search and browse movies and series.",
+      "noBrowseableCatalogsTitle": "Add a catalog to browse titles",
+      "noBrowseableCatalogsDescription": "Your installed add-ons provide viewing options, but none provides a movie or series catalog. Add Cinemeta or another catalog add-on to browse titles.",
       "noCatalogsTitle": "No catalogs for this view",
       "noCatalogsDescription": "Your installed add-ons do not offer catalogs for the selected title type.",
       "catalogErrorTitle": "Catalog unavailable",
@@ -160,6 +162,10 @@
     "empty": {
       "title": "No Content Found",
       "description": "Install some add-ons in Settings to start browsing.",
+      "streamOnlyTitle": "Add a catalog to browse titles",
+      "streamOnlyDescription": "Your installed add-ons provide viewing options, but none provides a movie or series catalog. Add a catalog add-on to discover titles.",
+      "catalogUnavailableTitle": "No titles available yet",
+      "catalogUnavailableDescription": "Your catalog source is installed, but it has not returned any titles. Refresh your catalogs or try again in a moment.",
       "action": "Manage Add-ons",
       "retryTitle": "Home could not load",
       "retryDescription": "Refresh your catalogs or check your connection.",
@@ -199,7 +205,8 @@
       "all": "All",
       "movies": "Movies",
       "series": "Series",
-      "offline": "Offline"
+      "offline": "Offline",
+      "history": "History"
     },
     "empty": {
       "title": "No Items Yet",
@@ -232,6 +239,21 @@
       "restore": "Restore",
       "bulkRemoved": "{{count}} titles removed from Library",
       "bulkRemoved_one": "1 title removed from Library"
+    },
+    "history": {
+      "emptyTitle": "No watch history yet",
+      "emptyDescription": "Titles you watch will appear here, including completed ones.",
+      "lastWatched": "Watched {{date}}",
+      "clearTitle": "Clear watch history?",
+      "clearMessage": "This permanently removes all watched titles and progress from your history. Your Library and downloads stay untouched.",
+      "clearAction": "Clear history",
+      "clearFailed": "Could not clear watch history.",
+      "cleared": "Watch history cleared.",
+      "removeTitle": "Remove from watch history?",
+      "removeMessage": "Remove \"{{title}}\" from your watch history?",
+      "removeAction": "Remove from history",
+      "removeFailed": "Could not remove this history entry.",
+      "removed": "Removed from watch history."
     }
   },
   "downloads": {
@@ -783,6 +805,7 @@
       "button": "Install",
       "success": "Add-on installed!",
       "successDetail": "New content will appear on Discover.",
+      "configurationRequiredDetail": "This source was added, but needs setup before it can provide content.",
       "error": "Installation Failed"
     },
     "installed": {
@@ -791,6 +814,7 @@
       "remove": "Remove",
       "cancel": "Cancel",
       "confirmRemove": "Remove \"{{name}}\"?",
+      "configurationRequired": "Setup needed before this source can provide content",
       "removeError": "This add-on could not be removed. Try again."
     },
     "empty": {
@@ -835,7 +859,9 @@
       "playBest": "Play Best",
       "preparing": "Preparing",
       "inLibrary": "In Library",
-      "add": "Add"
+      "add": "Add",
+      "watchTrailer": "Watch trailer",
+      "trailerUnavailable": "The trailer could not be opened on this device."
     },
     "sources": {
       "episodes": "Episodes",
@@ -1190,7 +1216,29 @@
   },
   "notifications": {
     "title": "Notifications",
+    "eyebrow": "Inbox",
+    "unreadCount_one": "{{count}} unread notification",
+    "unreadCount_other": "{{count}} unread notifications",
+    "allCaughtUpDescription": "You're all caught up.",
     "empty": "No notifications",
+    "emptyTitle": "You're all caught up",
+    "emptyDescription": "Downloads and account updates will appear here.",
+    "loading": "Loading notifications",
+    "errorTitle": "Notifications couldn't load",
+    "errorDescription": "Check your connection and try again.",
+    "unread": "Unread",
+    "markAllRead": "Mark all read",
+    "markAllReadA11y": "Mark all {{count}} unread notifications as read",
+    "markAllReadHint": "Marks every unread notification as read.",
+    "markAllReadError": "Couldn't mark all notifications as read.",
+    "markAsReadA11y": "Mark {{title}} as read",
+    "markAsReadHint": "Marks this notification as read.",
+    "markReadError": "Couldn't update this notification.",
+    "groups": {
+      "today": "Today",
+      "thisWeek": "This week",
+      "earlier": "Earlier"
+    },
     "dismiss": "Dismiss notification"
   },
   "biometricLock": {

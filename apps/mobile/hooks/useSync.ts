@@ -114,7 +114,9 @@ export function useSync() {
             case "PROGRESS_UPDATE":
               if (queryClient) {
                 queryClient.invalidateQueries({
-                  queryKey: ["continue-watching"],
+                  // Continue Watching and the paginated History view share
+                  // the progress namespace, so a remote change refreshes both.
+                  queryKey: ["progress"],
                 });
               }
               break;

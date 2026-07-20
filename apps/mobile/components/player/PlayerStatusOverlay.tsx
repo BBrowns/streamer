@@ -7,7 +7,6 @@ import {
   Text,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import type { StreamMetrics, StreamLoadState } from "../../stores/playerStore";
 import type {
@@ -24,6 +23,7 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
+import { playerChrome } from "./playerChrome";
 
 interface PlayerStatusOverlayProps {
   streamState: StreamLoadState;
@@ -58,7 +58,6 @@ export function PlayerStatusOverlay({
   onOpenSourcesDevices,
   onCancelPreparation,
 }: PlayerStatusOverlayProps) {
-  const { colors } = useTheme();
   const { t } = useTranslation();
   const sessionError = session?.terminalError
     ? { ...session.terminalError }
@@ -125,14 +124,14 @@ export function PlayerStatusOverlay({
             style={({ pressed, hovered, focused }: any) => [
               styles.cancelPreparation,
               {
-                backgroundColor: colors.surfaceOverlay,
-                borderColor: colors.border,
+                backgroundColor: playerChrome.surfaceStrong,
+                borderColor: playerChrome.border,
                 opacity: pressed ? 0.76 : 1,
               },
               hovered && styles.cancelPreparationHovered,
               Platform.OS === "web" &&
                 focused &&
-                getWebFocusStyle(colors.focus),
+                getWebFocusStyle(playerChrome.focus),
             ]}
             onPress={onCancelPreparation}
             accessibilityRole="button"
@@ -143,9 +142,12 @@ export function PlayerStatusOverlay({
                 : undefined
             }
           >
-            <Ionicons name="close" size={22} color={colors.text} />
+            <Ionicons name="close" size={22} color={playerChrome.text} />
             <Text
-              style={[styles.cancelPreparationText, { color: colors.text }]}
+              style={[
+                styles.cancelPreparationText,
+                { color: playerChrome.text },
+              ]}
             >
               {t("common.cancel")}
             </Text>
@@ -232,7 +234,7 @@ export function PlayerStatusOverlay({
         accessibilityLiveRegion="polite"
         accessibilityLabel={t("player.status.buffering")}
       >
-        <ActivityIndicator size="large" color={colors.tint} />
+        <ActivityIndicator size="large" color={playerChrome.accent} />
       </View>
     );
   }

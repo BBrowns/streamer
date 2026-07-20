@@ -1,8 +1,57 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { useAuthStore } from "../stores/authStore";
 import { clientRuntimeConfig } from "./runtimeConfig";
+
+type AuthRefreshState = {
+  isAuthenticated: boolean;
+  accessToken: string | null;
+  refreshToken: string | null;
+};
+
+type RefreshableRequest = AxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+function getAuthorizationHeader(headers: unknown): string | null {
+  if (!headers || typeof headers !== "object") return null;
+
+  const candidate = headers as {
+    Authorization?: unknown;
+    authorization?: unknown;
+    get?: (name: string) => unknown;
+  };
+  const value =
+    candidate.get?.("Authorization") ??
+    candidate.Authorization ??
+    candidate.authorization;
+
+  return typeof value === "string" ? value : null;
+}
+
+/**
+ * A 401 from a request without a bearer token is expected for public or
+ * pre-authentication traffic. Refreshing it would turn a harmless rejection
+ * into a refresh/logout loop, so only retry requests that were genuinely
+ * authenticated when they were sent.
+ */
+export function shouldRefreshUnauthorizedRequest(
+  request: RefreshableRequest | undefined,
+  auth: AuthRefreshState,
+): boolean {
+  if (
+    !request ||
+    request._retry ||
+    !auth.isAuthenticated ||
+    !auth.accessToken ||
+    !auth.refreshToken
+  ) {
+    return false;
+  }
+
+  return /^Bearer\s+\S+$/i.test(getAuthorizationHeader(request.headers) ?? "");
+}
 
 /**
  * Resolve the backend URL dynamically so the app works on both the iOS
@@ -81,15 +130,26 @@ const processQueue = (error: any, token: string | null = null) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as RefreshableRequest | undefined;
+    const auth = useAuthStore.getState();
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      shouldRefreshUnauthorizedRequest(originalRequest, auth)
+    ) {
+      // The predicate above returns false without a request, but TypeScript
+      // cannot infer that relationship across the helper boundary.
+      if (!originalRequest) return Promise.reject(error);
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+            const headers = originalRequest.headers as
+              | Record<string, unknown>
+              | undefined;
+            if (headers) headers.Authorization = `Bearer ${token}`;
             return api(originalRequest);
           })
           .catch((err) => {
@@ -101,7 +161,9 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { backendUrl, refreshToken } = useAuthStore.getState();
+        const { backendUrl, refreshToken } = auth;
+        // shouldRefreshUnauthorizedRequest guarantees this, but retaining the
+        // guard keeps the failure local if the store changes between awaits.
         if (!refreshToken) throw new Error("No refresh token");
 
         const targetUrl = backendUrl || BASE_URL;
@@ -117,7 +179,10 @@ api.interceptors.response.use(
           .setTokens(data.accessToken, data.refreshToken, expiresInMs);
 
         processQueue(null, data.accessToken);
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        const headers = originalRequest.headers as
+          | Record<string, unknown>
+          | undefined;
+        if (headers) headers.Authorization = `Bearer ${data.accessToken}`;
         return api(originalRequest);
       } catch (err) {
         processQueue(err, null);

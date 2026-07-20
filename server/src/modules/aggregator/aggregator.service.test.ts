@@ -92,6 +92,197 @@ describe("AggregatorService", () => {
         expect.any(Object),
       );
     });
+
+    it("uses a manifest-declared catalog for Home when resources omits catalog", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        {
+          id: "torrentclaw-installation",
+          userId: "user-1",
+          transportUrl: "https://torrentclaw.com/api/stremio/manifest.json",
+          installedAt: new Date(),
+          manifest: {
+            id: "com.torrentclaw",
+            version: "1.0.0",
+            name: "TorrentClaw",
+            description: "Search and stream add-on",
+            resources: ["stream", "meta"],
+            types: ["movie", "series"],
+            catalogs: [{ type: "movie", id: "tc-search", name: "Movies" }],
+            behaviorHints: { configurationRequired: false },
+          },
+        },
+      ] as any);
+      vi.mocked(axios.get).mockResolvedValue({
+        data: {
+          metas: [{ id: "tt0133093", type: "movie", name: "The Matrix" }],
+        },
+      });
+
+      await expect(
+        service.getCatalog("user-1", "movie", "req-torrentclaw-home"),
+      ).resolves.toMatchObject([
+        { id: "tt0133093", type: "movie", name: "The Matrix" },
+      ]);
+      expect(axios.get).toHaveBeenCalledWith(
+        "https://torrentclaw.com/api/stremio/catalog/movie/tc-search.json",
+        expect.any(Object),
+      );
+    });
+
+    it("uses a manifest-declared catalog for exact Discover fetches when resources omits catalog", async () => {
+      vi.mocked(prisma.installedAddon.findFirst).mockResolvedValue({
+        id: "torrentclaw-installation",
+        userId: "user-1",
+        transportUrl: "https://torrentclaw.com/api/stremio/manifest.json",
+        installedAt: new Date(),
+        manifest: {
+          id: "com.torrentclaw",
+          version: "1.0.0",
+          name: "TorrentClaw",
+          description: "Search and stream add-on",
+          resources: ["stream", "meta"],
+          types: ["movie", "series"],
+          catalogs: [{ type: "movie", id: "tc-search", name: "Movies" }],
+          behaviorHints: { configurationRequired: false },
+        },
+      } as any);
+      vi.mocked(axios.get).mockResolvedValue({
+        data: {
+          metas: [{ id: "tt0133093", type: "movie", name: "The Matrix" }],
+        },
+      });
+
+      await expect(
+        service.getAddonCatalog(
+          "user-1",
+          "torrentclaw-installation",
+          "movie",
+          "tc-search",
+          "req-torrentclaw-discover",
+        ),
+      ).resolves.toMatchObject([
+        { id: "tt0133093", type: "movie", name: "The Matrix" },
+      ]);
+      expect(axios.get).toHaveBeenCalledWith(
+        "https://torrentclaw.com/api/stremio/catalog/movie/tc-search.json",
+        expect.any(Object),
+      );
+    });
+
+    it("keeps nullable Stremio catalog metadata out of the provider failure circuit", async () => {
+      const addon = {
+        id: "cinemeta-installation",
+        userId: "user-1",
+        transportUrl: "https://v3-cinemeta.strem.io/manifest.json",
+        installedAt: new Date(),
+        manifest: {
+          id: "com.linvo.cinemeta",
+          version: "1.0.0",
+          name: "Cinemeta",
+          description: "Metadata provider",
+          resources: ["catalog"],
+          types: ["movie"],
+          catalogs: [{ type: "movie", id: "top", name: "Top" }],
+        },
+      } as any;
+      const policyKey = buildAddonPolicyKey(
+        "user-1",
+        addon.id,
+        addon.transportUrl,
+      );
+      resilienceRegistry.reset();
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([addon]);
+      vi.mocked(axios.get).mockResolvedValue({
+        data: {
+          metas: [
+            {
+              id: "tt0133093",
+              type: "movie",
+              name: "The Matrix",
+              released: null,
+            },
+            {
+              id: "tt-malformed",
+              type: "movie",
+              name: null,
+            },
+          ],
+        },
+      });
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await expect(
+          service.getCatalog("user-1", "movie", `req-${attempt}`),
+        ).resolves.toMatchObject([
+          { id: "tt0133093", type: "movie", name: "The Matrix" },
+        ]);
+      }
+
+      expect(axios.get).toHaveBeenCalledTimes(3);
+      expect(resilienceRegistry.getMetrics(policyKey)).toMatchObject({
+        retries: 0,
+        circuitOpens: 0,
+      });
+    });
+  });
+
+  describe("configuration-required add-ons", () => {
+    it("does not fetch an unconfigured provider for catalog, metadata, search, or streams", async () => {
+      const addon = {
+        id: "rpdb-installation",
+        userId: "user-1",
+        transportUrl: "https://api.ratingposterdb.com/manifest.json",
+        installedAt: new Date(),
+        manifest: {
+          id: "com.ratingposterdb.rpdb",
+          version: "1.0.0",
+          name: "RatingPosterDB",
+          description: "Poster customization",
+          resources: ["catalog", "meta", "stream"],
+          types: ["movie"],
+          catalogs: [
+            {
+              type: "movie",
+              id: "rpdb-search",
+              name: "Movies",
+              extra: [{ name: "search", isRequired: true }],
+            },
+          ],
+          behaviorHints: { configurationRequired: true },
+        },
+      } as any;
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([addon]);
+      vi.mocked(prisma.installedAddon.findFirst).mockResolvedValue(addon);
+
+      await expect(
+        service.getCatalog("user-1", "movie", "req-rpdb-catalog"),
+      ).resolves.toEqual([]);
+      await expect(
+        service.getMeta("user-1", "movie", "tt0133093", "req-rpdb-meta"),
+      ).resolves.toBeNull();
+      await expect(
+        service.getStreams("user-1", "movie", "tt0133093", "req-rpdb-stream"),
+      ).resolves.toEqual([]);
+      await expect(
+        service.searchWithProvenance("user-1", "matrix", "req-rpdb-search"),
+      ).resolves.toMatchObject({
+        attemptedProviders: 0,
+        successfulProviders: 0,
+        failedProviderIds: [],
+        metas: [],
+      });
+      await expect(
+        service.getAddonCatalog(
+          "user-1",
+          addon.id,
+          "movie",
+          "rpdb-search",
+          "req-rpdb-discover",
+        ),
+      ).rejects.toThrow("Add-on does not support this catalog type");
+
+      expect(axios.get).not.toHaveBeenCalled();
+    });
   });
 
   describe("resilience diagnostics", () => {
@@ -225,6 +416,49 @@ describe("AggregatorService", () => {
         "https://catalogs.example/catalog/movie/tc-search/search=matrix.json",
         expect.any(Object),
       );
+    });
+
+    it("accepts Cinemeta-style nullable release dates in bounded search results", async () => {
+      const addon = searchableAddon("nullable-search");
+      const policyKey = buildAddonPolicyKey(
+        "user-1",
+        addon.id,
+        addon.transportUrl,
+      );
+      resilienceRegistry.reset();
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([addon]);
+      vi.mocked(axios.get).mockResolvedValue({
+        data: {
+          metas: [
+            {
+              id: "tt0133093",
+              type: "movie",
+              name: "The Matrix",
+              released: null,
+            },
+            {
+              id: "tt-malformed",
+              type: "movie",
+              name: null,
+            },
+          ],
+        },
+      });
+
+      for (const query of ["matrix one", "matrix two", "matrix three"]) {
+        await expect(
+          service.searchWithProvenance("user-1", query, `req-${query}`),
+        ).resolves.toMatchObject({
+          metas: [{ id: "tt0133093", type: "movie", name: "The Matrix" }],
+          partial: false,
+        });
+      }
+
+      expect(axios.get).toHaveBeenCalledTimes(3);
+      expect(resilienceRegistry.getMetrics(policyKey)).toMatchObject({
+        retries: 0,
+        circuitOpens: 0,
+      });
     });
 
     it("uses TorrentClaw-style tc-search capability when resources omits catalog", async () => {

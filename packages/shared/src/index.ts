@@ -11,6 +11,7 @@ export * from "./types/playback-session";
 export * from "./types/build-metadata";
 export * from "./types/action-preflight";
 export * from "./types/search";
+export * from "./types/notification";
 
 // Zod Schemas
 export * from "./schemas/manifest.schema";
@@ -24,8 +25,10 @@ export * from "./schemas/playback.schema";
 export * from "./schemas/playback-session.schema";
 export * from "./schemas/build-metadata.schema";
 export * from "./schemas/action-preflight.schema";
+export * from "./schemas/notification.schema";
 export * from "./build-metadata";
 export * from "./action-preflight";
+export * from "./addon-capabilities";
 export * from "./sentry-breadcrumbs";
 export {
   catalogLayoutSchema,

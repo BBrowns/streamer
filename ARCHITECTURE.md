@@ -156,9 +156,14 @@ The `AggregatorService` is the most architecturally significant part of the serv
 **How it works:**
 
 1. Look up all `InstalledAddon` records for the requesting user from Postgres.
-2. Filter to add-ons that declare support for the requested resource (`catalog`, `meta`, or `stream`) and content type (`movie`, `series`) using the manifest's `resources` and `types` arrays.
+2. Filter to add-ons that can serve the requested resource and content type. A concrete movie/series catalog definition is sufficient for `catalog` (some deployed providers omit `catalog` from `resources`); `meta` and `stream` still require the corresponding resource declaration. Providers whose manifest says configuration is still required are held back until configured.
 3. Issue all HTTP requests **in parallel** via `Promise.allSettled` — individual add-on failures never crash the aggregate response.
 4. Merge results; for streams, pass each through `StreamParser.enrich()` (regex-extracts resolution and seeder count from the title string) then sort by resolution → seeders descending.
+
+Catalog ingestion normalizes protocol-standard nullable optional metadata and
+keeps valid titles when one entry is malformed. A non-empty response in which
+every entry is invalid remains a provider failure, so the circuit breaker still
+protects the aggregate from genuinely unusable upstream responses.
 
 **Resilience stack (per add-on, via [Cockatiel](https://github.com/connor4312/cockatiel)):**
 
@@ -626,7 +631,7 @@ HLS (`.m3u8`) streams work natively in `expo-video` on iOS/Android and on Web. T
 
 ### Prisma on PostgreSQL
 
-The schema uses `provider = "postgresql"` — there is **no SQLite fallback** in the current schema. The README mentions SQLite historically but this was migrated. For local development, the simplest approach is a Docker container: `docker run -e POSTGRES_PASSWORD=password -p 5432:5432 postgres`.
+The schema uses `provider = "postgresql"` — there is **no SQLite fallback** in the current schema. The README mentions SQLite historically but this was migrated. For local development, use the repository Compose service with `npm run dev:db`; it starts only the canonical `db` service and waits until PostgreSQL is ready.
 
 ### Zod v4
 
@@ -801,12 +806,12 @@ packaged-app QA before claiming production desktop distribution.
 # 1. Install all workspaces
 npm install
 
-# 2. Start Postgres (Docker)
-docker run --name streamer-db -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
+# 2. Start the canonical local Postgres service (Docker Compose)
+npm run dev:db
 
 # 3. Configure server env
 cp server/.env.example server/.env
-# Set DATABASE_URL=postgresql://postgres:password@localhost:5432/streamer
+# DATABASE_URL already matches the local Compose service by default.
 # Set JWT_SECRET=<any-long-random-string>
 
 # 4. Push DB schema
@@ -817,6 +822,7 @@ npm run dev
 
 # Or start individually:
 npm run dev:server         # :3001
+npm run dev:db             # PostgreSQL only; no API container or schema migration
 npm run dev:stream-server  # :11470
 npm run dev:mobile         # :8081 (Expo)
 npm run dev:desktop        # Electron (requires mobile web on :8081 first)

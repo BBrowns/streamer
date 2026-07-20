@@ -312,4 +312,83 @@ describe("Integration: Watch Progress", () => {
     expect(listRes.status).toBe(200);
     expect(listRes.body.items).toHaveLength(0);
   });
+
+  it("paginates all history, including completed titles, and removes one episode safely", async () => {
+    const firstEpisode = await request(app)
+      .post("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "series",
+        itemId: "tt0903747",
+        season: 1,
+        episode: 1,
+        currentTime: 1800,
+        duration: 1800,
+        title: "Breaking Bad",
+      });
+    const secondEpisode = await request(app)
+      .post("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "series",
+        itemId: "tt0903747",
+        season: 1,
+        episode: 2,
+        currentTime: 600,
+        duration: 1800,
+        title: "Breaking Bad",
+      });
+
+    expect(firstEpisode.status).toBe(200);
+    expect(secondEpisode.status).toBe(200);
+
+    const firstPage = await request(app)
+      .get("/api/library/history?limit=1")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.items).toHaveLength(1);
+    expect(firstPage.body.nextCursor).toEqual(expect.any(String));
+
+    const secondPage = await request(app)
+      .get(
+        `/api/library/history?limit=1&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`,
+      )
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(secondPage.status).toBe(200);
+    expect(secondPage.body.items).toHaveLength(1);
+    expect(secondPage.body.items[0].id).not.toBe(firstPage.body.items[0].id);
+
+    const deleteRes = await request(app)
+      .delete(`/api/library/history/${firstEpisode.body.id}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(deleteRes.status).toBe(204);
+
+    const remaining = await request(app)
+      .get("/api/library/history")
+      .set("Authorization", `Bearer ${token}`);
+    expect(remaining.status).toBe(200);
+    expect(remaining.body.items).toHaveLength(1);
+    expect(remaining.body.items[0].id).toBe(secondEpisode.body.id);
+
+    const clearRes = await request(app)
+      .delete("/api/library/history")
+      .set("Authorization", `Bearer ${token}`);
+    expect(clearRes.status).toBe(204);
+
+    const cleared = await request(app)
+      .get("/api/library/history")
+      .set("Authorization", `Bearer ${token}`);
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.items).toEqual([]);
+  });
+
+  it("rejects invalid history cursors", async () => {
+    const res = await request(app)
+      .get("/api/library/history?cursor=not-a-real-cursor")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
 });

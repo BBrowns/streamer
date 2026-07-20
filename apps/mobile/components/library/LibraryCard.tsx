@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
+import type { WatchProgress } from "@streamer/shared";
 import { hapticImpactHeavy, hapticImpactLight } from "../../lib/haptics";
 import {
   isTaskOfflinePlayable,
@@ -24,6 +25,7 @@ import {
   getWebFocusStyle,
   uiRadii,
   uiSpacing,
+  uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
 import type { LibraryCardItem } from "./libraryPresentation";
@@ -32,7 +34,12 @@ type LibraryCardProps = {
   item: LibraryCardItem;
   selectionKey: string;
   downloadTaskId?: string;
+  historyEntry?: WatchProgress;
   onRemove?: (itemId: string) => void;
+  removeId?: string;
+  removeLabel?: string;
+  showRemoveButton?: boolean;
+  metadata?: string;
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelect: (selectionKey: string) => void;
@@ -43,7 +50,12 @@ export function LibraryCard({
   item,
   selectionKey,
   downloadTaskId,
+  historyEntry,
   onRemove,
+  removeId,
+  removeLabel: removeLabelOverride,
+  showRemoveButton = false,
+  metadata,
   isSelectionMode,
   isSelected,
   onToggleSelect,
@@ -57,6 +69,7 @@ export function LibraryCard({
     y: number;
   } | null>(null);
   const itemId = item.itemId || item.id;
+  const removalId = removeId ?? itemId;
   const tasks = useDownloadStore((state) => state.tasks);
   const task = downloadTaskId
     ? tasks[downloadTaskId]
@@ -72,9 +85,25 @@ export function LibraryCard({
   const detailsLabel = t("library.actions.viewDetails", {
     defaultValue: "View details",
   });
-  const removeLabel = t("library.actions.remove", {
+  const defaultRemoveLabel = t("library.actions.remove", {
     defaultValue: "Remove from Library",
   });
+  const removeLabel = removeLabelOverride ?? defaultRemoveLabel;
+  const historyProgress = historyEntry
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          historyEntry.duration > 0
+            ? (historyEntry.currentTime / historyEntry.duration) * 100
+            : 0,
+        ),
+      )
+    : undefined;
+  const historyEpisodeLabel =
+    historyEntry?.season != null && historyEntry?.episode != null
+      ? `S${historyEntry.season} E${historyEntry.episode}`
+      : undefined;
 
   const handlePress = () => {
     hapticImpactLight();
@@ -95,7 +124,7 @@ export function LibraryCard({
         },
         (buttonIndex) => {
           if (buttonIndex === 1) router.push(`/detail/${item.type}/${itemId}`);
-          if (buttonIndex === 2) onRemove(itemId);
+          if (buttonIndex === 2) onRemove(removalId);
         },
       );
       return;
@@ -109,7 +138,7 @@ export function LibraryCard({
       {
         text: removeLabel,
         style: "destructive",
-        onPress: () => onRemove(itemId),
+        onPress: () => onRemove(removalId),
       },
     ]);
   };
@@ -136,9 +165,12 @@ export function LibraryCard({
             ? t("downloads.status.readyOffline", {
                 defaultValue: "Ready offline",
               })
-            : undefined
+            : (metadata ?? historyEpisodeLabel)
         }
-        progress={isDownloading ? (task?.progress ?? 0) * 100 : undefined}
+        progress={
+          historyProgress ??
+          (isDownloading ? (task?.progress ?? 0) * 100 : undefined)
+        }
         selected={isSelected}
         onPress={handlePress}
         onLongPress={onRemove ? showActions : undefined}
@@ -162,6 +194,26 @@ export function LibraryCard({
         }
         testID={`library-card-${selectionKey}`}
       />
+
+      {showRemoveButton && onRemove && !isSelectionMode ? (
+        <Pressable
+          onPress={() => onRemove(removalId)}
+          accessibilityRole="button"
+          accessibilityLabel={`${removeLabel}: ${item.title}`}
+          style={({ pressed, hovered, focused }: any) => [
+            styles.quickRemoveButton,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              opacity: pressed ? 0.72 : 1,
+            },
+            Platform.OS === "web" && hovered && { borderColor: colors.error },
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <Ionicons name="close" size={16} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
 
       {Platform.OS === "web" && contextMenu ? (
         <View
@@ -196,7 +248,7 @@ export function LibraryCard({
             focusColor={colors.focus}
             onPress={() => {
               setContextMenu(null);
-              onRemove?.(itemId);
+              onRemove?.(removalId);
             }}
           />
         </View>
@@ -258,6 +310,17 @@ const styles = StyleSheet.create({
     gap: uiSpacing.sm + 2,
     paddingHorizontal: uiSpacing.md,
     borderRadius: uiRadii.control,
+  },
+  quickRemoveButton: {
+    position: "absolute",
+    top: uiSpacing.sm,
+    right: uiSpacing.sm,
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    borderRadius: uiRadii.pill,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   contextText: {
     ...uiTypography.label,

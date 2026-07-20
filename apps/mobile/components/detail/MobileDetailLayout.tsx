@@ -2,7 +2,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Pressable,
   Platform,
   ScrollView,
@@ -19,6 +18,7 @@ import { useWindowClass } from "../../hooks/useWindowClass";
 import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
 import { useTranslation } from "react-i18next";
 import { MoreSourcesPanel } from "./MoreSourcesPanel";
+import { MediaArtwork } from "../ui/MediaArtwork";
 
 export function MobileDetailLayout({
   id,
@@ -29,6 +29,8 @@ export function MobileDetailLayout({
   initiallyOpenSources,
   inLibrary,
   handleToggleLibrary,
+  trailerUrl,
+  onWatchTrailer,
   handlePlayStream,
   handlePlayCandidate,
   handleDownloadStream,
@@ -57,26 +59,13 @@ export function MobileDetailLayout({
   const renderHeader = () => (
     <View>
       <View style={[styles.heroContainer, { height: backdropHeight }]}>
-        {!!meta.background ? (
-          <Image
-            source={{ uri: meta.background }}
-            style={styles.backdrop}
-            resizeMode="cover"
-          />
-        ) : !!meta.poster ? (
-          <Image
-            source={{ uri: meta.poster }}
-            style={styles.backdrop}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={[
-              styles.backdrop,
-              { backgroundColor: colors.surfaceElevated },
-            ]}
-          />
-        )}
+        <MediaArtwork
+          uri={meta.background || meta.poster}
+          title={meta.name}
+          variant="backdrop"
+          accessible={false}
+          style={styles.backdrop}
+        />
 
         <LinearGradient
           colors={heroGradientColors}
@@ -137,11 +126,13 @@ export function MobileDetailLayout({
           streamsLoading={streamsLoading}
           hasPlayableSources={hasMovieSources}
           inLibrary={!!inLibrary}
+          hasTrailer={!!trailerUrl}
           planningAction={planningAction}
           onPlayBest={() => handlePlayStream()}
           onDownload={() => handleDownloadStream()}
           onCast={handleCastStream ? () => handleCastStream() : undefined}
           onToggleLibrary={handleToggleLibrary}
+          onWatchTrailer={onWatchTrailer}
         />
 
         {!!playbackNotice && !!onDismissPlaybackNotice && (

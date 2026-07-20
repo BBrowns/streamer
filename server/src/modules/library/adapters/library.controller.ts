@@ -65,11 +65,37 @@ export class LibraryController {
     return c.json({ items });
   }
 
+  async getWatchHistory(c: Context) {
+    const { cursor, limit } = (c.req as any).valid("query") as {
+      cursor?: string;
+      limit: number;
+    };
+    const user = c.get("user");
+    return c.json(
+      await this.service.getWatchHistory(user.userId, { cursor, limit }),
+    );
+  }
+
   async removeProgress(c: Context) {
     const body = await c.req.json();
     const data = removeProgressSchema.parse(body);
     const user = c.get("user");
     await this.service.removeProgress(user.userId, data.itemId);
+    return new Response(null, { status: 204 });
+  }
+
+  async clearWatchHistory(c: Context) {
+    const user = c.get("user");
+    await this.service.clearWatchHistory(user.userId);
+    return new Response(null, { status: 204 });
+  }
+
+  async removeWatchHistoryEntry(c: Context) {
+    const { historyId } = (c.req as any).valid("param") as {
+      historyId: string;
+    };
+    const user = c.get("user");
+    await this.service.removeWatchHistoryEntry(user.userId, historyId);
     return new Response(null, { status: 204 });
   }
 }

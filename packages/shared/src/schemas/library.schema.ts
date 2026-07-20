@@ -29,6 +29,17 @@ export const removeProgressSchema = z.object({
   itemId: z.string().min(1),
 });
 
+/** Cursor pagination for the personal watch-history surface. */
+export const watchHistoryQuerySchema = z.object({
+  cursor: z.string().trim().min(8).max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(24),
+});
+
+/** A persisted history entry, scoped to the signed-in user by the API route. */
+export const watchHistoryEntryParamsSchema = z.object({
+  historyId: z.string().uuid(),
+});
+
 /** Zod schema for watch progress */
 export const watchProgressSchema = z.object({
   id: z.string().uuid(),

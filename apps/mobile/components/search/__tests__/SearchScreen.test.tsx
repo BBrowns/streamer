@@ -118,7 +118,7 @@ jest.mock("../../ui/SearchField", () => {
   };
 });
 
-jest.mock("../RecentSearches", () => ({ RecentSearches: () => null }));
+jest.mock("../SearchDiscovery", () => ({ SearchDiscovery: () => null }));
 jest.mock("../SearchFilters", () => ({
   FilterSheet: () => null,
   FilterSidebar: () => null,

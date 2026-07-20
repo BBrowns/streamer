@@ -1,10 +1,13 @@
 import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Alert } from "react-native";
 import LibraryScreen from "../library";
 
 const mockNavigation = { setOptions: jest.fn() };
 const mockRemove = { mutateAsync: jest.fn() };
 const mockBulkRemove = { mutateAsync: jest.fn() };
+const mockRemoveHistory = { mutateAsync: jest.fn() };
+const mockClearHistory = { mutateAsync: jest.fn(), isPending: false };
 
 const mockLibraryItems = [
   {
@@ -36,6 +39,32 @@ jest.mock("../../../hooks/useLibrary", () => ({
   useLibrary: () => ({ data: mockLibraryItems, isLoading: false }),
   useRemoveFromLibrary: () => mockRemove,
   useRemoveBulkFromLibrary: () => mockBulkRemove,
+}));
+
+jest.mock("../../../hooks/useWatchHistory", () => ({
+  useWatchHistory: () => ({
+    items: [
+      {
+        id: "history-episode",
+        userId: "user-1",
+        itemId: "series-1",
+        type: "series",
+        season: 1,
+        episode: 2,
+        currentTime: 900,
+        duration: 1200,
+        title: "Watched Episode",
+        poster: null,
+        lastWatched: "2026-07-18T10:00:00.000Z",
+      },
+    ],
+    isLoading: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: jest.fn(),
+  }),
+  useRemoveWatchHistoryEntry: () => mockRemoveHistory,
+  useClearWatchHistory: () => mockClearHistory,
 }));
 
 jest.mock("../../../stores/authStore", () => ({
@@ -132,11 +161,15 @@ jest.mock("../../../components/library/LibraryCard", () => {
       selectionKey,
       isSelected,
       onToggleSelect,
+      showRemoveButton,
+      onRemove,
     }: {
       item: { title: string };
       selectionKey: string;
       isSelected: boolean;
       onToggleSelect: (key: string) => void;
+      showRemoveButton?: boolean;
+      onRemove?: (key: string) => void;
     }) => (
       <MockPressable
         accessibilityLabel={`card-${selectionKey}`}
@@ -144,6 +177,12 @@ jest.mock("../../../components/library/LibraryCard", () => {
       >
         <MockText>{item.title}</MockText>
         {isSelected ? <MockText>Selected card</MockText> : null}
+        {showRemoveButton && onRemove ? (
+          <MockPressable
+            accessibilityLabel={`remove-${selectionKey}`}
+            onPress={() => onRemove(selectionKey.replace("history:", ""))}
+          />
+        ) : null}
       </MockPressable>
     ),
   };
@@ -204,8 +243,10 @@ jest.mock("react-i18next", () => ({
         "library.filters.movies": "Movies",
         "library.filters.series": "Series",
         "library.filters.offline": "Offline",
+        "library.filters.history": "History",
         "library.fab.delete": "Delete",
         "library.actions.manageDownloads": "Manage downloads",
+        "library.history.clearAction": "Clear history",
       };
       if (key === "library.fab.selected")
         return `${options?.count ?? 0} selected`;
@@ -244,5 +285,28 @@ describe("LibraryScreen selection", () => {
     fireEvent.press(screen.getByLabelText("filter-offline"));
     await waitFor(() => expect(screen.queryByText("Select")).toBeNull());
     expect(screen.getByText("Manage downloads")).toBeTruthy();
+  });
+
+  it("keeps a separately paginated watch history accessible and confirms clearing it", async () => {
+    const alertSpy = jest.spyOn(Alert, "alert");
+    const screen = render(<LibraryScreen />);
+
+    fireEvent.press(screen.getByLabelText("filter-history"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Watched Episode")).toBeTruthy();
+      expect(screen.getByText("Clear history")).toBeTruthy();
+      expect(screen.queryByText("Select")).toBeNull();
+    });
+
+    fireEvent.press(screen.getByText("Clear history"));
+    expect(alertSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.arrayContaining([
+        expect.objectContaining({ style: "destructive" }),
+      ]),
+    );
+    alertSpy.mockRestore();
   });
 });

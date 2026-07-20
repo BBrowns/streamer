@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-07-16.
+> Last updated: 2026-07-18.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -30,6 +30,18 @@ Current phase:
   suggestions, results, and filters. Search fan-out, cached result continuity,
   account-scoped recents, cursor stability, and resilience diagnostics are
   bounded and recoverable in the follow-up branch.
+- Current discovery/viewing pass: Home ranks existing provider rails only with
+  account-local Library and Continue Watching signals; it does not relabel or
+  synthesize provider catalog semantics. Empty Search can browse a bounded set
+  of compatible installed-provider catalogs, then show recent searches, while
+  submitted Search remains the active title-retrieval flow. Continue Watching
+  **Resume** goes through the existing planner/session path with a runtime-only
+  saved-position intent.
+- Current media/personal pass: `MediaArtwork` unifies resilient remote artwork
+  for `PosterCard` and detail layouts; provider-declared trailers are restricted
+  to safe YouTube destinations; player chrome is always cinema-dark; Library
+  has independent cursor-paginated watch history; and Notifications is a
+  grouped, retryable inbox with individual and bulk read actions.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
@@ -171,6 +183,14 @@ Recent work stabilized the server/add-on boundary:
 - Exact add-on catalog fetching was added for Discover:
   `GET /api/addons/:addonId/catalog/:type/:catalogId`.
 - Stremio catalog extras are fetched using path segments instead of query params.
+- Catalog capability comes from a concrete manifest catalog definition as well
+  as the normal resource declaration, so providers such as TorrentClaw remain
+  browseable when they omit `catalog` from `resources`. A provider that declares
+  `behaviorHints.configurationRequired` is not queried until it is configured;
+  Add-ons labels that state instead of implying its catalog is ready.
+- Catalog parsing accepts protocol-standard nullable optional metadata and keeps
+  valid titles when an isolated provider entry is malformed; a wholly malformed
+  non-empty response is still a provider failure.
 - Single stream resolve route exists:
   `GET /api/stream/resolve/:type/:id/:infoHash`.
 - Streams from `/api/stream/:type/:id` include enough `type` and `id` context for resolution.
@@ -355,17 +375,20 @@ containers. The earlier pastel-glass identity is legacy guidance.
 
 Known useful direction:
 
-- Keep provider/provider-like rails on Home. Search is reserved for active
-  retrieval and must not duplicate full discovery rails.
+- Keep Home as the primary personalised discovery destination. Empty Search may
+  show a bounded browse landing from compatible installed-provider catalog
+  metadata, using provider-declared names and types only; it must not fabricate
+  popularity, freshness, genre, or availability semantics.
 - Keep primary flows visually calm and media-led, with limited translucency,
   purposeful containment, and equal dark/light hierarchy.
 - Avoid exposing source complexity as the default path.
 - Settings uses Account, Playback, Downloads, Sources & Devices, Appearance,
   Privacy, About, and Advanced routes. Compact through expanded windows show a
   category overview or one detail page; only large windows show list-detail.
-- `/search` owns recent searches, suggestions, submitted results, and filters.
-  Home owns passive discovery. The compatibility `/search/results` route
-  preserves parameters but is not a second experience.
+- `/search` owns its browse landing, recent searches, suggestions, submitted
+  results, and filters. Home owns primary personalised discovery. The
+  compatibility `/search/results` route preserves parameters but is not a
+  second experience.
 
 ## Current Known Gaps
 
@@ -456,16 +479,36 @@ Gateway lifecycle exists now, but these are still open:
 The merged adaptive and Obsidian work provides the shell, Home composition,
 Undo notifications, player track state, cast mini-controller, full-viewport
 auth routes, recovery UI, routed Settings, and the editorial theme. The
-post-#154 Search follow-up separates Home-owned discovery from capability-aware
-title Search, including deterministic relevance, bounded suggestion/results
-modes, provider provenance, partial failure, and a shared Command Palette
-controller.
+post-#154 Search follow-up keeps submitted title Search capability-aware while
+the empty Search route can browse compatible installed-provider catalog
+metadata. It retains deterministic relevance, bounded suggestion/results modes,
+provider provenance, partial failure, and a shared Command Palette controller.
+
+The current discovery/viewing implementation also adds:
+
+- bounded Search browse rails that preserve installed provider catalog names,
+  an explicit content-type control, and a clear Add-ons recovery state rather
+  than invented editorial categories;
+- local-signal ordering of existing Home provider rails and direct
+  planner/session Resume from Continue Watching, without persisting a resolved
+  stream URL or treating a detail click as playback;
+- a shared `MediaArtwork` fallback/caching boundary for posters and detail
+  backdrops, plus optional trailers limited to provider-declared YouTube IDs or
+  allowlisted HTTPS YouTube URLs;
+- a cinema-dark player-control system that remains readable in application
+  light mode, including its sheets, resume prompt, and next-episode prompt;
+- an independent, cursor-paginated watch-history tab whose removal/clear
+  controls affect progress only; and
+- an accessible notification inbox grouped by recency, with optimistic
+  individual and mark-all read actions and recoverable failures.
 
 The current renderer matrix schedules 112 cases: 94 pass, 18 project-aware
 cases are intentionally skipped, and none fail. Search has 64 dark/light PNGs
 covering idle, recents, suggestions, results, filters, no results, partial
 results, and no searchable provider across 390 x 844, 768 x 1024, 1024 x 768,
-and 1440 x 1000. See
+and 1440 x 1000. The browser/desktop-renderer checks are regression evidence,
+not native evidence; current discovery/viewing screenshot updates must be
+reviewed there before merge. See
 [docs/qa-runs/2026-07-16-search-correctness.md](./docs/qa-runs/2026-07-16-search-correctness.md).
 
 The remaining work is validation or depends on trustworthy upstream metadata:
@@ -473,6 +516,10 @@ The remaining work is validation or depends on trustworthy upstream metadata:
 - Search provider provenance and partial-failure counts are reliable. Add genre,
   language, quality, or richer availability facets only when upstream metadata
   is reliable.
+- Validate the new artwork fallback, player chrome, history, and notification
+  interactions on real iPhone/iPad and Android targets; browser emulation and
+  desktop-renderer screenshots do not prove native video, safe-area, or touch
+  behaviour.
 - Validate Downloads, Series episode lists, settings panels, caption-safe
   layout, visible subtitle/audio state, large text, and focus-not-obscured
   behavior on native targets.

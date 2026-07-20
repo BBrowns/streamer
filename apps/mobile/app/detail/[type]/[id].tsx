@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback } from "react";
+import { Linking } from "react-native";
 import { getMetaLoadFailureKind, useMeta } from "../../../hooks/useMeta";
 import { useStreams } from "../../../hooks/useStreams";
 import { usePlayerStore } from "../../../stores/playerStore";
@@ -41,6 +42,7 @@ import {
   type PlaybackReadinessNoticeCopy,
 } from "../../../components/detail/PlaybackReadinessNotice";
 import { DetailLoadState } from "../../../components/detail/DetailLoadState";
+import { getSafeTrailerUrl } from "../../../services/trailer";
 
 export default function DetailScreen() {
   const {
@@ -82,6 +84,7 @@ export default function DetailScreen() {
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
+  const trailerUrl = getSafeTrailerUrl(meta?.trailers);
 
   const dismissPlaybackNotice = useCallback(() => {
     setPlaybackNotice(null);
@@ -126,6 +129,20 @@ export default function DetailScreen() {
       );
     }
   }, [meta, inLibrary, id, type, addToLibrary, removeFromLibrary]);
+
+  const handleWatchTrailer = useCallback(async () => {
+    if (!trailerUrl) return;
+
+    try {
+      const canOpen = await Linking.canOpenURL(trailerUrl);
+      if (!canOpen) throw new Error("Trailer destination is unavailable");
+      await Linking.openURL(trailerUrl);
+    } catch {
+      useToastStore
+        .getState()
+        .show(t("detail.actionPanel.trailerUnavailable"), "error");
+    }
+  }, [t, trailerUrl]);
 
   const groupedStreams = (streams || []).reduce(
     (acc, s) => {
@@ -527,6 +544,8 @@ export default function DetailScreen() {
     setSelectedResolution,
     inLibrary: !!inLibrary,
     handleToggleLibrary,
+    trailerUrl,
+    onWatchTrailer: handleWatchTrailer,
     handlePlayStream,
     handlePlayCandidate,
     handleDownloadStream,

@@ -1,6 +1,6 @@
 # Streamer Roadmap
 
-Last updated: 2026-07-14.
+Last updated: 2026-07-18.
 
 This is the current source of truth for work after PR #141. The architecture
 does not need another control-plane rewrite. The next phase is to reduce
@@ -74,6 +74,13 @@ Implemented through PR #151:
   deduplicated Home composition, canonical Search state, recoverable
   removal actions, and PiP/background/cast continuity. The stacked Obsidian
   branch owns the subsequent visual and information-architecture overhaul.
+- The current discovery/viewing pass keeps that architecture intact while
+  adding bounded installed-provider catalog browsing to empty Search,
+  local-signal ordering of existing Home rails, direct session-backed Resume,
+  shared artwork resilience, safe provider-declared trailers, cinema-dark
+  player chrome, personal watch history, and a notification inbox. These are
+  application changes, not evidence that playback, touch, or video behaviour
+  has been proven on native devices.
 
 Not yet proven:
 
@@ -115,14 +122,23 @@ including bounded provider fan-out, stable cursor failure semantics,
 account-scoped recents, immediate add-on cache invalidation, and retention of
 usable cached results during background and next-page failures.
 
+The current discovery/viewing pass extends that follow-up without changing
+routes, planner/session ownership, or the Obsidian direction. Its constraints
+are deliberate: Home ordering uses only local Library/Continue Watching
+signals, Search browsing uses only compatible installed-provider metadata, and
+neither surface invents popularity, freshness, genre, or playback-availability
+claims.
+
 Implemented in the foundation draft:
 
 - Semantic theme, focus, overlay, disabled, and contrast tokens.
 - Compact bottom navigation and medium/expanded/large rail/sidebar behavior.
 - Stable Home hero/rail composition with canonical deduplication and honest
   released-date labeling.
-- Home-owned passive discovery plus one active Search destination with
-  URL-restorable type/year/sort state and a responsive advanced-filter surface.
+- Home as the primary personalised discovery destination plus one active Search
+  destination with URL-restorable type/year/sort state and a responsive
+  advanced-filter surface. Empty Search may render a bounded browse landing
+  from compatible installed-provider catalog metadata before recent searches.
 - Capability-aware Search provenance, canonical `type:id` deduplication,
   deterministic relevance ranking, bounded suggestion/result modes, and a
   URL-restorable provider facet.
@@ -148,6 +164,18 @@ Implemented in the foundation draft:
   semantic surface, scrim, contrast, disabled, and focus contracts.
 - Provider rails exclude titles already claimed by the hero, Continue Watching,
   and primary Home rails.
+- Existing Home provider rails can be ordered from account-local Library and
+  Continue Watching signals without changing their provider-declared labels;
+  Continue Watching Resume starts the existing planner/session flow with a
+  runtime-only saved-position intent.
+- `MediaArtwork` provides a shared cached/loading/fallback boundary for
+  `PosterCard` and detail artwork. Optional trailers are limited to safe
+  provider-declared YouTube destinations rather than arbitrary external URLs.
+- Player controls, player sheets, resume prompt, and next-episode prompt use a
+  dedicated cinema-dark palette independent of the app light/dark theme.
+- Library history is cursor-paginated and independent of saved Library
+  membership/offline files; notifications form a grouped inbox with individual
+  and mark-all read recovery flows.
 
 Implemented by the stacked Obsidian overhaul:
 
@@ -161,7 +189,8 @@ Implemented by the stacked Obsidian overhaul:
 - Active title retrieval on the canonical `/search` route, shared debounced
   quick-search suggestions, media-first poster-grid results, mobile filter
   sheets, a large-screen filter sidebar, and explicit partial/no-searchable-
-  provider states. Provider catalog rails remain on Home.
+  provider states. Empty Search discovery preserves compatible provider catalog
+  names; Home remains the primary personalised discovery destination.
 - Screenshot-driven dark/light regression evidence for Settings and Search at
   390 x 844 and 1440 x 1000, plus overflow and pane assertions at 768 and 1024
   pixel widths.
@@ -173,7 +202,8 @@ Remaining evidence and upstream-data gates:
 - Add genre/language/availability facets only when providers return reliable
   metadata for those fields; do not infer them from labels.
 - Validate Downloads, episode lists, settings panels, subtitle visibility,
-  caption-safe layout, large text, and focus-not-obscured behavior on native
+  caption-safe layout, large text, focus-not-obscured behavior, artwork
+  fallbacks, player chrome, history, and notification interactions on native
   iPhone and Android targets.
 - Record native PiP, lock-screen, download, and Chromecast evidence without
   converting unknowns into claims.
@@ -182,9 +212,12 @@ Acceptance:
 
 - Core consumer flows share one token and window-class contract.
 - Search/back state and Home rail identity remain stable and test-covered.
+- Provider catalog labels and facets remain honest; local Home ordering and
+  empty Search browsing never fabricate editorial/provider semantics.
 - Player features do not regress below platform-standard media expectations.
-- Automated checks and responsive screenshots cover authenticated primary
-  states; native claims remain gated by real-device evidence.
+- Automated browser/desktop-renderer checks and responsive screenshots cover
+  authenticated primary states; native claims remain gated by real-device
+  evidence.
 - Settings and Search visibly depart from their legacy long-list/card-stack
   compositions and keep controls, focus, and content usable at 390, 768, 1024,
   and 1440 pixel widths.

@@ -1,14 +1,25 @@
 import { z } from "zod";
+
+/**
+ * Stremio providers commonly serialize an omitted metadata field as `null`
+ * rather than leaving it out. Keep the public contract optional while still
+ * rejecting non-string values for optional text fields.
+ */
+const optionalString = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? undefined);
+
 const optionalStringFromPrimitive = z
   .union([z.string(), z.number()])
-  .optional()
+  .nullish()
   .transform((value) =>
     value === undefined || value === null ? undefined : String(value),
   );
 
 const optionalStringArray = z
   .union([z.array(z.string()), z.string()])
-  .optional()
+  .nullish()
   .transform((value) => {
     if (!value) return undefined;
     if (Array.isArray(value)) return value;
@@ -26,9 +37,9 @@ export const metaPreviewSchema = z.object({
     .string()
     .nullish()
     .transform((value) => value ?? ""),
-  description: z.string().optional(),
+  description: optionalString,
   releaseInfo: optionalStringFromPrimitive,
-  released: z.string().optional(),
+  released: optionalString,
   imdbRating: optionalStringFromPrimitive,
   aliases: optionalStringArray,
   alternativeTitles: optionalStringArray,
@@ -57,20 +68,40 @@ export const videoEntrySchema = z
     };
   });
 
+export const mediaTrailerSchema = z.object({
+  source: z.string().trim().min(1).max(2_048),
+  type: z.string().trim().min(1).max(80).optional(),
+});
+
 export const metaDetailSchema = metaPreviewSchema.extend({
   background: z.string().optional(),
+  logo: z.string().optional(),
   genres: optionalStringArray,
   cast: optionalStringArray,
   director: optionalStringArray,
   runtime: optionalStringFromPrimitive,
   videos: z.array(videoEntrySchema).optional(),
+  trailers: z.array(mediaTrailerSchema).max(8).optional(),
 });
 
+/**
+ * Catalog responses are collections from untrusted providers. A single bad
+ * entry should not hide otherwise valid titles or count as an outage, while a
+ * non-empty response with no valid entries remains a validation failure.
+ */
+function normalizeCatalogMetas(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  const metas = value.flatMap((entry) => {
+    const parsed = metaPreviewSchema.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+  return metas.length > 0 || value.length === 0 ? metas : value;
+}
+
 export const catalogResponseSchema = z.object({
-  metas: z.preprocess(
-    (value) => (Array.isArray(value) ? value : []),
-    z.array(metaPreviewSchema),
-  ),
+  metas: z.preprocess(normalizeCatalogMetas, z.array(metaPreviewSchema)),
 });
 
 export const metaResponseSchema = z.object({

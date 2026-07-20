@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import type {
   AudioTrack,
@@ -23,6 +22,11 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
+import {
+  isFocusVisibleEvent,
+  setWebInputModality,
+} from "../../hooks/useWebPressableActivation";
+import { playerChrome } from "./playerChrome";
 
 interface PlayerSettingsModalProps {
   visible: boolean;
@@ -45,7 +49,6 @@ export function PlayerSettingsModal({
   playbackRate,
   onSelectPlaybackRate,
 }: PlayerSettingsModalProps) {
-  const { colors } = useTheme();
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
   const [focusedControl, setFocusedControl] = useState<string | null>(null);
@@ -53,7 +56,12 @@ export function PlayerSettingsModal({
   const webFocusProps = (control: string) =>
     Platform.OS === "web"
       ? {
-          onFocus: () => setFocusedControl(control),
+          onPointerDown: () => {
+            setWebInputModality("pointer");
+            setFocusedControl(null);
+          },
+          onFocus: (event: unknown) =>
+            setFocusedControl(isFocusVisibleEvent(event) ? control : null),
           onBlur: () => setFocusedControl(null),
         }
       : {};
@@ -65,17 +73,19 @@ export function PlayerSettingsModal({
       transparent
       onRequestClose={onClose}
     >
-      <View style={[styles.modalBg, { backgroundColor: colors.scrim }]}>
+      <View style={[styles.modalBg, { backgroundColor: playerChrome.scrim }]}>
         <View
+          testID="player-settings-sheet"
           style={[
             styles.sheetContent,
             {
-              backgroundColor: colors.surfaceElevated,
+              backgroundColor: playerChrome.surfaceStrong,
+              borderColor: playerChrome.border,
             },
           ]}
         >
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>
+            <Text style={[styles.title, { color: playerChrome.text }]}>
               {t("player.settings.title")}
             </Text>
             <Pressable
@@ -85,11 +95,12 @@ export function PlayerSettingsModal({
               accessibilityLabel={t("player.settings.done")}
               style={({ pressed }) => [
                 styles.doneButton,
-                pressed && { backgroundColor: colors.surfaceSubtle },
-                focusedControl === "done" && getWebFocusStyle(colors.focus),
+                pressed && { backgroundColor: playerChrome.surfacePressed },
+                focusedControl === "done" &&
+                  getWebFocusStyle(playerChrome.focus),
               ]}
             >
-              <Text style={[styles.doneText, { color: colors.text }]}>
+              <Text style={[styles.doneText, { color: playerChrome.text }]}>
                 {t("player.settings.done")}
               </Text>
             </Pressable>
@@ -106,9 +117,9 @@ export function PlayerSettingsModal({
               <Ionicons
                 name="speedometer-outline"
                 size={18}
-                color={colors.textSecondary}
+                color={playerChrome.textMuted}
               />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
                 {t("player.settings.speed")}
               </Text>
             </View>
@@ -124,12 +135,12 @@ export function PlayerSettingsModal({
                       styles.speedBtn,
                       {
                         backgroundColor: selected
-                          ? colors.tint + "18"
-                          : colors.surfaceSubtle,
+                          ? playerChrome.accent + "33"
+                          : playerChrome.surfaceRaised,
                       },
                       pressed && { opacity: 0.78 },
                       focusedControl === control &&
-                        getWebFocusStyle(colors.focus),
+                        getWebFocusStyle(playerChrome.focus),
                     ]}
                     onPress={() => onSelectPlaybackRate(rate)}
                     accessibilityRole="radio"
@@ -140,7 +151,9 @@ export function PlayerSettingsModal({
                       style={[
                         styles.speedBtnText,
                         {
-                          color: selected ? colors.tint : colors.textSecondary,
+                          color: selected
+                            ? playerChrome.text
+                            : playerChrome.textMuted,
                         },
                       ]}
                     >
@@ -156,14 +169,16 @@ export function PlayerSettingsModal({
               <Ionicons
                 name="volume-high-outline"
                 size={18}
-                color={colors.textSecondary}
+                color={playerChrome.textMuted}
               />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
                 {t("player.settings.audio")}
               </Text>
             </View>
             {audioTracks.length === 0 ? (
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.emptyText, { color: playerChrome.textMuted }]}
+              >
                 {t("player.settings.noAudio")}
               </Text>
             ) : (
@@ -178,32 +193,42 @@ export function PlayerSettingsModal({
                         styles.trackRow,
                         {
                           backgroundColor: item.active
-                            ? colors.tint + "18"
+                            ? playerChrome.accent + "2B"
                             : "transparent",
                         },
-                        pressed && { backgroundColor: colors.surfaceSubtle },
+                        pressed && {
+                          backgroundColor: playerChrome.surfacePressed,
+                        },
                         focusedControl === control &&
-                          getWebFocusStyle(colors.focus),
+                          getWebFocusStyle(playerChrome.focus),
                       ]}
                       onPress={() => onSelectAudio(item.id)}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: !!item.active }}
                       accessibilityLabel={`${t("player.settings.audio")}: ${item.label}`}
                     >
-                      <Text style={[styles.trackLabel, { color: colors.text }]}>
+                      <Text
+                        style={[
+                          styles.trackLabel,
+                          { color: playerChrome.text },
+                        ]}
+                      >
                         {item.label}
                       </Text>
                       <Text
                         style={[
                           styles.trackLang,
-                          { color: colors.textSecondary },
+                          { color: playerChrome.textMuted },
                         ]}
                       >
                         {item.language}
                       </Text>
                       {item.active && (
                         <Text
-                          style={[styles.checkIcon, { color: colors.tint }]}
+                          style={[
+                            styles.checkIcon,
+                            { color: playerChrome.accent },
+                          ]}
                         >
                           ✓
                         </Text>
@@ -219,14 +244,16 @@ export function PlayerSettingsModal({
               <Ionicons
                 name="text-outline"
                 size={18}
-                color={colors.textSecondary}
+                color={playerChrome.textMuted}
               />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
                 {t("player.settings.subtitles")}
               </Text>
             </View>
             {subtitles.length === 0 ? (
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.emptyText, { color: playerChrome.textMuted }]}
+              >
                 {t("player.settings.noSubtitles")}
               </Text>
             ) : (
@@ -236,11 +263,11 @@ export function PlayerSettingsModal({
                   style={({ pressed }) => [
                     styles.trackRow,
                     subtitles.every((s) => !s.active) && {
-                      backgroundColor: colors.tint + "18",
+                      backgroundColor: playerChrome.accent + "2B",
                     },
-                    pressed && { backgroundColor: colors.surfaceSubtle },
+                    pressed && { backgroundColor: playerChrome.surfacePressed },
                     focusedControl === "subtitle-off" &&
-                      getWebFocusStyle(colors.focus),
+                      getWebFocusStyle(playerChrome.focus),
                   ]}
                   onPress={() => onSelectSubtitle(null)}
                   accessibilityRole="radio"
@@ -249,7 +276,9 @@ export function PlayerSettingsModal({
                   }}
                   accessibilityLabel={t("player.settings.off")}
                 >
-                  <Text style={[styles.trackLabel, { color: colors.text }]}>
+                  <Text
+                    style={[styles.trackLabel, { color: playerChrome.text }]}
+                  >
                     {t("player.settings.off")}
                   </Text>
                 </Pressable>
@@ -264,12 +293,14 @@ export function PlayerSettingsModal({
                           styles.trackRow,
                           {
                             backgroundColor: item.active
-                              ? colors.tint + "18"
+                              ? playerChrome.accent + "2B"
                               : "transparent",
                           },
-                          pressed && { backgroundColor: colors.surfaceSubtle },
+                          pressed && {
+                            backgroundColor: playerChrome.surfacePressed,
+                          },
                           focusedControl === control &&
-                            getWebFocusStyle(colors.focus),
+                            getWebFocusStyle(playerChrome.focus),
                         ]}
                         onPress={() => onSelectSubtitle(item.id)}
                         accessibilityRole="radio"
@@ -277,21 +308,27 @@ export function PlayerSettingsModal({
                         accessibilityLabel={`${t("player.settings.subtitles")}: ${item.label}`}
                       >
                         <Text
-                          style={[styles.trackLabel, { color: colors.text }]}
+                          style={[
+                            styles.trackLabel,
+                            { color: playerChrome.text },
+                          ]}
                         >
                           {item.label}
                         </Text>
                         <Text
                           style={[
                             styles.trackLang,
-                            { color: colors.textSecondary },
+                            { color: playerChrome.textMuted },
                           ]}
                         >
                           {item.language}
                         </Text>
                         {item.active && (
                           <Text
-                            style={[styles.checkIcon, { color: colors.tint }]}
+                            style={[
+                              styles.checkIcon,
+                              { color: playerChrome.accent },
+                            ]}
                           >
                             ✓
                           </Text>
@@ -323,6 +360,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: uiRadii.sheet,
     padding: uiSpacing.xl,
     maxHeight: "80%",
+    borderWidth: 1,
   },
   header: {
     flexDirection: "row",
