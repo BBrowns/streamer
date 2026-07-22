@@ -27,6 +27,8 @@ Planner v2 returns:
 - requested-action eligibility
 - selected-path bridge, remux, and device compatibility details
 - action-specific timeout budgets
+- `sourceDiscovery` with only `partial`/`complete` status and a usable-candidate
+  count
 
 Candidate ordering is deterministic for the same normalized source set and
 device/action input. Candidate IDs are opaque and plan-local; callers must not
@@ -172,6 +174,49 @@ attempted. It never retries a loopback-only source for a remote display. These
 states are deterministic UX behavior, not evidence of native/background cast
 support on untested devices.
 
+## Fast Source Discovery And Immediate Launch
+
+The server owns a memory-only, 30-second stream-discovery cache scoped to the
+user, content type, and content ID. `/api/stream` and `/api/playback/plan`
+share its in-flight provider fan-out, so a stream-card lookup, Detail prefetch,
+and Play do not each ask every add-on again. Add-on installation, removal, and
+manifest revalidation invalidate the relevant user scope. A client-side plan
+memo is also runtime-only and is cleared when the account, bridge setup, or
+add-on set changes.
+
+All compatible providers start in parallel. The first usable response starts a
+250 ms batch window; 1.75 seconds is the fast boundary for returning a usable
+partial result. The remaining providers continue only long enough to fill the
+same short-lived server cache. A late usable result is released immediately
+once it arrives, rather than being held until every provider has settled.
+`sourceDiscovery.status` tells the client whether the plan is partial or
+complete, and `usableCandidateCount` tells it how many planner-eligible
+candidates are presently available. The status fields carry no raw source,
+provider, manifest, URL, magnet, or hash data.
+
+Detail begins a non-blocking plan prefetch after 600 ms of idle time and on
+desktop Play hover/focus. Bridge detection starts once in parallel with that
+plan and is shared by concurrent callers. When Play is pressed, Detail creates
+a runtime-only, abortable launch intent and immediately opens the player. The
+player displays a planning state, takes ownership of the normal session
+resolver as soon as a plan arrives, and must not show synthetic loading
+percentages.
+
+Escape, Close, and Cancel abort the foreground plan or partial-plan recovery,
+clean up a provisional session/engine, and ignore late results. If all
+candidates from a partial plan fail, the player makes one bounded automatic
+replan while late providers can finish. It changes sessions only if that work
+produces a new candidate; it does not restart an identical partial plan in a
+loop. Torrent attempts remain serial — the singleton torrent engine must not
+be used to race multiple torrent preparations.
+
+Ranking is intentionally start-first. The planner rejects qualities outside the
+user's explicit allowlist before it ranks candidates. For the remaining
+compatible candidates it favours direct/HLS transport, compatible codecs and
+containers, and realistic torrent seeder health before resolution. A healthy
+1080p source can therefore outrank a weak 2160p torrent. Exact ranking reasons
+remain an advanced diagnostic concern, not primary playback copy.
+
 The intended migration sequence is:
 
 1. Add the shared `PlaybackSession` contract.
@@ -184,12 +229,47 @@ The intended migration sequence is:
    **Complete.**
 7. Route cast through the same session model. **Complete.**
 
-Current status: steps 1 through 7 are complete. Gateway progress now has
-explicit `no_peers` and `stalled` states, and the torrent engine treats those
-as terminal for the current candidate so Play Best can fall back instead of
-polling forever. Remaining work is reliability and productization: remux
-runtime/cache limits, real-device download/cast/gateway tests, release
-evidence, and a more polished player readiness UI.
+Current status: steps 1 through 7 are complete. Gateway readiness has explicit
+`no_peers` and `stalled` states, and the torrent engine treats those as terminal
+for the current candidate so Play Best can fall back instead of polling forever.
+Peer discovery has a 12-second limit for an otherwise unconnected source. Once
+the first peer connects, it gets up to 20 seconds to provide metadata, with a
+32-second hard cap for the full discovery-and-metadata phase. The selected
+torrent file—not an add-on label—then decides whether the gateway can bridge it
+directly or needs an MP4 remux.
+
+For the primary Play action, the playback control plane passes a runtime-only
+`progressive-fmp4` delivery choice for a remuxed torrent. Gateway readiness then
+only requires a verified first torrent byte (up to 20 seconds); when the player
+opens the signed URL, FFmpeg emits a chunked fragmented MP4 with an empty movie
+header and subsequent media fragments. That live response intentionally has no
+arbitrary byte-range or seek support, and its `media` metadata reports
+`seekable: false` with `cacheStatus: "streaming"`. The live FFmpeg pipeline is
+cancelled with the gateway job when Play is cancelled or closed.
+
+Downloads, Cast, and the compatibility/manual seekable route retain
+`seekable-cache`: FFmpeg materializes a `+faststart` MP4 before it is declared
+ready, with a bounded 60-second remux window and normal `HEAD`/byte-range
+semantics. This costs more startup time but is required for stable seeking and
+consumers that need a complete file. Fragmented MP4 is a container transmux, not
+a video transcode: an unsupported copied codec such as HEVC or AV1 still relies
+on the existing candidate fallback rather than being made playable by remuxing.
+
+A `no_peers` result belongs to that candidate rather than the bridge as a whole,
+so the next eligible torrent source is still attempted. Gateway preparation
+does not report an elapsed-time percentage; the player presents phase and peer
+state until actual media metrics are available. The legacy `/stream` compatibility
+endpoint follows the same peer/metadata limits, keeps its seekable-cache default,
+and aborts its readiness wait when the caller disconnects. If the session-wide
+envelope expires, the terminal result is a retryable timeout rather than a
+misleading `NO_PLAYABLE_SOURCE` for candidates it never had time to try. The
+client uses the gateway's relative elapsed duration when it adopts an upgraded
+readiness budget, so a desktop bridge and a mobile/web renderer do not need
+synchronized wall clocks. Unknown-container torrent labels reserve the bounded
+remux allowance until metadata makes the container decision authoritative.
+Remaining work is reliability and productization: real-device
+download/cast/gateway tests, release evidence, and a more polished player
+readiness UI.
 
 Current terminal playback errors include specific source causes such as
 `NO_PEERS`, `BRIDGE_UNAVAILABLE`, `BRIDGE_UNSUPPORTED`, `UNSUPPORTED_CODEC`,
@@ -207,6 +287,9 @@ the shared lifecycle understandable and testable.
 - Do not persist raw `Stream` objects, media URLs, magnets, info hashes,
   external URLs, bridge URLs, or subtitle URLs inside `PlaybackSession` events
   or snapshots.
+- Do not persist discovery or planner caches, or add raw source fields to their
+  timing logs. Only the aggregate safe `sourceDiscovery` status/count may cross
+  the runtime-plan boundary.
 - Do not bypass `PlaybackOrchestrator` and
   `PlaybackSessionPlaybackService` for primary Play, Download, or Cast flows.
 - Do not make manual source picking the default UX again. `More Sources` is an
@@ -218,3 +301,5 @@ the shared lifecycle understandable and testable.
   machine.
 - Rehydrated sessions without runtime candidate mappings must re-plan; they
   must not attempt to reconstruct source data from persisted state.
+- Do not parallelize torrent warm-up without a separate coordinator with clear
+  job ownership and cancellation semantics.

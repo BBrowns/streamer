@@ -14,7 +14,7 @@ import type {
   PlannedMediaCandidate,
   RejectedCandidate,
 } from "@streamer/shared";
-import { createPlaybackPlanWithBridgeRetry } from "../../services/playback/PlaybackPlanService";
+import { getPlaybackPlanWithBridgeRetry } from "../../services/playback/PlaybackPlanService";
 import {
   createDebugBundle,
   exportDebugBundle,
@@ -194,7 +194,7 @@ export function SourceInspectorPanel({
     setLoading(true);
     setError(null);
     try {
-      const nextPlan = await createPlaybackPlanWithBridgeRetry({
+      const nextPlan = await getPlaybackPlanWithBridgeRetry({
         type: contentType,
         id: contentId,
         season,

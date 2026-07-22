@@ -106,6 +106,24 @@ describe("playbackPlanSchema", () => {
     expect(playbackPlanSchema.parse(makePlan())).toEqual(makePlan());
   });
 
+  it("accepts the safe partial source-discovery summary", () => {
+    const plan = makePlan();
+    plan.sourceDiscovery = {
+      status: "partial",
+      usableCandidateCount: 2,
+    };
+
+    expect(playbackPlanSchema.parse(plan).sourceDiscovery).toEqual(
+      plan.sourceDiscovery,
+    );
+    expect(
+      playbackPlanSchema.safeParse({
+        ...plan,
+        sourceDiscovery: { status: "partial", usableCandidateCount: -1 },
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires opaque candidate ids", () => {
     const plan = makePlan();
     plan.selectedCandidate!.id = "https://cdn.example.test/primary.mp4";

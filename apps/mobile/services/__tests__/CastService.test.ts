@@ -36,6 +36,23 @@ describe("CastService", () => {
     ).toBe(true);
   });
 
+  it("waits for the shared bridge probe before web device discovery", async () => {
+    streamEngineManager.bridgeAvailable = false;
+    streamEngineManager.bridgeStatus = "unreachable";
+
+    await castService.getDevices();
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "http://192.168.1.25:11470/api/health",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://192.168.1.25:11470/api/cast/devices",
+    );
+  });
+
   it("uses the configured stream bridge URL for playback", async () => {
     await castService.play(
       "living-room",

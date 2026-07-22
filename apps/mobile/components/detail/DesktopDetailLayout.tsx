@@ -29,6 +29,7 @@ export function DesktopDetailLayout({
   trailerUrl,
   onWatchTrailer,
   handlePlayStream,
+  onPlayIntent,
   handlePlayCandidate,
   handleDownloadStream,
   handleCastStream,
@@ -148,6 +149,7 @@ export function DesktopDetailLayout({
         hasTrailer={!!trailerUrl}
         planningAction={planningAction}
         onPlayBest={() => handlePlayStream()}
+        onPlayIntent={onPlayIntent}
         onDownload={() => handleDownloadStream()}
         onCast={handleCastStream ? () => handleCastStream() : undefined}
         onToggleLibrary={handleToggleLibrary}
@@ -194,6 +196,7 @@ export function DesktopDetailLayout({
               seriesId={id}
               videos={meta.videos || []}
               onPlayStream={handlePlayStream}
+              onPlayIntent={onPlayIntent}
               onPlayCandidate={handlePlayCandidate}
               onDownloadStream={handleDownloadStream}
             />

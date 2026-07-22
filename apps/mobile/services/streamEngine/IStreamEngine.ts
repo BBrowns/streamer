@@ -55,6 +55,10 @@ export interface GatewayJobProgress {
     | "cancelled"
     | "expired";
   phase?: PlaybackGatewayPhase;
+  /**
+   * A determinate readiness value only. Gateway preparation normally leaves
+   * this null rather than presenting elapsed time as media progress.
+   */
   progress?: number | null;
   peerCount?: number | null;
   error?: string;

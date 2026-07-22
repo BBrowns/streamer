@@ -10,12 +10,68 @@ import type {
 } from "@streamer/shared";
 
 const QUALITY_SCORE: Record<string, number> = {
-  "2160p": 4,
-  "1080p": 3,
-  "720p": 2,
-  "480p": 1,
+  "2160p": 40,
+  "1080p": 30,
+  "720p": 20,
+  "480p": 10,
   SD: 0,
 };
+
+/**
+ * These weights intentionally favour a source that is likely to begin playing
+ * promptly over extra pixels. Quality still settles otherwise equal candidates,
+ * while the planner remains responsible for enforcing the user's quality
+ * allowlist before a candidate can be selected.
+ */
+const STARTUP_TRANSPORT_SCORE: Record<MediaCandidate["kind"], number> = {
+  direct: 1_000,
+  hls: 850,
+  torrent: 650,
+  external: 0,
+  unknown: 0,
+};
+
+// A remux adds FFmpeg startup and leaves copied-codec compatibility to the
+// target. Primary Play can now begin it progressively, but it still should not
+// outrank an otherwise comparable direct source that can be served immediately.
+// Likewise, cam/TS releases are often incomplete or badly indexed even when an
+// add-on advertises many seeders.
+const REMUX_STARTUP_PENALTY = 520;
+const LOW_QUALITY_CAPTURE_PENALTY = 480;
+const THREE_DIMENSIONAL_PENALTY = 360;
+
+function releaseRiskFlags(stream: Stream): string[] {
+  // Query parameters and signed direct URLs often contain `ts`, which is not
+  // the TELESYNC release marker. Only title/name are human-authored release
+  // labels and therefore safe to classify here.
+  const text = [stream.title, stream.name].filter(Boolean).join(" ");
+  const flags: string[] = [];
+  if (
+    /\b(?:cam(?:rip)?|hdcam|hdts|ts|tele(?:sync|cine)|telesync|tc)\b/i.test(
+      text,
+    )
+  ) {
+    flags.push("low-quality-capture");
+  }
+  if (/\b(?:3d|full[.\s_-]?sbs|half[.\s_-]?sbs|hsbs)\b/i.test(text)) {
+    flags.push("three-dimensional");
+  }
+  return flags;
+}
+
+function torrentSeederScore(seeders?: number): number {
+  if (typeof seeders !== "number" || !Number.isFinite(seeders)) return -80;
+
+  const normalizedSeeders = Math.max(0, Math.floor(seeders));
+  if (normalizedSeeders === 0) return -240;
+  if (normalizedSeeders < 3) return -180;
+  if (normalizedSeeders < 10) return -80;
+
+  // Seeder reports from add-ons are approximate. A capped logarithmic bonus
+  // rewards a healthy swarm without letting an unverified large count dominate
+  // source type, compatibility, or the user's explicit quality selection.
+  return Math.min(120, Math.round(Math.log2(normalizedSeeders) * 20));
+}
 
 interface CandidateScoringPreferences {
   preferredAudioLanguage?: string | null;
@@ -179,7 +235,7 @@ export function normalizeStream(stream: Stream): MediaCandidate {
     hdr,
     seeders: stream.seeders,
     sizeBytes,
-    riskFlags: [],
+    riskFlags: releaseRiskFlags(stream),
   };
 }
 
@@ -333,30 +389,41 @@ export function scoreCandidate(
 ): number {
   let score = 0;
 
-  if (candidate.kind === "direct") score += 1000;
-  if (candidate.kind === "hls") score += 900;
-  if (candidate.kind === "torrent" && bridgeAvailable) score += 650;
+  if (candidate.kind !== "torrent" || bridgeAvailable) {
+    score += STARTUP_TRANSPORT_SCORE[candidate.kind];
+  }
 
-  if (candidate.videoCodec === "h264") score += 160;
+  if (candidate.videoCodec === "h264") score += 180;
   if (candidate.videoCodec === "h265" && deviceProfile.supports.h265) {
-    score += 80;
+    score += 110;
+  }
+  if (candidate.videoCodec === "av1" && deviceProfile.supports.av1) {
+    score += 100;
   }
   if (candidate.hdr === "dolby-vision" && !deviceProfile.supports.dolbyVision) {
     score -= 500;
   }
 
-  if (candidate.container === "mp4") score += 120;
-  if (candidate.container === "hls") score += 80;
-  if (candidateNeedsRemux(candidate, deviceProfile)) score += 40;
+  if (candidate.container === "mp4") score += 140;
+  if (candidate.container === "hls") score += 110;
+  if (candidateNeedsRemux(candidate, deviceProfile)) {
+    score -= REMUX_STARTUP_PENALTY;
+  }
 
-  score += (QUALITY_SCORE[candidate.quality || "SD"] ?? 0) * 40;
+  if (candidate.riskFlags.includes("low-quality-capture")) {
+    score -= LOW_QUALITY_CAPTURE_PENALTY;
+  }
+  if (candidate.riskFlags.includes("three-dimensional")) {
+    score -= THREE_DIMENSIONAL_PENALTY;
+  }
+
+  score += QUALITY_SCORE[candidate.quality || "SD"] ?? 0;
   score += audioLanguageScore(candidate, preferences);
 
   if (!qualityWithinProfile(candidate, deviceProfile)) score -= 250;
 
-  if (typeof candidate.seeders === "number") {
-    score += Math.min(candidate.seeders, 250) / 2;
-    if (candidate.seeders < 3) score -= 120;
+  if (candidate.kind === "torrent") {
+    score += torrentSeederScore(candidate.seeders);
   }
 
   if (action === "download" && candidate.kind === "hls") score -= 600;

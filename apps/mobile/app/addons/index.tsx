@@ -24,6 +24,7 @@ import {
 } from "../../hooks/useAddons";
 import { useTheme } from "../../hooks/useTheme";
 import { api } from "../../services/api";
+import { invalidatePlaybackPlanCache } from "../../services/playback/PlaybackPlanService";
 import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { AppButton } from "../../components/ui/AppButton";
@@ -83,6 +84,7 @@ export default function AddonsScreen() {
       return data;
     },
     onSuccess: (addon) => {
+      invalidatePlaybackPlanCache();
       queryClient.setQueryData<InstalledAddon[]>(
         addonQueryKeys.list(userId),
         (current) => upsertInstalledAddon(current, addon),
@@ -90,6 +92,7 @@ export default function AddonsScreen() {
       void queryClient.invalidateQueries({ queryKey: ["addons"] });
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
       void queryClient.invalidateQueries({ queryKey: ["search"] });
+      void queryClient.invalidateQueries({ queryKey: ["streams"] });
       setAddonUrl("");
       setInstallFeedback({
         tone: "success",
@@ -116,6 +119,7 @@ export default function AddonsScreen() {
       await api.delete(`/api/addons/${id}`);
     },
     onSuccess: (_result, addonId) => {
+      invalidatePlaybackPlanCache();
       queryClient.setQueryData<InstalledAddon[]>(
         addonQueryKeys.list(userId),
         (current) => removeInstalledAddon(current, addonId),
@@ -123,6 +127,7 @@ export default function AddonsScreen() {
       void queryClient.invalidateQueries({ queryKey: ["addons"] });
       void queryClient.invalidateQueries({ queryKey: ["catalog"] });
       void queryClient.invalidateQueries({ queryKey: ["search"] });
+      void queryClient.invalidateQueries({ queryKey: ["streams"] });
       setRemovalError(null);
     },
     onError: (error: unknown, id: string) => {

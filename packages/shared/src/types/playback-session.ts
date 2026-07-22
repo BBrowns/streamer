@@ -184,6 +184,7 @@ export interface PlaybackGatewayProgressEvent extends PlaybackSessionEventBase {
   type: "gateway_progress";
   gatewayJobId: string;
   phase: PlaybackGatewayPhase;
+  /** Present only when the gateway has a real determinate readiness value. */
   progress?: number;
   peerCount?: number;
 }

@@ -215,6 +215,72 @@ describe("torrent lookup", () => {
     await rm(cacheRoot, { recursive: true, force: true });
   });
 
+  it("ends the legacy stream readiness wait when no peer appears", async () => {
+    vi.useFakeTimers();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      const torrent = new EventEmitter() as any;
+      torrent.infoHash = "abcdef123456";
+      torrent.numPeers = 0;
+      torrent.files = [];
+      let markReadinessListenerAttached: (() => void) | undefined;
+      const readinessListenerAttached = new Promise<void>((resolve) => {
+        markReadinessListenerAttached = resolve;
+      });
+      const originalOnce = torrent.once.bind(torrent);
+      torrent.once = vi.fn(
+        (event: string, listener: (...args: any[]) => void) => {
+          if (event === "ready") markReadinessListenerAttached?.();
+          return originalOnce(event, listener);
+        },
+      );
+
+      class FakeWebTorrent {
+        torrents: any[] = [];
+        on = vi.fn();
+        destroy = (cb: (err: Error | null) => void) => cb(null);
+        get = vi.fn(() => null);
+        add = vi.fn(() => torrent);
+        createServer = () => ({
+          server: {
+            listen: (_port: number, _host: string, cb: () => void) => cb(),
+            address: () => ({ port: 3210 }),
+            on: vi.fn(),
+          },
+        });
+      }
+
+      __setWebTorrentImporterForTests(async () => ({
+        default: FakeWebTorrent as any,
+      }));
+
+      const res = makeRes();
+      const streamPromise = streamRequest(
+        {
+          method: "GET",
+          query: { magnet: "magnet:?xt=urn:btih:abcdef123456" },
+          hostname: "127.0.0.1",
+        } as any,
+        res as any,
+      );
+
+      await readinessListenerAttached;
+      await vi.advanceTimersByTimeAsync(12_000);
+      await streamPromise;
+
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith({
+        error: "No peers found quickly enough to start this source.",
+        retryable: true,
+      });
+    } finally {
+      consoleError.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("passes episode hints from direct stream requests into file selection", async () => {
     class FakeWebTorrent {
       torrents: any[] = [];

@@ -106,6 +106,9 @@ describe("Add-ons removal", () => {
         queryKey: ["search"],
       }),
     );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["streams"],
+    });
     screen.unmount();
     queryClient.clear();
   });
@@ -139,6 +142,9 @@ describe("Add-ons removal", () => {
         queryKey: ["search"],
       }),
     );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["streams"],
+    });
     screen.unmount();
     queryClient.clear();
   });

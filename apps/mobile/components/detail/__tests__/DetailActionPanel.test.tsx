@@ -133,7 +133,7 @@ describe("DetailActionPanel", () => {
     expect(callbacks.onWatchTrailer).toHaveBeenCalledTimes(1);
   });
 
-  it("disables movie playback actions when no source exists", () => {
+  it("keeps planner actions available while the raw stream list is empty", () => {
     const { getByText, queryByText, callbacks } = renderPanel({
       sourceCount: 0,
       hasPlayableSources: false,
@@ -143,7 +143,7 @@ describe("DetailActionPanel", () => {
     fireEvent.press(getByText("Download"));
 
     expect(queryByText("No sources")).toBeNull();
-    expect(callbacks.onPlayBest).not.toHaveBeenCalled();
-    expect(callbacks.onDownload).not.toHaveBeenCalled();
+    expect(callbacks.onPlayBest).toHaveBeenCalledTimes(1);
+    expect(callbacks.onDownload).toHaveBeenCalledTimes(1);
   });
 });

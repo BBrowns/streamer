@@ -29,7 +29,8 @@ export interface MediaInfo {
 
 export type PlaybackLaunchIntent =
   | { type: "play" }
-  | { type: "resume"; positionSeconds: number };
+  | { type: "resume"; positionSeconds: number }
+  | { type: "planning"; launchId: string };
 
 export interface StreamMetrics {
   state: "finding_peers" | "connecting" | "downloading" | "ready";
@@ -144,6 +145,12 @@ interface PlayerState {
     attemptId?: string | null,
     fallbackReason?: string | null,
     launchIntent?: PlaybackLaunchIntent | null,
+  ) => void;
+  setPlaybackPlanning: (media: MediaInfo, launchId: string) => void;
+  setPlaybackPlanningFailure: (
+    launchId: string,
+    error: PlaybackRuntimeError,
+    sessionId?: string,
   ) => void;
   consumePlaybackLaunchIntent: () => PlaybackLaunchIntent | null;
   advanceToNextFallback: (reason?: string | null) => Stream | null;
@@ -299,6 +306,58 @@ export const usePlayerStore = create<PlayerState>()(
           runtimeError: null,
           _eventSource: null,
           _peerTimeout: null,
+        });
+      },
+      setPlaybackPlanning: (media, launchId) => {
+        const state = get();
+        if (state._eventSource) {
+          state._eventSource.removeAllEventListeners();
+          state._eventSource.close();
+        }
+        if (state._peerTimeout) clearTimeout(state._peerTimeout);
+
+        set({
+          currentStream: null,
+          mediaInfo: media,
+          fallbackStreams: [],
+          fallbackReason: null,
+          playbackSessionId: null,
+          playbackCandidateId: null,
+          playbackAttemptId: null,
+          playbackLaunchIntent: { type: "planning", launchId },
+          isPlaying: false,
+          isBuffering: true,
+          currentTime: 0,
+          duration: 0,
+          streamState: "loading_metrics",
+          streamMetrics: null,
+          errorMessage: null,
+          runtimeState: "planning",
+          runtimeError: null,
+          _eventSource: null,
+          _peerTimeout: null,
+        });
+      },
+      setPlaybackPlanningFailure: (launchId, error, sessionId) => {
+        const state = get();
+        if (
+          state.playbackLaunchIntent?.type !== "planning" ||
+          state.playbackLaunchIntent.launchId !== launchId
+        ) {
+          return;
+        }
+
+        set({
+          playbackSessionId: sessionId ?? null,
+          playbackCandidateId: null,
+          playbackAttemptId: null,
+          isPlaying: false,
+          isBuffering: false,
+          streamState: "error",
+          streamMetrics: null,
+          errorMessage: error.message,
+          runtimeState: getPlaybackRuntimeState(error.code),
+          runtimeError: error,
         });
       },
       consumePlaybackLaunchIntent: () => {

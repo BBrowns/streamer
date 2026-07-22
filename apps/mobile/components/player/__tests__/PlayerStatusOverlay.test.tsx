@@ -93,6 +93,25 @@ describe("PlayerStatusOverlay", () => {
     expect(onCancelPreparation).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a partial-discovery recovery in its cancellable loading state", () => {
+    const onCancelPreparation = jest.fn();
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="loading_metrics"
+        runtimeState="planning"
+        streamMetrics={null}
+        isBuffering
+        errorMessage={null}
+        onBack={jest.fn()}
+        onCancelPreparation={onCancelPreparation}
+      />,
+    );
+
+    expect(screen.getByText("player.status.searchingSource")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("player.status.cancelPreparation"));
+    expect(onCancelPreparation).toHaveBeenCalledTimes(1);
+  });
+
   it("offers retry and Sources & Devices actions on playback errors", () => {
     const onRetry = jest.fn();
     const onChooseSource = jest.fn();
@@ -149,9 +168,10 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.queryByText("common.retry")).toBeNull();
   });
 
-  it("uses session readiness state and gateway progress for loading copy", () => {
+  it("uses peer and phase copy instead of a synthetic gateway percentage", () => {
     const session: PlaybackSession = {
       ...sessionBase,
+      gatewayJobId: "gateway-job-1",
       eventLog: [
         {
           id: "00000000-0000-4000-8000-000000000002",
@@ -178,7 +198,129 @@ describe("PlayerStatusOverlay", () => {
     );
 
     expect(screen.getByText("player.status.findingPeers")).toBeTruthy();
-    expect(screen.getByText("2 player.controls.peers • 25%")).toBeTruthy();
+    expect(screen.getByText("2 player.controls.peers")).toBeTruthy();
+    expect(screen.queryByText(/25%/)).toBeNull();
+  });
+
+  it("explains when peer discovery has not found a peer yet", () => {
+    const session: PlaybackSession = {
+      ...sessionBase,
+      gatewayJobId: "gateway-job-1",
+      eventLog: [
+        {
+          id: "00000000-0000-4000-8000-000000000003",
+          sessionId: sessionBase.id,
+          at: "2026-06-04T10:00:01.000Z",
+          type: "gateway_progress",
+          gatewayJobId: "gateway-job-1",
+          phase: "finding_peers",
+          progress: 0.25,
+          peerCount: 0,
+        },
+      ],
+    };
+
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="loading_metrics"
+        runtimeState="buffering"
+        streamMetrics={null}
+        isBuffering
+        errorMessage={null}
+        session={session}
+        onBack={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("player.status.noPeersYet")).toBeTruthy();
+    expect(screen.queryByText(/25%/)).toBeNull();
+  });
+
+  it("does not present a terminal no-peers result as an active search", () => {
+    const session: PlaybackSession = {
+      ...sessionBase,
+      gatewayJobId: "gateway-job-1",
+      eventLog: [
+        {
+          id: "00000000-0000-4000-8000-000000000007",
+          sessionId: sessionBase.id,
+          at: "2026-06-04T10:00:01.000Z",
+          type: "gateway_progress",
+          gatewayJobId: "gateway-job-1",
+          phase: "no_peers",
+          peerCount: 0,
+        },
+      ],
+    };
+
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="loading_metrics"
+        runtimeState="buffering"
+        streamMetrics={null}
+        isBuffering
+        errorMessage={null}
+        session={session}
+        onBack={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("player.status.noPeersFound")).toBeTruthy();
+    expect(screen.queryByText("player.status.noPeersYet")).toBeNull();
+  });
+
+  it("does not carry a previous candidate's no-peer status into the next source", () => {
+    const session: PlaybackSession = {
+      ...sessionBase,
+      gatewayJobId: "gateway-job-2",
+      eventLog: [
+        {
+          id: "00000000-0000-4000-8000-000000000004",
+          sessionId: sessionBase.id,
+          at: "2026-06-04T10:00:01.000Z",
+          type: "gateway_progress",
+          gatewayJobId: "gateway-job-1",
+          phase: "no_peers",
+          peerCount: 0,
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000005",
+          sessionId: sessionBase.id,
+          at: "2026-06-04T10:00:02.000Z",
+          type: "fallback_started",
+          fromCandidateId: "candidate-1",
+          toCandidateId: "candidate-2",
+          reason: "No peers found for the previous source.",
+        },
+        {
+          id: "00000000-0000-4000-8000-000000000006",
+          sessionId: sessionBase.id,
+          at: "2026-06-04T10:00:03.000Z",
+          type: "gateway_progress",
+          gatewayJobId: "gateway-job-2",
+          phase: "finding_peers",
+          peerCount: 1,
+        },
+      ],
+    };
+
+    const screen = render(
+      <PlayerStatusOverlay
+        streamState="loading_metrics"
+        runtimeState="finding_peers"
+        streamMetrics={null}
+        isBuffering
+        errorMessage={null}
+        session={session}
+        onBack={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("1 player.controls.peers")).toBeTruthy();
+    expect(
+      screen.queryByText("No peers found for the previous source."),
+    ).toBeNull();
+    expect(screen.queryByText("player.status.noPeersYet")).toBeNull();
   });
 
   it("uses a terminal session error instead of a generic player error", () => {

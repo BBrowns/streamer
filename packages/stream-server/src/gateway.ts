@@ -7,10 +7,12 @@ import {
 } from "./security.js";
 import {
   ensureTorrentReady,
+  getSelectedFile,
   isTorrentEngineUnavailableError,
   prepareSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
+  shouldRemuxTorrentFile,
   waitForTorrentFileFirstBytes,
   destroyTorrentByInfoHash,
 } from "./torrent.js";
@@ -26,6 +28,7 @@ type GatewayJobState =
   | "cancelled"
   | "expired";
 type GatewayJobMode = "bridge" | "remux";
+type GatewayRemuxStrategy = "seekable-cache" | "progressive-fmp4";
 type GatewayJobPhase =
   | "finding_peers"
   | "no_peers"
@@ -47,6 +50,7 @@ interface GatewayJob {
   fileIdx?: number;
   hints?: FileSelectionHints;
   mode: GatewayJobMode;
+  remuxStrategy: GatewayRemuxStrategy;
   state: GatewayJobState;
   error?: string;
   peerCount?: number;
@@ -67,8 +71,14 @@ const TERMINAL_JOB_TTL_MS = 15 * 60 * 1000;
 const UNUSED_READY_JOB_TTL_MS = 5 * 60 * 1000;
 const CONSUMED_READY_JOB_TTL_MS = 15 * 60 * 1000;
 const JOB_PRUNE_INTERVAL_MS = 60 * 1000;
-const GATEWAY_READY_TIMEOUT_MS = 120_000;
-const GATEWAY_STALLED_AFTER_MS = 60_000;
+const GATEWAY_PEER_DISCOVERY_TIMEOUT_MS = 12_000;
+const GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS = 20_000;
+// A peer gets up to 20 seconds to provide metadata, but the entire metadata
+// phase remains bounded even when that peer arrives at the discovery deadline.
+const GATEWAY_METADATA_TIMEOUT_MS =
+  GATEWAY_PEER_DISCOVERY_TIMEOUT_MS + GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS;
+const GATEWAY_FIRST_BYTE_TIMEOUT_MS = 20_000;
+const GATEWAY_REMUX_READY_TIMEOUT_MS = 60_000;
 const jobs = new Map<string, GatewayJob>();
 
 function parseInfoHash(magnet: string) {
@@ -79,8 +89,14 @@ function parseInfoHash(magnet: string) {
 function sanitizeGatewayError(err: unknown) {
   const message = String((err as Error | undefined)?.message ?? err);
   if (isTorrentEngineUnavailableError(err)) return message;
-  if (message.includes("Torrent ready timeout")) {
-    return "Torrent metadata timed out. No peers found in 2 minutes.";
+  if (message.includes("Torrent peer discovery timeout")) {
+    return "No peers found quickly enough to start this source.";
+  }
+  if (
+    message.includes("Torrent ready timeout") ||
+    message.includes("Torrent metadata timeout after peer connection")
+  ) {
+    return "Torrent metadata was not ready in time.";
   }
   if (message.includes("Torrent file first byte timeout")) {
     return "Torrent stalled while checking piece availability.";
@@ -100,16 +116,16 @@ function isRetryableGatewayError(error: unknown) {
 
 function isNoPeersGatewayError(error: unknown) {
   const message = sanitizeGatewayError(error).toLowerCase();
-  return (
-    message.includes("no peers") ||
-    message.includes("metadata timed out") ||
-    message.includes("torrent ready timeout")
-  );
+  return message.includes("no peers") || message.includes("peer discovery");
 }
 
 function isStalledGatewayError(error: unknown) {
   const message = sanitizeGatewayError(error).toLowerCase();
-  return message.includes("stalled");
+  return (
+    message.includes("stalled") ||
+    message.includes("metadata was not ready") ||
+    message.includes("torrent ready timeout")
+  );
 }
 
 function shouldPruneJob(job: GatewayJob, now: number) {
@@ -158,18 +174,14 @@ function getJobPhase(job: GatewayJob): GatewayJobPhase {
 }
 
 function getEffectiveJobState(job: GatewayJob): GatewayJobState {
-  if (
-    job.state === "preparing" &&
-    job.mode !== "remux" &&
-    (job.peerCount ?? 0) > 0 &&
-    Date.now() - job.createdAt > GATEWAY_STALLED_AFTER_MS
-  ) {
-    return "stalled";
-  }
+  // Warmup owns its explicit peer, metadata, and first-byte failures. Do not
+  // synthesize a terminal state from wall time while a probe can still resolve
+  // on the same event-loop turn; that used to reject an otherwise ready source
+  // just before the final status poll.
   return job.state;
 }
 
-function getJobProgress(job: GatewayJob, elapsedMs: number) {
+function getJobProgress(job: GatewayJob) {
   const state = getEffectiveJobState(job);
   if (state === "ready") return 1;
   if (
@@ -179,23 +191,18 @@ function getJobProgress(job: GatewayJob, elapsedMs: number) {
     state === "expired"
   )
     return null;
-  if (job.mode === "remux" && job.remuxStartedAt) {
-    const remuxElapsed = Date.now() - job.remuxStartedAt;
-    return Math.min(
-      0.98,
-      Math.max(0.25, 0.25 + (remuxElapsed / GATEWAY_READY_TIMEOUT_MS) * 0.7),
-    );
+  // Gateway readiness is indeterminate until the torrent can actually play.
+  // Do not turn elapsed preparation time into a fake media progress percentage.
+  return null;
+}
+
+function getGatewayReadyTimeoutMs(job: GatewayJob) {
+  if (job.mode === "remux" && job.remuxStrategy === "seekable-cache") {
+    return GATEWAY_METADATA_TIMEOUT_MS + GATEWAY_REMUX_READY_TIMEOUT_MS;
   }
-  if (job.firstByteProbeStartedAt) {
-    const probeElapsed = Date.now() - job.firstByteProbeStartedAt;
-    return Math.min(
-      0.98,
-      Math.max(0.35, 0.35 + (probeElapsed / GATEWAY_READY_TIMEOUT_MS) * 0.55),
-    );
-  }
-  const elapsedProgress = elapsedMs / GATEWAY_READY_TIMEOUT_MS;
-  const peerProgress = (job.peerCount ?? 0) > 0 ? 0.2 : 0;
-  return Math.min(0.95, Math.max(peerProgress, elapsedProgress));
+  // Direct torrent bridging and progressive fMP4 remuxing only need verified
+  // piece-zero readability before returning the player URL.
+  return GATEWAY_METADATA_TIMEOUT_MS + GATEWAY_FIRST_BYTE_TIMEOUT_MS;
 }
 
 function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
@@ -211,13 +218,15 @@ function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
   return {
     remuxed: true,
     container: "mp4",
-    seekable: state === "ready",
+    seekable: job.remuxStrategy === "seekable-cache" && state === "ready",
     cacheStatus:
-      state === "ready"
-        ? "ready"
-        : state === "error" || state === "cancelled" || state === "expired"
-          ? "unavailable"
-          : "pending",
+      state === "error" || state === "cancelled" || state === "expired"
+        ? "unavailable"
+        : job.remuxStrategy === "progressive-fmp4"
+          ? "streaming"
+          : state === "ready"
+            ? "ready"
+            : "pending",
   };
 }
 
@@ -240,9 +249,9 @@ function serializeJob(job: GatewayJob) {
     lastStreamAccessAt: job.lastStreamAccessAt
       ? new Date(job.lastStreamAccessAt).toISOString()
       : null,
-    progress: getJobProgress(job, elapsedMs),
+    progress: getJobProgress(job),
     elapsedMs,
-    readyTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
+    readyTimeoutMs: getGatewayReadyTimeoutMs(job),
     playbackUrl:
       state === "cancelled" || state === "no_peers" || state === "expired"
         ? null
@@ -328,6 +337,7 @@ function addGatewayJobBreadcrumb(
     data: {
       jobId: job.id,
       mode: job.mode,
+      remuxStrategy: job.remuxStrategy,
       state: job.state,
       phase: getJobPhase(job),
       hasInfoHash: Boolean(job.infoHash),
@@ -438,11 +448,38 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
 
-    await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
+    const metadataAbortController = new AbortController();
+    job.abortController = metadataAbortController;
+    try {
+      await ensureTorrentReady(torrent, GATEWAY_METADATA_TIMEOUT_MS, {
+        signal: metadataAbortController.signal,
+        initialPeerTimeoutMs: GATEWAY_PEER_DISCOVERY_TIMEOUT_MS,
+        metadataTimeoutAfterPeerMs: GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS,
+      });
+    } finally {
+      if (job.abortController === metadataAbortController) {
+        job.abortController = undefined;
+      }
+    }
     if (isGatewayJobCancelled(job)) return;
 
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
+
+    // Add-ons frequently omit the container from their stream label. The
+    // actual selected file is authoritative: do not report a bridge job as
+    // ready after its first byte if serving that file will later trigger a
+    // full MKV -> MP4 remux. That used to hand the player a misleadingly
+    // ready URL, then start an uncancelled remux only when the video element
+    // requested it.
+    const selectedFile = getSelectedFile(torrent, job.fileIdx, job.hints);
+    if (job.mode !== "remux" && shouldRemuxTorrentFile(selectedFile.name)) {
+      job.mode = "remux";
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info", {
+        remuxDetectedFromSelectedFile: true,
+      });
+    }
 
     if (job.mode === "remux") {
       job.remuxStartedAt = Date.now();
@@ -453,12 +490,26 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
       const abortController = new AbortController();
       job.abortController = abortController;
       try {
-        await prepareSeekableRemux(torrent, {
-          fileIdx: job.fileIdx,
-          hints: job.hints,
-          signal: abortController.signal,
-          remuxTimeoutMs: GATEWAY_READY_TIMEOUT_MS,
-        });
+        if (job.remuxStrategy === "progressive-fmp4") {
+          // Primary Play remuxes are fragmented MP4 streams. Proving the
+          // first torrent byte is readable is the last preflight we need;
+          // FFmpeg starts when the player connects, so we do not wait for the
+          // whole movie just to relocate an MP4 index.
+          job.firstByteProbeStartedAt = job.remuxStartedAt;
+          await waitForTorrentFileFirstBytes(torrent, {
+            fileIdx: job.fileIdx,
+            hints: job.hints,
+            signal: abortController.signal,
+            timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
+          });
+        } else {
+          await prepareSeekableRemux(torrent, {
+            fileIdx: job.fileIdx,
+            hints: job.hints,
+            signal: abortController.signal,
+            remuxTimeoutMs: GATEWAY_REMUX_READY_TIMEOUT_MS,
+          });
+        }
       } finally {
         if (job.abortController === abortController) {
           job.abortController = undefined;
@@ -478,7 +529,7 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
           fileIdx: job.fileIdx,
           hints: job.hints,
           signal: abortController.signal,
-          timeoutMs: GATEWAY_READY_TIMEOUT_MS,
+          timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
         });
       } finally {
         if (job.abortController === abortController) {
@@ -524,6 +575,10 @@ function parseJobRequest(req: Request) {
       ? req.body.fileIdx
       : undefined;
   const remux = req.body?.remux === "mp4" || req.body?.remuxFormat === "mp4";
+  const remuxStrategy: GatewayRemuxStrategy =
+    req.body?.remuxStrategy === "progressive-fmp4"
+      ? "progressive-fmp4"
+      : "seekable-cache";
   const hints = parseFileSelectionHints(req.body);
 
   return {
@@ -531,6 +586,7 @@ function parseJobRequest(req: Request) {
     fileIdx,
     hints,
     mode: remux ? ("remux" as const) : ("bridge" as const),
+    remuxStrategy,
   };
 }
 
@@ -551,6 +607,7 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
     fileIdx: parsed.fileIdx,
     hints: parsed.hints,
     mode: parsed.mode,
+    remuxStrategy: parsed.remuxStrategy,
     state: "preparing",
     activeStreamCount: 0,
     createdAt: Date.now(),
@@ -620,9 +677,16 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
   if (terminalResponse) {
     return res.status(terminalResponse.status).json(terminalResponse.body);
   }
-  if (job.mode === "remux" && job.state !== "ready") {
+  // The job preflight owns metadata, first-byte, and remux readiness. Serving
+  // a bridge job while that work is still pending used to create a second,
+  // uncancellable metadata wait. The player already polls this job, so make
+  // every mode wait for its single authoritative ready transition.
+  if (job.state !== "ready") {
     return res.status(425).json({
-      error: "Gateway remux is still preparing.",
+      error:
+        job.mode === "remux"
+          ? "Gateway remux is still preparing."
+          : "Gateway source is still preparing.",
       retryable: true,
     });
   }
@@ -630,18 +694,31 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
   trackGatewayStream(job, res);
 
   try {
-    const torrent = await prepareTorrent(job.magnet);
-    if (isGatewayJobCancelled(job)) {
-      return res.status(410).json({
-        error: job.error || "Gateway job cancelled",
-        retryable: false,
-      });
-    }
-    job.infoHash = torrent.infoHash || job.infoHash;
-    job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
-    job.updatedAt = Date.now();
+    let torrent: any;
+    const readinessAbortController = new AbortController();
+    job.abortController = readinessAbortController;
+    try {
+      torrent = await prepareTorrent(job.magnet);
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({
+          error: job.error || "Gateway job cancelled",
+          retryable: false,
+        });
+      }
+      job.infoHash = torrent.infoHash || job.infoHash;
+      job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
+      job.updatedAt = Date.now();
 
-    await ensureTorrentReady(torrent, GATEWAY_READY_TIMEOUT_MS);
+      await ensureTorrentReady(torrent, GATEWAY_METADATA_TIMEOUT_MS, {
+        signal: readinessAbortController.signal,
+        initialPeerTimeoutMs: GATEWAY_PEER_DISCOVERY_TIMEOUT_MS,
+        metadataTimeoutAfterPeerMs: GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS,
+      });
+    } finally {
+      if (job.abortController === readinessAbortController) {
+        job.abortController = undefined;
+      }
+    }
     if (isGatewayJobCancelled(job)) {
       return res.status(410).json({
         error: job.error || "Gateway job cancelled",
@@ -657,7 +734,9 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
           fileIdx: job.fileIdx,
           hints: job.hints,
           remuxFormat: "mp4",
+          remuxStrategy: job.remuxStrategy,
           signal: abortController.signal,
+          remuxTimeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
         });
         if (!isGatewayJobCancelled(job) && res.statusCode < 400) {
           job.state = "ready";
@@ -692,6 +771,13 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
       hints: job.hints,
     });
   } catch (err) {
+    const terminalResponse = getTerminalStreamResponse(job);
+    if (terminalResponse) {
+      if (!res.headersSent) {
+        return res.status(terminalResponse.status).json(terminalResponse.body);
+      }
+      return;
+    }
     const error = sanitizeGatewayError(err);
     job.state = "error";
     job.error = error;

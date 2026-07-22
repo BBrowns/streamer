@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-07-18.
+> Last updated: 2026-07-20.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -42,6 +42,12 @@ Current phase:
   to safe YouTube destinations; player chrome is always cinema-dark; Library
   has independent cursor-paginated watch history; and Notifications is a
   grouped, retryable inbox with individual and bulk read actions.
+- Fast-source-readiness pass: stream discovery is now user-scoped,
+  memory-only, single-flight work shared by stream cards and playback planning.
+  Compatible add-ons fan out in parallel, a usable fast batch returns without
+  waiting for slow providers, Detail can warm and share a plan, and Play opens
+  a cancellable player planning state immediately. The session resolver still
+  prepares torrent candidates serially; no parallel torrent hedge is implied.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
 
@@ -210,6 +216,39 @@ Playback is now structured around planning rather than rendering-time resolution
 - The client no longer needs to resolve every visible stream card.
 - Source cards should remain cheap metadata views; resolution should happen only on Play, Download, or Cast.
 
+### Fast Source Discovery And Launch
+
+- `AggregatorService.getStreamDiscovery()` is the shared, authoritative source
+  fan-out for `/api/stream` and `/api/playback/plan`. Its bounded 30-second
+  in-memory cache is keyed by user/type/content ID and coalesces concurrent
+  requests. It is invalidated for add-on install/removal/revalidation; account
+  separation is intrinsic to the cache key.
+- Compatible stream add-ons run in parallel. Once a usable batch arrives, the
+  server gathers another 250 ms of fast results, then returns `partial`; 1.75
+  seconds is the first-result boundary. Late provider results continue only to
+  warm the short-lived cache, and a usable response after that boundary is
+  released immediately rather than waiting for every provider.
+- `PlaybackPlan.sourceDiscovery` contains only `status` (`partial` or
+  `complete`) and `usableCandidateCount`. `/api/stream` returns the compatible
+  status-only envelope. These fields, the cache, and aggregate timing logs must
+  never persist or reveal provider URLs, manifests, resolved media URLs,
+  magnets, or hashes.
+- Detail prefetch starts after 600 ms of idle time and on desktop Play
+  hover/focus. It shares an in-memory planner entry with Play, More Sources,
+  and the source inspector; bridge detection runs once alongside it. Client
+  plan entries are discarded on account, bridge configuration, or add-on
+  changes.
+- Play immediately navigates with a runtime-only planning intent. Escape,
+  Close, and Cancel abort the foreground plan/replan, remove provisional
+  session work, and suppress late navigation. If all candidates from a partial
+  plan fail, one bounded automatic replan may use the warmed cache; it must
+  only switch to newly discovered candidates and must not loop identical
+  partial plans.
+- Ranking first enforces the selected quality allowlist. It then favours likely
+  startup success (direct/HLS transport, compatible codec/container, realistic
+  seeder health) before resolution, so a healthy 1080p candidate may beat a
+  weak 2160p torrent. Exact score details stay behind advanced diagnostics.
+
 ### Typed Playback Orchestration
 
 The mobile app now has typed playback orchestration:
@@ -233,6 +272,18 @@ Play, Download, and Cast orchestration:
 - Sessions do not persist `Stream` objects, resolved media URLs, magnets, info
   hashes, external URLs, or bridge URLs.
 - Session and candidate IDs must be opaque UUIDs, not source-derived values.
+- Gateway peer discovery is source-scoped and bounded: a candidate with no
+  peer fails after 12 seconds so the session can try the next candidate. Once
+  connected, a peer gets up to 20 seconds to provide metadata, with a
+  32-second discovery-and-metadata hard cap. Primary Play uses a runtime-only
+  progressive-fMP4 strategy for remuxed torrents, so readiness needs only a
+  verified first torrent byte within 20 seconds and the live FFmpeg response is
+  non-seekable. Download, Cast, and the default compatibility/manual path use
+  the 60-second seekable-cache remux window. Cancellation also aborts metadata
+  waiting and a live FFmpeg pipeline. The legacy `/stream` compatibility
+  endpoint uses the same peer/metadata limits, retains its seekable-cache
+  default, and aborts its wait on a client disconnect. Readiness UI shows
+  factual phase/peer state, never a synthetic elapsed-time percentage.
 - Existing `PlaybackPlan` behavior remains supported as a compatibility wrapper.
   Primary Play, Download, and Cast flows now use the session model.
 
@@ -467,11 +518,15 @@ Gateway lifecycle exists now, but these are still open:
 - Consider persistent gateway/download metadata for recoverability.
 - Unused ready jobs are now pruned periodically, while jobs with active stream
   consumers are protected from cleanup.
-- FFmpeg remux output is materialized into bounded MP4 cache files before
-  range seeking. Remux preparation now supports timeout, explicit cancellation,
-  gateway `remuxing` status, configurable FFmpeg path, cache TTL/size limits,
-  health diagnostics, and gateway media capability metadata. Real large-file
-  playback and seek behavior still need device validation.
+- Primary Play can stream a fragmented MP4 from FFmpeg as torrent data arrives,
+  avoiding full `+faststart` materialization before the first frame. That live
+  response deliberately has no arbitrary seek support and is cancelled with its
+  gateway job. Download, Cast, and compatibility/manual seek flows still
+  materialize bounded MP4 cache files before range seeking. Remux preparation
+  supports timeout, explicit cancellation, gateway `remuxing` status,
+  configurable FFmpeg path, seekable-cache TTL/size limits, health diagnostics,
+  and gateway media capability metadata. Real large-file playback and seek
+  behavior still need device validation.
 - Test with real torrents and direct streams on desktop, phone, and web.
 
 ### 4. Obsidian UI/UX Overhaul And Evidence

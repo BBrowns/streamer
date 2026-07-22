@@ -26,6 +26,7 @@ interface GatewayJobResponse extends GatewayJobProgress {
   playbackUrl?: string;
   error?: string;
   readyTimeoutMs?: number;
+  createdAt?: string;
 }
 
 const DEFAULT_GATEWAY_JOB_READY_TIMEOUT_MS = 45_000;
@@ -104,10 +105,16 @@ export class TorrentEngine implements IStreamEngine {
 
       // 2. Fallback to Local Bridge (stream-server)
       const bridgeUrl = this.bridge.getBridgeUrl?.() ?? this.bridge.bridgeUrl;
+      // A no-peers result belongs to the previous torrent candidate, not to
+      // the bridge itself. Keep real bridge failures blocked, but let a later
+      // candidate create its own gateway job and discover its own peers.
+      const canAttemptLocalGateway =
+        this.bridge.bridgeStatus === "available" ||
+        this.bridge.bridgeStatus === "no-peers";
       if (
         this.bridge.activeStrategy === "local" &&
         this.bridge.bridgeAvailable &&
-        this.bridge.bridgeStatus === "available"
+        canAttemptLocalGateway
       ) {
         // Build the magnet link or infohash to send to the bridge
         let magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
@@ -132,7 +139,7 @@ export class TorrentEngine implements IStreamEngine {
         this.emitForOperation(operation, "gateway", {
           state: "preparing",
           phase: "creating_gateway_job",
-          progress: 0,
+          progress: null,
           peerCount: null,
         } satisfies GatewayJobProgress);
         const job = await this.createGatewayJob(
@@ -201,6 +208,10 @@ export class TorrentEngine implements IStreamEngine {
           fileIdx: stream.fileIdx,
           fileSelectionHints: stream.fileSelectionHints,
           remux: stream.behaviorHints?.remuxToMp4 ? "mp4" : undefined,
+          remuxStrategy:
+            stream.behaviorHints?.remuxStrategy === "progressive-fmp4"
+              ? "progressive-fmp4"
+              : undefined,
         }),
         signal: operation.controller.signal,
       });
@@ -245,6 +256,7 @@ export class TorrentEngine implements IStreamEngine {
   ): Promise<GatewayJobResponse> {
     this.throwIfOperationCancelled(operation);
     if (initialJob.state === "ready" || !initialJob.state) {
+      this.bridge.bridgeStatus = "available";
       return initialJob;
     }
 
@@ -281,7 +293,8 @@ export class TorrentEngine implements IStreamEngine {
       typeof initialJob.readyTimeoutMs === "number"
         ? initialJob.readyTimeoutMs + GATEWAY_JOB_POLL_INTERVAL_MS
         : DEFAULT_GATEWAY_JOB_READY_TIMEOUT_MS;
-    const deadline = Date.now() + timeoutMs;
+    let deadline = this.gatewayJobDeadline(initialJob, timeoutMs);
+    let advertisedReadyTimeoutMs = initialJob.readyTimeoutMs;
 
     while (Date.now() < deadline) {
       this.throwIfOperationCancelled(operation);
@@ -304,8 +317,26 @@ export class TorrentEngine implements IStreamEngine {
           operation,
           statusRes.json() as Promise<GatewayJobResponse>,
         );
+        // The bridge can discover the real selected container only after
+        // torrent metadata arrives. If that turns an initially generic job
+        // into a remux job, honour its one-time larger readiness window rather
+        // than cancelling it using the shorter pre-metadata budget.
+        if (
+          typeof job.readyTimeoutMs === "number" &&
+          job.readyTimeoutMs > (advertisedReadyTimeoutMs ?? 0)
+        ) {
+          advertisedReadyTimeoutMs = job.readyTimeoutMs;
+          deadline = Math.max(
+            deadline,
+            this.gatewayJobDeadline(
+              job,
+              job.readyTimeoutMs + GATEWAY_JOB_POLL_INTERVAL_MS,
+            ),
+          );
+        }
         this.emitForOperation(operation, "gateway", job);
         if (job.state === "ready" && job.playbackUrl) {
+          this.bridge.bridgeStatus = "available";
           return job;
         }
 
@@ -372,6 +403,22 @@ export class TorrentEngine implements IStreamEngine {
     throw new Error(
       "Still waiting for torrent peers. Try again shortly or choose another source.",
     );
+  }
+
+  private gatewayJobDeadline(job: GatewayJobResponse, timeoutMs: number) {
+    // Gateway `createdAt` belongs to the desktop/mobile bridge clock, which
+    // need not be synchronized with this client. Its own elapsed duration is
+    // safe to use as a relative budget, while comparing server wall-clock time
+    // with `Date.now()` can make a healthy LAN job expire immediately.
+    const elapsedMs =
+      typeof job.elapsedMs === "number" && Number.isFinite(job.elapsedMs)
+        ? Math.max(0, job.elapsedMs)
+        : 0;
+    const remainingMs = Math.max(
+      GATEWAY_JOB_POLL_INTERVAL_MS,
+      timeoutMs - elapsedMs,
+    );
+    return Date.now() + remainingMs;
   }
 
   private beginPlaybackOperation(): PlaybackOperation {

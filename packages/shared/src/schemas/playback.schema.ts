@@ -243,6 +243,13 @@ export const playbackDecisionReasonSchema = z
   })
   .strict();
 
+export const playbackSourceDiscoverySchema = z
+  .object({
+    status: z.enum(["partial", "complete"]),
+    usableCandidateCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const playbackPlanSchema = z
   .object({
     version: z.literal(2),
@@ -256,6 +263,7 @@ export const playbackPlanSchema = z
       "notFound",
     ]),
     selectedCandidate: plannedMediaCandidateSchema.optional(),
+    sourceDiscovery: playbackSourceDiscoverySchema.optional(),
     fallbackCandidates: z.array(plannedMediaCandidateSchema),
     orderedCandidates: z.array(plannedMediaCandidateSchema),
     rejectedCandidates: z.array(rejectedCandidateSchema),

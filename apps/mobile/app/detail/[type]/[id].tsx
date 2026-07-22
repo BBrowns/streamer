@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState, useEffect, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Linking } from "react-native";
 import { getMetaLoadFailureKind, useMeta } from "../../../hooks/useMeta";
 import { useStreams } from "../../../hooks/useStreams";
@@ -9,7 +10,6 @@ import {
   useIsInLibrary,
   useRemoveFromLibrary,
 } from "../../../hooks/useLibrary";
-import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
 import {
   isTaskOfflinePlayable,
   useDownloadStore,
@@ -22,15 +22,15 @@ import { goBackOrReplace } from "../../../lib/navigation";
 import type { PlaybackAction, PlaybackPlan, Stream } from "@streamer/shared";
 import {
   playCandidate,
-  playBest,
   prepareDownload,
 } from "../../../services/playback/PlaybackOrchestrator";
+import { beginPlaybackLaunch } from "../../../services/playback/PlaybackLaunchService";
+import { prefetchPlaybackPlan } from "../../../services/playback/PlaybackPlanService";
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 import { useCastStore } from "../../../stores/castStore";
 import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
 import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
 import { useWindowClass } from "../../../hooks/useWindowClass";
-import { mapPlaybackMessageToRuntimeFailure } from "../../../services/playback/PlaybackErrors";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
 import { MobileDetailLayout } from "../../../components/detail/MobileDetailLayout";
@@ -43,6 +43,7 @@ import {
 } from "../../../components/detail/PlaybackReadinessNotice";
 import { DetailLoadState } from "../../../components/detail/DetailLoadState";
 import { getSafeTrailerUrl } from "../../../services/trailer";
+import { getInitialSeriesPlaybackEpisode } from "../../../services/playback/detailPlaybackPrefetch";
 
 export default function DetailScreen() {
   const {
@@ -65,8 +66,8 @@ export default function DetailScreen() {
     refetch: refetchMeta,
   } = useMeta(type, id);
   const { data: streams, isLoading: streamsLoading } = useStreams(type, id);
-  const setStream = usePlayerStore((s) => s.setStream);
   const setSessionStream = usePlayerStore((s) => s.setSessionStream);
+  const setPlaybackPlanning = usePlayerStore((s) => s.setPlaybackPlanning);
   const { isExpanded, isLarge } = useWindowClass();
   const isDesktop = isExpanded || isLarge;
 
@@ -74,21 +75,83 @@ export default function DetailScreen() {
     null,
   );
   const [castModalOpen, setCastModalOpen] = useState(false);
-  const [manualCastUri, setManualCastUri] = useState<string | null>(null);
-  const [castUsesPlanner, setCastUsesPlanner] = useState(false);
   const [planningAction, setPlanningAction] = useState<
     "play" | "download" | "cast" | null
   >(null);
+  const playLaunchInFlightRef = useRef(false);
   const [playbackNotice, setPlaybackNotice] =
     useState<PlaybackReadinessNoticeCopy | null>(null);
   const { data: inLibrary } = useIsInLibrary(id);
   const addToLibrary = useAddToLibrary();
   const removeFromLibrary = useRemoveFromLibrary();
   const trailerUrl = getSafeTrailerUrl(meta?.trailers);
+  const initialSeriesEpisode = useMemo(
+    () =>
+      castType === "series"
+        ? getInitialSeriesPlaybackEpisode(meta?.videos)
+        : undefined,
+    [castType, meta?.videos],
+  );
+
+  // Detail can remain mounted beneath the player route. The player owns a
+  // successful launch, but coming Back must make this screen actionable again
+  // instead of retaining the old double-click guard.
+  useFocusEffect(
+    useCallback(() => {
+      playLaunchInFlightRef.current = false;
+      setPlanningAction(null);
+    }, []),
+  );
+
+  // Detail is the earliest reliable point to warm the authoritative planner
+  // request. This uses runtime-only cache data and is shared with Play and
+  // More Sources; it never stores source URLs in React Query or persistence.
+  useEffect(() => {
+    if (!meta || !id || (castType === "series" && !initialSeriesEpisode)) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void prefetchPlaybackPlan(
+        {
+          type: castType,
+          id,
+          season: initialSeriesEpisode?.season,
+          episode: initialSeriesEpisode?.episode,
+          action: "play",
+        },
+        controller.signal,
+      );
+    }, 600);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [castType, id, initialSeriesEpisode, meta]);
 
   const dismissPlaybackNotice = useCallback(() => {
     setPlaybackNotice(null);
   }, []);
+
+  const handlePlayIntent = useCallback(
+    (season?: number, episode?: number) => {
+      if (
+        !id ||
+        (castType === "series" &&
+          (typeof season !== "number" || typeof episode !== "number"))
+      ) {
+        return;
+      }
+      void prefetchPlaybackPlan({
+        type: castType,
+        id,
+        season,
+        episode,
+        action: "play",
+      });
+    },
+    [castType, id],
+  );
 
   const handlePlaybackNoticeAction = useCallback(
     (target: PlaybackReadinessActionTarget) => {
@@ -197,154 +260,45 @@ export default function DetailScreen() {
   }
 
   const handlePlayStream = async (
-    stream?: Stream,
     episodeTitle?: string,
     season?: number,
     episode?: number,
   ) => {
     setPlaybackNotice(null);
-    if (!stream) {
-      setPlanningAction("play");
-      try {
-        const result = await playBest({
-          type: castType,
-          id: id || "unknown",
-          season,
-          episode,
-          title: meta?.name,
-          poster: meta?.poster,
-          episodeTitle,
-        });
+    if (planningAction === "play" || playLaunchInFlightRef.current) return;
 
-        if (!result.ok) {
-          setPlaybackNotice(
-            getPlaybackReadinessCopyFromError(
-              result.error,
-              "play",
-              result.resolveErrors,
-            ),
-          );
-          return;
-        }
-
-        setSessionStream(
-          result.stream,
-          result.mediaInfo,
-          result.sessionId,
-          result.candidateId,
-        );
-        router.push("/player");
-      } finally {
-        setPlanningAction(null);
-      }
-      return;
-    }
-
+    playLaunchInFlightRef.current = true;
+    setPlanningAction("play");
     try {
-      const playbackStream =
-        season && episode
-          ? {
-              ...stream,
-              fileSelectionHints: {
-                ...stream.fileSelectionHints,
-                season,
-                episode,
-              },
-            }
-          : stream;
-      const streamId = stream.infoHash || stream.url;
-      const task = useDownloadStore.getState().tasks[streamId || ""];
-
-      if (isTaskOfflinePlayable(task) && task?.localUri) {
-        if (await downloadService.verifyTask(task.id)) {
-          setPlaybackNotice(null);
-          setStream(
-            { ...playbackStream, url: task.localUri },
-            {
-              type: castType,
-              itemId: id || "unknown",
-              title: episodeTitle
-                ? `${meta?.name} - ${episodeTitle}`
-                : (meta?.name ?? stream.title ?? "Unknown"),
-              poster: meta?.poster,
-              season,
-              episode,
-            },
-          );
-
-          router.push("/player");
-          return;
-        }
-      }
-
-      const uri = await streamEngineManager.getPlaybackUri(playbackStream);
-      const playable = !!uri && uri.length > 0;
-
-      if (!playable && stream.infoHash) {
-        const bridgeUp = await streamEngineManager.detectBridge();
-        if (bridgeUp) {
-          const retryUri =
-            await streamEngineManager.getPlaybackUri(playbackStream);
-          if (retryUri && retryUri.length > 0) {
-            setStream(
-              { ...playbackStream, url: retryUri },
-              {
-                type: castType,
-                itemId: id || "unknown",
-                title: episodeTitle
-                  ? `${meta?.name} - ${episodeTitle}`
-                  : (meta?.name ?? stream.title ?? "Unknown"),
-                poster: meta?.poster,
-                season,
-                episode,
-              },
-            );
-            router.push("/player");
-            return;
-          }
-        }
-      }
-
-      if (!playable) {
-        let msg = t("detail.errors.notPlayable");
-        if (stream.infoHash) {
-          if (streamEngineManager.bridgeStatus === "unsupported") {
-            msg = t("detail.errors.bridgeBroken");
-          } else {
-            msg = t("detail.errors.torrentBridge");
-          }
-        }
-
-        showPlanMessage(null, msg, "play");
-        return;
-      }
-
-      setPlaybackNotice(null);
-      setStream(
-        uri && playbackStream.url !== uri
-          ? { ...playbackStream, url: uri }
-          : playbackStream,
+      const launchId = beginPlaybackLaunch({
+        type: castType,
+        id: id || "unknown",
+        season,
+        episode,
+        title: meta?.name,
+        poster: meta?.poster,
+        episodeTitle,
+      });
+      setPlaybackPlanning(
         {
           type: castType,
           itemId: id || "unknown",
           title: episodeTitle
             ? `${meta?.name} - ${episodeTitle}`
-            : (meta?.name ?? playbackStream.title ?? "Unknown"),
+            : (meta?.name ?? "Unknown"),
           poster: meta?.poster,
           season,
           episode,
         },
+        launchId,
       );
       router.push("/player");
-    } catch (err: any) {
-      const message = err?.message || t("detail.errors.notPlayable");
-      const failure = mapPlaybackMessageToRuntimeFailure(
-        message,
-        stream.infoHash ? "GATEWAY_TIMEOUT" : "SOURCE_UNAVAILABLE",
-      );
-      setPlaybackNotice(
-        getPlaybackReadinessCopyFromError(failure.error, "play", [message]),
-      );
+    } catch (error) {
+      playLaunchInFlightRef.current = false;
+      setPlanningAction(null);
+      const message =
+        error instanceof Error ? error.message : t("detail.errors.notPlayable");
+      showPlanMessage(null, message, "play");
     }
   };
 
@@ -380,6 +334,8 @@ export default function DetailScreen() {
     season?: number,
     episode?: number,
   ) => {
+    if (planningAction === "play" || playLaunchInFlightRef.current) return;
+    playLaunchInFlightRef.current = true;
     setPlaybackNotice(null);
     setPlanningAction("play");
     try {
@@ -415,6 +371,7 @@ export default function DetailScreen() {
       );
       router.push("/player");
     } finally {
+      playLaunchInFlightRef.current = false;
       setPlanningAction(null);
     }
   };
@@ -497,29 +454,10 @@ export default function DetailScreen() {
     }
   };
 
-  const handleCastStream = async (stream?: Stream) => {
+  const handleCastStream = () => {
     if (!meta) return;
     setPlaybackNotice(null);
-    try {
-      if (!stream) {
-        setManualCastUri(null);
-        setCastUsesPlanner(true);
-        setCastModalOpen(true);
-        return;
-      }
-
-      const uri = await streamEngineManager.getPlaybackUri(stream);
-      if (!uri) {
-        showPlanMessage(null, t("detail.errors.notPlayable"), "cast");
-        return;
-      }
-
-      setManualCastUri(uri);
-      setCastUsesPlanner(false);
-      setCastModalOpen(true);
-    } catch {
-      showPlanMessage(null, t("detail.errors.notPlayable"), "cast");
-    }
+    setCastModalOpen(true);
   };
 
   function showPlanMessage(
@@ -547,6 +485,7 @@ export default function DetailScreen() {
     trailerUrl,
     onWatchTrailer: handleWatchTrailer,
     handlePlayStream,
+    onPlayIntent: isDesktop ? handlePlayIntent : undefined,
     handlePlayCandidate,
     handleDownloadStream,
     handleCastStream,
@@ -567,17 +506,12 @@ export default function DetailScreen() {
       {castModalOpen && (
         <DesktopCastModal
           visible={castModalOpen}
-          orchestratorInput={
-            castUsesPlanner
-              ? {
-                  type: castType,
-                  id: id || "unknown",
-                  title: meta.name,
-                  poster: meta.poster,
-                }
-              : undefined
-          }
-          playbackUri={manualCastUri || ""}
+          orchestratorInput={{
+            type: castType,
+            id: id || "unknown",
+            title: meta.name,
+            poster: meta.poster,
+          }}
           title={meta.name}
           onClose={() => setCastModalOpen(false)}
           onOpenSourcesDevices={() => {

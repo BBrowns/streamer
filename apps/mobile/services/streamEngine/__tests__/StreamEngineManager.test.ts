@@ -310,7 +310,10 @@ describe("TorrentEngine", () => {
         episode: 2,
         title: "Show Name",
       },
-      behaviorHints: { remuxToMp4: true },
+      behaviorHints: {
+        remuxToMp4: true,
+        remuxStrategy: "progressive-fmp4",
+      },
     });
 
     expect(uri).toBe("http://bridge.test/api/gateway/jobs/job-1/stream");
@@ -335,6 +338,9 @@ describe("TorrentEngine", () => {
     expect((global.fetch as jest.Mock).mock.calls[0][1].body).toContain(
       '"fileSelectionHints":{"season":1,"episode":2,"title":"Show Name"}',
     );
+    expect((global.fetch as jest.Mock).mock.calls[0][1].body).toContain(
+      '"remuxStrategy":"progressive-fmp4"',
+    );
   });
 
   it("emits gateway progress and cancels the active gateway job on stop", async () => {
@@ -353,7 +359,7 @@ describe("TorrentEngine", () => {
           id: "job-1",
           state: "preparing",
           phase: "preparing_metadata",
-          progress: 0.25,
+          progress: null,
           peerCount: 2,
           playbackUrl: "/api/gateway/jobs/job-1/stream",
         }),
@@ -384,14 +390,14 @@ describe("TorrentEngine", () => {
       expect.objectContaining({
         state: "preparing",
         phase: "creating_gateway_job",
-        progress: 0,
+        progress: null,
       }),
     );
     expect(onGateway).toHaveBeenCalledWith(
       expect.objectContaining({
         state: "preparing",
         phase: "preparing_metadata",
-        progress: 0.25,
+        progress: null,
       }),
     );
     expect(onGateway).toHaveBeenCalledWith(
@@ -427,9 +433,9 @@ describe("TorrentEngine", () => {
           id: "job-1",
           state: "preparing",
           phase: "preparing_metadata",
-          progress: 0.2,
+          progress: null,
           playbackUrl: "/api/gateway/jobs/job-1/stream",
-          readyTimeoutMs: 120000,
+          readyTimeoutMs: 92000,
         }),
       })
       .mockResolvedValueOnce({
@@ -438,7 +444,7 @@ describe("TorrentEngine", () => {
           id: "job-1",
           state: "preparing",
           phase: "remuxing",
-          progress: 0.55,
+          progress: null,
           playbackUrl: "/api/gateway/jobs/job-1/stream",
           media: {
             remuxed: true,
@@ -473,10 +479,165 @@ describe("TorrentEngine", () => {
       expect.objectContaining({
         state: "preparing",
         phase: "remuxing",
-        progress: 0.55,
+        progress: null,
       }),
     );
     expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("extends a generic gateway job deadline when metadata reveals an MKV remux", async () => {
+    jest.useFakeTimers();
+    try {
+      engine = new TorrentEngine({
+        activeStrategy: "local",
+        bridgeAvailable: true,
+        bridgeStatus: "available",
+        bridgeUrl: "http://bridge.test",
+      } as any);
+      // Deliberately use a bridge wall clock far from the client clock. The
+      // client must use the bridge's relative elapsed duration, not this
+      // timestamp, when it extends a gateway deadline.
+      const createdAt = new Date(Date.now() - 10 * 60_000).toISOString();
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "preparing_metadata",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 1_000,
+            createdAt,
+            elapsedMs: 0,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "remuxing",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 8_000,
+            createdAt,
+            elapsedMs: 100,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "remuxing",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 8_000,
+            createdAt,
+            elapsedMs: 1_100,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "remuxing",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 8_000,
+            createdAt,
+            elapsedMs: 2_100,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "ready",
+            phase: "ready",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 8_000,
+            createdAt,
+            elapsedMs: 3_100,
+          }),
+        });
+
+      const playback = engine.getPlaybackUri({ infoHash: "deadbeef" });
+      await waitForFetchCallCount(2);
+      await jest.advanceTimersByTimeAsync(3_100);
+
+      await expect(playback).resolves.toBe(
+        "http://bridge.test/api/gateway/jobs/job-1/stream",
+      );
+      expect(global.fetch).toHaveBeenCalledTimes(5);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("ends a gateway wait from relative elapsed time when the bridge clock is ahead", async () => {
+    jest.useFakeTimers();
+    try {
+      engine = new TorrentEngine({
+        activeStrategy: "local",
+        bridgeAvailable: true,
+        bridgeStatus: "available",
+        bridgeUrl: "http://bridge.test",
+      } as any);
+      const createdAt = new Date(Date.now() + 10 * 60_000).toISOString();
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "finding_peers",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 1_000,
+            createdAt,
+            elapsedMs: 0,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "finding_peers",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 1_000,
+            createdAt,
+            elapsedMs: 0,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: "job-1",
+            state: "preparing",
+            phase: "finding_peers",
+            playbackUrl: "/api/gateway/jobs/job-1/stream",
+            readyTimeoutMs: 1_000,
+            createdAt,
+            elapsedMs: 1_000,
+          }),
+        })
+        .mockResolvedValue({ ok: false, json: async () => ({}) });
+
+      const playback = engine.getPlaybackUri({ infoHash: "deadbeef" });
+      const expectedFailure = expect(playback).rejects.toThrow(
+        "Still waiting for torrent peers",
+      );
+      await waitForFetchCallCount(2);
+      await jest.advanceTimersByTimeAsync(2_100);
+
+      await expectedFailure;
+      expect(
+        (global.fetch as jest.Mock).mock.calls.some(
+          ([, options]) => options?.method === "DELETE",
+        ),
+      ).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("returns gateway playback immediately for legacy ready responses", async () => {
@@ -591,7 +752,7 @@ describe("TorrentEngine", () => {
         json: async () => ({
           id: "job-1",
           state: "error",
-          error: "Torrent metadata timed out. No peers found in 2 minutes.",
+          error: "No peers found quickly enough to start this source.",
           playbackUrl: "/api/gateway/jobs/job-1/stream",
         }),
       });
@@ -625,7 +786,7 @@ describe("TorrentEngine", () => {
           id: "job-1",
           state: "no_peers",
           phase: "no_peers",
-          error: "Torrent metadata timed out. No peers found in 2 minutes.",
+          error: "No peers found quickly enough to start this source.",
           retryable: true,
           playbackUrl: null,
         }),
@@ -636,6 +797,101 @@ describe("TorrentEngine", () => {
     ).rejects.toThrow("No peers found");
     expect(bridge.bridgeStatus).toBe("no-peers");
   });
+
+  it("starts a new local gateway job for the next source after a no-peers result", async () => {
+    const bridge = {
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    };
+    engine = new TorrentEngine(bridge as any);
+
+    (global.fetch as jest.Mock).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          return Promise.resolve({ ok: true, json: async () => ({}) });
+        }
+
+        if (init?.method === "POST") {
+          const jobId =
+            (global.fetch as jest.Mock).mock.calls.filter(
+              ([, requestInit]) => requestInit?.method === "POST",
+            ).length === 1
+              ? "job-without-peers"
+              : "job-with-peers";
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: jobId,
+              state: "preparing",
+              playbackUrl: `/api/gateway/jobs/${jobId}/stream`,
+            }),
+          });
+        }
+
+        if (url.endsWith("/job-without-peers")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: "job-without-peers",
+              state: "no_peers",
+              error: "No peers found for this source.",
+            }),
+          });
+        }
+
+        if (url.endsWith("/job-with-peers")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              id: "job-with-peers",
+              state: "ready",
+              playbackUrl: "/api/gateway/jobs/job-with-peers/stream",
+            }),
+          });
+        }
+
+        throw new Error(`Unexpected gateway request: ${url}`);
+      },
+    );
+
+    await expect(
+      engine.getPlaybackUri({ infoHash: "source-without-peers" }),
+    ).rejects.toThrow("No peers found");
+    expect(bridge.bridgeStatus).toBe("no-peers");
+
+    await expect(
+      engine.getPlaybackUri({ infoHash: "source-with-peers" }),
+    ).resolves.toBe(
+      "http://bridge.test/api/gateway/jobs/job-with-peers/stream",
+    );
+    expect(bridge.bridgeStatus).toBe("available");
+
+    expect(
+      (global.fetch as jest.Mock).mock.calls.filter(
+        ([, init]) => init?.method === "POST",
+      ),
+    ).toHaveLength(2);
+  });
+
+  it.each(["unreachable", "unsupported"])(
+    "does not start a local gateway job while the bridge is %s",
+    async (bridgeStatus) => {
+      engine = new TorrentEngine({
+        activeStrategy: "local",
+        bridgeAvailable: true,
+        bridgeStatus,
+        bridgeUrl: "http://bridge.test",
+      } as any);
+
+      await expect(
+        engine.getPlaybackUri({ infoHash: "deadbeef" }),
+      ).resolves.toBe("");
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it("surfaces stalled gateway status without marking the bridge as no-peers", async () => {
     const bridge = {

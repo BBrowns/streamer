@@ -222,6 +222,18 @@ export interface PlaybackTimeoutBudget {
 }
 
 /**
+ * Safe summary of the add-on lookup that produced a playback plan.
+ *
+ * This intentionally contains counts and completion state only. Source URLs,
+ * magnets, hashes, provider ids, and transport details remain transient
+ * runtime data inside the planner and must not be persisted with a session.
+ */
+export interface PlaybackSourceDiscovery {
+  status: "partial" | "complete";
+  usableCandidateCount: number;
+}
+
+/**
  * Runtime candidate enriched by the planner for the requested action.
  *
  * The candidate id is an opaque UUID. The nested Stream remains transient
@@ -252,6 +264,8 @@ export interface PlaybackPlan {
   version: 2;
   action: PlaybackAction;
   state: PlaybackPlanState;
+  /** Present on plans produced by the current planner; optional for v2 compatibility. */
+  sourceDiscovery?: PlaybackSourceDiscovery;
   selectedCandidate?: PlannedMediaCandidate;
   fallbackCandidates: PlannedMediaCandidate[];
   orderedCandidates: PlannedMediaCandidate[];

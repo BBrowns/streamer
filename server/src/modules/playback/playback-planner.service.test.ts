@@ -10,6 +10,7 @@ import { aggregatorService } from "../aggregator/aggregator.service";
 vi.mock("../aggregator/aggregator.service", () => ({
   aggregatorService: {
     getStreams: vi.fn(),
+    getStreamDiscovery: vi.fn(),
   },
 }));
 
@@ -73,6 +74,17 @@ describe("PlaybackPlannerService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     service = new PlaybackPlannerService();
+    vi.mocked(aggregatorService.getStreamDiscovery).mockImplementation(
+      async (userId, type, id, requestId) => ({
+        streams: await aggregatorService.getStreams(
+          userId,
+          type,
+          id,
+          requestId,
+        ),
+        status: "complete",
+      }),
+    );
   });
 
   it("returns an explained notFound plan when no sources exist", async () => {
@@ -95,6 +107,42 @@ describe("PlaybackPlannerService", () => {
       eligible: false,
       reason: "no_sources",
     });
+    expect(plan.sourceDiscovery).toEqual({
+      status: "complete",
+      usableCandidateCount: 0,
+    });
+    expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
+  });
+
+  it("keeps a partial discovery result explicit without exposing provider details", async () => {
+    vi.mocked(aggregatorService.getStreamDiscovery).mockResolvedValue({
+      status: "partial",
+      streams: [
+        {
+          url: "https://cdn.example.test/movie.1080p.h264.aac.mp4",
+          title: "Movie.2026.1080p.H264.AAC.mp4",
+          resolution: "1080p",
+        },
+      ],
+    });
+
+    const plan = await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: webProfile,
+      },
+      "req-partial",
+    );
+
+    expect(plan.state).toBe("ready");
+    expect(plan.sourceDiscovery).toEqual({
+      status: "partial",
+      usableCandidateCount: 1,
+    });
+    expect(JSON.stringify(plan.sourceDiscovery)).not.toContain("cdn.example");
     expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
   });
 

@@ -65,21 +65,28 @@ export function PlayerStatusOverlay({
   const effectiveRuntimeError = sessionError || runtimeError;
   const effectiveStreamState =
     session?.status === "failed" ? "error" : streamState;
+  const isTryingFallback =
+    runtimeState === "trying_fallback" || session?.status === "trying_fallback";
   const latestFallback = session
     ? [...session.eventLog]
         .reverse()
         .find((event) => event.type === "fallback_started")
     : null;
-  const latestGatewayProgress = session
+  const latestGatewayProgress = session?.gatewayJobId
     ? [...session.eventLog]
         .reverse()
-        .find((event) => event.type === "gateway_progress")
+        .find(
+          (event) =>
+            event.type === "gateway_progress" &&
+            event.gatewayJobId === session.gatewayJobId,
+        )
     : null;
-  const effectiveFallbackReason =
-    fallbackReason ||
-    (latestFallback?.type === "fallback_started"
-      ? latestFallback.reason
-      : null);
+  const effectiveFallbackReason = isTryingFallback
+    ? fallbackReason ||
+      (latestFallback?.type === "fallback_started"
+        ? latestFallback.reason
+        : null)
+    : null;
 
   if (effectiveStreamState === "loading_metrics") {
     const title = getLoadingTitle(
@@ -89,7 +96,7 @@ export function PlayerStatusOverlay({
       session?.status,
     );
     const metricsDetail =
-      streamMetrics && runtimeState !== "trying_fallback"
+      streamMetrics && !isTryingFallback
         ? `${streamMetrics.numPeers} ${t("player.controls.peers")} • ${(
             streamMetrics.downloadSpeed /
             1024 /
@@ -109,13 +116,13 @@ export function PlayerStatusOverlay({
     return (
       <>
         <PlaybackStatusPanel
-          tone={runtimeState === "trying_fallback" ? "warning" : "loading"}
+          tone={isTryingFallback ? "warning" : "loading"}
           statusLabel={
-            runtimeState === "trying_fallback"
+            isTryingFallback
               ? t("player.status.tryingFallback")
               : t("downloads.status.preparing")
           }
-          loading={runtimeState !== "trying_fallback"}
+          loading={!isTryingFallback}
           title={title}
           message={message}
         />
@@ -248,6 +255,10 @@ function getLoadingTitle(
   t: (key: string) => string,
   sessionStatus?: PlaybackSessionStatus,
 ) {
+  if (runtimeState === "planning") {
+    return t("player.status.searchingSource");
+  }
+
   if (sessionStatus) {
     if (sessionStatus === "planning") return t("player.status.planning");
     if (sessionStatus === "checking_bridge")
@@ -304,14 +315,40 @@ function getGatewayProgressDetail(
   >,
   t: (key: string) => string,
 ) {
-  const parts: string[] = [];
+  // Gateway progress is a readiness heuristic, not media bytes downloaded.
+  // Keep it out of the player UI so a time-based preparation estimate cannot
+  // look like a real playback or download percentage.
+  if (event.phase === "no_peers") {
+    return t("player.status.noPeersFound");
+  }
+
+  if (event.phase === "finding_peers") {
+    return typeof event.peerCount === "number" && event.peerCount > 0
+      ? `${event.peerCount} ${t("player.controls.peers")}`
+      : t("player.status.noPeersYet");
+  }
+
+  if (event.phase === "selecting_file") {
+    return t("player.status.selectingPlayableFile");
+  }
+
+  if (event.phase === "checking_piece_availability") {
+    return t("player.status.checkingAvailability");
+  }
+
+  if (event.phase === "remuxing") {
+    return t("player.status.preparingCompatibleStream");
+  }
+
+  if (event.phase === "stalled") {
+    return t("player.status.stillPreparingSource");
+  }
+
   if (typeof event.peerCount === "number") {
-    parts.push(`${event.peerCount} ${t("player.controls.peers")}`);
+    return `${event.peerCount} ${t("player.controls.peers")}`;
   }
-  if (typeof event.progress === "number") {
-    parts.push(`${Math.round(event.progress * 100)}%`);
-  }
-  return parts.length > 0 ? parts.join(" • ") : null;
+
+  return null;
 }
 
 function getErrorTitle(

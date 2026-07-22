@@ -254,11 +254,18 @@ function getCandidateTimeoutMs(
       : timeoutBudget.directProbeMs;
 
   if (candidate.requiresBridge || candidate.kind === "torrent") {
+    // A provider label can omit its real container. Reserve the remux window
+    // for an unknown torrent too: after metadata the bridge may correctly
+    // discover an MKV and upgrade the gateway job. Without this allowance the
+    // outer client timeout could cancel a still-progressing remux a few
+    // seconds before the bridge's authoritative readiness deadline.
+    const mayRequireRemux =
+      candidate.requiresRemux || candidate.container === "unknown";
     candidateBudgetMs =
       timeoutBudget.bridgeConnectMs +
       timeoutBudget.torrentMetadataMs +
       timeoutBudget.peerDiscoveryMs +
-      (candidate.requiresRemux ? timeoutBudget.remuxReadyMs : 0);
+      (mayRequireRemux ? timeoutBudget.remuxReadyMs : 0);
   }
 
   return Math.min(candidateBudgetMs, remainingMs);
@@ -292,6 +299,31 @@ function createAllCandidatesFailedError(
       retryable: true,
       shouldFallback: false,
       debugMessage,
+    },
+  );
+}
+
+function createSessionBudgetExhaustedError(
+  session: PlaybackSession,
+  action: SessionResolutionAction,
+): PlaybackRuntimeError {
+  const hadBridgeAttempt = session.attempts.some(
+    (attempt) => attempt.sourceType === "torrent",
+  );
+  const code = hadBridgeAttempt ? "GATEWAY_TIMEOUT" : "PLAYBACK_TIMEOUT";
+
+  return createPlaybackRuntimeError(
+    code,
+    getActionMessage(action, {
+      play: "Sources were found, but none became ready in time. Try another source or retry.",
+      download:
+        "Sources were found, but none became ready in time for download. Try another source or retry.",
+      cast: "Sources were found, but none became ready in time for casting. Try another source or retry.",
+    }),
+    {
+      retryable: true,
+      shouldFallback: false,
+      debugMessage: "playback-session-time-budget-exhausted",
     },
   );
 }
@@ -604,6 +636,20 @@ async function attemptCandidate(
     return { ok: false, sessionId, error };
   }
 
+  // Primary viewing can consume a fragmented MP4 as the torrent arrives. Keep
+  // the completed seekable MP4 path for download and cast, which need stable
+  // byte ranges rather than the fastest possible first frame.
+  const streamForResolution: Stream =
+    action === "play" && stream.infoHash
+      ? {
+          ...stream,
+          behaviorHints: {
+            ...stream.behaviorHints,
+            remuxStrategy: "progressive-fmp4",
+          },
+        }
+      : stream;
+
   stopActiveEngine(sessionId);
   activeEngineBySession.set(sessionId, engine);
 
@@ -639,7 +685,7 @@ async function attemptCandidate(
 
     const timeoutMs = getCandidateTimeoutMs(currentSession, candidate);
     const uri = await withTimeout(
-      engine.getPlaybackUri(stream),
+      engine.getPlaybackUri(streamForResolution),
       timeoutMs,
       getActionMessage(action, {
         play: "Playback source preparation timed out.",
@@ -675,7 +721,9 @@ async function attemptCandidate(
     }
 
     const resolvedStream =
-      stream.url === uri ? stream : { ...stream, url: uri };
+      streamForResolution.url === uri
+        ? streamForResolution
+        : { ...streamForResolution, url: uri };
     const eligibility =
       action === "download"
         ? requireOfflineDownloadEligibility(resolvedStream)
@@ -830,6 +878,27 @@ async function resolveCandidateChain(
   let fallbackReason = initialFallbackReason;
 
   for (const [index, candidate] of orderedCandidates.entries()) {
+    const currentSession = getSession(sessionId);
+    if (!currentSession || isTerminal(currentSession)) {
+      return {
+        ok: false,
+        sessionId,
+        error: currentSession
+          ? runtimeErrorFromSession(currentSession)
+          : createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
+      };
+    }
+
+    // Do not turn every remaining candidate into an immediate zero-ms failure
+    // once the session-wide envelope has elapsed. The previous behaviour
+    // resulted in a misleading "No playable source" terminal state despite
+    // having discovered sources and possibly still receiving peers/remux data.
+    if (getRemainingBudgetMs(currentSession) <= 0) {
+      const error = createSessionBudgetExhaustedError(currentSession, action);
+      store.failSession(sessionId, error);
+      return { ok: false, sessionId, error };
+    }
+
     selectCandidate(sessionId, candidate.id, fallbackReason);
     const hasFallback = index < orderedCandidates.length - 1;
     const result = await attemptCandidate(
