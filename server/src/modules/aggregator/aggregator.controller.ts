@@ -59,14 +59,18 @@ export class AggregatorController {
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
-    const streams = await aggregatorService.getStreams(
+    const discovery = await aggregatorService.getStreamDiscovery(
       user.userId,
       type,
       id,
       requestId,
+      { signal: c.req.raw.signal },
     );
 
-    return c.json({ streams });
+    return c.json({
+      streams: discovery.streams,
+      sourceDiscovery: { status: discovery.status },
+    });
   }
 
   async resolveStream(c: Context) {

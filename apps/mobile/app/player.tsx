@@ -58,7 +58,17 @@ import {
   findPlayerTrackByRowId,
   findPreferredPlayerTrack,
 } from "../services/playback/trackSelection";
-import { playBest } from "../services/playback/PlaybackOrchestrator";
+import {
+  playBest,
+  type PlaybackOrchestratorResult,
+} from "../services/playback/PlaybackOrchestrator";
+import {
+  beginPlaybackLaunch,
+  cancelPlaybackLaunch,
+  getPlaybackLaunch,
+  isPlaybackLaunchCancelled,
+  releasePlaybackLaunch,
+} from "../services/playback/PlaybackLaunchService";
 import {
   advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
@@ -69,6 +79,7 @@ import {
 import { stopCastSession } from "../services/playback/PlaybackSessionCastService";
 import { useCastStore } from "../stores/castStore";
 import { PlaybackStatusPanel } from "../components/ui/PlaybackStatusPanel";
+import { hasNewStablePlaybackCandidate } from "../services/playback/partialDiscovery";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -91,6 +102,7 @@ export default function PlayerScreen() {
   const playbackSessionId = usePlayerStore((s) => s.playbackSessionId);
   const playbackCandidateId = usePlayerStore((s) => s.playbackCandidateId);
   const playbackAttemptId = usePlayerStore((s) => s.playbackAttemptId);
+  const playbackLaunchIntent = usePlayerStore((s) => s.playbackLaunchIntent);
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const preferredAudioLang = usePlayerStore((s) => s.preferredAudioLang);
@@ -102,6 +114,10 @@ export default function PlayerScreen() {
   const setRuntimeState = usePlayerStore((s) => s.setRuntimeState);
   const setRuntimeFailure = usePlayerStore((s) => s.setRuntimeFailure);
   const setSessionStream = usePlayerStore((s) => s.setSessionStream);
+  const setPlaybackPlanning = usePlayerStore((s) => s.setPlaybackPlanning);
+  const setPlaybackPlanningFailure = usePlayerStore(
+    (s) => s.setPlaybackPlanningFailure,
+  );
   const advanceToNextFallback = usePlayerStore((s) => s.advanceToNextFallback);
   const activeSession = usePlaybackSessionStore((s) =>
     playbackSessionId ? s.sessions[playbackSessionId] || null : null,
@@ -109,6 +125,19 @@ export default function PlayerScreen() {
   const activeCast = useCastStore((s) => s.activeCast);
   const setActiveCast = useCastStore((s) => s.setActiveCast);
   const clearActiveCast = useCastStore((s) => s.clearActiveCast);
+  const planningLaunchId =
+    playbackLaunchIntent?.type === "planning"
+      ? playbackLaunchIntent.launchId
+      : null;
+  // Planning failures are first written to the session store. Prefer that
+  // terminal error so the recovery action remains available during the render
+  // in which the player store has not yet published runtimeError.
+  const effectivePlaybackError = activeSession?.terminalError || runtimeError;
+  const shouldOfferSourcesDevicesRecovery =
+    effectivePlaybackError?.code === "BRIDGE_UNAVAILABLE" ||
+    effectivePlaybackError?.code === "BRIDGE_UNSUPPORTED" ||
+    runtimeState === "failed_bridge_unavailable" ||
+    runtimeState === "failed_bridge_unsupported";
   const downloadTask = useDownloadStore((s) => {
     if (!mediaInfo) return null;
     return (
@@ -142,6 +171,23 @@ export default function PlayerScreen() {
   const videoViewRef = useRef<any>(null);
   const fallbackInFlightRef = useRef(false);
   const appliedTrackPreferencesRef = useRef<string | null>(null);
+  // A fast launch can create its session between renders. Keep explicit
+  // ownership so an immediate route close cannot miss that session before
+  // React has published its id through the player store.
+  const launchOwnedSessionIdRef = useRef<string | null>(null);
+  const activePlanningLaunchIdRef = useRef<string | null>(planningLaunchId);
+  const activePlaybackSessionIdRef = useRef<string | null>(playbackSessionId);
+  const partialReplanAttemptsRef = useRef(new Set<string>());
+  const partialReplanPromisesRef = useRef(new Map<string, Promise<boolean>>());
+  const partialReplanControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    activePlanningLaunchIdRef.current = planningLaunchId;
+  }, [planningLaunchId]);
+
+  useEffect(() => {
+    activePlaybackSessionIdRef.current = playbackSessionId;
+  }, [playbackSessionId]);
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -163,14 +209,26 @@ export default function PlayerScreen() {
 
   const leavePlayer = useCallback(
     (reason: string) => {
+      partialReplanControllerRef.current?.abort();
+      partialReplanControllerRef.current = null;
       if (activeCast) {
         void stopCastSession(activeCast.device.id, activeCast.sessionId).catch(
           (error) => console.error("Failed to stop cast", error),
         );
         clearActiveCast();
       }
-      if (playbackSessionId) {
-        cancelPlaybackSession(playbackSessionId, reason);
+      if (planningLaunchId) {
+        cancelPlaybackLaunch(planningLaunchId, reason);
+      }
+      const sessionId = playbackSessionId || launchOwnedSessionIdRef.current;
+      if (sessionId) {
+        cancelPlaybackSession(sessionId, reason);
+        if (planningLaunchId || launchOwnedSessionIdRef.current === sessionId) {
+          usePlaybackSessionStore.getState().removeSession(sessionId);
+          if (launchOwnedSessionIdRef.current === sessionId) {
+            launchOwnedSessionIdRef.current = null;
+          }
+        }
       } else if (currentStream) {
         streamEngineManager.resolveEngine(currentStream)?.stop?.();
       }
@@ -182,6 +240,7 @@ export default function PlayerScreen() {
       clearActiveCast,
       clearPlayer,
       currentStream,
+      planningLaunchId,
       playbackSessionId,
       router,
     ],
@@ -203,23 +262,42 @@ export default function PlayerScreen() {
   }, [clearPlayer, router]);
 
   const handleOpenSourcesDevices = useCallback(() => {
-    if (playbackSessionId) {
-      cancelPlaybackSession(
-        playbackSessionId,
-        "User opened Sources & Devices.",
-      );
+    partialReplanControllerRef.current?.abort();
+    partialReplanControllerRef.current = null;
+    if (planningLaunchId) {
+      cancelPlaybackLaunch(planningLaunchId, "User opened Sources & Devices.");
+    }
+    const sessionId = playbackSessionId || launchOwnedSessionIdRef.current;
+    if (sessionId) {
+      cancelPlaybackSession(sessionId, "User opened Sources & Devices.");
+      usePlaybackSessionStore.getState().removeSession(sessionId);
+      if (launchOwnedSessionIdRef.current === sessionId) {
+        launchOwnedSessionIdRef.current = null;
+      }
     }
     clearPlayer();
     router.replace("/settings/sources");
-  }, [clearPlayer, playbackSessionId, router]);
+  }, [clearPlayer, planningLaunchId, playbackSessionId, router]);
 
   const handleChooseSource = useCallback(() => {
     if (!mediaInfo) return;
-    if (playbackSessionId) {
-      cancelPlaybackSession(
-        playbackSessionId,
+    partialReplanControllerRef.current?.abort();
+    partialReplanControllerRef.current = null;
+    if (planningLaunchId) {
+      cancelPlaybackLaunch(
+        planningLaunchId,
         "User chose advanced source selection.",
       );
+    }
+    const sessionId = playbackSessionId || launchOwnedSessionIdRef.current;
+    if (sessionId) {
+      cancelPlaybackSession(sessionId, "User chose advanced source selection.");
+      if (planningLaunchId || launchOwnedSessionIdRef.current === sessionId) {
+        usePlaybackSessionStore.getState().removeSession(sessionId);
+        if (launchOwnedSessionIdRef.current === sessionId) {
+          launchOwnedSessionIdRef.current = null;
+        }
+      }
     }
     const target = {
       pathname: "/detail/[type]/[id]",
@@ -231,31 +309,291 @@ export default function PlayerScreen() {
     } as const;
     clearPlayer();
     router.replace(target as any);
-  }, [clearPlayer, mediaInfo, playbackSessionId, router]);
+  }, [clearPlayer, mediaInfo, planningLaunchId, playbackSessionId, router]);
 
   useEffect(
     () => () => {
-      if (playbackSessionId) {
-        cancelPlaybackSession(
-          playbackSessionId,
-          "Player screen was closed before playback completed.",
+      partialReplanControllerRef.current?.abort();
+      partialReplanControllerRef.current = null;
+      const launchId = activePlanningLaunchIdRef.current;
+      if (launchId) {
+        cancelPlaybackLaunch(
+          launchId,
+          "Player screen was closed before planning completed.",
         );
       }
+      const sessionId =
+        launchOwnedSessionIdRef.current || activePlaybackSessionIdRef.current;
+      if (sessionId) {
+        cancelPlaybackSession(
+          sessionId,
+          "Player screen was closed before playback completed.",
+        );
+        if (launchOwnedSessionIdRef.current === sessionId) {
+          usePlaybackSessionStore.getState().removeSession(sessionId);
+          launchOwnedSessionIdRef.current = null;
+        }
+      }
     },
-    [playbackSessionId],
+    [],
   );
+
+  const tryReplanPartialPlayback = useCallback(
+    async (sessionId: string) => {
+      if (!mediaInfo) return false;
+
+      const replanKey = [
+        mediaInfo.type,
+        mediaInfo.itemId,
+        mediaInfo.season ?? "",
+        mediaInfo.episode ?? "",
+      ].join(":");
+      const existingReplan = partialReplanPromisesRef.current.get(replanKey);
+      if (existingReplan) return existingReplan;
+      if (partialReplanAttemptsRef.current.has(replanKey)) return false;
+
+      const previousPlan = usePlaybackSessionStore
+        .getState()
+        .getRuntimePlan(sessionId);
+      if (previousPlan?.sourceDiscovery?.status !== "partial") return false;
+
+      const replan = (async () => {
+        partialReplanAttemptsRef.current.add(replanKey);
+        // A terminal session takes precedence in PlayerStatusOverlay. Remove
+        // it before waiting for the warmed discovery cache so this recovery
+        // stays visibly cancellable instead of presenting a stale error.
+        usePlaybackSessionStore.getState().removeSession(sessionId);
+        if (launchOwnedSessionIdRef.current === sessionId) {
+          launchOwnedSessionIdRef.current = null;
+        }
+        const controller = new AbortController();
+        partialReplanControllerRef.current = controller;
+        setPlaybackUri(null);
+        setStreamStatus("loading_metrics");
+        setRuntimeState("planning");
+        let replacement: PlaybackOrchestratorResult;
+        try {
+          replacement = await playBest(
+            {
+              type: mediaInfo.type,
+              id: mediaInfo.itemId,
+              title: mediaInfo.title,
+              poster: mediaInfo.poster,
+              season: mediaInfo.season,
+              episode: mediaInfo.episode,
+            },
+            {
+              forceRefresh: true,
+              awaitCompleteDiscovery: true,
+              signal: controller.signal,
+            },
+          );
+        } catch {
+          // Escape/Close owns this controller. Treat its late rejection as
+          // handled so the resolver cannot repaint an error after navigation.
+          return controller.signal.aborted;
+        } finally {
+          if (partialReplanControllerRef.current === controller) {
+            partialReplanControllerRef.current = null;
+          }
+        }
+
+        if (controller.signal.aborted) {
+          if (replacement.sessionId) {
+            cancelPlaybackSession(
+              replacement.sessionId,
+              "Partial discovery recovery was cancelled.",
+            );
+            usePlaybackSessionStore
+              .getState()
+              .removeSession(replacement.sessionId);
+          }
+          return true;
+        }
+
+        const replacementCandidates = replacement.plan?.orderedCandidates ?? [];
+        const hasNewCandidate = hasNewStablePlaybackCandidate(
+          previousPlan.orderedCandidates,
+          replacementCandidates,
+        );
+
+        // A retry can reach the same server-side fast promise before late
+        // providers finish. Never restart playback with exactly the same
+        // source identity just because the planner minted another UUID.
+        if (!replacement.ok || !hasNewCandidate) {
+          if (replacement.sessionId) {
+            cancelPlaybackSession(
+              replacement.sessionId,
+              "Partial discovery did not produce another source.",
+            );
+            usePlaybackSessionStore
+              .getState()
+              .removeSession(replacement.sessionId);
+          }
+          return false;
+        }
+
+        cancelPlaybackSession(
+          sessionId,
+          "Trying sources returned after partial discovery.",
+        );
+        usePlaybackSessionStore.getState().removeSession(sessionId);
+        launchOwnedSessionIdRef.current = replacement.sessionId;
+        setPlaybackUri(null);
+        setSessionStream(
+          replacement.stream,
+          replacement.mediaInfo,
+          replacement.sessionId,
+          replacement.candidateId,
+          null,
+          null,
+          { type: "play" },
+        );
+        return true;
+      })();
+      partialReplanPromisesRef.current.set(replanKey, replan);
+      try {
+        return await replan;
+      } finally {
+        if (partialReplanPromisesRef.current.get(replanKey) === replan) {
+          partialReplanPromisesRef.current.delete(replanKey);
+        }
+      }
+    },
+    [mediaInfo, setRuntimeState, setSessionStream, setStreamStatus],
+  );
+
+  useEffect(() => {
+    if (!planningLaunchId) return;
+
+    let active = true;
+    const launch = getPlaybackLaunch(planningLaunchId);
+    if (!launch) {
+      setPlaybackPlanningFailure(
+        planningLaunchId,
+        createPlaybackRuntimeError(
+          "SOURCE_UNAVAILABLE",
+          "Playback planning expired. Try again to find a source.",
+          { retryable: true, shouldFallback: false },
+        ),
+      );
+      return;
+    }
+
+    void launch
+      .then((result) => {
+        if (!active) {
+          if (result.sessionId) {
+            cancelPlaybackSession(
+              result.sessionId,
+              "Playback launch was closed.",
+            );
+            usePlaybackSessionStore.getState().removeSession(result.sessionId);
+          }
+          return;
+        }
+
+        if (!result.ok) {
+          launchOwnedSessionIdRef.current = result.sessionId ?? null;
+          releasePlaybackLaunch(planningLaunchId);
+          setPlaybackPlanningFailure(
+            planningLaunchId,
+            result.error,
+            result.sessionId,
+          );
+          return;
+        }
+
+        launchOwnedSessionIdRef.current = result.sessionId;
+        setSessionStream(
+          result.stream,
+          result.mediaInfo,
+          result.sessionId,
+          result.candidateId,
+          null,
+          null,
+          { type: "play" },
+        );
+        releasePlaybackLaunch(planningLaunchId);
+        // Start the existing session resolver immediately. The player effect
+        // joins its single-flight promise after the route has rendered. If it
+        // wins that race, publish the result into the same runtime store so a
+        // second resolver pass is never needed.
+        void resolvePlaybackSession(result.sessionId, result.candidateId)
+          .then(async (resolution) => {
+            const state = usePlayerStore.getState();
+            if (state.playbackSessionId !== result.sessionId) return;
+            if (!resolution.ok) {
+              if (await tryReplanPartialPlayback(result.sessionId)) return;
+              state.setRuntimeFailure(resolution.error);
+              return;
+            }
+            state.setSessionStream(
+              resolution.stream,
+              result.mediaInfo,
+              resolution.sessionId,
+              resolution.candidateId,
+              resolution.attemptId,
+              resolution.fallbackReason,
+            );
+          })
+          .catch((error) => {
+            const state = usePlayerStore.getState();
+            if (state.playbackSessionId !== result.sessionId) return;
+            state.setRuntimeFailure(
+              createPlaybackRuntimeError(
+                "SOURCE_UNAVAILABLE",
+                error instanceof Error
+                  ? error.message
+                  : "Could not prepare a source for playback.",
+                { retryable: true, shouldFallback: false },
+              ),
+            );
+          });
+      })
+      .catch((error) => {
+        if (!active || isPlaybackLaunchCancelled(error)) return;
+        setPlaybackPlanningFailure(
+          planningLaunchId,
+          createPlaybackRuntimeError(
+            "SOURCE_UNAVAILABLE",
+            error instanceof Error
+              ? error.message
+              : "Could not prepare a source for playback.",
+            { retryable: true, shouldFallback: false },
+          ),
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    planningLaunchId,
+    setPlaybackPlanningFailure,
+    setSessionStream,
+    tryReplanPartialPlayback,
+  ]);
 
   // Cast sessions intentionally outlive this route. They only stop after an
   // explicit stop/close action, so navigation cannot silently end playback.
 
   const handleRetryPlayback = useCallback(async () => {
-    if (!currentStream) return;
-
-    if (playbackSessionId && mediaInfo) {
-      cancelPlaybackSession(playbackSessionId, "User retried playback.");
-      setPlaybackUri(null);
-      setStreamStatus("loading_metrics");
-      const result = await playBest({
+    partialReplanControllerRef.current?.abort();
+    partialReplanControllerRef.current = null;
+    if (!currentStream && planningLaunchId && mediaInfo) {
+      if (playbackSessionId) {
+        cancelPlaybackSession(
+          playbackSessionId,
+          "User retried playback planning.",
+        );
+        usePlaybackSessionStore.getState().removeSession(playbackSessionId);
+        if (launchOwnedSessionIdRef.current === playbackSessionId) {
+          launchOwnedSessionIdRef.current = null;
+        }
+      }
+      cancelPlaybackLaunch(planningLaunchId, "User retried playback planning.");
+      const launchId = beginPlaybackLaunch({
         type: mediaInfo.type,
         id: mediaInfo.itemId,
         title: mediaInfo.title,
@@ -263,7 +601,29 @@ export default function PlayerScreen() {
         season: mediaInfo.season,
         episode: mediaInfo.episode,
       });
+      setPlaybackPlanning(mediaInfo, launchId);
+      return;
+    }
+
+    if (!currentStream) return;
+
+    if (playbackSessionId && mediaInfo) {
+      cancelPlaybackSession(playbackSessionId, "User retried playback.");
+      setPlaybackUri(null);
+      setStreamStatus("loading_metrics");
+      const result = await playBest(
+        {
+          type: mediaInfo.type,
+          id: mediaInfo.itemId,
+          title: mediaInfo.title,
+          poster: mediaInfo.poster,
+          season: mediaInfo.season,
+          episode: mediaInfo.episode,
+        },
+        { forceRefresh: true },
+      );
       if (result.ok) {
+        launchOwnedSessionIdRef.current = result.sessionId;
         setSessionStream(
           result.stream,
           result.mediaInfo,
@@ -285,7 +645,9 @@ export default function PlayerScreen() {
   }, [
     currentStream,
     mediaInfo,
+    planningLaunchId,
     playbackSessionId,
+    setPlaybackPlanning,
     setRuntimeFailure,
     setSessionStream,
     setStreamStatus,
@@ -309,6 +671,9 @@ export default function PlayerScreen() {
             error,
           );
           if (!result.ok) {
+            if (await tryReplanPartialPlayback(playbackSessionId)) {
+              return true;
+            }
             setRuntimeFailure(result.error);
             return false;
           }
@@ -343,6 +708,7 @@ export default function PlayerScreen() {
       playbackSessionId,
       setRuntimeFailure,
       setSessionStream,
+      tryReplanPartialPlayback,
     ],
   );
 
@@ -375,6 +741,7 @@ export default function PlayerScreen() {
         if (!isMounted) return;
 
         if (!result.ok) {
+          if (await tryReplanPartialPlayback(playbackSessionId)) return;
           setPlaybackUri(null);
           setRuntimeFailure(result.error);
           return;
@@ -459,6 +826,7 @@ export default function PlayerScreen() {
     setStreamStatus,
     t,
     tryAdvanceToFallback,
+    tryReplanPartialPlayback,
   ]);
 
   useEffect(() => {
@@ -795,6 +1163,7 @@ export default function PlayerScreen() {
     Number.isFinite(playerDuration) && playerDuration > 0;
   const isRemuxPlayback = Boolean(
     currentStream?.behaviorHints?.remuxToMp4 ||
+    currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4" ||
     selectedSessionCandidate?.requiresRemux,
   );
   const isLivePlayback = Boolean(
@@ -983,12 +1352,14 @@ export default function PlayerScreen() {
   }, [showControls]);
 
   const preparationActive = Boolean(
-    currentStream &&
-    !playbackUri &&
-    streamState !== "error" &&
-    activeSession?.status !== "failed" &&
-    activeSession?.status !== "cancelled" &&
-    activeSession?.status !== "completed",
+    (planningLaunchId && streamState !== "error") ||
+    partialReplanControllerRef.current ||
+    (currentStream &&
+      !playbackUri &&
+      streamState !== "error" &&
+      activeSession?.status !== "failed" &&
+      activeSession?.status !== "cancelled" &&
+      activeSession?.status !== "completed"),
   );
   const handleEscape = useCallback(() => {
     const action = getPlayerEscapeAction({
@@ -1132,7 +1503,38 @@ export default function PlayerScreen() {
           onChooseSource={mediaInfo ? handleChooseSource : undefined}
           onPreviewPlayer={__DEV__ ? () => setPreviewControls(true) : undefined}
           onOpenSourcesDevices={
-            currentStream.infoHash ? handleOpenSourcesDevices : undefined
+            currentStream.infoHash || shouldOfferSourcesDevicesRecovery
+              ? handleOpenSourcesDevices
+              : undefined
+          }
+        />
+      </View>
+    );
+  }
+
+  if (!currentStream && !activeCast && planningLaunchId) {
+    return (
+      <View style={styles.errorContainer} testID="player-planning-screen">
+        <StatusBar style="light" />
+        <PlayerStatusOverlay
+          streamState={streamState}
+          runtimeState={runtimeState}
+          streamMetrics={streamMetrics}
+          isBuffering={isBuffering}
+          errorMessage={errorMessage}
+          runtimeError={runtimeError}
+          fallbackReason={fallbackReason}
+          session={activeSession}
+          onBack={handleClose}
+          onRetry={handleRetryPlayback}
+          onCancelPreparation={
+            preparationActive ? handleCancelPreparation : undefined
+          }
+          onChooseSource={mediaInfo ? handleChooseSource : undefined}
+          onOpenSourcesDevices={
+            shouldOfferSourcesDevicesRecovery
+              ? handleOpenSourcesDevices
+              : undefined
           }
         />
       </View>
@@ -1262,7 +1664,9 @@ export default function PlayerScreen() {
                 : undefined
             }
             onOpenSourcesDevices={
-              currentStream?.infoHash ? handleOpenSourcesDevices : undefined
+              currentStream?.infoHash || shouldOfferSourcesDevicesRecovery
+                ? handleOpenSourcesDevices
+                : undefined
             }
           />
 

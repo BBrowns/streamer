@@ -4,7 +4,7 @@ import {
   makePlaybackPlan,
   makePlannedMediaCandidate,
 } from "../../../test-utils/playbackPlan";
-import { createPlaybackPlanWithBridgeRetry } from "../../../services/playback/PlaybackPlanService";
+import { getPlaybackPlanWithBridgeRetry } from "../../../services/playback/PlaybackPlanService";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
@@ -34,13 +34,12 @@ jest.mock("../../../stores/toastStore", () => ({
 }));
 
 jest.mock("../../../services/playback/PlaybackPlanService", () => ({
-  createPlaybackPlanWithBridgeRetry: jest.fn(),
+  getPlaybackPlanWithBridgeRetry: jest.fn(),
 }));
 
-const mockedCreatePlan =
-  createPlaybackPlanWithBridgeRetry as jest.MockedFunction<
-    typeof createPlaybackPlanWithBridgeRetry
-  >;
+const mockedCreatePlan = getPlaybackPlanWithBridgeRetry as jest.MockedFunction<
+  typeof getPlaybackPlanWithBridgeRetry
+>;
 
 describe("SourceInspectorPanel", () => {
   beforeEach(() => {

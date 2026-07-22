@@ -396,6 +396,8 @@ test("Escape cancels source preparation through the active session", async ({
   expect(cancelBox).not.toBeNull();
   expect(cancelBox!.y).toBeLessThanOrEqual(32);
   expect(cancelBox!.x + cancelBox!.width).toBeGreaterThanOrEqual(1380);
+  await expect(page.getByText("1 peers", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^\d+%$/)).toHaveCount(0);
 
   await page.screenshot({
     path: testInfo.outputPath(
@@ -411,17 +413,20 @@ test("Escape cancels source preparation through the active session", async ({
   await expect.poll(controls.gatewayJobsCancelled).toBeGreaterThan(0);
 });
 
-test("bridge unavailable produces a recoverable detail state", async ({
+test("bridge unavailable produces a recoverable player state", async ({
   page,
 }) => {
   await loginAndOpenFixture(page, "bridge-unavailable");
   await page.getByRole("button", { name: "Play" }).click();
 
-  await expect(page.getByText("Finish playback setup")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Sources & Devices" }),
-  ).toBeVisible();
-  await expect(page).not.toHaveURL(/\/player$/);
+  await expect(page).toHaveURL(/\/player$/);
+  await expect(page.getByText("Bridge Not Ready")).toBeVisible();
+  const sourcesDevices = page.getByRole("button", {
+    name: "Sources & Devices",
+  });
+  await expect(sourcesDevices).toBeVisible();
+  await sourcesDevices.click();
+  await expect(page).toHaveURL(/\/settings\/sources$/);
 });
 
 test("download eligibility uses a planner action", async ({ page }) => {

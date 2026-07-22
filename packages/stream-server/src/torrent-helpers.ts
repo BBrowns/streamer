@@ -11,6 +11,23 @@ export type ByteRangeResult =
   | { type: "partial"; start: number; end: number; length: number }
   | { type: "unsatisfiable" };
 
+/**
+ * Controls for the metadata-readiness wait.
+ *
+ * `initialPeerTimeoutMs` is deliberately separate from the metadata timeout:
+ * it lets a caller stop trying a source that has not found a single peer yet,
+ * while still allowing a connected source enough time to receive metadata.
+ *
+ * `metadataTimeoutAfterPeerMs` gives a source a bounded metadata window after
+ * its first peer connects. `timeoutMs` remains the overall hard cap, so a late
+ * peer cannot extend preparation indefinitely.
+ */
+export interface TorrentReadinessOptions {
+  signal?: AbortSignal;
+  initialPeerTimeoutMs?: number;
+  metadataTimeoutAfterPeerMs?: number;
+}
+
 /** Detect MIME type from file extension for correct Content-Type header */
 export function mimeFromExt(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -103,41 +120,133 @@ export function parseByteRange(
  * webtorrent v2 fires `ready` once all metadata is received and
  * `torrent.files` is populated. The Torrent class extends EventEmitter.
  *
- * Times out after `timeoutMs` (default 30 s) to avoid infinite hangs.
+ * Times out after `timeoutMs` (default 120 s) to avoid infinite hangs.
  */
-export function waitForReady(torrent: any, timeoutMs = 120_000): Promise<void> {
+export function waitForReady(
+  torrent: any,
+  timeoutMs = 120_000,
+  options: TorrentReadinessOptions = {},
+): Promise<void> {
   return new Promise((resolve, reject) => {
     if (torrent.files && torrent.files.length > 0) {
       return resolve();
     }
 
-    let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      timer = null;
-      cleanup();
-      reject(new Error("Torrent ready timeout"));
-    }, timeoutMs);
+    const { signal, initialPeerTimeoutMs, metadataTimeoutAfterPeerMs } =
+      options;
+    if (signal?.aborted) {
+      return reject(createTorrentReadinessAbortError());
+    }
+
+    let settled = false;
+    let readyTimer: ReturnType<typeof setTimeout> | null = null;
+    let initialPeerTimer: ReturnType<typeof setTimeout> | null = null;
+    let metadataAfterPeerTimer: ReturnType<typeof setTimeout> | null = null;
+    let sawInitialPeer = Number(torrent.numPeers) > 0;
+    const hasInitialPeerDeadline =
+      !sawInitialPeer &&
+      typeof initialPeerTimeoutMs === "number" &&
+      Number.isFinite(initialPeerTimeoutMs) &&
+      initialPeerTimeoutMs > 0;
+    const hasMetadataAfterPeerDeadline =
+      typeof metadataTimeoutAfterPeerMs === "number" &&
+      Number.isFinite(metadataTimeoutAfterPeerMs) &&
+      metadataTimeoutAfterPeerMs > 0;
 
     function cleanup() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
+      if (readyTimer) {
+        clearTimeout(readyTimer);
+        readyTimer = null;
+      }
+      if (initialPeerTimer) {
+        clearTimeout(initialPeerTimer);
+        initialPeerTimer = null;
+      }
+      if (metadataAfterPeerTimer) {
+        clearTimeout(metadataAfterPeerTimer);
+        metadataAfterPeerTimer = null;
       }
       torrent.removeListener("ready", onReady);
       torrent.removeListener("error", onError);
+      torrent.removeListener("wire", onWire);
+      signal?.removeEventListener("abort", onAbort);
+    }
+
+    function settle(resolveOrReject: "resolve" | "reject", error?: Error) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (resolveOrReject === "resolve") {
+        resolve();
+      } else {
+        reject(error);
+      }
     }
 
     function onReady() {
-      cleanup();
-      resolve();
+      settle("resolve");
     }
     function onError(err: Error) {
-      cleanup();
-      reject(err);
+      settle("reject", err);
+    }
+    function onAbort() {
+      settle("reject", createTorrentReadinessAbortError());
+    }
+    function startMetadataAfterPeerTimer() {
+      if (!hasMetadataAfterPeerDeadline || metadataAfterPeerTimer || settled) {
+        return;
+      }
+      metadataAfterPeerTimer = setTimeout(() => {
+        metadataAfterPeerTimer = null;
+        settle(
+          "reject",
+          new Error("Torrent metadata timeout after peer connection"),
+        );
+      }, metadataTimeoutAfterPeerMs);
+    }
+    function onWire() {
+      sawInitialPeer = true;
+      if (initialPeerTimer) {
+        clearTimeout(initialPeerTimer);
+        initialPeerTimer = null;
+      }
+      startMetadataAfterPeerTimer();
+    }
+    function onInitialPeerTimeout() {
+      initialPeerTimer = null;
+      if (sawInitialPeer || Number(torrent.numPeers) > 0) {
+        sawInitialPeer = true;
+        startMetadataAfterPeerTimer();
+        return;
+      }
+      settle("reject", new Error("Torrent peer discovery timeout"));
     }
 
     torrent.once("ready", onReady);
     torrent.once("error", onError);
+    if (hasInitialPeerDeadline || hasMetadataAfterPeerDeadline) {
+      torrent.once("wire", onWire);
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    readyTimer = setTimeout(() => {
+      readyTimer = null;
+      settle("reject", new Error("Torrent ready timeout"));
+    }, timeoutMs);
+
+    if (hasInitialPeerDeadline) {
+      initialPeerTimer = setTimeout(onInitialPeerTimeout, initialPeerTimeoutMs);
+    }
+    if (sawInitialPeer) {
+      startMetadataAfterPeerTimer();
+    }
   });
+}
+
+function createTorrentReadinessAbortError() {
+  const error = new Error("Torrent readiness was cancelled");
+  error.name = "AbortError";
+  return error;
 }
 
 /** Stream the largest video file from a torrent to an Express response */

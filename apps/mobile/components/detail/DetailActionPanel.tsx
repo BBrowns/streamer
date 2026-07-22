@@ -14,6 +14,7 @@ type DetailActionPanelProps = {
   hasTrailer?: boolean;
   planningAction?: "play" | "download" | "cast" | null;
   onPlayBest: () => void;
+  onPlayIntent?: () => void;
   onDownload: () => void;
   onCast?: () => void;
   onToggleLibrary: () => void;
@@ -23,11 +24,12 @@ type DetailActionPanelProps = {
 
 export function DetailActionPanel({
   castType,
-  hasPlayableSources,
+  hasPlayableSources: _hasPlayableSources,
   inLibrary,
   hasTrailer = false,
   planningAction,
   onPlayBest,
+  onPlayIntent,
   onDownload,
   onCast,
   onToggleLibrary,
@@ -52,9 +54,15 @@ export function DetailActionPanel({
               icon="play"
               variant="primary"
               size="large"
-              disabled={!hasPlayableSources || actionDisabled}
+              // The planner is authoritative. A raw stream list can still be
+              // loading or contain only a fast partial response, so it must
+              // not disable Play before the planner has had a chance to find
+              // a playable source.
+              disabled={actionDisabled}
               loading={planningAction === "play"}
               onPress={onPlayBest}
+              onFocus={onPlayIntent}
+              onHoverIn={onPlayIntent}
               style={styles.primaryButton}
             />
             <AppButton
@@ -66,7 +74,7 @@ export function DetailActionPanel({
               icon="download-outline"
               variant="secondary"
               size="large"
-              disabled={!hasPlayableSources || actionDisabled}
+              disabled={actionDisabled}
               loading={planningAction === "download"}
               onPress={onDownload}
               style={styles.secondaryButton}
@@ -83,7 +91,7 @@ export function DetailActionPanel({
                 icon="tv-outline"
                 variant="secondary"
                 size="large"
-                disabled={!hasPlayableSources || actionDisabled}
+                disabled={actionDisabled}
                 loading={planningAction === "cast"}
                 onPress={onCast}
                 style={styles.secondaryButton}

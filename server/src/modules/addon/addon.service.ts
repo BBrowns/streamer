@@ -8,6 +8,7 @@ import {
   fetchSafeAddonJson,
   safeUrlForLog,
 } from "./addon-fetcher.js";
+import { aggregatorService } from "../aggregator/aggregator.service.js";
 
 export class AddonService {
   /** Fetch and validate manifest from a remote add-on URL */
@@ -129,6 +130,10 @@ export class AddonService {
           lastValidatedAt: new Date(),
         },
       });
+      // A refreshed manifest can change stream capabilities. Do not serve a
+      // stale source lookup after the background add-on reload completes.
+      aggregatorService.invalidateSearchCacheForUser(addon.userId);
+      aggregatorService.invalidateStreamDiscoveryCacheForUser(addon.userId);
 
       logger.info({ addonId }, "Add-on manifest re-validated");
     } catch (err: any) {

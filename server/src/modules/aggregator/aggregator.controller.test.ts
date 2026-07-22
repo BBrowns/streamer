@@ -65,6 +65,58 @@ describe("AggregatorController.getMeta", () => {
   });
 });
 
+describe("AggregatorController.getStreams", () => {
+  const controller = new AggregatorController();
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns the existing streams shape with a safe discovery status", async () => {
+    const signal = new AbortController().signal;
+    const streams = [
+      {
+        url: "https://cdn.example.test/movie.1080p.h264.mp4",
+        title: "Movie 1080p H264",
+      },
+    ];
+    const discovery = vi
+      .spyOn(aggregatorService, "getStreamDiscovery")
+      .mockResolvedValue({ streams, status: "partial" });
+    const json = vi.fn((body: unknown) => body);
+    const context = {
+      req: {
+        raw: { signal },
+        valid: () => ({ type: "movie", id: "tt-stream" }),
+      },
+      get: (key: string) => {
+        if (key === "user") return { userId: "user-1" };
+        if (key === "requestId") return "req-stream-controller";
+        return undefined;
+      },
+      json,
+    } as any;
+
+    await controller.getStreams(context);
+
+    expect(discovery).toHaveBeenCalledWith(
+      "user-1",
+      "movie",
+      "tt-stream",
+      "req-stream-controller",
+      { signal },
+    );
+    expect(json).toHaveBeenCalledWith({
+      streams,
+      sourceDiscovery: { status: "partial" },
+    });
+    const body = json.mock.calls[0]?.[0] as { sourceDiscovery: unknown };
+    expect(JSON.stringify(body.sourceDiscovery)).not.toContain(
+      "cdn.example.test",
+    );
+  });
+});
+
 describe("AggregatorController.search", () => {
   const controller = new AggregatorController();
 

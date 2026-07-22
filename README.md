@@ -265,8 +265,11 @@ npm run test:e2e --workspace=apps/mobile
 
 Server tests never use the normal `DATABASE_URL` from `server/.env`. Locally,
 they start and remove an ephemeral PostgreSQL container automatically. Start
-Docker Desktop before running them. If Docker is unavailable but you have a
-purpose-made disposable test database, pass it explicitly:
+Docker Desktop before running them. On Docker Desktop for macOS, the test
+setup automatically adopts the active Docker context (including the usual
+`~/.docker/run/docker.sock` endpoint); an explicitly configured `DOCKER_HOST`
+always takes precedence. If Docker is unavailable but you have a purpose-made
+disposable test database, pass it explicitly:
 
 ```bash
 STREAMER_TEST_DATABASE_URL='postgresql://user:password@host:5432/streamer_test?schema=public' \

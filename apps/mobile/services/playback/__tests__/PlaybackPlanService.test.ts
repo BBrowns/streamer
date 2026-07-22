@@ -7,7 +7,12 @@ import {
 } from "../../../test-utils/playbackPlan";
 import {
   createPlaybackPlan,
+  getPlaybackPlan,
+  getPlaybackPlanAfterPartialDiscovery,
+  getPlaybackPlanWithBridgeRetry,
   getReadyPlanStreams,
+  prefetchPlaybackPlan,
+  resetPlaybackPlanCacheForTests,
   resolvePlaybackPlan,
   resolveFirstPlayablePlanStream,
 } from "../PlaybackPlanService";
@@ -26,6 +31,7 @@ jest.mock("../../streamEngine/StreamEngineManager", () => ({
       status: "available",
       url: "http://192.168.1.25:11470",
     })),
+    detectBridge: jest.fn(() => Promise.resolve(true)),
     getPlaybackUri: jest.fn(),
   },
 }));
@@ -37,7 +43,9 @@ describe("PlaybackPlanService", () => {
     >;
 
   beforeEach(() => {
+    resetPlaybackPlanCacheForTests();
     jest.clearAllMocks();
+    (streamEngineManager as any).bridgeAvailable = false;
     (streamEngineManager as any).bridgeStatus = "available";
     (
       streamEngineManager.getBridgeUrl as jest.MockedFunction<
@@ -58,6 +66,11 @@ describe("PlaybackPlanService", () => {
       preferredSubtitleLang: null,
       autoPlayNext: true,
     });
+  });
+
+  afterEach(() => {
+    resetPlaybackPlanCacheForTests();
+    jest.useRealTimers();
   });
 
   it("sends exact selected qualities and their upper bound to the planner", async () => {
@@ -235,6 +248,204 @@ describe("PlaybackPlanService", () => {
     await expect(
       createPlaybackPlan({ type: "movie", id: "tt123", action: "play" }),
     ).rejects.toThrow();
+  });
+
+  it("coalesces concurrent planner callers and reuses the short-lived plan cache", async () => {
+    const candidate = makePlannedMediaCandidate();
+    const plan = makePlaybackPlan({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidate,
+        fallbackCandidates: [],
+      },
+    });
+    (api.post as jest.Mock).mockResolvedValue({ data: plan });
+    const input = {
+      type: "movie" as const,
+      id: "tt-coalesced",
+      action: "play" as const,
+    };
+
+    const [first, second] = await Promise.all([
+      getPlaybackPlan(input),
+      getPlaybackPlan(input),
+    ]);
+    const cached = await getPlaybackPlan(input);
+
+    expect(first).toEqual(plan);
+    expect(second).toEqual(plan);
+    expect(cached).toEqual(plan);
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts one bridge detection while concurrent plans are requested", async () => {
+    const candidate = makePlannedMediaCandidate();
+    const plan = makePlaybackPlan({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidate,
+        fallbackCandidates: [],
+      },
+    });
+    (api.post as jest.Mock).mockResolvedValue({ data: plan });
+
+    await Promise.all([
+      getPlaybackPlanWithBridgeRetry({
+        type: "movie",
+        id: "tt-bridge-one",
+        action: "play",
+      }),
+      getPlaybackPlanWithBridgeRetry({
+        type: "movie",
+        id: "tt-bridge-two",
+        action: "play",
+      }),
+    ]);
+
+    expect(streamEngineManager.detectBridge).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a confirmed bridge ready while a direct plan is requested", async () => {
+    (streamEngineManager as any).bridgeAvailable = true;
+    const candidate = makePlannedMediaCandidate();
+    (api.post as jest.Mock).mockResolvedValue({
+      data: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: candidate,
+          fallbackCandidates: [],
+        },
+      }),
+    });
+
+    await getPlaybackPlanWithBridgeRetry({
+      type: "movie",
+      id: "tt-confirmed-bridge",
+      action: "cast",
+    });
+
+    expect(streamEngineManager.detectBridge).not.toHaveBeenCalled();
+  });
+
+  it("lets a cancelled Play abort an attached Detail prefetch", async () => {
+    let requestSignal: AbortSignal | undefined;
+    (api.post as jest.Mock).mockImplementation(
+      (_url: string, _payload: unknown, config?: { signal?: AbortSignal }) =>
+        new Promise((_, reject) => {
+          requestSignal = config?.signal;
+          config?.signal?.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("cancelled");
+              error.name = "CanceledError";
+              reject(error);
+            },
+            { once: true },
+          );
+        }),
+    );
+    const input = {
+      type: "movie" as const,
+      id: "tt-cancel",
+      action: "play" as const,
+    };
+    const prefetchController = new AbortController();
+    const playerController = new AbortController();
+
+    const prefetched = prefetchPlaybackPlan(input, prefetchController.signal);
+    const playerPlan = getPlaybackPlan(input, {
+      signal: playerController.signal,
+    });
+    playerController.abort();
+
+    await expect(playerPlan).rejects.toMatchObject({ name: "AbortError" });
+    await expect(prefetched).resolves.toBeNull();
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it("force-refreshes a partial plan until the warmed cache returns complete", async () => {
+    jest.useFakeTimers();
+    const candidate = makePlannedMediaCandidate();
+    const partial = makePlaybackPlan({
+      state: "ready",
+      sourceDiscovery: { status: "partial", usableCandidateCount: 1 },
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidate,
+        fallbackCandidates: [],
+      },
+    });
+    const complete = makePlaybackPlan({
+      state: "ready",
+      sourceDiscovery: { status: "complete", usableCandidateCount: 1 },
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidate,
+        fallbackCandidates: [],
+      },
+    });
+    (api.post as jest.Mock)
+      .mockResolvedValueOnce({ data: partial })
+      .mockResolvedValueOnce({ data: complete });
+
+    const planPromise = getPlaybackPlanAfterPartialDiscovery({
+      type: "movie",
+      id: "tt-partial",
+      action: "play",
+    });
+
+    await jest.advanceTimersByTimeAsync(750);
+
+    await expect(planPromise).resolves.toEqual(complete);
+    expect(api.post).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let an older partial in-flight response overwrite a forced refresh", async () => {
+    const candidate = makePlannedMediaCandidate();
+    const partial = makePlaybackPlan({
+      state: "ready",
+      sourceDiscovery: { status: "partial", usableCandidateCount: 1 },
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidate,
+        fallbackCandidates: [],
+      },
+    });
+    const complete = makePlaybackPlan({
+      state: "ready",
+      sourceDiscovery: { status: "complete", usableCandidateCount: 1 },
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidate,
+        fallbackCandidates: [],
+      },
+    });
+    const resolveRequests: Array<(value: { data: unknown }) => void> = [];
+    (api.post as jest.Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequests.push(resolve);
+        }),
+    );
+    const input = {
+      type: "movie" as const,
+      id: "tt-force",
+      action: "play" as const,
+    };
+
+    const initial = getPlaybackPlan(input);
+    const forced = getPlaybackPlan(input, { forceRefresh: true });
+    expect(resolveRequests).toHaveLength(2);
+
+    resolveRequests[1]({ data: complete });
+    await expect(forced).resolves.toEqual(complete);
+    resolveRequests[0]({ data: partial });
+    await expect(initial).resolves.toEqual(partial);
+
+    await expect(getPlaybackPlan(input)).resolves.toEqual(complete);
   });
 
   it("returns selected and fallback streams in planner order", () => {

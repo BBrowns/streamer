@@ -25,6 +25,8 @@ type AppButtonSize = "small" | "medium" | "large";
 type AppButtonProps = {
   label: string;
   onPress?: () => void;
+  onFocus?: () => void;
+  onHoverIn?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
   accessibilityLabel?: string;
   accessibilityHint?: string;
@@ -40,6 +42,8 @@ type AppButtonProps = {
 export function AppButton({
   label,
   onPress,
+  onFocus,
+  onHoverIn,
   icon,
   accessibilityLabel,
   accessibilityHint,
@@ -65,6 +69,8 @@ export function AppButton({
     <Pressable
       testID={testID}
       onPress={onPress}
+      onFocus={onFocus}
+      onHoverIn={onHoverIn}
       disabled={disabled || loading}
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading, busy: loading }}

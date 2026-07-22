@@ -20,7 +20,6 @@ export interface DetailLayoutProps {
   trailerUrl?: string | null;
   onWatchTrailer?: () => void;
   handlePlayStream: (
-    stream?: Stream,
     episodeTitle?: string,
     season?: number,
     episode?: number,
@@ -38,8 +37,9 @@ export interface DetailLayoutProps {
     season?: number,
     episode?: number,
   ) => void;
-  handleCastStream?: (stream?: Stream) => void;
+  handleCastStream?: () => void;
   planningAction?: "play" | "download" | "cast" | null;
+  onPlayIntent?: (season?: number, episode?: number) => void;
   playbackNotice?: PlaybackReadinessNoticeCopy | null;
   onDismissPlaybackNotice?: () => void;
   onPlaybackNoticeAction?: (target: PlaybackReadinessActionTarget) => void;

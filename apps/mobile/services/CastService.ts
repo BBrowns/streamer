@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
 import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "./bridgeAuth";
 import type { CastDeviceCapabilities } from "./playback/deviceProfile";
@@ -7,6 +6,7 @@ import {
   preflightStreamAction,
   requireActionPreflight,
 } from "./actionPreflight";
+import { detectPlaybackBridgeOnce } from "./playback/PlaybackPlanService";
 import { redactSensitiveText } from "./redaction";
 
 export interface CastDevice {
@@ -63,8 +63,11 @@ class CastService {
   }
 
   async getDevices(): Promise<CastDevice[]> {
-    if (Platform.OS !== "web" && !streamEngineManager.bridgeAvailable) {
-      await streamEngineManager.detectBridge();
+    if (!streamEngineManager.bridgeAvailable) {
+      // The web cast dialog can open before the app's opportunistic startup
+      // probe has completed. Join the same single-flight probe used by Play
+      // rather than rejecting a bridge that is still becoming available.
+      await detectPlaybackBridgeOnce();
     }
     requireActionPreflight(
       preflightBridgeAction("cast", { sourceKind: "direct" }),

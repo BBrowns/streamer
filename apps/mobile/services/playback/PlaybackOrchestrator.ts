@@ -10,7 +10,10 @@ import type { MediaInfo } from "../../stores/playerStore";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
 import type { DownloadEligibility } from "../downloadEligibility";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
-import { createPlaybackPlanWithBridgeRetry } from "./PlaybackPlanService";
+import {
+  createPlaybackPlanWithBridgeRetry,
+  getPlaybackPlanAfterPartialDiscovery,
+} from "./PlaybackPlanService";
 import {
   resolveCastSession,
   resolveDownloadSession,
@@ -105,17 +108,36 @@ export interface PrepareCastOptions {
   castProfile?: PlaybackSessionCastProfile;
 }
 
+export interface PlayBestOptions {
+  /** Cancels the planner request before a runtime session is created. */
+  signal?: AbortSignal;
+  /** Bypass a partial/cached plan after every candidate in it has failed. */
+  forceRefresh?: boolean;
+  /** Wait briefly for the server's in-flight partial discovery to complete. */
+  awaitCompleteDiscovery?: boolean;
+}
+
 export async function playBest(
   input: PlaybackOrchestratorInput,
+  options: PlayBestOptions = {},
 ): Promise<PlaybackOrchestratorResult> {
   const fallback = "Playback is unavailable right now.";
-  const plan = await createPlaybackPlanWithBridgeRetry({
+  const planInput = {
     type: input.type,
     id: input.id,
     season: input.season,
     episode: input.episode,
     action: "play",
-  });
+  } as const;
+  const planOptions = {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.forceRefresh ? { forceRefresh: true } : {}),
+  };
+  const plan = options.awaitCompleteDiscovery
+    ? await getPlaybackPlanAfterPartialDiscovery(planInput, planOptions)
+    : Object.keys(planOptions).length > 0
+      ? await createPlaybackPlanWithBridgeRetry(planInput, planOptions)
+      : await createPlaybackPlanWithBridgeRetry(planInput);
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
   const session = usePlaybackSessionStore.getState().createSession({
     plan,

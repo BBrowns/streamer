@@ -20,8 +20,10 @@ import {
 import {
   __resetRemuxCacheForTests,
   __setFfmpegSpawnerForTests,
+  ensureTorrentReady,
   getSelectedFile,
   serveTorrentFile,
+  shouldRemuxTorrentFile,
   waitForTorrentFileFirstBytes,
 } from "../torrent.js";
 
@@ -113,6 +115,52 @@ function makeHangingFfmpegSpawner() {
   child.stdin.write = vi.fn();
   child.stdin.end = vi.fn();
   child.stdin.destroy = vi.fn();
+  child.stderr = new EventEmitter();
+  child.kill = vi.fn(() => {
+    setTimeout(() => child.emit("close", null), 0);
+  });
+
+  return {
+    child,
+    spawner: vi.fn(() => child) as any,
+  };
+}
+
+function makeStubbornFfmpegSpawner() {
+  const child = new EventEmitter() as any;
+  child.stdin = new EventEmitter() as any;
+  child.stdin.write = vi.fn();
+  child.stdin.end = vi.fn();
+  child.stdin.destroy = vi.fn();
+  child.stderr = new EventEmitter();
+  child.kill = vi.fn();
+  let outputPath: string | undefined;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+
+  return {
+    child,
+    spawner: vi.fn((_command: string, args: string[]) => {
+      outputPath = args.at(-1);
+      markStarted();
+      return child;
+    }) as any,
+    getOutputPath: () => outputPath,
+    started,
+  };
+}
+
+function makeProgressiveFfmpegSpawner() {
+  const child = new EventEmitter() as any;
+  child.stdin = new EventEmitter() as any;
+  child.stdin.write = vi.fn();
+  child.stdin.end = vi.fn();
+  child.stdin.destroy = vi.fn();
+  child.stdout = new EventEmitter() as any;
+  child.stdout.pause = vi.fn();
+  child.stdout.resume = vi.fn();
   child.stderr = new EventEmitter();
   child.kill = vi.fn();
 
@@ -314,6 +362,12 @@ describe("parseByteRange", () => {
 });
 
 describe("serveTorrentFile", () => {
+  it("uses the same MKV remux decision as gateway preflight", () => {
+    expect(shouldRemuxTorrentFile("movie.mkv")).toBe(true);
+    expect(shouldRemuxTorrentFile("movie.mp4")).toBe(false);
+    expect(shouldRemuxTorrentFile("movie.mp4", "mp4")).toBe(true);
+  });
+
   it("serves a clamped gateway seek range with exposed response headers", async () => {
     const file = makeFakeFile("film.mp4", 5_000_000);
     const torrent = makeTorrent([file]);
@@ -377,6 +431,124 @@ describe("serveTorrentFile", () => {
       remuxedBytes.length,
     );
     expect(res.end).toHaveBeenCalled();
+  });
+
+  it("starts an MKV as a fragmented MP4 before FFmpeg closes", async () => {
+    const { child, spawner } = makeProgressiveFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=0-" });
+
+    const streaming = serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      remuxStrategy: "progressive-fmp4",
+    });
+
+    expect(spawner).toHaveBeenCalledWith(
+      "ffmpeg",
+      expect.arrayContaining([
+        "+frag_keyframe+empty_moov+default_base_moof",
+        "-frag_duration",
+        "2000000",
+        "pipe:1",
+      ]),
+    );
+    const args = spawner.mock.calls[0][1] as string[];
+    expect(args).not.toContain("+faststart");
+    expect(file.createReadStream).toHaveBeenCalledWith();
+
+    const firstFragment = Buffer.from("fragmented-mp4-moof");
+    child.stdout.emit("data", firstFragment);
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "video/mp4");
+    expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
+    expect(res.setHeader).not.toHaveBeenCalledWith(
+      "Content-Length",
+      expect.anything(),
+    );
+    expect(res.setHeader).not.toHaveBeenCalledWith(
+      "Accept-Ranges",
+      expect.anything(),
+    );
+    expect(res.write).toHaveBeenCalledWith(firstFragment);
+    expect(res.end).not.toHaveBeenCalled();
+
+    child.emit("close", 0);
+    await streaming;
+
+    expect(res.end).toHaveBeenCalled();
+  });
+
+  it("rejects non-zero seeks for a progressive remux without spawning FFmpeg", async () => {
+    const { spawner } = makeProgressiveFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=1024-" });
+
+    await serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      remuxStrategy: "progressive-fmp4",
+    });
+
+    expect(spawner).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(416);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ retryable: false }),
+    );
+  });
+
+  it("cancels the live fragmented remux when its gateway job is aborted", async () => {
+    const { child, spawner } = makeProgressiveFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const sourceStream = file.createReadStream();
+    const controller = new AbortController();
+    const { req, res } = makeReqRes();
+
+    const streaming = serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      remuxStrategy: "progressive-fmp4",
+      signal: controller.signal,
+    });
+    controller.abort(new Error("Gateway job cancelled"));
+
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(sourceStream.destroy).toHaveBeenCalled();
+    child.emit("close", null);
+    await streaming;
+
+    expect(res.status).toHaveBeenCalledWith(410);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "Gateway job cancelled",
+        retryable: false,
+      }),
+    );
+  });
+
+  it("destroys an already-open player response if fragmented remuxing fails", async () => {
+    const { child, spawner } = makeProgressiveFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes();
+
+    const streaming = serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      remuxStrategy: "progressive-fmp4",
+    });
+    child.stdout.emit("data", Buffer.from("fragmented-mp4-moof"));
+    child.emit("close", 1);
+    await streaming;
+
+    expect(res.destroy).toHaveBeenCalledWith(expect.any(Error));
+    expect(res.status).not.toHaveBeenCalledWith(503);
   });
 
   it("serves byte ranges from cached remux output without spawning FFmpeg again", async () => {
@@ -528,6 +700,52 @@ describe("serveTorrentFile", () => {
       }),
     );
   });
+
+  it("keeps a partial remux file until FFmpeg closes after a forced cancellation", async () => {
+    vi.useFakeTimers();
+    const cacheRoot = await mkdtemp(
+      path.join(tmpdir(), "streamer-remux-test-"),
+    );
+    process.env.STREAMER_REMUX_CACHE_DIR = cacheRoot;
+    const { child, spawner, getOutputPath, started } =
+      makeStubbornFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    try {
+      const file = makeFakeFile("film.mkv", 5_000_000);
+      const torrent = makeTorrent([file]);
+      torrent.infoHash = "movie-hash";
+      const controller = new AbortController();
+      const { req, res } = makeReqRes();
+
+      const result = serveTorrentFile(req, res, torrent, {
+        remuxFormat: "mp4",
+        signal: controller.signal,
+      });
+      await started;
+      const outputPath = getOutputPath();
+      expect(outputPath).toBeDefined();
+      await writeFile(outputPath!, "partial remux output");
+
+      controller.abort(new Error("Gateway job cancelled"));
+      await vi.advanceTimersByTimeAsync(2_001);
+
+      expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+      expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+      await expect(access(outputPath!)).resolves.toBeUndefined();
+
+      child.emit("close", null);
+      await result;
+
+      await expect(access(outputPath!)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      expect(res.status).toHaveBeenCalledWith(410);
+    } finally {
+      vi.useRealTimers();
+      await rm(cacheRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("waitForTorrentFileFirstBytes", () => {
@@ -628,6 +846,149 @@ describe("waitForReady", () => {
     await expect(waitForReady(torrent, 50)).rejects.toThrow(
       "Torrent ready timeout",
     );
+  });
+
+  it("rejects early when no peer connects before the peer-discovery deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      const waiting = waitForReady(torrent, 1_000, {
+        initialPeerTimeoutMs: 50,
+      });
+      const assertion = expect(waiting).rejects.toThrow(
+        "Torrent peer discovery timeout",
+      );
+
+      await vi.advanceTimersByTimeAsync(50);
+      await assertion;
+
+      expect(torrent.listenerCount("ready")).toBe(0);
+      expect(torrent.listenerCount("error")).toBe(0);
+      expect(torrent.listenerCount("wire")).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps waiting for metadata after a peer connects", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      const waiting = waitForReady(torrent, 1_000, {
+        initialPeerTimeoutMs: 50,
+      });
+
+      torrent.numPeers = 1;
+      torrent.emit("wire");
+      await vi.advanceTimersByTimeAsync(75);
+
+      torrent.files = [makeFakeFile()];
+      torrent.emit("ready");
+      await expect(waiting).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives a newly connected peer its own bounded metadata window", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      const waiting = waitForReady(torrent, 320, {
+        initialPeerTimeoutMs: 50,
+        metadataTimeoutAfterPeerMs: 100,
+      });
+
+      // A peer just before the discovery deadline must still get its complete
+      // metadata window, rather than inheriting only the few milliseconds left
+      // on the overall cap.
+      await vi.advanceTimersByTimeAsync(45);
+      torrent.numPeers = 1;
+      torrent.emit("wire");
+      await vi.advanceTimersByTimeAsync(99);
+
+      torrent.files = [makeFakeFile()];
+      torrent.emit("ready");
+      await expect(waiting).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops metadata waiting after the post-peer deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      const waiting = waitForReady(torrent, 320, {
+        initialPeerTimeoutMs: 50,
+        metadataTimeoutAfterPeerMs: 100,
+      });
+      const assertion = expect(waiting).rejects.toThrow(
+        "Torrent metadata timeout after peer connection",
+      );
+
+      await vi.advanceTimersByTimeAsync(45);
+      torrent.numPeers = 1;
+      torrent.emit("wire");
+      await vi.advanceTimersByTimeAsync(100);
+
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts the metadata grace window immediately when a peer already exists", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      torrent.numPeers = 1;
+      const waiting = waitForReady(torrent, 320, {
+        metadataTimeoutAfterPeerMs: 100,
+      });
+      const assertion = expect(waiting).rejects.toThrow(
+        "Torrent metadata timeout after peer connection",
+      );
+
+      await vi.advanceTimersByTimeAsync(100);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects promptly on abort and removes its listeners", async () => {
+    const torrent = makeTorrent([]);
+    const controller = new AbortController();
+    const waiting = waitForReady(torrent, 1_000, {
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(waiting).rejects.toMatchObject({
+      name: "AbortError",
+      message: "Torrent readiness was cancelled",
+    });
+    expect(torrent.listenerCount("ready")).toBe(0);
+    expect(torrent.listenerCount("error")).toBe(0);
+    expect(torrent.listenerCount("wire")).toBe(0);
+  });
+
+  it("forwards readiness options through ensureTorrentReady", async () => {
+    const torrent = makeTorrent([]);
+    const controller = new AbortController();
+    const waiting = ensureTorrentReady(torrent, 1_000, {
+      signal: controller.signal,
+      initialPeerTimeoutMs: 50,
+    });
+
+    controller.abort();
+
+    await expect(waiting).rejects.toMatchObject({
+      name: "AbortError",
+      message: "Torrent readiness was cancelled",
+    });
   });
 });
 

@@ -600,7 +600,9 @@ export async function installGoldenPathRoutes(
           state: "preparing",
           phase: "finding_peers",
           playbackUrl: `/api/gateway/jobs/${GATEWAY_JOB_ID}/stream`,
-          progress: 0,
+          progress: null,
+          peerCount: 0,
+          readyTimeoutMs: 52_000,
         });
         return;
       }
@@ -614,7 +616,9 @@ export async function installGoldenPathRoutes(
             state: "preparing",
             phase: "preparing_metadata",
             playbackUrl: `/api/gateway/jobs/${GATEWAY_JOB_ID}/stream`,
-            progress: 0.1,
+            progress: null,
+            peerCount: 1,
+            readyTimeoutMs: 52_000,
           });
           return;
         }
@@ -622,9 +626,10 @@ export async function installGoldenPathRoutes(
           id: GATEWAY_JOB_ID,
           state: "no_peers",
           phase: "no_peers",
-          playbackUrl: `/api/gateway/jobs/${GATEWAY_JOB_ID}/stream`,
+          playbackUrl: null,
           error: "No peers found for this deterministic fixture.",
-          progress: 0,
+          progress: null,
+          peerCount: 0,
         });
         return;
       }

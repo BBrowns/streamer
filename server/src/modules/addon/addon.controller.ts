@@ -8,6 +8,7 @@ export class AddonController {
     const user = c.get("user");
     const addon = await addonService.install(user.userId, transportUrl);
     aggregatorService.invalidateSearchCacheForUser(user.userId);
+    aggregatorService.invalidateStreamDiscoveryCacheForUser(user.userId);
     return c.json(addon, 201);
   }
 

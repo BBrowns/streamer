@@ -12,6 +12,7 @@ export class PlaybackController {
       user.userId,
       body,
       requestId,
+      { signal: c.req.raw.signal },
     );
 
     return c.json(playbackPlanSchema.parse(plan));

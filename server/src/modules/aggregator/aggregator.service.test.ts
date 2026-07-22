@@ -12,6 +12,7 @@ import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver";
 import { featureFlags } from "../feature-flag/feature-flag.service";
 import { prisma } from "../../prisma/client";
 import { resilienceRegistry } from "./resilience";
+import { logger } from "../../config/logger";
 
 // Mock dependencies
 vi.mock("axios");
@@ -1575,6 +1576,24 @@ describe("AggregatorService", () => {
   });
 
   describe("getStreams", () => {
+    function streamAddon(id: string) {
+      return {
+        id,
+        userId: "user-1",
+        transportUrl: `https://${id}.example/manifest.json`,
+        installedAt: new Date(),
+        manifest: {
+          id: `com.example.${id}`,
+          version: "1.0.0",
+          name: id,
+          description: "Stream add-on",
+          resources: ["stream"],
+          types: ["movie"],
+          catalogs: [],
+        },
+      } as any;
+    }
+
     it("attaches type and id context to streams returned from add-ons", async () => {
       vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
         {
@@ -1611,6 +1630,191 @@ describe("AggregatorService", () => {
         type: "movie",
         id: "tt1234567",
       });
+    });
+
+    it("shares one in-flight lookup between stream cards and playback planning", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        streamAddon("shared-streams"),
+      ]);
+      let resolveResponse!: (value: unknown) => void;
+      vi.mocked(axios.get).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveResponse = resolve;
+          }) as any,
+      );
+
+      const streamsPromise = service.getStreams(
+        "user-1",
+        "movie",
+        "tt-shared",
+        "req-stream-cards",
+      );
+      const discoveryPromise = service.getStreamDiscovery(
+        "user-1",
+        "movie",
+        "tt-shared",
+        "req-planner",
+      );
+
+      await vi.waitFor(() => expect(axios.get).toHaveBeenCalledTimes(1));
+      resolveResponse({
+        data: {
+          streams: [
+            {
+              url: "https://cdn.example.test/shared.1080p.h264.mp4",
+              title: "Shared 1080p H264",
+            },
+          ],
+        },
+      });
+
+      const [streams, discovery] = await Promise.all([
+        streamsPromise,
+        discoveryPromise,
+      ]);
+      expect(discovery.status).toBe("complete");
+      expect(discovery.streams).toEqual(streams);
+      expect(axios.get).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns a viable fast batch without waiting for a slow provider", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+          streamAddon("fast-streams"),
+          streamAddon("slow-streams"),
+        ]);
+        vi.mocked(axios.get).mockImplementation((url) => {
+          if (String(url).includes("fast-streams")) {
+            return Promise.resolve({
+              data: {
+                streams: [
+                  {
+                    url: "https://cdn.example.test/fast.1080p.h264.mp4",
+                    title: "Fast 1080p H264",
+                  },
+                ],
+              },
+            });
+          }
+          return new Promise(() => undefined) as any;
+        });
+
+        const resultPromise = service.getStreamDiscovery(
+          "user-1",
+          "movie",
+          "tt-fast",
+          "req-fast",
+        );
+
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(250);
+        const result = await resultPromise;
+
+        expect(result.status).toBe("partial");
+        expect(result.streams).toHaveLength(1);
+        expect(result.streams[0]).toMatchObject({
+          url: "https://cdn.example.test/fast.1080p.h264.mp4",
+          type: "movie",
+          id: "tt-fast",
+        });
+        expect(axios.get).toHaveBeenCalledTimes(2);
+        expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain(
+          "cdn.example.test",
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("releases the first viable batch that arrives after the fast deadline", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+          streamAddon("late-healthy-streams"),
+          streamAddon("still-slow-streams"),
+        ]);
+        vi.mocked(axios.get).mockImplementation((url) => {
+          if (String(url).includes("late-healthy-streams")) {
+            return new Promise((resolve) => {
+              setTimeout(
+                () =>
+                  resolve({
+                    data: {
+                      streams: [
+                        {
+                          url: "https://cdn.example.test/late.1080p.h264.mp4",
+                          title: "Late but viable 1080p H264",
+                        },
+                      ],
+                    },
+                  }),
+                2_000,
+              );
+            }) as any;
+          }
+          return new Promise(() => undefined) as any;
+        });
+
+        const resultPromise = service.getStreamDiscovery(
+          "user-1",
+          "movie",
+          "tt-late",
+          "req-late",
+        );
+        let settled = false;
+        void resultPromise.then(() => {
+          settled = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(1_750);
+        expect(settled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(250);
+        expect(settled).toBe(true);
+        await expect(resultPromise).resolves.toMatchObject({
+          status: "partial",
+          streams: [
+            {
+              url: "https://cdn.example.test/late.1080p.h264.mp4",
+              type: "movie",
+              id: "tt-late",
+            },
+          ],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("caches a complete lookup per user and invalidates it with add-on state", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        streamAddon("cache-streams"),
+      ]);
+      vi.mocked(axios.get).mockResolvedValue({
+        data: {
+          streams: [
+            {
+              url: "https://cdn.example.test/cache.1080p.h264.mp4",
+              title: "Cache 1080p H264",
+            },
+          ],
+        },
+      });
+
+      await service.getStreams("user-1", "movie", "tt-cache", "req-1");
+      await service.getStreams("user-1", "movie", "tt-cache", "req-2");
+      expect(axios.get).toHaveBeenCalledTimes(1);
+
+      service.removeAddonStateForUser(
+        "user-1",
+        "cache-streams",
+        "https://cache-streams.example/manifest.json",
+      );
+      await service.getStreams("user-1", "movie", "tt-cache", "req-3");
+      expect(axios.get).toHaveBeenCalledTimes(2);
     });
   });
 

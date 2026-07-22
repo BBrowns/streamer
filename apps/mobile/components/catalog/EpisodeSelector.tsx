@@ -18,12 +18,14 @@ function EpisodeRow({
   video,
   isSelected,
   onPress,
+  onPlayIntent,
   onDownload,
   onToggleSources,
 }: {
   video: VideoEntry;
   isSelected: boolean;
   onPress: () => void;
+  onPlayIntent?: () => void;
   onDownload: () => void;
   onToggleSources: () => void;
 }) {
@@ -80,6 +82,13 @@ function EpisodeRow({
         {...playProps}
         style={[styles.episodePlayArea, isPlayFocused && styles.webFocused]}
         onPress={handlePlayPress}
+        onFocus={(event) => {
+          (playProps as { onFocus?: (event: unknown) => void }).onFocus?.(
+            event,
+          );
+          onPlayIntent?.();
+        }}
+        onHoverIn={onPlayIntent}
         accessibilityRole="button"
         accessibilityLabel={t("detail.episodesList.playA11y", {
           episode: video.episode,
@@ -267,12 +276,8 @@ function EpisodeStreamList({
 interface EpisodeSelectorProps {
   seriesId: string;
   videos: VideoEntry[];
-  onPlayStream: (
-    stream: Stream | undefined,
-    episodeTitle: string,
-    season: number,
-    episode: number,
-  ) => void;
+  onPlayStream: (episodeTitle: string, season: number, episode: number) => void;
+  onPlayIntent?: (season: number, episode: number) => void;
   onPlayCandidate: (
     plan: PlaybackPlan,
     candidateId: string,
@@ -292,6 +297,7 @@ export const EpisodeSelector = memo(function EpisodeSelector({
   seriesId,
   videos,
   onPlayStream,
+  onPlayIntent,
   onPlayCandidate,
   onDownloadStream,
 }: EpisodeSelectorProps) {
@@ -397,13 +403,9 @@ export const EpisodeSelector = memo(function EpisodeSelector({
               video={video}
               isSelected={selectedEpisode?.id === video.id}
               onPress={() =>
-                onPlayStream(
-                  undefined,
-                  video.title,
-                  video.season,
-                  video.episode,
-                )
+                onPlayStream(video.title, video.season, video.episode)
               }
+              onPlayIntent={() => onPlayIntent?.(video.season, video.episode)}
               onDownload={() =>
                 onDownloadStream(
                   undefined,

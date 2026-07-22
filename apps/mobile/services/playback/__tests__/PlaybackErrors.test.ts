@@ -61,6 +61,20 @@ describe("PlaybackErrors", () => {
     expect(result.runtimeState).toBe("failed_timeout");
   });
 
+  it("keeps metadata stalls separate from a source with no peers", () => {
+    const result = mapPlaybackMessageToRuntimeFailure(
+      "Torrent metadata was not ready in time.",
+      "SOURCE_UNAVAILABLE",
+    );
+
+    expect(result.error).toMatchObject({
+      code: "GATEWAY_TIMEOUT",
+      retryable: true,
+      shouldFallback: true,
+    });
+    expect(result.runtimeState).toBe("failed_timeout");
+  });
+
   it("preserves an exclusively quality-filtered planner failure", () => {
     const plan = makePlaybackPlan({
       state: "unsupported",

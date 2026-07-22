@@ -11,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { PlaybackPlan } from "@streamer/shared";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
-import { createPlaybackPlanWithBridgeRetry } from "../../services/playback/PlaybackPlanService";
+import { getPlaybackPlanWithBridgeRetry } from "../../services/playback/PlaybackPlanService";
 import { formatBytes } from "../downloads/downloadPresentation";
 import {
   getWebFocusStyle,
@@ -59,13 +59,16 @@ export function useSourceChoicePlan({
     let active = true;
     setLoading(true);
     setError(null);
-    void createPlaybackPlanWithBridgeRetry({
-      type: contentType,
-      id: contentId,
-      season,
-      episode,
-      action: "play",
-    })
+    void getPlaybackPlanWithBridgeRetry(
+      {
+        type: contentType,
+        id: contentId,
+        season,
+        episode,
+        action: "play",
+      },
+      requestId > 0 ? { forceRefresh: true } : undefined,
+    )
       .then((nextPlan) => {
         if (active) setPlan(nextPlan);
       })

@@ -135,10 +135,20 @@ export function inferPlaybackErrorCodeFromMessages(
     text.includes("no peers") ||
     text.includes("not enough peers") ||
     text.includes("finding peers") ||
-    text.includes("metadata timed out") ||
-    text.includes("torrent metadata")
+    text.includes("peer discovery") ||
+    (text.includes("metadata timed out") && text.includes("no peers"))
   ) {
     return "NO_PEERS";
+  }
+
+  if (
+    text.includes("metadata was not ready") ||
+    text.includes("torrent ready timeout") ||
+    text.includes("file first byte timeout") ||
+    text.includes("stalled") ||
+    text.includes("stuck preparing")
+  ) {
+    return "GATEWAY_TIMEOUT";
   }
 
   if (
@@ -186,10 +196,6 @@ export function inferPlaybackErrorCodeFromMessages(
 
   if (text.includes("timeout") || text.includes("timed out")) {
     return "PLAYBACK_TIMEOUT";
-  }
-
-  if (text.includes("stalled") || text.includes("stuck preparing")) {
-    return "GATEWAY_TIMEOUT";
   }
 
   if (

@@ -22,6 +22,7 @@ export const streamSchema = z.object({
       notWebReady: z.boolean().optional(),
       bingeGroup: z.string().optional(),
       remuxToMp4: z.boolean().optional(),
+      remuxStrategy: z.enum(["progressive-fmp4", "seekable-cache"]).optional(),
     })
     .optional(),
   resolution: z.string().optional(),

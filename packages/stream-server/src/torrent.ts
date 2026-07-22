@@ -22,7 +22,10 @@ import {
   mimeFromExt,
   parseByteRange,
 } from "./torrent-helpers.js";
-import type { FileSelectionHints } from "./torrent-helpers.js";
+import type {
+  FileSelectionHints,
+  TorrentReadinessOptions,
+} from "./torrent-helpers.js";
 import { redactSensitiveText } from "./redaction.js";
 import {
   cleanupTorrentCache,
@@ -41,7 +44,10 @@ export {
   parseByteRange,
   selectBestVideoFile,
 } from "./torrent-helpers.js";
-export type { FileSelectionHints } from "./torrent-helpers.js";
+export type {
+  FileSelectionHints,
+  TorrentReadinessOptions,
+} from "./torrent-helpers.js";
 
 type WebTorrentModule = {
   default: new (options: Record<string, unknown>) => any;
@@ -112,12 +118,22 @@ const MAX_ACTIVE_TORRENTS = parseInt(
   process.env.MAX_ACTIVE_TORRENTS || "5",
   10,
 );
+// Kept in sync with gateway preflight: a source without a single peer should
+// quickly make room for the caller's next candidate instead of occupying the
+// legacy compatibility endpoint for two minutes.
+const LEGACY_STREAM_PEER_DISCOVERY_TIMEOUT_MS = 12_000;
+const LEGACY_STREAM_METADATA_AFTER_PEER_TIMEOUT_MS = 20_000;
+const LEGACY_STREAM_METADATA_TIMEOUT_MS =
+  LEGACY_STREAM_PEER_DISCOVERY_TIMEOUT_MS +
+  LEGACY_STREAM_METADATA_AFTER_PEER_TIMEOUT_MS;
 
 /** Track last access time per infoHash for pruning */
 const lastAccessMap = new Map<string, number>();
 const loggedTorrents = new WeakSet<object>();
 
 type FfmpegSpawner = typeof nodeSpawn;
+
+type RemuxStrategy = "seekable-cache" | "progressive-fmp4";
 
 interface RemuxedFile {
   filePath: string;
@@ -161,6 +177,9 @@ export { getTorrentCacheStatus } from "./torrent-cache.js";
 const DEFAULT_REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_REMUX_CACHE_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 const DEFAULT_REMUX_READY_TIMEOUT_MS = 90_000;
+const REMUX_ABORT_CLOSE_GRACE_MS = 2_000;
+const PROGRESSIVE_REMUX_ABORT_CLOSE_GRACE_MS = 2_000;
+const DEFAULT_PROGRESSIVE_REMUX_FIRST_FRAGMENT_TIMEOUT_MS = 20_000;
 const remuxCache = new Map<string, RemuxCacheEntry>();
 let remuxRootPromise: Promise<string> | null = null;
 let spawnFfmpeg: FfmpegSpawner = nodeSpawn;
@@ -359,38 +378,68 @@ function runFfmpegRemuxToFile(
 
     let stderr = "";
     let settled = false;
+    let processClosed = false;
+    let abortError: RemuxAbortError | null = null;
+    let processError: Error | null = null;
+    let abortCloseGraceTimer: ReturnType<typeof setTimeout> | null = null;
     const sourceStream = file.createReadStream();
 
-    const fail = (err: unknown) => {
-      if (settled) return;
-      settled = true;
+    const markProcessClosed = () => {
+      processClosed = true;
+    };
 
+    const stopProcesses = () => {
       try {
         ffmpeg.kill("SIGTERM");
       } catch {}
       try {
         sourceStream.destroy?.();
       } catch {}
+    };
 
+    const finishReject = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      if (abortCloseGraceTimer) {
+        clearTimeout(abortCloseGraceTimer);
+        abortCloseGraceTimer = null;
+      }
+      signal?.removeEventListener("abort", abortRemux);
       reject(err instanceof Error ? err : new Error(String(err)));
     };
 
+    const fail = (err: unknown) => {
+      if (settled || abortError || processError) return;
+      // A timeout/cancellation already owns shutdown. Let FFmpeg close before
+      // rejecting and deleting the partial cache file; otherwise +faststart
+      // can still be rewriting that file and emits a misleading ENOENT.
+      processError = err instanceof Error ? err : new Error(String(err));
+      stopProcesses();
+      if (processClosed) finishReject(processError);
+    };
+
     const abortRemux = () => {
+      if (settled || abortError) return;
       const reason =
         signal?.reason instanceof Error
           ? signal.reason.message
           : typeof signal?.reason === "string"
             ? signal.reason
             : "FFmpeg remux was cancelled.";
-      fail(new RemuxAbortError(reason));
+      abortError = new RemuxAbortError(reason);
+      stopProcesses();
+      // SIGTERM normally produces close immediately. Keep a bounded escape
+      // hatch for a broken child process. We still wait for `close` before
+      // rejecting: cache cleanup must never unlink the file while FFmpeg's
+      // +faststart pass can still be writing it.
+      abortCloseGraceTimer = setTimeout(() => {
+        if (processClosed) return;
+        try {
+          ffmpeg.kill("SIGKILL");
+        } catch {}
+      }, REMUX_ABORT_CLOSE_GRACE_MS);
+      abortCloseGraceTimer.unref?.();
     };
-
-    if (signal?.aborted) {
-      abortRemux();
-      return;
-    }
-
-    signal?.addEventListener("abort", abortRemux, { once: true });
 
     ffmpeg.stderr.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
@@ -408,11 +457,22 @@ function runFfmpegRemuxToFile(
     });
 
     ffmpeg.on("close", async (code) => {
+      markProcessClosed();
       if (settled) return;
       signal?.removeEventListener("abort", abortRemux);
 
+      if (abortError) {
+        finishReject(abortError);
+        return;
+      }
+
+      if (processError) {
+        finishReject(processError);
+        return;
+      }
+
       if (code !== 0) {
-        fail(
+        finishReject(
           new Error(
             `FFmpeg remux failed with exit code ${code}${
               stderr ? `: ${redactSensitiveText(stderr.trim())}` : ""
@@ -439,7 +499,16 @@ function runFfmpegRemuxToFile(
       }
     });
 
-    sourceStream.on?.("error", fail);
+    sourceStream.on?.("error", (error: unknown) => {
+      if (!abortError) fail(error);
+    });
+
+    if (signal?.aborted) {
+      abortRemux();
+      return;
+    }
+
+    signal?.addEventListener("abort", abortRemux, { once: true });
     sourceStream.pipe(ffmpeg.stdin);
   });
 }
@@ -702,6 +771,275 @@ async function serveSeekableRemuxedFile(
       });
     }
   }
+}
+
+function isProgressiveRemuxStartRange(rangeHeader?: string) {
+  if (!rangeHeader) return true;
+  // Chromium's HTMLVideoElement sends this harmless probe for a chunked
+  // fMP4 response. A non-zero range would mean a seek, which cannot be
+  // satisfied until the source has been materialized as a seekable file.
+  return /^bytes=0-(?:\d*)$/i.test(rangeHeader.trim());
+}
+
+function setProgressiveRemuxHeaders(res: Response) {
+  res.setHeader("Content-Type", "video/mp4");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Type");
+  // Deliberately omit Content-Length, Content-Range, and Accept-Ranges. This
+  // is a live fragmented-MP4 response, not a complete file that can safely
+  // service arbitrary seeks. The player already disables seeking for remuxed
+  // sources until a future seekable-cache handoff exists.
+}
+
+/**
+ * Starts a remux as a live fragmented MP4 response. Unlike `+faststart`, the
+ * empty movie header and subsequent `moof` fragments can be consumed while
+ * WebTorrent is still receiving the source file. This is the primary Play
+ * transport for MKV sources; the seekable cache remains available for flows
+ * that need complete byte-range semantics, such as offline preparation.
+ */
+async function serveProgressiveRemuxedFile(
+  req: Request,
+  res: Response,
+  file: any,
+  options: {
+    signal?: AbortSignal;
+    firstFragmentTimeoutMs?: number;
+  },
+) {
+  const rangeHeader =
+    typeof req.headers?.range === "string" ? req.headers.range : undefined;
+  if (!isProgressiveRemuxStartRange(rangeHeader)) {
+    return res.status(416).json({
+      error: "This compatible stream cannot seek while it is still loading.",
+      retryable: false,
+    });
+  }
+
+  if (req.method === "HEAD") {
+    setProgressiveRemuxHeaders(res);
+    return res.status(200).end();
+  }
+
+  const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), [
+    "-hide_banner",
+    "-loglevel",
+    "warning",
+    "-i",
+    "pipe:0",
+    "-map",
+    "0:v:0?",
+    "-map",
+    "0:a:0?",
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-movflags",
+    "+frag_keyframe+empty_moov+default_base_moof",
+    "-frag_duration",
+    "2000000",
+    "-f",
+    "mp4",
+    "pipe:1",
+  ]);
+  const sourceStream = file.createReadStream();
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    let processClosed = false;
+    let responseStarted = false;
+    let playableFragmentSeen = false;
+    let boxTail = Buffer.alloc(0);
+    let clientClosed = false;
+    let terminalError: Error | null = null;
+    let abortCloseGraceTimer: ReturnType<typeof setTimeout> | null = null;
+    const firstFragmentTimeoutMs =
+      options.firstFragmentTimeoutMs ??
+      DEFAULT_PROGRESSIVE_REMUX_FIRST_FRAGMENT_TIMEOUT_MS;
+    const firstFragmentTimer = setTimeout(() => {
+      stop(
+        new Error(
+          `FFmpeg progressive remux did not produce a playable fragment after ${Math.round(firstFragmentTimeoutMs / 1000)} seconds.`,
+        ),
+      );
+    }, firstFragmentTimeoutMs);
+    firstFragmentTimer.unref?.();
+
+    const cleanup = () => {
+      clearTimeout(firstFragmentTimer);
+      if (abortCloseGraceTimer) {
+        clearTimeout(abortCloseGraceTimer);
+        abortCloseGraceTimer = null;
+      }
+      options.signal?.removeEventListener("abort", onParentAbort);
+      req.off?.("aborted", onClientClose);
+      res.off?.("close", onClientClose);
+      ffmpeg.stdout?.off?.("data", onOutput);
+      ffmpeg.stdout?.off?.("error", onProcessError);
+      ffmpeg.stdin?.off?.("error", onStdinError);
+      sourceStream.off?.("error", onSourceError);
+    };
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const stopProcesses = () => {
+      try {
+        ffmpeg.kill("SIGTERM");
+      } catch {}
+      try {
+        sourceStream.destroy?.();
+      } catch {}
+      if (!abortCloseGraceTimer) {
+        abortCloseGraceTimer = setTimeout(() => {
+          if (processClosed) return;
+          try {
+            ffmpeg.kill("SIGKILL");
+          } catch {}
+        }, PROGRESSIVE_REMUX_ABORT_CLOSE_GRACE_MS);
+        abortCloseGraceTimer.unref?.();
+      }
+    };
+
+    const reportFailure = (error: Error) => {
+      if (clientClosed || res.destroyed) {
+        finish();
+        return;
+      }
+      if (!responseStarted && !res.headersSent) {
+        const cancelled =
+          error instanceof RemuxAbortError && /cancelled/i.test(error.message);
+        res.status(cancelled ? 410 : 503).json({
+          error:
+            error instanceof RemuxAbortError
+              ? error.message
+              : "A compatible stream could not start. Try another source.",
+          retryable: !cancelled && !(error instanceof RemuxAbortError),
+        });
+      } else {
+        res.destroy(error);
+      }
+      finish();
+    };
+
+    const concludeAfterClose = () => {
+      if (settled) return;
+      if (terminalError) {
+        reportFailure(terminalError);
+        return;
+      }
+      if (!responseStarted) {
+        reportFailure(
+          new Error("FFmpeg progressive remux ended before playback data."),
+        );
+        return;
+      }
+      if (!playableFragmentSeen) {
+        reportFailure(
+          new Error(
+            "FFmpeg progressive remux ended before a playable fragment.",
+          ),
+        );
+        return;
+      }
+      if (!res.destroyed && !res.writableEnded) res.end();
+      finish();
+    };
+
+    const stop = (reason: Error, fromClient = false) => {
+      if (settled || terminalError) return;
+      terminalError = reason;
+      clientClosed = clientClosed || fromClient;
+      stopProcesses();
+      if (processClosed) concludeAfterClose();
+    };
+
+    const onParentAbort = () => {
+      const reason =
+        options.signal?.reason instanceof Error
+          ? options.signal.reason
+          : new RemuxAbortError("FFmpeg progressive remux was cancelled.");
+      stop(
+        reason instanceof RemuxAbortError
+          ? reason
+          : new RemuxAbortError(reason.message),
+      );
+    };
+
+    const onClientClose = () => {
+      stop(
+        new RemuxAbortError("FFmpeg progressive remux was cancelled."),
+        true,
+      );
+    };
+
+    const onProcessError = (error: Error) => stop(error);
+    const onSourceError = (error: Error) => stop(error);
+    const onStdinError = (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") stop(error);
+    };
+
+    const onOutput = (chunk: Buffer) => {
+      if (settled || terminalError || clientClosed) return;
+      if (!responseStarted) {
+        setProgressiveRemuxHeaders(res);
+        responseStarted = true;
+      }
+      if (!playableFragmentSeen) {
+        const scan = Buffer.concat([boxTail, chunk]);
+        if (scan.includes(Buffer.from("moof"))) {
+          playableFragmentSeen = true;
+          clearTimeout(firstFragmentTimer);
+        } else {
+          boxTail = scan.subarray(Math.max(0, scan.length - 3));
+        }
+      }
+      try {
+        const canContinue = res.write(chunk);
+        if (!canContinue) {
+          ffmpeg.stdout?.pause?.();
+          res.once?.("drain", () => ffmpeg.stdout?.resume?.());
+        }
+      } catch (error) {
+        stop(error instanceof Error ? error : new Error(String(error)), true);
+      }
+    };
+
+    ffmpeg.stderr?.on?.("data", (data: Buffer) => {
+      const message = data.toString().trim();
+      if (message) console.warn(`[ffmpeg] ${redactSensitiveText(message)}`);
+    });
+    ffmpeg.on("error", onProcessError);
+    ffmpeg.on("close", (code) => {
+      processClosed = true;
+      if (!terminalError && code !== 0) {
+        terminalError = new Error(
+          `FFmpeg progressive remux failed with exit code ${code}`,
+        );
+      }
+      concludeAfterClose();
+    });
+    ffmpeg.stdout?.on?.("data", onOutput);
+    ffmpeg.stdout?.on?.("error", onProcessError);
+    ffmpeg.stdin?.on?.("error", onStdinError);
+    sourceStream.on?.("error", onSourceError);
+    req.once?.("aborted", onClientClose);
+    res.once?.("close", onClientClose);
+    options.signal?.addEventListener("abort", onParentAbort, { once: true });
+
+    if (options.signal?.aborted) {
+      onParentAbort();
+      return;
+    }
+
+    sourceStream.pipe(ffmpeg.stdin);
+  });
 }
 
 export async function prepareSeekableRemux(
@@ -1245,6 +1583,22 @@ export function getSelectedFile(
   return selectBestVideoFile(torrent.files ?? [], hints);
 }
 
+/**
+ * Keep gateway preflight and the eventual HTTP stream on the same media
+ * decision. A stream label is only a hint; after metadata arrives the
+ * selected file extension decides whether browser-safe MP4 remuxing is
+ * required.
+ */
+export function shouldRemuxTorrentFile(
+  filename: string,
+  requestedRemuxFormat?: string,
+) {
+  return (
+    requestedRemuxFormat === "mp4" ||
+    path.extname(filename).toLowerCase() === ".mkv"
+  );
+}
+
 function enhanceMagnetWithTrackers(magnet: string) {
   let enhancedMagnet = magnet;
   for (const tr of DEFAULT_TRACKERS) {
@@ -1350,11 +1704,16 @@ export async function destroyTorrentByInfoHash(infoHash?: string) {
 export async function ensureTorrentReady(
   torrent: any,
   timeoutMs = 120_000,
+  options: TorrentReadinessOptions = {},
 ): Promise<void> {
-  console.log(
-    `[stream-server] Waiting for metadata (up to ${Math.round(timeoutMs / 1000)}s)... numPeers=${torrent.numPeers}`,
-  );
-  await waitForReady(torrent, timeoutMs);
+  const peerWait = options.initialPeerTimeoutMs;
+  const metadataAfterPeerWait = options.metadataTimeoutAfterPeerMs;
+  const readinessMessage =
+    typeof peerWait === "number" && typeof metadataAfterPeerWait === "number"
+      ? `[stream-server] Waiting for a peer (up to ${Math.round(peerWait / 1000)}s), then metadata (up to ${Math.round(metadataAfterPeerWait / 1000)}s; ${Math.round(timeoutMs / 1000)}s hard cap)... numPeers=${torrent.numPeers}`
+      : `[stream-server] Waiting for metadata (up to ${Math.round(timeoutMs / 1000)}s)... numPeers=${torrent.numPeers}`;
+  console.log(readinessMessage);
+  await waitForReady(torrent, timeoutMs, options);
   validateTorrentFiles(torrent);
   if (torrent.infoHash) {
     lastAccessMap.set(torrent.infoHash, Date.now());
@@ -1369,6 +1728,7 @@ export async function serveTorrentFile(
   torrent: any,
   options: {
     remuxFormat?: string;
+    remuxStrategy?: RemuxStrategy;
     fileIdx?: number;
     hints?: FileSelectionHints;
     signal?: AbortSignal;
@@ -1380,14 +1740,18 @@ export async function serveTorrentFile(
   }
 
   const file = getSelectedFile(torrent, options.fileIdx, options.hints);
-  const ext = path.extname(file.name).toLowerCase();
-
   // Strategy:
   // 1. Force remuxing for MKV as browsers don't support it natively
   // 2. Proxy directly for MP4/WebM/etc to avoid 302 redirect CORS/port issues
-  const shouldRemux = options.remuxFormat === "mp4" || ext === ".mkv";
+  const shouldRemux = shouldRemuxTorrentFile(file.name, options.remuxFormat);
 
   if (shouldRemux) {
+    if (options.remuxStrategy === "progressive-fmp4") {
+      return serveProgressiveRemuxedFile(req, res, file, {
+        signal: options.signal,
+        firstFragmentTimeoutMs: options.remuxTimeoutMs,
+      });
+    }
     return serveSeekableRemuxedFile(req, res, torrent, file, {
       fileIdx: options.fileIdx,
       hints: options.hints,
@@ -1519,28 +1883,52 @@ export async function streamRequest(req: Request, res: Response) {
   }
 
   let torrent: any;
+  const readinessAbortController = new AbortController();
+  const abortReadiness = () => {
+    readinessAbortController.abort(new Error("Stream request cancelled"));
+  };
+
+  // This compatibility endpoint does not have a separate job DELETE route.
+  // Stop its readiness wait if the client has already given up. The torrent
+  // itself remains under the shared client's normal cache/usage lifecycle:
+  // this request cannot safely destroy a torrent another gateway job may use.
+  req.once?.("aborted", abortReadiness);
+  res.once?.("close", abortReadiness);
 
   try {
     torrent = await prepareTorrent(magnet);
-    await ensureTorrentReady(torrent, 120_000);
+    await ensureTorrentReady(torrent, LEGACY_STREAM_METADATA_TIMEOUT_MS, {
+      signal: readinessAbortController.signal,
+      initialPeerTimeoutMs: LEGACY_STREAM_PEER_DISCOVERY_TIMEOUT_MS,
+      metadataTimeoutAfterPeerMs: LEGACY_STREAM_METADATA_AFTER_PEER_TIMEOUT_MS,
+    });
   } catch (err: any) {
+    if (readinessAbortController.signal.aborted) return;
     const msg = err?.message ?? "Failed to load torrent";
+    const isNoPeers = msg.includes("Torrent peer discovery timeout");
     const isTimeout = msg.includes("timeout");
     console.error(
       "[stream-server]",
       isTimeout
-        ? "Torrent metadata timeout (no peers found)"
+        ? isNoPeers
+          ? "Torrent peer discovery timeout"
+          : "Torrent metadata timeout"
         : `Torrent error: ${redactSensitiveText(msg)}`,
     );
     if (!res.headersSent) {
       return res.status(503).json({
-        error: isTimeout
-          ? "Torrent metadata timed out. No peers found in 2 minutes."
-          : msg,
+        error: isNoPeers
+          ? "No peers found quickly enough to start this source."
+          : isTimeout
+            ? "Torrent metadata was not ready in time."
+            : msg,
         retryable: isTimeout,
       });
     }
     return;
+  } finally {
+    req.off?.("aborted", abortReadiness);
+    res.off?.("close", abortReadiness);
   }
 
   try {

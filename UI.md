@@ -67,7 +67,9 @@ Primary hierarchy:
    of saved progress. `playBest()` remains an internal planner action name.
 2. Download, **Cast to device**, and **Add to Library** are secondary actions.
 3. `More Sources` is collapsed by default and treated as an advanced fallback.
-   It does not request a plan until expanded, and its source count appears once.
+   It does not create a separate plan until expanded; it may reuse the
+   runtime-only Play plan that Detail has already warmed, and its source count
+   appears once.
 4. Sources & Devices explains bridge/add-on health without forcing users to
    understand torrents or codecs before pressing Play.
 
@@ -600,6 +602,7 @@ Important visible states:
 
 | Runtime state               | UX meaning                                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
+| `planning`                  | The player opened immediately and is searching for a playable source.                       |
 | `creating_gateway_job`      | The bridge is creating a stream gateway job.                                                |
 | `finding_peers`             | A torrent source is waiting for peers.                                                      |
 | `preparing_metadata`        | Torrent metadata exists and the bridge is warming.                                          |
@@ -613,12 +616,25 @@ Important visible states:
 
 `PlayerStatusOverlay` uses these states for titles, retry visibility, and Sources & Devices guidance. Keep future player work in this typed model rather than adding raw alert strings.
 
+During gateway preparation, the status message must describe a concrete phase
+or peer state (for example, finding peers, reading metadata, checking whether
+playback can start, or preparing a compatible stream). Do not render the
+gateway's elapsed readiness time as a percentage. A percentage is reserved for
+actual media/download progress once byte-level metrics exist.
+
 Source preparation is cancellable as soon as it is active. The loading overlay
 shows a dedicated Cancel control; on web/Electron, Escape triggers the same
 session/engine cancellation path. Closing or cancelling without a planner
 session also stops the resolved engine before leaving the player. A missing
 stream is presented through `PlaybackStatusPanel` with Browse titles and Back,
 not as an isolated error string.
+
+The initial planning stage follows the same rule: Play navigates immediately to
+the player with a runtime-only launch intent, which shows **Searching for a
+playable source** within the normal player surface. Escape, Close, and Cancel
+abort that foreground request, clean up any provisional session, and suppress
+late results after navigation. Detail prefetch never turns a user cancellation
+into a background-owned playback attempt.
 
 Torrent preparation itself is cancellation-aware. Each operation has an
 `AbortController` and generation guard, so cancelling interrupts the bridge
@@ -641,10 +657,13 @@ The detail screen fetches:
 
 For series, it additionally renders the `EpisodeSelector` component to let the user pick a season and episode, then fetches streams for that specific episode via `useEpisodeStreams`.
 
-**Primary flow:** The visible action is **Play**. It calls the internal
-`PlaybackOrchestrator.playBest()`, which requests one server playback plan,
-resolves only the selected source, and passes remaining planned fallbacks into
-`playerStore`.
+**Primary flow:** The visible action is **Play**. Detail starts a shared plan
+prefetch after 600 ms of idle time (and on desktop Play hover/focus), then
+creates a runtime-only planning intent and opens the player immediately. The
+player calls the internal `PlaybackOrchestrator.playBest()` through that same
+in-flight plan, resolves only the selected source, and passes remaining planned
+fallbacks into `playerStore`. Bridge detection runs once alongside plan lookup,
+not as a second serial wait.
 
 **Provider-declared trailers:** `MetaDetail.trailers` is optional provider
 metadata. A secondary **Watch trailer** action appears only when
@@ -660,6 +679,14 @@ its candidate ID through the existing planner/session resolver; it never
 bypasses that contract with a direct URI. Ranking, codecs, rejected candidates,
 bridge/remux data, and reason codes live behind the separately lazy **Show
 technical details** disclosure.
+
+The initial stream-card list can be marked `partial` while compatible add-ons
+are still completing in the background. The UI keeps usable cards visible and
+does one bounded follow-up fetch instead of treating that state as zero results
+or keeping it stale for the normal two-minute card cache. If every candidate in
+a partial playback plan fails, the player makes one bounded automatic replan;
+it only replaces the session for a newly discovered candidate and otherwise
+shows the normal recoverable actions.
 
 Metadata loading and recovery are separate visible states. `useMeta` classifies
 a confirmed `404`/no-provider result, a connection failure, and a temporary

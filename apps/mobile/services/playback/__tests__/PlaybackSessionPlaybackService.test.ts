@@ -217,6 +217,28 @@ describe("PlaybackSessionPlaybackService", () => {
     );
   });
 
+  it("uses progressive fragmented remux only for the primary Play action", async () => {
+    const source = { infoHash: "abc123", title: "Torrent" } as Stream;
+    const engine = makeEngine(async () => "http://bridge.test/stream");
+    resolveEngine.mockReturnValue(engine);
+    const session = createSession(source);
+
+    const result = await resolvePlaybackSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: true,
+      uri: "http://bridge.test/stream",
+    });
+    expect(engine.getPlaybackUri).toHaveBeenCalledWith(
+      expect.objectContaining({
+        infoHash: "abc123",
+        behaviorHints: expect.objectContaining({
+          remuxStrategy: "progressive-fmp4",
+        }),
+      }),
+    );
+  });
+
   it("treats engine cancellation as cancellation without failure or fallback", async () => {
     const primary = { infoHash: "abc123", title: "Torrent" } as Stream;
     const fallback = {
@@ -686,6 +708,119 @@ describe("PlaybackSessionPlaybackService", () => {
         error: { code: "PLAYBACK_TIMEOUT" },
       });
       expect(engine.stop).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("reports a session budget timeout without exhausting every remaining source", async () => {
+    jest.useFakeTimers();
+    try {
+      const primary = {
+        infoHash: "slow-torrent",
+        title: "Slow torrent",
+      } as Stream;
+      const fallback = {
+        url: "https://cdn.example.test/fallback.mp4",
+        title: "Fallback",
+      } as Stream;
+      const primaryEngine = makeEngine(
+        () => new Promise<string>(() => undefined),
+      );
+      const fallbackEngine = makeEngine(async () => fallback.url!);
+      resolveEngine.mockImplementation((stream) =>
+        stream.infoHash ? primaryEngine : fallbackEngine,
+      );
+
+      const plan = makePlan(primary, fallback);
+      plan.timeoutBudget.totalMs = 10;
+      const session = usePlaybackSessionStore.getState().createSession({
+        plan,
+        content: { type: "movie", id: "tt123" },
+        deviceProfile,
+      });
+
+      const resolution = resolvePlaybackSession(session.id);
+      await jest.advanceTimersByTimeAsync(11);
+      const result = await resolution;
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: {
+          code: "GATEWAY_TIMEOUT",
+          message: expect.stringContaining("Sources were found"),
+        },
+      });
+      expect(primaryEngine.stop).toHaveBeenCalled();
+      expect(fallbackEngine.getPlaybackUri).not.toHaveBeenCalled();
+      expect(
+        usePlaybackSessionStore.getState().sessions[session.id],
+      ).toMatchObject({
+        status: "failed",
+        terminalError: { code: "GATEWAY_TIMEOUT" },
+        attempts: [{ status: "failed", error: { code: "GATEWAY_TIMEOUT" } }],
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("keeps an unknown-container torrent alive long enough for a gateway remux upgrade", async () => {
+    jest.useFakeTimers();
+    try {
+      const source = {
+        infoHash: "container-discovered-after-metadata",
+        title: "Provider label without a container",
+      } as Stream;
+      const engine = makeEngine(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(
+              () => resolve("http://bridge.test/api/gateway/jobs/job-1/stream"),
+              100,
+            );
+          }),
+      );
+      resolveEngine.mockReturnValue(engine);
+
+      const plan = makePlan(source);
+      const candidate = plan.plan!.selectedCandidate!;
+      candidate.container = "unknown";
+      candidate.requiresRemux = false;
+      plan.timeoutBudget = {
+        ...plan.timeoutBudget,
+        totalMs: 200,
+        bridgeConnectMs: 10,
+        torrentMetadataMs: 20,
+        peerDiscoveryMs: 30,
+        remuxReadyMs: 100,
+      };
+      const session = usePlaybackSessionStore.getState().createSession({
+        plan,
+        content: { type: "movie", id: "tt123" },
+        deviceProfile,
+      });
+
+      const resolution = resolvePlaybackSession(session.id);
+      for (
+        let attempt = 0;
+        attempt < 10 && !jest.mocked(engine.getPlaybackUri).mock.calls.length;
+        attempt += 1
+      ) {
+        await Promise.resolve();
+      }
+      expect(engine.getPlaybackUri).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(100);
+
+      await expect(resolution).resolves.toMatchObject({
+        ok: true,
+        uri: "http://bridge.test/api/gateway/jobs/job-1/stream",
+      });
+      expect(engine.stop).not.toHaveBeenCalled();
+      // The reducer timestamps use the fake clock. Clear the completed test
+      // session before restoring real time so shared afterEach cleanup cannot
+      // append an event with an earlier wall-clock timestamp.
+      usePlaybackSessionStore.getState().clearAllSessions();
     } finally {
       jest.useRealTimers();
     }

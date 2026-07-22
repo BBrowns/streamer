@@ -182,6 +182,39 @@ bulkhead → timeout → retry (1×, exponential backoff) → circuit breaker
 
 A `policyCache` map (keyed by `addonId`) preserves circuit breaker state across requests so the breaker actually tracks cumulative failures — not just per-request state.
 
+#### Fast Stream Discovery For Playback
+
+`AggregatorService.getStreamDiscovery()` is the canonical stream lookup for
+both `GET /api/stream/:type/:id` and `POST /api/playback/plan`. It keeps a
+bounded, memory-only cache keyed by user, content type, and content ID. A
+completed discovery result is reusable for at most 30 seconds; concurrent
+lookups coalesce onto one provider fan-out. The cache is never persisted, and
+add-on install, removal, and manifest revalidation invalidate the affected
+user's entries. User scoping prevents one account from ever receiving another
+account's discovery result.
+
+Compatible stream add-ons start in parallel. When the first usable provider
+batch arrives, discovery collects another 250 ms of equally fast responses and
+then returns a `partial` result; the first-response boundary is 1.75 seconds.
+If all providers finish first, the result is `complete`. Slow providers are
+allowed to finish after a partial response so their result can warm the same
+short-lived cache for Retry, More Sources, and the next automatic choice. A
+usable response arriving just after the boundary is released immediately rather
+than waiting for every remaining provider. Torrent resolution itself remains
+serial in the session resolver: discovery is parallel, torrent warm-up is not a
+race between singleton-engine jobs.
+
+The playback plan exposes only the safe discovery summary
+`sourceDiscovery: { status, usableCandidateCount }`; the stream-card route
+exposes the compatible `sourceDiscovery: { status }` envelope alongside its
+existing runtime `streams`. These summary fields contain no provider URLs,
+manifest locations, resolved media URLs, magnets, or info hashes. Discovery
+observability is likewise aggregate-only (cache hit/miss, status, elapsed time,
+usable count, and provider counts); raw source data is neither persisted nor
+logged. A caller can abort its own wait. Before any fast response, a run with
+no remaining caller is aborted; after a partial response, the short background
+completion is intentionally allowed to warm the cache.
+
 **SSRF protection:** Add-on manifest, catalog, meta, and stream requests are
 validated before every outbound fetch. The validator blocks credentials,
 non-HTTPS URLs by default, localhost, link-local, private, carrier-grade NAT,
@@ -236,36 +269,44 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
 **How torrent playback works now:**
 
 1. The mobile client asks the server playback planner for a `PlaybackPlan`.
-2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`.
-3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `state`, `phase`, `progress`, `peerCount`, elapsed time, retryability, and timeout metadata through `GET /api/gateway/jobs/:id`.
-4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, `preparing_metadata`, `remuxing`, and `cancelled`. Explicit gateway `no_peers` and `stalled` responses are terminal for the current candidate so Play Best can fall back instead of waiting indefinitely.
+2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`. The primary Play control plane may attach its runtime-only `progressive-fmp4` remux strategy; it is not persisted in a playback session or copied into add-on metadata.
+3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `state`, `phase`, `peerCount`, elapsed time, retryability, and timeout metadata through `GET /api/gateway/jobs/:id`. Preparation is indeterminate, so it reports no percentage until readiness is actually proven. A candidate without a peer fails after 12 seconds. Once a peer connects, it gets up to 20 seconds to provide metadata, with a 32-second hard cap across discovery and metadata. Direct files and primary Play's progressive fMP4 remux then require a verified first torrent byte within 20 seconds; seekable-cache remux work for Download, Cast, and the default compatibility path retains its separate 60-second materialization window.
+4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, `preparing_metadata`, `remuxing`, and `cancelled`. Explicit gateway `no_peers` and `stalled` responses are terminal for the current candidate so Play Best can fall back instead of waiting indefinitely. `no_peers` is source-specific: a later torrent candidate still receives its own discovery attempt rather than treating the bridge as unavailable.
 5. Once ready, the player receives a signed
    `/api/gateway/jobs/:id/stream?expires=...&signature=...` URL. The URL is
    header-free for `expo-video` and cast devices, but the bridge validates the
-   HMAC signature and expiry before serving bytes. Direct-file responses
-   support single HTTP byte ranges, including open-ended and suffix ranges, so
-   `expo-video` can seek without receiving incorrect byte windows. Expired
-   URLs are accepted only when they match the same signature already used by
-   the active stream and stay inside a short grace window, avoiding broken
-   ongoing range requests mid-playback.
+   HMAC signature and expiry before serving bytes. Direct-file and
+   seekable-cache responses support single HTTP byte ranges, including
+   open-ended and suffix ranges, so `expo-video` can seek without receiving
+   incorrect byte windows. A live progressive-fMP4 response is instead chunked
+   with no `Content-Length`, `Content-Range`, or `Accept-Ranges`; it accepts
+   only an initial zero-origin probe and deliberately rejects arbitrary seeks
+   while the torrent is still being remuxed. Expired URLs are accepted only
+   when they match the same signature already used by the active stream and
+   stay inside a short grace window, avoiding broken ongoing range requests
+   mid-playback.
 6. If the player stops, the mobile engine calls `DELETE /api/gateway/jobs/:id`
-   so warmup work is cancelled instead of leaking. The bridge also prunes
-   unused ready jobs on a timer while protecting jobs with active stream
-   consumers.
+   so warmup work — including metadata waiting — is aborted instead of leaking.
+   The bridge also prunes unused ready jobs on a timer while protecting jobs
+   with active stream consumers.
 
-The legacy `/stream?magnet=<encoded>&fileIndex=0` endpoint still exists for compatibility, but new torrent playback should prefer gateway jobs because they provide readiness state, cancellation, progress, and future remux/transcode hooks.
+The legacy `/stream?magnet=<encoded>&fileIndex=0` endpoint still exists for compatibility, but new torrent playback should prefer gateway jobs because they provide readiness state, cancellation, progress, and future remux/transcode hooks. Its peer/metadata preflight follows the same policy: up to 12 seconds to find the first peer, then up to 20 seconds for metadata with a 32-second combined hard cap. It stops when its client disconnects and must not reintroduce the old two-minute wait.
 
-FFmpeg remux output is now materialized into a temporary MP4 cache file before
-serving bytes. Once materialization succeeds, the bridge can answer `HEAD` and
-single byte-range requests from the cached MP4 instead of pretending that a
-sequential FFmpeg pipe is seekable. This is a production direction, not a
-support claim: large-file remux, cache cleanup, disk limits, unsupported
-FFmpeg/runtime cases, and real-device seek behavior still need the PR #109
-productization pass and QA evidence.
+The bridge has two FFmpeg delivery paths. Primary Play uses a live fragmented
+MP4 stream: after first-byte preflight, FFmpeg emits an empty movie header and
+media fragments as the torrent arrives, avoiding full `+faststart`
+materialization before the player can start. It is intentionally non-seekable.
+Downloads, Cast, and the default compatibility/manual path use a temporary
+seekable MP4 cache instead: after materialization succeeds, the bridge can
+answer `HEAD` and single byte-range requests without pretending that a
+sequential FFmpeg pipe is seekable. Both paths remain a production direction,
+not a support claim: large-file behavior, cache cleanup, disk limits,
+unsupported FFmpeg/runtime cases, copied-codec compatibility, and real-device
+first-frame/seek evidence still need QA evidence.
 
 **Chromecast:** The `castv2-client` library (running inside the daemon) communicates directly with Chromecast devices discovered via `bonjour-service` (mDNS). The `/api/cast` router handles device discovery and playback control. This avoids requiring the mobile client to implement the Chromecast protocol natively.
 
-**Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served. Gateway jobs expose coarser preparation progress before the media URL is ready.
+**Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served. Gateway jobs expose factual preparation phase, peer state, elapsed time, and a bounded readiness window before the media URL is ready; they do not expose an elapsed-time percentage as media progress.
 
 **Bridge auth:** Control routes use `requireBridgeAuth` when `STREAMER_BRIDGE_TOKEN` is configured. Clients can send either bearer auth or `x-streamer-bridge-token`. Gateway stream URLs stay header-free for native video/cast consumption, but are HMAC-signed with expiry query params before the bridge serves bytes.
 
@@ -355,23 +396,30 @@ StreamEngineManager
 The player (`app/player.tsx`) calls `streamEngineManager.resolveEngine(currentStream)` and gets back the appropriate engine. This means adding a new stream type only requires implementing `IStreamEngine` and registering it — the player is oblivious to the delivery mechanism.
 
 **FFmpeg remuxing:** When a target cannot play an MKV container directly, the
-stream-server can remux the torrent file to MP4 using FFmpeg and serve the
-materialized output through the gateway. This is necessary because iOS's
-`AVPlayer` (underlying `expo-video`) does not support MKV containers natively.
-The current implementation has timeout and cancellation behavior, but cache
-limits, runtime discovery, and health diagnostics are now explicit:
+stream-server can remux the torrent file to MP4 using FFmpeg. The primary Play
+route produces a live fragmented MP4 as the torrent arrives, so it can start
+before a full-file `+faststart` rewrite; the resulting response is not
+seekable. Download, Cast, and the default compatibility/manual path preserve a
+materialized seekable MP4 cache for `HEAD` and range requests. This is necessary
+because iOS's `AVPlayer` (underlying `expo-video`) does not support MKV
+containers natively. Fragmented MP4 only changes the container, not the copied
+video codec, so unsupported HEVC/AV1 sources still use planner fallback. The
+current implementation has timeout and cancellation behavior, while cache
+limits, runtime discovery, and health diagnostics remain explicit:
 
 - `STREAMER_FFMPEG_PATH` can point the bridge at a packaged or system FFmpeg
   binary. The bridge health endpoint probes this runtime and reports
   availability/version.
-- `STREAMER_REMUX_CACHE_DIR` can pin the remux cache location; otherwise the
-  bridge uses an OS temp directory.
-- `STREAMER_REMUX_CACHE_MAX_BYTES` bounds completed remux output and evicts the
-  least recently used completed files when exceeded.
-- `STREAMER_REMUX_CACHE_TTL_MS` controls stale completed-file cleanup.
+- `STREAMER_REMUX_CACHE_DIR` can pin the **seekable-cache** remux location;
+  otherwise the bridge uses an OS temp directory.
+- `STREAMER_REMUX_CACHE_MAX_BYTES` bounds completed **seekable-cache** remux
+  output and evicts the least recently used completed files when exceeded.
+- `STREAMER_REMUX_CACHE_TTL_MS` controls stale completed seekable-cache-file
+  cleanup.
 - Gateway job responses include media metadata (`remuxed`, `container`,
   `seekable`, `cacheStatus`) so clients do not have to infer remux seek
-  capability from source shape alone.
+  capability from source shape alone. `cacheStatus` is `streaming` for live
+  progressive fMP4 and `ready` only for a completed seekable cache.
 
 ### 6.4 Playback Planning And Runtime State
 
@@ -379,8 +427,9 @@ Playback is no longer a direct "user picks source, source resolves immediately" 
 
 ```
 Detail Play Best
-  → PlaybackOrchestrator.playBest()
-  → POST /api/playback/plan
+  → 600 ms Detail prefetch + shared bridge detection
+  → runtime-only planning intent and immediate /player navigation
+  → PlaybackOrchestrator.playBest() shares POST /api/playback/plan work
   → resolve selected source only when needed
   → playerStore.setStream(primary, mediaInfo, fallbackStreams)
   → player runtime state/error handling
@@ -388,23 +437,54 @@ Detail Play Best
 
 Important client modules:
 
-| Module                                        | Responsibility                                                                                                      |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `services/playback/PlaybackPlanService.ts`    | Calls and validates `/api/playback/plan`, includes device profile and bridge diagnostics, resolves planned streams. |
-| `services/playback/PlaybackOrchestrator.ts`   | Central Play Best entry point; returns a prepared stream or typed runtime error.                                    |
-| `services/playback/PlaybackErrors.ts`         | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                |
-| `services/playback/PlaybackSessionReducer.ts` | Creates persistence-safe sessions and applies typed append-only lifecycle events.                                   |
-| `stores/playbackSessionStore.ts`              | Persists validated control-plane sessions while keeping raw planner candidates in memory only.                      |
-| `stores/playerStore.ts`                       | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                           |
-| `components/player/PlayerStatusOverlay.tsx`   | Displays typed readiness/error states instead of an endless generic buffering state.                                |
+| Module                                        | Responsibility                                                                                                                               |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/playback/PlaybackPlanService.ts`    | Calls and validates `/api/playback/plan`, shares short-lived in-memory plans, and starts bridge detection once per concurrent planning pass. |
+| `services/playback/PlaybackOrchestrator.ts`   | Central Play Best entry point; returns a prepared stream or typed runtime error.                                                             |
+| `services/playback/PlaybackLaunchService.ts`  | Keeps a cancellable, runtime-only planning launch across the immediate Detail-to-Player navigation.                                          |
+| `services/playback/PlaybackErrors.ts`         | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                                         |
+| `services/playback/PlaybackSessionReducer.ts` | Creates persistence-safe sessions and applies typed append-only lifecycle events.                                                            |
+| `stores/playbackSessionStore.ts`              | Persists validated control-plane sessions while keeping raw planner candidates in memory only.                                               |
+| `stores/playerStore.ts`                       | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                                                    |
+| `components/player/PlayerStatusOverlay.tsx`   | Displays typed readiness/error states instead of an endless generic buffering state.                                                         |
 
 Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
 
 Planner v2 exposes deterministic ordered candidates, top-level selection and
 fallbacks, typed rejection reasons, requested-action eligibility, compatibility
-details, and timeout budgets. Candidate IDs are opaque UUIDs. The nested
-`plan` object is a temporary compatibility wrapper for the current resolver;
-new orchestration code should use the top-level fields.
+details, timeout budgets, and a safe `sourceDiscovery` status/count. Candidate
+IDs are opaque UUIDs. The nested `plan` object is a temporary compatibility
+wrapper for the current resolver; new orchestration code should use the
+top-level fields.
+
+### 6.4.1 Fast Plan Reuse, Cancellation, And Ranking
+
+Detail prefetch begins after 600 ms of idle time and on desktop Play
+hover/focus. It uses the same in-memory, account- and constraints-scoped plan
+entry as Play, More Sources, and the source inspector, so those surfaces do not
+fan out independently. Bridge detection starts alongside that lookup and is
+single-flight. The client discards transient entries when the account, bridge
+configuration, or add-on set changes. Plans and launch intents remain runtime
+only because they can contain `Stream` data.
+
+Pressing Play immediately opens the player with a `planning` launch intent.
+The player shows source-search feedback rather than an invented download
+percentage, starts the normal session resolver as soon as the plan is ready,
+and keeps one resolver owner. Escape, Close, and Cancel abort the foreground
+plan/replan request, cancel a provisional session or engine, and prevent a late
+response from navigating or repainting the player. If every candidate from a
+partial plan fails, the player performs one bounded, cancellable discovery
+replan while late providers may still be warming the server cache. It only
+switches to a genuinely new candidate set; it never loops an identical partial
+plan indefinitely.
+
+Candidate eligibility applies the user's exact quality allowlist before
+ranking. Among allowed and device-compatible choices, ranking favours sources
+with the best start probability: direct/HLS transport, compatible container and
+codec, and realistic torrent seeder health. Resolution is a later tie-breaker,
+so a healthy 1080p source may legitimately start before a weak 2160p torrent.
+The technical score remains planner-only and is disclosed only through the
+advanced source details.
 
 `@streamer/shared` also defines the persistence-safe `PlaybackSession` control
 plane contract. A session records action, opaque candidate snapshots, attempts,
@@ -778,10 +858,10 @@ packaged-app QA before claiming production desktop distribution.
 | `STREAMER_GATEWAY_STREAM_SECRET`      | per-process random fallback  |                           | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
 | `STREAMER_GATEWAY_STREAM_URL_TTL_MS`  | `7200000`                    |                           | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
 | `STREAMER_FFMPEG_PATH`                | `ffmpeg`                     |                           | FFmpeg binary used for MP4 remux jobs and health probing. Packaged desktop builds can point this at a bundled runtime.                      |
-| `STREAMER_REMUX_CACHE_DIR`            | OS temp dir                  |                           | Optional fixed remux cache directory. The bridge removes stale `.partial.mp4` files on startup.                                             |
-| `STREAMER_REMUX_CACHE_MAX_BYTES`      | `5368709120`                 |                           | Maximum bytes for completed remux cache entries before least-recently-used eviction.                                                        |
-| `STREAMER_REMUX_CACHE_TTL_MS`         | `1800000`                    |                           | TTL for completed remux cache entries.                                                                                                      |
-| `REMUX_READY_TIMEOUT_MS`              | `90000`                      |                           | Timeout budget for an individual FFmpeg remux readiness operation.                                                                          |
+| `STREAMER_REMUX_CACHE_DIR`            | OS temp dir                  |                           | Optional fixed **seekable-cache** remux directory. The bridge removes stale `.partial.mp4` files on startup.                                |
+| `STREAMER_REMUX_CACHE_MAX_BYTES`      | `5368709120`                 |                           | Maximum bytes for completed **seekable-cache** remux entries before least-recently-used eviction.                                           |
+| `STREAMER_REMUX_CACHE_TTL_MS`         | `1800000`                    |                           | TTL for completed seekable-cache remux entries.                                                                                             |
+| `REMUX_READY_TIMEOUT_MS`              | `90000`                      |                           | Timeout budget for an individual seekable-cache FFmpeg remux readiness operation.                                                           |
 | `STREAMER_APP_VERSION`                | package/app fallback         |                           | Product version exposed in build metadata, health endpoints, diagnostics, logs, and Sentry release names.                                   |
 | `STREAMER_GIT_SHA`                    | CI fallback or `unknown`     |                           | Full commit SHA exposed as build metadata.                                                                                                  |
 | `STREAMER_BUILD_DATE`                 | CI fallback or `unknown`     |                           | ISO build timestamp exposed as build metadata.                                                                                              |

@@ -11,6 +11,7 @@ import type {
   PlaybackPlanMode,
   PlaybackPlanRequest,
   PlaybackRejectReason,
+  PlaybackSourceDiscovery,
   PlaybackTimeoutBudget,
   PlannedMediaCandidate,
   RejectedCandidate,
@@ -32,6 +33,10 @@ import {
   scoreCandidate,
 } from "./source-normalizer.js";
 
+// `peerDiscoveryMs` is a client-side torrent-attempt envelope, not the
+// gateway's raw peer-discovery timer. The bridge reports source-specific
+// no-peers after 12 seconds and Play Best falls back immediately from that
+// result.
 const TIMEOUT_BUDGETS: Record<PlaybackAction, PlaybackTimeoutBudget> = {
   play: {
     totalMs: 120_000,
@@ -502,6 +507,10 @@ function emptyPlan(
   userMessage: string,
   reason?: PlaybackRejectReason,
   preflightReason?: ActionPreflightResult["reason"],
+  sourceDiscovery: PlaybackSourceDiscovery = {
+    status: "complete",
+    usableCandidateCount: 0,
+  },
 ): PlaybackPlan {
   const leading = [...evaluations].sort(sortEvaluations)[0];
   const requiresBridge = evaluations.some(
@@ -520,6 +529,7 @@ function emptyPlan(
     version: 2,
     action: request.action,
     state,
+    sourceDiscovery,
     fallbackCandidates: [],
     orderedCandidates: [],
     rejectedCandidates,
@@ -544,14 +554,17 @@ export class PlaybackPlannerService {
     userId: string,
     request: PlaybackPlanRequest,
     requestId: string,
+    options: { signal?: AbortSignal } = {},
   ): Promise<PlaybackPlan> {
     const contentId = episodeAwareId(request);
-    const streams = await aggregatorService.getStreams(
+    const discovery = await aggregatorService.getStreamDiscovery(
       userId,
       request.type,
       contentId,
       requestId,
+      options,
     );
+    const streams = discovery.streams;
 
     const candidates = dedupeCandidates(
       streams.map((stream) =>
@@ -567,6 +580,11 @@ export class PlaybackPlannerService {
         [],
         "No sources are available for this title yet.",
         "no_sources",
+        undefined,
+        {
+          status: discovery.status,
+          usableCandidateCount: 0,
+        },
       );
     }
 
@@ -582,6 +600,10 @@ export class PlaybackPlannerService {
       .map((evaluation) => toRejectedCandidate(evaluation, request.bridge));
     const orderedCandidates = eligibleEvaluations.map(toPlannedCandidate);
     const selectedCandidate = orderedCandidates[0];
+    const sourceDiscovery: PlaybackSourceDiscovery = {
+      status: discovery.status,
+      usableCandidateCount: orderedCandidates.length,
+    };
 
     if (selectedCandidate) {
       const fallbackCandidates = orderedCandidates.slice(1, 5);
@@ -589,6 +611,7 @@ export class PlaybackPlannerService {
         version: 2,
         action: request.action,
         state: "ready",
+        sourceDiscovery,
         selectedCandidate,
         fallbackCandidates,
         orderedCandidates,
@@ -653,6 +676,7 @@ export class PlaybackPlannerService {
         bridgePreflight?.message || bridgeRejection.reason,
         bridgeRejection.reasonCode,
         bridgePreflight?.reason,
+        sourceDiscovery,
       );
     }
 
@@ -667,6 +691,8 @@ export class PlaybackPlannerService {
         evaluations,
         "This source needs video conversion before it can play on this device.",
         transcodeRejection.reasonCode,
+        undefined,
+        sourceDiscovery,
       );
     }
 
@@ -683,6 +709,8 @@ export class PlaybackPlannerService {
         evaluations,
         "No source matches the playback qualities selected in Settings.",
         "quality_not_allowed",
+        undefined,
+        sourceDiscovery,
       );
     }
 
@@ -693,6 +721,8 @@ export class PlaybackPlannerService {
       evaluations,
       "No source is compatible with this device yet.",
       rejectedCandidates[0]?.reasonCode,
+      undefined,
+      sourceDiscovery,
     );
   }
 }
