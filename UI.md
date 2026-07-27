@@ -550,8 +550,8 @@ toolbar with the available actions.
 - Bottom timeline with current time, duration, and cobalt progress.
 - Accessible progress control using `accessibilityRole="adjustable"`,
   `accessibilityActions`, and ±10s seek actions.
-- Capability-aware timeline copy for direct, remux, live, and unknown-duration
-  playback.
+- Capability-aware timeline copy for direct, seekable-cache, live progressive,
+  remux, and unknown-duration playback.
 - Desktop/web mute and continuous volume adjustment, settings, cast, retry, and
   fullscreen actions when those capabilities are available.
 - Desktop/web keyboard shortcut helper for the currently supported hotkeys.
@@ -560,8 +560,18 @@ toolbar with the available actions.
 
 PR #117 routes button, scrubber, accessibility, and desktop hotkey seeking
 through the same guarded callbacks. Keyboard shortcuts must not bypass
-`canSeekPlayback` or seek while remux/live/unknown-duration streams are marked
-non-seekable.
+`canSeekPlayback` or seek while a source is live, unknown-duration, or otherwise
+marked non-seekable. Primary progressive fMP4 Play begins in that disabled live
+state: controls describe it as a live-compatible stream and, while applicable,
+honestly state that seek controls are being prepared. Once the gateway's
+background cache is ready and the replacement source has actually loaded, the
+same guarded controls become available. If that optional cache is unavailable,
+live playback continues and the timeline remains disabled; no UI copy promises
+that seeking will definitely unlock.
+
+The replacement preserves both the current position and explicit pause state.
+An optional handoff failure only changes the seekability state; it never
+silently starts a fallback while the existing video remains playable.
 
 ### 6.4 `usePlayerHotkeys`
 
@@ -622,6 +632,15 @@ playback can start, or preparing a compatible stream). Do not render the
 gateway's elapsed readiness time as a percentage. A percentage is reserved for
 actual media/download progress once byte-level metrics exist.
 
+For primary progressive fMP4 playback, a real first consumer starts an optional
+background seekable-cache preparation. The player may show a factual
+"preparing seek controls" state, but never presents it as media progress or a
+guaranteed upgrade. When the cache is ready, the player replaces the source via
+the same signed gateway route, restores the current position and prior playback
+choice only after the replacement reports readiness, and then enables normal
+range-backed seeking. If the cache becomes unavailable, the live response stays
+on screen and only seeking remains disabled.
+
 Source preparation is cancellable as soon as it is active. The loading overlay
 shows a dedicated Cancel control; on web/Electron, Escape triggers the same
 session/engine cancellation path. Closing or cancelling without a planner
@@ -643,6 +662,14 @@ waiting for the gateway timeout. A job returned late by a bridge that ignored
 the abort is deleted best-effort. Expected cancellation remains a cancelled
 session: it does not create an attempt failure, start a fallback, or degrade the
 remembered bridge status.
+
+After real playback begins, a one-shot stall watchdog observes actual playhead
+or buffered-edge movement. Fifteen seconds without either signal can enter the
+existing **Trying another source** state and use the normal serial fallback.
+It is deliberately suppressed while playback is paused, the app/player is not
+visible, the user is seeking, preview controls are open, casting is active, or
+a fallback is already running. That makes a stalled source recoverable without
+mistaking an intentional pause or interaction for a failure.
 
 ---
 
@@ -880,7 +907,9 @@ validate full keyboard-only browse -> detail -> Play flows in Electron.
 control with a progress value and increment/decrement actions. The same guarded
 seek callbacks back pointer, accessibility, and desktop hotkey input. Streams
 that cannot seek expose a disabled state and explanatory copy rather than a
-misleading interactive timeline.
+misleading interactive timeline. The progressive-to-seekable handoff follows
+the same rule: the disabled state remains until the replacement media source is
+ready, not merely until background preparation has reported completion.
 
 #### 9. Offline-First Library
 

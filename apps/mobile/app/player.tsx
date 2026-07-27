@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -43,6 +44,7 @@ import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
+import { replaceWithSeekableSource } from "../components/player/seekablePlaybackHandoff";
 import { PlayerInteractionLayer } from "../components/player/PlayerInteractionLayer";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
@@ -80,10 +82,43 @@ import { stopCastSession } from "../services/playback/PlaybackSessionCastService
 import { useCastStore } from "../stores/castStore";
 import { PlaybackStatusPanel } from "../components/ui/PlaybackStatusPanel";
 import { hasNewStablePlaybackCandidate } from "../services/playback/partialDiscovery";
+import {
+  PLAYBACK_SEEK_GRACE_PERIOD_MS,
+  PLAYBACK_STALL_CHECK_INTERVAL_MS,
+  hasPlaybackProgressed,
+  shouldAdvanceAfterPlaybackStall,
+} from "../components/player/playbackStallWatchdog";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
 const PLAYBACK_START_TIMEOUT_MS = 60_000;
+const SEEKABLE_CACHE_POLL_INTERVAL_MS = 2_000;
+
+type SeekableCacheStatus =
+  | "not_started"
+  | "preparing"
+  | "ready"
+  | "unavailable";
+
+function waitForSeekableCachePoll(signal: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, SEEKABLE_CACHE_POLL_INTERVAL_MS);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+function getPlayerVisibility() {
+  if (AppState.currentState !== "active") return false;
+  if (Platform.OS !== "web" || typeof document === "undefined") return true;
+  return document.visibilityState !== "hidden";
+}
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -150,6 +185,9 @@ export default function PlayerScreen() {
       ) || null
     );
   });
+  const activeGatewayJobId = activeSession?.gatewayJobId;
+  const playbackSessionCreatedAt = activeSession?.createdAt;
+  const playbackSessionTimeoutBudgetMs = activeSession?.timeoutBudgetMs;
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [castModalOpen, setCastModalOpen] = useState(false);
@@ -159,6 +197,14 @@ export default function PlayerScreen() {
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [previewControls, setPreviewControls] = useState(false);
+  const [fallbackStatusMessage, setFallbackStatusMessage] = useState<
+    string | null
+  >(null);
+  const [hasPlaybackStarted, setHasPlaybackStarted] = useState(false);
+  const [seekableCacheStatus, setSeekableCacheStatus] =
+    useState<SeekableCacheStatus>("not_started");
+  const [seekableHandoffApplied, setSeekableHandoffApplied] = useState(false);
+  const visibleFallbackReason = fallbackReason || fallbackStatusMessage;
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
     null,
@@ -180,6 +226,21 @@ export default function PlayerScreen() {
   const partialReplanAttemptsRef = useRef(new Set<string>());
   const partialReplanPromisesRef = useRef(new Map<string, Promise<boolean>>());
   const partialReplanControllerRef = useRef<AbortController | null>(null);
+  const activeCastRef = useRef(activeCast);
+  const previewControlsRef = useRef(previewControls);
+  const playerVisibleRef = useRef(getPlayerVisibility());
+  const playbackStartedRef = useRef(false);
+  const lastPlaybackProgressAtRef = useRef(Date.now());
+  const lastPlaybackProgressRef = useRef({
+    currentTime: undefined as number | undefined,
+    bufferedPosition: undefined as number | undefined,
+  });
+  const seekingUntilRef = useRef(0);
+  const stallFallbackTriggeredRef = useRef(false);
+  const seekableHandoffControllerRef = useRef<AbortController | null>(null);
+  const seekableHandoffInFlightRef = useRef(false);
+  const seekableHandoffShouldResumeRef = useRef<boolean | null>(null);
+  const pausedAfterSeekableHandoffRef = useRef(false);
 
   useEffect(() => {
     activePlanningLaunchIdRef.current = planningLaunchId;
@@ -188,6 +249,50 @@ export default function PlayerScreen() {
   useEffect(() => {
     activePlaybackSessionIdRef.current = playbackSessionId;
   }, [playbackSessionId]);
+
+  useEffect(() => {
+    activeCastRef.current = activeCast;
+  }, [activeCast]);
+
+  useEffect(() => {
+    previewControlsRef.current = previewControls;
+  }, [previewControls]);
+
+  useEffect(() => {
+    const syncVisibility = () => {
+      const wasVisible = playerVisibleRef.current;
+      const isVisible = getPlayerVisibility();
+      playerVisibleRef.current = isVisible;
+
+      // Time spent in the background is not a playback stall. Start a fresh
+      // bounded observation window when the viewer returns to the player.
+      if (!wasVisible && isVisible && playbackStartedRef.current) {
+        lastPlaybackProgressAtRef.current = Date.now();
+      }
+    };
+
+    syncVisibility();
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      syncVisibility,
+    );
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", syncVisibility);
+    }
+
+    return () => {
+      appStateSubscription.remove();
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", syncVisibility);
+      }
+    };
+  }, []);
+
+  const markIntentionalSeek = useCallback(() => {
+    const now = Date.now();
+    seekingUntilRef.current = now + PLAYBACK_SEEK_GRACE_PERIOD_MS;
+    lastPlaybackProgressAtRef.current = now;
+  }, []);
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -211,6 +316,8 @@ export default function PlayerScreen() {
     (reason: string) => {
       partialReplanControllerRef.current?.abort();
       partialReplanControllerRef.current = null;
+      seekableHandoffControllerRef.current?.abort();
+      seekableHandoffControllerRef.current = null;
       if (activeCast) {
         void stopCastSession(activeCast.device.id, activeCast.sessionId).catch(
           (error) => console.error("Failed to stop cast", error),
@@ -264,6 +371,8 @@ export default function PlayerScreen() {
   const handleOpenSourcesDevices = useCallback(() => {
     partialReplanControllerRef.current?.abort();
     partialReplanControllerRef.current = null;
+    seekableHandoffControllerRef.current?.abort();
+    seekableHandoffControllerRef.current = null;
     if (planningLaunchId) {
       cancelPlaybackLaunch(planningLaunchId, "User opened Sources & Devices.");
     }
@@ -283,6 +392,8 @@ export default function PlayerScreen() {
     if (!mediaInfo) return;
     partialReplanControllerRef.current?.abort();
     partialReplanControllerRef.current = null;
+    seekableHandoffControllerRef.current?.abort();
+    seekableHandoffControllerRef.current = null;
     if (planningLaunchId) {
       cancelPlaybackLaunch(
         planningLaunchId,
@@ -315,6 +426,8 @@ export default function PlayerScreen() {
     () => () => {
       partialReplanControllerRef.current?.abort();
       partialReplanControllerRef.current = null;
+      seekableHandoffControllerRef.current?.abort();
+      seekableHandoffControllerRef.current = null;
       const launchId = activePlanningLaunchIdRef.current;
       if (launchId) {
         cancelPlaybackLaunch(
@@ -579,8 +692,11 @@ export default function PlayerScreen() {
   // explicit stop/close action, so navigation cannot silently end playback.
 
   const handleRetryPlayback = useCallback(async () => {
+    setFallbackStatusMessage(null);
     partialReplanControllerRef.current?.abort();
     partialReplanControllerRef.current = null;
+    seekableHandoffControllerRef.current?.abort();
+    seekableHandoffControllerRef.current = null;
     if (!currentStream && planningLaunchId && mediaInfo) {
       if (playbackSessionId) {
         cancelPlaybackSession(
@@ -648,6 +764,7 @@ export default function PlayerScreen() {
     planningLaunchId,
     playbackSessionId,
     setPlaybackPlanning,
+    setFallbackStatusMessage,
     setRuntimeFailure,
     setSessionStream,
     setStreamStatus,
@@ -658,12 +775,29 @@ export default function PlayerScreen() {
       error: ReturnType<typeof createPlaybackRuntimeError>,
       reason?: string | null,
     ) => {
-      if (playbackSessionId && playbackCandidateId && playbackAttemptId) {
-        if (fallbackInFlightRef.current) return true;
+      if (fallbackInFlightRef.current) return true;
 
-        fallbackInFlightRef.current = true;
-        setPlaybackUri(null);
-        try {
+      // The current player can still receive a late cache-ready response
+      // after a fallback has selected another candidate. Stop that monitor
+      // before changing the session-owned source.
+      seekableHandoffControllerRef.current?.abort();
+      seekableHandoffControllerRef.current = null;
+
+      const fallbackStatus =
+        reason ||
+        t("player.status.tryingFallback", {
+          defaultValue: "Trying another source...",
+        });
+      setFallbackStatusMessage(fallbackStatus);
+      setBuffering(true);
+      setPlaying(false);
+      setStreamStatus("loading_metrics");
+      setRuntimeState("trying_fallback");
+      fallbackInFlightRef.current = true;
+
+      try {
+        if (playbackSessionId && playbackCandidateId && playbackAttemptId) {
+          setPlaybackUri(null);
           const result = await advancePlaybackSessionAfterFailure(
             playbackSessionId,
             playbackCandidateId,
@@ -688,17 +822,17 @@ export default function PlayerScreen() {
           );
           setPlaybackUri(result.uri);
           return true;
-        } finally {
-          fallbackInFlightRef.current = false;
         }
+
+        const nextStream = advanceToNextFallback(reason);
+        if (!nextStream) return false;
+
+        setPlaybackUri(null);
+        setResolveAttempt((attempt) => attempt + 1);
+        return true;
+      } finally {
+        fallbackInFlightRef.current = false;
       }
-
-      const nextStream = advanceToNextFallback(reason);
-      if (!nextStream) return false;
-
-      setPlaybackUri(null);
-      setResolveAttempt((attempt) => attempt + 1);
-      return true;
     },
     [
       advanceToNextFallback,
@@ -706,8 +840,14 @@ export default function PlayerScreen() {
       playbackAttemptId,
       playbackCandidateId,
       playbackSessionId,
+      setBuffering,
+      setFallbackStatusMessage,
+      setPlaying,
       setRuntimeFailure,
+      setRuntimeState,
       setSessionStream,
+      setStreamStatus,
+      t,
       tryReplanPartialPlayback,
     ],
   );
@@ -865,6 +1005,20 @@ export default function PlayerScreen() {
     if (!player || !playbackUri || !currentStream) return;
 
     player.timeUpdateEventInterval = 1;
+    playbackStartedRef.current = false;
+    setHasPlaybackStarted(false);
+    setSeekableCacheStatus("not_started");
+    setSeekableHandoffApplied(false);
+    seekableHandoffInFlightRef.current = false;
+    seekableHandoffShouldResumeRef.current = null;
+    pausedAfterSeekableHandoffRef.current = false;
+    lastPlaybackProgressAtRef.current = Date.now();
+    lastPlaybackProgressRef.current = {
+      currentTime: undefined,
+      bufferedPosition: undefined,
+    };
+    seekingUntilRef.current = 0;
+    stallFallbackTriggeredRef.current = false;
     setBuffering(true);
 
     const markLoading = () => {
@@ -881,12 +1035,37 @@ export default function PlayerScreen() {
     };
 
     const markPlaying = () => {
+      // A stale video event can arrive after we have selected the next
+      // candidate. Preserve the visible fallback state until that candidate
+      // actually owns a player again.
+      if (fallbackInFlightRef.current) return;
+      // `replaceAsync` can emit ready/loaded events even when the viewer had
+      // paused before the seekable-cache handoff. Those events describe media
+      // readiness, not an explicit request to resume.
+      if (
+        pausedAfterSeekableHandoffRef.current ||
+        (seekableHandoffInFlightRef.current &&
+          seekableHandoffShouldResumeRef.current === false)
+      ) {
+        setBuffering(false);
+        setPlaying(false);
+        return;
+      }
       if (playbackSessionId) {
         markPlaybackSessionPlaying(playbackSessionId);
       }
       setBuffering(false);
       setPlaying(true);
       setStreamStatus("playing");
+      setFallbackStatusMessage(null);
+    };
+
+    const markPlaybackStarted = () => {
+      if (!playbackStartedRef.current) {
+        playbackStartedRef.current = true;
+        setHasPlaybackStarted(true);
+        lastPlaybackProgressAtRef.current = Date.now();
+      }
     };
 
     const formatPlaybackError = (fallback?: string) => {
@@ -937,12 +1116,44 @@ export default function PlayerScreen() {
       "playingChange",
       ({ isPlaying }: any) => {
         setPlaying(isPlaying);
-        if (isPlaying) markPlaying();
+        if (isPlaying) {
+          if (
+            seekableHandoffInFlightRef.current &&
+            seekableHandoffShouldResumeRef.current === false
+          ) {
+            return;
+          }
+          // A real play event after a paused handoff is the user's explicit
+          // resume intent, so subsequent media-ready events may be playing.
+          pausedAfterSeekableHandoffRef.current = false;
+          markPlaying();
+        }
       },
     );
 
     const timeSub = player.addListener("timeUpdate", ({ currentTime }: any) => {
-      if (currentTime > 0 || player.bufferedPosition > 0) {
+      const nextProgress = {
+        currentTime:
+          typeof currentTime === "number" && Number.isFinite(currentTime)
+            ? currentTime
+            : undefined,
+        bufferedPosition:
+          typeof player.bufferedPosition === "number" &&
+          Number.isFinite(player.bufferedPosition)
+            ? player.bufferedPosition
+            : undefined,
+      };
+      if (
+        hasPlaybackProgressed(lastPlaybackProgressRef.current, nextProgress)
+      ) {
+        lastPlaybackProgressAtRef.current = Date.now();
+      }
+      lastPlaybackProgressRef.current = nextProgress;
+
+      if (nextProgress.currentTime && nextProgress.currentTime > 0) {
+        markPlaybackStarted();
+      }
+      if (nextProgress.currentTime || nextProgress.bufferedPosition) {
         markPlaying();
       }
     });
@@ -953,11 +1164,11 @@ export default function PlayerScreen() {
       }
     });
 
-    const remainingSessionBudgetMs = activeSession
+    const remainingSessionBudgetMs = playbackSessionCreatedAt
       ? Math.max(
           0,
-          Date.parse(activeSession.createdAt) +
-            activeSession.timeoutBudgetMs -
+          Date.parse(playbackSessionCreatedAt) +
+            (playbackSessionTimeoutBudgetMs ?? PLAYBACK_START_TIMEOUT_MS) -
             Date.now(),
         )
       : PLAYBACK_START_TIMEOUT_MS;
@@ -992,20 +1203,76 @@ export default function PlayerScreen() {
       });
     }, watchdogTimeoutMs);
 
+    const stallWatchdog = setInterval(() => {
+      const state = usePlayerStore.getState();
+      const now = Date.now();
+      if (
+        state.currentStream !== currentStream ||
+        state.streamState === "error" ||
+        previewControlsRef.current
+      ) {
+        return;
+      }
+      if (
+        !shouldAdvanceAfterPlaybackStall({
+          now,
+          lastProgressAt: lastPlaybackProgressAtRef.current,
+          hasStarted: playbackStartedRef.current,
+          // `playing` is the player's desired playback state. It remains true
+          // while a stream is buffering, but becomes false for an explicit
+          // pause, which is precisely the distinction needed here.
+          isPlaying: Boolean(player.playing),
+          isVisible: playerVisibleRef.current,
+          isSeeking: now < seekingUntilRef.current,
+          isCasting: Boolean(activeCastRef.current),
+          fallbackInFlight:
+            fallbackInFlightRef.current || seekableHandoffInFlightRef.current,
+          fallbackAlreadyTriggered: stallFallbackTriggeredRef.current,
+        })
+      ) {
+        return;
+      }
+
+      stallFallbackTriggeredRef.current = true;
+      const fallbackMessage = t("player.status.playbackStalledTryingFallback", {
+        defaultValue:
+          "Playback stopped making progress. Trying another source.",
+      });
+      const timeoutError = createPlaybackRuntimeError(
+        "PLAYBACK_TIMEOUT",
+        t("player.errors.playbackStalled", {
+          defaultValue:
+            "Playback stopped making progress. Try another source or retry.",
+        }),
+        { retryable: true, shouldFallback: false },
+      );
+      void tryAdvanceToFallback(timeoutError, fallbackMessage).then(
+        (advanced) => {
+          if (advanced) return;
+          setBuffering(false);
+          setPlaying(false);
+          setRuntimeFailure(timeoutError);
+        },
+      );
+    }, PLAYBACK_STALL_CHECK_INTERVAL_MS);
+
     return () => {
       statusSub.remove();
       playingSub.remove();
       timeSub.remove();
       sourceSub.remove();
       clearTimeout(watchdog);
+      clearInterval(stallWatchdog);
     };
   }, [
     currentStream,
-    activeSession,
     playbackUri,
     playbackSessionId,
+    playbackSessionCreatedAt,
+    playbackSessionTimeoutBudgetMs,
     player,
     setBuffering,
+    setFallbackStatusMessage,
     setPlaying,
     setRuntimeState,
     setStreamStatus,
@@ -1161,9 +1428,11 @@ export default function PlayerScreen() {
   const playerDuration = player?.duration || 0;
   const hasKnownDuration =
     Number.isFinite(playerDuration) && playerDuration > 0;
+  const isProgressiveRemuxPlayback =
+    currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4";
   const isRemuxPlayback = Boolean(
     currentStream?.behaviorHints?.remuxToMp4 ||
-    currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4" ||
+    isProgressiveRemuxPlayback ||
     selectedSessionCandidate?.requiresRemux,
   );
   const isLivePlayback = Boolean(
@@ -1171,8 +1440,13 @@ export default function PlayerScreen() {
     currentStream?.url?.toLowerCase().includes(".m3u8") &&
     !hasKnownDuration,
   );
+  const hasSeekableProgressiveHandoff =
+    isProgressiveRemuxPlayback && seekableHandoffApplied;
   const canSeekPlayback = Boolean(
-    !activeCast && !isRemuxPlayback && hasKnownDuration && !isLivePlayback,
+    !activeCast &&
+    (!isRemuxPlayback || hasSeekableProgressiveHandoff) &&
+    hasKnownDuration &&
+    !isLivePlayback,
   );
   const sourceLabel = useMemo(() => {
     if (!currentStream && activeCast) {
@@ -1234,6 +1508,13 @@ export default function PlayerScreen() {
       canSeek: canSeekPlayback,
       isLive: isLivePlayback,
       isRemux: isRemuxPlayback,
+      isProgressiveRemux: isProgressiveRemuxPlayback && !seekableHandoffApplied,
+      seekableCacheStatus:
+        isProgressiveRemuxPlayback && !seekableHandoffApplied
+          ? seekableCacheStatus === "ready"
+            ? undefined
+            : seekableCacheStatus
+          : undefined,
       canUseVolume: Platform.OS === "web" && !activeCast,
       canUseFullscreen: !activeCast,
       hasCaptions: subtitles.length > 0,
@@ -1245,13 +1526,175 @@ export default function PlayerScreen() {
       canSeekPlayback,
       fallbackReason,
       isLivePlayback,
+      isProgressiveRemuxPlayback,
       isRemuxPlayback,
       mediaInfo,
       playbackSessionId,
       runtimeError,
+      seekableCacheStatus,
+      seekableHandoffApplied,
       subtitles.length,
     ],
   );
+
+  // A primary torrent starts as a live fragmented MP4 so it can show a frame
+  // quickly. The bridge prepares its range-seekable cache only after that
+  // first consumer exists. Poll that one existing gateway job here; this
+  // never plans a second candidate or creates another torrent.
+  useEffect(() => {
+    if (
+      !player ||
+      !playbackUri ||
+      !engine?.getSeekablePlaybackHandoff ||
+      !isProgressiveRemuxPlayback ||
+      !hasPlaybackStarted ||
+      !playbackSessionId ||
+      !playbackCandidateId ||
+      !playbackAttemptId ||
+      activeCast ||
+      seekableHandoffApplied
+    ) {
+      return;
+    }
+
+    const getSeekablePlaybackHandoff =
+      engine.getSeekablePlaybackHandoff.bind(engine);
+    const controller = new AbortController();
+    seekableHandoffControllerRef.current?.abort();
+    seekableHandoffControllerRef.current = controller;
+    const sessionSnapshot = {
+      sessionId: playbackSessionId,
+      candidateId: playbackCandidateId,
+      attemptId: playbackAttemptId,
+    };
+    // The opaque gateway ID is already session-owned state, so using it here
+    // prevents a late monitor from ever observing a gateway job selected by a
+    // different candidate or player.
+    let expectedGatewayJobId: string | undefined = activeGatewayJobId;
+
+    const isCurrentAttempt = () => {
+      const state = usePlayerStore.getState();
+      const currentSession =
+        usePlaybackSessionStore.getState().sessions[sessionSnapshot.sessionId];
+      return (
+        state.playbackSessionId === sessionSnapshot.sessionId &&
+        state.playbackCandidateId === sessionSnapshot.candidateId &&
+        state.playbackAttemptId === sessionSnapshot.attemptId &&
+        currentSession?.selectedCandidateId === sessionSnapshot.candidateId &&
+        currentSession.status !== "cancelled" &&
+        currentSession.status !== "failed" &&
+        currentSession.status !== "completed" &&
+        state.currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4"
+      );
+    };
+
+    const markSeekableHandoffUnavailable = () => {
+      if (controller.signal.aborted || !isCurrentAttempt()) return;
+      // A seekable cache is an enhancement to the already-live fMP4. If the
+      // replacement cannot be completed, keep that candidate alive; a real
+      // player error will still follow the normal serial fallback path.
+      setSeekableCacheStatus("unavailable");
+      if (player.playing) {
+        setBuffering(false);
+        setPlaying(true);
+        setStreamStatus("playing");
+        markPlaybackSessionPlaying(sessionSnapshot.sessionId);
+      }
+    };
+
+    const monitor = async () => {
+      while (!controller.signal.aborted && isCurrentAttempt()) {
+        let handoff;
+        try {
+          handoff = await getSeekablePlaybackHandoff({
+            expectedGatewayJobId,
+            signal: controller.signal,
+          });
+        } catch {
+          // The live stream remains valid when a status request has a
+          // transient network failure. Keep the monitor bounded and try the
+          // same gateway job again instead of treating cache observability as
+          // a playback failure.
+          if (controller.signal.aborted) return;
+          await waitForSeekableCachePoll(controller.signal);
+          continue;
+        }
+
+        if (controller.signal.aborted || !isCurrentAttempt()) return;
+        if (
+          expectedGatewayJobId &&
+          handoff.gatewayJobId &&
+          handoff.gatewayJobId !== expectedGatewayJobId
+        ) {
+          return;
+        }
+        expectedGatewayJobId = handoff.gatewayJobId ?? expectedGatewayJobId;
+        setSeekableCacheStatus(handoff.status);
+
+        if (handoff.status === "unavailable") return;
+        if (handoff.status !== "ready" || !handoff.uri) {
+          await waitForSeekableCachePoll(controller.signal);
+          continue;
+        }
+
+        const resumeAt = Number.isFinite(player.currentTime)
+          ? Math.max(0, player.currentTime)
+          : 0;
+        const shouldResume = Boolean(player.playing);
+        seekableHandoffInFlightRef.current = true;
+        seekableHandoffShouldResumeRef.current = shouldResume;
+        pausedAfterSeekableHandoffRef.current = !shouldResume;
+        setBuffering(true);
+        setRuntimeState("buffering");
+        try {
+          await replaceWithSeekableSource({
+            player,
+            source: handoff.uri,
+            resumeAt,
+            shouldResume,
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted || !isCurrentAttempt()) return;
+          setSeekableHandoffApplied(true);
+          setSeekableCacheStatus("ready");
+          return;
+        } catch {
+          markSeekableHandoffUnavailable();
+          return;
+        } finally {
+          seekableHandoffInFlightRef.current = false;
+          seekableHandoffShouldResumeRef.current = null;
+          if (shouldResume) {
+            pausedAfterSeekableHandoffRef.current = false;
+          }
+        }
+      }
+    };
+
+    void monitor();
+    return () => {
+      controller.abort();
+      if (seekableHandoffControllerRef.current === controller) {
+        seekableHandoffControllerRef.current = null;
+      }
+    };
+  }, [
+    activeCast,
+    activeGatewayJobId,
+    engine,
+    hasPlaybackStarted,
+    isProgressiveRemuxPlayback,
+    playbackAttemptId,
+    playbackCandidateId,
+    playbackSessionId,
+    playbackUri,
+    player,
+    seekableHandoffApplied,
+    setBuffering,
+    setPlaying,
+    setRuntimeState,
+    setStreamStatus,
+  ]);
 
   useEffect(() => {
     if (player && player.playbackRate !== playbackRate) {
@@ -1283,29 +1726,32 @@ export default function PlayerScreen() {
 
   const handleSeekBy = useCallback(
     (seconds: number) => {
-      if (!canSeekPlayback) return;
+      if (!canSeekPlayback || !player) return;
+      markIntentionalSeek();
       player?.seekBy(seconds);
       showControls();
     },
-    [canSeekPlayback, player, showControls],
+    [canSeekPlayback, markIntentionalSeek, player, showControls],
   );
 
   const handleSeekTo = useCallback(
     (seconds: number) => {
       if (!canSeekPlayback || !player) return;
+      markIntentionalSeek();
       player.currentTime = seconds;
       showControls();
     },
-    [canSeekPlayback, player, showControls],
+    [canSeekPlayback, markIntentionalSeek, player, showControls],
   );
 
   const handleSeekPercent = useCallback(
     (percent: number) => {
       if (!canSeekPlayback || !player || !player.duration) return;
+      markIntentionalSeek();
       player.currentTime = (player.duration * percent) / 100;
       showControls();
     },
-    [canSeekPlayback, player, showControls],
+    [canSeekPlayback, markIntentionalSeek, player, showControls],
   );
 
   const handleToggleMute = useCallback(() => {
@@ -1493,7 +1939,7 @@ export default function PlayerScreen() {
           isBuffering={isBuffering}
           errorMessage={errorMessage}
           runtimeError={runtimeError}
-          fallbackReason={fallbackReason}
+          fallbackReason={visibleFallbackReason}
           session={activeSession}
           onBack={handleClose}
           onRetry={handleRetryPlayback}
@@ -1523,7 +1969,7 @@ export default function PlayerScreen() {
           isBuffering={isBuffering}
           errorMessage={errorMessage}
           runtimeError={runtimeError}
-          fallbackReason={fallbackReason}
+          fallbackReason={visibleFallbackReason}
           session={activeSession}
           onBack={handleClose}
           onRetry={handleRetryPlayback}
@@ -1650,7 +2096,7 @@ export default function PlayerScreen() {
             isBuffering={previewControls ? false : isBuffering}
             errorMessage={previewControls ? null : errorMessage}
             runtimeError={previewControls ? null : runtimeError}
-            fallbackReason={previewControls ? null : fallbackReason}
+            fallbackReason={previewControls ? null : visibleFallbackReason}
             session={previewControls ? null : activeSession}
             onBack={handleClose}
             onRetry={handleRetryPlayback}
@@ -1697,7 +2143,7 @@ export default function PlayerScreen() {
             sourceLabel={sourceLabel}
             castStatus={castStatus}
             downloadStatus={downloadStatus}
-            fallbackReason={previewControls ? null : fallbackReason}
+            fallbackReason={previewControls ? null : visibleFallbackReason}
             audioStatus={
               audioTracks.find((track) => track.active)?.label || null
             }

@@ -277,13 +277,19 @@ Play, Download, and Cast orchestration:
   connected, a peer gets up to 20 seconds to provide metadata, with a
   32-second discovery-and-metadata hard cap. Primary Play uses a runtime-only
   progressive-fMP4 strategy for remuxed torrents, so readiness needs only a
-  verified first torrent byte within 20 seconds and the live FFmpeg response is
-  non-seekable. Download, Cast, and the default compatibility/manual path use
-  the 60-second seekable-cache remux window. Cancellation also aborts metadata
-  waiting and a live FFmpeg pipeline. The legacy `/stream` compatibility
-  endpoint uses the same peer/metadata limits, retains its seekable-cache
-  default, and aborts its wait on a client disconnect. Readiness UI shows
-  factual phase/peer state, never a synthetic elapsed-time percentage.
+  verified first torrent byte within 20 seconds and the initial live FFmpeg
+  response is non-seekable. Only after its first real stream consumer does the
+  gateway create one optional, process-local seekable cache for that same job.
+  When ready, the current player can hand off through the same signed stream
+  route and restore its current position; an unavailable cache leaves the live
+  source playing and keeps seek disabled. Download, Cast, and the default
+  compatibility/manual path use the 60-second seekable-cache remux window as a
+  foreground readiness condition. Cancellation also aborts metadata waiting, a
+  live FFmpeg pipeline, and pending background cache work. The legacy `/stream`
+  compatibility endpoint uses the same peer/metadata limits, retains its
+  seekable-cache default, and aborts its wait on a client disconnect. Readiness
+  UI shows factual phase/peer/cache state, never a synthetic elapsed-time
+  percentage.
 - Existing `PlaybackPlan` behavior remains supported as a compatibility wrapper.
   Primary Play, Download, and Cast flows now use the session model.
 
@@ -351,6 +357,10 @@ The player now stores and displays typed playback readiness:
 - First-frame timeout and navigation-away cancellation are recorded through
   the active session, preventing indefinite generic buffering and dangling
   gateway jobs.
+- After a real start, a 15-second no-progress watchdog may use the existing
+  serial fallback once. It ignores paused, hidden, intentional-seek, preview,
+  casting, and already-falling-back states, so it cannot turn normal user
+  interaction into a source failure.
 
 ### Gateway Job Lifecycle
 
@@ -365,6 +375,12 @@ The stream-server gateway has moved closer to production behavior:
   `DELETE /api/gateway/jobs/:id`.
 - Cancelled streams return `410`.
 - Late warmup completion cannot overwrite cancellation.
+- Primary progressive-fMP4 jobs report an optional `media.seekableCache` state
+  of `not_started`, `preparing`, `ready`, or `unavailable`. It starts only
+  after the first signed `GET` stream consumer and is kept process-local. The
+  retained cache lets a later consumer of the same signed route receive normal
+  range semantics; cache failure never changes a healthy live job into an
+  error.
 - WebTorrent now uses an explicit Streamer-owned cache root instead of the
   library default temp path. Default macOS/dev location is
   `~/Library/Caches/Streamer/webtorrent`; fallback is

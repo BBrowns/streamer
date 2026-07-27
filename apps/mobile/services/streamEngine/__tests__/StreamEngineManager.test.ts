@@ -1094,6 +1094,89 @@ describe("TorrentEngine", () => {
     }
   });
 
+  it("returns a fresh runtime-only URI when the active gateway cache is seekable", async () => {
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    (engine as any).activeGatewayJob = {
+      bridgeUrl: "http://bridge.test",
+      id: "job-seekable",
+      generation: 1,
+    };
+    const onGateway = jest.fn();
+    engine.on("gateway", onGateway);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "job-seekable",
+        playbackUrl:
+          "/api/gateway/jobs/job-seekable/stream?expires=1&signature=signed",
+        media: {
+          seekable: true,
+          seekableCache: { status: "ready" },
+        },
+      }),
+    });
+
+    await expect(
+      engine.getSeekablePlaybackHandoff({
+        expectedGatewayJobId: "job-seekable",
+      }),
+    ).resolves.toEqual({
+      gatewayJobId: "job-seekable",
+      status: "ready",
+      uri: "http://bridge.test/api/gateway/jobs/job-seekable/stream?expires=1&signature=signed",
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://bridge.test/api/gateway/jobs/job-seekable",
+      expect.objectContaining({ headers: {} }),
+    );
+    // Cache observation remains a local UI concern; it must not create a
+    // persisted gateway event or another source-resolution attempt.
+    expect(onGateway).not.toHaveBeenCalled();
+  });
+
+  it("does not observe a replacement gateway job after a candidate changes", async () => {
+    (engine as any).activeGatewayJob = {
+      bridgeUrl: "http://bridge.test",
+      id: "new-job",
+      generation: 2,
+    };
+
+    await expect(
+      engine.getSeekablePlaybackHandoff({
+        expectedGatewayJobId: "old-job",
+      }),
+    ).resolves.toEqual({ status: "unavailable" });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("forwards handoff cancellation to the safe status request", async () => {
+    (engine as any).activeGatewayJob = {
+      bridgeUrl: "http://bridge.test",
+      id: "job-seekable",
+      generation: 1,
+    };
+    const controller = new AbortController();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "job-seekable",
+        media: { seekable: false, seekableCache: { status: "preparing" } },
+      }),
+    });
+
+    await engine.getSeekablePlaybackHandoff({ signal: controller.signal });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://bridge.test/api/gateway/jobs/job-seekable",
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it("should identify itself as torrent engine", () => {
     expect(engine.getEngineType()).toBe("torrent");
   });

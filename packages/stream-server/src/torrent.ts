@@ -146,6 +146,12 @@ interface RemuxCacheEntry {
   partialPath: string;
   promise: Promise<RemuxedFile>;
   pending: boolean;
+  /**
+   * Completed cache entries can be retained by a short-lived gateway job while
+   * it offers a seekable handoff. This prevents LRU cleanup from evicting the
+   * exact file advertised as seekable before that job expires or is cancelled.
+   */
+  leaseCount: number;
   size?: number;
   createdAt: number;
   lastAccessAt: number;
@@ -262,6 +268,7 @@ function removeRemuxEntryFiles(entry: RemuxCacheEntry) {
 function pruneRemuxCache(now = Date.now()) {
   for (const [key, entry] of remuxCache) {
     if (entry.pending) continue;
+    if (entry.leaseCount > 0) continue;
     if (now - entry.lastAccessAt <= getRemuxCacheTtlMs()) continue;
 
     remuxCache.delete(key);
@@ -276,6 +283,7 @@ function pruneRemuxCache(now = Date.now()) {
 
   for (const entry of completedEntries) {
     if (totalBytes <= maxBytes) break;
+    if (entry.leaseCount > 0) continue;
 
     remuxCache.delete(entry.key);
     totalBytes -= entry.size ?? 0;
@@ -532,6 +540,14 @@ async function getOrCreateSeekableRemux(
   }
 
   const root = await getRemuxRootDir();
+  // `getRemuxRootDir()` is asynchronous on the first request. Re-check after
+  // that await so two consumers arriving in the same turn do not both miss the
+  // cache and launch duplicate FFmpeg materializations for one torrent file.
+  const existingAfterRoot = remuxCache.get(key);
+  if (existingAfterRoot) {
+    existingAfterRoot.lastAccessAt = Date.now();
+    return existingAfterRoot.promise;
+  }
   const filePath = path.join(root, `${key}.mp4`);
   const partialPath = path.join(root, `${key}.partial.mp4`);
   const abortController = new AbortController();
@@ -553,6 +569,7 @@ async function getOrCreateSeekableRemux(
     partialPath,
     promise: Promise.resolve({ filePath, size: 0 }),
     pending: true,
+    leaseCount: 0,
     createdAt: Date.now(),
     lastAccessAt: Date.now(),
     abortController,
@@ -1075,6 +1092,39 @@ export async function prepareSeekableRemux(
   } finally {
     timeout.cleanup();
   }
+}
+
+/**
+ * Keeps one completed seekable remux resident while a gateway job advertises
+ * it as a handoff target. The returned release function is deliberately
+ * runtime-only: it must be called when the owning gateway job is cancelled or
+ * pruned, and it never exposes a media path or source identity to callers.
+ */
+export function retainSeekableRemux(
+  torrent: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  } = {},
+): (() => void) | undefined {
+  if (!torrent.files || torrent.files.length === 0) return undefined;
+
+  const file = getSelectedFile(torrent, options.fileIdx, options.hints);
+  const key = getRemuxCacheKey(torrent, file, options);
+  const entry = remuxCache.get(key);
+  if (!entry || entry.pending) return undefined;
+
+  entry.leaseCount += 1;
+  entry.lastAccessAt = Date.now();
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    entry.leaseCount = Math.max(0, entry.leaseCount - 1);
+    entry.lastAccessAt = Date.now();
+    pruneRemuxCache();
+  };
 }
 
 export function waitForTorrentFileFirstBytes(

@@ -29,6 +29,13 @@ export interface PlayerControlCapabilities {
   canSeek: boolean;
   isLive?: boolean;
   isRemux?: boolean;
+  /**
+   * A progressive fMP4 stream starts quickly, but does not expose byte-range
+   * seeking unless a separate seekable cache is made available later.
+   */
+  isProgressiveRemux?: boolean;
+  /** Runtime-only state of the optional seekable cache behind a live fMP4. */
+  seekableCacheStatus?: "not_started" | "preparing" | "unavailable";
   canUseVolume?: boolean;
   canUseFullscreen?: boolean;
   hasCaptions?: boolean;
@@ -169,17 +176,31 @@ export function PlayerControls({
   const seekDisabledLabel = t("player.controls.seekUnavailable", {
     defaultValue: "Seek unavailable",
   });
-  const seekUnavailableDetail = capabilities?.isRemux
-    ? t("player.controls.seekRemuxUnavailable", {
-        defaultValue: "Seeking unlocks when the compatible stream is ready",
-      })
-    : isLive
-      ? t("player.controls.seekLiveUnavailable", {
-          defaultValue: "Live streams use the live edge",
+  const seekUnavailableDetail = capabilities?.isProgressiveRemux
+    ? capabilities.seekableCacheStatus === "preparing"
+      ? t("player.controls.seekProgressiveRemuxPreparing", {
+          defaultValue:
+            "Preparing seek controls in the background. Playback can continue while this finishes.",
         })
-      : t("player.controls.seekDurationUnavailable", {
-          defaultValue: "Timeline is unavailable until duration is known",
-        });
+      : capabilities.seekableCacheStatus === "unavailable"
+        ? t("player.controls.seekProgressiveRemuxUnavailable", {
+            defaultValue:
+              "Seeking is unavailable for this source. Playback can continue or you can try another source.",
+          })
+        : t("player.controls.seekProgressiveRemuxStarting", {
+            defaultValue: "Seeking will start preparing after playback begins.",
+          })
+    : capabilities?.isRemux
+      ? t("player.controls.seekRemuxUnavailable", {
+          defaultValue: "Seeking is unavailable while this stream is prepared",
+        })
+      : isLive
+        ? t("player.controls.seekLiveUnavailable", {
+            defaultValue: "Live streams use the live edge",
+          })
+        : t("player.controls.seekDurationUnavailable", {
+            defaultValue: "Timeline is unavailable until duration is known",
+          });
   const progressLabel = hasTimeline
     ? t("player.controls.progress", { defaultValue: "Playback progress" })
     : t("player.controls.progressUnavailable", {
@@ -202,15 +223,27 @@ export function PlayerControls({
     : t("player.controls.seekForwardUnavailable", {
         defaultValue: "Seek forward unavailable",
       });
-  const capabilityMessage = capabilities?.isRemux
-    ? t("player.controls.remuxPreparing", {
-        defaultValue: "Preparing compatible stream",
-      })
-    : isLive
-      ? t("player.controls.liveStream", { defaultValue: "Live stream" })
-      : !hasTimeline
-        ? seekDisabledLabel
-        : null;
+  const capabilityMessage = !hasTimeline
+    ? capabilities?.isProgressiveRemux
+      ? capabilities.seekableCacheStatus === "preparing"
+        ? t("player.controls.progressiveRemuxPreparing", {
+            defaultValue: "Preparing seek controls",
+          })
+        : capabilities.seekableCacheStatus === "unavailable"
+          ? t("player.controls.progressiveRemuxNoSeek", {
+              defaultValue: "Live-compatible stream",
+            })
+          : t("player.controls.progressiveRemux", {
+              defaultValue: "Live-compatible stream",
+            })
+      : capabilities?.isRemux
+        ? t("player.controls.remuxPreparing", {
+            defaultValue: "Preparing compatible stream",
+          })
+        : isLive
+          ? t("player.controls.liveStream", { defaultValue: "Live stream" })
+          : seekDisabledLabel
+    : null;
   const seekBy = (seconds: number) => {
     if (!hasTimeline) return;
     if (onSeekBy) onSeekBy(seconds);

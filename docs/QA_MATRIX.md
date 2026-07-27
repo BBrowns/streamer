@@ -42,39 +42,41 @@ tests alone.
 
 ## Reference Fixtures
 
-| ID  | Source shape                 | Purpose                | Required observations                                             |
-| --- | ---------------------------- | ---------------------- | ----------------------------------------------------------------- |
-| F1  | Direct MP4, H.264/AAC        | Baseline click-to-play | first frame, seek, stop cleanup                                   |
-| F2  | HLS, H.264/AAC               | Streaming-only source  | first frame, no offline-complete claim                            |
-| F3  | Torrent MKV, H.264/AC3       | Primary Play remux     | peers, remuxing state, first fMP4 fragment/frame, no live seek    |
-| F4  | Torrent MKV, HEVC/EAC3       | Codec edge             | rejection/fallback when copied codec is unsupported               |
-| F5  | Direct MP4, AV1/AAC          | Device codec edge      | compatible target succeeds; incompatible target rejects/fallbacks |
-| F6  | Torrent 4K MKV               | Large-file behavior    | first-fragment deadline/cancel, fallback, storage impact          |
-| F7  | Torrent episode pack         | file selection         | correct episode selected from season/episode hints                |
-| F8  | Broken direct/torrent source | fallback               | terminal error or automatic fallback, no infinite buffering       |
+| ID  | Source shape                 | Purpose                | Required observations                                                  |
+| --- | ---------------------------- | ---------------------- | ---------------------------------------------------------------------- |
+| F1  | Direct MP4, H.264/AAC        | Baseline click-to-play | first frame, seek, stop cleanup                                        |
+| F2  | HLS, H.264/AAC               | Streaming-only source  | first frame, no offline-complete claim                                 |
+| F3  | Torrent MKV, H.264/AC3       | Primary Play remux     | peers, first fMP4 fragment/frame, background cache state, handoff seek |
+| F4  | Torrent MKV, HEVC/EAC3       | Codec edge             | rejection/fallback when copied codec is unsupported                    |
+| F5  | Direct MP4, AV1/AAC          | Device codec edge      | compatible target succeeds; incompatible target rejects/fallbacks      |
+| F6  | Torrent 4K MKV               | Large-file behavior    | first-fragment deadline/cancel, fallback, storage impact               |
+| F7  | Torrent episode pack         | file selection         | correct episode selected from season/episode hints                     |
+| F8  | Broken direct/torrent source | fallback               | terminal error or automatic fallback, no infinite buffering            |
 
 ## Golden Path Matrix
 
-| Flow                                                 | Desktop packaged | Electron/web dev                             | iPhone  | Android | Browser web                     |
-| ---------------------------------------------------- | ---------------- | -------------------------------------------- | ------- | ------- | ------------------------------- |
-| Browse -> detail -> Play direct source               | Unknown          | Partial: deterministic UI only               | Unknown | Not run | Partial: deterministic UI only  |
-| Play fallback source                                 | Unknown          | Partial: deterministic UI only               | Unknown | Not run | Partial: deterministic UI only  |
-| Torrent with peers -> gateway ready -> first frame   | Unknown          | Unknown                                      | Unknown | Not run | Unknown                         |
-| Torrent no peers -> terminal no-peers/error          | Unknown          | Partial: deterministic UI only               | Unknown | Not run | Partial: deterministic UI only  |
-| Primary Play fMP4 -> remuxing -> first frame/no seek | Unknown          | Partial: Chromium fixture smoke; no Electron | Unknown | Not run | Partial: Chromium fixture smoke |
-| Direct stream seek forward/back                      | Unknown          | Partial: unit/integration only               | Unknown | Not run | Unknown                         |
-| Seekable-cache remux -> materialization -> seek      | Unknown          | Partial: unit/integration only               | Unknown | Not run | Unknown                         |
-| Download direct source                               | Unknown          | Partial: unit tests only                     | Unknown | Not run | Unknown                         |
-| Download torrent source                              | Unknown          | Partial: unit tests only                     | Unknown | Not run | Unknown                         |
-| Cast HLS/MP4 source                                  | Unknown          | Partial: planner UI only                     | Unknown | Not run | Unknown                         |
-| Bridge unavailable/unsupported                       | Unknown          | Partial: tests and UI smoke                  | Unknown | Not run | Partial: deterministic UI only  |
-| Desktop bridge diagnostics/repair                    | Unknown          | Partial: unit tests only                     | Unknown | Not run | Unknown                         |
-| Torrent cache bounded storage/cleanup                | Unknown          | Partial: unit tests only                     | Unknown | Not run | Unknown                         |
+| Flow                                                       | Desktop packaged | Electron/web dev                                          | iPhone  | Android | Browser web                                               |
+| ---------------------------------------------------------- | ---------------- | --------------------------------------------------------- | ------- | ------- | --------------------------------------------------------- |
+| Browse -> detail -> Play direct source                     | Unknown          | Partial: deterministic UI only                            | Unknown | Not run | Partial: deterministic UI only                            |
+| Play fallback source                                       | Unknown          | Partial: deterministic UI only                            | Unknown | Not run | Partial: deterministic UI only                            |
+| Torrent with peers -> gateway ready -> first frame         | Unknown          | Unknown                                                   | Unknown | Not run | Unknown                                                   |
+| Torrent no peers -> terminal no-peers/error                | Unknown          | Partial: deterministic UI only                            | Unknown | Not run | Partial: deterministic UI only                            |
+| Primary Play fMP4 -> first frame -> seekable-cache handoff | Unknown          | Partial: Chromium first-frame smoke only; handoff Unknown | Unknown | Not run | Partial: Chromium first-frame smoke only; handoff Unknown |
+| Primary Play cache unavailable -> live playback continues  | Unknown          | Unknown                                                   | Unknown | Not run | Unknown                                                   |
+| Direct stream seek forward/back                            | Unknown          | Partial: unit/integration only                            | Unknown | Not run | Unknown                                                   |
+| Seekable-cache remux -> materialization -> seek            | Unknown          | Partial: unit/integration only                            | Unknown | Not run | Unknown                                                   |
+| Download direct source                                     | Unknown          | Partial: unit tests only                                  | Unknown | Not run | Unknown                                                   |
+| Download torrent source                                    | Unknown          | Partial: unit tests only                                  | Unknown | Not run | Unknown                                                   |
+| Cast HLS/MP4 source                                        | Unknown          | Partial: planner UI only                                  | Unknown | Not run | Unknown                                                   |
+| Bridge unavailable/unsupported                             | Unknown          | Partial: tests and UI smoke                               | Unknown | Not run | Partial: deterministic UI only                            |
+| Desktop bridge diagnostics/repair                          | Unknown          | Partial: unit tests only                                  | Unknown | Not run | Unknown                                                   |
+| Torrent cache bounded storage/cleanup                      | Unknown          | Partial: unit tests only                                  | Unknown | Not run | Unknown                                                   |
 
 The primary Play fMP4 row has local Chromium fixture evidence in the
 [July 22 progressive fMP4 smoke](./qa-runs/2026-07-22-progressive-fmp4-smoke.md).
 It proves FFmpeg transport and browser decode before full source materialization,
-not a real provider, torrent swarm, native device, or packaged Electron run.
+not the consumer-triggered seekable-cache handoff, a real provider, torrent
+swarm, native device, or packaged Electron run.
 
 ## Storage And Cache Guardrails
 
