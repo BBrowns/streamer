@@ -5,6 +5,7 @@ import {
   type AudioTrack,
   type GatewayJobProgress,
   type IStreamEngine,
+  type SeekablePlaybackHandoff,
   type SubtitleTrack,
   type StreamStats,
 } from "./IStreamEngine";
@@ -27,6 +28,17 @@ interface GatewayJobResponse extends GatewayJobProgress {
   error?: string;
   readyTimeoutMs?: number;
   createdAt?: string;
+  media?: {
+    remuxed?: boolean;
+    container?: string;
+    seekable?: boolean;
+    cacheStatus?: string;
+    seekableCache?: {
+      status?: "not_started" | "preparing" | "ready" | "unavailable";
+      startedAt?: string | null;
+      completedAt?: string | null;
+    };
+  };
 }
 
 const DEFAULT_GATEWAY_JOB_READY_TIMEOUT_MS = 45_000;
@@ -175,6 +187,67 @@ export class TorrentEngine implements IStreamEngine {
     } finally {
       this.finishPlaybackOperation(operation);
     }
+  }
+
+  /**
+   * Queries the already-active gateway job for a completed seekable cache.
+   * This deliberately never starts a second torrent or gateway job; the
+   * bridge owns cache materialization after the first progressive consumer is
+   * connected. The returned URL is runtime-only and is safe to use only for
+   * the active player handoff.
+   */
+  async getSeekablePlaybackHandoff(
+    options: {
+      expectedGatewayJobId?: string;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<SeekablePlaybackHandoff> {
+    const activeJob = this.activeGatewayJob;
+    if (
+      !activeJob ||
+      (options.expectedGatewayJobId &&
+        activeJob.id !== options.expectedGatewayJobId)
+    ) {
+      return { status: "unavailable" };
+    }
+
+    const statusUrl = toAbsoluteBridgeUrl(
+      activeJob.bridgeUrl,
+      `/api/gateway/jobs/${encodeURIComponent(activeJob.id)}`,
+    );
+    const response = await fetch(statusUrl, {
+      headers: getBridgeAuthHeaders(),
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      return {
+        gatewayJobId: activeJob.id,
+        status: "unavailable",
+      };
+    }
+
+    const job = (await response.json()) as GatewayJobResponse;
+    if (
+      !job.id ||
+      job.id !== activeJob.id ||
+      (options.expectedGatewayJobId && job.id !== options.expectedGatewayJobId)
+    ) {
+      return { status: "unavailable" };
+    }
+
+    const status = job.media?.seekableCache?.status ?? "unavailable";
+    if (status === "ready" && job.media?.seekable && job.playbackUrl) {
+      return {
+        gatewayJobId: job.id,
+        status,
+        uri: toAbsoluteBridgeUrl(activeJob.bridgeUrl, job.playbackUrl),
+      };
+    }
+
+    return {
+      gatewayJobId: job.id,
+      status,
+    };
   }
 
   private async createGatewayJob(

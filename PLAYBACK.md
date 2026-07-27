@@ -243,9 +243,35 @@ For the primary Play action, the playback control plane passes a runtime-only
 only requires a verified first torrent byte (up to 20 seconds); when the player
 opens the signed URL, FFmpeg emits a chunked fragmented MP4 with an empty movie
 header and subsequent media fragments. That live response intentionally has no
-arbitrary byte-range or seek support, and its `media` metadata reports
-`seekable: false` with `cacheStatus: "streaming"`. The live FFmpeg pipeline is
-cancelled with the gateway job when Play is cancelled or closed.
+arbitrary byte-range or seek support. Its initial `media` metadata reports
+`seekable: false`, `cacheStatus: "streaming"`, and
+`seekableCache.status: "not_started"`.
+
+Only after the first real signed `GET` consumer has attached does the gateway
+start one process-local background `+faststart` cache materialization for that
+same selected torrent file. It joins the existing remux-cache single-flight;
+it does not start another gateway job, torrent discovery, session, or planner
+attempt. While it runs, `seekableCache.status` is `preparing`, and readiness
+copy must honestly say that seek controls are being prepared rather than show a
+percentage or imply that the live response is already seekable.
+
+When that cache reaches `ready`, the gateway advertises `seekable: true` on a
+fresh status response. The player can then open the same signed `/stream` route
+again, now backed by the completed cache and its normal range semantics, and
+restore the current position and prior play/pause choice after the replacement
+source is actually ready. This is a runtime-only handoff for the current
+session/candidate/attempt; it never persists a media URL or creates a second
+source attempt. If cache preparation becomes `unavailable` or fails, the
+already-working live fMP4 response remains valid, playback continues, and seek
+controls remain unavailable. Closing or cancelling the gateway job stops both
+the live pipeline and any still-running background preparation.
+
+If the optional client-side source replacement times out or rejects before the
+video player reports an error, the player keeps the existing candidate and
+marks seeking unavailable. If the video player itself reports a real source
+error during replacement, it uses the normal serial fallback: at that point a
+platform player may already have released the old live renderer. A paused
+viewer remains paused across a successful handoff.
 
 Downloads, Cast, and the compatibility/manual seekable route retain
 `seekable-cache`: FFmpeg materializes a `+faststart` MP4 before it is declared
@@ -270,6 +296,15 @@ remux allowance until metadata makes the container decision authoritative.
 Remaining work is reliability and productization: real-device
 download/cast/gateway tests, release evidence, and a more polished player
 readiness UI.
+
+After video has genuinely started, the player also guards against a silent
+post-start stall. If neither the playhead nor the buffered edge advances for 15
+seconds, it may use the normal serial candidate fallback once. That watchdog is
+disabled while playback is paused, hidden, intentionally seeking, previewing
+controls, casting, or already changing source, so it does not convert an
+intentional user action into a source failure. It is not a replacement for the
+gateway's peer/metadata limits: it protects the separate case where a source
+started but then stops advancing.
 
 Current terminal playback errors include specific source causes such as
 `NO_PEERS`, `BRIDGE_UNAVAILABLE`, `BRIDGE_UNSUPPORTED`, `UNSUPPORTED_CODEC`,
@@ -303,3 +338,6 @@ the shared lifecycle understandable and testable.
   must not attempt to reconstruct source data from persisted state.
 - Do not parallelize torrent warm-up without a separate coordinator with clear
   job ownership and cancellation semantics.
+- Treat the progressive-to-seekable transition as an enhancement to an active
+  live source. A failed optional cache must not fail that source, create another
+  attempt, or expose a raw runtime URL in a session, event, store, or log.

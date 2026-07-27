@@ -22,6 +22,7 @@ import {
   __setFfmpegSpawnerForTests,
   ensureTorrentReady,
   getSelectedFile,
+  prepareSeekableRemux,
   serveTorrentFile,
   shouldRemuxTorrentFile,
   waitForTorrentFileFirstBytes,
@@ -431,6 +432,25 @@ describe("serveTorrentFile", () => {
       remuxedBytes.length,
     );
     expect(res.end).toHaveBeenCalled();
+  });
+
+  it("coalesces concurrent seekable cache preparation for the same torrent file", async () => {
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    const spawner = makeSuccessfulFfmpegSpawner(remuxedBytes);
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+
+    const [first, second] = await Promise.all([
+      prepareSeekableRemux(torrent),
+      prepareSeekableRemux(torrent),
+    ]);
+
+    expect(spawner).toHaveBeenCalledTimes(1);
+    expect(first).toEqual({ fileName: "film.mkv", size: remuxedBytes.length });
+    expect(second).toEqual(first);
   });
 
   it("starts an MKV as a fragmented MP4 before FFmpeg closes", async () => {

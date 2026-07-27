@@ -11,6 +11,7 @@ import {
   ensureTorrentReady,
   getSelectedFile,
   prepareSeekableRemux,
+  retainSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
   shouldRemuxTorrentFile,
@@ -25,6 +26,7 @@ vi.mock("../torrent.js", () => ({
   ),
   isTorrentEngineUnavailableError: vi.fn(() => false),
   prepareSeekableRemux: vi.fn(),
+  retainSeekableRemux: vi.fn(() => () => {}),
   prepareTorrent: vi.fn(),
   serveTorrentFile: vi.fn((_req, res) => res.status(204).send()),
   shouldRemuxTorrentFile: vi.fn(
@@ -292,6 +294,213 @@ describe("gateway jobs", () => {
         remuxStrategy: "progressive-fmp4",
       }),
     );
+  });
+
+  it("starts one seekable cache only after a progressive job gets its first consumer and hands off through the same URL", async () => {
+    let resolveCache: (() => void) | undefined;
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (prepareSeekableRemux as any).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCache = () =>
+          resolve({ fileName: "actual-video.mkv", size: 1024 });
+      }),
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+    expect(prepareSeekableRemux).not.toHaveBeenCalled();
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.media).toMatchObject({
+        remuxed: true,
+        seekable: false,
+        cacheStatus: "streaming",
+        seekableCache: {
+          status: "preparing",
+          startedAt: expect.any(String),
+          completedAt: null,
+        },
+      });
+    });
+    expect(prepareSeekableRemux).toHaveBeenCalledTimes(1);
+
+    resolveCache?.();
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.media).toMatchObject({
+        remuxed: true,
+        seekable: true,
+        cacheStatus: "streaming",
+        seekableCache: {
+          status: "ready",
+          startedAt: expect.any(String),
+          completedAt: expect.any(String),
+        },
+      });
+    });
+    expect(retainSeekableRemux).toHaveBeenCalledTimes(1);
+
+    await request(app)
+      .get(created.body.playbackUrl)
+      .set("Range", "bytes=4-7")
+      .expect(204);
+
+    expect(serveTorrentFile).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ infoHash: "abcdef123456" }),
+      expect.objectContaining({
+        remuxFormat: "mp4",
+        remuxStrategy: "seekable-cache",
+      }),
+    );
+  });
+
+  it("keeps the live job ready when background seekable-cache preparation fails", async () => {
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (prepareSeekableRemux as any).mockRejectedValueOnce(
+      new Error("FFmpeg cache failed"),
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.error).toBeUndefined();
+      expect(status.body).toMatchObject({
+        state: "ready",
+        media: {
+          remuxed: true,
+          seekable: false,
+          cacheStatus: "streaming",
+          seekableCache: { status: "unavailable" },
+        },
+      });
+    });
+  });
+
+  it("aborts a job-owned background seekable cache when the job is cancelled", async () => {
+    let cacheSignal: AbortSignal | undefined;
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (prepareSeekableRemux as any).mockImplementationOnce(
+      (_torrent: unknown, options: { signal?: AbortSignal }) =>
+        new Promise<void>((_resolve, reject) => {
+          cacheSignal = options.signal;
+          options.signal?.addEventListener(
+            "abort",
+            () => reject(new Error("Gateway job cancelled")),
+            { once: true },
+          );
+        }),
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+    await vi.waitFor(() => expect(cacheSignal).toBeDefined());
+
+    const cancelled = await request(app).delete(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+
+    expect(cacheSignal?.aborted).toBe(true);
+    expect(cancelled.body).toMatchObject({
+      state: "cancelled",
+      media: {
+        seekable: false,
+        seekableCache: { status: "unavailable" },
+      },
+    });
+  });
+
+  it("aborts a background seekable cache when a consumed job is pruned", async () => {
+    let cacheSignal: AbortSignal | undefined;
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (prepareSeekableRemux as any).mockImplementationOnce(
+      (_torrent: unknown, options: { signal?: AbortSignal }) =>
+        new Promise<void>((_resolve, reject) => {
+          cacheSignal = options.signal;
+          options.signal?.addEventListener(
+            "abort",
+            () => reject(new Error("Gateway job expired")),
+            { once: true },
+          );
+        }),
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+    await vi.waitFor(() => expect(cacheSignal).toBeDefined());
+
+    __pruneGatewayJobsForTests(Date.now() + 16 * 60 * 1000);
+
+    expect(cacheSignal?.aborted).toBe(true);
+    await request(app).get(`/api/gateway/jobs/${created.body.id}`).expect(404);
   });
 
   it("reports stalled when bridge first-byte readiness times out", async () => {

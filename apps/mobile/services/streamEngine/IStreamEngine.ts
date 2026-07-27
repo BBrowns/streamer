@@ -67,6 +67,18 @@ export interface GatewayJobProgress {
   readyTimeoutMs?: number;
 }
 
+/**
+ * Runtime-only status for a progressive torrent stream that is being
+ * materialized into a range-seekable MP4 in the background. The URI, when
+ * present, is signed and deliberately never belongs in persisted playback
+ * session state.
+ */
+export interface SeekablePlaybackHandoff {
+  gatewayJobId?: string;
+  status: "not_started" | "preparing" | "ready" | "unavailable";
+  uri?: string;
+}
+
 /** Event map for stream engine events */
 export interface StreamEngineEventMap {
   stats: StreamStats;
@@ -84,6 +96,16 @@ export interface IStreamEngine {
 
   /** Get the playback URI for the stream */
   getPlaybackUri(stream: Stream): Promise<string>;
+
+  /**
+   * Return a replacement URI once a progressive gateway stream has finished
+   * materializing a seekable cache. Engines that do not support a handoff do
+   * not implement this optional capability.
+   */
+  getSeekablePlaybackHandoff?(options?: {
+    expectedGatewayJobId?: string;
+    signal?: AbortSignal;
+  }): Promise<SeekablePlaybackHandoff>;
 
   /** Get the engine type identifier */
   getEngineType(): string;

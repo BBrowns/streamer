@@ -233,7 +233,7 @@ describe("PlayerControls", () => {
     }
   });
 
-  it("disables misleading seek controls for non-seekable streams", () => {
+  it("truthfully explains seek availability for progressive fMP4 streams", () => {
     const player = createPlayer();
     const onSeekBy = jest.fn();
     const screen = render(
@@ -249,6 +249,7 @@ describe("PlayerControls", () => {
           canSeek: false,
           isLive: false,
           isRemux: true,
+          isProgressiveRemux: true,
           canUseVolume: false,
           canUseFullscreen: false,
         }}
@@ -267,10 +268,53 @@ describe("PlayerControls", () => {
 
     expect(player.seekBy).not.toHaveBeenCalled();
     expect(onSeekBy).not.toHaveBeenCalled();
-    expect(screen.getByText("Preparing compatible stream")).toBeTruthy();
+    expect(screen.getByText("Live-compatible stream")).toBeTruthy();
     expect(
-      screen.getByText("Seeking unlocks when the compatible stream is ready"),
+      screen.getByText("Seeking will start preparing after playback begins."),
     ).toBeTruthy();
+  });
+
+  it("reports background seek preparation and enables controls after handoff", () => {
+    const player = createPlayer();
+    const screen = render(
+      <PlayerControls
+        player={player}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        capabilities={{
+          canSeek: false,
+          isRemux: true,
+          isProgressiveRemux: true,
+          seekableCacheStatus: "preparing",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Preparing seek controls")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Preparing seek controls in the background. Playback can continue while this finishes.",
+      ),
+    ).toBeTruthy();
+
+    screen.rerender(
+      <PlayerControls
+        player={player}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        capabilities={{ canSeek: true, isRemux: true }}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
+    expect(player.seekBy).toHaveBeenCalledWith(10);
+    expect(screen.queryByText("Preparing compatible stream")).toBeNull();
   });
 
   it("routes seek controls through the provided guarded seek callback", () => {

@@ -10,6 +10,7 @@ import {
   getSelectedFile,
   isTorrentEngineUnavailableError,
   prepareSeekableRemux,
+  retainSeekableRemux,
   prepareTorrent,
   serveTorrentFile,
   shouldRemuxTorrentFile,
@@ -29,6 +30,11 @@ type GatewayJobState =
   | "expired";
 type GatewayJobMode = "bridge" | "remux";
 type GatewayRemuxStrategy = "seekable-cache" | "progressive-fmp4";
+type GatewaySeekableCacheStatus =
+  | "not_started"
+  | "preparing"
+  | "ready"
+  | "unavailable";
 type GatewayJobPhase =
   | "finding_peers"
   | "no_peers"
@@ -59,6 +65,17 @@ interface GatewayJob {
   abortController?: AbortController;
   firstByteProbeStartedAt?: number;
   remuxStartedAt?: number;
+  /**
+   * Primary Play opens a live fMP4 response first. Once a consumer exists, a
+   * single background +faststart cache is materialized for a later seekable
+   * handoff. These fields are process-local and never persisted.
+   */
+  seekableCacheStatus?: GatewaySeekableCacheStatus;
+  seekableCacheStartedAt?: number;
+  seekableCacheCompletedAt?: number;
+  seekableCacheAbortController?: AbortController;
+  seekableCachePromise?: Promise<void>;
+  releaseSeekableCache?: () => void;
   activeStreamCount: number;
   activeStreamSignature?: string;
   lastStreamAccessAt?: number;
@@ -80,6 +97,24 @@ const GATEWAY_METADATA_TIMEOUT_MS =
 const GATEWAY_FIRST_BYTE_TIMEOUT_MS = 20_000;
 const GATEWAY_REMUX_READY_TIMEOUT_MS = 60_000;
 const jobs = new Map<string, GatewayJob>();
+
+function releaseGatewaySeekableCache(
+  job: GatewayJob,
+  reason = "Gateway job cancelled",
+) {
+  job.seekableCacheAbortController?.abort(new Error(reason));
+  job.seekableCacheAbortController = undefined;
+  job.seekableCachePromise = undefined;
+  job.releaseSeekableCache?.();
+  job.releaseSeekableCache = undefined;
+
+  if (job.seekableCacheStatus === "preparing") {
+    // A cancelled/pruned job no longer has a usable handoff target. This does
+    // not change the primary live playback state while the job is still live.
+    job.seekableCacheStatus = "unavailable";
+    job.seekableCacheCompletedAt = Date.now();
+  }
+}
 
 function parseInfoHash(magnet: string) {
   const match = magnet.match(/btih:([^&]+)/i);
@@ -153,6 +188,7 @@ function pruneJobs(now = Date.now()) {
   for (const [id, job] of jobs) {
     if (shouldPruneJob(job, now)) {
       if (job.progressTimer) clearInterval(job.progressTimer);
+      releaseGatewaySeekableCache(job, "Gateway job expired");
       jobs.delete(id);
     }
   }
@@ -215,6 +251,37 @@ function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
     };
   }
 
+  if (job.remuxStrategy === "progressive-fmp4") {
+    const terminal =
+      state === "error" ||
+      state === "cancelled" ||
+      state === "expired" ||
+      state === "no_peers" ||
+      state === "stalled";
+    const seekableCacheStatus: GatewaySeekableCacheStatus = terminal
+      ? "unavailable"
+      : (job.seekableCacheStatus ?? "not_started");
+
+    return {
+      remuxed: true,
+      container: "mp4",
+      // The original fragmented response stays non-seekable. A new consumer
+      // may reuse the same signed route once the background cache has reached
+      // this explicit ready state.
+      seekable: state === "ready" && seekableCacheStatus === "ready",
+      cacheStatus: terminal ? "unavailable" : "streaming",
+      seekableCache: {
+        status: seekableCacheStatus,
+        startedAt: job.seekableCacheStartedAt
+          ? new Date(job.seekableCacheStartedAt).toISOString()
+          : null,
+        completedAt: job.seekableCacheCompletedAt
+          ? new Date(job.seekableCacheCompletedAt).toISOString()
+          : null,
+      },
+    };
+  }
+
   return {
     remuxed: true,
     container: "mp4",
@@ -222,11 +289,9 @@ function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
     cacheStatus:
       state === "error" || state === "cancelled" || state === "expired"
         ? "unavailable"
-        : job.remuxStrategy === "progressive-fmp4"
-          ? "streaming"
-          : state === "ready"
-            ? "ready"
-            : "pending",
+        : state === "ready"
+          ? "ready"
+          : "pending",
   };
 }
 
@@ -381,6 +446,7 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
   }
   job.abortController?.abort(new Error(error));
   job.abortController = undefined;
+  releaseGatewaySeekableCache(job, error);
   job.state = "cancelled";
   job.error = error;
   job.retryable = false;
@@ -435,6 +501,104 @@ function trackGatewayJobProgress(job: GatewayJob, torrent: any) {
     if (job.progressTimer) clearInterval(job.progressTimer);
     job.progressTimer = undefined;
   };
+}
+
+/**
+ * Primary Play starts with an fMP4 pipe because it gives the first frame much
+ * sooner than a full `+faststart` pass. After the first real GET consumer is
+ * attached, build exactly one seekable cache in the background. The remux
+ * cache itself remains single-flight, so a concurrent compatibility, cast, or
+ * retry request joins the same materialization instead of starting a second
+ * FFmpeg cache job.
+ */
+function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
+  if (
+    job.mode !== "remux" ||
+    job.remuxStrategy !== "progressive-fmp4" ||
+    job.state !== "ready" ||
+    job.activeStreamCount <= 0 ||
+    job.seekableCacheStatus === "preparing" ||
+    job.seekableCacheStatus === "ready" ||
+    job.seekableCacheStatus === "unavailable" ||
+    isGatewayJobCancelled(job)
+  ) {
+    return;
+  }
+
+  const abortController = new AbortController();
+  job.seekableCacheAbortController = abortController;
+  job.seekableCacheStatus = "preparing";
+  job.seekableCacheStartedAt = Date.now();
+  job.seekableCacheCompletedAt = undefined;
+  job.updatedAt = Date.now();
+  addGatewayJobBreadcrumb(job, "gateway.seekable_cache_started", "info", {
+    seekableCacheStatus: "preparing",
+  });
+
+  const ownsCurrentPreparation = () =>
+    !isGatewayJobCancelled(job) &&
+    job.seekableCacheAbortController === abortController &&
+    job.seekableCacheStatus === "preparing";
+
+  job.seekableCachePromise = prepareSeekableRemux(torrent, {
+    fileIdx: job.fileIdx,
+    hints: job.hints,
+    signal: abortController.signal,
+    remuxTimeoutMs: GATEWAY_REMUX_READY_TIMEOUT_MS,
+  })
+    .then(() => {
+      if (!ownsCurrentPreparation()) return;
+
+      // Pin the completed entry until this job ends. A signed route is only
+      // advertised as seekable while that exact cache remains available.
+      const release = retainSeekableRemux(torrent, {
+        fileIdx: job.fileIdx,
+        hints: job.hints,
+      });
+      if (!release) {
+        job.seekableCacheStatus = "unavailable";
+        job.seekableCacheCompletedAt = Date.now();
+        job.updatedAt = Date.now();
+        addGatewayJobBreadcrumb(
+          job,
+          "gateway.seekable_cache_unavailable",
+          "warning",
+          { seekableCacheStatus: "unavailable" },
+        );
+        return;
+      }
+
+      job.releaseSeekableCache = release;
+      job.seekableCacheStatus = "ready";
+      job.seekableCacheCompletedAt = Date.now();
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.seekable_cache_ready", "info", {
+        seekableCacheStatus: "ready",
+      });
+    })
+    .catch(() => {
+      // A seekable cache is an enhancement to the live response. Never turn a
+      // healthy progressive playback job into a terminal failure just because
+      // the optional handoff could not be produced.
+      if (!ownsCurrentPreparation()) return;
+      job.seekableCacheStatus = "unavailable";
+      job.seekableCacheCompletedAt = Date.now();
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(
+        job,
+        "gateway.seekable_cache_unavailable",
+        "warning",
+        { seekableCacheStatus: "unavailable" },
+      );
+    })
+    .finally(() => {
+      if (job.seekableCacheAbortController === abortController) {
+        job.seekableCacheAbortController = undefined;
+      }
+      if (job.seekableCacheStatus !== "preparing") {
+        job.seekableCachePromise = undefined;
+      }
+    });
 }
 
 async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
@@ -730,19 +894,35 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
       job.abortController = abortController;
 
       try {
-        const result = await serveTorrentFile(req, res, torrent, {
+        const serveSeekableCache =
+          job.remuxStrategy === "progressive-fmp4" &&
+          job.seekableCacheStatus === "ready";
+        const serving = serveTorrentFile(req, res, torrent, {
           fileIdx: job.fileIdx,
           hints: job.hints,
           remuxFormat: "mp4",
-          remuxStrategy: job.remuxStrategy,
+          // A player handoff opens the same signed URL again (normally with a
+          // non-zero range). Once the optional cache is ready, make that
+          // representation seekable without minting or exposing another URL.
+          remuxStrategy: serveSeekableCache
+            ? "seekable-cache"
+            : job.remuxStrategy,
           signal: abortController.signal,
           remuxTimeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
         });
+        // Do not spend CPU/disk on a cache while a job merely warms. A real
+        // GET consumer has now been counted by `trackGatewayStream`; start one
+        // background cache only after the live delivery has been accepted.
+        if (req.method === "GET" && !serveSeekableCache) {
+          startGatewaySeekableCachePreparation(job, torrent);
+        }
+        const result = await serving;
         if (!isGatewayJobCancelled(job) && res.statusCode < 400) {
           job.state = "ready";
           job.retryable = false;
           addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
         } else if (!isGatewayJobCancelled(job) && res.statusCode >= 400) {
+          releaseGatewaySeekableCache(job, "Primary playback stream failed");
           job.state = "error";
           job.error = "Remux preparation failed.";
           job.retryable = true;
@@ -779,6 +959,7 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
       return;
     }
     const error = sanitizeGatewayError(err);
+    releaseGatewaySeekableCache(job, "Primary playback stream failed");
     job.state = "error";
     job.error = error;
     job.retryable = isRetryableGatewayError(err);
@@ -795,6 +976,7 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
 export function __resetGatewayJobsForTests() {
   for (const job of jobs.values()) {
     if (job.progressTimer) clearInterval(job.progressTimer);
+    releaseGatewaySeekableCache(job, "Gateway jobs reset for tests");
   }
   jobs.clear();
 }

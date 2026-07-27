@@ -270,7 +270,7 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
 
 1. The mobile client asks the server playback planner for a `PlaybackPlan`.
 2. If a torrent source is selected and the bridge is available, the mobile `TorrentEngine` creates a gateway job with `POST /api/gateway/jobs`. The primary Play control plane may attach its runtime-only `progressive-fmp4` remux strategy; it is not persisted in a playback session or copied into add-on metadata.
-3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `state`, `phase`, `peerCount`, elapsed time, retryability, and timeout metadata through `GET /api/gateway/jobs/:id`. Preparation is indeterminate, so it reports no percentage until readiness is actually proven. A candidate without a peer fails after 12 seconds. Once a peer connects, it gets up to 20 seconds to provide metadata, with a 32-second hard cap across discovery and metadata. Direct files and primary Play's progressive fMP4 remux then require a verified first torrent byte within 20 seconds; seekable-cache remux work for Download, Cast, and the default compatibility path retains its separate 60-second materialization window.
+3. The stream-server starts WebTorrent peer discovery and metadata warmup, exposing job `state`, `phase`, `peerCount`, elapsed time, retryability, and timeout metadata through `GET /api/gateway/jobs/:id`. Preparation is indeterminate, so it reports no percentage until readiness is actually proven. A candidate without a peer fails after 12 seconds. Once a peer connects, it gets up to 20 seconds to provide metadata, with a 32-second hard cap across discovery and metadata. Direct files and primary Play's progressive fMP4 remux then require a verified first torrent byte within 20 seconds. After the first real stream consumer attaches, primary Play starts one optional background seekable-cache materialization for that same file; Download, Cast, and the default compatibility path retain their separate foreground 60-second seekable-cache window.
 4. The mobile player maps gateway phases into typed runtime states such as `creating_gateway_job`, `finding_peers`, `preparing_metadata`, `remuxing`, and `cancelled`. Explicit gateway `no_peers` and `stalled` responses are terminal for the current candidate so Play Best can fall back instead of waiting indefinitely. `no_peers` is source-specific: a later torrent candidate still receives its own discovery attempt rather than treating the bridge as unavailable.
 5. Once ready, the player receives a signed
    `/api/gateway/jobs/:id/stream?expires=...&signature=...` URL. The URL is
@@ -280,33 +280,40 @@ This is a **separate Node.js process** running on `:11470`. Its sole job is to b
    open-ended and suffix ranges, so `expo-video` can seek without receiving
    incorrect byte windows. A live progressive-fMP4 response is instead chunked
    with no `Content-Length`, `Content-Range`, or `Accept-Ranges`; it accepts
-   only an initial zero-origin probe and deliberately rejects arbitrary seeks
-   while the torrent is still being remuxed. Expired URLs are accepted only
-   when they match the same signature already used by the active stream and
-   stay inside a short grace window, avoiding broken ongoing range requests
-   mid-playback.
+   only an initial zero-origin probe and deliberately rejects arbitrary seeks.
+   Once its consumer-triggered cache reports `seekableCache.status: "ready"`, a
+   fresh consumer of that same signed route is served from the retained
+   seekable cache and can use ranges. A cache failure is informational only:
+   the active live response remains playable and non-seekable. Expired URLs are
+   accepted only when they match the same signature already used by the active
+   stream and stay inside a short grace window, avoiding broken ongoing range
+   requests mid-playback.
 6. If the player stops, the mobile engine calls `DELETE /api/gateway/jobs/:id`
-   so warmup work — including metadata waiting — is aborted instead of leaking.
-   The bridge also prunes unused ready jobs on a timer while protecting jobs
-   with active stream consumers.
+   so warmup work — including metadata waiting, a live FFmpeg pipeline, and an
+   optional background seekable cache — is aborted instead of leaking. The
+   bridge also prunes unused ready jobs on a timer while protecting jobs with
+   active stream consumers.
 
 The legacy `/stream?magnet=<encoded>&fileIndex=0` endpoint still exists for compatibility, but new torrent playback should prefer gateway jobs because they provide readiness state, cancellation, progress, and future remux/transcode hooks. Its peer/metadata preflight follows the same policy: up to 12 seconds to find the first peer, then up to 20 seconds for metadata with a 32-second combined hard cap. It stops when its client disconnects and must not reintroduce the old two-minute wait.
 
-The bridge has two FFmpeg delivery paths. Primary Play uses a live fragmented
-MP4 stream: after first-byte preflight, FFmpeg emits an empty movie header and
-media fragments as the torrent arrives, avoiding full `+faststart`
-materialization before the player can start. It is intentionally non-seekable.
-Downloads, Cast, and the default compatibility/manual path use a temporary
-seekable MP4 cache instead: after materialization succeeds, the bridge can
-answer `HEAD` and single byte-range requests without pretending that a
-sequential FFmpeg pipe is seekable. Both paths remain a production direction,
-not a support claim: large-file behavior, cache cleanup, disk limits,
-unsupported FFmpeg/runtime cases, copied-codec compatibility, and real-device
-first-frame/seek evidence still need QA evidence.
+The bridge has two FFmpeg delivery paths. Primary Play initially uses a live
+fragmented MP4 stream: after first-byte preflight, FFmpeg emits an empty movie
+header and media fragments as the torrent arrives, avoiding full `+faststart`
+materialization before the player can start. That initial response is
+intentionally non-seekable. Only after a real consumer attaches does it begin a
+single background materialization of a seekable MP4 cache for the same gateway
+job. Once ready, a replacement consumer on the same signed route receives the
+retained cache with `HEAD` and byte-range semantics; cache failure leaves the
+live playback untouched. Downloads, Cast, and the default compatibility/manual
+path use the seekable cache as their foreground readiness condition instead.
+Both paths remain a production direction, not a support claim: large-file
+behavior, cache cleanup, disk limits, unsupported FFmpeg/runtime cases,
+copied-codec compatibility, and real-device first-frame/seek evidence still
+need QA evidence.
 
 **Chromecast:** The `castv2-client` library (running inside the daemon) communicates directly with Chromecast devices discovered via `bonjour-service` (mDNS). The `/api/cast` router handles device discovery and playback control. This avoids requiring the mobile client to implement the Chromecast protocol natively.
 
-**Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served. Gateway jobs expose factual preparation phase, peer state, elapsed time, and a bounded readiness window before the media URL is ready; they do not expose an elapsed-time percentage as media progress.
+**Metrics:** `/api/torrent/:infoHash/metrics` exposes download speed, peer count, and buffer health for the stream currently being served. Gateway jobs expose factual preparation phase, peer state, elapsed time, bounded readiness metadata, and the safe seekable-cache state (`not_started`, `preparing`, `ready`, or `unavailable`); they do not expose an elapsed-time percentage as media progress.
 
 **Bridge auth:** Control routes use `requireBridgeAuth` when `STREAMER_BRIDGE_TOKEN` is configured. Clients can send either bearer auth or `x-streamer-bridge-token`. Gateway stream URLs stay header-free for native video/cast consumption, but are HMAC-signed with expiry query params before the bridge serves bytes.
 
@@ -392,20 +399,27 @@ StreamEngineManager
   `no_peers`, `preparing_metadata`, `fetching_metadata`, `selecting_file`,
   `checking_piece_availability`, `remuxing`, `ready`, `stalled`, `error`,
   `cancelled`, `expired`)
+- optional runtime-only seekable-handoff lookup for an active gateway job; it
+  reports only cache state and a transient replacement URI, never persisted
+  session data
 
 The player (`app/player.tsx`) calls `streamEngineManager.resolveEngine(currentStream)` and gets back the appropriate engine. This means adding a new stream type only requires implementing `IStreamEngine` and registering it — the player is oblivious to the delivery mechanism.
 
 **FFmpeg remuxing:** When a target cannot play an MKV container directly, the
 stream-server can remux the torrent file to MP4 using FFmpeg. The primary Play
-route produces a live fragmented MP4 as the torrent arrives, so it can start
-before a full-file `+faststart` rewrite; the resulting response is not
-seekable. Download, Cast, and the default compatibility/manual path preserve a
-materialized seekable MP4 cache for `HEAD` and range requests. This is necessary
-because iOS's `AVPlayer` (underlying `expo-video`) does not support MKV
-containers natively. Fragmented MP4 only changes the container, not the copied
-video codec, so unsupported HEVC/AV1 sources still use planner fallback. The
-current implementation has timeout and cancellation behavior, while cache
-limits, runtime discovery, and health diagnostics remain explicit:
+route first produces a live fragmented MP4 as the torrent arrives, so it can
+start before a full-file `+faststart` rewrite. After its first real consumer,
+the job may prepare one retained seekable MP4 cache in the background. When the
+cache is ready, the player replaces the live source through the same signed
+route at the current position and receives normal `HEAD`/range support; an
+unavailable cache leaves the live source alone. Download, Cast, and the default
+compatibility/manual path preserve the materialized cache as their foreground
+readiness requirement. This is necessary because iOS's `AVPlayer` (underlying
+`expo-video`) does not support MKV containers natively. Fragmented MP4 only
+changes the container, not the copied video codec, so unsupported HEVC/AV1
+sources still use planner fallback. The current implementation has timeout and
+cancellation behavior, while cache limits, runtime discovery, and health
+diagnostics remain explicit:
 
 - `STREAMER_FFMPEG_PATH` can point the bridge at a packaged or system FFmpeg
   binary. The bridge health endpoint probes this runtime and reports
@@ -417,9 +431,11 @@ limits, runtime discovery, and health diagnostics remain explicit:
 - `STREAMER_REMUX_CACHE_TTL_MS` controls stale completed seekable-cache-file
   cleanup.
 - Gateway job responses include media metadata (`remuxed`, `container`,
-  `seekable`, `cacheStatus`) so clients do not have to infer remux seek
-  capability from source shape alone. `cacheStatus` is `streaming` for live
-  progressive fMP4 and `ready` only for a completed seekable cache.
+  `seekable`, `cacheStatus`, and `seekableCache`) so clients do not have to
+  infer remux seek capability from source shape alone. `cacheStatus` remains
+  `streaming` for a live progressive fMP4 response; `seekableCache` explicitly
+  records `not_started`, `preparing`, `ready`, or `unavailable`, and only
+  `ready` makes a new route consumer seekable.
 
 ### 6.4 Playback Planning And Runtime State
 
@@ -477,6 +493,13 @@ partial plan fails, the player performs one bounded, cancellable discovery
 replan while late providers may still be warming the server cache. It only
 switches to a genuinely new candidate set; it never loops an identical partial
 plan indefinitely.
+
+Once playback has actually started, the player watches for a separate
+post-start failure: 15 seconds without either playhead or buffered-edge
+progress may advance the normal serial fallback once. The watchdog is inactive
+for a paused, hidden, intentionally seeking, previewing, casting, or
+already-falling-back player, preventing intentional user states from being
+misclassified as a failed source.
 
 Candidate eligibility applies the user's exact quality allowlist before
 ranking. Among allowed and device-compatible choices, ranking favours sources
