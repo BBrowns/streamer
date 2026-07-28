@@ -35,7 +35,11 @@ export interface PlayerControlCapabilities {
    */
   isProgressiveRemux?: boolean;
   /** Runtime-only state of the optional seekable cache behind a live fMP4. */
-  seekableCacheStatus?: "not_started" | "preparing" | "unavailable";
+  seekableCacheStatus?:
+    | "not_started"
+    | "evaluating"
+    | "preparing"
+    | "unavailable";
   canUseVolume?: boolean;
   canUseFullscreen?: boolean;
   hasCaptions?: boolean;
@@ -176,8 +180,11 @@ export function PlayerControls({
   const seekDisabledLabel = t("player.controls.seekUnavailable", {
     defaultValue: "Seek unavailable",
   });
+  const seekPreparationActive =
+    capabilities?.seekableCacheStatus === "evaluating" ||
+    capabilities?.seekableCacheStatus === "preparing";
   const seekUnavailableDetail = capabilities?.isProgressiveRemux
-    ? capabilities.seekableCacheStatus === "preparing"
+    ? seekPreparationActive
       ? t("player.controls.seekProgressiveRemuxPreparing", {
           defaultValue:
             "Preparing seek controls in the background. Playback can continue while this finishes.",
@@ -225,7 +232,7 @@ export function PlayerControls({
       });
   const capabilityMessage = !hasTimeline
     ? capabilities?.isProgressiveRemux
-      ? capabilities.seekableCacheStatus === "preparing"
+      ? seekPreparationActive
         ? t("player.controls.progressiveRemuxPreparing", {
             defaultValue: "Preparing seek controls",
           })

@@ -142,9 +142,11 @@
       "series": "Serie",
       "resume": "Reanudar",
       "remaining": "{{minutes}}m restantes · {{progress}}%",
+      "watched": "{{minutes}}m vistos",
       "emptyTitle": "Nada en progreso",
       "emptyDescription": "Empieza una película o episodio y aparecerá aquí.",
       "resumeA11y": "Reanudar {{title}}, quedan {{minutes}} minutos",
+      "resumeWatchedA11y": "Reanudar {{title}}, {{minutes}} minutos vistos",
       "removeA11y": "Quitar {{title}} de Continuar viendo"
     },
     "shortcuts": {

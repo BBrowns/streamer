@@ -80,20 +80,30 @@ npm run dev:db
 
 This starts and waits for Compose's `db` service only. It does not start the
 containerised API service and therefore cannot conflict with local
-`npm run dev:server` on port 3001. It also never runs schema migrations.
+`npm run dev:server` on port 3001. It also never changes the schema by itself.
 
 `npm run dev:server` performs the same preflight for a loopback
 `DATABASE_URL`: if PostgreSQL is unavailable, it starts only Compose's `db`
-service and waits for it. Use a separately managed local database by adding
+service and waits for it. It then runs a non-destructive Prisma schema sync for
+that loopback development database, so additive schema changes are ready before
+the API starts. Prisma will refuse changes that require explicit data-loss
+approval.
+
+Use a separately managed local database by adding
 `STREAMER_DEV_DATABASE=external` to your shell or `server/.env`; the launcher
-will then never start Docker for that database. Remote database URLs are never
-Docker-managed.
+will then never start Docker or synchronize that database implicitly. Remote
+database URLs are likewise never Docker-managed or automatically changed.
 
 ### 4. Initialise the database
 
 ```bash
 npm run db:push --workspace=server
 ```
+
+This explicit command remains available for external development databases.
+Production uses versioned migrations as documented in
+[`docs/SERVER_PRODUCTION.md`](./docs/SERVER_PRODUCTION.md), never this
+development sync.
 
 ### 5. Start everything
 

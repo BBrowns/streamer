@@ -6,9 +6,11 @@ const {
   isLoopbackHostname,
   parseDatabaseTarget,
   parseEnvFile,
+  prepareDevelopmentDatabase,
   preflightDatabase,
   resolveDatabaseConfiguration,
   startComposeDatabase,
+  synchronizeDevelopmentSchema,
 } = require("./dev-database.cjs");
 
 test("parses quoted server environment values without changing URL fragments", () => {
@@ -179,5 +181,89 @@ test("Compose startup addresses only the db service and waits for PostgreSQL", a
     commands.flat().includes("server"),
     false,
     "the local API container must not be started by the database helper",
+  );
+});
+
+test("prepare synchronizes a reachable loopback development database", async () => {
+  const commands = [];
+  const messages = [];
+
+  const result = await prepareDevelopmentDatabase({
+    configuration: {
+      mode: "auto",
+      target: { hostname: "127.0.0.1", port: 5432, isLoopback: true },
+    },
+    canConnect: async () => true,
+    commandRunner: async (command, args) => {
+      commands.push([command, args]);
+      return 0;
+    },
+    log: (message) => messages.push(message),
+  });
+
+  assert.equal(result.preflight.action, "connected");
+  assert.equal(result.schema.action, "schema-synchronized");
+  assert.deepEqual(commands, [
+    ["npm", ["run", "db:push", "--workspace=server"]],
+  ]);
+  assert.match(messages.join("\n"), /schema is up to date/);
+});
+
+test("external mode never synchronizes a database implicitly", async () => {
+  let commandCalls = 0;
+  const result = await synchronizeDevelopmentSchema(
+    {
+      mode: "external",
+      target: { hostname: "127.0.0.1", port: 5432, isLoopback: true },
+    },
+    {
+      commandRunner: async () => {
+        commandCalls += 1;
+        return 0;
+      },
+      log: () => {},
+    },
+  );
+
+  assert.equal(result.action, "schema-sync-skipped");
+  assert.equal(commandCalls, 0);
+});
+
+test("remote databases never synchronize implicitly", async () => {
+  let commandCalls = 0;
+  const result = await synchronizeDevelopmentSchema(
+    {
+      mode: "auto",
+      target: {
+        hostname: "postgres.example.test",
+        port: 5432,
+        isLoopback: false,
+      },
+    },
+    {
+      commandRunner: async () => {
+        commandCalls += 1;
+        return 0;
+      },
+      log: () => {},
+    },
+  );
+
+  assert.equal(result.action, "schema-sync-skipped");
+  assert.equal(commandCalls, 0);
+});
+
+test("prepare stops when Prisma refuses a schema change", async () => {
+  await assert.rejects(
+    prepareDevelopmentDatabase({
+      configuration: {
+        mode: "compose",
+        target: { hostname: "localhost", port: 5432, isLoopback: true },
+      },
+      canConnect: async () => true,
+      commandRunner: async () => 1,
+      log: () => {},
+    }),
+    /could not be synchronized/,
   );
 });

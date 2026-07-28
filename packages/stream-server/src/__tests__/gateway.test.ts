@@ -9,6 +9,7 @@ import {
 import { createSignedGatewayStreamPath } from "../security.js";
 import {
   ensureTorrentReady,
+  evaluateSeekableRemuxPreparation,
   getSelectedFile,
   prepareSeekableRemux,
   retainSeekableRemux,
@@ -20,6 +21,7 @@ import {
 
 vi.mock("../torrent.js", () => ({
   ensureTorrentReady: vi.fn(),
+  evaluateSeekableRemuxPreparation: vi.fn(),
   getSelectedFile: vi.fn(
     (torrent: { files: unknown[] }, fileIdx?: number) =>
       torrent.files[typeof fileIdx === "number" ? fileIdx : 0],
@@ -56,6 +58,10 @@ describe("gateway jobs", () => {
       files: [{ name: "movie.mp4", streamURL: "/webtorrent/file" }],
     });
     (ensureTorrentReady as any).mockResolvedValue(undefined);
+    (evaluateSeekableRemuxPreparation as any).mockResolvedValue({
+      eligible: true,
+      sourceBytes: 1024,
+    });
     (prepareSeekableRemux as any).mockResolvedValue({
       fileName: "movie.mkv",
       size: 1024,
@@ -415,6 +421,49 @@ describe("gateway jobs", () => {
         },
       });
     });
+  });
+
+  it("keeps progressive playback ready when adaptive cache evaluation declines", async () => {
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (evaluateSeekableRemuxPreparation as any).mockResolvedValueOnce({
+      eligible: false,
+      reason: "insufficient_storage",
+      sourceBytes: 1024,
+    });
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "ready",
+        media: {
+          seekable: false,
+          seekableCache: {
+            status: "unavailable",
+            unavailableReason: "insufficient_storage",
+          },
+        },
+      });
+    });
+    expect(prepareSeekableRemux).not.toHaveBeenCalled();
   });
 
   it("aborts a job-owned background seekable cache when the job is cancelled", async () => {

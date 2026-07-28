@@ -58,6 +58,7 @@ describe("rankProviderCatalogRows", () => {
           itemId: "series-2",
           currentTime: 120,
           duration: 3600,
+          durationSource: "metadata",
           title: "Series two",
           lastWatched: "2026-07-18T12:00:00.000Z",
         },

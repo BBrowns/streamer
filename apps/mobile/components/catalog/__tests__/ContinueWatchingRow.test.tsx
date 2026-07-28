@@ -78,6 +78,9 @@ jest.mock("react-i18next", () => ({
       if (key === "home.continueWatching.remaining") {
         return `${options?.minutes}m left · ${options?.progress}%`;
       }
+      if (key === "home.continueWatching.watched") {
+        return `${options?.minutes}m watched`;
+      }
       if (key === "home.continueWatching.removeA11y") {
         return `Remove ${options?.title} from Continue Watching`;
       }
@@ -119,6 +122,7 @@ describe("ContinueWatchingRow", () => {
           episode: 2,
           currentTime: 1200,
           duration: 3600,
+          durationSource: "media",
           title: "Example Episode",
           poster: "https://images.example.test/poster.jpg",
           lastWatched: "2026-06-13T10:00:00.000Z",
@@ -193,6 +197,7 @@ describe("ContinueWatchingRow", () => {
           episode: null,
           currentTime: 60,
           duration: 120,
+          durationSource: "media",
           title: "Example Movie",
           poster: null,
           lastWatched: "2026-06-13T10:00:00.000Z",
@@ -210,6 +215,81 @@ describe("ContinueWatchingRow", () => {
       "tt0111161",
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  it("does not send movie persistence sentinels to the playback planner", async () => {
+    hooks.useContinueWatching.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          id: "progress-movie",
+          userId: "user-1",
+          type: "movie",
+          itemId: "tt0111161",
+          season: 0,
+          episode: 0,
+          currentTime: 600,
+          duration: 7200,
+          durationSource: "metadata",
+          title: "Example Movie",
+          poster: null,
+          lastWatched: "2026-07-27T10:00:00.000Z",
+        },
+      ],
+    });
+    mockPlayBest.mockResolvedValue({
+      ok: true,
+      stream: { url: "https://example.test/video.mp4" },
+      mediaInfo: {
+        type: "movie",
+        itemId: "tt0111161",
+        title: "Example Movie",
+      },
+      sessionId: "session-movie",
+      candidateId: "candidate-movie",
+    });
+
+    const screen = render(<ContinueWatchingRow />);
+    fireEvent.press(
+      screen.getByLabelText("Resume Example Movie, 110 minutes remaining"),
+    );
+    await Promise.resolve();
+
+    expect(screen.queryByText("S0 E0")).toBeNull();
+    expect(mockPlayBest).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt0111161",
+      title: "Example Movie",
+      poster: undefined,
+      season: undefined,
+      episode: undefined,
+    });
+  });
+
+  it("hides misleading percentages for legacy progress", () => {
+    hooks.useContinueWatching.mockReturnValue({
+      isLoading: false,
+      data: [
+        {
+          id: "progress-legacy",
+          userId: "user-1",
+          type: "series",
+          itemId: "tt11198330",
+          season: 3,
+          episode: 5,
+          currentTime: 240,
+          duration: 300,
+          durationSource: "legacy",
+          title: "Example Episode",
+          poster: null,
+          lastWatched: "2026-07-27T10:00:00.000Z",
+        },
+      ],
+    });
+
+    const screen = render(<ContinueWatchingRow />);
+    expect(screen.getByText("4m watched")).toBeTruthy();
+    expect(screen.queryByText("1m left · 80%")).toBeNull();
   });
 
   it("can show a useful empty state on Home", () => {

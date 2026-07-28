@@ -142,9 +142,11 @@
       "series": "Serie",
       "resume": "Hervatten",
       "remaining": "{{minutes}}m over · {{progress}}%",
+      "watched": "{{minutes}}m bekeken",
       "emptyTitle": "Nog niets gestart",
       "emptyDescription": "Start een film of aflevering en hij verschijnt hier.",
       "resumeA11y": "Hervat {{title}}, nog {{minutes}} minuten",
+      "resumeWatchedA11y": "Hervat {{title}}, {{minutes}} minuten bekeken",
       "removeA11y": "Verwijder {{title}} uit Verder kijken"
     },
     "shortcuts": {

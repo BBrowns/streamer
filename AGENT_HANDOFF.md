@@ -279,7 +279,9 @@ Play, Download, and Cast orchestration:
   progressive-fMP4 strategy for remuxed torrents, so readiness needs only a
   verified first torrent byte within 20 seconds and the initial live FFmpeg
   response is non-seekable. Only after its first real stream consumer does the
-  gateway create one optional, process-local seekable cache for that same job.
+  gateway evaluate one optional, process-local seekable cache for that same
+  job. It starts only with sufficient storage and active byte progress; its
+  stall timeout resets on progress and a hard total timeout remains in force.
   When ready, the current player can hand off through the same signed stream
   route and restore its current position; an unavailable cache leaves the live
   source playing and keeps seek disabled. Download, Cast, and the default
@@ -290,6 +292,11 @@ Play, Download, and Cast orchestration:
   seekable-cache default, and aborts its wait on a client disconnect. Readiness
   UI shows factual phase/peer/cache state, never a synthetic elapsed-time
   percentage.
+- Watch progress is driven by a pure accepted-event clock. Progressive fMP4
+  never persists its temporary growing player duration: records use trusted
+  `metadata`/`media` duration or `unknown` with zero duration. Migrated records
+  are `legacy`; Continue Watching hides percentages for both unknown and
+  legacy while retaining Resume.
 - Existing `PlaybackPlan` behavior remains supported as a compatibility wrapper.
   Primary Play, Download, and Cast flows now use the session model.
 

@@ -251,7 +251,11 @@ Only after the first real signed `GET` consumer has attached does the gateway
 start one process-local background `+faststart` cache materialization for that
 same selected torrent file. It joins the existing remux-cache single-flight;
 it does not start another gateway job, torrent discovery, session, or planner
-attempt. While it runs, `seekableCache.status` is `preparing`, and readiness
+attempt. The gateway first reports `evaluating` while it checks source size,
+free temporary storage, and whether torrent bytes are still arriving. An
+eligible job then reports `preparing`. Its no-progress timeout resets whenever
+source bytes arrive, while a hard total timeout and the gateway/cache TTL keep
+the work bounded. Only one cache job may own a torrent file. Readiness
 copy must honestly say that seek controls are being prepared rather than show a
 percentage or imply that the live response is already seekable.
 
@@ -265,6 +269,10 @@ source attempt. If cache preparation becomes `unavailable` or fails, the
 already-working live fMP4 response remains valid, playback continues, and seek
 controls remain unavailable. Closing or cancelling the gateway job stops both
 the live pipeline and any still-running background preparation.
+
+Compatible MP4/WebM torrent files do not need this handoff. Their signed stream
+route exposes the authoritative length immediately and supports `HEAD`,
+`Accept-Ranges`, and correct `206`/`Content-Range` responses.
 
 If the optional client-side source replacement times out or rejects before the
 video player reports an error, the player keeps the existing candidate and
@@ -341,3 +349,21 @@ the shared lifecycle understandable and testable.
 - Treat the progressive-to-seekable transition as an enhancement to an active
   live source. A failed optional cache must not fail that source, create another
   attempt, or expose a raw runtime URL in a session, event, store, or log.
+- Fast first-frame playback and random seek are separate readiness moments for
+  MKV/HEVC remuxes. On-demand fMP4/HLS segment generation with torrent-piece
+  prioritization is the follow-up required for seeking into data that has not
+  yet been materialized; it is not emulated by the full-file cache.
+
+## Watch progress trust model
+
+Watch position is accepted only from real player `timeUpdate` events or an
+explicit resume/seek intent. Temporary resets and jumps during source
+replacement are ignored. The last accepted position is flushed on pause,
+backgrounding, close/unmount, plus every 15 seconds for crash recovery.
+
+Every progress record carries `durationSource`: `metadata`, `media`, `unknown`,
+or migrated `legacy`. A progressive fMP4 player's temporary, growing duration
+is never stored as a title duration. Catalog runtime is used as `metadata`
+where available; otherwise the position is stored with `duration: 0` and
+`unknown`. Server precedence prevents lower-trust updates from replacing a
+known duration and clamps positions only when a trusted duration exists.

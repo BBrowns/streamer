@@ -21,6 +21,7 @@ import {
   __resetRemuxCacheForTests,
   __setFfmpegSpawnerForTests,
   ensureTorrentReady,
+  evaluateSeekableRemuxPreparation,
   getSelectedFile,
   prepareSeekableRemux,
   serveTorrentFile,
@@ -31,6 +32,8 @@ import {
 const previousFfmpegPath = process.env.STREAMER_FFMPEG_PATH;
 const previousRemuxCacheMaxBytes = process.env.STREAMER_REMUX_CACHE_MAX_BYTES;
 const previousRemuxCacheDir = process.env.STREAMER_REMUX_CACHE_DIR;
+const previousSeekableRemuxMaxSourceBytes =
+  process.env.STREAMER_SEEKABLE_REMUX_MAX_SOURCE_BYTES;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -190,7 +193,41 @@ afterEach(async () => {
     process.env.STREAMER_REMUX_CACHE_DIR = previousRemuxCacheDir;
   }
 
+  if (previousSeekableRemuxMaxSourceBytes === undefined) {
+    delete process.env.STREAMER_SEEKABLE_REMUX_MAX_SOURCE_BYTES;
+  } else {
+    process.env.STREAMER_SEEKABLE_REMUX_MAX_SOURCE_BYTES =
+      previousSeekableRemuxMaxSourceBytes;
+  }
+
   await __resetRemuxCacheForTests();
+});
+
+describe("evaluateSeekableRemuxPreparation", () => {
+  it("declines a source that exceeds the bounded cache budget", async () => {
+    process.env.STREAMER_SEEKABLE_REMUX_MAX_SOURCE_BYTES = "1024";
+    const torrent = makeTorrent([makeFakeFile("movie.mkv", 2048)]);
+    torrent.numPeers = 1;
+    torrent.downloaded = 1;
+
+    await expect(evaluateSeekableRemuxPreparation(torrent)).resolves.toEqual({
+      eligible: false,
+      reason: "source_too_large",
+    });
+  });
+
+  it("declines cache work until the active torrent is making progress", async () => {
+    const torrent = makeTorrent([makeFakeFile("movie.mkv", 1024)]);
+    torrent.numPeers = 1;
+    torrent.downloaded = 0;
+    torrent.downloadSpeed = 0;
+    torrent.progress = 0;
+
+    await expect(evaluateSeekableRemuxPreparation(torrent)).resolves.toEqual({
+      eligible: false,
+      reason: "no_download_progress",
+    });
+  });
 });
 
 // ─── handleTorrent ────────────────────────────────────────────────────────────

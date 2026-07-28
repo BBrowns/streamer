@@ -461,8 +461,10 @@ poster URLs before changing the card UI.
 A horizontal `FlatList` of in-progress content from `useContinueWatching`.
 Home can request a useful empty state; Discover and Library can keep the row
 hidden when there is no progress. Cards show poster/fallback artwork, episode
-label when available, remaining time, progress percentage, a primary Resume
-action, and a separate remove action. The remove action calls
+label when available, a primary Resume action, and a separate remove action.
+Trusted metadata/media durations show remaining time and percentage. Unknown
+or migrated legacy durations show only “X min watched”; they remain resumable
+but never imply completion. The remove action calls
 `DELETE /api/library/progress` and only removes watch progress; it does not
 delete the title from the user's library.
 
@@ -599,7 +601,17 @@ normal playback.
 
 ### 6.5 Progress Reporting
 
-The player reports watch progress to the server every `15_000` ms (`PROGRESS_REPORT_INTERVAL`) via `useUpdateProgress` (a React Query mutation). The interval is managed via `setInterval` in a ref (`progressTimerRef`) and cleared on component unmount. Progress is also reported on player exit.
+The player reports the last position accepted by `PlaybackProgressClock` every
+`15_000` ms (`PROGRESS_REPORT_INTERVAL`) via `useUpdateProgress`. Only player
+`timeUpdate` events and explicit seek/resume intents advance that clock.
+Source-replacement resets and unexplained jumps are ignored. Pause,
+backgrounding, close/unmount flush the last accepted position, with duplicate
+writes suppressed.
+
+Progress duration carries a trust source. Direct, HLS-VOD, and fully seekable
+media may use `media`; catalog runtime uses `metadata`; a progressive remux
+without catalog runtime uses `unknown` with `duration: 0`. The player's growing
+progressive-fMP4 duration is never persisted.
 
 **Intricacy:** The `useTraktScrobbler` hook fires independently from this interval, using the player's local state. The two are not synchronised — Trakt scrobbles can arrive at the server slightly before or after the watch progress update. This is acceptable for the use case but means `lastWatched` timestamp in the database and the Trakt scrobble timestamp may differ slightly.
 
@@ -633,7 +645,8 @@ gateway's elapsed readiness time as a percentage. A percentage is reserved for
 actual media/download progress once byte-level metrics exist.
 
 For primary progressive fMP4 playback, a real first consumer starts an optional
-background seekable-cache preparation. The player may show a factual
+background seekable-cache evaluation and preparation. Evaluation checks source
+size, available storage, and active download progress. The player may show a factual
 "preparing seek controls" state, but never presents it as media progress or a
 guaranteed upgrade. When the cache is ready, the player replaces the source via
 the same signed gateway route, restores the current position and prior playback

@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export const watchProgressDurationSourceSchema = z.enum([
+  "metadata",
+  "media",
+  "unknown",
+  "legacy",
+]);
+
 /** Zod schema for a library item (watchlist entry) */
 export const libraryItemSchema = z.object({
   id: z.string().uuid(),
@@ -49,7 +56,8 @@ export const watchProgressSchema = z.object({
   season: z.number().int().nonnegative().optional().nullable(),
   episode: z.number().int().nonnegative().optional().nullable(),
   currentTime: z.number().nonnegative(),
-  duration: z.number().positive(),
+  duration: z.number().nonnegative(),
+  durationSource: watchProgressDurationSourceSchema,
   title: z.string().min(1),
   poster: z.string().url().optional().nullable(),
   lastWatched: z.string().datetime(),
@@ -62,7 +70,10 @@ export const updateProgressSchema = z.object({
   season: z.number().int().nonnegative().optional(),
   episode: z.number().int().nonnegative().optional(),
   currentTime: z.number().nonnegative(),
-  duration: z.number().positive(),
+  duration: z.number().nonnegative(),
+  durationSource: watchProgressDurationSourceSchema
+    .optional()
+    .default("legacy"),
   title: z.string().min(1),
   poster: z.string().url().optional(),
 });

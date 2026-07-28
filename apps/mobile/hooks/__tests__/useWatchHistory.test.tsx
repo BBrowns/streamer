@@ -28,6 +28,7 @@ const entry = (id: string): WatchProgress => ({
   episode: id === "entry-1" ? 1 : 2,
   currentTime: 600,
   duration: 1200,
+  durationSource: "media",
   title: "Example series",
   poster: null,
   lastWatched: "2026-07-18T10:00:00.000Z",

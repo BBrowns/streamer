@@ -101,6 +101,31 @@ describe("PlaybackPlanService", () => {
     );
   });
 
+  it("does not expose persisted zero episode sentinels to the planner", async () => {
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate(),
+          fallbackCandidates: [],
+        },
+      }),
+    });
+
+    await createPlaybackPlan({
+      type: "movie",
+      id: "tt123",
+      season: 0,
+      episode: 0,
+      action: "play",
+    } as any);
+
+    const payload = (api.post as jest.Mock).mock.calls[0][1];
+    expect(payload).not.toHaveProperty("season");
+    expect(payload).not.toHaveProperty("episode");
+  });
+
   it("keeps all four selectable qualities as an exact allowlist", async () => {
     (api.post as jest.Mock).mockResolvedValueOnce({
       data: makePlaybackPlan({
