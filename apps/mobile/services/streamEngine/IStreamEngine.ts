@@ -75,7 +75,14 @@ export interface GatewayJobProgress {
  */
 export interface SeekablePlaybackHandoff {
   gatewayJobId?: string;
-  status: "not_started" | "preparing" | "ready" | "unavailable";
+  status: "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
+  unavailableReason?:
+    | "source_too_large"
+    | "insufficient_storage"
+    | "no_download_progress"
+    | "remux_failed"
+    | "timed_out"
+    | "cancelled";
   uri?: string;
 }
 

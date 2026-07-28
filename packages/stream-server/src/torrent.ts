@@ -12,7 +12,7 @@
 import { createHash } from "crypto";
 import { spawn as nodeSpawn } from "child_process";
 import { createReadStream } from "fs";
-import { mkdir, mkdtemp, readdir, rename, rm, stat } from "fs/promises";
+import { mkdir, mkdtemp, readdir, rename, rm, stat, statfs } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { Request, Response } from "express";
@@ -183,6 +183,9 @@ export { getTorrentCacheStatus } from "./torrent-cache.js";
 const DEFAULT_REMUX_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_REMUX_CACHE_MAX_BYTES = 5 * 1024 * 1024 * 1024;
 const DEFAULT_REMUX_READY_TIMEOUT_MS = 90_000;
+const DEFAULT_SEEKABLE_REMUX_MAX_SOURCE_BYTES = 5 * 1024 * 1024 * 1024;
+const DEFAULT_SEEKABLE_REMUX_STORAGE_RESERVE_BYTES = 512 * 1024 * 1024;
+const DEFAULT_SEEKABLE_REMUX_STALL_TIMEOUT_MS = 30_000;
 const REMUX_ABORT_CLOSE_GRACE_MS = 2_000;
 const PROGRESSIVE_REMUX_ABORT_CLOSE_GRACE_MS = 2_000;
 const DEFAULT_PROGRESSIVE_REMUX_FIRST_FRAGMENT_TIMEOUT_MS = 20_000;
@@ -218,6 +221,64 @@ function getRemuxReadyTimeoutMs() {
     "REMUX_READY_TIMEOUT_MS",
     DEFAULT_REMUX_READY_TIMEOUT_MS,
   );
+}
+
+export type SeekableRemuxUnavailableReason =
+  | "insufficient_storage"
+  | "source_too_large"
+  | "no_download_progress";
+
+export async function evaluateSeekableRemuxPreparation(
+  torrent: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  } = {},
+): Promise<
+  | { eligible: true; sourceBytes: number }
+  | { eligible: false; reason: SeekableRemuxUnavailableReason }
+> {
+  const file = getSelectedFile(torrent, options.fileIdx, options.hints);
+  const sourceBytes = Number(file.length);
+  const maxSourceBytes = Math.min(
+    getRemuxCacheMaxBytes(),
+    readPositiveIntegerEnv(
+      "STREAMER_SEEKABLE_REMUX_MAX_SOURCE_BYTES",
+      DEFAULT_SEEKABLE_REMUX_MAX_SOURCE_BYTES,
+    ),
+  );
+  if (
+    !Number.isFinite(sourceBytes) ||
+    sourceBytes <= 0 ||
+    sourceBytes > maxSourceBytes
+  ) {
+    return { eligible: false, reason: "source_too_large" };
+  }
+
+  const hasDownloadProgress =
+    Number(torrent?.downloaded) > 0 ||
+    Number(torrent?.downloadSpeed) > 0 ||
+    Number(torrent?.progress) > 0;
+  if (Number(torrent?.numPeers) <= 0 || !hasDownloadProgress) {
+    return { eligible: false, reason: "no_download_progress" };
+  }
+
+  const root = await getRemuxRootDir();
+  const filesystem = await statfs(root);
+  const availableBytes =
+    Number(filesystem.bavail ?? filesystem.bfree) * Number(filesystem.bsize);
+  const reserveBytes = readPositiveIntegerEnv(
+    "STREAMER_SEEKABLE_REMUX_STORAGE_RESERVE_BYTES",
+    DEFAULT_SEEKABLE_REMUX_STORAGE_RESERVE_BYTES,
+  );
+  if (
+    !Number.isFinite(availableBytes) ||
+    availableBytes < sourceBytes + reserveBytes
+  ) {
+    return { eligible: false, reason: "insufficient_storage" };
+  }
+
+  return { eligible: true, sourceBytes };
 }
 
 async function cleanupRemuxRoot(root: string) {
@@ -359,7 +420,11 @@ function isAbortLikeError(err: unknown) {
 function runFfmpegRemuxToFile(
   file: any,
   partialPath: string,
-  signal?: AbortSignal,
+  options: {
+    signal?: AbortSignal;
+    stallTimeoutMs?: number;
+    onProgress?: (bytesRead: number) => void;
+  } = {},
 ): Promise<RemuxedFile> {
   return new Promise((resolve, reject) => {
     const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), [
@@ -391,6 +456,27 @@ function runFfmpegRemuxToFile(
     let processError: Error | null = null;
     let abortCloseGraceTimer: ReturnType<typeof setTimeout> | null = null;
     const sourceStream = file.createReadStream();
+    let sourceBytesRead = 0;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    const stallTimeoutMs =
+      options.stallTimeoutMs ?? DEFAULT_SEEKABLE_REMUX_STALL_TIMEOUT_MS;
+
+    const resetStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        fail(
+          new Error(
+            `FFmpeg seekable remux stalled for ${Math.round(stallTimeoutMs / 1000)} seconds.`,
+          ),
+        );
+      }, stallTimeoutMs);
+      stallTimer.unref?.();
+    };
+    const onSourceProgress = (chunk: Buffer) => {
+      sourceBytesRead += chunk.length;
+      options.onProgress?.(sourceBytesRead);
+      resetStallTimer();
+    };
 
     const markProcessClosed = () => {
       processClosed = true;
@@ -412,7 +498,9 @@ function runFfmpegRemuxToFile(
         clearTimeout(abortCloseGraceTimer);
         abortCloseGraceTimer = null;
       }
-      signal?.removeEventListener("abort", abortRemux);
+      options.signal?.removeEventListener("abort", abortRemux);
+      sourceStream.off?.("data", onSourceProgress);
+      if (stallTimer) clearTimeout(stallTimer);
       reject(err instanceof Error ? err : new Error(String(err)));
     };
 
@@ -429,10 +517,10 @@ function runFfmpegRemuxToFile(
     const abortRemux = () => {
       if (settled || abortError) return;
       const reason =
-        signal?.reason instanceof Error
-          ? signal.reason.message
-          : typeof signal?.reason === "string"
-            ? signal.reason
+        options.signal?.reason instanceof Error
+          ? options.signal.reason.message
+          : typeof options.signal?.reason === "string"
+            ? options.signal.reason
             : "FFmpeg remux was cancelled.";
       abortError = new RemuxAbortError(reason);
       stopProcesses();
@@ -467,7 +555,9 @@ function runFfmpegRemuxToFile(
     ffmpeg.on("close", async (code) => {
       markProcessClosed();
       if (settled) return;
-      signal?.removeEventListener("abort", abortRemux);
+      options.signal?.removeEventListener("abort", abortRemux);
+      sourceStream.off?.("data", onSourceProgress);
+      if (stallTimer) clearTimeout(stallTimer);
 
       if (abortError) {
         finishReject(abortError);
@@ -511,12 +601,14 @@ function runFfmpegRemuxToFile(
       if (!abortError) fail(error);
     });
 
-    if (signal?.aborted) {
+    if (options.signal?.aborted) {
       abortRemux();
       return;
     }
 
-    signal?.addEventListener("abort", abortRemux, { once: true });
+    options.signal?.addEventListener("abort", abortRemux, { once: true });
+    sourceStream.on?.("data", onSourceProgress);
+    resetStallTimer();
     sourceStream.pipe(ffmpeg.stdin);
   });
 }
@@ -528,6 +620,8 @@ async function getOrCreateSeekableRemux(
     fileIdx?: number;
     hints?: FileSelectionHints;
     signal?: AbortSignal;
+    stallTimeoutMs?: number;
+    onProgress?: (bytesRead: number) => void;
   },
 ): Promise<RemuxedFile> {
   pruneRemuxCache();
@@ -583,11 +677,11 @@ async function getOrCreateSeekableRemux(
       `[stream-server] Preparing seekable FFmpeg remux: ${file.name}`,
     );
 
-    const remuxed = await runFfmpegRemuxToFile(
-      file,
-      partialPath,
-      abortController.signal,
-    );
+    const remuxed = await runFfmpegRemuxToFile(file, partialPath, {
+      signal: abortController.signal,
+      stallTimeoutMs: options.stallTimeoutMs,
+      onProgress: options.onProgress,
+    });
     await rename(remuxed.filePath, filePath);
 
     const stats = await stat(filePath);
@@ -734,6 +828,8 @@ async function serveSeekableRemuxedFile(
     hints?: FileSelectionHints;
     signal?: AbortSignal;
     remuxTimeoutMs?: number;
+    stallTimeoutMs?: number;
+    onProgress?: (bytesRead: number) => void;
   },
 ) {
   const timeout = createRemuxTimeoutSignal(
@@ -752,6 +848,8 @@ async function serveSeekableRemuxedFile(
     const remuxed = await getOrCreateSeekableRemux(torrent, file, {
       ...options,
       signal: timeout.signal,
+      stallTimeoutMs: options.stallTimeoutMs,
+      onProgress: options.onProgress,
     });
     timeout.cleanup();
     req.off?.("close", abortOnClose);
@@ -1066,6 +1164,8 @@ export async function prepareSeekableRemux(
     hints?: FileSelectionHints;
     signal?: AbortSignal;
     remuxTimeoutMs?: number;
+    stallTimeoutMs?: number;
+    onProgress?: (bytesRead: number) => void;
   } = {},
 ) {
   if (!torrent.files || torrent.files.length === 0) {
@@ -1083,6 +1183,8 @@ export async function prepareSeekableRemux(
       fileIdx: options.fileIdx,
       hints: options.hints,
       signal: timeout.signal,
+      stallTimeoutMs: options.stallTimeoutMs,
+      onProgress: options.onProgress,
     });
 
     return {

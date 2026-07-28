@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { DeviceEventEmitter } from "react-native";
+import { AppState, DeviceEventEmitter } from "react-native";
 import { usePlayerStore } from "../stores/playerStore";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { useSync } from "./useSync";
@@ -15,12 +15,18 @@ import type {
   StreamStats,
 } from "../services/streamEngine/IStreamEngine";
 import { mapPlaybackMessageToRuntimeFailure } from "../services/playback/PlaybackErrors";
+import {
+  PlaybackProgressClock,
+  resolveProgressDuration,
+} from "../services/playback/PlaybackProgressClock";
 
 interface UsePlayerControllerProps {
   player: any; // Expo Video Player instance
   playbackUri: string | null;
   onClose: () => void;
   showControls: () => void;
+  isProgressiveRemux?: boolean;
+  hasSeekableHandoff?: boolean;
 }
 
 const PROGRESS_REPORT_INTERVAL = 15_000;
@@ -30,6 +36,8 @@ export function usePlayerController({
   playbackUri,
   onClose,
   showControls,
+  isProgressiveRemux = false,
+  hasSeekableHandoff = false,
 }: UsePlayerControllerProps) {
   const currentStream = usePlayerStore((s) => s.currentStream);
   const mediaInfo = usePlayerStore((s) => s.mediaInfo);
@@ -67,6 +75,14 @@ export function usePlayerController({
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
 
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressClockRef = useRef(new PlaybackProgressClock());
+  const lastReportedProgressRef = useRef<{
+    mediaKey: string;
+    currentTime: number;
+    duration: number;
+    durationSource: string;
+    reportedAt: number;
+  } | null>(null);
 
   const engine = useMemo(
     () =>
@@ -173,7 +189,76 @@ export function usePlayerController({
   useEffect(() => {
     setHasPromptedResume(false);
     setShowResumePrompt(false);
+    progressClockRef.current.reset();
+    lastReportedProgressRef.current = null;
   }, [mediaKey]);
+
+  const getProgressSnapshot = useCallback(() => {
+    const duration = resolveProgressDuration({
+      observedDuration: Number(player?.duration) || 0,
+      metadataRuntime: meta?.runtime,
+      isProgressiveRemux,
+      hasSeekableHandoff,
+    });
+    return progressClockRef.current.snapshot(
+      duration.duration,
+      duration.durationSource,
+    );
+  }, [hasSeekableHandoff, isProgressiveRemux, meta?.runtime, player]);
+
+  const reportProgress = useCallback(
+    (force = false) => {
+      if (!mediaInfo || !mediaKey) return;
+      const snapshot = getProgressSnapshot();
+      if (snapshot.currentTime <= 0) return;
+
+      const now = Date.now();
+      const previous = lastReportedProgressRef.current;
+      const sameSample =
+        previous?.mediaKey === mediaKey &&
+        Math.abs(previous.currentTime - snapshot.currentTime) < 0.5 &&
+        previous.duration === snapshot.duration &&
+        previous.durationSource === snapshot.durationSource;
+      if (sameSample) return;
+      if (
+        !force &&
+        previous?.mediaKey === mediaKey &&
+        now - previous.reportedAt < PROGRESS_REPORT_INTERVAL &&
+        Math.abs(previous.currentTime - snapshot.currentTime) < 2
+      ) {
+        return;
+      }
+
+      setProgress(snapshot.currentTime, snapshot.duration);
+      updateProgress({
+        itemId: mediaInfo.itemId,
+        type: mediaInfo.type,
+        season: mediaInfo.season,
+        episode: mediaInfo.episode,
+        currentTime: snapshot.currentTime,
+        duration: snapshot.duration,
+        durationSource: snapshot.durationSource,
+        title: mediaInfo.title,
+        poster: mediaInfo.poster,
+      });
+      lastReportedProgressRef.current = {
+        mediaKey,
+        ...snapshot,
+        reportedAt: now,
+      };
+    },
+    [getProgressSnapshot, mediaInfo, mediaKey, setProgress, updateProgress],
+  );
+
+  const recordExplicitSeek = useCallback((position: number) => {
+    progressClockRef.current.recordExplicitSeek(position);
+  }, []);
+  const beginProgressSourceReplacement = useCallback(() => {
+    progressClockRef.current.beginSourceReplacement();
+  }, []);
+  const completeProgressSourceReplacement = useCallback((position: number) => {
+    progressClockRef.current.completeSourceReplacement(position);
+  }, []);
 
   // Expo creates the player before an asynchronously resolved session URI is
   // available. Track readiness for the current URI so a Resume seek cannot be
@@ -225,6 +310,7 @@ export function usePlayerController({
         Number.isFinite(playbackLaunchIntent.positionSeconds) &&
         playbackLaunchIntent.positionSeconds >= 15
       ) {
+        recordExplicitSeek(playbackLaunchIntent.positionSeconds);
         player.currentTime = playbackLaunchIntent.positionSeconds;
       }
       consumePlaybackLaunchIntent();
@@ -245,58 +331,63 @@ export function usePlayerController({
     player,
     previousProgress,
     readyPlaybackUri,
+    recordExplicitSeek,
   ]);
 
   const handleResumeResponse = useCallback(
     (resume: boolean) => {
       setShowResumePrompt(false);
       if (resume && previousProgress && player) {
+        recordExplicitSeek(previousProgress.currentTime);
         player.currentTime = previousProgress.currentTime;
       }
       player?.play();
     },
-    [player, previousProgress],
+    [player, previousProgress, recordExplicitSeek],
   );
 
   // 4. Progress Reporting & Sync intervals
   useEffect(() => {
     if (!mediaInfo || !player) return;
 
-    progressTimerRef.current = setInterval(() => {
-      let currentTime = 0;
-      let duration = 0;
-      try {
-        currentTime = player.currentTime || 0;
-        duration = player.duration || 0;
-      } catch (e) {
-        return;
-      }
-
-      setProgress(currentTime, duration);
-
-      if (currentTime > 0 && duration > 0) {
-        updateProgress({
-          itemId: mediaInfo.itemId,
-          type: mediaInfo.type,
-          season: mediaInfo.season,
-          episode: mediaInfo.episode,
-          currentTime,
-          duration,
-          title: mediaInfo.title,
-          poster: mediaInfo.poster,
-        });
-
+    const timeSubscription = player.addListener?.(
+      "timeUpdate",
+      ({ currentTime }: { currentTime?: number }) => {
+        if (
+          typeof currentTime !== "number" ||
+          !progressClockRef.current.acceptTimeUpdate(currentTime)
+        ) {
+          return;
+        }
+        const snapshot = getProgressSnapshot();
+        setProgress(snapshot.currentTime, snapshot.duration);
         if (
           autoPlayNext &&
           nextEpisode &&
           !showNextEpisodeOverlay &&
-          duration - currentTime < 30 &&
-          duration > 60
+          snapshot.duration - snapshot.currentTime < 30 &&
+          snapshot.duration > 60
         ) {
           setShowNextEpisodeOverlay(true);
         }
-      }
-    }, PROGRESS_REPORT_INTERVAL);
+      },
+    );
+    const playingSubscription = player.addListener?.(
+      "playingChange",
+      ({ isPlaying }: { isPlaying?: boolean }) => {
+        if (isPlaying === false) reportProgress(true);
+      },
+    );
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState) => {
+        if (nextState !== "active") reportProgress(true);
+      },
+    );
+    progressTimerRef.current = setInterval(
+      () => reportProgress(false),
+      PROGRESS_REPORT_INTERVAL,
+    );
 
     const sessionTimer = setInterval(() => {
       if (!player) return;
@@ -310,15 +401,20 @@ export function usePlayerController({
     }, 5000);
 
     return () => {
+      reportProgress(true);
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
       clearInterval(sessionTimer);
+      timeSubscription?.remove?.();
+      playingSubscription?.remove?.();
+      appStateSubscription.remove();
       updateStatus({ status: "idle" });
     };
   }, [
     mediaInfo,
     player,
+    getProgressSnapshot,
+    reportProgress,
     setProgress,
-    updateProgress,
     updateStatus,
     autoPlayNext,
     nextEpisode,
@@ -339,8 +435,10 @@ export function usePlayerController({
           showControls();
           break;
         case "seek":
-          if (cmd.data?.position !== undefined)
+          if (cmd.data?.position !== undefined) {
+            recordExplicitSeek(cmd.data.position);
             player.currentTime = cmd.data.position;
+          }
           break;
         case "stop":
           onClose();
@@ -353,7 +451,10 @@ export function usePlayerController({
       const diff = Math.abs((player.currentTime || 0) - data.position);
       if (data.status === "playing" && !player.playing) player.play();
       else if (data.status === "paused" && player.playing) player.pause();
-      if (diff > 3) player.currentTime = data.position;
+      if (diff > 3) {
+        recordExplicitSeek(data.position);
+        player.currentTime = data.position;
+      }
     };
 
     const remoteSub = DeviceEventEmitter.addListener(
@@ -369,7 +470,7 @@ export function usePlayerController({
       remoteSub.remove();
       syncSub.remove();
     };
-  }, [player, onClose, showControls, mediaInfo?.itemId]);
+  }, [player, onClose, showControls, mediaInfo?.itemId, recordExplicitSeek]);
 
   // 6. Broadcast local changes
   useEffect(() => {
@@ -433,5 +534,9 @@ export function usePlayerController({
     setAudioTracks,
     setSubtitles,
     nextEpisode,
+    reportProgress,
+    recordExplicitSeek,
+    beginProgressSourceReplacement,
+    completeProgressSourceReplacement,
   };
 }

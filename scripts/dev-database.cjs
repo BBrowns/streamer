@@ -334,6 +334,49 @@ async function preflightDatabase(options = {}) {
   return { action: "started-compose", mode, target };
 }
 
+function shouldSynchronizeDevelopmentSchema(configuration) {
+  return (
+    configuration.target.isLoopback && configuration.mode !== "external"
+  );
+}
+
+async function synchronizeDevelopmentSchema(configuration, options = {}) {
+  const log = options.log || console.log;
+  if (!shouldSynchronizeDevelopmentSchema(configuration)) {
+    log(
+      "[dev-db] Automatic schema sync is disabled for external databases; run `npm run db:push --workspace=server` explicitly when appropriate.",
+    );
+    return { action: "schema-sync-skipped" };
+  }
+
+  log("[dev-db] Synchronizing the local development schema.");
+  const commandRunner = options.commandRunner || runCommand;
+  const result = await commandRunner(
+    "npm",
+    ["run", "db:push", "--workspace=server"],
+    options,
+  );
+  if (exitCode(result) !== 0) {
+    throw new Error(
+      "The local development schema could not be synchronized. Prisma refuses destructive changes unless you handle them explicitly.",
+    );
+  }
+
+  log("[dev-db] Local development schema is up to date.");
+  return { action: "schema-synchronized" };
+}
+
+async function prepareDevelopmentDatabase(options = {}) {
+  const configuration =
+    options.configuration || resolveDatabaseConfiguration(options);
+  const preflight = await preflightDatabase({
+    ...options,
+    configuration,
+  });
+  const schema = await synchronizeDevelopmentSchema(configuration, options);
+  return { preflight, schema };
+}
+
 async function showComposeStatus(options = {}) {
   await runCompose(["ps", "db"], options);
 }
@@ -341,10 +384,11 @@ async function showComposeStatus(options = {}) {
 async function main(argv = process.argv, options = {}) {
   const command = argv[2] || "preflight";
   if (command === "preflight") return preflightDatabase(options);
+  if (command === "prepare") return prepareDevelopmentDatabase(options);
   if (command === "start") return startComposeDatabase(options);
   if (command === "status") return showComposeStatus(options);
   throw new Error(
-    `Unknown development database command: ${command}. Use preflight, start, or status.`,
+    `Unknown development database command: ${command}. Use prepare, preflight, start, or status.`,
   );
 }
 
@@ -368,10 +412,13 @@ module.exports = {
   parseDatabaseTarget,
   parseDevDatabaseMode,
   parseEnvFile,
+  prepareDevelopmentDatabase,
   preflightDatabase,
   readServerEnv,
   resolveDatabaseConfiguration,
   runCompose,
   startComposeDatabase,
+  shouldSynchronizeDevelopmentSchema,
+  synchronizeDevelopmentSchema,
   waitForTcpConnection,
 };

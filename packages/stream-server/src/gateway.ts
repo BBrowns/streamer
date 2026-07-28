@@ -7,6 +7,7 @@ import {
 } from "./security.js";
 import {
   ensureTorrentReady,
+  evaluateSeekableRemuxPreparation,
   getSelectedFile,
   isTorrentEngineUnavailableError,
   prepareSeekableRemux,
@@ -17,7 +18,10 @@ import {
   waitForTorrentFileFirstBytes,
   destroyTorrentByInfoHash,
 } from "./torrent.js";
-import type { FileSelectionHints } from "./torrent.js";
+import type {
+  FileSelectionHints,
+  SeekableRemuxUnavailableReason,
+} from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
 
 type GatewayJobState =
@@ -32,9 +36,15 @@ type GatewayJobMode = "bridge" | "remux";
 type GatewayRemuxStrategy = "seekable-cache" | "progressive-fmp4";
 type GatewaySeekableCacheStatus =
   | "not_started"
+  | "evaluating"
   | "preparing"
   | "ready"
   | "unavailable";
+type GatewaySeekableCacheUnavailableReason =
+  | SeekableRemuxUnavailableReason
+  | "remux_failed"
+  | "timed_out"
+  | "cancelled";
 type GatewayJobPhase =
   | "finding_peers"
   | "no_peers"
@@ -73,6 +83,9 @@ interface GatewayJob {
   seekableCacheStatus?: GatewaySeekableCacheStatus;
   seekableCacheStartedAt?: number;
   seekableCacheCompletedAt?: number;
+  seekableCacheUnavailableReason?: GatewaySeekableCacheUnavailableReason;
+  seekableCacheBytesRead?: number;
+  seekableCacheLastProgressAt?: number;
   seekableCacheAbortController?: AbortController;
   seekableCachePromise?: Promise<void>;
   releaseSeekableCache?: () => void;
@@ -96,6 +109,8 @@ const GATEWAY_METADATA_TIMEOUT_MS =
   GATEWAY_PEER_DISCOVERY_TIMEOUT_MS + GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS;
 const GATEWAY_FIRST_BYTE_TIMEOUT_MS = 20_000;
 const GATEWAY_REMUX_READY_TIMEOUT_MS = 60_000;
+const GATEWAY_BACKGROUND_REMUX_TIMEOUT_MS = 10 * 60_000;
+const GATEWAY_BACKGROUND_REMUX_STALL_TIMEOUT_MS = 30_000;
 const jobs = new Map<string, GatewayJob>();
 
 function releaseGatewaySeekableCache(
@@ -108,10 +123,14 @@ function releaseGatewaySeekableCache(
   job.releaseSeekableCache?.();
   job.releaseSeekableCache = undefined;
 
-  if (job.seekableCacheStatus === "preparing") {
+  if (
+    job.seekableCacheStatus === "evaluating" ||
+    job.seekableCacheStatus === "preparing"
+  ) {
     // A cancelled/pruned job no longer has a usable handoff target. This does
     // not change the primary live playback state while the job is still live.
     job.seekableCacheStatus = "unavailable";
+    job.seekableCacheUnavailableReason = "cancelled";
     job.seekableCacheCompletedAt = Date.now();
   }
 }
@@ -272,6 +291,10 @@ function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
       cacheStatus: terminal ? "unavailable" : "streaming",
       seekableCache: {
         status: seekableCacheStatus,
+        unavailableReason:
+          seekableCacheStatus === "unavailable"
+            ? (job.seekableCacheUnavailableReason ?? "remux_failed")
+            : null,
         startedAt: job.seekableCacheStartedAt
           ? new Date(job.seekableCacheStartedAt).toISOString()
           : null,
@@ -518,6 +541,7 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
     job.state !== "ready" ||
     job.activeStreamCount <= 0 ||
     job.seekableCacheStatus === "preparing" ||
+    job.seekableCacheStatus === "evaluating" ||
     job.seekableCacheStatus === "ready" ||
     job.seekableCacheStatus === "unavailable" ||
     isGatewayJobCancelled(job)
@@ -527,26 +551,83 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
 
   const abortController = new AbortController();
   job.seekableCacheAbortController = abortController;
-  job.seekableCacheStatus = "preparing";
+  job.seekableCacheStatus = "evaluating";
   job.seekableCacheStartedAt = Date.now();
   job.seekableCacheCompletedAt = undefined;
+  job.seekableCacheUnavailableReason = undefined;
+  job.seekableCacheBytesRead = 0;
+  job.seekableCacheLastProgressAt = undefined;
   job.updatedAt = Date.now();
-  addGatewayJobBreadcrumb(job, "gateway.seekable_cache_started", "info", {
-    seekableCacheStatus: "preparing",
+  addGatewayJobBreadcrumb(job, "gateway.seekable_cache_evaluating", "info", {
+    seekableCacheStatus: "evaluating",
   });
 
   const ownsCurrentPreparation = () =>
     !isGatewayJobCancelled(job) &&
     job.seekableCacheAbortController === abortController &&
-    job.seekableCacheStatus === "preparing";
+    (job.seekableCacheStatus === "evaluating" ||
+      job.seekableCacheStatus === "preparing");
 
-  job.seekableCachePromise = prepareSeekableRemux(torrent, {
-    fileIdx: job.fileIdx,
-    hints: job.hints,
-    signal: abortController.signal,
-    remuxTimeoutMs: GATEWAY_REMUX_READY_TIMEOUT_MS,
-  })
-    .then(() => {
+  job.seekableCachePromise = (async () => {
+    const evaluation = await evaluateSeekableRemuxPreparation(torrent, {
+      fileIdx: job.fileIdx,
+      hints: job.hints,
+    });
+    if (!ownsCurrentPreparation()) return false;
+
+    if (!evaluation.eligible) {
+      job.seekableCacheStatus = "unavailable";
+      job.seekableCacheUnavailableReason = evaluation.reason;
+      job.seekableCacheCompletedAt = Date.now();
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(
+        job,
+        "gateway.seekable_cache_unavailable",
+        "warning",
+        {
+          seekableCacheStatus: "unavailable",
+          unavailableReason: evaluation.reason,
+        },
+      );
+      return false;
+    }
+
+    job.seekableCacheStatus = "preparing";
+    job.updatedAt = Date.now();
+    addGatewayJobBreadcrumb(job, "gateway.seekable_cache_started", "info", {
+      seekableCacheStatus: "preparing",
+    });
+
+    await prepareSeekableRemux(torrent, {
+      fileIdx: job.fileIdx,
+      hints: job.hints,
+      signal: abortController.signal,
+      remuxTimeoutMs: GATEWAY_BACKGROUND_REMUX_TIMEOUT_MS,
+      stallTimeoutMs: GATEWAY_BACKGROUND_REMUX_STALL_TIMEOUT_MS,
+      onProgress: (bytesRead) => {
+        if (!ownsCurrentPreparation()) return;
+        const isFirstProgress = !job.seekableCacheLastProgressAt;
+        job.seekableCacheBytesRead = bytesRead;
+        job.seekableCacheLastProgressAt = Date.now();
+        job.updatedAt = Date.now();
+        if (isFirstProgress) {
+          addGatewayJobBreadcrumb(
+            job,
+            "gateway.seekable_cache_progressed",
+            "info",
+            {
+              elapsedMs:
+                job.seekableCacheLastProgressAt -
+                (job.seekableCacheStartedAt ?? job.createdAt),
+            },
+          );
+        }
+      },
+    });
+    return true;
+  })()
+    .then((prepared) => {
+      if (!prepared) return;
       if (!ownsCurrentPreparation()) return;
 
       // Pin the completed entry until this job ends. A signed route is only
@@ -557,6 +638,7 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
       });
       if (!release) {
         job.seekableCacheStatus = "unavailable";
+        job.seekableCacheUnavailableReason = "remux_failed";
         job.seekableCacheCompletedAt = Date.now();
         job.updatedAt = Date.now();
         addGatewayJobBreadcrumb(
@@ -570,32 +652,44 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
 
       job.releaseSeekableCache = release;
       job.seekableCacheStatus = "ready";
+      job.seekableCacheUnavailableReason = undefined;
       job.seekableCacheCompletedAt = Date.now();
       job.updatedAt = Date.now();
       addGatewayJobBreadcrumb(job, "gateway.seekable_cache_ready", "info", {
         seekableCacheStatus: "ready",
       });
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       // A seekable cache is an enhancement to the live response. Never turn a
       // healthy progressive playback job into a terminal failure just because
       // the optional handoff could not be produced.
       if (!ownsCurrentPreparation()) return;
       job.seekableCacheStatus = "unavailable";
+      job.seekableCacheUnavailableReason = /timed out|timeout|stalled/i.test(
+        String((error as Error | undefined)?.message ?? error),
+      )
+        ? "timed_out"
+        : "remux_failed";
       job.seekableCacheCompletedAt = Date.now();
       job.updatedAt = Date.now();
       addGatewayJobBreadcrumb(
         job,
         "gateway.seekable_cache_unavailable",
         "warning",
-        { seekableCacheStatus: "unavailable" },
+        {
+          seekableCacheStatus: "unavailable",
+          unavailableReason: job.seekableCacheUnavailableReason,
+        },
       );
     })
     .finally(() => {
       if (job.seekableCacheAbortController === abortController) {
         job.seekableCacheAbortController = undefined;
       }
-      if (job.seekableCacheStatus !== "preparing") {
+      if (
+        job.seekableCacheStatus !== "evaluating" &&
+        job.seekableCacheStatus !== "preparing"
+      ) {
         job.seekableCachePromise = undefined;
       }
     });

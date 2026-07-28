@@ -13,7 +13,7 @@
     "dev:db": "node scripts/dev-database.cjs start",
     "dev:db:status": "node scripts/dev-database.cjs status",
     "dev:db:test": "node --test scripts/dev-database.test.cjs",
-    "dev:server": "node scripts/dev-database.cjs preflight && node scripts/dev-runtime.cjs npm --port 3001 -- run dev --workspace=server",
+    "dev:server": "node scripts/dev-database.cjs prepare && node scripts/dev-runtime.cjs npm --port 3001 -- run dev --workspace=server",
     "dev:mobile": "node scripts/dev-runtime.cjs npm -- run start --workspace=apps/mobile",
     "dev:mobile:web": "node scripts/dev-runtime.cjs npm -- run web --workspace=apps/mobile",
     "dev:desktop": "node scripts/dev-runtime.cjs npm -- run dev --workspace=@streamer/desktop",

@@ -262,6 +262,7 @@ describe("Integration: Watch Progress", () => {
         itemId: "tt0111161",
         currentTime: 9600,
         duration: 10000,
+        durationSource: "media",
         title: "Completed Movie",
       });
 
@@ -274,6 +275,7 @@ describe("Integration: Watch Progress", () => {
         itemId: "tt0903747",
         currentTime: 4000,
         duration: 10000,
+        durationSource: "media",
         title: "In Progress Movie",
       });
 

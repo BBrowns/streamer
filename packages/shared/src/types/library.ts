@@ -10,6 +10,12 @@ export interface LibraryItem {
 }
 
 /** Watch progress for resume / continue-watching */
+export type WatchProgressDurationSource =
+  | "metadata"
+  | "media"
+  | "unknown"
+  | "legacy";
+
 export interface WatchProgress {
   id: string;
   userId: string;
@@ -19,6 +25,7 @@ export interface WatchProgress {
   episode?: number | null;
   currentTime: number;
   duration: number;
+  durationSource: WatchProgressDurationSource;
   title: string;
   poster?: string | null;
   lastWatched: string;
@@ -51,6 +58,7 @@ export interface UpdateProgressRequest {
   episode?: number;
   currentTime: number;
   duration: number;
+  durationSource?: WatchProgressDurationSource;
   title: string;
   poster?: string;
 }

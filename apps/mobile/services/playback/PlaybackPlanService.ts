@@ -121,7 +121,20 @@ function buildPlannerPreferences(
 function preparePlaybackPlanRequest(
   input: PlaybackPlanInput,
 ): PreparedPlaybackPlanRequest {
-  const { deviceProfile: requestedDeviceProfile, ...request } = input;
+  const {
+    deviceProfile: requestedDeviceProfile,
+    season: requestedSeason,
+    episode: requestedEpisode,
+    ...request
+  } = input;
+  const season =
+    Number.isInteger(requestedSeason) && (requestedSeason ?? 0) > 0
+      ? requestedSeason
+      : undefined;
+  const episode =
+    Number.isInteger(requestedEpisode) && (requestedEpisode ?? 0) > 0
+      ? requestedEpisode
+      : undefined;
   const baseDeviceProfile =
     requestedDeviceProfile ??
     (input.action === "cast"
@@ -147,6 +160,8 @@ function preparePlaybackPlanRequest(
 
   const payload: PlaybackPlanRequest = {
     ...request,
+    ...(season ? { season } : {}),
+    ...(episode ? { episode } : {}),
     deviceProfile,
     ...(preferences ? { preferences } : {}),
     bridge,

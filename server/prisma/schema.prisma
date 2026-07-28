@@ -136,6 +136,7 @@ model WatchProgress {
   episode     Int         @default(0)
   currentTime Float       @map("current_time")
   duration    Float
+  durationSource String    @default("legacy") @map("duration_source")
   title       String
   poster      String?
   lastWatched DateTime    @default(now()) @map("last_watched")

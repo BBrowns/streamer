@@ -96,6 +96,7 @@ const SEEKABLE_CACHE_POLL_INTERVAL_MS = 2_000;
 
 type SeekableCacheStatus =
   | "not_started"
+  | "evaluating"
   | "preparing"
   | "ready"
   | "unavailable";
@@ -1295,11 +1296,17 @@ export default function PlayerScreen() {
     setAudioTracks,
     setSubtitles,
     nextEpisode,
+    recordExplicitSeek,
+    beginProgressSourceReplacement,
+    completeProgressSourceReplacement,
   } = usePlayerController({
     player,
     playbackUri,
     onClose: handleClose,
     showControls,
+    isProgressiveRemux:
+      currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4",
+    hasSeekableHandoff: seekableHandoffApplied,
   });
 
   const refreshPlayerTracks = useCallback(() => {
@@ -1646,6 +1653,8 @@ export default function PlayerScreen() {
         pausedAfterSeekableHandoffRef.current = !shouldResume;
         setBuffering(true);
         setRuntimeState("buffering");
+        beginProgressSourceReplacement();
+        let replacementCompleted = false;
         try {
           await replaceWithSeekableSource({
             player,
@@ -1655,13 +1664,20 @@ export default function PlayerScreen() {
             signal: controller.signal,
           });
           if (controller.signal.aborted || !isCurrentAttempt()) return;
+          completeProgressSourceReplacement(resumeAt);
+          replacementCompleted = true;
           setSeekableHandoffApplied(true);
           setSeekableCacheStatus("ready");
           return;
         } catch {
+          completeProgressSourceReplacement(resumeAt);
+          replacementCompleted = true;
           markSeekableHandoffUnavailable();
           return;
         } finally {
+          if (!replacementCompleted) {
+            completeProgressSourceReplacement(resumeAt);
+          }
           seekableHandoffInFlightRef.current = false;
           seekableHandoffShouldResumeRef.current = null;
           if (shouldResume) {
@@ -1681,6 +1697,8 @@ export default function PlayerScreen() {
   }, [
     activeCast,
     activeGatewayJobId,
+    beginProgressSourceReplacement,
+    completeProgressSourceReplacement,
     engine,
     hasPlaybackStarted,
     isProgressiveRemuxPlayback,
@@ -1728,30 +1746,52 @@ export default function PlayerScreen() {
     (seconds: number) => {
       if (!canSeekPlayback || !player) return;
       markIntentionalSeek();
+      recordExplicitSeek(Math.max(0, player.currentTime + seconds));
       player?.seekBy(seconds);
       showControls();
     },
-    [canSeekPlayback, markIntentionalSeek, player, showControls],
+    [
+      canSeekPlayback,
+      markIntentionalSeek,
+      player,
+      recordExplicitSeek,
+      showControls,
+    ],
   );
 
   const handleSeekTo = useCallback(
     (seconds: number) => {
       if (!canSeekPlayback || !player) return;
       markIntentionalSeek();
+      recordExplicitSeek(seconds);
       player.currentTime = seconds;
       showControls();
     },
-    [canSeekPlayback, markIntentionalSeek, player, showControls],
+    [
+      canSeekPlayback,
+      markIntentionalSeek,
+      player,
+      recordExplicitSeek,
+      showControls,
+    ],
   );
 
   const handleSeekPercent = useCallback(
     (percent: number) => {
       if (!canSeekPlayback || !player || !player.duration) return;
       markIntentionalSeek();
-      player.currentTime = (player.duration * percent) / 100;
+      const target = (player.duration * percent) / 100;
+      recordExplicitSeek(target);
+      player.currentTime = target;
       showControls();
     },
-    [canSeekPlayback, markIntentionalSeek, player, showControls],
+    [
+      canSeekPlayback,
+      markIntentionalSeek,
+      player,
+      recordExplicitSeek,
+      showControls,
+    ],
   );
 
   const handleToggleMute = useCallback(() => {

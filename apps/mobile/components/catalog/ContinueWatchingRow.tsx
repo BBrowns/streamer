@@ -28,6 +28,7 @@ import { useWindowClass } from "../../hooks/useWindowClass";
 import { MediaRail } from "../ui/MediaRail";
 import { playBest } from "../../services/playback/PlaybackOrchestrator";
 import { usePlayerStore } from "../../stores/playerStore";
+import { extractErrorMessage } from "../../utils/error";
 
 type ContinueWatchingRowProps = {
   showEmptyState?: boolean;
@@ -39,9 +40,33 @@ function formatRemainingMinutes(item: WatchProgress) {
   return Math.max(1, Math.ceil(remainingSeconds / 60));
 }
 
+function hasTrustedDuration(item: WatchProgress) {
+  return (
+    item.duration > 0 &&
+    (item.durationSource === "metadata" || item.durationSource === "media")
+  );
+}
+
+function formatWatchedMinutes(item: WatchProgress) {
+  return Math.max(1, Math.floor(item.currentTime / 60));
+}
+
 function episodeLabel(item: WatchProgress) {
-  if (item.season == null || item.episode == null) return null;
+  if (
+    item.season == null ||
+    item.season <= 0 ||
+    item.episode == null ||
+    item.episode <= 0
+  ) {
+    return null;
+  }
   return `S${item.season} E${item.episode}`;
+}
+
+function playbackCoordinate(value: number | null | undefined) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
 }
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
@@ -86,11 +111,14 @@ function ContinueWatchingCard({
   const cardWidth = isDesktop ? 360 : 286;
   const posterWidth = isDesktop ? 142 : 112;
   const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
-  const remainingMinutes = formatRemainingMinutes(item);
-  const progressPercent =
-    item.duration > 0
-      ? Math.min(Math.round((item.currentTime / item.duration) * 100), 100)
-      : 0;
+  const durationIsTrusted = hasTrustedDuration(item);
+  const remainingMinutes = durationIsTrusted
+    ? formatRemainingMinutes(item)
+    : null;
+  const watchedMinutes = formatWatchedMinutes(item);
+  const progressPercent = durationIsTrusted
+    ? Math.min(Math.round((item.currentTime / item.duration) * 100), 100)
+    : 0;
   const episode = episodeLabel(item);
 
   const handleOpenDetails = () => {
@@ -105,8 +133,8 @@ function ContinueWatchingCard({
         id: item.itemId,
         title: item.title,
         poster: item.poster ?? undefined,
-        season: item.season ?? undefined,
-        episode: item.episode ?? undefined,
+        season: playbackCoordinate(item.season),
+        episode: playbackCoordinate(item.episode),
       });
 
       if (!result.ok) {
@@ -126,7 +154,7 @@ function ContinueWatchingCard({
       router.push("/player");
     } catch (error: any) {
       useToastStore.getState().show(
-        error?.message ||
+        extractErrorMessage(error) ||
           t("detail.errors.notPlayable", {
             defaultValue: "Playback is unavailable right now.",
           }),
@@ -196,7 +224,9 @@ function ContinueWatchingCard({
               />
             </View>
           )}
-          <ProgressBar current={item.currentTime} total={item.duration} />
+          {durationIsTrusted && (
+            <ProgressBar current={item.currentTime} total={item.duration} />
+          )}
         </View>
 
         <View style={styles.copy}>
@@ -212,20 +242,33 @@ function ContinueWatchingCard({
             </Text>
           </View>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {t("home.continueWatching.remaining", {
-              minutes: remainingMinutes,
-              progress: progressPercent,
-            })}
+            {durationIsTrusted
+              ? t("home.continueWatching.remaining", {
+                  minutes: remainingMinutes,
+                  progress: progressPercent,
+                })
+              : t("home.continueWatching.watched", {
+                  minutes: watchedMinutes,
+                  defaultValue: "{{minutes}}m watched",
+                })}
           </Text>
         </View>
       </Pressable>
       <View style={styles.actionRow}>
         <AppButton
           label={resumeLabel}
-          accessibilityLabel={t("home.continueWatching.resumeA11y", {
-            title: item.title,
-            minutes: remainingMinutes,
-          })}
+          accessibilityLabel={
+            durationIsTrusted
+              ? t("home.continueWatching.resumeA11y", {
+                  title: item.title,
+                  minutes: remainingMinutes,
+                })
+              : t("home.continueWatching.resumeWatchedA11y", {
+                  title: item.title,
+                  minutes: watchedMinutes,
+                  defaultValue: "Resume {{title}}, {{minutes}} minutes watched",
+                })
+          }
           icon="play"
           size="small"
           variant="primary"
@@ -365,6 +408,7 @@ export function ContinueWatchingRow({
                         episode: removedItem.episode ?? undefined,
                         currentTime: removedItem.currentTime,
                         duration: removedItem.duration,
+                        durationSource: removedItem.durationSource,
                         title: removedItem.title,
                         poster: removedItem.poster ?? undefined,
                       }),

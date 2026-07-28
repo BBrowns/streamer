@@ -1,4 +1,5 @@
 import { ContentType } from "@prisma/client";
+import type { WatchProgressDurationSource } from "@streamer/shared";
 
 /** Port: Library item persistence */
 export interface ILibraryRepository {
@@ -25,6 +26,12 @@ export interface IWatchProgressRepository {
     userId: string,
     options: { limit: number; cursor?: { lastWatched: Date; id: string } },
   ): Promise<WatchProgressRecord[]>;
+  findByIdentity(
+    userId: string,
+    itemId: string,
+    season?: number | null,
+    episode?: number | null,
+  ): Promise<WatchProgressRecord | null>;
   upsert(data: {
     userId: string;
     type: ContentType;
@@ -33,6 +40,7 @@ export interface IWatchProgressRepository {
     episode?: number | null;
     currentTime: number;
     duration: number;
+    durationSource: WatchProgressDurationSource;
     title: string;
     poster?: string | null;
   }): Promise<WatchProgressRecord>;
@@ -62,6 +70,7 @@ export interface WatchProgressRecord {
   episode: number | null;
   currentTime: number;
   duration: number;
+  durationSource: WatchProgressDurationSource;
   title: string;
   poster: string | null;
   lastWatched: Date;

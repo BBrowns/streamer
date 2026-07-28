@@ -89,17 +89,20 @@ export function LibraryCard({
     defaultValue: "Remove from Library",
   });
   const removeLabel = removeLabelOverride ?? defaultRemoveLabel;
-  const historyProgress = historyEntry
-    ? Math.min(
-        100,
-        Math.max(
-          0,
-          historyEntry.duration > 0
-            ? (historyEntry.currentTime / historyEntry.duration) * 100
-            : 0,
-        ),
-      )
-    : undefined;
+  const historyProgress =
+    historyEntry &&
+    (historyEntry.durationSource === "metadata" ||
+      historyEntry.durationSource === "media")
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            historyEntry.duration > 0
+              ? (historyEntry.currentTime / historyEntry.duration) * 100
+              : 0,
+          ),
+        )
+      : undefined;
   const historyEpisodeLabel =
     historyEntry?.season != null && historyEntry?.episode != null
       ? `S${historyEntry.season} E${historyEntry.episode}`

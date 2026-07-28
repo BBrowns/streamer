@@ -34,7 +34,13 @@ interface GatewayJobResponse extends GatewayJobProgress {
     seekable?: boolean;
     cacheStatus?: string;
     seekableCache?: {
-      status?: "not_started" | "preparing" | "ready" | "unavailable";
+      status?:
+        | "not_started"
+        | "evaluating"
+        | "preparing"
+        | "ready"
+        | "unavailable";
+      unavailableReason?: SeekablePlaybackHandoff["unavailableReason"] | null;
       startedAt?: string | null;
       completedAt?: string | null;
     };
@@ -247,6 +253,8 @@ export class TorrentEngine implements IStreamEngine {
     return {
       gatewayJobId: job.id,
       status,
+      unavailableReason:
+        job.media?.seekableCache?.unavailableReason ?? undefined,
     };
   }
 

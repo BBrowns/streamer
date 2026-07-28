@@ -11,6 +11,7 @@ import type {
   LibraryItem,
   WatchHistoryPage,
   WatchProgress,
+  WatchProgressDurationSource,
 } from "@streamer/shared";
 
 import { TraktService } from "../../trakt/trakt.service.js";
@@ -118,18 +119,27 @@ export class LibraryService {
       episode?: number;
       currentTime: number;
       duration: number;
+      durationSource?: WatchProgressDurationSource;
       title: string;
       poster?: string;
     },
   ): Promise<WatchProgress> {
+    const existing = await this.progressRepo.findByIdentity(
+      userId,
+      data.itemId,
+      data.season,
+      data.episode,
+    );
+    const normalized = normalizeProgressDuration(data, existing);
     const record = await this.progressRepo.upsert({
       userId,
       type: data.type as ContentType,
       itemId: data.itemId,
       season: data.season ?? null,
       episode: data.episode ?? null,
-      currentTime: data.currentTime,
-      duration: data.duration,
+      currentTime: normalized.currentTime,
+      duration: normalized.duration,
+      durationSource: normalized.durationSource,
       title: data.title,
       poster: data.poster ?? null,
     });
@@ -161,9 +171,13 @@ export class LibraryService {
   ): Promise<WatchProgress[]> {
     const records = await this.progressRepo.findByUser(userId, limit);
 
-    // Filter out completed items (>= 95% watched)
+    // Unknown and legacy durations remain resumable, but must never be used
+    // to infer that a title is complete.
     const inProgress = records.filter((r) => {
-      if (r.duration <= 0) return false;
+      if (r.currentTime <= 0) return false;
+      if (!isTrustedDurationSource(r.durationSource) || r.duration <= 0) {
+        return true;
+      }
       const pct = r.currentTime / r.duration;
       return pct < 0.95;
     });
@@ -253,15 +267,94 @@ export class LibraryService {
       userId: record.userId,
       type: record.type as "movie" | "series",
       itemId: record.itemId,
-      season: record.season,
-      episode: record.episode,
+      season: normalizeProgressCoordinate(record.season),
+      episode: normalizeProgressCoordinate(record.episode),
       currentTime: record.currentTime,
       duration: record.duration,
+      durationSource: record.durationSource,
       title: record.title,
       poster: record.poster,
       lastWatched: record.lastWatched.toISOString(),
     };
   }
+}
+
+/**
+ * Prisma stores zero as the identity sentinel for content without episode
+ * coordinates. Never expose that persistence detail through the public API:
+ * playback request schemas intentionally only accept positive coordinates.
+ */
+export function normalizeProgressCoordinate(
+  value: number | null | undefined,
+): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+const DURATION_SOURCE_RANK: Record<WatchProgressDurationSource, number> = {
+  unknown: 0,
+  legacy: 1,
+  metadata: 2,
+  media: 3,
+};
+
+function isTrustedDurationSource(source: WatchProgressDurationSource) {
+  return source === "metadata" || source === "media";
+}
+
+export function normalizeProgressDuration(
+  input: {
+    currentTime: number;
+    duration: number;
+    durationSource?: WatchProgressDurationSource;
+  },
+  existing?: WatchProgressRecord | null,
+): {
+  currentTime: number;
+  duration: number;
+  durationSource: WatchProgressDurationSource;
+} {
+  let durationSource = input.durationSource ?? "legacy";
+  let duration =
+    Number.isFinite(input.duration) && input.duration > 0 ? input.duration : 0;
+  if (duration === 0) durationSource = "unknown";
+
+  if (existing) {
+    const existingRank = DURATION_SOURCE_RANK[existing.durationSource];
+    const incomingRank = DURATION_SOURCE_RANK[durationSource];
+    const lowerConfidence = incomingRank < existingRank;
+    const metadataCannotReplaceMedia =
+      existing.durationSource === "media" && durationSource === "metadata";
+    const suspiciousLowerPriorityChange =
+      existing.duration > 0 &&
+      duration > 0 &&
+      durationSource !== "media" &&
+      Math.abs(duration - existing.duration) / existing.duration > 0.2 &&
+      incomingRank <= existingRank;
+
+    if (
+      lowerConfidence ||
+      metadataCannotReplaceMedia ||
+      suspiciousLowerPriorityChange
+    ) {
+      duration = existing.duration;
+      durationSource = existing.durationSource;
+    }
+  }
+
+  const rawCurrentTime =
+    Number.isFinite(input.currentTime) && input.currentTime > 0
+      ? input.currentTime
+      : 0;
+  return {
+    currentTime:
+      duration > 0 && isTrustedDurationSource(durationSource)
+        ? Math.min(rawCurrentTime, duration)
+        : rawCurrentTime,
+    duration,
+    durationSource,
+  };
 }
 
 export function encodeHistoryCursor(lastWatched: Date, id: string): string {

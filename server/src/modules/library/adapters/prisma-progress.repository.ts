@@ -4,6 +4,24 @@ import type {
   IWatchProgressRepository,
   WatchProgressRecord,
 } from "../ports/library.ports.js";
+import type { WatchProgressDurationSource } from "@streamer/shared";
+
+function toRecord(record: any): WatchProgressRecord {
+  return {
+    id: record.id,
+    userId: record.userId,
+    type: record.type,
+    itemId: record.itemId,
+    season: record.season,
+    episode: record.episode,
+    currentTime: record.currentTime,
+    duration: record.duration,
+    durationSource: record.durationSource as WatchProgressDurationSource,
+    title: record.title,
+    poster: record.poster,
+    lastWatched: record.lastWatched,
+  };
+}
 
 /** Prisma adapter implementing IWatchProgressRepository */
 export class PrismaWatchProgressRepository implements IWatchProgressRepository {
@@ -14,19 +32,7 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
       take: limit,
     });
 
-    return records.map((r: any) => ({
-      id: r.id,
-      userId: r.userId,
-      type: r.type,
-      itemId: r.itemId,
-      season: r.season,
-      episode: r.episode,
-      currentTime: r.currentTime,
-      duration: r.duration,
-      title: r.title,
-      poster: r.poster,
-      lastWatched: r.lastWatched,
-    }));
+    return records.map(toRecord);
   }
 
   async findHistoryByUser(
@@ -50,19 +56,26 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
       take: options.limit,
     });
 
-    return records.map((r: any) => ({
-      id: r.id,
-      userId: r.userId,
-      type: r.type,
-      itemId: r.itemId,
-      season: r.season,
-      episode: r.episode,
-      currentTime: r.currentTime,
-      duration: r.duration,
-      title: r.title,
-      poster: r.poster,
-      lastWatched: r.lastWatched,
-    }));
+    return records.map(toRecord);
+  }
+
+  async findByIdentity(
+    userId: string,
+    itemId: string,
+    season?: number | null,
+    episode?: number | null,
+  ): Promise<WatchProgressRecord | null> {
+    const record = await prisma.watchProgress.findUnique({
+      where: {
+        userId_itemId_season_episode: {
+          userId,
+          itemId,
+          season: season ?? 0,
+          episode: episode ?? 0,
+        },
+      },
+    });
+    return record ? toRecord(record) : null;
   }
 
   async upsert(data: {
@@ -73,6 +86,7 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
     episode?: number | null;
     currentTime: number;
     duration: number;
+    durationSource: WatchProgressDurationSource;
     title: string;
     poster?: string | null;
   }): Promise<WatchProgressRecord> {
@@ -93,31 +107,21 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
         episode: data.episode ?? 0,
         currentTime: data.currentTime,
         duration: data.duration,
+        durationSource: data.durationSource,
         title: data.title,
         poster: data.poster ?? null,
       },
       update: {
         currentTime: data.currentTime,
         duration: data.duration,
+        durationSource: data.durationSource,
         title: data.title,
         poster: data.poster ?? null,
         lastWatched: new Date(),
       },
     });
 
-    return {
-      id: record.id,
-      userId: record.userId,
-      type: record.type,
-      itemId: record.itemId,
-      season: record.season,
-      episode: record.episode,
-      currentTime: record.currentTime,
-      duration: record.duration,
-      title: record.title,
-      poster: record.poster,
-      lastWatched: record.lastWatched,
-    };
+    return toRecord(record);
   }
 
   async delete(userId: string, itemId: string): Promise<void> {
