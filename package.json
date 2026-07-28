@@ -42,7 +42,7 @@
     "rc:evidence:test": "node --test scripts/rc-evidence.test.mjs",
     "sentry:release": "node scripts/sentry-release.mjs",
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
-    "security:audit": "npm audit --omit=dev --audit-level=high",
+    "security:audit": "node scripts/security-audit.mjs",
     "security:install-scripts": "node scripts/check-install-script-policy.mjs",
     "test:golden-path": "playwright test --config=playwright.config.ts --project=phone-web --project=tablet-portrait-web --project=tablet-landscape-web --project=desktop-renderer",
     "test:visual": "STREAMER_VISUAL_BASELINES=1 playwright test --config=playwright.config.ts --project=phone-web --project=desktop-renderer tests/golden-path/visual-regression.spec.ts",
@@ -86,7 +86,7 @@
     "webtorrent": "^2.8.5",
     "castv2-client": "^1.2.0",
     "shell-quote": "^1.10.0",
-    "brace-expansion": "^1.1.13",
+    "fast-uri": "^3.1.4",
     "castv2": {
       "protobufjs": "^7.6.5"
     },

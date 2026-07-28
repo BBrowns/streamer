@@ -311,8 +311,14 @@ function checkDependencySecurity() {
   );
   requireText(
     "package.json",
-    '"security:audit": "npm audit --omit=dev --audit-level=high"',
+    '"security:audit": "node scripts/security-audit.mjs"',
     "blocking production high/critical audit",
+  );
+  requireFile("scripts/security-audit.mjs");
+  requireText(
+    "scripts/security-audit.mjs",
+    "GHSA-MH99-V99M-4GVG",
+    "reviewed brace-expansion advisory exception",
   );
   requireText(
     "package.json",
