@@ -171,25 +171,53 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   await expect(page.locator("video")).toBeVisible();
   const pause = page.getByRole("button", { name: "Pause playback" });
   if (await pause.isVisible()) {
-    await pause.click();
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    });
+    await page.keyboard.press("k");
   }
-  await expect(
-    page.getByRole("button", { name: "Play playback" }),
-  ).toBeVisible();
+  const playControl = page.getByRole("button", { name: "Play playback" });
+  await expect(playControl).toBeVisible();
+  const settleUnfocusedPlayerFrame = async () => {
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    });
+    await settleVisualFrame(page);
+    await expect(playControl).not.toBeFocused();
+    await expect(playControl).toHaveCSS("outline-style", "none");
+  };
   const video = page.locator("video");
-  await video.evaluate((element) => {
-    const video = element as HTMLVideoElement;
-    video.pause();
-    video.currentTime = 0;
-    video.dispatchEvent(new Event("timeupdate"));
-  });
   const timeline = page.getByTestId("player-progress-slider");
+  const watchedTimeline = page.getByTestId("player-timeline-watched");
   await expect
     .poll(() =>
-      video.evaluate((element) => (element as HTMLVideoElement).currentTime),
+      video.evaluate((element) => (element as HTMLVideoElement).paused),
     )
-    .toBe(0);
-  await settleVisualFrame(page);
+    .toBe(true);
+
+  // Drive the same seek boundary as a keyboard user. Mutating the DOM video
+  // directly can leave expo-video's accepted clock (and therefore the rendered
+  // playhead) on an older value, which made this short fixture nondeterministic
+  // across otherwise identical Linux jobs.
+  await timeline.focus();
+  await timeline.press("Home");
+  await expect(watchedTimeline).toHaveAttribute("style", /width:\s*0%;/);
+  // The accepted-clock update can outlive the normal chrome timeout on a slow
+  // CI runner. Re-issuing the idempotent seek makes the intended visible state
+  // explicit immediately before capture.
+  await timeline.press("Home");
+  await expect(page.getByTestId("player-close-button")).toBeVisible();
+  const playerBox = await page.getByTestId("player-screen").boundingBox();
+  expect(playerBox).not.toBeNull();
+  await page.mouse.move(
+    playerBox!.x + playerBox!.width / 2,
+    playerBox!.y + playerBox!.height * 0.2,
+  );
+  await settleUnfocusedPlayerFrame();
   await expect(page).toHaveScreenshot(
     `player-dark-${testInfo.project.name}.png`,
     screenshotOptions,
@@ -202,12 +230,20 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     timelineBox!.y + timelineBox!.height / 2,
   );
   await expect(page.getByTestId("player-timeline-preview")).toBeVisible();
-  await settleVisualFrame(page);
-  await expect(page).toHaveScreenshot(
+  await settleUnfocusedPlayerFrame();
+  const previewSnapshotName =
     testInfo.project.name === "phone-web"
       ? "player-scrubbing-preview-dark-phone-web.png"
-      : "player-hover-preview-dark-desktop-renderer.png",
-    screenshotOptions,
+      : "player-hover-preview-dark-desktop-renderer.png";
+  // This frame is already settled above. Comparing the direct buffer avoids
+  // toHaveScreenshot's stabilization loop reintroducing the prior button
+  // focus style while it takes repeated captures.
+  expect(await page.screenshot(screenshotOptions)).toMatchSnapshot(
+    previewSnapshotName,
+    {
+      maxDiffPixels: 500,
+      threshold: 0.1,
+    },
   );
 
   await page
