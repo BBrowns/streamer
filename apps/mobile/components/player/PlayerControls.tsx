@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   GestureResponderEvent,
-  LayoutChangeEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -24,6 +23,9 @@ import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { playerChrome } from "./playerChrome";
+import { PlayerTimeline } from "./PlayerTimeline";
+import type { TimelineScrubbingChange } from "../../services/playback/TimelineController";
+import type { PlaybackSegmentKind } from "../../services/playback/PlaybackSegmentsProvider";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -51,6 +53,7 @@ interface PlayerControlsProps {
   player: VideoPlayer;
   currentTime: number;
   duration: number;
+  bufferedPosition?: number;
   isVisible: boolean;
   onPlayPause: () => void;
   isPlaying: boolean;
@@ -61,23 +64,24 @@ interface PlayerControlsProps {
   fallbackReason?: string | null;
   audioStatus?: string | null;
   subtitleStatus?: string | null;
+  activeSegment?: {
+    kind: PlaybackSegmentKind;
+    endSeconds: number;
+  } | null;
   muted?: boolean;
   volume?: number;
   onSeekBy?: (seconds: number) => void;
   onSeekTo?: (seconds: number) => void;
+  onPreviewSeek?: (seconds: number) => void;
+  onScrubbingChange?: (change: TimelineScrubbingChange) => void;
+  getThumbnail?: (position: number) => Promise<unknown | null>;
   onToggleMute?: () => void;
   onVolumeChange?: (volume: number) => void;
   onToggleFullscreen?: () => void;
   onOpenSettings?: () => void;
   onOpenCast?: () => void;
   onRetry?: () => void;
-}
-
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s < 10 ? "0" : ""}${s}`;
+  onSkipSegment?: (endSeconds: number) => void;
 }
 
 const SEEK_STEP_SECONDS = 10;
@@ -131,6 +135,7 @@ export function PlayerControls({
   player,
   currentTime,
   duration,
+  bufferedPosition = 0,
   isVisible,
   onPlayPause,
   isPlaying,
@@ -139,44 +144,35 @@ export function PlayerControls({
   castStatus,
   downloadStatus,
   fallbackReason,
+  activeSegment,
   muted = false,
   volume = 1,
   onSeekBy,
   onSeekTo,
+  onPreviewSeek,
+  onScrubbingChange,
+  getThumbnail,
   onToggleMute,
   onVolumeChange,
   onToggleFullscreen,
   onOpenSettings,
   onOpenCast,
   onRetry,
+  onSkipSegment,
 }: PlayerControlsProps) {
   const { t } = useTranslation();
   const { isCompact } = useWindowClass();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const compactLayout = isCompact;
-  const [scrubberWidth, setScrubberWidth] = useState(0);
   const [volumeTrackWidth, setVolumeTrackWidth] = useState(0);
 
   if (!isVisible) return null;
 
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
-  const safeCurrentTime =
-    Number.isFinite(currentTime) && currentTime > 0
-      ? Math.min(currentTime, safeDuration || currentTime)
-      : 0;
   const canSeek = capabilities?.canSeek ?? safeDuration > 0;
   const hasTimeline = canSeek && safeDuration > 0;
   const isLive = Boolean(capabilities?.isLive || duration === Infinity);
-  const progressPercent = hasTimeline
-    ? Math.min(100, Math.max(0, (safeCurrentTime / safeDuration) * 100))
-    : 0;
-  const currentTimeLabel = formatTime(safeCurrentTime);
-  const durationLabel = isLive
-    ? t("player.controls.live", { defaultValue: "Live" })
-    : safeDuration > 0
-      ? formatTime(safeDuration)
-      : t("player.controls.unknownDuration", { defaultValue: "--:--" });
   const seekDisabledLabel = t("player.controls.seekUnavailable", {
     defaultValue: "Seek unavailable",
   });
@@ -208,11 +204,6 @@ export function PlayerControls({
         : t("player.controls.seekDurationUnavailable", {
             defaultValue: "Timeline is unavailable until duration is known",
           });
-  const progressLabel = hasTimeline
-    ? t("player.controls.progress", { defaultValue: "Playback progress" })
-    : t("player.controls.progressUnavailable", {
-        defaultValue: "Playback progress unavailable",
-      });
   const playPauseLabel = isPlaying
     ? t("player.controls.pause", { defaultValue: "Pause playback" })
     : t("player.controls.play", { defaultValue: "Play playback" });
@@ -256,44 +247,21 @@ export function PlayerControls({
     if (onSeekBy) onSeekBy(seconds);
     else player.seekBy(seconds);
   };
-
-  const seekTo = (seconds: number) => {
-    if (!hasTimeline) return;
-    const clamped = Math.min(Math.max(seconds, 0), safeDuration);
-    if (onSeekTo) onSeekTo(clamped);
-    else player.currentTime = clamped;
-  };
-
-  const handleScrubberLayout = (event: LayoutChangeEvent) => {
-    setScrubberWidth(event.nativeEvent.layout.width);
-  };
-
-  const handleScrubberPress = (event: GestureResponderEvent) => {
-    if (!hasTimeline || scrubberWidth <= 0) return;
-    const nativeEvent =
-      event.nativeEvent as GestureResponderEvent["nativeEvent"] & {
-        offsetX?: number;
-      };
-    const locationX =
-      typeof nativeEvent.locationX === "number"
-        ? nativeEvent.locationX
-        : nativeEvent.offsetX;
-    if (typeof locationX !== "number") return;
-    seekTo((locationX / scrubberWidth) * safeDuration);
-  };
-
-  const handleScrubberKeyDown = (event: WebControlKeyboardEvent) => {
-    if (!hasTimeline) return;
-    const action = getSliderKeyboardAction(event.key);
-    if (!action) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    if (action === "minimum") seekTo(0);
-    else if (action === "maximum") seekTo(safeDuration);
-    else
-      seekBy(action === "increment" ? SEEK_STEP_SECONDS : -SEEK_STEP_SECONDS);
-  };
+  const skipSegmentLabel = activeSegment
+    ? activeSegment.kind === "intro"
+      ? t("player.controls.skipIntro", { defaultValue: "Skip intro" })
+      : activeSegment.kind === "recap"
+        ? t("player.controls.skipRecap", { defaultValue: "Skip recap" })
+        : activeSegment.kind === "credits"
+          ? t("player.controls.skipCredits", { defaultValue: "Skip credits" })
+          : activeSegment.kind === "preview"
+            ? t("player.controls.skipPreview", {
+                defaultValue: "Skip preview",
+              })
+            : t("player.controls.skipPostCredits", {
+                defaultValue: "Skip post-credits",
+              })
+    : null;
 
   const volumeLabel = muted
     ? t("player.controls.unmute", { defaultValue: "Unmute" })
@@ -411,106 +379,25 @@ export function PlayerControls({
         <View
           style={[styles.bottomTray, compactLayout && styles.bottomTrayCompact]}
         >
-          <View style={styles.timelineRow}>
-            <Text style={[styles.timeText, { color: PLAYER_TEXT }]}>
-              {currentTimeLabel}
-            </Text>
-
-            <Pressable
-              testID="player-progress-slider"
-              style={({ focused }: any) => [
-                styles.scrubberContainer,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(playerChrome.focus),
-              ]}
-              accessibilityRole="adjustable"
-              accessibilityLabel={progressLabel}
-              accessibilityState={{ disabled: !hasTimeline }}
-              accessibilityActions={
-                hasTimeline
-                  ? [
-                      { name: "decrement", label: seekBackLabel },
-                      { name: "increment", label: seekForwardLabel },
-                    ]
-                  : []
-              }
-              accessibilityValue={{
-                min: 0,
-                max: 100,
-                now: Math.round(progressPercent),
-                text: hasTimeline
-                  ? `${currentTimeLabel} of ${durationLabel}`
-                  : seekUnavailableDetail,
-              }}
-              disabled={!hasTimeline}
-              onPress={handleScrubberPress}
-              onLayout={handleScrubberLayout}
-              {...((Platform.OS === "web"
-                ? {
-                    onKeyDown: handleScrubberKeyDown,
-                    "aria-valuemin": 0,
-                    "aria-valuemax": 100,
-                    "aria-valuenow": Math.round(progressPercent),
-                    "aria-valuetext": hasTimeline
-                      ? `${currentTimeLabel} of ${durationLabel}`
-                      : seekUnavailableDetail,
-                  }
-                : {}) as any)}
-              onAccessibilityAction={(event) => {
-                if (!hasTimeline) return;
-                switch (event.nativeEvent.actionName) {
-                  case "increment":
-                    seekBy(SEEK_STEP_SECONDS);
-                    break;
-                  case "decrement":
-                    seekBy(-SEEK_STEP_SECONDS);
-                    break;
-                }
-              }}
-            >
-              <View
-                style={[
-                  styles.scrubberTrack,
-                  {
-                    backgroundColor: playerChrome.track,
-                    opacity: hasTimeline ? 1 : 0.58,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.scrubberFill,
-                    {
-                      width: `${progressPercent}%`,
-                      backgroundColor: playerChrome.accent,
-                    },
-                  ]}
-                />
-                {hasTimeline ? (
-                  <View
-                    style={[
-                      styles.scrubberThumb,
-                      {
-                        left: `${progressPercent}%`,
-                        backgroundColor: PLAYER_TEXT,
-                        borderColor: "rgba(8,9,12,0.48)",
-                      },
-                    ]}
-                  />
-                ) : null}
-              </View>
-            </Pressable>
-
-            <Text style={[styles.timeText, { color: PLAYER_TEXT }]}>
-              {durationLabel}
-            </Text>
-          </View>
-          {!hasTimeline ? (
-            <Text style={[styles.timelineHint, { color: PLAYER_MUTED_TEXT }]}>
-              {seekUnavailableDetail}
-            </Text>
-          ) : null}
+          <PlayerTimeline
+            currentTime={currentTime}
+            duration={safeDuration}
+            bufferedPosition={bufferedPosition}
+            isPlaying={isPlaying}
+            canSeek={hasTimeline}
+            unavailableMessage={seekUnavailableDetail}
+            onSeekBy={seekBy}
+            onPreviewSeek={(position) => {
+              if (onPreviewSeek) onPreviewSeek(position);
+              else player.currentTime = position;
+            }}
+            onSeekTo={(position) => {
+              if (onSeekTo) onSeekTo(position);
+              else player.currentTime = position;
+            }}
+            onScrubbingChange={onScrubbingChange}
+            getThumbnail={getThumbnail}
+          />
 
           <View
             testID="player-controls-toolbar"
@@ -560,6 +447,13 @@ export function PlayerControls({
                 compactLayout && styles.actionRowCompact,
               ]}
             >
+              {activeSegment && skipSegmentLabel && onSkipSegment ? (
+                <SegmentSkipButton
+                  label={skipSegmentLabel}
+                  onPress={() => onSkipSegment(activeSegment.endSeconds)}
+                  reducedMotion={reducedMotion}
+                />
+              ) : null}
               {capabilities?.canUseVolume && onToggleMute ? (
                 <ActionButton
                   icon={
@@ -671,6 +565,42 @@ export function PlayerControls({
         </View>
       </LinearGradient>
     </Animated.View>
+  );
+}
+
+function SegmentSkipButton({
+  label,
+  onPress,
+  reducedMotion,
+}: {
+  label: string;
+  onPress: () => void;
+  reducedMotion: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed, hovered, focused }: any) => [
+        styles.segmentSkipButton,
+        {
+          backgroundColor: PLAYER_TEXT,
+          borderColor: PLAYER_TEXT,
+          opacity: pressed ? 0.82 : 1,
+        },
+        hovered &&
+          (reducedMotion
+            ? styles.hoveredButtonReducedMotion
+            : styles.hoveredButton),
+        Platform.OS === "web" &&
+          focused &&
+          getWebFocusStyle(playerChrome.focus),
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name="play-skip-forward" size={17} color="#08090C" />
+      <Text style={styles.segmentSkipText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -912,51 +842,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
-  timelineRow: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  timeText: {
-    width: 52,
-    fontSize: 12,
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-    textAlign: "center",
-  },
-  scrubberContainer: {
-    flex: 1,
-    height: 36,
-    justifyContent: "center",
-    marginHorizontal: uiSpacing.sm + 2,
-  },
-  scrubberTrack: {
-    height: 4,
-    borderRadius: 4,
-    position: "relative",
-  },
-  scrubberFill: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 3,
-  },
-  scrubberThumb: {
-    position: "absolute",
-    top: -5,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 1,
-    transform: [{ translateX: -7 }],
-  },
   actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "flex-end",
     gap: uiSpacing.sm,
+  },
+  segmentSkipButton: {
+    minHeight: uiTouchTarget,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.xs,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.pill,
+    borderWidth: 1,
+  },
+  segmentSkipText: {
+    ...uiTypography.caption,
+    color: "#08090C",
+    fontWeight: "800",
   },
   actionRowCompact: {
     width: "100%",

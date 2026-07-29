@@ -44,10 +44,6 @@ export class HLSEngine implements IStreamEngine {
     return [];
   }
 
-  setAudioTrack(_id: string): void {
-    // Stub — native HLS player handles this
-  }
-
   getSubtitles(): SubtitleTrack[] {
     // Stub — no subtitle tracks available in basic HLS mode
     return [];

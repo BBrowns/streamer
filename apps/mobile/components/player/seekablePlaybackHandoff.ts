@@ -2,6 +2,9 @@ export interface SeekableHandoffVideoPlayer {
   status?: string;
   currentTime: number;
   playing: boolean;
+  playbackRate?: number;
+  muted?: boolean;
+  volume?: number;
   play(): void;
   pause(): void;
   replaceAsync(source: string): Promise<void>;
@@ -50,6 +53,9 @@ export async function replaceWithSeekableSource({
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let onAbort: (() => void) | undefined;
   let replacementStarted = false;
+  const playbackRate = player.playbackRate;
+  const muted = player.muted;
+  const volume = player.volume;
   // On web and Android `replaceAsync` can resolve as soon as the new source
   // has been handed to the native player. Do not mistake a `readyToPlay`
   // status left over from the live source for readiness of the replacement.
@@ -120,6 +126,13 @@ export async function replaceWithSeekableSource({
 
     if (Number.isFinite(resumeAt) && resumeAt > 0) {
       player.currentTime = resumeAt;
+    }
+    if (typeof playbackRate === "number" && Number.isFinite(playbackRate)) {
+      player.playbackRate = playbackRate;
+    }
+    if (typeof muted === "boolean") player.muted = muted;
+    if (typeof volume === "number" && Number.isFinite(volume)) {
+      player.volume = Math.min(1, Math.max(0, volume));
     }
     if (shouldResume) player.play();
     else player.pause();

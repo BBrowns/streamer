@@ -1,8 +1,10 @@
 import {
+  buildPlayerTrackCatalog,
   buildTrackRows,
   findPreferredPlayerTrack,
   formatMediaTrackLabel,
   normalizeTrackLanguage,
+  rankAudioTracks,
 } from "../trackSelection";
 
 describe("trackSelection", () => {
@@ -24,6 +26,55 @@ describe("trackSelection", () => {
     expect(buildTrackRows(tracks, tracks[1])).toEqual([
       { id: "1", label: "English", language: "en", active: false },
       { id: "2", label: "Spanish", language: "es", active: true },
+    ]);
+  });
+
+  it("exposes only native-switchable audio while merging native and gateway subtitles", () => {
+    const nativeAudio = [
+      { id: "native-audio", language: "eng", label: "English" },
+    ];
+    const nativeSubtitles = [
+      { id: "native-en", language: "eng", label: "English" },
+    ];
+
+    const catalog = buildPlayerTrackCatalog({
+      availableAudioTracks: nativeAudio,
+      activeAudioTrack: nativeAudio[0],
+      availableSubtitleTracks: nativeSubtitles,
+      activeSubtitleTrack: nativeSubtitles[0],
+      engineSubtitles: [
+        {
+          id: "gateway-en",
+          label: "English",
+          language: "en",
+          active: false,
+          source: "embedded",
+        },
+        {
+          id: "gateway-nl",
+          label: "Nederlands",
+          language: "nl",
+          active: false,
+          source: "torrent-file",
+          fetchIdentity: "opaque-nl",
+        },
+      ],
+    });
+
+    expect(catalog.audioTracks).toEqual([
+      expect.objectContaining({ id: "native-audio", active: true }),
+    ]);
+    expect(catalog.subtitles).toEqual([
+      expect.objectContaining({
+        id: "native-en",
+        active: true,
+        source: "embedded",
+      }),
+      expect.objectContaining({
+        id: "gateway-nl",
+        source: "torrent-file",
+        fetchIdentity: "opaque-nl",
+      }),
     ]);
   });
 
@@ -52,5 +103,100 @@ describe("trackSelection", () => {
     expect(findPreferredPlayerTrack([{ language: "", label: "" }], null)).toBe(
       null,
     );
+  });
+
+  it("ranks main, compatible audio ahead of commentary deterministically", () => {
+    const tracks = [
+      {
+        id: "commentary",
+        streamIndex: 2,
+        kind: "audio" as const,
+        language: "en",
+        title: "Director commentary",
+        codec: "aac",
+        default: true,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: false,
+        commentary: true,
+        source: "embedded" as const,
+        supported: true,
+      },
+      {
+        id: "main",
+        streamIndex: 1,
+        kind: "audio" as const,
+        language: "en",
+        title: "English",
+        codec: "eac3",
+        channelCount: 6,
+        channelLayout: "5.1",
+        default: false,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: false,
+        commentary: false,
+        source: "embedded" as const,
+        supported: true,
+      },
+    ];
+
+    expect(
+      rankAudioTracks(tracks, {
+        preferredLanguages: ["en"],
+        preferOriginalLanguage: false,
+        preferAudioDescription: false,
+        supportedCodecs: ["aac", "eac3"],
+      })[0].track.id,
+    ).toBe("main");
+  });
+
+  it("lets an explicit choice and audio-description preference override defaults", () => {
+    const tracks = [
+      {
+        id: "main",
+        streamIndex: 1,
+        kind: "audio" as const,
+        language: "en",
+        codec: "aac",
+        default: true,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: false,
+        commentary: false,
+        source: "embedded" as const,
+        supported: true,
+      },
+      {
+        id: "description",
+        streamIndex: 2,
+        kind: "audio" as const,
+        language: "en",
+        codec: "aac",
+        default: false,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: true,
+        commentary: false,
+        source: "embedded" as const,
+        supported: true,
+      },
+    ];
+
+    expect(
+      rankAudioTracks(tracks, {
+        explicitTrackId: "description",
+        preferredLanguages: ["en"],
+        preferOriginalLanguage: false,
+        preferAudioDescription: false,
+      })[0].track.id,
+    ).toBe("description");
+    expect(
+      rankAudioTracks(tracks, {
+        preferredLanguages: ["en"],
+        preferOriginalLanguage: false,
+        preferAudioDescription: true,
+      })[0].track.id,
+    ).toBe("description");
   });
 });

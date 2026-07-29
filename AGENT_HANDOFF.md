@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-07-20.
+> Last updated: 2026-07-29.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -50,6 +50,23 @@ Current phase:
   prepares torrent candidates serially; no parallel torrent hedge is implied.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
+- Consumer-player implementation pass: normalized media/runtime/timeline
+  boundaries, true cross-input scrubbing, selected-file gateway track probing,
+  URL-free torrent and add-on subtitle pipelines, accepted-clock external
+  subtitles, deterministic track ranking, continuity-preserving active
+  fallback, next-episode preplanning and evidence-only segment skipping are in
+  place. See
+  [docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md).
+- Native target setup: Xcode's compatible iOS 26.5 build 23F77, an iPhone 15
+  simulator, the Android API 34 ARM64 image, and the exact configured Detox AVD
+  are installed. A disposable iOS development client build/install/launch and
+  Android emulator boot passed; Metro-backed app journeys, Detox, playback,
+  and physical devices remain open. See
+  [the July 29 QA record](./docs/qa-runs/2026-07-29-native-targets-and-stream-disconnect.md).
+- Direct torrent response disconnects are now cancellation rather than an
+  uncaught streamx error: full and ranged direct streams stop cleanly when a
+  consumer closes, while genuine source errors still close the response and
+  use redacted diagnostics.
 
 The merged implementation roadmap is complete through **PR #154** in
 [ROADMAP.md](./ROADMAP.md); the capability-aware Search follow-up is the active
@@ -368,6 +385,36 @@ The player now stores and displays typed playback readiness:
   serial fallback once. It ignores paused, hidden, intentional-seek, preview,
   casting, and already-falling-back states, so it cannot turn normal user
   interaction into a source failure.
+- `PlaybackRuntimeCoordinator` now represents planning, media load, playback,
+  buffering, scrubbing, source replacement, fallback and terminal state as one
+  transient discriminated view state rather than another persisted machine.
+- `MediaPlayerAdapter` normalizes `expo-video` status, timeline, source
+  replacement, track, volume/rate and thumbnail capabilities.
+- Mid-playback fallback captures accepted position and play/pause intent, then
+  restores both after the next serial candidate becomes ready.
+
+### Audio, Subtitles, Timeline, And Series Continuity
+
+- Gateway probing and subtitle discovery use the exact selected gateway file.
+  Protected endpoints expose safe descriptors and opaque subtitle identities,
+  never raw magnets or source URLs.
+- Remux output maps all usable audio streams and preserves available
+  language/title/disposition metadata. Platform target validation remains
+  required before claiming every native player exposes every track.
+- Installed Stremio subtitle add-ons fan out with bounded partial results under
+  the existing trust/SSRF model. Provider URLs remain in a user-scoped runtime
+  cache on the API server.
+- Native, torrent-file and add-on subtitles share one client catalog.
+  External documents switch without restarting video and render from the
+  accepted clock with bounded cue parsing, overlap, style and sync controls.
+- The timeline supports pointer/touch drag, hover preview, keyboard seeking,
+  honest buffering and lazy bounded thumbnails. Native targets use
+  `expo-video`; web can use a protected active-job endpoint only while the
+  gateway owns a retained seekable cache.
+- Next episode ordering is season/episode based and preplanning uses the normal
+  planner without warming the singleton torrent engine. Supplied playback
+  segments are bounded and abortable; skip controls stay hidden without
+  evidence.
 
 ### Gateway Job Lifecycle
 
@@ -388,6 +435,10 @@ The stream-server gateway has moved closer to production behavior:
   retained cache lets a later consumer of the same signed route receive normal
   range semantics; cache failure never changes a healthy live job into an
   error.
+- Protected `GET /api/gateway/jobs/:id/thumbnails/:bucket` accepts only a
+  bounded ten-second bucket index. It reads the exact retained cache owned by
+  that job, uses single-flight FFmpeg generation with concurrency/time/output
+  limits and returns no source identity or cache path.
 - WebTorrent now uses an explicit Streamer-owned cache root instead of the
   library default temp path. Default macOS/dev location is
   `~/Library/Caches/Streamer/webtorrent`; fallback is

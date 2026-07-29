@@ -13,7 +13,7 @@ import {
 import { getStats } from "./stats.js";
 import { castRouter } from "./cast.js";
 import { metricsHandler } from "./metrics.js";
-import { getSubtitlesRequest, streamSubtitleRequest } from "./subtitles.js";
+import { legacySubtitlesRetiredRequest } from "./subtitles.js";
 import { handoffRouter } from "./handoff.js";
 import { gatewayRouter } from "./gateway.js";
 import { getBridgeAuthDiagnostics, requireBridgeAuth } from "./security.js";
@@ -356,8 +356,12 @@ export function createStreamServerApp() {
     },
   );
 
-  app.get("/api/subtitles", requireBridgeAuth, getSubtitlesRequest);
-  app.get("/api/subtitles/:id/stream", streamSubtitleRequest);
+  app.get("/api/subtitles", requireBridgeAuth, legacySubtitlesRetiredRequest);
+  app.get(
+    "/api/subtitles/:id/stream",
+    requireBridgeAuth,
+    legacySubtitlesRetiredRequest,
+  );
 
   app.use("/api/handoff", handoffRouter);
 

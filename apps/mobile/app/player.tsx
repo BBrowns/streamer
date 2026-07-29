@@ -4,16 +4,9 @@ import React, {
   useRef,
   useCallback,
   useMemo,
+  useReducer,
 } from "react";
-import {
-  AppState,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Platform,
-  Image,
-} from "react-native";
+import { AppState, View, Text, Pressable, Platform, Image } from "react-native";
 import { useRouter } from "expo-router";
 import {
   VideoView,
@@ -38,6 +31,7 @@ import {
 } from "../hooks/usePlayerHotkeys";
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { usePlayerController } from "../hooks/usePlayerController";
+import { usePlayerMediaControls } from "../hooks/usePlayerMediaControls";
 
 // UI Components
 import { PlayerOverlay } from "../components/player/PlayerOverlay";
@@ -56,9 +50,9 @@ import {
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
 import {
-  buildTrackRows,
-  findPlayerTrackByRowId,
+  buildPlayerTrackCatalog,
   findPreferredPlayerTrack,
+  normalizeTrackLanguage,
 } from "../services/playback/trackSelection";
 import {
   playBest,
@@ -88,6 +82,34 @@ import {
   hasPlaybackProgressed,
   shouldAdvanceAfterPlaybackStall,
 } from "../components/player/playbackStallWatchdog";
+import { ExpoMediaPlayerAdapter } from "../services/playback/MediaPlayerAdapter";
+import {
+  initialPlaybackRuntimeViewState,
+  reducePlaybackRuntimeViewState,
+} from "../services/playback/PlaybackRuntimeCoordinator";
+import { ExternalSubtitleRenderer } from "../components/player/ExternalSubtitleRenderer";
+import {
+  parseSubtitleDocument,
+  type SubtitleCue,
+} from "../services/playback/SubtitleParser";
+import {
+  getAddonSubtitles,
+  loadAddonSubtitleDocument,
+  mergeSubtitleTracks,
+} from "../services/playback/AddonSubtitleService";
+import type { SubtitleTrack } from "../services/streamEngine/IStreamEngine";
+import {
+  captureFallbackContinuity,
+  resolveFallbackResumePosition,
+  type FallbackContinuitySnapshot,
+} from "../services/playback/FallbackContinuity";
+import {
+  buildPlaybackDiagnostics,
+  PlaybackDiagnosticsRecorder,
+  type PlaybackDiagnosticEvent,
+} from "../services/playback/PlaybackDiagnostics";
+import { getActivePlaybackSegment } from "../services/playback/PlaybackSegmentsProvider";
+import { createPlayerScreenStyles } from "../components/player/playerScreenStyles";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -141,9 +163,41 @@ export default function PlayerScreen() {
   const playbackLaunchIntent = usePlayerStore((s) => s.playbackLaunchIntent);
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const acceptedCurrentTime = usePlayerStore((s) => s.currentTime);
   const preferredAudioLang = usePlayerStore((s) => s.preferredAudioLang);
   const preferredSubtitleLang = usePlayerStore((s) => s.preferredSubtitleLang);
+  const subtitleMode = usePlayerStore((s) => s.subtitleMode);
+  const subtitleAccessibility = usePlayerStore((s) => s.subtitleAccessibility);
+  const subtitleTextSize = usePlayerStore((s) => s.subtitleTextSize);
+  const subtitleBackground = usePlayerStore((s) => s.subtitleBackground);
+  const subtitleBackgroundOpacity = usePlayerStore(
+    (s) => s.subtitleBackgroundOpacity,
+  );
+  const subtitleVerticalPosition = usePlayerStore(
+    (s) => s.subtitleVerticalPosition,
+  );
+  const subtitleFontFamily = usePlayerStore((s) => s.subtitleFontFamily);
+  const subtitleSyncOffsetSeconds = usePlayerStore(
+    (s) => s.subtitleSyncOffsetSeconds,
+  );
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
+  const setSubtitleMode = usePlayerStore((s) => s.setSubtitleMode);
+  const setSubtitleAccessibility = usePlayerStore(
+    (s) => s.setSubtitleAccessibility,
+  );
+  const setSubtitleTextSize = usePlayerStore((s) => s.setSubtitleTextSize);
+  const setSubtitleBackground = usePlayerStore((s) => s.setSubtitleBackground);
+  const setSubtitleBackgroundOpacity = usePlayerStore(
+    (s) => s.setSubtitleBackgroundOpacity,
+  );
+  const setSubtitleVerticalPosition = usePlayerStore(
+    (s) => s.setSubtitleVerticalPosition,
+  );
+  const setSubtitleFontFamily = usePlayerStore((s) => s.setSubtitleFontFamily);
+  const resetSubtitleStyle = usePlayerStore((s) => s.resetSubtitleStyle);
+  const setSubtitleSyncOffsetSeconds = usePlayerStore(
+    (s) => s.setSubtitleSyncOffsetSeconds,
+  );
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setBuffering = usePlayerStore((s) => s.setBuffering);
   const setStreamStatus = usePlayerStore((s) => s.setStreamStatus);
@@ -195,8 +249,6 @@ export default function PlayerScreen() {
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [muted, setMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
   const [previewControls, setPreviewControls] = useState(false);
   const [fallbackStatusMessage, setFallbackStatusMessage] = useState<
     string | null
@@ -205,6 +257,19 @@ export default function PlayerScreen() {
   const [seekableCacheStatus, setSeekableCacheStatus] =
     useState<SeekableCacheStatus>("not_started");
   const [seekableHandoffApplied, setSeekableHandoffApplied] = useState(false);
+  const [trackCatalogRevision, setTrackCatalogRevision] = useState(0);
+  const [externalSubtitleCues, setExternalSubtitleCues] = useState<
+    SubtitleCue[]
+  >([]);
+  const [addonSubtitles, setAddonSubtitles] = useState<SubtitleTrack[]>([]);
+  const [subtitleLoadState, setSubtitleLoadState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const [diagnosticsRevision, setDiagnosticsRevision] = useState(0);
+  const [runtimeViewState, dispatchRuntimeViewEvent] = useReducer(
+    reducePlaybackRuntimeViewState,
+    initialPlaybackRuntimeViewState,
+  );
   const visibleFallbackReason = fallbackReason || fallbackStatusMessage;
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
@@ -217,6 +282,10 @@ export default function PlayerScreen() {
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoViewRef = useRef<any>(null);
   const fallbackInFlightRef = useRef(false);
+  const fallbackAttemptRef = useRef(0);
+  const pendingFallbackRestoreRef = useRef<FallbackContinuitySnapshot | null>(
+    null,
+  );
   const appliedTrackPreferencesRef = useRef<string | null>(null);
   // A fast launch can create its session between renders. Keep explicit
   // ownership so an immediate route close cannot miss that session before
@@ -239,9 +308,30 @@ export default function PlayerScreen() {
   const seekingUntilRef = useRef(0);
   const stallFallbackTriggeredRef = useRef(false);
   const seekableHandoffControllerRef = useRef<AbortController | null>(null);
+  const subtitleDocumentControllerRef = useRef<AbortController | null>(null);
   const seekableHandoffInFlightRef = useRef(false);
   const seekableHandoffShouldResumeRef = useRef<boolean | null>(null);
   const pausedAfterSeekableHandoffRef = useRef(false);
+  const playbackDiagnosticsRecorderRef = useRef(
+    new PlaybackDiagnosticsRecorder(),
+  );
+  const planObservedKeyRef = useRef<string | null>(null);
+
+  const recordDiagnostic = useCallback((event: PlaybackDiagnosticEvent) => {
+    playbackDiagnosticsRecorderRef.current.record(event);
+    setDiagnosticsRevision((revision) => revision + 1);
+  }, []);
+
+  useEffect(() => {
+    playbackDiagnosticsRecorderRef.current = new PlaybackDiagnosticsRecorder();
+    planObservedKeyRef.current = null;
+    setDiagnosticsRevision((revision) => revision + 1);
+  }, [
+    mediaInfo?.episode,
+    mediaInfo?.itemId,
+    mediaInfo?.season,
+    mediaInfo?.type,
+  ]);
 
   useEffect(() => {
     activePlanningLaunchIdRef.current = planningLaunchId;
@@ -250,6 +340,25 @@ export default function PlayerScreen() {
   useEffect(() => {
     activePlaybackSessionIdRef.current = playbackSessionId;
   }, [playbackSessionId]);
+
+  useEffect(() => {
+    if (!currentStream || !playbackSessionId || !playbackSessionCreatedAt) {
+      return;
+    }
+    if (planObservedKeyRef.current === playbackSessionId) return;
+    const createdAt = Date.parse(playbackSessionCreatedAt);
+    if (!Number.isFinite(createdAt)) return;
+    planObservedKeyRef.current = playbackSessionId;
+    recordDiagnostic({
+      type: "plan_usable",
+      elapsedMs: Date.now() - createdAt,
+    });
+  }, [
+    currentStream,
+    playbackSessionCreatedAt,
+    playbackSessionId,
+    recordDiagnostic,
+  ]);
 
   useEffect(() => {
     activeCastRef.current = activeCast;
@@ -777,6 +886,20 @@ export default function PlayerScreen() {
       reason?: string | null,
     ) => {
       if (fallbackInFlightRef.current) return true;
+      recordDiagnostic({ type: "fallback" });
+      const playerState = usePlayerStore.getState();
+      const continuity = captureFallbackContinuity({
+        currentTime: playerState.currentTime,
+        isPlaying: playerState.isPlaying,
+        sourceUri: `${playbackCandidateId || "legacy"}:${playbackUri || ""}`,
+        attempt: ++fallbackAttemptRef.current,
+      });
+      pendingFallbackRestoreRef.current = continuity;
+      dispatchRuntimeViewEvent({
+        type: "fallback_started",
+        resumeAt: continuity.resumeAt,
+        attempt: continuity.attempt,
+      });
 
       // The current player can still receive a late cache-ready response
       // after a fallback has selected another candidate. Stop that monitor
@@ -795,6 +918,7 @@ export default function PlayerScreen() {
       setStreamStatus("loading_metrics");
       setRuntimeState("trying_fallback");
       fallbackInFlightRef.current = true;
+      let fallbackAdvanced = false;
 
       try {
         if (playbackSessionId && playbackCandidateId && playbackAttemptId) {
@@ -807,6 +931,7 @@ export default function PlayerScreen() {
           );
           if (!result.ok) {
             if (await tryReplanPartialPlayback(playbackSessionId)) {
+              fallbackAdvanced = true;
               return true;
             }
             setRuntimeFailure(result.error);
@@ -822,6 +947,7 @@ export default function PlayerScreen() {
             result.fallbackReason || reason || error.message,
           );
           setPlaybackUri(result.uri);
+          fallbackAdvanced = true;
           return true;
         }
 
@@ -830,8 +956,10 @@ export default function PlayerScreen() {
 
         setPlaybackUri(null);
         setResolveAttempt((attempt) => attempt + 1);
+        fallbackAdvanced = true;
         return true;
       } finally {
+        if (!fallbackAdvanced) pendingFallbackRestoreRef.current = null;
         fallbackInFlightRef.current = false;
       }
     },
@@ -841,6 +969,8 @@ export default function PlayerScreen() {
       playbackAttemptId,
       playbackCandidateId,
       playbackSessionId,
+      playbackUri,
+      recordDiagnostic,
       setBuffering,
       setFallbackStatusMessage,
       setPlaying,
@@ -1001,10 +1131,66 @@ export default function PlayerScreen() {
     p.showNowPlayingNotification = true;
     p.play();
   });
+  const mediaAdapter = useMemo(
+    () =>
+      new ExpoMediaPlayerAdapter(
+        player,
+        Platform.OS === "ios"
+          ? "ios"
+          : Platform.OS === "android"
+            ? "android"
+            : "web",
+      ),
+    [player],
+  );
+
+  const handleFirstFrameRendered = useCallback(() => {
+    dispatchRuntimeViewEvent({ type: "first_frame_rendered" });
+    const createdAt = playbackSessionCreatedAt
+      ? Date.parse(playbackSessionCreatedAt)
+      : Number.NaN;
+    if (!playbackStartedRef.current && Number.isFinite(createdAt)) {
+      const elapsedMs = Date.now() - createdAt;
+      recordDiagnostic({
+        type: "first_frame",
+        elapsedMs,
+      });
+      const timeToUsablePlanMs =
+        playbackDiagnosticsRecorderRef.current.snapshot().timeToUsablePlanMs ??
+        0;
+      recordDiagnostic({
+        type: "initial_buffering",
+        durationMs: Math.max(0, elapsedMs - timeToUsablePlanMs),
+      });
+    }
+    if (fallbackInFlightRef.current) return;
+
+    if (!playbackStartedRef.current) {
+      playbackStartedRef.current = true;
+      setHasPlaybackStarted(true);
+      lastPlaybackProgressAtRef.current = Date.now();
+    }
+    if (playbackSessionId) {
+      markPlaybackSessionPlaying(playbackSessionId);
+    }
+    setBuffering(false);
+    setPlaying(Boolean(player.playing));
+    setStreamStatus("playing");
+    setFallbackStatusMessage(null);
+  }, [
+    playbackSessionId,
+    playbackSessionCreatedAt,
+    player,
+    recordDiagnostic,
+    setBuffering,
+    setPlaying,
+    setStreamStatus,
+  ]);
 
   useEffect(() => {
     if (!player || !playbackUri || !currentStream) return;
 
+    dispatchRuntimeViewEvent({ type: "media_loading" });
     player.timeUpdateEventInterval = 1;
     playbackStartedRef.current = false;
     setHasPlaybackStarted(false);
@@ -1023,6 +1209,7 @@ export default function PlayerScreen() {
     setBuffering(true);
 
     const markLoading = () => {
+      dispatchRuntimeViewEvent({ type: "media_loading" });
       if (playbackSessionId) {
         markPlaybackSessionBuffering(playbackSessionId);
       }
@@ -1087,7 +1274,14 @@ export default function PlayerScreen() {
         }
 
         if (status === "readyToPlay") {
-          markPlaying();
+          dispatchRuntimeViewEvent({
+            type: "media_ready",
+            shouldPlay:
+              Boolean(player.playing) &&
+              !pausedAfterSeekableHandoffRef.current &&
+              seekableHandoffShouldResumeRef.current !== false,
+          });
+          setBuffering(true);
           return;
         }
 
@@ -1117,6 +1311,10 @@ export default function PlayerScreen() {
       "playingChange",
       ({ isPlaying }: any) => {
         setPlaying(isPlaying);
+        dispatchRuntimeViewEvent({
+          type: "playing_changed",
+          isPlaying: Boolean(isPlaying),
+        });
         if (isPlaying) {
           if (
             seekableHandoffInFlightRef.current &&
@@ -1127,7 +1325,7 @@ export default function PlayerScreen() {
           // A real play event after a paused handoff is the user's explicit
           // resume intent, so subsequent media-ready events may be playing.
           pausedAfterSeekableHandoffRef.current = false;
-          markPlaying();
+          if (playbackStartedRef.current) markPlaying();
         }
       },
     );
@@ -1153,6 +1351,7 @@ export default function PlayerScreen() {
 
       if (nextProgress.currentTime && nextProgress.currentTime > 0) {
         markPlaybackStarted();
+        dispatchRuntimeViewEvent({ type: "first_frame_rendered" });
       }
       if (nextProgress.currentTime || nextProgress.bufferedPosition) {
         markPlaying();
@@ -1161,7 +1360,13 @@ export default function PlayerScreen() {
 
     const sourceSub = player.addListener("sourceLoad", () => {
       if (player.status === "readyToPlay") {
-        markPlaying();
+        dispatchRuntimeViewEvent({
+          type: "media_ready",
+          shouldPlay:
+            Boolean(player.playing) &&
+            !pausedAfterSeekableHandoffRef.current &&
+            seekableHandoffShouldResumeRef.current !== false,
+        });
       }
     });
 
@@ -1235,6 +1440,10 @@ export default function PlayerScreen() {
       }
 
       stallFallbackTriggeredRef.current = true;
+      recordDiagnostic({
+        type: "stall",
+        durationMs: now - lastPlaybackProgressAtRef.current,
+      });
       const fallbackMessage = t("player.status.playbackStalledTryingFallback", {
         defaultValue:
           "Playback stopped making progress. Trying another source.",
@@ -1272,6 +1481,7 @@ export default function PlayerScreen() {
     playbackSessionCreatedAt,
     playbackSessionTimeoutBudgetMs,
     player,
+    recordDiagnostic,
     setBuffering,
     setFallbackStatusMessage,
     setPlaying,
@@ -1282,9 +1492,15 @@ export default function PlayerScreen() {
     tryAdvanceToFallback,
   ]);
 
+  const handlePlaybackCompleted = useCallback(() => {
+    dispatchRuntimeViewEvent({ type: "completed" });
+    setBuffering(false);
+    setPlaying(false);
+  }, [setBuffering, setPlaying]);
+
   const {
     audioTracks,
-    subtitles,
+    subtitles: engineSubtitles,
     stats,
     engine,
     showResumePrompt,
@@ -1296,9 +1512,11 @@ export default function PlayerScreen() {
     setAudioTracks,
     setSubtitles,
     nextEpisode,
+    playbackSegments,
     recordExplicitSeek,
     beginProgressSourceReplacement,
     completeProgressSourceReplacement,
+    originalLanguage,
   } = usePlayerController({
     player,
     playbackUri,
@@ -1307,44 +1525,231 @@ export default function PlayerScreen() {
     isProgressiveRemux:
       currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4",
     hasSeekableHandoff: seekableHandoffApplied,
+    onCompleted: handlePlaybackCompleted,
+    onDiagnosticEvent: recordDiagnostic,
   });
 
+  useEffect(() => {
+    const pending = pendingFallbackRestoreRef.current;
+    if (!pending || !player || !playbackUri) return;
+    const sourceKey = `${playbackCandidateId || "legacy"}:${playbackUri}`;
+    if (sourceKey === pending.sourceUri) return;
+
+    let restored = false;
+    const restore = (status: string | undefined = player.status) => {
+      if (restored || status !== "readyToPlay") return;
+      restored = true;
+      const resumeAt = resolveFallbackResumePosition(
+        pending,
+        mediaAdapter.snapshot().duration,
+      );
+      recordExplicitSeek(resumeAt);
+      mediaAdapter.commitSeek(resumeAt);
+      dispatchRuntimeViewEvent({ type: "fallback_media_ready" });
+      if (pending.shouldPlay) {
+        mediaAdapter.play();
+      } else {
+        mediaAdapter.pause();
+      }
+      pendingFallbackRestoreRef.current = null;
+    };
+    const statusSubscription = player.addListener?.(
+      "statusChange",
+      ({ status }: { status?: string }) => restore(status),
+    );
+    restore();
+    return () => statusSubscription?.remove?.();
+  }, [
+    mediaAdapter,
+    playbackCandidateId,
+    playbackUri,
+    player,
+    recordExplicitSeek,
+  ]);
+
+  const subtitles = useMemo(
+    () => mergeSubtitleTracks([...engineSubtitles, ...addonSubtitles]),
+    [addonSubtitles, engineSubtitles],
+  );
+
+  useEffect(() => {
+    setAddonSubtitles([]);
+    if (!mediaInfo) return;
+
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    void getAddonSubtitles(mediaInfo, controller.signal)
+      .then((tracks) => {
+        if (!controller.signal.aborted) {
+          recordDiagnostic({
+            type: "subtitle_provider",
+            outcome: "succeeded",
+            latencyMs: Date.now() - startedAt,
+          });
+          setAddonSubtitles(tracks);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          recordDiagnostic({
+            type: "subtitle_provider",
+            outcome: "failed",
+            latencyMs: Date.now() - startedAt,
+          });
+          setAddonSubtitles([]);
+        }
+      });
+    return () => controller.abort();
+  }, [
+    mediaInfo?.episode,
+    mediaInfo?.itemId,
+    mediaInfo?.season,
+    mediaInfo?.type,
+    recordDiagnostic,
+  ]);
+
   const refreshPlayerTracks = useCallback(() => {
-    if (!player) return;
+    if (!player) {
+      setAudioTracks([]);
+      setSubtitles(engine?.getSubtitles() || []);
+      return;
+    }
 
     const availableAudioTracks = player.availableAudioTracks || [];
     const availableSubtitleTracks = player.availableSubtitleTracks || [];
-
-    if (availableAudioTracks.length > 0) {
-      setAudioTracks(
-        buildTrackRows(availableAudioTracks, player.audioTrack, "audio"),
-      );
-    } else if (engine) {
-      setAudioTracks(engine.getAudioTracks());
-    } else {
-      setAudioTracks([]);
-    }
-
-    if (availableSubtitleTracks.length > 0) {
-      setSubtitles(
-        buildTrackRows(
-          availableSubtitleTracks,
-          player.subtitleTrack,
-          "subtitle",
-        ),
-      );
-    } else if (engine) {
-      setSubtitles(engine.getSubtitles());
-    } else {
-      setSubtitles([]);
-    }
+    const catalog = buildPlayerTrackCatalog({
+      availableAudioTracks,
+      activeAudioTrack: player.audioTrack,
+      availableSubtitleTracks,
+      activeSubtitleTrack: player.subtitleTrack,
+      engineSubtitles: engine?.getSubtitles() || [],
+    });
+    setAudioTracks(catalog.audioTracks);
+    setSubtitles(catalog.subtitles);
   }, [engine, player, setAudioTracks, setSubtitles]);
+
+  const handleSubtitleSelection = useCallback(
+    async (id: string | null) => {
+      subtitleDocumentControllerRef.current?.abort();
+      subtitleDocumentControllerRef.current = null;
+      setExternalSubtitleCues([]);
+      setSubtitleLoadState("idle");
+      const addonTrack = id
+        ? addonSubtitles.find((track) => track.id === id)
+        : undefined;
+
+      if (mediaAdapter.selectSubtitleTrack(id)) {
+        engine?.setSubtitle(null);
+        setAddonSubtitles((tracks) =>
+          tracks.map((track) => ({ ...track, active: false })),
+        );
+        refreshPlayerTracks();
+        return;
+      }
+
+      if (!id) {
+        engine?.setSubtitle(null);
+        setAddonSubtitles((tracks) =>
+          tracks.map((track) => ({ ...track, active: false })),
+        );
+        refreshPlayerTracks();
+        return;
+      }
+      mediaAdapter.selectSubtitleTrack(null);
+      if (addonTrack) {
+        engine?.setSubtitle(null);
+        setAddonSubtitles((tracks) =>
+          tracks.map((track) => ({ ...track, active: track.id === id })),
+        );
+      } else {
+        engine?.setSubtitle(id);
+        setAddonSubtitles((tracks) =>
+          tracks.map((track) => ({ ...track, active: false })),
+        );
+      }
+      if (!addonTrack && !engine?.loadSubtitleDocument) {
+        refreshPlayerTracks();
+        return;
+      }
+
+      const controller = new AbortController();
+      subtitleDocumentControllerRef.current = controller;
+      setSubtitleLoadState("loading");
+      try {
+        const document = addonTrack
+          ? await loadAddonSubtitleDocument(addonTrack, controller.signal)
+          : await engine!.loadSubtitleDocument!(id, controller.signal);
+        if (controller.signal.aborted) return;
+        const cues = parseSubtitleDocument(
+          document,
+          addonTrack?.format || "vtt",
+        );
+        if (cues.length === 0) {
+          throw new Error("Subtitle document contains no usable cues");
+        }
+        recordDiagnostic({
+          type: "subtitle_parse",
+          outcome: "succeeded",
+          cueCount: cues.length,
+        });
+        setExternalSubtitleCues(cues);
+        setSubtitleLoadState("ready");
+      } catch {
+        if (controller.signal.aborted) return;
+        recordDiagnostic({
+          type: "subtitle_parse",
+          outcome: "failed",
+        });
+        engine?.setSubtitle(null);
+        setAddonSubtitles((tracks) =>
+          tracks.map((track) => ({ ...track, active: false })),
+        );
+        setExternalSubtitleCues([]);
+        setSubtitleLoadState("error");
+      } finally {
+        if (subtitleDocumentControllerRef.current === controller) {
+          subtitleDocumentControllerRef.current = null;
+        }
+        refreshPlayerTracks();
+      }
+    },
+    [
+      addonSubtitles,
+      engine,
+      mediaAdapter,
+      recordDiagnostic,
+      refreshPlayerTracks,
+    ],
+  );
+
+  useEffect(() => {
+    return () => {
+      subtitleDocumentControllerRef.current?.abort();
+      subtitleDocumentControllerRef.current = null;
+      setExternalSubtitleCues([]);
+      setSubtitleLoadState("idle");
+    };
+  }, [engine, playbackUri]);
 
   useEffect(() => {
     appliedTrackPreferencesRef.current = null;
-    setAudioTracks(engine?.getAudioTracks() || []);
+    setAudioTracks([]);
     setSubtitles(engine?.getSubtitles() || []);
-  }, [engine, playbackUri, setAudioTracks, setSubtitles]);
+
+    if (!engine) return;
+    const controller = new AbortController();
+    const handleEngineTracks = () => refreshPlayerTracks();
+    engine.on("tracks", handleEngineTracks);
+    void engine.refreshTrackCatalog?.(controller.signal).catch(() => {
+      // Track discovery is optional. Native tracks and playback stay usable
+      // when the bridge cannot provide richer metadata.
+    });
+
+    return () => {
+      controller.abort();
+      engine.off("tracks", handleEngineTracks);
+    };
+  }, [engine, playbackUri, refreshPlayerTracks, setAudioTracks, setSubtitles]);
 
   useEffect(() => {
     if (!player) return;
@@ -1367,10 +1772,11 @@ export default function PlayerScreen() {
       "subtitleTrackChange",
       refreshPlayerTracks,
     );
-    const sourceLoadSub = player.addListener?.(
-      "sourceLoad",
-      refreshPlayerTracks,
-    );
+    const sourceLoadSub = player.addListener?.("sourceLoad", () => {
+      appliedTrackPreferencesRef.current = null;
+      refreshPlayerTracks();
+      setTrackCatalogRevision((revision) => revision + 1);
+    });
 
     return () => {
       audioListSub?.remove?.();
@@ -1388,25 +1794,66 @@ export default function PlayerScreen() {
     const availableAudioTracks = player.availableAudioTracks || [];
     const availableSubtitleTracks = player.availableSubtitleTracks || [];
     const waitingForPreferredAudio =
-      Boolean(preferredAudioLang) && availableAudioTracks.length === 0;
+      Boolean(preferredAudioLang || originalLanguage) &&
+      availableAudioTracks.length === 0;
     const waitingForPreferredSubtitles =
-      Boolean(preferredSubtitleLang) && availableSubtitleTracks.length === 0;
+      Boolean(preferredSubtitleLang) &&
+      availableSubtitleTracks.length === 0 &&
+      subtitles.length === 0;
     if (waitingForPreferredAudio || waitingForPreferredSubtitles) return;
 
     const audioTrack = findPreferredPlayerTrack(
       availableAudioTracks,
-      preferredAudioLang,
+      preferredAudioLang || originalLanguage,
     );
     if (audioTrack) {
       player.audioTrack = audioTrack;
     }
 
-    const subtitleTrack = findPreferredPlayerTrack(
-      availableSubtitleTracks,
-      preferredSubtitleLang,
-    );
-    if (subtitleTrack) {
-      player.subtitleTrack = subtitleTrack;
+    if (subtitleMode === "off") {
+      player.subtitleTrack = null;
+      void handleSubtitleSelection(null);
+    } else {
+      const subtitleTrack = findPreferredPlayerTrack(
+        availableSubtitleTracks,
+        preferredSubtitleLang,
+      );
+      if (subtitleTrack) {
+        player.subtitleTrack = subtitleTrack;
+      } else if (preferredSubtitleLang && subtitles.length > 0) {
+        const preferredLanguage = normalizeTrackLanguage(preferredSubtitleLang);
+        const candidates = subtitles
+          .filter(
+            (track) =>
+              normalizeTrackLanguage(track.language) === preferredLanguage,
+          )
+          .sort((left, right) => {
+            const accessibilityScore = (track: typeof left) =>
+              subtitleAccessibility === "prefer"
+                ? Number(Boolean(track.hearingImpaired))
+                : subtitleAccessibility === "avoid"
+                  ? Number(!track.hearingImpaired)
+                  : 0;
+            return (
+              accessibilityScore(right) - accessibilityScore(left) ||
+              Number(Boolean(right.forced)) - Number(Boolean(left.forced)) ||
+              left.id.localeCompare(right.id)
+            );
+          });
+        const selectedAudioLanguage = normalizeTrackLanguage(
+          player.audioTrack?.language ||
+            audioTracks.find((track) => track.active)?.language,
+        );
+        const engineSubtitle = candidates.find(
+          (track) =>
+            subtitleMode === "always" ||
+            track.forced ||
+            selectedAudioLanguage !== preferredLanguage,
+        );
+        if (engineSubtitle) {
+          void handleSubtitleSelection(engineSubtitle.id);
+        }
+      }
     }
 
     appliedTrackPreferencesRef.current = playbackUri;
@@ -1415,10 +1862,15 @@ export default function PlayerScreen() {
     player,
     playbackUri,
     audioTracks.length,
+    handleSubtitleSelection,
     preferredAudioLang,
     preferredSubtitleLang,
+    originalLanguage,
     refreshPlayerTracks,
+    subtitleAccessibility,
+    subtitleMode,
     subtitles.length,
+    trackCatalogRevision,
   ]);
 
   const selectedSessionCandidate = useMemo(() => {
@@ -1454,6 +1906,51 @@ export default function PlayerScreen() {
     (!isRemuxPlayback || hasSeekableProgressiveHandoff) &&
     hasKnownDuration &&
     !isLivePlayback,
+  );
+  const activePlaybackSegment = useMemo(
+    () =>
+      canSeekPlayback
+        ? getActivePlaybackSegment(playbackSegments, acceptedCurrentTime)
+        : null,
+    [acceptedCurrentTime, canSeekPlayback, playbackSegments],
+  );
+  const playbackDiagnostics = useMemo(
+    () =>
+      buildPlaybackDiagnostics({
+        engineType: engine?.getEngineType() || "unknown",
+        sourceKind: currentStream?.infoHash
+          ? "torrent"
+          : currentStream?.url?.startsWith("file:")
+            ? "offline"
+            : currentStream?.url?.toLowerCase().includes(".m3u8")
+              ? "hls"
+              : currentStream?.url
+                ? "direct"
+                : "unknown",
+        runtimeState: runtimeViewState.kind,
+        seekable: canSeekPlayback,
+        positionSeconds: acceptedCurrentTime,
+        durationSeconds: playerDuration,
+        bufferedSeconds: mediaAdapter.snapshot().bufferedPosition,
+        audioLabel:
+          audioTracks.find((track) => track.active)?.label || undefined,
+        subtitleLabel:
+          subtitles.find((track) => track.active)?.label || undefined,
+        observation: playbackDiagnosticsRecorderRef.current.snapshot(),
+      }),
+    [
+      acceptedCurrentTime,
+      audioTracks,
+      canSeekPlayback,
+      currentStream?.infoHash,
+      currentStream?.url,
+      diagnosticsRevision,
+      engine,
+      mediaAdapter,
+      playerDuration,
+      runtimeViewState.kind,
+      subtitles,
+    ],
   );
   const sourceLabel = useMemo(() => {
     if (!currentStream && activeCast) {
@@ -1601,6 +2098,10 @@ export default function PlayerScreen() {
       // replacement cannot be completed, keep that candidate alive; a real
       // player error will still follow the normal serial fallback path.
       setSeekableCacheStatus("unavailable");
+      recordDiagnostic({
+        type: "seekable_handoff",
+        state: "unavailable",
+      });
       if (player.playing) {
         setBuffering(false);
         setPlaying(true);
@@ -1638,11 +2139,18 @@ export default function PlayerScreen() {
         expectedGatewayJobId = handoff.gatewayJobId ?? expectedGatewayJobId;
         setSeekableCacheStatus(handoff.status);
 
-        if (handoff.status === "unavailable") return;
+        if (handoff.status === "unavailable") {
+          recordDiagnostic({
+            type: "seekable_handoff",
+            state: "unavailable",
+          });
+          return;
+        }
         if (handoff.status !== "ready" || !handoff.uri) {
           await waitForSeekableCachePoll(controller.signal);
           continue;
         }
+        recordDiagnostic({ type: "seekable_handoff", state: "ready" });
 
         const resumeAt = Number.isFinite(player.currentTime)
           ? Math.max(0, player.currentTime)
@@ -1651,6 +2159,12 @@ export default function PlayerScreen() {
         seekableHandoffInFlightRef.current = true;
         seekableHandoffShouldResumeRef.current = shouldResume;
         pausedAfterSeekableHandoffRef.current = !shouldResume;
+        recordDiagnostic({ type: "seekable_handoff", state: "started" });
+        dispatchRuntimeViewEvent({
+          type: "source_replacement_started",
+          reason: "seekable_handoff",
+          resumeAt,
+        });
         setBuffering(true);
         setRuntimeState("buffering");
         beginProgressSourceReplacement();
@@ -1666,12 +2180,22 @@ export default function PlayerScreen() {
           if (controller.signal.aborted || !isCurrentAttempt()) return;
           completeProgressSourceReplacement(resumeAt);
           replacementCompleted = true;
+          dispatchRuntimeViewEvent({
+            type: "source_replacement_completed",
+          });
           setSeekableHandoffApplied(true);
           setSeekableCacheStatus("ready");
+          recordDiagnostic({
+            type: "seekable_handoff",
+            state: "completed",
+          });
           return;
         } catch {
           completeProgressSourceReplacement(resumeAt);
           replacementCompleted = true;
+          dispatchRuntimeViewEvent({
+            type: "source_replacement_completed",
+          });
           markSeekableHandoffUnavailable();
           return;
         } finally {
@@ -1707,6 +2231,7 @@ export default function PlayerScreen() {
     playbackSessionId,
     playbackUri,
     player,
+    recordDiagnostic,
     seekableHandoffApplied,
     setBuffering,
     setPlaying,
@@ -1720,102 +2245,29 @@ export default function PlayerScreen() {
     }
   }, [player, playbackRate]);
 
-  useEffect(() => {
-    if (!player) return;
-    setMuted(Boolean(player.muted));
-    setVolume(
-      Number.isFinite(player.volume)
-        ? Math.min(1, Math.max(0, player.volume))
-        : 1,
-    );
-
-    const volumeSub = player.addListener?.("volumeChange", ({ volume }: any) =>
-      setVolume(Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1),
-    );
-    const mutedSub = player.addListener?.("mutedChange", ({ muted }: any) =>
-      setMuted(Boolean(muted)),
-    );
-
-    return () => {
-      volumeSub?.remove?.();
-      mutedSub?.remove?.();
-    };
-  }, [player]);
-
-  const handleSeekBy = useCallback(
-    (seconds: number) => {
-      if (!canSeekPlayback || !player) return;
-      markIntentionalSeek();
-      recordExplicitSeek(Math.max(0, player.currentTime + seconds));
-      player?.seekBy(seconds);
-      showControls();
-    },
-    [
-      canSeekPlayback,
-      markIntentionalSeek,
-      player,
-      recordExplicitSeek,
-      showControls,
-    ],
-  );
-
-  const handleSeekTo = useCallback(
-    (seconds: number) => {
-      if (!canSeekPlayback || !player) return;
-      markIntentionalSeek();
-      recordExplicitSeek(seconds);
-      player.currentTime = seconds;
-      showControls();
-    },
-    [
-      canSeekPlayback,
-      markIntentionalSeek,
-      player,
-      recordExplicitSeek,
-      showControls,
-    ],
-  );
-
-  const handleSeekPercent = useCallback(
-    (percent: number) => {
-      if (!canSeekPlayback || !player || !player.duration) return;
-      markIntentionalSeek();
-      const target = (player.duration * percent) / 100;
-      recordExplicitSeek(target);
-      player.currentTime = target;
-      showControls();
-    },
-    [
-      canSeekPlayback,
-      markIntentionalSeek,
-      player,
-      recordExplicitSeek,
-      showControls,
-    ],
-  );
-
-  const handleToggleMute = useCallback(() => {
-    if (!player) return;
-    const nextMuted = !player.muted;
-    player.muted = nextMuted;
-    setMuted(nextMuted);
-    showControls();
-  }, [player, showControls]);
-
-  const handleVolumeChange = useCallback(
-    (nextVolume: number) => {
-      if (!player) return;
-      const normalized = Math.min(1, Math.max(0, nextVolume));
-      player.volume = normalized;
-      setVolume(normalized);
-      if (normalized > 0 && player.muted) {
-        player.muted = false;
-        setMuted(false);
-      }
-      showControls();
-    },
-    [player, showControls],
-  );
+  const {
+    muted,
+    volume,
+    handleSeekBy,
+    handleSeekTo,
+    handlePreviewSeek,
+    handleScrubbingChange,
+    getTimelineThumbnail,
+    handleSeekPercent,
+    handleToggleMute,
+    handleVolumeChange,
+  } = usePlayerMediaControls({
+    player,
+    mediaAdapter,
+    engine,
+    canSeek: canSeekPlayback,
+    markIntentionalSeek,
+    recordDiagnostic,
+    recordExplicitSeek,
+    setShowNextEpisodeOverlay,
+    showControls,
+    dispatchRuntimeViewEvent,
+  });
 
   const handleToggleFullscreen = useCallback(() => {
     try {
@@ -1966,7 +2418,10 @@ export default function PlayerScreen() {
     }
   }, []);
 
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(
+    () => createPlayerScreenStyles(colors, isDark),
+    [colors, isDark],
+  );
 
   if (currentStream && !playbackUri && !previewControls) {
     return (
@@ -2106,12 +2561,24 @@ export default function PlayerScreen() {
                   allowsPictureInPicture={isPiPSupported}
                   startsPictureInPictureAutomatically={false}
                   onFullscreenEnter={() => showControls()}
+                  onFirstFrameRender={handleFirstFrameRendered}
                 />
               )}
 
               <PlayerInteractionLayer
                 onTapSide={handleTap}
                 onToggleControls={toggleControls}
+              />
+              <ExternalSubtitleRenderer
+                cues={externalSubtitleCues}
+                currentTime={acceptedCurrentTime}
+                offsetSeconds={subtitleSyncOffsetSeconds}
+                textSize={subtitleTextSize}
+                background={subtitleBackground}
+                backgroundOpacity={subtitleBackgroundOpacity}
+                verticalPosition={subtitleVerticalPosition}
+                fontFamily={subtitleFontFamily}
+                controlsVisible={controlsVisible}
               />
             </>
           )}
@@ -2171,9 +2638,13 @@ export default function PlayerScreen() {
 
           <PlayerControls
             player={player}
-            currentTime={player?.currentTime || 0}
+            currentTime={mediaAdapter.snapshot().currentTime}
             duration={playerDuration}
-            isVisible={controlsVisible && !activeCast}
+            bufferedPosition={mediaAdapter.snapshot().bufferedPosition}
+            isVisible={
+              (controlsVisible || runtimeViewState.kind === "scrubbing") &&
+              !activeCast
+            }
             isPlaying={player?.playing ?? false}
             capabilities={
               previewControls
@@ -2188,21 +2659,37 @@ export default function PlayerScreen() {
               audioTracks.find((track) => track.active)?.label || null
             }
             subtitleStatus={
-              subtitles.find((track) => track.active)?.label ||
+              (subtitleLoadState === "loading"
+                ? t("player.settings.subtitleLoading", {
+                    defaultValue: "Loading subtitles",
+                  })
+                : subtitleLoadState === "error"
+                  ? t("player.settings.subtitleUnavailable", {
+                      defaultValue: "Subtitles unavailable",
+                    })
+                  : subtitles.find((track) => track.active)?.label) ||
               (subtitles.length > 0
                 ? t("player.settings.off", { defaultValue: "Subtitles off" })
                 : null)
             }
+            activeSegment={activePlaybackSegment}
             muted={muted}
             volume={volume}
             onSeekBy={handleSeekBy}
             onSeekTo={handleSeekTo}
+            onPreviewSeek={handlePreviewSeek}
+            onScrubbingChange={handleScrubbingChange}
+            getThumbnail={getTimelineThumbnail}
             onToggleMute={handleToggleMute}
             onVolumeChange={handleVolumeChange}
             onToggleFullscreen={handleToggleFullscreen}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={() => {
+              setShowNextEpisodeOverlay(false);
+              setSettingsOpen(true);
+            }}
             onOpenCast={() => setCastModalOpen(true)}
             onRetry={handleRetryPlayback}
+            onSkipSegment={handleSeekTo}
             onPlayPause={() => {
               if (previewControls) return;
               if (player?.playing) player.pause();
@@ -2239,29 +2726,54 @@ export default function PlayerScreen() {
             audioTracks={audioTracks}
             subtitles={subtitles}
             onSelectAudio={(id: string | null) => {
-              if (id && player?.availableAudioTracks?.length) {
-                const track = findPlayerTrackByRowId(
-                  player.availableAudioTracks,
-                  id,
+              try {
+                const switched = Boolean(
+                  id && mediaAdapter.selectAudioTrack(id),
                 );
-                if (track) player.audioTrack = track;
-              } else if (id) {
-                engine?.setAudioTrack(id);
+                recordDiagnostic({
+                  type: "audio_switch",
+                  outcome: switched ? "succeeded" : "failed",
+                });
+              } catch {
+                recordDiagnostic({
+                  type: "audio_switch",
+                  outcome: "failed",
+                });
               }
               refreshPlayerTracks();
             }}
             onSelectSubtitle={(id: string | null) => {
-              if (player?.availableSubtitleTracks?.length) {
-                player.subtitleTrack = id
-                  ? findPlayerTrackByRowId(player.availableSubtitleTracks, id)
-                  : null;
-              } else {
-                engine?.setSubtitle(id);
-              }
-              refreshPlayerTracks();
+              void handleSubtitleSelection(id);
             }}
             playbackRate={playbackRate}
             onSelectPlaybackRate={setPlaybackRate}
+            subtitleMode={subtitleMode}
+            onSelectSubtitleMode={(mode) => {
+              appliedTrackPreferencesRef.current = null;
+              setSubtitleMode(mode);
+              if (mode === "off") {
+                void handleSubtitleSelection(null);
+              }
+            }}
+            subtitleAccessibility={subtitleAccessibility}
+            onSelectSubtitleAccessibility={(preference) => {
+              appliedTrackPreferencesRef.current = null;
+              setSubtitleAccessibility(preference);
+            }}
+            subtitleTextSize={subtitleTextSize}
+            onSelectSubtitleTextSize={setSubtitleTextSize}
+            subtitleBackground={subtitleBackground}
+            onSelectSubtitleBackground={setSubtitleBackground}
+            subtitleBackgroundOpacity={subtitleBackgroundOpacity}
+            onSelectSubtitleBackgroundOpacity={setSubtitleBackgroundOpacity}
+            subtitleVerticalPosition={subtitleVerticalPosition}
+            onSelectSubtitleVerticalPosition={setSubtitleVerticalPosition}
+            subtitleFontFamily={subtitleFontFamily}
+            onSelectSubtitleFontFamily={setSubtitleFontFamily}
+            subtitleSyncOffsetSeconds={subtitleSyncOffsetSeconds}
+            onSelectSubtitleSyncOffset={setSubtitleSyncOffsetSeconds}
+            onResetSubtitleStyle={resetSubtitleStyle}
+            diagnostics={playbackDiagnostics}
           />
         )}
 
@@ -2307,86 +2819,3 @@ export default function PlayerScreen() {
     </GestureHandlerRootView>
   );
 }
-
-const createStyles = (colors: any, isDark: boolean) =>
-  StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#000" },
-    errorContainer: {
-      flex: 1,
-      backgroundColor: colors.background,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    videoContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "#000",
-      overflow: "hidden",
-    },
-    webVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
-    seekOverlay: {
-      position: "absolute",
-      top: "40%",
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      backgroundColor: colors.surfaceOverlay,
-      borderRadius: 24,
-      zIndex: 20,
-    },
-    seekText: { color: colors.text, fontSize: 16, fontWeight: "bold" },
-    castContainer: {
-      flex: 1,
-      width: "100%",
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: colors.background,
-    },
-    castBg: {
-      position: "absolute",
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-      opacity: isDark ? 0.3 : 0.1,
-    },
-    castCard: {
-      alignItems: "center",
-      backgroundColor: colors.surfaceOverlay,
-      padding: 40,
-      borderRadius: 32,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    castIconWrap: {
-      backgroundColor: colors.tint + "15",
-      padding: 24,
-      borderRadius: 40,
-      marginBottom: 24,
-    },
-    castTitle: {
-      color: colors.text,
-      fontSize: 22,
-      fontWeight: "bold",
-      marginBottom: 8,
-    },
-    castSubtitle: {
-      color: colors.textSecondary,
-      fontSize: 16,
-      marginBottom: 32,
-      textAlign: "center",
-      maxWidth: 300,
-    },
-    stopCastBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: colors.error + "15",
-      paddingHorizontal: 28,
-      paddingVertical: 14,
-      borderRadius: 30,
-      borderWidth: 1,
-      borderColor: colors.error + "30",
-    },
-    stopCastText: { color: colors.error, fontWeight: "600", fontSize: 15 },
-  });

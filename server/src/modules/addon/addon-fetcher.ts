@@ -20,6 +20,7 @@ export interface FetchSafeAddonJsonOptions {
 }
 
 const DEFAULT_MAX_REDIRECTS = 3;
+const ADDON_TEXT_RESPONSE_LIMIT_BYTES = 8 * 1024 * 1024;
 const ADDON_RESPONSE_LIMIT_BYTES: Record<AddonFetchKind, number> = {
   manifest: 256 * 1024,
   resource: 1024 * 1024,
@@ -147,4 +148,80 @@ export async function fetchSafeAddonJson(
 
   assertPayloadSize(response.data, options.kind, maxBytes);
   return response.data;
+}
+
+export async function fetchSafeAddonText(
+  url: string,
+  options: Omit<FetchSafeAddonJsonOptions, "kind"> = {},
+  redirects = 0,
+): Promise<string> {
+  const maxRedirects = options.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
+  if (redirects > maxRedirects) {
+    throw new AddonSourcePolicyError(
+      "too-many-redirects",
+      "Too many add-on redirects.",
+    );
+  }
+
+  await assertSafeAddonUrl(url);
+  const requestedLimit =
+    options.maxResponseBytes === undefined ||
+    !Number.isSafeInteger(options.maxResponseBytes)
+      ? ADDON_TEXT_RESPONSE_LIMIT_BYTES
+      : options.maxResponseBytes;
+  const maxBytes = Math.max(
+    1,
+    Math.min(ADDON_TEXT_RESPONSE_LIMIT_BYTES, requestedLimit),
+  );
+
+  let response;
+  try {
+    response = await axios.get(url, {
+      timeout: options.timeoutMs ?? env.addonTimeoutMs,
+      signal: options.signal,
+      responseType: "text",
+      transformResponse: [(value) => value],
+      maxRedirects: 0,
+      maxContentLength: maxBytes,
+      maxBodyLength: maxBytes,
+      ...options.axiosOptions,
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || isRedirectStatus(status),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/maxContentLength|maxBodyLength|content length/i.test(message)) {
+      throw new AddonSourcePolicyError(
+        "oversized-response",
+        `Add-on text response exceeded ${maxBytes} bytes.`,
+      );
+    }
+    throw error;
+  }
+
+  if (isRedirectStatus(response.status)) {
+    const location = response.headers.location;
+    if (typeof location !== "string" || location.trim().length === 0) {
+      throw new AddonSourcePolicyError(
+        "missing-redirect-location",
+        "Add-on redirect missing Location header.",
+      );
+    }
+    return fetchSafeAddonText(
+      new URL(location, url).toString(),
+      options,
+      redirects + 1,
+    );
+  }
+
+  const document = Buffer.isBuffer(response.data)
+    ? response.data.toString("utf8")
+    : String(response.data ?? "");
+  if (Buffer.byteLength(document, "utf8") > maxBytes) {
+    throw new AddonSourcePolicyError(
+      "oversized-response",
+      `Add-on text response exceeded ${maxBytes} bytes.`,
+    );
+  }
+  return document;
 }

@@ -12,9 +12,9 @@ module.exports = {
   apps: {
     "ios.debug": {
       type: "ios.app",
-      binaryPath: "ios/build/Build/Products/Debug-iphonesimulator/mobile.app",
+      binaryPath: "ios/build/Build/Products/Debug-iphonesimulator/Streamer.app",
       build:
-        "xcodebuild -workspace ios/mobile.xcworkspace -scheme mobile -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build",
+        "xcodebuild -workspace ios/Streamer.xcworkspace -scheme Streamer -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build",
     },
     "android.debug": {
       type: "android.apk",

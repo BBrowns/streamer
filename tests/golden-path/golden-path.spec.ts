@@ -326,6 +326,50 @@ test("development player preview exposes the real control chrome", async ({
   });
 });
 
+test("player timeline preview and inspect sheet remain usable", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !["phone-web", "desktop-renderer"].includes(testInfo.project.name),
+    "Focused player visual evidence is captured at compact and large widths.",
+  );
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await loginAndOpenFixture(page, "direct");
+  await page.getByRole("button", { name: "Play" }).click();
+
+  await expect(page).toHaveURL(/\/player$/);
+  const timeline = page.getByTestId("player-progress-slider");
+  await expect(timeline).toBeVisible();
+  await expect(timeline).toHaveAttribute("aria-label", "Playback progress");
+  const timelineBox = await timeline.boundingBox();
+  expect(timelineBox).not.toBeNull();
+  await page.mouse.move(
+    timelineBox!.x + timelineBox!.width * 0.64,
+    timelineBox!.y + timelineBox!.height / 2,
+  );
+  await expect(page.getByTestId("player-timeline-preview")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `player-scrubbing-preview-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+
+  await page
+    .getByRole("button", { name: "Audio, subtitles, and source" })
+    .click();
+  await expect(page.getByTestId("player-settings-sheet")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reset subtitle style" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `player-inspect-sheet-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+});
+
 test("player volume owns its browser keyboard controls", async ({
   page,
 }, testInfo) => {

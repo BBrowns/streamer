@@ -12,6 +12,10 @@ and Cast flows. The shared contract is `PlaybackSession` in `@streamer/shared`.
 Current work should keep hardening reliability and UX copy around this model
 instead of replacing it.
 
+The player/runtime boundaries, exact Play-to-first-frame sequence, track
+catalog, subtitle fetch paths and lifecycle cleanup are documented in
+[docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md).
+
 ## Runtime Plans Versus Persisted Sessions
 
 `PlaybackPlan` and `MediaCandidate` are runtime planning contracts. A
@@ -272,7 +276,23 @@ the live pipeline and any still-running background preparation.
 
 Compatible MP4/WebM torrent files do not need this handoff. Their signed stream
 route exposes the authoritative length immediately and supports `HEAD`,
-`Accept-Ranges`, and correct `206`/`Content-Range` responses.
+`Accept-Ranges`, and correct `206`/`Content-Range` responses. A player closing
+either a full or ranged direct response is normal cancellation: the bridge
+stops that response's source stream without failing the candidate or exiting
+the stream-server process. Genuine source errors still terminate the response
+and are logged only after sensitive source data is redacted.
+
+The timeline may lazily request a preview from
+`GET /api/gateway/jobs/:id/thumbnails/:bucket`, where one bucket represents ten
+seconds. This protected route works only while that exact active gateway job
+owns a retained seekable remux cache. It never accepts a source path or URL from
+the client and never serializes its process-local cache identity. Generation is
+single-flight per bucket and bounded by FFmpeg timeout, output bytes,
+concurrency, LRU entries, total memory and TTL. The response is `no-store`; the
+client keeps only a small runtime preview cache, aborts obsolete requests and
+falls back to the timestamp when a preview is unavailable. Thumbnail work
+never starts playback preparation and cannot turn a healthy stream into a
+candidate failure.
 
 If the optional client-side source replacement times out or rejects before the
 video player reports an error, the player keeps the existing candidate and
@@ -324,6 +344,37 @@ with `NO_PLAYABLE_SOURCE` so the player can stop buffering and show a clear
 
 XState is optional. Introduce it only if a typed reducer/service cannot keep
 the shared lifecycle understandable and testable.
+
+## Track And Subtitle Runtime Contracts
+
+Gateway track discovery is bound to the exact selected file of an active
+gateway job. The protected `GET /api/gateway/jobs/:id/tracks` response contains
+normalized, URL-free audio and subtitle descriptors. Concurrent probes are
+coalesced behind bounded concurrency, output, timeout and cache limits.
+
+The gateway exposes catalog-approved subtitle documents through
+`GET /api/gateway/jobs/:id/subtitles/:identity`. The identity is meaningful
+only inside the active job. External SRT/VTT and common encodings are normalized
+to UTF-8 WebVTT; embedded text and ASS/SSA extraction uses a bounded FFmpeg
+path. Bitmap subtitles are reported unsupported. The legacy raw subtitle route
+is an authenticated `410` tombstone and must not regain magnet or file query
+parameters.
+
+Installed Stremio add-ons that declare a compatible `subtitles` resource are
+queried through the existing add-on trust model. The server fans out with
+bounded provider/result/time limits and returns normalized candidates with
+opaque document identities. It keeps provider URLs only in a user-scoped,
+bounded runtime cache and repeats SSRF, redirect, byte and timeout checks when
+the document is fetched.
+
+The client merges native, torrent and add-on descriptors into one catalog.
+Native embedded subtitles remain player-owned. External documents are parsed
+into bounded sanitized cues and rendered from the accepted playback clock
+without replacing video. Durable preferences contain language, auto/always/off,
+accessibility, style and sync offset—not a provider document identity or URL.
+
+See [docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md) for the complete
+audio/subtitle data flows and current evidence limits.
 
 ## Agent Guardrails
 

@@ -12,8 +12,10 @@ import {
 
 export type GoldenPathScenario =
   | "direct"
+  | "direct-visual"
   | "torrent-fallback"
   | "no-peers"
+  | "progressive-nonseekable"
   | "preparing-cancellable"
   | "bridge-unavailable"
   | "download-unsupported"
@@ -28,8 +30,10 @@ const FIXTURE_SERIES_ID = "golden-path-series";
 const API_HOSTS = new Set(["127.0.0.1:3001", "localhost:3001"]);
 const BRIDGE_HOSTS = new Set(["127.0.0.1:11470", "localhost:11470"]);
 const MEDIA_URL = "https://media.example.test/golden-path.mp4";
+const VISUAL_MEDIA_URL = "https://media.example.test/golden-path.webm";
 const POSTER_URL = "https://assets.example.test/golden-path-poster.svg";
 const MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.mp4");
+const VISUAL_MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.webm");
 const GATEWAY_JOB_ID = "00000000-0000-4000-8000-000000000099";
 
 const timeoutBudget = {
@@ -187,10 +191,23 @@ function readyPlan(
     0,
     scenario === "torrent-fallback" ||
       scenario === "no-peers" ||
+      scenario === "progressive-nonseekable" ||
       scenario === "preparing-cancellable"
       ? "torrent"
       : "direct",
   );
+  if (scenario === "progressive-nonseekable") {
+    selected.requiresRemux = true;
+    selected.stream.behaviorHints = {
+      remuxToMp4: true,
+      remuxStrategy: "progressive-fmp4",
+    };
+  }
+  if (scenario === "direct-visual") {
+    selected.stream.url = VISUAL_MEDIA_URL;
+    selected.container = "unknown";
+    selected.videoCodec = "unknown";
+  }
   const fallbacks =
     scenario === "torrent-fallback" ? [candidate(action, 1, "direct")] : [];
   return playbackPlanSchema.parse({
@@ -259,6 +276,7 @@ function responsePlan(
   const needsTorrentBridge =
     scenario === "torrent-fallback" ||
     scenario === "no-peers" ||
+    scenario === "progressive-nonseekable" ||
     scenario === "preparing-cancellable";
   if (needsTorrentBridge && request.bridge?.status !== "available") {
     return unavailablePlan(request.action, "bridge-unavailable");
@@ -308,6 +326,7 @@ export async function installGoldenPathRoutes(
   let gatewayJobs = 0;
   let cancelledGatewayJobs = 0;
   const media = readFileSync(MEDIA_FIXTURE);
+  const visualMedia = readFileSync(VISUAL_MEDIA_FIXTURE);
 
   await page.routeWebSocket(/\/api\/sync\/events$/, (socket) => {
     socket.onMessage(() => {});
@@ -335,6 +354,18 @@ export async function installGoldenPathRoutes(
           "content-length": String(media.length),
         },
         body: media,
+      });
+      return;
+    }
+    if (url.href === VISUAL_MEDIA_URL) {
+      await route.fulfill({
+        status: 200,
+        contentType: "video/webm",
+        headers: {
+          "accept-ranges": "bytes",
+          "content-length": String(visualMedia.length),
+        },
+        body: visualMedia,
       });
       return;
     }
@@ -610,6 +641,25 @@ export async function installGoldenPathRoutes(
         url.pathname === `/api/gateway/jobs/${GATEWAY_JOB_ID}` &&
         request.method() === "GET"
       ) {
+        if (scenario === "progressive-nonseekable") {
+          await json(route, {
+            id: GATEWAY_JOB_ID,
+            state: "ready",
+            phase: "ready",
+            playbackUrl: `/api/gateway/jobs/${GATEWAY_JOB_ID}/stream`,
+            progress: null,
+            peerCount: 1,
+            readyTimeoutMs: 52_000,
+            media: {
+              remuxed: true,
+              container: "mp4",
+              seekable: false,
+              cacheStatus: "streaming",
+              seekableCache: { status: "preparing" },
+            },
+          });
+          return;
+        }
         if (scenario === "preparing-cancellable") {
           await json(route, {
             id: GATEWAY_JOB_ID,
@@ -630,6 +680,21 @@ export async function installGoldenPathRoutes(
           error: "No peers found for this deterministic fixture.",
           progress: null,
           peerCount: 0,
+        });
+        return;
+      }
+      if (
+        url.pathname === `/api/gateway/jobs/${GATEWAY_JOB_ID}/stream` &&
+        scenario === "progressive-nonseekable"
+      ) {
+        await route.fulfill({
+          status: 200,
+          contentType: "video/webm",
+          headers: {
+            ...corsHeaders,
+            "content-length": String(visualMedia.length),
+          },
+          body: visualMedia,
         });
         return;
       }

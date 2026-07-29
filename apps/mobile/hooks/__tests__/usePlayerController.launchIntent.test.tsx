@@ -174,4 +174,24 @@ describe("usePlayerController playback launch intent", () => {
     expect(screen.result.current.showResumePrompt).toBe(false);
     screen.unmount();
   });
+
+  it("reports the native playback completion event", () => {
+    const player = createMockPlayer();
+    const onCompleted = jest.fn();
+    startSession({ type: "play" });
+    const screen = renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+        onCompleted,
+      }),
+    );
+
+    act(() => player.emit("playToEnd", {}));
+
+    expect(onCompleted).toHaveBeenCalledTimes(1);
+    screen.unmount();
+  });
 });

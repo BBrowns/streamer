@@ -49,7 +49,14 @@ export const PLAYBACK_QUALITY_OPTIONS = [
   "480p",
 ] as const satisfies readonly PlaybackQuality[];
 
-export const PLAYER_PREFERENCES_STORE_VERSION = 1;
+export type SubtitleMode = "auto" | "always" | "off";
+export type SubtitleAccessibilityPreference = "neutral" | "prefer" | "avoid";
+export type SubtitleTextSize = "small" | "medium" | "large";
+export type SubtitleBackground = "shadow" | "box" | "none";
+export type SubtitleVerticalPosition = "low" | "middle" | "high";
+export type SubtitleFontFamily = "system" | "serif" | "monospace";
+
+export const PLAYER_PREFERENCES_STORE_VERSION = 3;
 
 function isPlaybackQuality(value: unknown): value is PlaybackQuality {
   return PLAYBACK_QUALITY_OPTIONS.includes(value as PlaybackQuality);
@@ -85,6 +92,26 @@ export function normalizePreferredQualities(
   return migrateLegacyPreferredQuality(legacyPreferredQuality);
 }
 
+export function normalizeSubtitleSyncOffset(value: unknown) {
+  const offset =
+    typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return Math.max(-10, Math.min(10, offset));
+}
+
+export function normalizeSubtitleBackgroundOpacity(value: unknown) {
+  const opacity =
+    typeof value === "number" && Number.isFinite(value) ? value : 0.78;
+  return Math.max(0, Math.min(1, opacity));
+}
+
+function oneOf<T extends string>(
+  value: unknown,
+  supported: readonly T[],
+  fallback: T,
+) {
+  return supported.includes(value as T) ? (value as T) : fallback;
+}
+
 export function migratePlayerPreferences(persistedState: unknown) {
   const state =
     persistedState && typeof persistedState === "object"
@@ -97,6 +124,42 @@ export function migratePlayerPreferences(persistedState: unknown) {
     preferredQualities: normalizePreferredQualities(
       state.preferredQualities,
       preferredQuality,
+    ),
+    subtitleMode: oneOf(
+      state.subtitleMode,
+      ["auto", "always", "off"] as const,
+      "auto",
+    ),
+    subtitleAccessibility: oneOf(
+      state.subtitleAccessibility,
+      ["neutral", "prefer", "avoid"] as const,
+      "neutral",
+    ),
+    subtitleTextSize: oneOf(
+      state.subtitleTextSize,
+      ["small", "medium", "large"] as const,
+      "medium",
+    ),
+    subtitleBackground: oneOf(
+      state.subtitleBackground,
+      ["shadow", "box", "none"] as const,
+      "shadow",
+    ),
+    subtitleBackgroundOpacity: normalizeSubtitleBackgroundOpacity(
+      state.subtitleBackgroundOpacity,
+    ),
+    subtitleVerticalPosition: oneOf(
+      state.subtitleVerticalPosition,
+      ["low", "middle", "high"] as const,
+      "low",
+    ),
+    subtitleFontFamily: oneOf(
+      state.subtitleFontFamily,
+      ["system", "serif", "monospace"] as const,
+      "system",
+    ),
+    subtitleSyncOffsetSeconds: normalizeSubtitleSyncOffset(
+      state.subtitleSyncOffsetSeconds,
     ),
   };
 }
@@ -130,6 +193,14 @@ interface PlayerState {
   preferredQualities: PlaybackQuality[];
   preferredAudioLang: string | null;
   preferredSubtitleLang: string | null;
+  subtitleMode: SubtitleMode;
+  subtitleAccessibility: SubtitleAccessibilityPreference;
+  subtitleTextSize: SubtitleTextSize;
+  subtitleBackground: SubtitleBackground;
+  subtitleBackgroundOpacity: number;
+  subtitleVerticalPosition: SubtitleVerticalPosition;
+  subtitleFontFamily: SubtitleFontFamily;
+  subtitleSyncOffsetSeconds: number;
   autoPlayNext: boolean;
 
   setStream: (
@@ -171,6 +242,17 @@ interface PlayerState {
   setPreferredQualities: (qualities: PlaybackQuality[]) => void;
   setPreferredAudioLang: (lang: string | null) => void;
   setPreferredSubtitleLang: (lang: string | null) => void;
+  setSubtitleMode: (mode: SubtitleMode) => void;
+  setSubtitleAccessibility: (
+    preference: SubtitleAccessibilityPreference,
+  ) => void;
+  setSubtitleTextSize: (size: SubtitleTextSize) => void;
+  setSubtitleBackground: (background: SubtitleBackground) => void;
+  setSubtitleBackgroundOpacity: (opacity: number) => void;
+  setSubtitleVerticalPosition: (position: SubtitleVerticalPosition) => void;
+  setSubtitleFontFamily: (fontFamily: SubtitleFontFamily) => void;
+  setSubtitleSyncOffsetSeconds: (offset: number) => void;
+  resetSubtitleStyle: () => void;
   subscribeToStreamMetrics: (infoHash: string) => void;
   clearPlayer: () => void;
 }
@@ -233,6 +315,14 @@ export const usePlayerStore = create<PlayerState>()(
       preferredQualities: [...PLAYBACK_QUALITY_OPTIONS],
       preferredAudioLang: null,
       preferredSubtitleLang: null,
+      subtitleMode: "auto",
+      subtitleAccessibility: "neutral",
+      subtitleTextSize: "medium",
+      subtitleBackground: "shadow",
+      subtitleBackgroundOpacity: 0.78,
+      subtitleVerticalPosition: "low",
+      subtitleFontFamily: "system",
+      subtitleSyncOffsetSeconds: 0,
       autoPlayNext: true,
 
       setStream: (stream, media, fallbackStreams = []) => {
@@ -445,6 +535,34 @@ export const usePlayerStore = create<PlayerState>()(
         set({ preferredQualities: normalizePreferredQualities(qualities) }),
       setPreferredAudioLang: (lang) => set({ preferredAudioLang: lang }),
       setPreferredSubtitleLang: (lang) => set({ preferredSubtitleLang: lang }),
+      setSubtitleMode: (mode) => set({ subtitleMode: mode }),
+      setSubtitleAccessibility: (subtitleAccessibility) =>
+        set({ subtitleAccessibility }),
+      setSubtitleTextSize: (subtitleTextSize) => set({ subtitleTextSize }),
+      setSubtitleBackground: (subtitleBackground) =>
+        set({ subtitleBackground }),
+      setSubtitleBackgroundOpacity: (opacity) =>
+        set({
+          subtitleBackgroundOpacity:
+            normalizeSubtitleBackgroundOpacity(opacity),
+        }),
+      setSubtitleVerticalPosition: (subtitleVerticalPosition) =>
+        set({ subtitleVerticalPosition }),
+      setSubtitleFontFamily: (subtitleFontFamily) =>
+        set({ subtitleFontFamily }),
+      setSubtitleSyncOffsetSeconds: (offset) =>
+        set({
+          subtitleSyncOffsetSeconds: normalizeSubtitleSyncOffset(offset),
+        }),
+      resetSubtitleStyle: () =>
+        set({
+          subtitleTextSize: "medium",
+          subtitleBackground: "shadow",
+          subtitleBackgroundOpacity: 0.78,
+          subtitleVerticalPosition: "low",
+          subtitleFontFamily: "system",
+          subtitleSyncOffsetSeconds: 0,
+        }),
       setAutoPlayNext: (enabled) => set({ autoPlayNext: enabled }),
 
       subscribeToStreamMetrics: (infoHash) => {
@@ -711,6 +829,14 @@ export const usePlayerStore = create<PlayerState>()(
         preferredQualities: state.preferredQualities,
         preferredAudioLang: state.preferredAudioLang,
         preferredSubtitleLang: state.preferredSubtitleLang,
+        subtitleMode: state.subtitleMode,
+        subtitleAccessibility: state.subtitleAccessibility,
+        subtitleTextSize: state.subtitleTextSize,
+        subtitleBackground: state.subtitleBackground,
+        subtitleBackgroundOpacity: state.subtitleBackgroundOpacity,
+        subtitleVerticalPosition: state.subtitleVerticalPosition,
+        subtitleFontFamily: state.subtitleFontFamily,
+        subtitleSyncOffsetSeconds: state.subtitleSyncOffsetSeconds,
         autoPlayNext: state.autoPlayNext,
       }),
       version: PLAYER_PREFERENCES_STORE_VERSION,

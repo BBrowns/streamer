@@ -446,23 +446,30 @@ Detail Play Best
   → 600 ms Detail prefetch + shared bridge detection
   → runtime-only planning intent and immediate /player navigation
   → PlaybackOrchestrator.playBest() shares POST /api/playback/plan work
-  → resolve selected source only when needed
-  → playerStore.setStream(primary, mediaInfo, fallbackStreams)
-  → player runtime state/error handling
+  → create persistence-safe PlaybackSession
+  → resolve opaque candidates serially when needed
+  → playerStore keeps only transient selected session/attempt context
+  → MediaPlayerAdapter + PlaybackRuntimeCoordinator
+  → accepted first frame/time events
 ```
 
 Important client modules:
 
-| Module                                        | Responsibility                                                                                                                               |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `services/playback/PlaybackPlanService.ts`    | Calls and validates `/api/playback/plan`, shares short-lived in-memory plans, and starts bridge detection once per concurrent planning pass. |
-| `services/playback/PlaybackOrchestrator.ts`   | Central Play Best entry point; returns a prepared stream or typed runtime error.                                                             |
-| `services/playback/PlaybackLaunchService.ts`  | Keeps a cancellable, runtime-only planning launch across the immediate Detail-to-Player navigation.                                          |
-| `services/playback/PlaybackErrors.ts`         | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                                         |
-| `services/playback/PlaybackSessionReducer.ts` | Creates persistence-safe sessions and applies typed append-only lifecycle events.                                                            |
-| `stores/playbackSessionStore.ts`              | Persists validated control-plane sessions while keeping raw planner candidates in memory only.                                               |
-| `stores/playerStore.ts`                       | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                                                    |
-| `components/player/PlayerStatusOverlay.tsx`   | Displays typed readiness/error states instead of an endless generic buffering state.                                                         |
+| Module                                            | Responsibility                                                                                                                               |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/playback/PlaybackPlanService.ts`        | Calls and validates `/api/playback/plan`, shares short-lived in-memory plans, and starts bridge detection once per concurrent planning pass. |
+| `services/playback/PlaybackOrchestrator.ts`       | Central Play Best entry point; returns a prepared stream or typed runtime error.                                                             |
+| `services/playback/PlaybackLaunchService.ts`      | Keeps a cancellable, runtime-only planning launch across the immediate Detail-to-Player navigation.                                          |
+| `services/playback/PlaybackErrors.ts`             | Maps planner, resolver, bridge, peer, timeout, and codec failures into typed errors.                                                         |
+| `services/playback/PlaybackSessionReducer.ts`     | Creates persistence-safe sessions and applies typed append-only lifecycle events.                                                            |
+| `stores/playbackSessionStore.ts`                  | Persists validated control-plane sessions while keeping raw planner candidates in memory only.                                               |
+| `stores/playerStore.ts`                           | Holds `runtimeState`, `runtimeError`, fallback queue, stream metrics, and playback state.                                                    |
+| `components/player/PlayerStatusOverlay.tsx`       | Displays typed readiness/error states instead of an endless generic buffering state.                                                         |
+| `services/playback/MediaPlayerAdapter.ts`         | Normalizes `expo-video` status, timeline, source replacement, tracks and media capabilities.                                                 |
+| `services/playback/PlaybackRuntimeCoordinator.ts` | Derives one transient discriminated player view state without creating another persisted machine.                                            |
+| `services/playback/TimelineController.ts`         | Owns preview/commit, seek clamp/tolerance and scrubbing lifecycle semantics.                                                                 |
+| `services/playback/AddonSubtitleService.ts`       | Loads and merges URL-free installed-add-on subtitle candidates and opaque documents.                                                         |
+| `services/playback/PlaybackSegmentsProvider.ts`   | Bounds metadata/provider supplied intro, recap, credits and preview segments.                                                                |
 
 Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
 
@@ -809,9 +816,15 @@ The `policyCache` in `aggregator.service.ts` is a module-level `Map<string, IPol
 
 The current rate limiter (`express-rate-limit`) uses in-memory storage. If the server is ever run in multiple instances (behind a load balancer), each instance has its own counter — defeating the rate limit. Replace with `rate-limit-redis` backed by the `ioredis` client already in `package.json` (it's a declared dependency but not yet used for rate limiting).
 
-#### 6. Stream Engine: Subtitle Track Support
+#### 6. Stream Engine Track Target Validation
 
-`IStreamEngine` declares a `getSubtitleTracks()` method but implementation is incomplete for torrent streams. The stream-server should parse `.srt`/`.ass` files bundled inside torrent archives and expose them as individually addressable HTTP endpoints. `expo-video` supports external subtitle tracks via `SubtitleTrack` objects.
+Torrent track probing and addressable external/embedded text subtitles are
+implemented through protected, job-scoped endpoints. Installed Stremio
+subtitle add-ons use the existing server trust boundary, and the client renders
+external cues without restarting video. Remaining work is real-target
+validation of multi-audio exposure/switching and native embedded subtitle
+behavior across supported Expo Video platforms. Bitmap torrent subtitles
+remain explicitly unsupported.
 
 #### 7. Download Resumability After App Restart (Native)
 

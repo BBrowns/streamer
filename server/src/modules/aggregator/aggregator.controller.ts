@@ -73,6 +73,46 @@ export class AggregatorController {
     });
   }
 
+  async getSubtitles(c: Context) {
+    const { type, id } = (c.req as any).valid("param");
+    const user = c.get("user");
+    const requestId = c.get("requestId") ?? "";
+    const subtitles = await aggregatorService.getSubtitleCandidates(
+      user.userId,
+      type,
+      id,
+      requestId,
+      { signal: c.req.raw.signal },
+    );
+    return c.json({ subtitles });
+  }
+
+  async getSubtitleDocument(c: Context) {
+    const { identity } = (c.req as any).valid("param");
+    const user = c.get("user");
+    try {
+      const document = await aggregatorService.getSubtitleDocument(
+        user.userId,
+        identity,
+        c.req.raw.signal,
+      );
+      if (document === null) {
+        return c.json({ error: "Subtitle not found" }, 404);
+      }
+      c.header("Cache-Control", "no-store");
+      c.header("Content-Type", "text/plain; charset=utf-8");
+      return c.body(document);
+    } catch {
+      return c.json(
+        {
+          error: "Subtitle is temporarily unavailable",
+          code: "SUBTITLE_TEMPORARILY_UNAVAILABLE",
+        },
+        503,
+      );
+    }
+  }
+
   async resolveStream(c: Context) {
     const { type, id, infoHash } = (c.req as any).valid("param");
     const user = c.get("user");

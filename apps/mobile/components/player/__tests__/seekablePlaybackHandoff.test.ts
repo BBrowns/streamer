@@ -26,6 +26,9 @@ function createPlayer({
     currentTime,
     playing,
     status,
+    playbackRate: 1.25,
+    muted: true,
+    volume: 0.4,
     play: jest.fn(),
     pause: jest.fn(),
     replaceAsync,
@@ -95,6 +98,30 @@ describe("replaceWithSeekableSource", () => {
     expect(player.currentTime).toBe(42);
     expect(player.play).not.toHaveBeenCalled();
     expect(player.pause).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores playback rate, mute, and volume after replacement", async () => {
+    const { player, emit } = createPlayer();
+    player.replaceAsync = jest.fn().mockImplementation(async () => {
+      player.playbackRate = 1;
+      player.muted = false;
+      player.volume = 1;
+    });
+    const controller = new AbortController();
+
+    const handoff = replaceWithSeekableSource({
+      player,
+      source,
+      resumeAt: 52,
+      shouldResume: true,
+      signal: controller.signal,
+    });
+    emit("sourceLoad");
+    await handoff;
+
+    expect(player.playbackRate).toBe(1.25);
+    expect(player.muted).toBe(true);
+    expect(player.volume).toBe(0.4);
   });
 
   it("uses an already-ready player status when no event is dispatched", async () => {

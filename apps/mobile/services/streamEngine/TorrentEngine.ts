@@ -1,4 +1,9 @@
-import type { Stream } from "@streamer/shared";
+import {
+  gatewayTrackCatalogSchema,
+  type GatewayTrackCatalog,
+  type NormalizedMediaTrack,
+  type Stream,
+} from "@streamer/shared";
 import {
   isStreamEngineCancellationError,
   StreamEngineCancellationError,
@@ -49,6 +54,10 @@ interface GatewayJobResponse extends GatewayJobProgress {
 
 const DEFAULT_GATEWAY_JOB_READY_TIMEOUT_MS = 45_000;
 const GATEWAY_JOB_POLL_INTERVAL_MS = 1_000;
+const MAX_SUBTITLE_DOCUMENT_CHARACTERS = 8 * 1024 * 1024;
+const THUMBNAIL_BUCKET_SECONDS = 10;
+const MAX_THUMBNAIL_BUCKET = 24 * 60 * 6;
+const MAX_THUMBNAIL_BYTES = 512 * 1024;
 
 interface BridgeConfig {
   activeStrategy: string;
@@ -61,6 +70,23 @@ interface BridgeConfig {
 function toAbsoluteBridgeUrl(bridgeUrl: string, path: string) {
   return new URL(path, bridgeUrl.endsWith("/") ? bridgeUrl : `${bridgeUrl}/`)
     .href;
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let encoded = "";
+  for (let index = 0; index < bytes.length; index += 3) {
+    const first = bytes[index] ?? 0;
+    const second = bytes[index + 1] ?? 0;
+    const third = bytes[index + 2] ?? 0;
+    const combined = (first << 16) | (second << 8) | third;
+    encoded += alphabet[(combined >> 18) & 63];
+    encoded += alphabet[(combined >> 12) & 63];
+    encoded += index + 1 < bytes.length ? alphabet[(combined >> 6) & 63] : "=";
+    encoded += index + 2 < bytes.length ? alphabet[combined & 63] : "=";
+  }
+  return encoded;
 }
 
 interface PlaybackOperation {
@@ -79,6 +105,11 @@ export class TorrentEngine implements IStreamEngine {
   private statsInterval: ReturnType<typeof setInterval> | null = null;
   private activeGatewayJob: ActiveGatewayJob | null = null;
   private activeOperation: PlaybackOperation | null = null;
+  private trackCatalogController: AbortController | null = null;
+  private subtitleDocumentController: AbortController | null = null;
+  private thumbnailController: AbortController | null = null;
+  private audioTracks: AudioTrack[] = [];
+  private subtitleTracks: SubtitleTrack[] = [];
   private operationGeneration = 0;
   private bridge: BridgeConfig;
 
@@ -256,6 +287,89 @@ export class TorrentEngine implements IStreamEngine {
       unavailableReason:
         job.media?.seekableCache?.unavailableReason ?? undefined,
     };
+  }
+
+  async getThumbnail(
+    positionSeconds: number,
+    signal?: AbortSignal,
+  ): Promise<unknown | null> {
+    const activeJob = this.activeGatewayJob;
+    if (
+      !activeJob ||
+      !Number.isFinite(positionSeconds) ||
+      positionSeconds < 0
+    ) {
+      return null;
+    }
+    const bucket = Math.round(positionSeconds / THUMBNAIL_BUCKET_SECONDS);
+    if (!Number.isSafeInteger(bucket) || bucket > MAX_THUMBNAIL_BUCKET) {
+      return null;
+    }
+
+    this.thumbnailController?.abort();
+    const controller = new AbortController();
+    this.thumbnailController = controller;
+    const onExternalAbort = () =>
+      controller.abort(
+        signal?.reason instanceof Error
+          ? signal.reason
+          : new Error("Thumbnail request cancelled"),
+      );
+    signal?.addEventListener("abort", onExternalAbort, { once: true });
+    if (signal?.aborted) onExternalAbort();
+
+    try {
+      const response = await fetch(
+        toAbsoluteBridgeUrl(
+          activeJob.bridgeUrl,
+          `/api/gateway/jobs/${encodeURIComponent(
+            activeJob.id,
+          )}/thumbnails/${bucket}`,
+        ),
+        {
+          headers: getBridgeAuthHeaders(),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) return null;
+      if (
+        !response.headers
+          .get("content-type")
+          ?.toLowerCase()
+          .startsWith("image/jpeg")
+      ) {
+        return null;
+      }
+
+      const advertisedBytes = Number(response.headers.get("content-length"));
+      if (
+        Number.isFinite(advertisedBytes) &&
+        advertisedBytes > MAX_THUMBNAIL_BYTES
+      ) {
+        throw new Error("Thumbnail exceeded its size limit");
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length > MAX_THUMBNAIL_BYTES) {
+        throw new Error("Thumbnail exceeded its size limit");
+      }
+      if (
+        controller.signal.aborted ||
+        this.activeGatewayJob?.id !== activeJob.id
+      ) {
+        throw (
+          controller.signal.reason ?? new Error("Thumbnail request cancelled")
+        );
+      }
+
+      return {
+        uri: `data:image/jpeg;base64,${bytesToBase64(bytes)}`,
+      };
+    } finally {
+      signal?.removeEventListener("abort", onExternalAbort);
+      if (this.thumbnailController === controller) {
+        this.thumbnailController = null;
+      }
+    }
   }
 
   private async createGatewayJob(
@@ -505,6 +619,12 @@ export class TorrentEngine implements IStreamEngine {
   private beginPlaybackOperation(): PlaybackOperation {
     const previousOperation = this.activeOperation;
     if (previousOperation) previousOperation.controller.abort();
+    this.trackCatalogController?.abort();
+    this.trackCatalogController = null;
+    this.subtitleDocumentController?.abort();
+    this.subtitleDocumentController = null;
+    this.audioTracks = [];
+    this.subtitleTracks = [];
 
     const operation: PlaybackOperation = {
       generation: ++this.operationGeneration,
@@ -677,6 +797,8 @@ export class TorrentEngine implements IStreamEngine {
     const activeJob = this.activeGatewayJob;
     if (!activeJob) return;
 
+    this.thumbnailController?.abort();
+    this.thumbnailController = null;
     this.activeGatewayJob = null;
     await this.cancelGatewayJob(activeJob, emitCancellation);
   }
@@ -700,15 +822,216 @@ export class TorrentEngine implements IStreamEngine {
     return "torrent";
   }
 
-  // Pass-through track stubs
   getAudioTracks(): AudioTrack[] {
-    return [];
+    return this.audioTracks.map((track) => ({ ...track }));
   }
-  setAudioTrack(id: string): void {}
+
   getSubtitles(): SubtitleTrack[] {
-    return [];
+    return this.subtitleTracks.map((track) => ({ ...track }));
   }
-  setSubtitle(id: string | null): void {}
+
+  setSubtitle(id: string | null): void {
+    if (id && !this.subtitleTracks.some((track) => track.id === id)) return;
+    this.subtitleTracks = this.subtitleTracks.map((track) => ({
+      ...track,
+      active: id !== null && track.id === id,
+    }));
+    this.emitTracks();
+  }
+
+  async refreshTrackCatalog(signal?: AbortSignal): Promise<void> {
+    const activeJob = this.activeGatewayJob;
+    if (!activeJob) {
+      this.audioTracks = [];
+      this.subtitleTracks = [];
+      this.emitTracks();
+      return;
+    }
+
+    this.trackCatalogController?.abort();
+    const controller = new AbortController();
+    this.trackCatalogController = controller;
+    const onExternalAbort = () =>
+      controller.abort(
+        signal?.reason instanceof Error
+          ? signal.reason
+          : new Error("Track discovery cancelled"),
+      );
+    signal?.addEventListener("abort", onExternalAbort, { once: true });
+    if (signal?.aborted) onExternalAbort();
+
+    try {
+      const response = await fetch(
+        toAbsoluteBridgeUrl(
+          activeJob.bridgeUrl,
+          `/api/gateway/jobs/${encodeURIComponent(activeJob.id)}/tracks`,
+        ),
+        {
+          headers: getBridgeAuthHeaders(),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Track catalog unavailable (${response.status})`);
+      }
+
+      const parsed = gatewayTrackCatalogSchema.safeParse(await response.json());
+      if (!parsed.success || parsed.data.jobId !== activeJob.id) {
+        throw new Error("Track catalog response was invalid");
+      }
+      if (
+        controller.signal.aborted ||
+        this.activeGatewayJob?.id !== activeJob.id
+      ) {
+        return;
+      }
+
+      this.applyTrackCatalog(parsed.data);
+    } finally {
+      signal?.removeEventListener("abort", onExternalAbort);
+      if (this.trackCatalogController === controller) {
+        this.trackCatalogController = null;
+      }
+    }
+  }
+
+  private applyTrackCatalog(catalog: GatewayTrackCatalog) {
+    const selectedAudioId = this.audioTracks.find((track) => track.active)?.id;
+    const supportedAudio = catalog.tracks.filter(
+      (track) => track.kind === "audio" && track.supported,
+    );
+    const defaultAudioId =
+      supportedAudio.find((track) => track.id === selectedAudioId)?.id ??
+      supportedAudio.find((track) => track.default)?.id ??
+      supportedAudio[0]?.id;
+
+    this.audioTracks = supportedAudio.map((track) => ({
+      id: track.id,
+      label: this.audioTrackLabel(track),
+      language: track.language,
+      active: track.id === defaultAudioId,
+      codec: track.codec,
+      channelCount: track.channelCount,
+      channelLayout: track.channelLayout,
+      audioDescription: track.audioDescription,
+      commentary: track.commentary,
+      source: track.source,
+    }));
+
+    const selectedSubtitleId = this.subtitleTracks.find(
+      (track) => track.active,
+    )?.id;
+    this.subtitleTracks = catalog.subtitles
+      .filter((subtitle) => Boolean(subtitle.fetchIdentity))
+      .map((subtitle) => ({
+        id: subtitle.id,
+        label: subtitle.label,
+        language: subtitle.language,
+        active: subtitle.id === selectedSubtitleId,
+        format: subtitle.format,
+        source: subtitle.source,
+        forced: subtitle.forced,
+        hearingImpaired: subtitle.hearingImpaired,
+        fetchIdentity: subtitle.fetchIdentity,
+        providerName: subtitle.providerName,
+        confidence: subtitle.confidence,
+        contentIdMatch: subtitle.contentIdMatch,
+      }));
+    this.emitTracks();
+  }
+
+  private audioTrackLabel(track: NormalizedMediaTrack) {
+    if (track.title) return track.title;
+    const channelLabel =
+      track.channelLayout ||
+      (track.channelCount ? `${track.channelCount}ch` : undefined);
+    return [
+      track.language.toUpperCase(),
+      channelLabel,
+      track.codec.toUpperCase(),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  async loadSubtitleDocument(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const activeJob = this.activeGatewayJob;
+    const track = this.subtitleTracks.find(
+      (candidate) => candidate.id === id || candidate.fetchIdentity === id,
+    );
+    if (!activeJob || !track?.fetchIdentity) {
+      throw new Error("Subtitle is unavailable for the active source");
+    }
+
+    this.subtitleDocumentController?.abort();
+    const controller = new AbortController();
+    this.subtitleDocumentController = controller;
+    const onExternalAbort = () =>
+      controller.abort(
+        signal?.reason instanceof Error
+          ? signal.reason
+          : new Error("Subtitle request cancelled"),
+      );
+    signal?.addEventListener("abort", onExternalAbort, { once: true });
+    if (signal?.aborted) onExternalAbort();
+
+    try {
+      const response = await fetch(
+        toAbsoluteBridgeUrl(
+          activeJob.bridgeUrl,
+          `/api/gateway/jobs/${encodeURIComponent(
+            activeJob.id,
+          )}/subtitles/${encodeURIComponent(track.fetchIdentity)}`,
+        ),
+        {
+          headers: getBridgeAuthHeaders(),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Subtitle unavailable (${response.status})`);
+      }
+      const advertisedBytes = Number(response.headers.get("content-length"));
+      if (
+        Number.isFinite(advertisedBytes) &&
+        advertisedBytes > MAX_SUBTITLE_DOCUMENT_CHARACTERS
+      ) {
+        throw new Error("Subtitle document exceeded its size limit");
+      }
+
+      const document = await response.text();
+      if (document.length > MAX_SUBTITLE_DOCUMENT_CHARACTERS) {
+        throw new Error("Subtitle document exceeded its size limit");
+      }
+      if (!/^WEBVTT(?:\r?\n|$)/.test(document)) {
+        throw new Error("Subtitle response was not WebVTT");
+      }
+      if (
+        controller.signal.aborted ||
+        this.activeGatewayJob?.id !== activeJob.id
+      ) {
+        throw (
+          controller.signal.reason ?? new Error("Subtitle request cancelled")
+        );
+      }
+      return document;
+    } finally {
+      signal?.removeEventListener("abort", onExternalAbort);
+      if (this.subtitleDocumentController === controller) {
+        this.subtitleDocumentController = null;
+      }
+    }
+  }
+
+  private emitTracks() {
+    this.emit("tracks", {
+      audioTracks: this.getAudioTracks(),
+      subtitles: this.getSubtitles(),
+    });
+  }
 
   on(event: string, callback: Function): void {
     if (!this.listeners.has(event)) {
@@ -726,6 +1049,14 @@ export class TorrentEngine implements IStreamEngine {
 
   stop(): void {
     this.cancelPlaybackOperation();
+    this.trackCatalogController?.abort();
+    this.trackCatalogController = null;
+    this.subtitleDocumentController?.abort();
+    this.subtitleDocumentController = null;
+    this.thumbnailController?.abort();
+    this.thumbnailController = null;
+    this.audioTracks = [];
+    this.subtitleTracks = [];
     if (this.statsInterval) {
       clearInterval(this.statsInterval);
       this.statsInterval = null;

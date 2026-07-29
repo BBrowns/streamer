@@ -22,8 +22,10 @@ import {
   __setFfmpegSpawnerForTests,
   ensureTorrentReady,
   evaluateSeekableRemuxPreparation,
+  getRetainedSeekableRemuxSource,
   getSelectedFile,
   prepareSeekableRemux,
+  retainSeekableRemux,
   serveTorrentFile,
   shouldRemuxTorrentFile,
   waitForTorrentFileFirstBytes,
@@ -42,6 +44,24 @@ function makeFakeStream() {
   s.pipe = vi.fn().mockReturnThis();
   s.destroy = vi.fn();
   return s;
+}
+
+function makeStreamxLikeReadable() {
+  const stream = new EventEmitter() as any;
+  stream.destroyed = false;
+  stream.destroy = vi.fn((error?: Error) => {
+    if (stream.destroyed) return stream;
+    stream.destroyed = true;
+    if (error) stream.emit("error", error);
+    return stream;
+  });
+  stream.pipe = vi.fn((destination: EventEmitter) => {
+    destination.once("close", () => {
+      stream.destroy(new Error("Writable stream closed prematurely"));
+    });
+    return destination;
+  });
+  return stream;
 }
 
 function makeFakeFile(name = "movie.mp4", size = 1_000_000) {
@@ -319,15 +339,13 @@ describe("handleTorrent", () => {
     const torrent = makeTorrent([file]);
     const { req, res } = makeReqRes();
     const fakeStream = makeFakeStream();
+    Object.assign(res, { writableFinished: false, destroyed: false });
     file.createReadStream.mockReturnValue(fakeStream);
 
     handleTorrent(torrent, req, res);
 
     // Simulate client closing connection
-    const closeHandler = (req.on as any).mock.calls.find(
-      ([event]: [string]) => event === "close",
-    )[1];
-    closeHandler();
+    (res as any).emit("close");
 
     expect(fakeStream.destroy).toHaveBeenCalled();
   });
@@ -404,6 +422,100 @@ describe("serveTorrentFile", () => {
     expect(shouldRemuxTorrentFile("movie.mkv")).toBe(true);
     expect(shouldRemuxTorrentFile("movie.mp4")).toBe(false);
     expect(shouldRemuxTorrentFile("movie.mp4", "mp4")).toBe(true);
+  });
+
+  it.each<{ label: string; headers: Record<string, string> }>([
+    { label: "full", headers: {} },
+    { label: "ranged", headers: { range: "bytes=0-1023" } },
+  ])(
+    "treats a client disconnect during a $label direct stream as cancellation",
+    async ({ headers }) => {
+      const stream = makeStreamxLikeReadable();
+      const file = makeFakeFile("film.mp4", 5_000_000);
+      file.createReadStream.mockReturnValue(stream);
+      const torrent = makeTorrent([file]);
+      const { req, res } = makeReqRes(headers);
+      Object.assign(res, { writableFinished: false, destroyed: false });
+
+      await serveTorrentFile(req, res, torrent);
+
+      expect(() => (res as any).emit("close")).not.toThrow();
+      expect(stream.destroy.mock.calls[0]).toEqual([]);
+      expect(stream.destroyed).toBe(true);
+      expect(res.destroy).not.toHaveBeenCalled();
+    },
+  );
+
+  it("cancels a direct stream when the request is aborted", async () => {
+    const stream = makeStreamxLikeReadable();
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    file.createReadStream.mockReturnValue(stream);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes();
+    Object.assign(req, { aborted: false });
+    Object.assign(res, { writableFinished: false, destroyed: false });
+
+    await serveTorrentFile(req, res, torrent);
+
+    const abortHandler = (req.once as any).mock.calls.find(
+      ([event]: [string]) => event === "aborted",
+    )?.[1];
+    expect(abortHandler).toEqual(expect.any(Function));
+    Object.assign(req, { aborted: true });
+    expect(() => abortHandler()).not.toThrow();
+    expect(() => (res as any).emit("close")).not.toThrow();
+    expect(stream.destroy.mock.calls[0]).toEqual([]);
+    expect(stream.destroyed).toBe(true);
+    expect(res.destroy).not.toHaveBeenCalled();
+  });
+
+  it("stops a direct source created after the response already closed", async () => {
+    const stream = makeStreamxLikeReadable();
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    file.createReadStream.mockReturnValue(stream);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes();
+    Object.assign(req, { aborted: false });
+    Object.assign(res, { writableFinished: true, destroyed: true });
+
+    await serveTorrentFile(req, res, torrent);
+
+    expect(stream.pipe).not.toHaveBeenCalled();
+    expect(stream.destroy).toHaveBeenCalledWith();
+    expect(stream.destroyed).toBe(true);
+  });
+
+  it("handles and redacts a genuine direct source error", async () => {
+    const stream = makeFakeStream();
+    const file = makeFakeFile("film.mp4", 5_000_000);
+    file.createReadStream.mockReturnValue(stream);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes();
+    Object.assign(req, { aborted: false });
+    Object.assign(res, { writableFinished: false, destroyed: false });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await serveTorrentFile(req, res, torrent);
+
+    try {
+      expect(() =>
+        stream.emit(
+          "error",
+          new Error(
+            "upstream failed for magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+          ),
+        ),
+      ).not.toThrow();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Direct torrent stream error"),
+      );
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("0123456789abcdef0123456789abcdef01234567"),
+      );
+      expect(res.destroy).toHaveBeenCalledWith();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("serves a clamped gateway seek range with exposed response headers", async () => {
@@ -490,6 +602,28 @@ describe("serveTorrentFile", () => {
     expect(second).toEqual(first);
   });
 
+  it("exposes a seekable cache source only while a gateway lease retains it", async () => {
+    const remuxedBytes = Buffer.from("0123456789abcdef");
+    __setFfmpegSpawnerForTests(makeSuccessfulFfmpegSpawner(remuxedBytes));
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    torrent.infoHash = "movie-hash";
+
+    await prepareSeekableRemux(torrent);
+    expect(getRetainedSeekableRemuxSource(torrent)).toBeUndefined();
+
+    const release = retainSeekableRemux(torrent);
+    const retained = getRetainedSeekableRemuxSource(torrent);
+
+    expect(retained).toMatchObject({
+      cacheKey: expect.stringMatching(/^[a-f0-9]{32}$/),
+      filePath: expect.stringMatching(/\.mp4$/),
+      size: remuxedBytes.length,
+    });
+    release?.();
+    expect(getRetainedSeekableRemuxSource(torrent)).toBeUndefined();
+  });
+
   it("starts an MKV as a fragmented MP4 before FFmpeg closes", async () => {
     const { child, spawner } = makeProgressiveFfmpegSpawner();
     __setFfmpegSpawnerForTests(spawner);
@@ -514,6 +648,8 @@ describe("serveTorrentFile", () => {
     );
     const args = spawner.mock.calls[0][1] as string[];
     expect(args).not.toContain("+faststart");
+    expect(args).toContain("0:a?");
+    expect(args).not.toContain("0:a:0?");
     expect(file.createReadStream).toHaveBeenCalledWith();
 
     const firstFragment = Buffer.from("fragmented-mp4-moof");

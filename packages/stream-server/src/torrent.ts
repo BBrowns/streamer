@@ -21,6 +21,7 @@ import {
   selectBestVideoFile,
   mimeFromExt,
   parseByteRange,
+  pipeTorrentStreamToResponse,
 } from "./torrent-helpers.js";
 import type {
   FileSelectionHints,
@@ -176,6 +177,12 @@ export interface RemuxCacheStatus {
   totalBytes: number;
   maxBytes: number;
   ttlMs: number;
+}
+
+export interface RetainedSeekableRemuxSource {
+  cacheKey: string;
+  filePath: string;
+  size: number;
 }
 
 export { getTorrentCacheStatus } from "./torrent-cache.js";
@@ -437,7 +444,11 @@ function runFfmpegRemuxToFile(
       "-map",
       "0:v:0?",
       "-map",
-      "0:a:0?",
+      "0:a?",
+      "-map_metadata",
+      "0",
+      "-map_chapters",
+      "0",
       "-c:v",
       "copy",
       "-c:a",
@@ -946,7 +957,11 @@ async function serveProgressiveRemuxedFile(
     "-map",
     "0:v:0?",
     "-map",
-    "0:a:0?",
+    "0:a?",
+    "-map_metadata",
+    "0",
+    "-map_chapters",
+    "0",
     "-c:v",
     "copy",
     "-c:a",
@@ -1200,7 +1215,7 @@ export async function prepareSeekableRemux(
  * Keeps one completed seekable remux resident while a gateway job advertises
  * it as a handoff target. The returned release function is deliberately
  * runtime-only: it must be called when the owning gateway job is cancelled or
- * pruned, and it never exposes a media path or source identity to callers.
+ * pruned. External routes never receive the media path or source identity.
  */
 export function retainSeekableRemux(
   torrent: any,
@@ -1226,6 +1241,41 @@ export function retainSeekableRemux(
     entry.leaseCount = Math.max(0, entry.leaseCount - 1);
     entry.lastAccessAt = Date.now();
     pruneRemuxCache();
+  };
+}
+
+/**
+ * Returns the process-local file behind an already retained remux. This is an
+ * internal bridge capability for bounded derivative work such as thumbnails;
+ * callers must never serialize the path or cache identity into an API result.
+ */
+export function getRetainedSeekableRemuxSource(
+  torrent: any,
+  options: {
+    fileIdx?: number;
+    hints?: FileSelectionHints;
+  } = {},
+): RetainedSeekableRemuxSource | undefined {
+  if (!torrent.files || torrent.files.length === 0) return undefined;
+
+  const file = getSelectedFile(torrent, options.fileIdx, options.hints);
+  const key = getRemuxCacheKey(torrent, file, options);
+  const entry = remuxCache.get(key);
+  if (
+    !entry ||
+    entry.pending ||
+    entry.leaseCount <= 0 ||
+    !Number.isSafeInteger(entry.size) ||
+    (entry.size as number) <= 0
+  ) {
+    return undefined;
+  }
+
+  entry.lastAccessAt = Date.now();
+  return {
+    cacheKey: key,
+    filePath: entry.filePath,
+    size: entry.size as number,
   };
 }
 
@@ -1951,15 +2001,21 @@ export async function serveTorrentFile(
       start: range.start,
       end: range.end,
     });
-    stream.pipe(res);
-    res.on("close", () => stream.destroy());
+    pipeTorrentStreamToResponse(req, res, stream, (error) => {
+      console.error(
+        `[stream-server] Direct torrent stream error: ${redactSensitiveText(error.message)}`,
+      );
+    });
   } else {
     res.setHeader("Content-Length", total);
     if (req.method === "HEAD") return res.end();
 
     const stream = file.createReadStream();
-    stream.pipe(res);
-    res.on("close", () => stream.destroy());
+    pipeTorrentStreamToResponse(req, res, stream, (error) => {
+      console.error(
+        `[stream-server] Direct torrent stream error: ${redactSensitiveText(error.message)}`,
+      );
+    });
   }
 }
 

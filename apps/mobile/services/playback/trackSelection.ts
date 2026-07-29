@@ -2,6 +2,7 @@ import type {
   AudioTrack as ExpoAudioTrack,
   SubtitleTrack as ExpoSubtitleTrack,
 } from "expo-video";
+import type { NormalizedMediaTrack } from "@streamer/shared";
 import type { AudioTrack, SubtitleTrack } from "../streamEngine/IStreamEngine";
 
 type ExpoTrack = ExpoAudioTrack | ExpoSubtitleTrack;
@@ -50,6 +51,21 @@ export function formatMediaTrackLabel(label: string, kind?: TrackKind) {
   return label;
 }
 
+export function buildTrackRows<T extends ExpoAudioTrack>(
+  tracks: T[],
+  activeTrack: T | null | undefined,
+  kind: "audio",
+): AudioTrack[];
+export function buildTrackRows<T extends ExpoSubtitleTrack>(
+  tracks: T[],
+  activeTrack: T | null | undefined,
+  kind: "subtitle",
+): SubtitleTrack[];
+export function buildTrackRows<T extends ExpoTrack>(
+  tracks: T[],
+  activeTrack?: T | null,
+  kind?: TrackKind,
+): TrackRow[];
 export function buildTrackRows<T extends ExpoTrack>(
   tracks: T[],
   activeTrack?: T | null,
@@ -82,6 +98,85 @@ export function buildTrackRows<T extends ExpoTrack>(
   });
 }
 
+export function mergeSubtitleTracks(tracks: SubtitleTrack[]): SubtitleTrack[] {
+  const bestByIdentity = new Map<string, SubtitleTrack>();
+  const sourceOrder = { embedded: 0, "torrent-file": 1, addon: 2 } as const;
+
+  for (const track of tracks) {
+    const key = [
+      track.language.toLowerCase(),
+      track.label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim(),
+      track.forced ? "forced" : "normal",
+      track.hearingImpaired ? "sdh" : "standard",
+    ].join(":");
+    const existing = bestByIdentity.get(key);
+    const trackScore =
+      (track.confidence ?? 0.5) +
+      (track.contentIdMatch ? 0.1 : 0) -
+      sourceOrder[track.source ?? "addon"] * 0.001;
+    const existingScore = existing
+      ? (existing.confidence ?? 0.5) +
+        (existing.contentIdMatch ? 0.1 : 0) -
+        sourceOrder[existing.source ?? "addon"] * 0.001
+      : -1;
+    if (
+      !existing ||
+      trackScore > existingScore ||
+      (trackScore === existingScore && track.id.localeCompare(existing.id) < 0)
+    ) {
+      bestByIdentity.set(key, track);
+    }
+  }
+
+  return [...bestByIdentity.values()].sort(
+    (left, right) =>
+      left.language.localeCompare(right.language) ||
+      Number(Boolean(right.forced)) - Number(Boolean(left.forced)) ||
+      left.label.localeCompare(right.label) ||
+      left.id.localeCompare(right.id),
+  );
+}
+
+export function buildPlayerTrackCatalog({
+  availableAudioTracks,
+  activeAudioTrack,
+  availableSubtitleTracks,
+  activeSubtitleTrack,
+  engineSubtitles,
+}: {
+  availableAudioTracks: ExpoAudioTrack[];
+  activeAudioTrack?: ExpoAudioTrack | null;
+  availableSubtitleTracks: ExpoSubtitleTrack[];
+  activeSubtitleTrack?: ExpoSubtitleTrack | null;
+  engineSubtitles: SubtitleTrack[];
+}) {
+  const nativeSubtitles = buildTrackRows(
+    availableSubtitleTracks,
+    activeSubtitleTrack,
+    "subtitle",
+  ).map(
+    (track): SubtitleTrack => ({
+      ...track,
+      source: "embedded",
+      confidence: 1,
+    }),
+  );
+
+  return {
+    // Gateway audio descriptors are discovery metadata. Only tracks exposed by
+    // the active native player are selectable without replacing the source.
+    audioTracks: buildTrackRows(
+      availableAudioTracks,
+      activeAudioTrack,
+      "audio",
+    ),
+    subtitles: mergeSubtitleTracks([...nativeSubtitles, ...engineSubtitles]),
+  };
+}
+
 export function findPreferredPlayerTrack<T extends ExpoTrack>(
   tracks: T[],
   preferredLanguage?: string | null,
@@ -102,4 +197,74 @@ export function findPlayerTrackByRowId<T extends ExpoTrack>(
   id: string,
 ): T | null {
   return tracks.find((track, index) => trackId(track, index) === id) || null;
+}
+
+export interface AudioTrackRankingContext {
+  explicitTrackId?: string | null;
+  preferredLanguages: string[];
+  originalLanguage?: string | null;
+  preferOriginalLanguage: boolean;
+  preferAudioDescription: boolean;
+  supportedCodecs?: string[];
+}
+
+export function rankAudioTracks(
+  tracks: NormalizedMediaTrack[],
+  context: AudioTrackRankingContext,
+) {
+  const preferredLanguages = context.preferredLanguages.map(
+    normalizeTrackLanguage,
+  );
+  const originalLanguage = normalizeTrackLanguage(context.originalLanguage);
+
+  return tracks
+    .filter((track) => track.kind === "audio")
+    .map((track) => {
+      let score = 0;
+      const reasons: string[] = [];
+      const language = normalizeTrackLanguage(track.language);
+      const languageIndex = preferredLanguages.indexOf(language);
+
+      if (track.id === context.explicitTrackId) {
+        score += 10_000;
+        reasons.push("explicit");
+      }
+      if (languageIndex >= 0) {
+        score += 500 - languageIndex * 20;
+        reasons.push("preferred_language");
+      }
+      if (
+        context.preferOriginalLanguage &&
+        originalLanguage !== "unknown" &&
+        language === originalLanguage
+      ) {
+        score += 450;
+        reasons.push("original_language");
+      }
+      if (track.default) {
+        score += 80;
+        reasons.push("default");
+      }
+      if (track.commentary) score -= 400;
+      if (track.audioDescription) {
+        score += context.preferAudioDescription ? 500 : -120;
+        if (context.preferAudioDescription) reasons.push("audio_description");
+      }
+      if (!track.supported) score -= 2_000;
+      if (
+        context.supportedCodecs &&
+        !context.supportedCodecs.includes(track.codec.toLowerCase())
+      ) {
+        score -= 1_000;
+      }
+      if (track.channelCount && track.channelCount > 2) {
+        score += Math.min(track.channelCount, 8);
+      }
+
+      return { track, score, reasons };
+    })
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.track.id.localeCompare(right.track.id),
+    );
 }

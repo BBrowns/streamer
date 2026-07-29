@@ -69,6 +69,10 @@ export const aggregatorStreamSchema = z.object({
   id: z.string().min(1),
 });
 
+export const aggregatorSubtitleDocumentSchema = z.object({
+  identity: z.string().uuid(),
+});
+
 export const aggregatorResolveSchema = aggregatorStreamSchema.extend({
   infoHash: z.string().min(1),
 });
