@@ -507,10 +507,14 @@ The player screen (`app/player.tsx`) is the most complex screen in the app. It w
 ```
 PlayerScreen (app/player.tsx)
 ├── VideoView (expo-video)          — native video renderer
+├── MediaPlayerAdapter              — normalized media capability/event boundary
+├── PlaybackRuntimeCoordinator      — transient discriminated view state
 ├── PlayerInteractionLayer          — passive tap/double-tap hit areas
 ├── PlayerOverlay                   — quiet top chrome and optional stream info
-├── PlayerControls                  — play/pause, timeline, volume and actions
-├── PlayerSettingsModal             — audio track, subtitle track, playback speed
+├── PlayerControls
+│   └── PlayerTimeline              — pointer/touch/keyboard scrub and preview
+├── ExternalSubtitleRenderer        — accepted-clock external subtitle overlay
+├── PlayerSettingsModal             — tracks, subtitle style, speed, diagnostics
 ├── PlayerStatusOverlay             — typed readiness/error state
 ├── NextEpisodeOverlay              — "Up Next: Episode X" auto-play prompt
 ├── RemoteControlBar                — Chromecast / AirPlay remote UI (when casting)
@@ -549,9 +553,12 @@ toolbar with the available actions.
 
 - Center controls with one high-contrast Play/Pause action and restrained
   Skip ±10s controls.
-- Bottom timeline with current time, duration, and cobalt progress.
+- Bottom timeline with watched, buffered and playhead layers.
+- Pointer hover, pointer/touch drag and timestamp preview. Native targets use
+  `expo-video` thumbnails where supported; web may use the active gateway
+  job's bounded seekable-cache thumbnail route.
 - Accessible progress control using `accessibilityRole="adjustable"`,
-  `accessibilityActions`, and ±10s seek actions.
+  current/total values, keyboard Home/End and ±10s seek actions.
 - Capability-aware timeline copy for direct, seekable-cache, live progressive,
   remux, and unknown-duration playback.
 - Desktop/web mute and continuous volume adjustment, settings, cast, retry, and
@@ -559,6 +566,8 @@ toolbar with the available actions.
 - Desktop/web keyboard shortcut helper for the currently supported hotkeys.
 - Web pointer pass-through so the overlay can remain visible without blocking
   unrelated video-surface interactions.
+- Evidence-gated Skip intro/recap/credits controls. No supplied segment means
+  no control.
 
 PR #117 routes button, scrubber, accessibility, and desktop hotkey seeking
 through the same guarded callbacks. Keyboard shortcuts must not bypass
@@ -575,6 +584,12 @@ The replacement preserves both the current position and explicit pause state.
 An optional handoff failure only changes the seekability state; it never
 silently starts a fallback while the existing video remains playable.
 
+Thumbnail previews are progressive enhancement. The timeline requests coarse
+ten-second buckets only after hover or drag begins, retains at most 24 client
+entries and cancels an obsolete bridge request when a new bucket wins. Direct
+or cross-origin media without a safe frame path continues to show the target
+timestamp; absence of an image never disables or delays seeking.
+
 ### 6.4 `usePlayerHotkeys`
 
 Extracted hook for keyboard shortcuts on web/desktop. Handles:
@@ -584,9 +599,11 @@ Extracted hook for keyboard shortcuts on web/desktop. Handles:
 | `Space` / `K` | Play/Pause                                               |
 | `J` / `←`     | Seek back 10 seconds                                     |
 | `L` / `→`     | Seek forward 10 seconds                                  |
+| `Shift+←/→`   | Seek back/forward 30 seconds                             |
 | `F`           | Toggle fullscreen                                        |
 | `M`           | Toggle mute                                              |
-| `1`-`9`       | Jump to 10%-90%                                          |
+| `C`           | Toggle subtitles                                         |
+| `0`-`9`       | Jump to 0%-90%                                           |
 | `Escape`      | Close a player sheet or cancel active source preparation |
 
 All listeners are added to `window` (web only — guarded by
@@ -683,6 +700,25 @@ It is deliberately suppressed while playback is paused, the app/player is not
 visible, the user is seeking, preview controls are open, casting is active, or
 a fallback is already running. That makes a stalled source recoverable without
 mistaking an intentional pause or interaction for a failure.
+
+### 6.7 Audio And Subtitle Experience
+
+The Settings inspect sheet consumes one normalized catalog. Audio labels
+combine language, channel layout and accessibility role; commentary and audio
+description are not treated as ordinary main audio. Subtitle rows identify
+embedded, included-file and add-on origin without exposing provider URLs.
+
+External subtitle documents are bounded and sanitized, then rendered above the
+video from the accepted playback clock. Styling preferences cover text size,
+shadow/box/none, box opacity, vertical position, a small accessible font set,
+sync offset and reset-to-defaults. The overlay respects safe-area and visible
+control offsets. External subtitles are not claimed inside native PiP.
+
+Automatic selection is deterministic. It considers explicit selection,
+language, forced status, release/file/content evidence, SDH preference,
+provider order and confidence. A weak first provider result does not
+automatically turn captions on. See
+[docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md).
 
 ---
 
@@ -936,7 +972,13 @@ The `CommandPalette` is desktop-only (`Platform.OS === "web"`). On mobile, there
 
 #### 11. Split `player.tsx` Further
 
-`app/player.tsx` is ~800 lines despite already being decomposed. The Chromecast cast detection logic, the `previousProgress` resume prompt, and the `seekFeedback` animation could each be extracted into separate components or hooks. A `useCast` hook (managing `remoteMediaClient` setup and the `lastCastUriRef`) and a `useResumePrompt` hook would each be ~30–50 lines and make the player's main render function much easier to read.
+The player now delegates media normalization, runtime view state, timeline
+semantics, subtitle loading/parsing/ranking, fallback continuity, next-episode
+selection/preplanning, diagnostics and supplied segments to focused modules.
+`app/player.tsx` is still a large composition and lifecycle host. A later
+scoped pass can extract cast ownership, seekable-cache polling, add-on subtitle
+catalog coordination and recovery callbacks without replacing the proven
+`PlaybackSession` control plane or creating another store.
 
 #### 12. Expand `FlashList` Coverage and Profile Poster Memory
 

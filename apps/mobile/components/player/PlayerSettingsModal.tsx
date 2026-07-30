@@ -27,6 +27,15 @@ import {
   setWebInputModality,
 } from "../../hooks/useWebPressableActivation";
 import { playerChrome } from "./playerChrome";
+import type {
+  SubtitleAccessibilityPreference,
+  SubtitleBackground,
+  SubtitleFontFamily,
+  SubtitleMode,
+  SubtitleTextSize,
+  SubtitleVerticalPosition,
+} from "../../stores/playerStore";
+import type { PlaybackDiagnosticRow } from "../../services/playback/PlaybackDiagnostics";
 
 interface PlayerSettingsModalProps {
   visible: boolean;
@@ -37,6 +46,82 @@ interface PlayerSettingsModalProps {
   onSelectSubtitle: (id: string | null) => void;
   playbackRate: number;
   onSelectPlaybackRate: (rate: number) => void;
+  subtitleMode: SubtitleMode;
+  onSelectSubtitleMode: (mode: SubtitleMode) => void;
+  subtitleAccessibility: SubtitleAccessibilityPreference;
+  onSelectSubtitleAccessibility: (
+    preference: SubtitleAccessibilityPreference,
+  ) => void;
+  subtitleTextSize: SubtitleTextSize;
+  onSelectSubtitleTextSize: (size: SubtitleTextSize) => void;
+  subtitleBackground: SubtitleBackground;
+  onSelectSubtitleBackground: (background: SubtitleBackground) => void;
+  subtitleBackgroundOpacity: number;
+  onSelectSubtitleBackgroundOpacity: (opacity: number) => void;
+  subtitleVerticalPosition: SubtitleVerticalPosition;
+  onSelectSubtitleVerticalPosition: (
+    position: SubtitleVerticalPosition,
+  ) => void;
+  subtitleFontFamily: SubtitleFontFamily;
+  onSelectSubtitleFontFamily: (fontFamily: SubtitleFontFamily) => void;
+  subtitleSyncOffsetSeconds: number;
+  onSelectSubtitleSyncOffset: (offset: number) => void;
+  onResetSubtitleStyle: () => void;
+  diagnostics: PlaybackDiagnosticRow[];
+}
+
+function PreferenceChoiceRow({
+  label,
+  selected,
+  values,
+  onSelect,
+}: {
+  label: string;
+  selected: string;
+  values: Array<{ value: string; label: string }>;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <View style={styles.preferenceGroup}>
+      <Text style={[styles.preferenceLabel, { color: playerChrome.textMuted }]}>
+        {label}
+      </Text>
+      <View style={styles.preferenceChoices} accessibilityRole="radiogroup">
+        {values.map((choice) => {
+          const active = choice.value === selected;
+          return (
+            <Pressable
+              key={choice.value}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
+              accessibilityLabel={`${label}: ${choice.label}`}
+              onPress={() => onSelect(choice.value)}
+              style={({ pressed }) => [
+                styles.preferenceChoice,
+                {
+                  backgroundColor: active
+                    ? playerChrome.accent + "33"
+                    : playerChrome.surfaceRaised,
+                },
+                pressed && { opacity: 0.78 },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.preferenceChoiceText,
+                  {
+                    color: active ? playerChrome.text : playerChrome.textMuted,
+                  },
+                ]}
+              >
+                {choice.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 export function PlayerSettingsModal({
@@ -48,6 +133,24 @@ export function PlayerSettingsModal({
   onSelectSubtitle,
   playbackRate,
   onSelectPlaybackRate,
+  subtitleMode,
+  onSelectSubtitleMode,
+  subtitleAccessibility,
+  onSelectSubtitleAccessibility,
+  subtitleTextSize,
+  onSelectSubtitleTextSize,
+  subtitleBackground,
+  onSelectSubtitleBackground,
+  subtitleBackgroundOpacity,
+  onSelectSubtitleBackgroundOpacity,
+  subtitleVerticalPosition,
+  onSelectSubtitleVerticalPosition,
+  subtitleFontFamily,
+  onSelectSubtitleFontFamily,
+  subtitleSyncOffsetSeconds,
+  onSelectSubtitleSyncOffset,
+  onResetSubtitleStyle,
+  diagnostics,
 }: PlayerSettingsModalProps) {
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
@@ -221,7 +324,25 @@ export function PlayerSettingsModal({
                           { color: playerChrome.textMuted },
                         ]}
                       >
-                        {item.language}
+                        {[
+                          item.language,
+                          item.channelLayout ||
+                            (item.channelCount
+                              ? `${item.channelCount}ch`
+                              : undefined),
+                          item.codec?.toUpperCase(),
+                          item.audioDescription
+                            ? t("player.settings.audioDescription", {
+                                defaultValue: "Audio description",
+                              })
+                            : item.commentary
+                              ? t("player.settings.commentary", {
+                                  defaultValue: "Commentary",
+                                })
+                              : undefined,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </Text>
                       {item.active && (
                         <Text
@@ -321,7 +442,30 @@ export function PlayerSettingsModal({
                             { color: playerChrome.textMuted },
                           ]}
                         >
-                          {item.language}
+                          {[
+                            item.language,
+                            item.source === "torrent-file"
+                              ? t("player.settings.sourceFile", {
+                                  defaultValue: "File",
+                                })
+                              : item.source === "embedded"
+                                ? t("player.settings.sourceEmbedded", {
+                                    defaultValue: "Embedded",
+                                  })
+                                : item.source === "addon"
+                                  ? t("player.settings.sourceAddon", {
+                                      defaultValue: "Add-on",
+                                    })
+                                  : undefined,
+                            item.forced
+                              ? t("player.settings.forced", {
+                                  defaultValue: "Forced",
+                                })
+                              : undefined,
+                            item.hearingImpaired ? "SDH" : undefined,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </Text>
                         {item.active && (
                           <Text
@@ -339,6 +483,304 @@ export function PlayerSettingsModal({
                 </View>
               </>
             )}
+
+            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
+              <Ionicons
+                name="options-outline"
+                size={18}
+                color={playerChrome.textMuted}
+              />
+              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
+                {t("player.settings.subtitlePreferences", {
+                  defaultValue: "Subtitle preferences",
+                })}
+              </Text>
+            </View>
+
+            <PreferenceChoiceRow
+              label={t("player.settings.subtitleMode", {
+                defaultValue: "Automatic behavior",
+              })}
+              selected={subtitleMode}
+              values={[
+                {
+                  value: "auto",
+                  label: t("player.settings.auto", { defaultValue: "Auto" }),
+                },
+                {
+                  value: "always",
+                  label: t("player.settings.always", {
+                    defaultValue: "Always",
+                  }),
+                },
+                {
+                  value: "off",
+                  label: t("player.settings.off", { defaultValue: "Off" }),
+                },
+              ]}
+              onSelect={(value) => onSelectSubtitleMode(value as SubtitleMode)}
+            />
+            <PreferenceChoiceRow
+              label={t("player.settings.accessibility", {
+                defaultValue: "SDH / accessibility",
+              })}
+              selected={subtitleAccessibility}
+              values={[
+                {
+                  value: "neutral",
+                  label: t("player.settings.neutral", {
+                    defaultValue: "Neutral",
+                  }),
+                },
+                {
+                  value: "prefer",
+                  label: t("player.settings.prefer", {
+                    defaultValue: "Prefer",
+                  }),
+                },
+                {
+                  value: "avoid",
+                  label: t("player.settings.avoid", {
+                    defaultValue: "Avoid",
+                  }),
+                },
+              ]}
+              onSelect={(value) =>
+                onSelectSubtitleAccessibility(
+                  value as SubtitleAccessibilityPreference,
+                )
+              }
+            />
+            <PreferenceChoiceRow
+              label={t("player.settings.textSize", {
+                defaultValue: "Text size",
+              })}
+              selected={subtitleTextSize}
+              values={[
+                {
+                  value: "small",
+                  label: t("player.settings.small", { defaultValue: "S" }),
+                },
+                {
+                  value: "medium",
+                  label: t("player.settings.medium", { defaultValue: "M" }),
+                },
+                {
+                  value: "large",
+                  label: t("player.settings.large", { defaultValue: "L" }),
+                },
+              ]}
+              onSelect={(value) =>
+                onSelectSubtitleTextSize(value as SubtitleTextSize)
+              }
+            />
+            <PreferenceChoiceRow
+              label={t("player.settings.background", {
+                defaultValue: "Background",
+              })}
+              selected={subtitleBackground}
+              values={[
+                {
+                  value: "shadow",
+                  label: t("player.settings.shadow", {
+                    defaultValue: "Shadow",
+                  }),
+                },
+                {
+                  value: "box",
+                  label: t("player.settings.box", { defaultValue: "Box" }),
+                },
+                {
+                  value: "none",
+                  label: t("player.settings.none", { defaultValue: "None" }),
+                },
+              ]}
+              onSelect={(value) =>
+                onSelectSubtitleBackground(value as SubtitleBackground)
+              }
+            />
+            <PreferenceChoiceRow
+              label={t("player.settings.backgroundOpacity", {
+                defaultValue: "Background opacity",
+              })}
+              selected={String(Math.round(subtitleBackgroundOpacity * 100))}
+              values={[0, 50, 78, 100].map((opacity) => ({
+                value: String(opacity),
+                label: `${opacity}%`,
+              }))}
+              onSelect={(value) =>
+                onSelectSubtitleBackgroundOpacity(Number(value) / 100)
+              }
+            />
+            <PreferenceChoiceRow
+              label={t("player.settings.verticalPosition", {
+                defaultValue: "Vertical position",
+              })}
+              selected={subtitleVerticalPosition}
+              values={[
+                {
+                  value: "low",
+                  label: t("player.settings.positionLow", {
+                    defaultValue: "Low",
+                  }),
+                },
+                {
+                  value: "middle",
+                  label: t("player.settings.positionMiddle", {
+                    defaultValue: "Middle",
+                  }),
+                },
+                {
+                  value: "high",
+                  label: t("player.settings.positionHigh", {
+                    defaultValue: "High",
+                  }),
+                },
+              ]}
+              onSelect={(value) =>
+                onSelectSubtitleVerticalPosition(
+                  value as SubtitleVerticalPosition,
+                )
+              }
+            />
+            <PreferenceChoiceRow
+              label={t("player.settings.font", {
+                defaultValue: "Font",
+              })}
+              selected={subtitleFontFamily}
+              values={[
+                {
+                  value: "system",
+                  label: t("player.settings.fontSystem", {
+                    defaultValue: "System",
+                  }),
+                },
+                {
+                  value: "serif",
+                  label: t("player.settings.fontSerif", {
+                    defaultValue: "Serif",
+                  }),
+                },
+                {
+                  value: "monospace",
+                  label: t("player.settings.fontMonospace", {
+                    defaultValue: "Monospace",
+                  }),
+                },
+              ]}
+              onSelect={(value) =>
+                onSelectSubtitleFontFamily(value as SubtitleFontFamily)
+              }
+            />
+
+            <View style={styles.preferenceGroup}>
+              <Text
+                style={[
+                  styles.preferenceLabel,
+                  { color: playerChrome.textMuted },
+                ]}
+              >
+                {t("player.settings.sync", { defaultValue: "Subtitle sync" })}
+              </Text>
+              <View style={styles.preferenceChoices}>
+                {[-0.5, 0, 0.5].map((delta) => {
+                  const label =
+                    delta === 0
+                      ? `${subtitleSyncOffsetSeconds.toFixed(1)}s`
+                      : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}s`;
+                  return (
+                    <Pressable
+                      key={delta}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t("player.settings.sync", {
+                        defaultValue: "Subtitle sync",
+                      })}: ${label}`}
+                      onPress={() =>
+                        onSelectSubtitleSyncOffset(
+                          delta === 0 ? 0 : subtitleSyncOffsetSeconds + delta,
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.preferenceChoice,
+                        { backgroundColor: playerChrome.surfaceRaised },
+                        pressed && { opacity: 0.78 },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.preferenceChoiceText,
+                          { color: playerChrome.text },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("player.settings.resetSubtitleStyle", {
+                defaultValue: "Reset subtitle style",
+              })}
+              onPress={onResetSubtitleStyle}
+              style={({ pressed }) => [
+                styles.resetButton,
+                {
+                  borderColor: playerChrome.border,
+                  backgroundColor: playerChrome.surfaceRaised,
+                },
+                pressed && { opacity: 0.78 },
+              ]}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={16}
+                color={playerChrome.text}
+              />
+              <Text style={[styles.resetText, { color: playerChrome.text }]}>
+                {t("player.settings.resetSubtitleStyle", {
+                  defaultValue: "Reset subtitle style",
+                })}
+              </Text>
+            </Pressable>
+
+            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
+              <Ionicons
+                name="pulse-outline"
+                size={18}
+                color={playerChrome.textMuted}
+              />
+              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
+                {t("player.settings.diagnostics", {
+                  defaultValue: "Playback diagnostics",
+                })}
+              </Text>
+            </View>
+            <View style={styles.diagnosticsCard}>
+              {diagnostics.map((row) => (
+                <View key={row.label} style={styles.diagnosticRow}>
+                  <Text
+                    style={[
+                      styles.diagnosticLabel,
+                      { color: playerChrome.textMuted },
+                    ]}
+                  >
+                    {row.label}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.diagnosticValue,
+                      { color: playerChrome.text },
+                    ]}
+                  >
+                    {row.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </ScrollView>
         </View>
       </View>
@@ -421,5 +863,64 @@ const styles = StyleSheet.create({
   },
   speedBtnText: {
     ...uiTypography.control,
+  },
+  preferenceGroup: {
+    marginTop: uiSpacing.md,
+    gap: uiSpacing.xs,
+  },
+  preferenceLabel: {
+    ...uiTypography.caption,
+    fontWeight: "600",
+  },
+  preferenceChoices: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: uiSpacing.xs,
+  },
+  preferenceChoice: {
+    minHeight: uiTouchTarget,
+    minWidth: 68,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: uiSpacing.sm,
+    borderRadius: uiRadii.control,
+  },
+  preferenceChoiceText: {
+    ...uiTypography.caption,
+    fontWeight: "700",
+  },
+  diagnosticsCard: {
+    padding: uiSpacing.md,
+    borderRadius: uiRadii.control,
+    backgroundColor: playerChrome.surfaceRaised,
+    gap: uiSpacing.xs,
+  },
+  resetButton: {
+    minHeight: uiTouchTarget,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: uiSpacing.xs,
+    borderWidth: 1,
+    borderRadius: uiRadii.md,
+    paddingHorizontal: uiSpacing.md,
+    marginTop: uiSpacing.xs,
+  },
+  resetText: {
+    ...uiTypography.body,
+    fontWeight: "700",
+  },
+  diagnosticRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: uiSpacing.md,
+  },
+  diagnosticLabel: {
+    ...uiTypography.caption,
+  },
+  diagnosticValue: {
+    ...uiTypography.caption,
+    flexShrink: 1,
+    textAlign: "right",
   },
 });

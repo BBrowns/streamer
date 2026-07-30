@@ -1,4 +1,9 @@
-import type { PlaybackGatewayPhase, Stream } from "@streamer/shared";
+import type {
+  MediaTrackSource,
+  PlaybackGatewayPhase,
+  Stream,
+  SubtitleCandidateFormat,
+} from "@streamer/shared";
 
 export class StreamEngineCancellationError extends Error {
   readonly code = "STREAM_ENGINE_CANCELLED";
@@ -28,6 +33,12 @@ export interface AudioTrack {
   label: string;
   language: string;
   active: boolean;
+  codec?: string;
+  channelCount?: number;
+  channelLayout?: string;
+  audioDescription?: boolean;
+  commentary?: boolean;
+  source?: MediaTrackSource;
 }
 
 /** Subtitle track descriptor */
@@ -36,6 +47,14 @@ export interface SubtitleTrack {
   label: string;
   language: string;
   active: boolean;
+  format?: SubtitleCandidateFormat;
+  source?: Extract<MediaTrackSource, "embedded" | "torrent-file" | "addon">;
+  forced?: boolean;
+  hearingImpaired?: boolean;
+  fetchIdentity?: string;
+  providerName?: string;
+  confidence?: number;
+  contentIdMatch?: boolean;
 }
 
 /** Real-time streaming stats (for torrent engine) */
@@ -90,6 +109,10 @@ export interface SeekablePlaybackHandoff {
 export interface StreamEngineEventMap {
   stats: StreamStats;
   gateway: GatewayJobProgress;
+  tracks: {
+    audioTracks: AudioTrack[];
+    subtitles: SubtitleTrack[];
+  };
 }
 
 /**
@@ -114,20 +137,32 @@ export interface IStreamEngine {
     signal?: AbortSignal;
   }): Promise<SeekablePlaybackHandoff>;
 
+  /**
+   * Load a runtime-only preview image for the active gateway job. Engines
+   * without a safe local derivative path leave this capability undefined.
+   */
+  getThumbnail?(
+    positionSeconds: number,
+    signal?: AbortSignal,
+  ): Promise<unknown | null>;
+
   /** Get the engine type identifier */
   getEngineType(): string;
 
   /** Get available audio tracks */
   getAudioTracks(): AudioTrack[];
 
-  /** Switch to a specific audio track */
-  setAudioTrack(id: string): void;
-
   /** Get available subtitle tracks */
   getSubtitles(): SubtitleTrack[];
 
   /** Enable/switch subtitle track (pass null to disable) */
   setSubtitle(id: string | null): void;
+
+  /** Refresh runtime-only track metadata for the active source. */
+  refreshTrackCatalog?(signal?: AbortSignal): Promise<void>;
+
+  /** Load a normalized WebVTT document for an engine-managed subtitle. */
+  loadSubtitleDocument?(id: string, signal?: AbortSignal): Promise<string>;
 
   /** Subscribe to engine events (e.g. torrent stats) */
   on<K extends keyof StreamEngineEventMap>(

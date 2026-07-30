@@ -7,7 +7,6 @@ import { useRemoteControl } from "./useRemoteControl";
 import { useTraktScrobbler } from "./useTraktScrobbler";
 import { useUpdateProgress, useContinueWatching } from "./useContinueWatching";
 import { useMeta } from "./useMeta";
-import { api } from "../services/api";
 import type {
   AudioTrack,
   GatewayJobProgress,
@@ -19,6 +18,15 @@ import {
   PlaybackProgressClock,
   resolveProgressDuration,
 } from "../services/playback/PlaybackProgressClock";
+import { beginPlaybackLaunch } from "../services/playback/PlaybackLaunchService";
+import { completePlaybackSession } from "../services/playback/PlaybackSessionPlaybackService";
+import { findNextEpisode } from "../services/playback/NextEpisode";
+import { preplanNextEpisode } from "../services/playback/NextEpisodePreplanner";
+import {
+  loadPlaybackSegments,
+  type PlaybackSegment,
+} from "../services/playback/PlaybackSegmentsProvider";
+import type { PlaybackDiagnosticEvent } from "../services/playback/PlaybackDiagnostics";
 
 interface UsePlayerControllerProps {
   player: any; // Expo Video Player instance
@@ -27,6 +35,8 @@ interface UsePlayerControllerProps {
   showControls: () => void;
   isProgressiveRemux?: boolean;
   hasSeekableHandoff?: boolean;
+  onCompleted?: () => void;
+  onDiagnosticEvent?: (event: PlaybackDiagnosticEvent) => void;
 }
 
 const PROGRESS_REPORT_INTERVAL = 15_000;
@@ -38,6 +48,8 @@ export function usePlayerController({
   showControls,
   isProgressiveRemux = false,
   hasSeekableHandoff = false,
+  onCompleted,
+  onDiagnosticEvent,
 }: UsePlayerControllerProps) {
   const currentStream = usePlayerStore((s) => s.currentStream);
   const mediaInfo = usePlayerStore((s) => s.mediaInfo);
@@ -45,11 +57,12 @@ export function usePlayerController({
     (s) => s.subscribeToStreamMetrics,
   );
   const setProgress = usePlayerStore((s) => s.setProgress);
-  const setStream = usePlayerStore((s) => s.setStream);
+  const setPlaybackPlanning = usePlayerStore((s) => s.setPlaybackPlanning);
   const setRuntimeState = usePlayerStore((s) => s.setRuntimeState);
   const setRuntimeFailure = usePlayerStore((s) => s.setRuntimeFailure);
   const autoPlayNext = usePlayerStore((s) => s.autoPlayNext);
   const playbackLaunchIntent = usePlayerStore((s) => s.playbackLaunchIntent);
+  const playbackSessionId = usePlayerStore((s) => s.playbackSessionId);
   const consumePlaybackLaunchIntent = usePlayerStore(
     (s) => s.consumePlaybackLaunchIntent,
   );
@@ -73,9 +86,14 @@ export function usePlayerController({
   const [hasPromptedResume, setHasPromptedResume] = useState(false);
   const [readyPlaybackUri, setReadyPlaybackUri] = useState<string | null>(null);
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
+  const [playbackSegments, setPlaybackSegments] = useState<PlaybackSegment[]>(
+    [],
+  );
 
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressClockRef = useRef(new PlaybackProgressClock());
+  const nextEpisodePreplanKeyRef = useRef<string | null>(null);
+  const nextEpisodePreplanControllerRef = useRef<AbortController | null>(null);
   const lastReportedProgressRef = useRef<{
     mediaKey: string;
     currentTime: number;
@@ -103,17 +121,53 @@ export function usePlayerController({
 
   const nextEpisode = useMemo(() => {
     if (!meta || !mediaInfo || mediaInfo.type !== "series") return null;
-    const currentIndex = meta.videos?.findIndex(
-      (v) => v.season === mediaInfo.season && v.episode === mediaInfo.episode,
-    );
-    if (currentIndex === undefined || currentIndex === -1) return null;
-    return meta.videos?.[currentIndex + 1] || null;
+    return findNextEpisode(meta.videos, mediaInfo);
   }, [meta, mediaInfo]);
+
+  useEffect(() => {
+    setPlaybackSegments([]);
+    if (!mediaInfo) return;
+
+    const controller = new AbortController();
+    void loadPlaybackSegments(
+      {
+        type: mediaInfo.type,
+        itemId: mediaInfo.itemId,
+        season: mediaInfo.season,
+        episode: mediaInfo.episode,
+      },
+      controller.signal,
+    ).then((segments) => {
+      if (!controller.signal.aborted) setPlaybackSegments(segments);
+    });
+
+    return () => controller.abort();
+  }, [
+    mediaInfo?.episode,
+    mediaInfo?.itemId,
+    mediaInfo?.season,
+    mediaInfo?.type,
+  ]);
+
+  useEffect(() => {
+    nextEpisodePreplanKeyRef.current = null;
+    nextEpisodePreplanControllerRef.current?.abort();
+    nextEpisodePreplanControllerRef.current = null;
+    return () => {
+      nextEpisodePreplanControllerRef.current?.abort();
+      nextEpisodePreplanControllerRef.current = null;
+    };
+  }, [
+    mediaInfo?.episode,
+    mediaInfo?.itemId,
+    mediaInfo?.season,
+    mediaInfo?.type,
+  ]);
 
   // 1. Engine lifecycle (stats, tracks)
   useEffect(() => {
     if (!engine) return;
-    setAudioTracks(engine.getAudioTracks());
+    setAudioTracks([]);
     setSubtitles(engine.getSubtitles());
 
     const onStats = (data: StreamStats) => setStats(data);
@@ -370,6 +424,51 @@ export function usePlayerController({
         ) {
           setShowNextEpisodeOverlay(true);
         }
+        if (
+          nextEpisode &&
+          mediaInfo.type === "series" &&
+          snapshot.duration > 120 &&
+          snapshot.duration - snapshot.currentTime <= 120
+        ) {
+          const key = `${mediaInfo.itemId}:${nextEpisode.season}:${nextEpisode.episode}`;
+          if (nextEpisodePreplanKeyRef.current !== key) {
+            nextEpisodePreplanKeyRef.current = key;
+            nextEpisodePreplanControllerRef.current?.abort();
+            const controller = new AbortController();
+            nextEpisodePreplanControllerRef.current = controller;
+            const preplanStartedAt = Date.now();
+            void preplanNextEpisode(
+              {
+                type: "series",
+                id: mediaInfo.itemId,
+                season: nextEpisode.season,
+                episode: nextEpisode.episode,
+                title: mediaInfo.title,
+                poster: mediaInfo.poster,
+                episodeTitle: nextEpisode.title,
+              },
+              controller.signal,
+            )
+              .then((result) => {
+                onDiagnosticEvent?.({
+                  type: "next_episode_preplan",
+                  outcome: result.safeImmediateReplacement
+                    ? "ready"
+                    : "unavailable",
+                  elapsedMs: Date.now() - preplanStartedAt,
+                });
+              })
+              .catch(() => {
+                onDiagnosticEvent?.({
+                  type: "next_episode_preplan",
+                  outcome: controller.signal.aborted
+                    ? "cancelled"
+                    : "unavailable",
+                  elapsedMs: Date.now() - preplanStartedAt,
+                });
+              });
+          }
+        }
       },
     );
     const playingSubscription = player.addListener?.(
@@ -378,6 +477,12 @@ export function usePlayerController({
         if (isPlaying === false) reportProgress(true);
       },
     );
+    const completedSubscription = player.addListener?.("playToEnd", () => {
+      reportProgress(true);
+      if (playbackSessionId) completePlaybackSession(playbackSessionId);
+      if (nextEpisode) setShowNextEpisodeOverlay(true);
+      onCompleted?.();
+    });
     const appStateSubscription = AppState.addEventListener(
       "change",
       (nextState) => {
@@ -406,6 +511,7 @@ export function usePlayerController({
       clearInterval(sessionTimer);
       timeSubscription?.remove?.();
       playingSubscription?.remove?.();
+      completedSubscription?.remove?.();
       appStateSubscription.remove();
       updateStatus({ status: "idle" });
     };
@@ -418,6 +524,9 @@ export function usePlayerController({
     updateStatus,
     autoPlayNext,
     nextEpisode,
+    onCompleted,
+    onDiagnosticEvent,
+    playbackSessionId,
     showNextEpisodeOverlay,
   ]);
 
@@ -503,22 +612,41 @@ export function usePlayerController({
   const handleNextEpisode = useCallback(async () => {
     if (!nextEpisode || !mediaInfo) return;
     try {
-      const episodeId = `${mediaInfo.itemId}:${nextEpisode.season}:${nextEpisode.episode}`;
-      const { data } = await api.get(`/api/stream/series/${episodeId}`);
-      if (data.streams?.length > 0) {
-        setStream(data.streams[0], {
-          ...mediaInfo,
-          season: nextEpisode.season,
-          episode: nextEpisode.episode,
-          title: `${mediaInfo.title} - ${nextEpisode.title}`,
-        });
-        setHasPromptedResume(false);
-        setShowNextEpisodeOverlay(false);
-      }
-    } catch (e) {
-      console.error("Failed to auto-play next episode", e);
+      if (playbackSessionId) completePlaybackSession(playbackSessionId);
+      const nextMedia = {
+        ...mediaInfo,
+        season: nextEpisode.season,
+        episode: nextEpisode.episode,
+        title: `${mediaInfo.title} - ${nextEpisode.title}`,
+      };
+      const launchId = beginPlaybackLaunch({
+        type: "series",
+        id: mediaInfo.itemId,
+        title: mediaInfo.title,
+        poster: mediaInfo.poster,
+        season: nextEpisode.season,
+        episode: nextEpisode.episode,
+        episodeTitle: nextEpisode.title,
+      });
+      setPlaybackPlanning(nextMedia, launchId);
+      setHasPromptedResume(false);
+      setShowNextEpisodeOverlay(false);
+    } catch {
+      setRuntimeFailure(
+        mapPlaybackMessageToRuntimeFailure(
+          "The next episode could not be prepared.",
+          "SOURCE_UNAVAILABLE",
+          { retryable: true, shouldFallback: false },
+        ).error,
+      );
     }
-  }, [nextEpisode, mediaInfo, setStream]);
+  }, [
+    mediaInfo,
+    nextEpisode,
+    playbackSessionId,
+    setPlaybackPlanning,
+    setRuntimeFailure,
+  ]);
 
   return {
     audioTracks,
@@ -534,6 +662,8 @@ export function usePlayerController({
     setAudioTracks,
     setSubtitles,
     nextEpisode,
+    playbackSegments,
+    originalLanguage: meta?.originalLanguage ?? null,
     reportProgress,
     recordExplicitSeek,
     beginProgressSourceReplacement,

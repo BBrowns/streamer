@@ -12,6 +12,7 @@ export * from "./types/build-metadata";
 export * from "./types/action-preflight";
 export * from "./types/search";
 export * from "./types/notification";
+export * from "./types/media-track";
 
 // Zod Schemas
 export * from "./schemas/manifest.schema";
@@ -26,6 +27,7 @@ export * from "./schemas/playback-session.schema";
 export * from "./schemas/build-metadata.schema";
 export * from "./schemas/action-preflight.schema";
 export * from "./schemas/notification.schema";
+export * from "./schemas/media-track.schema";
 export * from "./build-metadata";
 export * from "./action-preflight";
 export * from "./addon-capabilities";

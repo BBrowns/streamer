@@ -29,10 +29,10 @@ test("requires the exact non-empty visual baseline set and records provenance", 
       sourceCommit: "fixture-commit",
     });
 
-    assert.equal(manifest.expectedFileCount, 12);
+    assert.equal(manifest.expectedFileCount, 20);
     assert.equal(manifest.platform, "linux");
     assert.equal(manifest.sourceCommit, "fixture-commit");
-    assert.equal(manifest.files.length, 12);
+    assert.equal(manifest.files.length, 20);
     assert.equal(manifest.files[0].sha256.length, 64);
   });
 });

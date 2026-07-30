@@ -22,6 +22,8 @@ import EventSource from "react-native-sse";
 import { useAuthStore } from "../authStore";
 import {
   migratePlayerPreferences,
+  normalizeSubtitleBackgroundOpacity,
+  normalizeSubtitleSyncOffset,
   normalizePreferredQualities,
   usePlayerStore,
 } from "../playerStore";
@@ -52,7 +54,43 @@ describe("playerStore", () => {
       playbackRate: 1,
       preferredQualities: ["720p", "480p"],
       autoPlayNext: true,
+      subtitleMode: "auto",
+      subtitleAccessibility: "neutral",
+      subtitleTextSize: "medium",
+      subtitleBackground: "shadow",
+      subtitleBackgroundOpacity: 0.78,
+      subtitleVerticalPosition: "low",
+      subtitleFontFamily: "system",
+      subtitleSyncOffsetSeconds: 0,
     });
+  });
+
+  it("migrates and bounds subtitle accessibility preferences", () => {
+    expect(
+      migratePlayerPreferences({
+        subtitleMode: "invalid",
+        subtitleAccessibility: "prefer",
+        subtitleTextSize: "large",
+        subtitleBackground: "box",
+        subtitleBackgroundOpacity: 4,
+        subtitleVerticalPosition: "high",
+        subtitleFontFamily: "serif",
+        subtitleSyncOffsetSeconds: 99,
+      }),
+    ).toMatchObject({
+      subtitleMode: "auto",
+      subtitleAccessibility: "prefer",
+      subtitleTextSize: "large",
+      subtitleBackground: "box",
+      subtitleBackgroundOpacity: 1,
+      subtitleVerticalPosition: "high",
+      subtitleFontFamily: "serif",
+      subtitleSyncOffsetSeconds: 10,
+    });
+    expect(normalizeSubtitleSyncOffset(-99)).toBe(-10);
+    expect(normalizeSubtitleSyncOffset(Number.NaN)).toBe(0);
+    expect(normalizeSubtitleBackgroundOpacity(-1)).toBe(0);
+    expect(normalizeSubtitleBackgroundOpacity(Number.NaN)).toBe(0.78);
   });
 
   it("normalizes persisted quality values in display and planner order", () => {

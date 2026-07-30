@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { catalogResponseSchema } from "../schemas/meta.schema";
+import {
+  catalogResponseSchema,
+  metaDetailSchema,
+} from "../schemas/meta.schema";
 
 describe("Stremio metadata schemas", () => {
   it("normalizes nullable metadata and drops one malformed catalog entry", () => {
@@ -47,5 +50,19 @@ describe("Stremio metadata schemas", () => {
         metas: [{ id: "tt0133093", type: "movie", name: null }],
       }).success,
     ).toBe(false);
+  });
+
+  it("normalizes provider original-language aliases", () => {
+    expect(
+      metaDetailSchema.parse({
+        id: "tt0133093",
+        type: "movie",
+        name: "The Matrix",
+        poster: "",
+        original_language: "en",
+      }),
+    ).toMatchObject({
+      originalLanguage: "en",
+    });
   });
 });

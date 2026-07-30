@@ -38,6 +38,7 @@ export interface MetaDetail extends MetaPreview {
   cast?: string[];
   director?: string[];
   runtime?: string;
+  originalLanguage?: string;
   videos?: VideoEntry[];
   trailers?: MediaTrailer[];
 }

@@ -28,6 +28,58 @@ export interface TorrentReadinessOptions {
   metadataTimeoutAfterPeerMs?: number;
 }
 
+type TorrentSourceStream = {
+  destroyed?: boolean;
+  destroy(error?: Error): unknown;
+  on(event: "error", listener: (error: Error) => void): unknown;
+  pipe(destination: Response): unknown;
+};
+
+/**
+ * Pipe a WebTorrent/streamx source into an Express response without turning a
+ * normal media-player disconnect into an uncaught source error.
+ *
+ * streamx registers its destination `close` handler inside `pipe()`. Register
+ * our clean cancellation handlers first so a closed response destroys the
+ * source without the synthetic "Writable stream closed prematurely" error.
+ */
+export function pipeTorrentStreamToResponse(
+  req: Request,
+  res: Response,
+  stream: TorrentSourceStream,
+  onUnexpectedError?: (error: Error) => void,
+) {
+  let clientDisconnected = false;
+  let sourceStopped = false;
+
+  const stopSourceForDisconnect = () => {
+    clientDisconnected = true;
+    if (sourceStopped) return;
+    sourceStopped = true;
+    stream.destroy();
+  };
+
+  const stopForResponseClose = () => {
+    if (res.writableFinished) return;
+    stopSourceForDisconnect();
+  };
+
+  stream.on("error", (error) => {
+    if (clientDisconnected || req.aborted || res.destroyed) return;
+    onUnexpectedError?.(error);
+    if (!res.destroyed) res.destroy();
+  });
+  req.once("aborted", stopSourceForDisconnect);
+  res.once("close", stopForResponseClose);
+
+  if (req.aborted || res.destroyed) {
+    stopSourceForDisconnect();
+    return;
+  }
+
+  stream.pipe(res);
+}
+
 /** Detect MIME type from file extension for correct Content-Type header */
 export function mimeFromExt(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -285,8 +337,7 @@ export function handleTorrent(torrent: any, req: Request, res: Response) {
       start: range.start,
       end: range.end,
     });
-    stream.pipe(res);
-    req.on("close", () => stream.destroy());
+    pipeTorrentStreamToResponse(req, res, stream);
   } else {
     res.writeHead(200, {
       "Content-Length": total,
@@ -296,8 +347,7 @@ export function handleTorrent(torrent: any, req: Request, res: Response) {
     if (req.method === "HEAD") return res.end();
 
     const stream = file.createReadStream();
-    stream.pipe(res);
-    req.on("close", () => stream.destroy());
+    pipeTorrentStreamToResponse(req, res, stream);
   }
 }
 

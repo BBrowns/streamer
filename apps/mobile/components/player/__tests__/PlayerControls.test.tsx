@@ -418,4 +418,37 @@ describe("PlayerControls", () => {
     expect(style.backgroundColor).toBe(playerChrome.surface);
     expect(style.borderColor).toBe(playerChrome.border);
   });
+
+  it("shows segment skipping only when verified segment evidence is active", () => {
+    const onSkipSegment = jest.fn();
+    const screen = render(
+      <PlayerControls
+        player={createPlayer()}
+        currentTime={30}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        activeSegment={{ kind: "intro", endSeconds: 84 }}
+        onSkipSegment={onSkipSegment}
+        capabilities={{ canSeek: true }}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText("Skip intro"));
+    expect(onSkipSegment).toHaveBeenCalledWith(84);
+
+    screen.rerender(
+      <PlayerControls
+        player={createPlayer()}
+        currentTime={90}
+        duration={120}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        capabilities={{ canSeek: true }}
+      />,
+    );
+    expect(screen.queryByLabelText("Skip intro")).toBeNull();
+  });
 });

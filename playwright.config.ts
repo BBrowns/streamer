@@ -8,6 +8,8 @@ const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: "./tests",
   outputDir: "artifacts/playwright-results",
+  snapshotPathTemplate:
+    "{testDir}/{testFilePath}-snapshots/{platform}/{arg}{ext}",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

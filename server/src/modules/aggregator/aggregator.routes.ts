@@ -14,6 +14,7 @@ import {
   aggregatorStreamSchema,
   aggregatorResolveSchema,
   aggregatorResolveBulkSchema,
+  aggregatorSubtitleDocumentSchema,
 } from "@streamer/shared";
 
 export const aggregatorRouter = new Hono<HonoEnv>();
@@ -51,6 +52,18 @@ const routes = aggregatorRouter
     authMiddleware,
     zValidator("param", aggregatorStreamSchema),
     (c) => aggregatorController.getStreams(c),
+  )
+  .get(
+    "/subtitles/document/:identity",
+    authMiddleware,
+    zValidator("param", aggregatorSubtitleDocumentSchema),
+    (c) => aggregatorController.getSubtitleDocument(c),
+  )
+  .get(
+    "/subtitles/:type/:id",
+    authMiddleware,
+    zValidator("param", aggregatorMetaSchema),
+    (c) => aggregatorController.getSubtitles(c),
   )
   .post(
     "/stream/resolve-bulk",

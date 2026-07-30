@@ -43,6 +43,162 @@ describe("AggregatorService", () => {
     service = new AggregatorService();
   });
 
+  describe("subtitle resources", () => {
+    it("keeps provider URLs server-side and scopes document identities to the user", async () => {
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        {
+          id: "opensubtitles-installation",
+          userId: "user-1",
+          transportUrl: "https://subtitles.example/manifest.json",
+          installedAt: new Date(),
+          manifest: {
+            id: "org.example.subtitles",
+            version: "1.0.0",
+            name: "OpenSubtitles",
+            description: "Subtitles",
+            resources: ["subtitles"],
+            types: ["movie", "series"],
+            catalogs: [],
+          },
+        },
+      ] as any);
+      vi.mocked(axios.get)
+        .mockResolvedValueOnce({
+          data: {
+            subtitles: [
+              {
+                id: "nl-sdh",
+                url: "https://cdn.example/subtitle.nl.srt",
+                lang: "nld",
+                title: "Nederlands SDH",
+              },
+            ],
+          },
+        })
+        .mockResolvedValueOnce({
+          data: "1\n00:00:01,000 --> 00:00:02,000\nHallo",
+          status: 200,
+          headers: {},
+        });
+
+      const subtitles = await service.getSubtitleCandidates(
+        "user-1",
+        "movie",
+        "tt123",
+        "req-subtitles",
+      );
+
+      expect(subtitles).toEqual([
+        expect.objectContaining({
+          language: "nl",
+          source: "addon",
+          providerName: "OpenSubtitles",
+          format: "srt",
+          hearingImpaired: true,
+          contentIdMatch: true,
+          fetchIdentity: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+          ),
+        }),
+      ]);
+      expect(JSON.stringify(subtitles)).not.toContain("cdn.example");
+
+      const identity = subtitles[0].fetchIdentity!;
+      await expect(
+        service.getSubtitleDocument("user-2", identity),
+      ).resolves.toBeNull();
+      await expect(
+        service.getSubtitleDocument("user-1", identity),
+      ).resolves.toContain("Hallo");
+      expect(axios.get).toHaveBeenLastCalledWith(
+        "https://cdn.example/subtitle.nl.srt",
+        expect.objectContaining({
+          responseType: "text",
+          maxRedirects: 0,
+          maxContentLength: 8 * 1024 * 1024,
+        }),
+      );
+    });
+
+    it("deduplicates and bounds multi-provider candidates before caching every returned identity", async () => {
+      const providerCount = 4;
+      const subtitlesPerProvider = 200;
+      const sharedSubtitlesPerProvider = 40;
+
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue(
+        Array.from({ length: providerCount }, (_, providerIndex) => ({
+          id: `subtitle-provider-${providerIndex}`,
+          userId: "user-1",
+          transportUrl: `https://subtitles-${providerIndex}.example/manifest.json`,
+          installedAt: new Date(),
+          manifest: {
+            id: `org.example.subtitles.${providerIndex}`,
+            version: "1.0.0",
+            name: `Subtitle Provider ${providerIndex}`,
+            description: "Subtitles",
+            resources: ["subtitles"],
+            types: ["movie"],
+            catalogs: [],
+          },
+        })) as any,
+      );
+      vi.mocked(axios.get).mockImplementation(async (url, options: any) => {
+        const requestedUrl = String(url);
+        if (options?.responseType === "text") {
+          return { data: requestedUrl, status: 200, headers: {} };
+        }
+
+        const providerIndex = Number(
+          requestedUrl.match(/subtitles-(\d+)\.example/)?.[1],
+        );
+        return {
+          data: {
+            subtitles: Array.from(
+              { length: subtitlesPerProvider },
+              (_, subtitleIndex) => {
+                const shared = subtitleIndex < sharedSubtitlesPerProvider;
+                return {
+                  id: shared
+                    ? `shared-${subtitleIndex}`
+                    : `unique-${providerIndex}-${subtitleIndex}`,
+                  url: shared
+                    ? `https://cdn.example/shared-${subtitleIndex}.srt`
+                    : `https://cdn.example/provider-${providerIndex}-${subtitleIndex}.srt`,
+                  lang: "eng",
+                  title: shared
+                    ? `Shared ${subtitleIndex}`
+                    : `Provider ${providerIndex} ${subtitleIndex}`,
+                };
+              },
+            ),
+          },
+        };
+      });
+
+      const subtitles = await service.getSubtitleCandidates(
+        "user-1",
+        "movie",
+        "tt123",
+        "req-bounded-subtitles",
+      );
+
+      expect(subtitles).toHaveLength(512);
+      expect(subtitles[0].id).toBe("addon:subtitle-provider-0:shared-0");
+      expect(subtitles.at(-1)?.id).toBe(
+        "addon:subtitle-provider-2:unique-2-191",
+      );
+      expect(JSON.stringify(subtitles)).not.toContain("cdn.example");
+
+      const documents = await Promise.all(
+        subtitles.map((subtitle) =>
+          service.getSubtitleDocument("user-1", subtitle.fetchIdentity!),
+        ),
+      );
+      expect(documents.every((document) => document !== null)).toBe(true);
+      expect(new Set(documents).size).toBe(512);
+    });
+  });
+
   describe("catalog paths", () => {
     it("builds Stremio extras as path segments", () => {
       expect(buildCatalogPath("movie", "top", "blade runner", 100)).toBe(

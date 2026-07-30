@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { join } from "node:path";
 import {
@@ -8,6 +9,8 @@ import {
   nativeEvidenceStatus,
   parseDetoxTargets,
 } from "./native-evidence-preflight.mjs";
+
+const require = createRequire(import.meta.url);
 
 function successful(stdout = "") {
   return { ok: true, status: 0, stdout, stderr: "", error: undefined };
@@ -92,6 +95,18 @@ test("parses both required Detox targets before preflight can inspect platforms"
   const parsed = parseDetoxTargets(committedDetoxTargets());
 
   assert.deepEqual(parsed, targets);
+});
+
+test("keeps the committed iOS Detox build aligned with the Expo product identity", () => {
+  const detoxConfig = require("../apps/mobile/.detoxrc.js");
+  const iosApp = detoxConfig.apps?.["ios.debug"];
+
+  assert.equal(
+    iosApp?.binaryPath,
+    "ios/build/Build/Products/Debug-iphonesimulator/Streamer.app",
+  );
+  assert.match(iosApp?.build ?? "", /ios\/Streamer\.xcworkspace/);
+  assert.match(iosApp?.build ?? "", /-scheme Streamer(?:\s|$)/);
 });
 
 test("blocks both native targets without running commands for incomplete Detox targets", () => {

@@ -29,8 +29,6 @@ export class HttpVideoEngine implements IStreamEngine {
     return [];
   }
 
-  setAudioTrack(id: string): void {}
-
   getSubtitles(): SubtitleTrack[] {
     return [];
   }

@@ -15,6 +15,13 @@ jest.mock("../../../hooks/useReducedMotion", () => ({
 describe("PlayerSettingsModal", () => {
   it("uses the cinema-dark sheet regardless of the surrounding application theme", () => {
     const onSelectPlaybackRate = jest.fn();
+    const onSelectSubtitleMode = jest.fn();
+    const onSelectSubtitleTextSize = jest.fn();
+    const onSelectSubtitleSyncOffset = jest.fn();
+    const onSelectSubtitleBackgroundOpacity = jest.fn();
+    const onSelectSubtitleVerticalPosition = jest.fn();
+    const onSelectSubtitleFontFamily = jest.fn();
+    const onResetSubtitleStyle = jest.fn();
     const screen = render(
       <PlayerSettingsModal
         visible
@@ -25,6 +32,24 @@ describe("PlayerSettingsModal", () => {
         onSelectSubtitle={jest.fn()}
         playbackRate={1}
         onSelectPlaybackRate={onSelectPlaybackRate}
+        subtitleMode="auto"
+        onSelectSubtitleMode={onSelectSubtitleMode}
+        subtitleAccessibility="neutral"
+        onSelectSubtitleAccessibility={jest.fn()}
+        subtitleTextSize="medium"
+        onSelectSubtitleTextSize={onSelectSubtitleTextSize}
+        subtitleBackground="shadow"
+        onSelectSubtitleBackground={jest.fn()}
+        subtitleBackgroundOpacity={0.78}
+        onSelectSubtitleBackgroundOpacity={onSelectSubtitleBackgroundOpacity}
+        subtitleVerticalPosition="low"
+        onSelectSubtitleVerticalPosition={onSelectSubtitleVerticalPosition}
+        subtitleFontFamily="system"
+        onSelectSubtitleFontFamily={onSelectSubtitleFontFamily}
+        subtitleSyncOffsetSeconds={0}
+        onSelectSubtitleSyncOffset={onSelectSubtitleSyncOffset}
+        onResetSubtitleStyle={onResetSubtitleStyle}
+        diagnostics={[]}
       />,
     );
 
@@ -36,5 +61,19 @@ describe("PlayerSettingsModal", () => {
 
     fireEvent.press(screen.getByLabelText("player.settings.speed: 1.5x"));
     expect(onSelectPlaybackRate).toHaveBeenCalledWith(1.5);
+    fireEvent.press(screen.getByLabelText("Automatic behavior: Always"));
+    fireEvent.press(screen.getByLabelText("Text size: L"));
+    fireEvent.press(screen.getByLabelText("Background opacity: 50%"));
+    fireEvent.press(screen.getByLabelText("Vertical position: High"));
+    fireEvent.press(screen.getByLabelText("Font: Serif"));
+    fireEvent.press(screen.getByLabelText("Subtitle sync: +0.5s"));
+    fireEvent.press(screen.getByLabelText("Reset subtitle style"));
+    expect(onSelectSubtitleMode).toHaveBeenCalledWith("always");
+    expect(onSelectSubtitleTextSize).toHaveBeenCalledWith("large");
+    expect(onSelectSubtitleBackgroundOpacity).toHaveBeenCalledWith(0.5);
+    expect(onSelectSubtitleVerticalPosition).toHaveBeenCalledWith("high");
+    expect(onSelectSubtitleFontFamily).toHaveBeenCalledWith("serif");
+    expect(onSelectSubtitleSyncOffset).toHaveBeenCalledWith(0.5);
+    expect(onResetSubtitleStyle).toHaveBeenCalledTimes(1);
   });
 });

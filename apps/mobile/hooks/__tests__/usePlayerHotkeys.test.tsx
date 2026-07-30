@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react-native";
 import { Platform } from "react-native";
 import {
   getPlayerEscapeAction,
+  getPlayerSeekShortcut,
   isPlayerHotkeyTargetInteractive,
   usePlayerHotkeys,
 } from "../usePlayerHotkeys";
@@ -105,6 +106,29 @@ describe("usePlayerHotkeys", () => {
     expect(isPlayerHotkeyTargetInteractive(interactiveTarget)).toBe(true);
     expect(isPlayerHotkeyTargetInteractive(passiveTarget)).toBe(false);
     expect(isPlayerHotkeyTargetInteractive(null)).toBe(false);
+  });
+
+  it("uses conventional 10/30 second and percentage seek shortcuts", () => {
+    expect(getPlayerSeekShortcut("ArrowLeft", false)).toEqual({
+      type: "relative",
+      seconds: -10,
+    });
+    expect(getPlayerSeekShortcut("ArrowRight", true)).toEqual({
+      type: "relative",
+      seconds: 30,
+    });
+    expect(getPlayerSeekShortcut("j", false)).toEqual({
+      type: "relative",
+      seconds: -10,
+    });
+    expect(getPlayerSeekShortcut("0", false)).toEqual({
+      type: "percent",
+      percent: 0,
+    });
+    expect(getPlayerSeekShortcut("9", false)).toEqual({
+      type: "percent",
+      percent: 90,
+    });
   });
 
   it("yields conflicting shortcuts to focused interactive controls", () => {

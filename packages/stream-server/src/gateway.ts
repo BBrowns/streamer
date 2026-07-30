@@ -8,6 +8,8 @@ import {
 import {
   ensureTorrentReady,
   evaluateSeekableRemuxPreparation,
+  getClient,
+  getRetainedSeekableRemuxSource,
   getSelectedFile,
   isTorrentEngineUnavailableError,
   prepareSeekableRemux,
@@ -18,11 +20,26 @@ import {
   waitForTorrentFileFirstBytes,
   destroyTorrentByInfoHash,
 } from "./torrent.js";
+import { seekThumbnailService } from "./seek-thumbnail.js";
 import type {
   FileSelectionHints,
   SeekableRemuxUnavailableReason,
 } from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
+import {
+  createMediaProbeCache,
+  discoverExternalSubtitleCandidates,
+  probeMediaTracksAtUrl,
+} from "./media-probe.js";
+import {
+  gatewayTrackCatalogSchema,
+  type SubtitleCandidate,
+} from "@streamer/shared";
+import {
+  extractEmbeddedSubtitleToVtt,
+  normalizeSubtitleBuffer,
+  readTorrentSubtitleBuffer,
+} from "./subtitle-normalizer.js";
 
 type GatewayJobState =
   | "preparing"
@@ -73,6 +90,7 @@ interface GatewayJob {
   retryable?: boolean;
   progressTimer?: ReturnType<typeof setInterval>;
   abortController?: AbortController;
+  operationAbortControllers: Set<AbortController>;
   firstByteProbeStartedAt?: number;
   remuxStartedAt?: number;
   /**
@@ -111,7 +129,24 @@ const GATEWAY_FIRST_BYTE_TIMEOUT_MS = 20_000;
 const GATEWAY_REMUX_READY_TIMEOUT_MS = 60_000;
 const GATEWAY_BACKGROUND_REMUX_TIMEOUT_MS = 10 * 60_000;
 const GATEWAY_BACKGROUND_REMUX_STALL_TIMEOUT_MS = 30_000;
+const GATEWAY_THUMBNAIL_BUCKET_SECONDS = 10;
+const GATEWAY_MAX_THUMBNAIL_BUCKET = 24 * 60 * 6;
 const jobs = new Map<string, GatewayJob>();
+const mediaProbeCache = createMediaProbeCache({
+  ttlMs: 5 * 60_000,
+  maxEntries: 16,
+});
+const subtitleDocumentCache = createMediaProbeCache({
+  ttlMs: 5 * 60_000,
+  maxEntries: 32,
+});
+
+function abortGatewayOperations(job: GatewayJob, reason: string) {
+  for (const controller of job.operationAbortControllers) {
+    controller.abort(new Error(reason));
+  }
+  job.operationAbortControllers.clear();
+}
 
 function releaseGatewaySeekableCache(
   job: GatewayJob,
@@ -207,6 +242,7 @@ function pruneJobs(now = Date.now()) {
   for (const [id, job] of jobs) {
     if (shouldPruneJob(job, now)) {
       if (job.progressTimer) clearInterval(job.progressTimer);
+      abortGatewayOperations(job, "Gateway job expired");
       releaseGatewaySeekableCache(job, "Gateway job expired");
       jobs.delete(id);
     }
@@ -469,6 +505,7 @@ function cancelGatewayJob(job: GatewayJob, error = "Gateway job cancelled") {
   }
   job.abortController?.abort(new Error(error));
   job.abortController = undefined;
+  abortGatewayOperations(job, error);
   releaseGatewaySeekableCache(job, error);
   job.state = "cancelled";
   job.error = error;
@@ -731,6 +768,13 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     // ready URL, then start an uncancelled remux only when the video element
     // requested it.
     const selectedFile = getSelectedFile(torrent, job.fileIdx, job.hints);
+    const selectedFileIndex = torrent.files?.indexOf(selectedFile) ?? -1;
+    if (selectedFileIndex < 0) {
+      throw new Error("Selected torrent file is not part of the gateway job");
+    }
+    // Resolve hints once and make the resulting index authoritative for every
+    // later stream, probe, subtitle, thumbnail, and handoff operation.
+    job.fileIdx = selectedFileIndex;
     if (job.mode !== "remux" && shouldRemuxTorrentFile(selectedFile.name)) {
       job.mode = "remux";
       job.updatedAt = Date.now();
@@ -767,6 +811,14 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
             signal: abortController.signal,
             remuxTimeoutMs: GATEWAY_REMUX_READY_TIMEOUT_MS,
           });
+          const release = retainSeekableRemux(torrent, {
+            fileIdx: job.fileIdx,
+            hints: job.hints,
+          });
+          if (!release) {
+            throw new Error("Seekable cache could not be retained");
+          }
+          job.releaseSeekableCache = release;
         }
       } finally {
         if (job.abortController === abortController) {
@@ -867,6 +919,7 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
     mode: parsed.mode,
     remuxStrategy: parsed.remuxStrategy,
     state: "preparing",
+    operationAbortControllers: new Set(),
     activeStreamCount: 0,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -901,6 +954,307 @@ gatewayRouter.get("/jobs/:id", requireBridgeAuth, (req, res) => {
   if (!job) return res.status(404).json({ error: "Gateway job not found" });
   return res.json(serializeJob(job));
 });
+
+function subtitleFormatFromCodec(codec: string) {
+  if (codec === "subrip" || codec === "srt") return "srt" as const;
+  if (codec === "webvtt") return "vtt" as const;
+  if (codec === "ass") return "ass" as const;
+  if (codec === "ssa") return "ssa" as const;
+  return "unknown" as const;
+}
+
+async function getGatewaySelectedMedia(job: GatewayJob) {
+  if (job.state !== "ready" || !Number.isInteger(job.fileIdx)) {
+    throw new Error("Gateway media is not ready");
+  }
+  const selectedFileIndex = job.fileIdx as number;
+
+  const torrent = await prepareTorrent(job.magnet);
+  if (isGatewayJobCancelled(job)) {
+    throw new Error("Gateway job cancelled");
+  }
+  const selectedFile = getSelectedFile(torrent, selectedFileIndex);
+  const client = await getClient();
+  const address = client.server?.address?.();
+  if (!address || typeof address === "string") {
+    throw new Error("Torrent media server is unavailable");
+  }
+  const streamUrl = `http://127.0.0.1:${address.port}${selectedFile.streamURL}`;
+
+  return {
+    torrent,
+    selectedFile,
+    selectedFileIndex,
+    streamUrl,
+  };
+}
+
+async function buildGatewayTrackCatalog(job: GatewayJob) {
+  const { torrent, selectedFileIndex, streamUrl } =
+    await getGatewaySelectedMedia(job);
+  const cacheKey = `${job.id}:${selectedFileIndex}`;
+
+  const tracks = await mediaProbeCache.getOrCreate(cacheKey, async () => {
+    const controller = new AbortController();
+    job.operationAbortControllers.add(controller);
+    try {
+      return await probeMediaTracksAtUrl({
+        streamUrl,
+        signal: controller.signal,
+      });
+    } finally {
+      job.operationAbortControllers.delete(controller);
+    }
+  });
+  if (isGatewayJobCancelled(job)) {
+    throw new Error("Gateway job cancelled");
+  }
+
+  const externalSubtitles = discoverExternalSubtitleCandidates(
+    torrent.files || [],
+    selectedFileIndex,
+  );
+  const embeddedSubtitles: SubtitleCandidate[] = tracks
+    .filter((track) => track.kind === "subtitle" && track.supported)
+    .map((track) => ({
+      id: `embedded:${track.streamIndex}`,
+      language: track.language,
+      format: subtitleFormatFromCodec(track.codec),
+      source: "embedded",
+      label: track.title || `${track.language.toUpperCase()} · Embedded`,
+      hearingImpaired: track.hearingImpaired,
+      forced: track.forced,
+      fileHashMatch: true,
+      fileNameMatch: true,
+      contentIdMatch: false,
+      confidence: 0.95,
+      active: false,
+      fetchIdentity: `embedded:${track.streamIndex}`,
+    }));
+
+  return gatewayTrackCatalogSchema.parse({
+    jobId: job.id,
+    selectedFileIndex,
+    tracks,
+    subtitles: [...embeddedSubtitles, ...externalSubtitles],
+  });
+}
+
+gatewayRouter.get("/jobs/:id/tracks", requireBridgeAuth, async (req, res) => {
+  pruneJobs();
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Gateway job not found" });
+
+  try {
+    return res.json(await buildGatewayTrackCatalog(job));
+  } catch (error) {
+    if (isGatewayJobCancelled(job)) {
+      return res.status(410).json({ error: "Gateway job cancelled" });
+    }
+    return res.status(503).json({
+      error: "Media tracks are temporarily unavailable",
+      retryable: true,
+    });
+  }
+});
+
+gatewayRouter.get(
+  "/jobs/:id/thumbnails/:bucket",
+  requireBridgeAuth,
+  async (req, res) => {
+    pruneJobs();
+    const job = jobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: "Gateway job not found" });
+    if (isGatewayJobCancelled(job)) {
+      return res.status(410).json({ error: "Gateway job cancelled" });
+    }
+
+    const bucketText = req.params.bucket;
+    const bucket = /^\d+$/.test(bucketText) ? Number(bucketText) : NaN;
+    if (
+      !Number.isSafeInteger(bucket) ||
+      bucket < 0 ||
+      bucket > GATEWAY_MAX_THUMBNAIL_BUCKET
+    ) {
+      return res.status(400).json({ error: "Invalid thumbnail bucket" });
+    }
+
+    const ownsSeekableCache =
+      job.state === "ready" &&
+      job.mode === "remux" &&
+      Boolean(job.releaseSeekableCache) &&
+      (job.remuxStrategy === "seekable-cache" ||
+        job.seekableCacheStatus === "ready");
+    if (!ownsSeekableCache) {
+      return res.status(425).json({
+        error: "Seekable media is still preparing",
+        retryable: true,
+      });
+    }
+
+    const abortController = new AbortController();
+    job.operationAbortControllers.add(abortController);
+    let responseReady = false;
+    const abortOnDisconnect = () => {
+      if (!responseReady) {
+        abortController.abort(new Error("Thumbnail request cancelled"));
+      }
+    };
+    req.once("aborted", abortOnDisconnect);
+    res.once("close", abortOnDisconnect);
+
+    try {
+      const torrent = await prepareTorrent(job.magnet);
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({ error: "Gateway job cancelled" });
+      }
+      const source = getRetainedSeekableRemuxSource(torrent, {
+        fileIdx: job.fileIdx,
+        hints: job.hints,
+      });
+      if (!source) {
+        return res.status(425).json({
+          error: "Seekable media is still preparing",
+          retryable: true,
+        });
+      }
+
+      const thumbnail = await seekThumbnailService.getOrCreate({
+        cacheKey: source.cacheKey,
+        filePath: source.filePath,
+        timeSeconds: bucket * GATEWAY_THUMBNAIL_BUCKET_SECONDS,
+        signal: abortController.signal,
+      });
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({ error: "Gateway job cancelled" });
+      }
+
+      responseReady = true;
+      res.set({
+        "Cache-Control": "no-store",
+        "Content-Length": String(thumbnail.length),
+        "Content-Type": "image/jpeg",
+        "X-Content-Type-Options": "nosniff",
+      });
+      return res.status(200).send(thumbnail);
+    } catch {
+      if (res.destroyed) return;
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({ error: "Gateway job cancelled" });
+      }
+      return res.status(503).json({
+        error: "Thumbnail is temporarily unavailable",
+        retryable: true,
+      });
+    } finally {
+      responseReady = true;
+      req.off("aborted", abortOnDisconnect);
+      res.off("close", abortOnDisconnect);
+      job.operationAbortControllers.delete(abortController);
+    }
+  },
+);
+
+function isNormalizableSubtitleFormat(
+  value: string,
+): value is "srt" | "vtt" | "ass" | "ssa" {
+  return (
+    value === "srt" || value === "vtt" || value === "ass" || value === "ssa"
+  );
+}
+
+gatewayRouter.get(
+  "/jobs/:id/subtitles/:identity",
+  requireBridgeAuth,
+  async (req, res) => {
+    pruneJobs();
+    const job = jobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: "Gateway job not found" });
+    if (isGatewayJobCancelled(job)) {
+      return res.status(410).json({ error: "Gateway job cancelled" });
+    }
+    if (job.state !== "ready") {
+      return res.status(425).json({
+        error: "Gateway media is still preparing",
+        retryable: true,
+      });
+    }
+
+    const identity = req.params.identity;
+    const identityMatch = identity.match(/^(external|embedded):(\d+)$/);
+    if (!identityMatch) {
+      return res.status(404).json({ error: "Subtitle not found" });
+    }
+
+    try {
+      const catalog = await buildGatewayTrackCatalog(job);
+      const candidate = catalog.subtitles.find(
+        (subtitle) => subtitle.fetchIdentity === identity,
+      );
+      if (!candidate) {
+        return res.status(404).json({ error: "Subtitle not found" });
+      }
+
+      const document = await subtitleDocumentCache.getOrCreate(
+        `${job.id}:${identity}`,
+        async () => {
+          const controller = new AbortController();
+          job.operationAbortControllers.add(controller);
+          try {
+            const { torrent, streamUrl } = await getGatewaySelectedMedia(job);
+            const sourceIndex = Number(identityMatch[2]);
+
+            if (
+              identityMatch[1] === "external" &&
+              candidate.source === "torrent-file" &&
+              isNormalizableSubtitleFormat(candidate.format)
+            ) {
+              const subtitleFile = torrent.files?.[sourceIndex];
+              if (!subtitleFile) {
+                throw new Error("Subtitle file is unavailable");
+              }
+              const buffer = await readTorrentSubtitleBuffer(
+                subtitleFile,
+                controller.signal,
+              );
+              return normalizeSubtitleBuffer(buffer, candidate.format);
+            }
+
+            if (
+              identityMatch[1] === "embedded" &&
+              candidate.source === "embedded"
+            ) {
+              return await extractEmbeddedSubtitleToVtt({
+                streamUrl,
+                streamIndex: sourceIndex,
+                signal: controller.signal,
+              });
+            }
+
+            throw new Error("Subtitle identity does not match its source");
+          } finally {
+            job.operationAbortControllers.delete(controller);
+          }
+        },
+      );
+
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({ error: "Gateway job cancelled" });
+      }
+      res.set("Content-Type", "text/vtt; charset=utf-8");
+      res.set("Cache-Control", "no-store");
+      return res.send(document);
+    } catch {
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({ error: "Gateway job cancelled" });
+      }
+      return res.status(503).json({
+        error: "Subtitle is temporarily unavailable",
+        retryable: true,
+      });
+    }
+  },
+);
 
 gatewayRouter.delete("/jobs/:id", requireBridgeAuth, (req, res) => {
   pruneJobs();
@@ -1070,9 +1424,13 @@ gatewayRouter.get("/jobs/:id/stream", async (req: Request, res: Response) => {
 export function __resetGatewayJobsForTests() {
   for (const job of jobs.values()) {
     if (job.progressTimer) clearInterval(job.progressTimer);
+    abortGatewayOperations(job, "Gateway jobs reset for tests");
     releaseGatewaySeekableCache(job, "Gateway jobs reset for tests");
   }
   jobs.clear();
+  mediaProbeCache.clear();
+  subtitleDocumentCache.clear();
+  seekThumbnailService.clear();
 }
 
 export function __pruneGatewayJobsForTests(now: number) {

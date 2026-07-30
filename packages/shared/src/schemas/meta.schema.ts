@@ -73,16 +73,25 @@ export const mediaTrailerSchema = z.object({
   type: z.string().trim().min(1).max(80).optional(),
 });
 
-export const metaDetailSchema = metaPreviewSchema.extend({
-  background: z.string().optional(),
-  logo: z.string().optional(),
-  genres: optionalStringArray,
-  cast: optionalStringArray,
-  director: optionalStringArray,
-  runtime: optionalStringFromPrimitive,
-  videos: z.array(videoEntrySchema).optional(),
-  trailers: z.array(mediaTrailerSchema).max(8).optional(),
-});
+export const metaDetailSchema = metaPreviewSchema
+  .extend({
+    background: z.string().optional(),
+    logo: z.string().optional(),
+    genres: optionalStringArray,
+    cast: optionalStringArray,
+    director: optionalStringArray,
+    runtime: optionalStringFromPrimitive,
+    originalLanguage: optionalString,
+    original_language: optionalString,
+    language: optionalString,
+    videos: z.array(videoEntrySchema).optional(),
+    trailers: z.array(mediaTrailerSchema).max(8).optional(),
+  })
+  .transform(({ original_language, language, ...meta }) => ({
+    ...meta,
+    originalLanguage:
+      meta.originalLanguage ?? original_language ?? language ?? undefined,
+  }));
 
 /**
  * Catalog responses are collections from untrusted providers. A single bad

@@ -14,4 +14,15 @@ describe("aggregator diagnostics routes", () => {
 
     expect(response.status).toBe(401);
   });
+
+  it("does not expose subtitle catalogs or documents anonymously", async () => {
+    await expect(
+      aggregatorRouter.request("/subtitles/movie/tt123"),
+    ).resolves.toMatchObject({ status: 401 });
+    await expect(
+      aggregatorRouter.request(
+        "/subtitles/document/123e4567-e89b-42d3-a456-426614174000",
+      ),
+    ).resolves.toMatchObject({ status: 401 });
+  });
 });

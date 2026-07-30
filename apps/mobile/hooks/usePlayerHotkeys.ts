@@ -73,6 +73,31 @@ export function isPlayerHotkeyTargetInteractive(
   );
 }
 
+export type PlayerSeekShortcut =
+  | { type: "relative"; seconds: number }
+  | { type: "percent"; percent: number };
+
+export function getPlayerSeekShortcut(
+  rawKey: string,
+  shiftKey: boolean,
+): PlayerSeekShortcut | null {
+  const key = rawKey.toLowerCase();
+  if (/^[0-9]$/.test(key)) {
+    return { type: "percent", percent: Number(key) * 10 };
+  }
+  if (key === "arrowleft" || key === "arrowright") {
+    const seconds = shiftKey ? 30 : 10;
+    return {
+      type: "relative",
+      seconds: key === "arrowright" ? seconds : -seconds,
+    };
+  }
+  if (key === "j" || key === "l") {
+    return { type: "relative", seconds: key === "l" ? 10 : -10 };
+  }
+  return null;
+}
+
 export function usePlayerHotkeys({
   player,
   showControls,
@@ -114,6 +139,37 @@ export function usePlayerHotkeys({
         return;
       }
 
+      const seekShortcut = getPlayerSeekShortcut(key, e.shiftKey);
+      if (seekShortcut) {
+        e.preventDefault();
+        if (!canSeek) return;
+        if (seekShortcut.type === "percent") {
+          if (player?.duration) {
+            if (onSeekPercent) onSeekPercent(seekShortcut.percent);
+            else
+              player.currentTime =
+                (player.duration * seekShortcut.percent) / 100;
+            showControls();
+          }
+          return;
+        }
+
+        const relativeSeconds =
+          Math.abs(seekShortcut.seconds) === 10
+            ? Math.sign(seekShortcut.seconds) * SEEK_SECONDS
+            : seekShortcut.seconds;
+        if (onSeekBy) onSeekBy(relativeSeconds);
+        else player?.seekBy(relativeSeconds);
+        setSeekFeedback(relativeSeconds < 0 ? "left" : "right");
+        if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
+        seekFeedbackTimer.current = setTimeout(
+          () => setSeekFeedback(null),
+          600,
+        );
+        showControls();
+        return;
+      }
+
       switch (key) {
         case " ":
         case "k":
@@ -134,53 +190,6 @@ export function usePlayerHotkeys({
           if (onToggleMute) onToggleMute();
           else if (player) player.muted = !player.muted;
           showControls();
-          break;
-        case "arrowleft":
-        case "j":
-          e.preventDefault();
-          if (!canSeek) break;
-          if (onSeekBy) onSeekBy(-SEEK_SECONDS);
-          else player?.seekBy(-SEEK_SECONDS);
-          setSeekFeedback("left");
-          if (seekFeedbackTimer.current)
-            clearTimeout(seekFeedbackTimer.current);
-          seekFeedbackTimer.current = setTimeout(
-            () => setSeekFeedback(null),
-            600,
-          );
-          showControls();
-          break;
-        case "arrowright":
-        case "l":
-          e.preventDefault();
-          if (!canSeek) break;
-          if (onSeekBy) onSeekBy(SEEK_SECONDS);
-          else player?.seekBy(SEEK_SECONDS);
-          setSeekFeedback("right");
-          if (seekFeedbackTimer.current)
-            clearTimeout(seekFeedbackTimer.current);
-          seekFeedbackTimer.current = setTimeout(
-            () => setSeekFeedback(null),
-            600,
-          );
-          showControls();
-          break;
-        case "1":
-        case "2":
-        case "3":
-        case "4":
-        case "5":
-        case "6":
-        case "7":
-        case "8":
-        case "9":
-          e.preventDefault();
-          if (canSeek && player && player.duration) {
-            const percent = parseInt(e.key) * 10;
-            if (onSeekPercent) onSeekPercent(percent);
-            else player.currentTime = (player.duration * percent) / 100;
-            showControls();
-          }
           break;
       }
     };

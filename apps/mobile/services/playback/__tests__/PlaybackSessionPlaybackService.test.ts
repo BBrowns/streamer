@@ -140,7 +140,6 @@ function makeEngine(
     getPlaybackUri: jest.fn(getPlaybackUri),
     getEngineType: () => "test",
     getAudioTracks: () => [],
-    setAudioTrack: () => {},
     getSubtitles: () => [],
     setSubtitle: () => {},
     on: (event, callback) => {
