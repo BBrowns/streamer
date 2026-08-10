@@ -169,8 +169,14 @@ source downloads remain separate.
 a task is offline-playable only after its local URI exists and has been
 verified. The persisted mobile queue stores task state for UI recovery, while
 Electron persists managed download-job metadata and restores interrupted jobs
-as paused. Electron `streamer://` playback, file verification, and deletion are
-limited to its app-managed offline-media directory.
+as paused. Recovery metadata is versioned and URL-free: it carries only opaque
+task/file identities, the download action, coarse byte counts, status, failure
+reason, and timestamps. Hydrated interrupted tasks always replan through the
+playback session before they can resume. Electron partial files are appended
+only when their recorded size, expected size, and persisted ETag or
+Last-Modified validator agree; a mismatch discards the partial and restarts
+from byte zero. Electron `streamer://` playback, file verification, and
+deletion are limited to its app-managed offline-media directory.
 
 Primary Cast now creates and resolves a `PlaybackSession` through
 `PlaybackOrchestrator`. The cast dialog prepares a cast-ready source before

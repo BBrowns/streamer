@@ -625,6 +625,10 @@ The main download queue and persistence pass is complete:
 - Download queue persistence now strips resolved download URLs, resume data, and
   raw `Stream` objects. Restart recovery uses safe content replan metadata or
   runtime-only source data.
+- Recovery metadata is now versioned and explicitly marks hydrated interrupted
+  tasks for a fresh session replan. Electron partial files are reused only when
+  the recorded size, expected size, and an ETag/Last-Modified validator agree;
+  otherwise the managed `.part` file is discarded and restarted safely.
 - Failed and paused queue items now derive one context-specific recovery action
   from a persisted non-sensitive failure reason: resume, replan, verify, free
   storage, repair the bridge, or remove an unsupported item.

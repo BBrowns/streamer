@@ -261,7 +261,10 @@ and preserve URL-free persistence and capability-gated native behavior.
    (opaque task identity, content/action, managed-file identity, expected
    bytes, status, and timestamps); always replan after restart; reuse partial
    files only when validators, size, and integrity checks match; bound
-   concurrency and storage pressure.
+   concurrency and storage pressure. The first recovery slice now versions
+   mobile metadata, forces a fresh session replan after hydration, and protects
+   Electron partial-file reuse with ETag/Last-Modified, byte-count, and range
+   validation. Concurrency and storage-pressure limits remain the next slice.
 5. **Desktop offline and Smart Downloads:** allow offline playback only through
    verified Electron-managed files and add opt-in next-episode/Wi-Fi/storage/
    quality policies using the existing planner/session path.

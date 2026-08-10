@@ -1,6 +1,6 @@
 "use strict";
 
-const DOWNLOAD_JOBS_FILE_VERSION = 2;
+const DOWNLOAD_JOBS_FILE_VERSION = 3;
 
 const DOWNLOAD_FAILURE_REASONS = new Set([
   "source_access_expired",
@@ -50,6 +50,13 @@ function normalizeContentType(value) {
     : null;
 }
 
+function normalizeValidator(value) {
+  const validator = typeof value === "string" ? value.trim() : "";
+  return validator && validator.length <= 200 && !/[\r\n]/.test(validator)
+    ? validator
+    : null;
+}
+
 function normalizeFailureReason(value, fallback = "download_failed") {
   return DOWNLOAD_FAILURE_REASONS.has(value) ? value : fallback;
 }
@@ -84,7 +91,7 @@ function classifyDownloadFailure(error) {
   return "download_failed";
 }
 
-function serializeDownloadJobV2(job) {
+function serializeDownloadJobV3(job) {
   if (!isOpaqueDownloadId(job.id)) return null;
   const status =
     job.status === "Completed"
@@ -93,6 +100,8 @@ function serializeDownloadJobV2(job) {
         ? "Error"
         : "Paused";
   const contentType = normalizeContentType(job.contentType);
+  const etag = normalizeValidator(job.etag);
+  const lastModified = normalizeValidator(job.lastModified);
 
   return {
     id: String(job.id).trim(),
@@ -102,6 +111,8 @@ function serializeDownloadJobV2(job) {
     totalBytesExpectedToWrite: clampBytes(job.totalBytesExpectedToWrite),
     ...(contentType ? { contentType } : {}),
     metadataBytes: clampBytes(job.metadataBytes),
+    ...(etag ? { etag } : {}),
+    ...(lastModified ? { lastModified } : {}),
     ...(status === "Error"
       ? {
           failureReason: normalizeFailureReason(job.failureReason),
@@ -111,11 +122,39 @@ function serializeDownloadJobV2(job) {
   };
 }
 
-function serializeDownloadJobsV2(jobs) {
+function serializeDownloadJobsV3(jobs) {
   return {
     version: DOWNLOAD_JOBS_FILE_VERSION,
-    jobs: Array.from(jobs, serializeDownloadJobV2).filter(Boolean),
+    jobs: Array.from(jobs, serializeDownloadJobV3).filter(Boolean),
   };
+}
+
+/**
+ * Partial files are safe to append only when the local observation agrees
+ * with the persisted byte count and a server validator can be sent as
+ * If-Range. An expected size equal to the partial size is treated as
+ * suspicious: a completed file should have gone through the managed-file
+ * verification path instead of being appended to in place.
+ */
+function canReusePartialDownload({
+  partialFileBytes,
+  recordedBytes,
+  expectedBytes,
+  etag,
+  lastModified,
+}) {
+  const partial = clampBytes(partialFileBytes);
+  const recorded = clampBytes(recordedBytes);
+  const expected = clampBytes(expectedBytes);
+  const hasValidator = Boolean(
+    normalizeValidator(etag) || normalizeValidator(lastModified),
+  );
+  return Boolean(
+    partial > 0 &&
+    hasValidator &&
+    partial === recorded &&
+    (expected === 0 || partial < expected),
+  );
 }
 
 function normalizePersistedDownloadJob(record, fileState = {}) {
@@ -155,6 +194,8 @@ function normalizePersistedDownloadJob(record, fileState = {}) {
           ? "interrupted"
           : undefined;
   const contentType = normalizeContentType(record.contentType);
+  const etag = normalizeValidator(record.etag);
+  const lastModified = normalizeValidator(record.lastModified);
 
   return {
     id: record.id.trim(),
@@ -167,6 +208,8 @@ function normalizePersistedDownloadJob(record, fileState = {}) {
     ),
     contentType,
     metadataBytes: clampBytes(record.metadataBytes),
+    ...(etag ? { etag } : {}),
+    ...(lastModified ? { lastModified } : {}),
     failureReason,
     requiresReplan: status !== "Completed",
   };
@@ -174,8 +217,10 @@ function normalizePersistedDownloadJob(record, fileState = {}) {
 
 module.exports = {
   DOWNLOAD_JOBS_FILE_VERSION,
+  canReusePartialDownload,
   classifyDownloadFailure,
   failureMessage,
   normalizePersistedDownloadJob,
-  serializeDownloadJobsV2,
+  normalizeValidator,
+  serializeDownloadJobsV3,
 };

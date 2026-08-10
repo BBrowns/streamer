@@ -1223,6 +1223,14 @@ export class DownloadService {
       return { ok: false, error: "Download is not paused or failed." };
     }
 
+    // Hydrated interrupted tasks never reuse a runtime-only URL or resumable
+    // token. Re-plan through the session boundary before touching a partial
+    // file; the platform-specific path may then resume only after its own
+    // validator and integrity checks pass.
+    if (task.needsReplan) {
+      return this.restartDownloadFromPlan(id);
+    }
+
     if (Platform.OS === "web") {
       const desktopBridge = window.desktopBridge;
       if (!desktopBridge?.startDownloadJob) {
