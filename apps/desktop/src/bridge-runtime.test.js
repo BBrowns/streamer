@@ -8,6 +8,7 @@ const {
   resolveBridgeWorkingDirectoryPath,
   resolveNodeBinaryCandidatePaths,
   resolveNodeDataChannelBinaryPath,
+  selectNodeBinaryCandidate,
 } = require("./bridge-runtime");
 
 const dirname = path.join(path.sep, "repo", "apps", "desktop", "dist");
@@ -103,6 +104,28 @@ test("allows explicit system node override in packaged app only when opted in", 
   });
 
   assert.equal(candidates.includes("/usr/local/bin/node"), true);
+});
+
+test("skips unresolved packaged node paths when selecting a runtime", () => {
+  const candidates = [
+    "/Streamer.app/Contents/Resources/node/darwin-arm64/bin/node",
+    "/repo/apps/desktop/vendor/node/darwin-arm64/bin/node",
+    "node",
+  ];
+
+  assert.equal(
+    selectNodeBinaryCandidate(candidates, (candidate) =>
+      candidate.includes("vendor/node"),
+    ),
+    candidates[1],
+  );
+});
+
+test("returns null when no node candidate is runnable", () => {
+  assert.equal(
+    selectNodeBinaryCandidate(["/missing/node", "node"], () => false),
+    null,
+  );
 });
 
 test("uses packaged node-datachannel binary before workspace binary", () => {

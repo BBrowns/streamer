@@ -6,6 +6,17 @@ function uniqueTruthy(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function selectNodeBinaryCandidate(candidates, inspect) {
+  for (const candidate of candidates) {
+    try {
+      if (inspect(candidate)) return candidate;
+    } catch {
+      // Keep looking when a candidate is missing or cannot be executed.
+    }
+  }
+  return null;
+}
+
 function isInsidePath(value, root) {
   if (!value || !root) return false;
   const relative = path.relative(root, value);
@@ -188,4 +199,5 @@ module.exports = {
   resolveBridgeWorkingDirectoryPath,
   resolveNodeBinaryCandidatePaths,
   resolveNodeDataChannelBinaryPath,
+  selectNodeBinaryCandidate,
 };
