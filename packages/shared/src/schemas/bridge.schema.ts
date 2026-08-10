@@ -559,6 +559,27 @@ export const bridgeCommandResponseV1Schema = z
   })
   .strict();
 
+export const bridgeOperationalMetricsV1Schema = z
+  .object({
+    protocolVersion: bridgeProtocolVersionSchema,
+    sampledAt: z.string().datetime({ offset: true }),
+    counters: z
+      .object({
+        rate_limited: z.number().int().nonnegative(),
+        session_issued: z.number().int().nonnegative(),
+        session_renewed: z.number().int().nonnegative(),
+        session_revoked: z.number().int().nonnegative(),
+        idempotency_conflict: z.number().int().nonnegative(),
+        terminal_no_peers: z.number().int().nonnegative(),
+        terminal_stalled: z.number().int().nonnegative(),
+        terminal_error: z.number().int().nonnegative(),
+        terminal_cancelled: z.number().int().nonnegative(),
+        terminal_expired: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const bridgeCastStatusV1Schema = z
   .object({
     protocolVersion: bridgeProtocolVersionSchema,
@@ -602,3 +623,5 @@ export const bridgeAccessSessionV1Schema = z
     expiresAt: z.string().datetime({ offset: true }),
   })
   .strict();
+
+export const bridgeAccessSessionIdSchema = z.string().uuid();

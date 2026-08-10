@@ -266,6 +266,37 @@ export interface BridgeCommandResponseV1 {
   success: true;
 }
 
+export const bridgeOperationalCounterNames = [
+  "rate_limited",
+  "session_issued",
+  "session_renewed",
+  "session_revoked",
+  "idempotency_conflict",
+  "terminal_no_peers",
+  "terminal_stalled",
+  "terminal_error",
+  "terminal_cancelled",
+  "terminal_expired",
+] as const;
+
+export type BridgeOperationalCounterName =
+  (typeof bridgeOperationalCounterNames)[number];
+
+export type BridgeOperationalMetricsCounters = Record<
+  BridgeOperationalCounterName,
+  number
+>;
+
+/**
+ * Process-local, privacy-safe bridge health counters. The snapshot contains
+ * no request ids, job ids, source identities, URLs, or credentials.
+ */
+export interface BridgeOperationalMetricsV1 {
+  protocolVersion: 1;
+  sampledAt: string;
+  counters: BridgeOperationalMetricsCounters;
+}
+
 export interface BridgeCastStatusV1 {
   protocolVersion: 1;
   deviceId: string;

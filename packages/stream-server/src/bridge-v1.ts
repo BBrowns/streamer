@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "crypto";
-import rateLimit from "express-rate-limit";
+import rateLimit, { MemoryStore } from "express-rate-limit";
 import { Router, type Response } from "express";
 import {
   bridgeCapabilitiesV1Schema,
+  bridgeAccessSessionIdSchema,
   bridgeCastControlV1Schema,
   bridgeCastDevicesV1Schema,
   bridgeCastPlayV1Schema,
@@ -13,6 +14,7 @@ import {
   bridgeErrorResponseV1Schema,
   bridgeHelloV1Schema,
   bridgeJobMetricsV1Schema,
+  bridgeOperationalMetricsV1Schema,
   bridgeTrackCatalogV1Schema,
   BRIDGE_V1_MAX_REQUEST_BYTES,
   type BridgeDelivery,
@@ -37,8 +39,15 @@ import {
   getBridgeV1AuthContext,
   requireBridgeV1MasterAuth,
   requireBridgeV1Scope,
+  revokeBridgeV1AccessSession,
   validateCastPlaybackUrlWithDns,
 } from "./security.js";
+import {
+  __resetBridgeOperationalMetricsForTests,
+  getBridgeOperationalMetricsSnapshot,
+  recordBridgeOperationalEvent,
+  recordBridgeTerminalState,
+} from "./bridge-metrics.js";
 import {
   getRemuxRuntimeStatus,
   getTorrentEngineStatus,
@@ -131,6 +140,14 @@ function gatewayInputForDelivery(
 
 function idempotencyDigest(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("base64url");
+}
+
+function serializeBridgeJobForResponse(
+  job: Parameters<typeof serializeBridgeJobV1>[0],
+) {
+  const response = serializeBridgeJobV1(job);
+  recordBridgeTerminalState(response.job.id, response.job.state);
+  return response;
 }
 
 function pruneIdempotencyRecords() {
@@ -234,6 +251,7 @@ export async function buildBridgeTrackCatalogV1(
 export const bridgeV1Router = Router();
 
 const bridgeV1RateLimitHandler = (_req: unknown, res: Response) => {
+  recordBridgeOperationalEvent("rate_limited");
   return res.status(429).json(
     bridgeErrorResponseV1Schema.parse({
       protocolVersion: 1,
@@ -247,9 +265,13 @@ const bridgeV1RateLimitHandler = (_req: unknown, res: Response) => {
   );
 };
 
+const bridgeV1RateLimitStore = new MemoryStore();
+const bridgeV1PairingRateLimitStore = new MemoryStore();
+
 const bridgeV1RateLimiter = rateLimit({
   windowMs: 60_000,
   limit: 120,
+  store: bridgeV1RateLimitStore,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: bridgeV1RateLimitHandler,
@@ -258,6 +280,7 @@ const bridgeV1RateLimiter = rateLimit({
 const bridgeV1PairingRateLimiter = rateLimit({
   windowMs: 60_000,
   limit: 20,
+  store: bridgeV1PairingRateLimitStore,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: bridgeV1RateLimitHandler,
@@ -356,6 +379,7 @@ export async function createBridgeJobV1(
   const existing = idempotencyRecords.get(idempotencyKey);
   if (existing) {
     if (existing.digest !== digest) {
+      recordBridgeOperationalEvent("idempotency_conflict");
       return { kind: "conflict" as const };
     }
     const existingJob = getGatewayJob(existing.jobId);
@@ -406,6 +430,46 @@ bridgeV1Router.post(
   },
 );
 
+bridgeV1Router.delete(
+  "/access-sessions/:sessionId",
+  bridgeV1PairingRateLimiter,
+  requireBridgeV1MasterAuth,
+  (req, res) => {
+    const parsedSessionId = bridgeAccessSessionIdSchema.safeParse(
+      req.params.sessionId,
+    );
+    if (!parsedSessionId.success) {
+      return sendBridgeV1Error(
+        res,
+        400,
+        "INVALID_REQUEST",
+        "The bridge access-session identity is invalid.",
+      );
+    }
+
+    revokeBridgeV1AccessSession(parsedSessionId.data);
+    return res.json(
+      bridgeCommandResponseV1Schema.parse({
+        protocolVersion: 1,
+        success: true,
+      }),
+    );
+  },
+);
+
+bridgeV1Router.get(
+  "/metrics",
+  bridgeV1RateLimiter,
+  requireBridgeV1MasterAuth,
+  (_req, res) => {
+    return res.json(
+      bridgeOperationalMetricsV1Schema.parse(
+        getBridgeOperationalMetricsSnapshot(),
+      ),
+    );
+  },
+);
+
 bridgeV1Router.post(
   "/jobs",
   bridgeV1RateLimiter,
@@ -441,7 +505,7 @@ bridgeV1Router.post(
           "The requestId was already used with a different payload.",
         );
       }
-      return res.status(202).json(serializeBridgeJobV1(result.job));
+      return res.status(202).json(serializeBridgeJobForResponse(result.job));
     } catch (error) {
       if (isTorrentEngineUnavailableError(error)) {
         return sendBridgeV1Error(
@@ -476,7 +540,7 @@ bridgeV1Router.get(
         "The bridge job was not found.",
       );
     }
-    return res.json(serializeBridgeJobV1(job));
+    return res.json(serializeBridgeJobForResponse(job));
   },
 );
 
@@ -773,7 +837,7 @@ bridgeV1Router.delete(
     if (!job) return res.status(204).send();
     if (job.state !== "cancelled") cancelGatewayJob(job);
     mediaIdentitiesByJobId.delete(job.id);
-    return res.json(serializeBridgeJobV1(job));
+    return res.json(serializeBridgeJobForResponse(job));
   },
 );
 
@@ -821,6 +885,7 @@ bridgeV1Router.post(
     const digest = idempotencyDigest(parsed.data);
     const previousDigest = castPlayRequests.get(requestKey);
     if (previousDigest && previousDigest !== digest) {
+      recordBridgeOperationalEvent("idempotency_conflict");
       return sendBridgeV1Error(
         res,
         409,
@@ -862,7 +927,7 @@ bridgeV1Router.post(
           "The bridge job was not found.",
         );
       }
-      const response = serializeBridgeJobV1(job);
+      const response = serializeBridgeJobForResponse(job);
       if (response.job.state !== "ready" || !response.job.stream) {
         return sendBridgeV1Error(
           res,
@@ -963,4 +1028,12 @@ export function __resetBridgeV1ForTests() {
   idempotencyRecords.clear();
   mediaIdentitiesByJobId.clear();
   castPlayRequests.clear();
+  __resetBridgeOperationalMetricsForTests();
+}
+
+export async function __resetBridgeV1RateLimitersForTests() {
+  await Promise.all([
+    bridgeV1RateLimitStore.resetAll(),
+    bridgeV1PairingRateLimitStore.resetAll(),
+  ]);
 }

@@ -10,6 +10,7 @@ import {
   bridgeCreateJobV1Schema,
   bridgeJobMetricsV1Schema,
   bridgeJobResponseV1Schema,
+  bridgeOperationalMetricsV1Schema,
   bridgeTrackCatalogV1Schema,
   type BridgeCapabilitiesV1,
   type BridgeCastControlV1,
@@ -20,6 +21,8 @@ import {
   type BridgeHelloV1,
   type BridgeJobMetricsV1,
   type BridgeJobResponseV1,
+  type BridgeOperationalCounterName,
+  type BridgeOperationalMetricsV1,
   type BridgeTrackCatalogV1,
   type BridgeV1ErrorCode,
   type CreateBridgeJobV1,
@@ -79,12 +82,40 @@ export interface BridgeClientOptions {
   authHeaders?: () => Record<string, string>;
   jsonHeaders?: () => Record<string, string>;
   refreshAuth?: () => Promise<boolean>;
+  onOperationalEvent?: (event: "session_renewed") => void;
   now?: () => number;
 }
 
 export interface BridgeBinaryRequestOptions {
   signal?: AbortSignal;
   maxBytes: number;
+}
+
+type BridgeRequestPolicy = {
+  retryOnAuth?: boolean;
+};
+
+const terminalCounterByState = {
+  no_peers: "terminal_no_peers",
+  stalled: "terminal_stalled",
+  error: "terminal_error",
+  cancelled: "terminal_cancelled",
+  expired: "terminal_expired",
+} as const satisfies Partial<Record<string, BridgeOperationalCounterName>>;
+
+function createEmptyOperationalCounters(): BridgeOperationalMetricsV1["counters"] {
+  return {
+    rate_limited: 0,
+    session_issued: 0,
+    session_renewed: 0,
+    session_revoked: 0,
+    idempotency_conflict: 0,
+    terminal_no_peers: 0,
+    terminal_stalled: 0,
+    terminal_error: 0,
+    terminal_cancelled: 0,
+    terminal_expired: 0,
+  };
 }
 
 function normalizeBaseUrl(baseUrl: string) {
@@ -220,9 +251,13 @@ export class BridgeClient {
   private readonly authHeaders: () => Record<string, string>;
   private readonly jsonHeaders: () => Record<string, string>;
   private readonly refreshAuth: () => Promise<boolean>;
+  private readonly onOperationalEvent?: (event: "session_renewed") => void;
   private readonly now: () => number;
+  private readonly operationalCounters = createEmptyOperationalCounters();
+  private readonly observedTerminalJobs = new Set<string>();
   private selectedProtocol: BridgeProtocolSelection | null = null;
   private selectedProtocolExpiresAt = 0;
+  private refreshInFlight: Promise<boolean> | null = null;
 
   constructor(options: BridgeClientOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
@@ -230,12 +265,21 @@ export class BridgeClient {
     this.authHeaders = options.authHeaders ?? getBridgeAuthHeaders;
     this.jsonHeaders = options.jsonHeaders ?? withBridgeJsonHeaders;
     this.refreshAuth = options.refreshAuth ?? refreshDesktopBridgeAccessSession;
+    this.onOperationalEvent = options.onOperationalEvent;
     this.now = options.now ?? Date.now;
   }
 
   resetNegotiation() {
     this.selectedProtocol = null;
     this.selectedProtocolExpiresAt = 0;
+  }
+
+  getOperationalMetrics(): BridgeOperationalMetricsV1 {
+    return bridgeOperationalMetricsV1Schema.parse({
+      protocolVersion: 1,
+      sampledAt: new Date(this.now()).toISOString(),
+      counters: { ...this.operationalCounters },
+    });
   }
 
   async negotiate(signal?: AbortSignal): Promise<BridgeProtocolSelection> {
@@ -299,12 +343,17 @@ export class BridgeClient {
     signal?: AbortSignal,
   ): Promise<BridgeJobResponseV1> {
     const validatedInput = this.parseRequest(input, bridgeCreateJobV1Schema);
-    return this.requestJson("/api/bridge/v1/jobs", bridgeJobResponseV1Schema, {
-      method: "POST",
-      headers: this.jsonHeaders(),
-      body: JSON.stringify(validatedInput),
-      signal,
-    });
+    return this.requestJson(
+      "/api/bridge/v1/jobs",
+      bridgeJobResponseV1Schema,
+      {
+        method: "POST",
+        headers: this.jsonHeaders(),
+        body: JSON.stringify(validatedInput),
+        signal,
+      },
+      { retryOnAuth: true },
+    );
   }
 
   async getJob(
@@ -484,6 +533,7 @@ export class BridgeClient {
         body: JSON.stringify(validatedInput),
         signal,
       },
+      { retryOnAuth: true },
     );
   }
 
@@ -501,6 +551,7 @@ export class BridgeClient {
         body: JSON.stringify(validatedInput),
         signal,
       },
+      { retryOnAuth: false },
     );
   }
 
@@ -535,7 +586,11 @@ export class BridgeClient {
     }
   }
 
-  private async request(path: string, init: RequestInit) {
+  private async request(
+    path: string,
+    init: RequestInit,
+    policy: BridgeRequestPolicy = {},
+  ) {
     throwIfAborted(init.signal ?? undefined);
     await this.requireV1(init.signal ?? undefined);
     throwIfAborted(init.signal ?? undefined);
@@ -557,11 +612,18 @@ export class BridgeClient {
     if (!response.ok && response.status !== 204) {
       const body = await parseResponseBody(response, init.signal ?? undefined);
       const error = bridgeErrorFromResponse(response.status, body);
-      if (response.status === 401 && error.code === "AUTH_REQUIRED") {
+      if (
+        policy.retryOnAuth !== false &&
+        response.status === 401 &&
+        error.code === "AUTH_REQUIRED"
+      ) {
         throwIfAborted(init.signal ?? undefined);
-        const refreshed = await this.refreshAuth();
+        const refreshed = await this.refreshAuthOnce();
         throwIfAborted(init.signal ?? undefined);
-        if (!refreshed) throw error;
+        if (!refreshed) {
+          this.recordOperationalError(error);
+          throw error;
+        }
         const headers = new Headers(init.headers);
         headers.delete("Authorization");
         headers.delete("X-Streamer-Bridge-Token");
@@ -590,10 +652,16 @@ export class BridgeClient {
             response,
             init.signal ?? undefined,
           );
-          throw bridgeErrorFromResponse(response.status, retryBody);
+          const retryError = bridgeErrorFromResponse(
+            response.status,
+            retryBody,
+          );
+          this.recordOperationalError(retryError);
+          throw retryError;
         }
         return response;
       }
+      this.recordOperationalError(error);
       throw error;
     }
     return response;
@@ -603,8 +671,9 @@ export class BridgeClient {
     path: string,
     schema: ResponseSchema<T>,
     init: RequestInit,
+    policy: BridgeRequestPolicy = {},
   ): Promise<T> {
-    const response = await this.request(path, init);
+    const response = await this.request(path, init, policy);
     return this.parseSuccessfulResponse(
       response,
       schema,
@@ -619,7 +688,9 @@ export class BridgeClient {
   ): Promise<T> {
     const body = await parseResponseBody(response, signal);
     try {
-      return schema.parse(body);
+      const parsed = schema.parse(body);
+      this.recordTerminalResponse(parsed);
+      return parsed;
     } catch (cause) {
       throw new BridgeClientError(
         "BRIDGE_RESPONSE_INVALID",
@@ -639,6 +710,64 @@ export class BridgeClient {
         { cause },
       );
     }
+  }
+
+  private async refreshAuthOnce() {
+    if (this.refreshInFlight) return this.refreshInFlight;
+
+    let refreshPromise: Promise<boolean>;
+    refreshPromise = Promise.resolve()
+      .then(() => this.refreshAuth())
+      .then((refreshed) => {
+        if (refreshed) {
+          this.operationalCounters.session_renewed += 1;
+          try {
+            this.onOperationalEvent?.("session_renewed");
+          } catch {
+            // Telemetry callbacks must never change request semantics.
+          }
+        }
+        return refreshed;
+      })
+      .finally(() => {
+        if (this.refreshInFlight === refreshPromise) {
+          this.refreshInFlight = null;
+        }
+      });
+    this.refreshInFlight = refreshPromise;
+    return refreshPromise;
+  }
+
+  private recordOperationalError(error: BridgeClientError) {
+    if (
+      error.code === "RATE_LIMITED" ||
+      error.code === "IDEMPOTENCY_CONFLICT"
+    ) {
+      const counter =
+        error.code === "RATE_LIMITED" ? "rate_limited" : "idempotency_conflict";
+      this.operationalCounters[counter] += 1;
+    }
+  }
+
+  private recordTerminalResponse(body: unknown) {
+    if (!body || typeof body !== "object") return;
+    const job = (body as { job?: unknown }).job;
+    if (!job || typeof job !== "object") return;
+    const state = (job as { state?: unknown }).state;
+    const jobId = (job as { id?: unknown }).id;
+    if (typeof state !== "string" || typeof jobId !== "string") {
+      return;
+    }
+    const counter =
+      terminalCounterByState[state as keyof typeof terminalCounterByState];
+    if (!counter) return;
+    if (this.observedTerminalJobs.has(jobId)) return;
+    if (this.observedTerminalJobs.size >= 1_024) {
+      const oldest = this.observedTerminalJobs.values().next().value;
+      if (oldest) this.observedTerminalJobs.delete(oldest);
+    }
+    this.observedTerminalJobs.add(jobId);
+    this.operationalCounters[counter] += 1;
   }
 
   private requireOpaqueId(value: string) {

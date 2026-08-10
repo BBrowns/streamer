@@ -45,6 +45,7 @@ import {
   buildBridgeTrackCatalogV1,
   createBridgeJobV1,
 } from "../bridge-v1.js";
+import { getBridgeOperationalMetricsSnapshot } from "../bridge-metrics.js";
 
 const REQUEST_ID = "00000000-0000-4000-8000-000000000051";
 
@@ -164,6 +165,9 @@ describe("bridge v1 application contract", () => {
     });
     expect(conflict).toEqual({ kind: "conflict" });
     expect(gatewayMocks.createGatewayJob).toHaveBeenCalledTimes(1);
+    expect(
+      getBridgeOperationalMetricsSnapshot().counters.idempotency_conflict,
+    ).toBe(1);
   });
 
   it("replaces subtitle transport identities with stable job-scoped UUIDs", async () => {

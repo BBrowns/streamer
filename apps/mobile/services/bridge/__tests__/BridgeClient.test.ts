@@ -14,6 +14,24 @@ const HELLO = {
 };
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const DOCUMENT_ID = "22222222-2222-4222-8222-222222222222";
+const JOB_RESPONSE = {
+  protocolVersion: 1,
+  job: {
+    id: JOB_ID,
+    state: "preparing",
+    phase: "finding_peers",
+    delivery: "range-http",
+    peerCount: null,
+    readinessProgress: null,
+    elapsedMs: 0,
+    readyTimeoutMs: 32_000,
+    media: {
+      container: "unknown",
+      remuxed: false,
+      seek: "unavailable",
+    },
+  },
+};
 
 function response(status: number, body: unknown): Response {
   return {
@@ -323,6 +341,157 @@ describe("BridgeClient protocol negotiation", () => {
       code: "FORBIDDEN",
     });
     expect(refreshAuth).not.toHaveBeenCalled();
+  });
+
+  it("single-flights concurrent session renewal and exposes a privacy-safe counter", async () => {
+    let token = "expired-session";
+    let releaseRefresh!: () => void;
+    let refreshStarted!: () => void;
+    const refreshReady = new Promise<void>((resolve) => {
+      refreshStarted = resolve;
+    });
+    const refreshAuth = jest.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          refreshStarted();
+          releaseRefresh = () => {
+            token = "rotated-session";
+            resolve(true);
+          };
+        }),
+    );
+    const authBody = {
+      protocolVersion: 1,
+      error: {
+        code: "AUTH_REQUIRED",
+        message: "Bridge authentication is required.",
+        retryable: false,
+      },
+    };
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(response(200, HELLO))
+      .mockResolvedValueOnce(response(401, authBody))
+      .mockResolvedValueOnce(response(401, authBody))
+      .mockResolvedValueOnce(response(200, { protocolVersion: 1, devices: [] }))
+      .mockResolvedValueOnce(
+        response(200, { protocolVersion: 1, devices: [] }),
+      );
+    const onOperationalEvent = jest.fn();
+    const client = new BridgeClient({
+      baseUrl: "http://bridge.test:11470",
+      fetchImpl,
+      authHeaders: () => ({ Authorization: `Bearer ${token}` }),
+      refreshAuth,
+      onOperationalEvent,
+    });
+
+    await client.negotiate();
+    const first = client.getCastDevices();
+    const second = client.getCastDevices();
+    await refreshReady;
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+    releaseRefresh();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { protocolVersion: 1, devices: [] },
+      { protocolVersion: 1, devices: [] },
+    ]);
+    expect(onOperationalEvent).toHaveBeenCalledTimes(1);
+    expect(client.getOperationalMetrics().counters.session_renewed).toBe(1);
+  });
+
+  it("retries a job with the original requestId and body after renewal", async () => {
+    let token = "expired-session";
+    const refreshAuth = jest.fn(async () => {
+      token = "rotated-session";
+      return true;
+    });
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(response(200, HELLO))
+      .mockResolvedValueOnce(
+        response(401, {
+          protocolVersion: 1,
+          error: {
+            code: "AUTH_REQUIRED",
+            message: "Bridge authentication is required.",
+            retryable: false,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(response(202, JOB_RESPONSE));
+    const client = new BridgeClient({
+      baseUrl: "http://bridge.test:11470",
+      fetchImpl,
+      authHeaders: () => ({ Authorization: `Bearer ${token}` }),
+      refreshAuth,
+    });
+    const input = {
+      requestId: "33333333-3333-4333-8333-333333333333",
+      source: { kind: "magnet" as const, magnet: "magnet:?xt=urn:btih:abcdef" },
+      delivery: "range-http" as const,
+    };
+
+    await expect(client.createJob(input)).resolves.toMatchObject({
+      protocolVersion: 1,
+      job: { id: JOB_ID },
+    });
+    expect(JSON.parse(fetchImpl.mock.calls[1]?.[1]?.body as string)).toEqual(
+      JSON.parse(fetchImpl.mock.calls[2]?.[1]?.body as string),
+    );
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries cast play but never auto-retries cast controls", async () => {
+    let token = "expired-session";
+    const refreshAuth = jest.fn(async () => {
+      token = "rotated-session";
+      return true;
+    });
+    const authError = {
+      protocolVersion: 1,
+      error: {
+        code: "AUTH_REQUIRED",
+        message: "Bridge authentication is required.",
+        retryable: false,
+      },
+    };
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(response(200, HELLO))
+      .mockResolvedValueOnce(response(401, authError))
+      .mockResolvedValueOnce(
+        response(200, { protocolVersion: 1, success: true }),
+      )
+      .mockResolvedValueOnce(response(401, authError));
+    const client = new BridgeClient({
+      baseUrl: "http://bridge.test:11470",
+      fetchImpl,
+      authHeaders: () => ({ Authorization: `Bearer ${token}` }),
+      refreshAuth,
+    });
+    const playInput = {
+      requestId: "44444444-4444-4444-8444-444444444444",
+      deviceId: "55555555-5555-4555-8555-555555555555",
+      source: {
+        kind: "external-url" as const,
+        url: "https://cdn.example.test/movie.mp4",
+        contentType: "video/mp4" as const,
+      },
+    };
+
+    await expect(client.playCast(playInput)).resolves.toEqual({
+      protocolVersion: 1,
+      success: true,
+    });
+    await expect(
+      client.controlCast({
+        deviceId: playInput.deviceId,
+        action: "pause",
+      }),
+    ).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
   it("loads bounded authenticated subtitle and thumbnail bodies", async () => {
