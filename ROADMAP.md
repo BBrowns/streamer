@@ -251,7 +251,11 @@ and preserve URL-free persistence and capability-gated native behavior.
    fallback, route-exit, cleanup, and attempt/lease coordination from the
    player host into one binding hook/service. Do not create a second store or
    orchestration state machine, and retain the existing seekable-cache and
-   track-catalog hooks.
+   track-catalog hooks. The initial slice now lives in
+   `usePlaybackSessionBinding`: planning-launch ownership, partial-discovery
+   replan single-flight, and route-exit cleanup are covered by focused hook
+   tests. Fallback coordination is now part of the binding; source-URI
+   resolution remains the next slice.
 4. **Download recovery v2:** persist only versioned URL-free recovery metadata
    (opaque task identity, content/action, managed-file identity, expected
    bytes, status, and timestamps); always replan after restart; reuse partial

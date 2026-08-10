@@ -33,6 +33,7 @@ import { streamEngineManager } from "../services/streamEngine/StreamEngineManage
 import { usePlayerController } from "../hooks/usePlayerController";
 import { usePlayerMediaControls } from "../hooks/usePlayerMediaControls";
 import { usePlayerCastController } from "../hooks/usePlayerCastController";
+import { usePlaybackSessionBinding } from "../hooks/usePlaybackSessionBinding";
 import { useSeekableCacheHandoff } from "../hooks/useSeekableCacheHandoff";
 import { usePlayerTrackCatalog } from "../hooks/usePlayerTrackCatalog";
 
@@ -55,26 +56,15 @@ import {
   findPreferredPlayerTrack,
   normalizeTrackLanguage,
 } from "../services/playback/trackSelection";
+import { playBest } from "../services/playback/PlaybackOrchestrator";
+import { beginPlaybackLaunch } from "../services/playback/PlaybackLaunchService";
 import {
-  playBest,
-  type PlaybackOrchestratorResult,
-} from "../services/playback/PlaybackOrchestrator";
-import {
-  beginPlaybackLaunch,
-  cancelPlaybackLaunch,
-  getPlaybackLaunch,
-  isPlaybackLaunchCancelled,
-  releasePlaybackLaunch,
-} from "../services/playback/PlaybackLaunchService";
-import {
-  advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
   markPlaybackSessionBuffering,
   markPlaybackSessionPlaying,
   resolvePlaybackSession,
 } from "../services/playback/PlaybackSessionPlaybackService";
 import { PlaybackStatusPanel } from "../components/ui/PlaybackStatusPanel";
-import { hasNewStablePlaybackCandidate } from "../services/playback/partialDiscovery";
 import {
   PLAYBACK_SEEK_GRACE_PERIOD_MS,
   PLAYBACK_STALL_CHECK_INTERVAL_MS,
@@ -88,11 +78,7 @@ import {
   reducePlaybackRuntimeViewState,
 } from "../services/playback/PlaybackRuntimeCoordinator";
 import { ExternalSubtitleRenderer } from "../components/player/ExternalSubtitleRenderer";
-import {
-  captureFallbackContinuity,
-  resolveFallbackResumePosition,
-  type FallbackContinuitySnapshot,
-} from "../services/playback/FallbackContinuity";
+import { resolveFallbackResumePosition } from "../services/playback/FallbackContinuity";
 import {
   buildPlaybackDiagnostics,
   PlaybackDiagnosticsRecorder,
@@ -261,21 +247,7 @@ export default function PlayerScreen() {
   const seekFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoViewRef = useRef<any>(null);
-  const fallbackInFlightRef = useRef(false);
-  const fallbackAttemptRef = useRef(0);
-  const pendingFallbackRestoreRef = useRef<FallbackContinuitySnapshot | null>(
-    null,
-  );
   const appliedTrackPreferencesRef = useRef<string | null>(null);
-  // A fast launch can create its session between renders. Keep explicit
-  // ownership so an immediate route close cannot miss that session before
-  // React has published its id through the player store.
-  const launchOwnedSessionIdRef = useRef<string | null>(null);
-  const activePlanningLaunchIdRef = useRef<string | null>(planningLaunchId);
-  const activePlaybackSessionIdRef = useRef<string | null>(playbackSessionId);
-  const partialReplanAttemptsRef = useRef(new Set<string>());
-  const partialReplanPromisesRef = useRef(new Map<string, Promise<boolean>>());
-  const partialReplanControllerRef = useRef<AbortController | null>(null);
   const activeCastRef = useRef(activeCast);
   const previewControlsRef = useRef(previewControls);
   const playerVisibleRef = useRef(getPlayerVisibility());
@@ -301,6 +273,57 @@ export default function PlayerScreen() {
     setDiagnosticsRevision((revision) => revision + 1);
   }, []);
 
+  const abortSeekableHandoff = useCallback(() => {
+    seekableHandoffControllerRef.current?.abort();
+    seekableHandoffControllerRef.current = null;
+  }, []);
+
+  const requestLegacyFallback = useCallback(() => {
+    setPlaybackUri(null);
+    setResolveAttempt((attempt) => attempt + 1);
+  }, []);
+
+  const getFallbackStatusMessage = useCallback(
+    () =>
+      t("player.status.tryingFallback", {
+        defaultValue: "Trying another source...",
+      }),
+    [t],
+  );
+
+  const {
+    launchOwnedSessionIdRef,
+    partialReplanControllerRef,
+    fallbackInFlightRef,
+    pendingFallbackRestoreRef,
+    tryReplanPartialPlayback,
+    cancelOwnedPlayback,
+    getOwnedSessionId,
+    tryAdvanceToFallback,
+  } = usePlaybackSessionBinding({
+    mediaInfo,
+    planningLaunchId,
+    playbackSessionId,
+    playbackCandidateId,
+    playbackAttemptId,
+    playbackUri,
+    setPlaybackUri,
+    setStreamStatus,
+    setRuntimeState,
+    setSessionStream,
+    advanceToNextFallback,
+    setPlaybackPlanningFailure,
+    recordDiagnostic,
+    dispatchRuntimeViewEvent,
+    setFallbackStatusMessage,
+    setBuffering,
+    setPlaying,
+    setRuntimeFailure,
+    getFallbackStatusMessage,
+    abortSeekableHandoff,
+    requestLegacyFallback,
+  });
+
   useEffect(() => {
     playbackDiagnosticsRecorderRef.current = new PlaybackDiagnosticsRecorder();
     planObservedKeyRef.current = null;
@@ -311,14 +334,6 @@ export default function PlayerScreen() {
     mediaInfo?.season,
     mediaInfo?.type,
   ]);
-
-  useEffect(() => {
-    activePlanningLaunchIdRef.current = planningLaunchId;
-  }, [planningLaunchId]);
-
-  useEffect(() => {
-    activePlaybackSessionIdRef.current = playbackSessionId;
-  }, [playbackSessionId]);
 
   useEffect(() => {
     if (!currentStream || !playbackSessionId || !playbackSessionCreatedAt) {
@@ -403,24 +418,12 @@ export default function PlayerScreen() {
 
   const leavePlayer = useCallback(
     (reason: string) => {
-      partialReplanControllerRef.current?.abort();
-      partialReplanControllerRef.current = null;
+      const hadSession = Boolean(playbackSessionId || getOwnedSessionId());
+      cancelOwnedPlayback(reason);
       seekableHandoffControllerRef.current?.abort();
       seekableHandoffControllerRef.current = null;
       stopCastingOnPlayerClose();
-      if (planningLaunchId) {
-        cancelPlaybackLaunch(planningLaunchId, reason);
-      }
-      const sessionId = playbackSessionId || launchOwnedSessionIdRef.current;
-      if (sessionId) {
-        cancelPlaybackSession(sessionId, reason);
-        if (planningLaunchId || launchOwnedSessionIdRef.current === sessionId) {
-          usePlaybackSessionStore.getState().removeSession(sessionId);
-          if (launchOwnedSessionIdRef.current === sessionId) {
-            launchOwnedSessionIdRef.current = null;
-          }
-        }
-      } else if (currentStream) {
+      if (!hadSession && currentStream) {
         streamEngineManager.resolveEngine(currentStream)?.stop?.();
       }
       goBackOrReplace(router);
@@ -428,8 +431,9 @@ export default function PlayerScreen() {
     },
     [
       clearPlayer,
+      cancelOwnedPlayback,
       currentStream,
-      planningLaunchId,
+      getOwnedSessionId,
       playbackSessionId,
       router,
       stopCastingOnPlayerClose,
@@ -452,47 +456,20 @@ export default function PlayerScreen() {
   }, [clearPlayer, router]);
 
   const handleOpenSourcesDevices = useCallback(() => {
-    partialReplanControllerRef.current?.abort();
-    partialReplanControllerRef.current = null;
+    cancelOwnedPlayback("User opened Sources & Devices.", {
+      removeSession: true,
+    });
     seekableHandoffControllerRef.current?.abort();
     seekableHandoffControllerRef.current = null;
-    if (planningLaunchId) {
-      cancelPlaybackLaunch(planningLaunchId, "User opened Sources & Devices.");
-    }
-    const sessionId = playbackSessionId || launchOwnedSessionIdRef.current;
-    if (sessionId) {
-      cancelPlaybackSession(sessionId, "User opened Sources & Devices.");
-      usePlaybackSessionStore.getState().removeSession(sessionId);
-      if (launchOwnedSessionIdRef.current === sessionId) {
-        launchOwnedSessionIdRef.current = null;
-      }
-    }
     clearPlayer();
     router.replace("/settings/sources");
-  }, [clearPlayer, planningLaunchId, playbackSessionId, router]);
+  }, [cancelOwnedPlayback, clearPlayer, router]);
 
   const handleChooseSource = useCallback(() => {
     if (!mediaInfo) return;
-    partialReplanControllerRef.current?.abort();
-    partialReplanControllerRef.current = null;
+    cancelOwnedPlayback("User chose advanced source selection.");
     seekableHandoffControllerRef.current?.abort();
     seekableHandoffControllerRef.current = null;
-    if (planningLaunchId) {
-      cancelPlaybackLaunch(
-        planningLaunchId,
-        "User chose advanced source selection.",
-      );
-    }
-    const sessionId = playbackSessionId || launchOwnedSessionIdRef.current;
-    if (sessionId) {
-      cancelPlaybackSession(sessionId, "User chose advanced source selection.");
-      if (planningLaunchId || launchOwnedSessionIdRef.current === sessionId) {
-        usePlaybackSessionStore.getState().removeSession(sessionId);
-        if (launchOwnedSessionIdRef.current === sessionId) {
-          launchOwnedSessionIdRef.current = null;
-        }
-      }
-    }
     const target = {
       pathname: "/detail/[type]/[id]",
       params: {
@@ -503,295 +480,27 @@ export default function PlayerScreen() {
     } as const;
     clearPlayer();
     router.replace(target as any);
-  }, [clearPlayer, mediaInfo, planningLaunchId, playbackSessionId, router]);
+  }, [cancelOwnedPlayback, clearPlayer, mediaInfo, router]);
 
   useEffect(
     () => () => {
-      partialReplanControllerRef.current?.abort();
-      partialReplanControllerRef.current = null;
       seekableHandoffControllerRef.current?.abort();
       seekableHandoffControllerRef.current = null;
-      const launchId = activePlanningLaunchIdRef.current;
-      if (launchId) {
-        cancelPlaybackLaunch(
-          launchId,
-          "Player screen was closed before planning completed.",
-        );
-      }
-      const sessionId =
-        launchOwnedSessionIdRef.current || activePlaybackSessionIdRef.current;
-      if (sessionId) {
-        cancelPlaybackSession(
-          sessionId,
-          "Player screen was closed before playback completed.",
-        );
-        if (launchOwnedSessionIdRef.current === sessionId) {
-          usePlaybackSessionStore.getState().removeSession(sessionId);
-          launchOwnedSessionIdRef.current = null;
-        }
-      }
     },
     [],
   );
-
-  const tryReplanPartialPlayback = useCallback(
-    async (sessionId: string) => {
-      if (!mediaInfo) return false;
-
-      const replanKey = [
-        mediaInfo.type,
-        mediaInfo.itemId,
-        mediaInfo.season ?? "",
-        mediaInfo.episode ?? "",
-      ].join(":");
-      const existingReplan = partialReplanPromisesRef.current.get(replanKey);
-      if (existingReplan) return existingReplan;
-      if (partialReplanAttemptsRef.current.has(replanKey)) return false;
-
-      const previousPlan = usePlaybackSessionStore
-        .getState()
-        .getRuntimePlan(sessionId);
-      if (previousPlan?.sourceDiscovery?.status !== "partial") return false;
-
-      const replan = (async () => {
-        partialReplanAttemptsRef.current.add(replanKey);
-        // A terminal session takes precedence in PlayerStatusOverlay. Remove
-        // it before waiting for the warmed discovery cache so this recovery
-        // stays visibly cancellable instead of presenting a stale error.
-        usePlaybackSessionStore.getState().removeSession(sessionId);
-        if (launchOwnedSessionIdRef.current === sessionId) {
-          launchOwnedSessionIdRef.current = null;
-        }
-        const controller = new AbortController();
-        partialReplanControllerRef.current = controller;
-        setPlaybackUri(null);
-        setStreamStatus("loading_metrics");
-        setRuntimeState("planning");
-        let replacement: PlaybackOrchestratorResult;
-        try {
-          replacement = await playBest(
-            {
-              type: mediaInfo.type,
-              id: mediaInfo.itemId,
-              title: mediaInfo.title,
-              poster: mediaInfo.poster,
-              season: mediaInfo.season,
-              episode: mediaInfo.episode,
-            },
-            {
-              forceRefresh: true,
-              awaitCompleteDiscovery: true,
-              signal: controller.signal,
-            },
-          );
-        } catch {
-          // Escape/Close owns this controller. Treat its late rejection as
-          // handled so the resolver cannot repaint an error after navigation.
-          return controller.signal.aborted;
-        } finally {
-          if (partialReplanControllerRef.current === controller) {
-            partialReplanControllerRef.current = null;
-          }
-        }
-
-        if (controller.signal.aborted) {
-          if (replacement.sessionId) {
-            cancelPlaybackSession(
-              replacement.sessionId,
-              "Partial discovery recovery was cancelled.",
-            );
-            usePlaybackSessionStore
-              .getState()
-              .removeSession(replacement.sessionId);
-          }
-          return true;
-        }
-
-        const replacementCandidates = replacement.plan?.orderedCandidates ?? [];
-        const hasNewCandidate = hasNewStablePlaybackCandidate(
-          previousPlan.orderedCandidates,
-          replacementCandidates,
-        );
-
-        // A retry can reach the same server-side fast promise before late
-        // providers finish. Never restart playback with exactly the same
-        // source identity just because the planner minted another UUID.
-        if (!replacement.ok || !hasNewCandidate) {
-          if (replacement.sessionId) {
-            cancelPlaybackSession(
-              replacement.sessionId,
-              "Partial discovery did not produce another source.",
-            );
-            usePlaybackSessionStore
-              .getState()
-              .removeSession(replacement.sessionId);
-          }
-          return false;
-        }
-
-        cancelPlaybackSession(
-          sessionId,
-          "Trying sources returned after partial discovery.",
-        );
-        usePlaybackSessionStore.getState().removeSession(sessionId);
-        launchOwnedSessionIdRef.current = replacement.sessionId;
-        setPlaybackUri(null);
-        setSessionStream(
-          replacement.stream,
-          replacement.mediaInfo,
-          replacement.sessionId,
-          replacement.candidateId,
-          null,
-          null,
-          { type: "play" },
-        );
-        return true;
-      })();
-      partialReplanPromisesRef.current.set(replanKey, replan);
-      try {
-        return await replan;
-      } finally {
-        if (partialReplanPromisesRef.current.get(replanKey) === replan) {
-          partialReplanPromisesRef.current.delete(replanKey);
-        }
-      }
-    },
-    [mediaInfo, setRuntimeState, setSessionStream, setStreamStatus],
-  );
-
-  useEffect(() => {
-    if (!planningLaunchId) return;
-
-    let active = true;
-    const launch = getPlaybackLaunch(planningLaunchId);
-    if (!launch) {
-      setPlaybackPlanningFailure(
-        planningLaunchId,
-        createPlaybackRuntimeError(
-          "SOURCE_UNAVAILABLE",
-          "Playback planning expired. Try again to find a source.",
-          { retryable: true, shouldFallback: false },
-        ),
-      );
-      return;
-    }
-
-    void launch
-      .then((result) => {
-        if (!active) {
-          if (result.sessionId) {
-            cancelPlaybackSession(
-              result.sessionId,
-              "Playback launch was closed.",
-            );
-            usePlaybackSessionStore.getState().removeSession(result.sessionId);
-          }
-          return;
-        }
-
-        if (!result.ok) {
-          launchOwnedSessionIdRef.current = result.sessionId ?? null;
-          releasePlaybackLaunch(planningLaunchId);
-          setPlaybackPlanningFailure(
-            planningLaunchId,
-            result.error,
-            result.sessionId,
-          );
-          return;
-        }
-
-        launchOwnedSessionIdRef.current = result.sessionId;
-        setSessionStream(
-          result.stream,
-          result.mediaInfo,
-          result.sessionId,
-          result.candidateId,
-          null,
-          null,
-          { type: "play" },
-        );
-        releasePlaybackLaunch(planningLaunchId);
-        // Start the existing session resolver immediately. The player effect
-        // joins its single-flight promise after the route has rendered. If it
-        // wins that race, publish the result into the same runtime store so a
-        // second resolver pass is never needed.
-        void resolvePlaybackSession(result.sessionId, result.candidateId)
-          .then(async (resolution) => {
-            const state = usePlayerStore.getState();
-            if (state.playbackSessionId !== result.sessionId) return;
-            if (!resolution.ok) {
-              if (await tryReplanPartialPlayback(result.sessionId)) return;
-              state.setRuntimeFailure(resolution.error);
-              return;
-            }
-            state.setSessionStream(
-              resolution.stream,
-              result.mediaInfo,
-              resolution.sessionId,
-              resolution.candidateId,
-              resolution.attemptId,
-              resolution.fallbackReason,
-            );
-          })
-          .catch((error) => {
-            const state = usePlayerStore.getState();
-            if (state.playbackSessionId !== result.sessionId) return;
-            state.setRuntimeFailure(
-              createPlaybackRuntimeError(
-                "SOURCE_UNAVAILABLE",
-                error instanceof Error
-                  ? error.message
-                  : "Could not prepare a source for playback.",
-                { retryable: true, shouldFallback: false },
-              ),
-            );
-          });
-      })
-      .catch((error) => {
-        if (!active || isPlaybackLaunchCancelled(error)) return;
-        setPlaybackPlanningFailure(
-          planningLaunchId,
-          createPlaybackRuntimeError(
-            "SOURCE_UNAVAILABLE",
-            error instanceof Error
-              ? error.message
-              : "Could not prepare a source for playback.",
-            { retryable: true, shouldFallback: false },
-          ),
-        );
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [
-    planningLaunchId,
-    setPlaybackPlanningFailure,
-    setSessionStream,
-    tryReplanPartialPlayback,
-  ]);
 
   // Cast sessions intentionally outlive this route. They only stop after an
   // explicit stop/close action, so navigation cannot silently end playback.
 
   const handleRetryPlayback = useCallback(async () => {
     setFallbackStatusMessage(null);
-    partialReplanControllerRef.current?.abort();
-    partialReplanControllerRef.current = null;
     seekableHandoffControllerRef.current?.abort();
     seekableHandoffControllerRef.current = null;
     if (!currentStream && planningLaunchId && mediaInfo) {
-      if (playbackSessionId) {
-        cancelPlaybackSession(
-          playbackSessionId,
-          "User retried playback planning.",
-        );
-        usePlaybackSessionStore.getState().removeSession(playbackSessionId);
-        if (launchOwnedSessionIdRef.current === playbackSessionId) {
-          launchOwnedSessionIdRef.current = null;
-        }
-      }
-      cancelPlaybackLaunch(planningLaunchId, "User retried playback planning.");
+      cancelOwnedPlayback("User retried playback planning.", {
+        removeSession: true,
+      });
       const launchId = beginPlaybackLaunch({
         type: mediaInfo.type,
         id: mediaInfo.itemId,
@@ -843,6 +552,7 @@ export default function PlayerScreen() {
     setResolveAttempt((attempt) => attempt + 1);
   }, [
     currentStream,
+    cancelOwnedPlayback,
     mediaInfo,
     planningLaunchId,
     playbackSessionId,
@@ -852,109 +562,6 @@ export default function PlayerScreen() {
     setSessionStream,
     setStreamStatus,
   ]);
-
-  const tryAdvanceToFallback = useCallback(
-    async (
-      error: ReturnType<typeof createPlaybackRuntimeError>,
-      reason?: string | null,
-    ) => {
-      if (fallbackInFlightRef.current) return true;
-      recordDiagnostic({ type: "fallback" });
-      const playerState = usePlayerStore.getState();
-      const continuity = captureFallbackContinuity({
-        currentTime: playerState.currentTime,
-        isPlaying: playerState.isPlaying,
-        sourceUri: `${playbackCandidateId || "legacy"}:${playbackUri || ""}`,
-        attempt: ++fallbackAttemptRef.current,
-      });
-      pendingFallbackRestoreRef.current = continuity;
-      dispatchRuntimeViewEvent({
-        type: "fallback_started",
-        resumeAt: continuity.resumeAt,
-        attempt: continuity.attempt,
-      });
-
-      // The current player can still receive a late cache-ready response
-      // after a fallback has selected another candidate. Stop that monitor
-      // before changing the session-owned source.
-      seekableHandoffControllerRef.current?.abort();
-      seekableHandoffControllerRef.current = null;
-
-      const fallbackStatus =
-        reason ||
-        t("player.status.tryingFallback", {
-          defaultValue: "Trying another source...",
-        });
-      setFallbackStatusMessage(fallbackStatus);
-      setBuffering(true);
-      setPlaying(false);
-      setStreamStatus("loading_metrics");
-      setRuntimeState("trying_fallback");
-      fallbackInFlightRef.current = true;
-      let fallbackAdvanced = false;
-
-      try {
-        if (playbackSessionId && playbackCandidateId && playbackAttemptId) {
-          setPlaybackUri(null);
-          const result = await advancePlaybackSessionAfterFailure(
-            playbackSessionId,
-            playbackCandidateId,
-            playbackAttemptId,
-            error,
-          );
-          if (!result.ok) {
-            if (await tryReplanPartialPlayback(playbackSessionId)) {
-              fallbackAdvanced = true;
-              return true;
-            }
-            setRuntimeFailure(result.error);
-            return false;
-          }
-
-          setSessionStream(
-            result.stream,
-            mediaInfo || undefined,
-            result.sessionId,
-            result.candidateId,
-            result.attemptId,
-            result.fallbackReason || reason || error.message,
-          );
-          setPlaybackUri(result.uri);
-          fallbackAdvanced = true;
-          return true;
-        }
-
-        const nextStream = advanceToNextFallback(reason);
-        if (!nextStream) return false;
-
-        setPlaybackUri(null);
-        setResolveAttempt((attempt) => attempt + 1);
-        fallbackAdvanced = true;
-        return true;
-      } finally {
-        if (!fallbackAdvanced) pendingFallbackRestoreRef.current = null;
-        fallbackInFlightRef.current = false;
-      }
-    },
-    [
-      advanceToNextFallback,
-      mediaInfo,
-      playbackAttemptId,
-      playbackCandidateId,
-      playbackSessionId,
-      playbackUri,
-      recordDiagnostic,
-      setBuffering,
-      setFallbackStatusMessage,
-      setPlaying,
-      setRuntimeFailure,
-      setRuntimeState,
-      setSessionStream,
-      setStreamStatus,
-      t,
-      tryReplanPartialPlayback,
-    ],
-  );
 
   // Effect to resolve playback URI
   useEffect(() => {
