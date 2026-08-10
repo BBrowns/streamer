@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "crypto";
+import rateLimit from "express-rate-limit";
 import { Router, type Response } from "express";
 import {
   bridgeCapabilitiesV1Schema,
@@ -232,6 +233,36 @@ export async function buildBridgeTrackCatalogV1(
 
 export const bridgeV1Router = Router();
 
+const bridgeV1RateLimitHandler = (_req: unknown, res: Response) => {
+  return res.status(429).json(
+    bridgeErrorResponseV1Schema.parse({
+      protocolVersion: 1,
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many bridge requests. Please try again later.",
+        retryable: true,
+        retryAfterMs: 60_000,
+      },
+    }),
+  );
+};
+
+const bridgeV1RateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: bridgeV1RateLimitHandler,
+});
+
+const bridgeV1PairingRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: bridgeV1RateLimitHandler,
+});
+
 export function buildBridgeHelloV1() {
   return bridgeHelloV1Schema.parse({
     protocol: {
@@ -350,6 +381,7 @@ bridgeV1Router.get("/hello", (_req, res) => {
 
 bridgeV1Router.get(
   "/capabilities",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("capabilities:read"),
   async (_req, res) => {
     return res.json(await buildBridgeCapabilitiesV1());
@@ -358,6 +390,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.post(
   "/access-sessions",
+  bridgeV1PairingRateLimiter,
   requireBridgeV1MasterAuth,
   (req, res) => {
     const parsed = bridgeCreateAccessSessionV1Schema.safeParse(req.body);
@@ -375,6 +408,7 @@ bridgeV1Router.post(
 
 bridgeV1Router.post(
   "/jobs",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:write"),
   async (req, res) => {
     const parsed = bridgeCreateJobV1Schema.safeParse(req.body);
@@ -430,6 +464,7 @@ bridgeV1Router.post(
 
 bridgeV1Router.get(
   "/jobs/:jobId",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
   (req, res) => {
     const job = getGatewayJob(req.params.jobId);
@@ -447,6 +482,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.get(
   "/jobs/:jobId/metrics",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
   (req, res) => {
     const job = getGatewayJob(req.params.jobId);
@@ -490,6 +526,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.get(
   "/jobs/:jobId/tracks",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
   async (req, res) => {
     const job = getGatewayJob(req.params.jobId);
@@ -535,6 +572,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.get(
   "/jobs/:jobId/subtitles/:documentId",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
   async (req, res) => {
     const job = getGatewayJob(req.params.jobId);
@@ -615,6 +653,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.get(
   "/jobs/:jobId/thumbnails/:bucket",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
   async (req, res) => {
     const job = getGatewayJob(req.params.jobId);
@@ -727,6 +766,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.delete(
   "/jobs/:jobId",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:write"),
   (req, res) => {
     const job = getGatewayJob(req.params.jobId);
@@ -742,6 +782,7 @@ bridgeV1Router.head("/jobs/:id/stream", serveGatewayJobStream);
 
 bridgeV1Router.get(
   "/cast/devices",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("cast:read"),
   async (_req, res) => {
     return res.json(
@@ -755,6 +796,7 @@ bridgeV1Router.get(
 
 bridgeV1Router.post(
   "/cast/play",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("cast:write"),
   async (req, res) => {
     const parsed = bridgeCastPlayV1Schema.safeParse(req.body);
@@ -877,6 +919,7 @@ bridgeV1Router.post(
 
 bridgeV1Router.post(
   "/cast/control",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("cast:write"),
   async (req, res) => {
     const parsed = bridgeCastControlV1Schema.safeParse(req.body);
@@ -901,6 +944,7 @@ bridgeV1Router.post(
 
 bridgeV1Router.get(
   "/cast/status/:deviceId",
+  bridgeV1RateLimiter,
   requireBridgeV1Scope("cast:read"),
   async (req, res) => {
     const result = await getBridgeCastStatus(req.params.deviceId);

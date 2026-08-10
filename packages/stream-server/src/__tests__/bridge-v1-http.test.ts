@@ -46,6 +46,33 @@ describe("bridge v1 HTTP contract", () => {
     });
   });
 
+  it("rate limits bridge pairing requests with a typed retryable error", async () => {
+    const app = createStreamServerApp();
+    const body = { scopes: ["jobs:read"], ttlSeconds: 60 };
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await request(app)
+        .post("/api/bridge/v1/access-sessions")
+        .set("Authorization", "Bearer bridge-http-test-token")
+        .send(body);
+      expect(response.status).toBe(200);
+    }
+
+    const blocked = await request(app)
+      .post("/api/bridge/v1/access-sessions")
+      .set("Authorization", "Bearer bridge-http-test-token")
+      .send(body);
+
+    expect(blocked.status).toBe(429);
+    expect(bridgeErrorResponseV1Schema.parse(blocked.body).error).toMatchObject(
+      {
+        code: "RATE_LIMITED",
+        retryable: true,
+        retryAfterMs: 60_000,
+      },
+    );
+  });
+
   it("requires scoped auth for capabilities and returns the typed document", async () => {
     const app = createStreamServerApp();
     const missing = await request(app).get("/api/bridge/v1/capabilities");
