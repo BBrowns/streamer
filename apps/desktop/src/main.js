@@ -46,6 +46,7 @@ const {
   resolveBridgeWorkingDirectoryPath,
   resolveNodeBinaryCandidatePaths,
   resolveNodeDataChannelBinaryPath,
+  selectNodeBinaryCandidate,
 } = require("./bridge-runtime");
 const {
   captureDesktopException,
@@ -1328,23 +1329,29 @@ function resolveNodeExecutable() {
 
   if (!nativeArch) {
     console.log(
-      "[stream-server] Could not detect native binary architecture, using default node.",
+      "[stream-server] Could not detect native binary architecture, selecting the first runnable node.",
     );
-    return candidates[0] || "node";
+    const runnable = selectNodeBinaryCandidate(candidates, getNodeArch);
+    if (runnable) {
+      console.log(`[stream-server] Selected runtime: ${runnable}`);
+      return runnable;
+    }
+    return "node";
   }
 
   // 1. Try to find an external node binary that matches the native architecture
   console.log(
     `[stream-server] Searching for node binary matching ${nativeArch} among ${candidates.length} candidates...`,
   );
-  for (const candidate of candidates) {
-    const nodeArch = getNodeArch(candidate);
-    if (nodeArch === nativeArch) {
-      console.log(
-        `[stream-server] Selected matched runtime: ${candidate} (${nodeArch})`,
-      );
-      return candidate;
-    }
+  const matchedCandidate = selectNodeBinaryCandidate(
+    candidates,
+    (candidate) => getNodeArch(candidate) === nativeArch,
+  );
+  if (matchedCandidate) {
+    console.log(
+      `[stream-server] Selected matched runtime: ${matchedCandidate} (${nativeArch})`,
+    );
+    return matchedCandidate;
   }
 
   // 2. Fallback: Check if Electron's own architecture matches.
