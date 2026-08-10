@@ -19,7 +19,10 @@ import {
   resolveProgressDuration,
 } from "../services/playback/PlaybackProgressClock";
 import { beginPlaybackLaunch } from "../services/playback/PlaybackLaunchService";
-import { completePlaybackSession } from "../services/playback/PlaybackSessionPlaybackService";
+import {
+  completePlaybackSession,
+  getActivePlaybackSourceRuntime,
+} from "../services/playback/PlaybackSessionPlaybackService";
 import { findNextEpisode } from "../services/playback/NextEpisode";
 import { preplanNextEpisode } from "../services/playback/NextEpisodePreplanner";
 import {
@@ -63,6 +66,7 @@ export function usePlayerController({
   const autoPlayNext = usePlayerStore((s) => s.autoPlayNext);
   const playbackLaunchIntent = usePlayerStore((s) => s.playbackLaunchIntent);
   const playbackSessionId = usePlayerStore((s) => s.playbackSessionId);
+  const playbackAttemptId = usePlayerStore((s) => s.playbackAttemptId);
   const consumePlaybackLaunchIntent = usePlayerStore(
     (s) => s.consumePlaybackLaunchIntent,
   );
@@ -102,11 +106,26 @@ export function usePlayerController({
     reportedAt: number;
   } | null>(null);
 
-  const engine = useMemo(
-    () =>
-      currentStream ? streamEngineManager.resolveEngine(currentStream) : null,
-    [currentStream],
-  );
+  // The runtime handoff is an in-memory, attempt-scoped lease. Read it on
+  // every render so a fallback/cancel cannot leave this hook attached to a
+  // runtime from the previous attempt.
+  const activeSourceRuntime =
+    playbackSessionId && playbackAttemptId
+      ? getActivePlaybackSourceRuntime(playbackSessionId, playbackAttemptId)
+      : null;
+  const engineOwnedBySession = playbackSessionId !== null;
+  const engine = useMemo(() => {
+    // PlaybackSessionPlaybackService is the single owner of every prepared
+    // session source. While it is resolving (or when a bridge route exposes no
+    // legacy runtime), never sniff the Stream and construct a second engine.
+    if (playbackSessionId) return activeSourceRuntime?.runtime ?? null;
+    return currentStream
+      ? streamEngineManager.resolveEngine(currentStream)
+      : null;
+  }, [activeSourceRuntime, currentStream, playbackSessionId]);
+  const effectiveIsProgressiveRemux =
+    isProgressiveRemux ||
+    activeSourceRuntime?.route?.delivery === "progressive-fmp4";
 
   const previousProgress = useMemo(() => {
     if (!mediaInfo || !cwItems) return null;
@@ -225,16 +244,21 @@ export function usePlayerController({
     return () => {
       engine.off("stats", onStats);
       engine.off("gateway", onGateway);
-      engine.stop?.();
+      if (!engineOwnedBySession) engine.stop?.();
     };
-  }, [engine, setRuntimeFailure, setRuntimeState]);
+  }, [engine, engineOwnedBySession, setRuntimeFailure, setRuntimeState]);
 
   // 2. Metrics subscription
   useEffect(() => {
-    if (currentStream?.infoHash && playbackUri) {
+    if (!playbackSessionId && currentStream?.infoHash && playbackUri) {
       subscribeToStreamMetrics(currentStream.infoHash);
     }
-  }, [currentStream?.infoHash, playbackUri, subscribeToStreamMetrics]);
+  }, [
+    currentStream?.infoHash,
+    playbackSessionId,
+    playbackUri,
+    subscribeToStreamMetrics,
+  ]);
 
   const mediaKey = mediaInfo
     ? `${mediaInfo.type}:${mediaInfo.itemId}:${mediaInfo.season ?? 0}:${mediaInfo.episode ?? 0}`
@@ -251,14 +275,14 @@ export function usePlayerController({
     const duration = resolveProgressDuration({
       observedDuration: Number(player?.duration) || 0,
       metadataRuntime: meta?.runtime,
-      isProgressiveRemux,
+      isProgressiveRemux: effectiveIsProgressiveRemux,
       hasSeekableHandoff,
     });
     return progressClockRef.current.snapshot(
       duration.duration,
       duration.durationSource,
     );
-  }, [hasSeekableHandoff, isProgressiveRemux, meta?.runtime, player]);
+  }, [effectiveIsProgressiveRemux, hasSeekableHandoff, meta?.runtime, player]);
 
   const reportProgress = useCallback(
     (force = false) => {
@@ -653,6 +677,8 @@ export function usePlayerController({
     subtitles,
     stats,
     engine,
+    playbackRoute: activeSourceRuntime?.route ?? null,
+    bridgeJobId: activeSourceRuntime?.bridgeJobId ?? null,
     showResumePrompt,
     resumePromptTimeSeconds: previousProgress?.currentTime ?? null,
     handleResumeResponse,

@@ -224,6 +224,11 @@ describe("action preflight", () => {
   it("classifies loopback, LAN, remote, and invalid endpoints", () => {
     expect(classifyActionEndpoint("http://127.0.0.1:11470")).toBe("loopback");
     expect(classifyActionEndpoint("http://192.168.1.20:11470")).toBe("lan");
+    expect(classifyActionEndpoint("http://[fd00::1]:11470")).toBe("lan");
+    expect(classifyActionEndpoint("http://fdevil.com:11470")).toBe("remote");
+    expect(classifyActionEndpoint("http://fc-example.com:11470")).toBe(
+      "remote",
+    );
     expect(classifyActionEndpoint("https://media.example.test/video.mp4")).toBe(
       "remote",
     );
@@ -238,6 +243,15 @@ describe("action preflight", () => {
     expect(validateActionBridgeUrl("http://10.0.2.2:11470")).toMatchObject({
       ok: true,
       scope: "lan",
+    });
+    expect(validateActionBridgeUrl("http://[fd00::1]:11470")).toMatchObject({
+      ok: true,
+      scope: "lan",
+    });
+    expect(validateActionBridgeUrl("http://fdevil.com:11470")).toMatchObject({
+      ok: false,
+      reason: "not-local-or-lan",
+      scope: "remote",
     });
     expect(
       validateActionBridgeUrl("https://bridge.example.test"),

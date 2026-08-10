@@ -10,6 +10,20 @@ export const REVIEWED_ADVISORIES = Object.freeze({
     scope: "repository-controlled transform, test, and packaging globs",
     allowedNodes: ["node_modules/test-exclude/node_modules/brace-expansion"],
   },
+  "GHSA-W3RX-R6R6-PGPR": {
+    dependency: "image-size",
+    expiresOn: "2026-09-30",
+    scope:
+      "Expo/Metro development tooling; image-size has no patched npm release",
+    allowedNodes: ["node_modules/image-size"],
+  },
+  "GHSA-5P2G-FCMC-QVQQ": {
+    dependency: "image-size",
+    expiresOn: "2026-09-30",
+    scope:
+      "Expo/Metro development tooling; image-size has no patched npm release",
+    allowedNodes: ["node_modules/image-size"],
+  },
 });
 
 function advisoryId(url) {

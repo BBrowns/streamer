@@ -1,6 +1,6 @@
 import type {
   DeviceProfile,
-  PlaybackPlan,
+  PlaybackPlanResponse,
   PlaybackRuntimeError,
   PlaybackRuntimeState,
   PlaybackSessionCastProfile,
@@ -47,7 +47,7 @@ export interface PlaybackOrchestratorSuccess {
   sessionId: string;
   candidateId: string;
   runtimeState: PlaybackRuntimeState;
-  plan: PlaybackPlan;
+  plan: PlaybackPlanResponse;
   attemptedStreams: number;
   resolveErrors: string[];
 }
@@ -56,7 +56,7 @@ export interface PlaybackOrchestratorFailure {
   ok: false;
   error: PlaybackRuntimeError;
   runtimeState: PlaybackRuntimeState;
-  plan?: PlaybackPlan;
+  plan?: PlaybackPlanResponse;
   sessionId?: string;
   attemptedStreams: number;
   resolveErrors: string[];
@@ -76,7 +76,7 @@ export interface DownloadOrchestratorSuccess {
   candidateId: string;
   attemptId: string;
   runtimeState: PlaybackRuntimeState;
-  plan: PlaybackPlan;
+  plan: PlaybackPlanResponse;
   attemptedStreams: number;
   resolveErrors: string[];
 }
@@ -93,8 +93,9 @@ export interface CastOrchestratorSuccess {
   sessionId: string;
   candidateId: string;
   attemptId: string;
+  bridgeJobId?: string;
   runtimeState: PlaybackRuntimeState;
-  plan: PlaybackPlan;
+  plan: PlaybackPlanResponse;
   attemptedStreams: number;
   resolveErrors: string[];
 }
@@ -207,7 +208,7 @@ export async function playBest(
  */
 export async function playCandidate(
   input: PlaybackOrchestratorInput,
-  plan: PlaybackPlan,
+  plan: PlaybackPlanResponse,
   plannerCandidateId: string,
 ): Promise<PlaybackOrchestratorResult> {
   const candidate = plan.orderedCandidates.find(
@@ -474,6 +475,7 @@ export async function prepareCast(
     sessionId: session.id,
     candidateId: result.candidateId,
     attemptId: result.attemptId,
+    bridgeJobId: result.bridgeJobId,
     runtimeState: "selecting_source",
     plan,
     attemptedStreams: attempts.length,
@@ -485,7 +487,7 @@ function recordSessionStarted(
   action: "play" | "download" | "cast",
   input: PlaybackOrchestratorInput,
   sessionId: string,
-  plan: PlaybackPlan,
+  plan: PlaybackPlanResponse,
   bridgeDiagnostics: ReturnType<
     typeof streamEngineManager.getBridgeDiagnostics
   >,

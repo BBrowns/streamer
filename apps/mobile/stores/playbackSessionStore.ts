@@ -9,6 +9,7 @@ import {
   type PlaybackRuntimeError,
   type PlaybackSession,
   type PlannedMediaCandidate,
+  type PlannedMediaCandidateV3,
 } from "@streamer/shared";
 import {
   createPlaybackSessionEvent,
@@ -163,7 +164,7 @@ export interface PlaybackSessionStoreState {
   getRuntimeCandidate: (
     sessionId: string,
     candidateId: string,
-  ) => PlannedMediaCandidate | null;
+  ) => PlannedMediaCandidate | PlannedMediaCandidateV3 | null;
   getRuntimePlan: (sessionId: string) => PlaybackSessionRuntime["plan"] | null;
   hasRuntimeCandidates: (sessionId: string) => boolean;
   requiresReplan: (sessionId: string) => boolean;

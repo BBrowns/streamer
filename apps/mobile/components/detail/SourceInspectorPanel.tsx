@@ -10,9 +10,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import type {
   PlaybackAction,
-  PlaybackPlan,
-  PlannedMediaCandidate,
-  RejectedCandidate,
+  PlaybackPlanCandidate,
+  PlaybackPlanRejectedCandidate,
+  PlaybackPlanResponse,
 } from "@streamer/shared";
 import { getPlaybackPlanWithBridgeRetry } from "../../services/playback/PlaybackPlanService";
 import {
@@ -40,7 +40,7 @@ const ACTIONS: { action: PlaybackAction; label: string; icon: string }[] = [
   { action: "cast", label: "Cast", icon: "cast-outline" },
 ];
 
-function formatCandidateLabel(candidate: PlannedMediaCandidate) {
+function formatCandidateLabel(candidate: PlaybackPlanCandidate) {
   return [
     candidate.quality,
     candidate.container?.toUpperCase(),
@@ -63,7 +63,7 @@ function CandidateRow({
   candidate,
   selected,
 }: {
-  candidate: PlannedMediaCandidate;
+  candidate: PlaybackPlanCandidate;
   selected?: boolean;
 }) {
   const { colors, isDark } = useTheme();
@@ -142,7 +142,11 @@ function CandidateRow({
   );
 }
 
-function RejectedRow({ candidate }: { candidate: RejectedCandidate }) {
+function RejectedRow({
+  candidate,
+}: {
+  candidate: PlaybackPlanRejectedCandidate;
+}) {
   const { colors, isDark } = useTheme();
   const actionLabel = formatAction(candidate.actionEligibility.action);
 
@@ -184,7 +188,7 @@ export function SourceInspectorPanel({
 }: SourceInspectorPanelProps) {
   const { colors, isDark } = useTheme();
   const [action, setAction] = useState<PlaybackAction>(initiallySelectedAction);
-  const [plan, setPlan] = useState<PlaybackPlan | null>(null);
+  const [plan, setPlan] = useState<PlaybackPlanResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -21,6 +21,7 @@ export interface PreparedCastSource {
   attemptId: string;
   stream: Stream;
   uri: string;
+  bridgeJobId?: string;
 }
 
 export interface CastSessionStartSuccess extends PreparedCastSource {
@@ -80,12 +81,14 @@ export async function startCastSession(
     markPlaybackSessionCasting(source.sessionId);
 
     try {
-      await castService.play(
-        device.id,
-        source.uri,
-        title,
-        getCastContentType(source.stream, source.uri),
-      );
+      const contentType = getCastContentType(source.stream, source.uri);
+      if (source.bridgeJobId) {
+        await castService.play(device.id, source.uri, title, contentType, {
+          bridgeJobId: source.bridgeJobId,
+        });
+      } else {
+        await castService.play(device.id, source.uri, title, contentType);
+      }
       return { ok: true, ...source };
     } catch (error) {
       const runtimeError = toCastRuntimeError(error);
@@ -125,6 +128,7 @@ export async function startCastSession(
         attemptId: fallback.attemptId,
         stream: fallback.stream,
         uri: fallback.uri,
+        bridgeJobId: fallback.bridgeJobId,
       };
     }
   }

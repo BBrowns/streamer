@@ -57,6 +57,7 @@ import {
   uiTypography,
 } from "../components/ui/designSystem";
 import { useTranslation } from "react-i18next";
+import { setDesktopBridgeAccessSession } from "../services/bridgeAuth";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -117,9 +118,11 @@ async function hydrateDesktopBridgeSettings() {
       store.setServerUrls(undefined, bridgeUrl);
     }
 
-    if (info.pairingToken && store.streamServerToken !== info.pairingToken) {
-      await store.setStreamServerToken(info.pairingToken);
-    }
+    setDesktopBridgeAccessSession(info.accessSession);
+    // Desktop uses a short-lived, scope-limited bridge credential. Remove a
+    // master token persisted by older desktop builds instead of reusing it in
+    // the less-trusted renderer.
+    if (store.streamServerToken) await store.setStreamServerToken(null);
   } catch {
     // Desktop bridge hydration is opportunistic; manual Sources & Devices
     // settings still work when the shell is unavailable.

@@ -351,11 +351,6 @@ export function AdvancedSourcesSection({
             variant="ghost"
             onPress={() => {
               environment.setStreamInput(environment.bridgeInfo!.lanUrl);
-              if (environment.bridgeInfo?.pairingToken) {
-                environment.setPairingTokenInput(
-                  environment.bridgeInfo.pairingToken,
-                );
-              }
             }}
           />
         )}

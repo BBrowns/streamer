@@ -59,6 +59,17 @@ function asHealthRecord(value: unknown): HealthRecord | null {
   return value as HealthRecord;
 }
 
+function legacyDesktopDiagnostics(
+  diagnostics: NonNullable<DesktopBridgeInfo["diagnostics"]>,
+) {
+  return diagnostics as typeof diagnostics & {
+    health?: unknown;
+    error?: string | null;
+    nodeArch?: string;
+    nativeArch?: string;
+  };
+}
+
 function repairPlanForReason(
   reason?: string | null,
 ): BridgeRepairPlan | undefined {
@@ -128,7 +139,7 @@ function resolveDesktopBridgeStatus(
   diagnostics: NonNullable<DesktopBridgeInfo["diagnostics"]>,
   info: DesktopBridgeInfo,
 ): BridgeStatus {
-  const health = asHealthRecord(diagnostics.health);
+  const health = asHealthRecord(legacyDesktopDiagnostics(diagnostics).health);
   if (health?.repair?.required || diagnostics.repair?.required) {
     return "unsupported";
   }
@@ -160,7 +171,8 @@ export function diagnosticsFromDesktopBridge(
   const diagnostics = info?.diagnostics;
   if (!info || !diagnostics) return null;
 
-  const health = asHealthRecord(diagnostics.health);
+  const legacyDiagnostics = legacyDesktopDiagnostics(diagnostics);
+  const health = asHealthRecord(legacyDiagnostics.health);
   const torrentEngine = health?.torrentEngine;
   const runtime = health?.runtime;
   const reason =
@@ -184,17 +196,18 @@ export function diagnosticsFromDesktopBridge(
       repair?.detail ||
       torrentEngine?.message ||
       diagnostics.message ||
-      diagnostics.error ||
+      legacyDiagnostics.error ||
       selfTest?.summary ||
       undefined,
     processArch:
       torrentEngine?.processArch ||
       runtime?.processArch ||
       diagnostics.processArch ||
-      diagnostics.nodeArch ||
+      legacyDiagnostics.nodeArch ||
       undefined,
-    runtimeArch: runtime?.nodeArch || diagnostics.nodeArch || undefined,
-    nativeArch: runtime?.nativeArch || diagnostics.nativeArch || undefined,
+    runtimeArch: runtime?.nodeArch || legacyDiagnostics.nodeArch || undefined,
+    nativeArch:
+      runtime?.nativeArch || legacyDiagnostics.nativeArch || undefined,
     platform:
       torrentEngine?.platform || runtime?.platform || diagnostics.platform,
     selfTest,

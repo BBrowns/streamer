@@ -3,10 +3,21 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  classifyUntrustedOrigin,
   createDesktopSentryOptions,
   redactSensitiveText,
   redactSensitiveValue,
 } = require("./sentry");
+
+test("classifies untrusted renderer URLs without retaining their origin", () => {
+  assert.equal(classifyUntrustedOrigin("file:///renderer/index.html"), "file");
+  assert.equal(classifyUntrustedOrigin("http://localhost:8081/player"), "http");
+  assert.equal(
+    classifyUntrustedOrigin("https://attacker.example/collect?token=secret"),
+    "https",
+  );
+  assert.equal(classifyUntrustedOrigin("not a URL"), "other");
+});
 
 test("desktop sentry stays disabled without a DSN", () => {
   const options = createDesktopSentryOptions({

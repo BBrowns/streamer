@@ -35,6 +35,7 @@ const POSTER_URL = "https://assets.example.test/golden-path-poster.svg";
 const MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.mp4");
 const VISUAL_MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.webm");
 const GATEWAY_JOB_ID = "00000000-0000-4000-8000-000000000099";
+const FIXTURE_DISPLAY_ID = "00000000-0000-4000-8000-000000000010";
 
 const timeoutBudget = {
   totalMs: 120_000,
@@ -608,6 +609,41 @@ export async function installGoldenPathRoutes(
     }
 
     if (BRIDGE_HOSTS.has(url.host)) {
+      if (url.pathname === "/api/bridge/v1/hello") {
+        await json(route, {
+          protocol: {
+            name: "streamer-bridge",
+            current: 1,
+            supported: [1],
+          },
+          serviceVersion: "golden-path-fixture",
+          auth: {
+            required: true,
+            methods: ["bearer", "x-streamer-bridge-token"],
+          },
+        });
+        return;
+      }
+      if (url.pathname === "/api/bridge/v1/cast/devices") {
+        await json(route, {
+          protocolVersion: 1,
+          devices: [
+            {
+              id: FIXTURE_DISPLAY_ID,
+              name: "Fixture Living Room",
+              type: "chromecast",
+            },
+          ],
+        });
+        return;
+      }
+      if (
+        url.pathname === "/api/bridge/v1/cast/play" ||
+        url.pathname === "/api/bridge/v1/cast/control"
+      ) {
+        await json(route, { protocolVersion: 1, success: true });
+        return;
+      }
       if (url.pathname === "/api/health" || url.pathname === "/status") {
         bridgeProbeCount += 1;
       }
@@ -710,7 +746,7 @@ export async function installGoldenPathRoutes(
         await json(route, {
           devices: [
             {
-              id: "fixture-display",
+              id: FIXTURE_DISPLAY_ID,
               name: "Fixture Living Room",
               type: "chromecast",
             },

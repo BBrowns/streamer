@@ -6,22 +6,31 @@ const path = require("path");
 const fs = require("fs");
 const https = require("https");
 const http = require("http");
+const net = require("net");
 const os = require("os");
 const crypto = require("crypto");
-const { spawn, execFileSync } = require("child_process");
+const { execFileSync, spawn } = require("child_process");
 const {
   resolveManagedDownloadPath,
   toStreamerUri,
 } = require("./download-paths");
 const {
+  classifyDownloadFailure,
+  failureMessage,
+  normalizePersistedDownloadJob,
+  serializeDownloadJobsV2,
+} = require("./download-job-persistence");
+const {
+  createPinnedLookup,
+  validateDownloadUrlWithDns,
+} = require("./download-url-policy");
+const {
   INVOKE_IPC_CHANNELS,
-  SEND_IPC_CHANNELS,
   createContentSecurityPolicy,
   isAllowedExternalUrl,
   isAllowedRendererUrl,
   normalizeDownloadIpcArgs,
-  normalizeHandoffPayload,
-  normalizeIpcId,
+  normalizeDownloadJobId,
   normalizeLocalUri,
 } = require("./security");
 const {
@@ -33,6 +42,7 @@ const {
 const {
   captureDesktopException,
   captureDesktopMessage,
+  classifyUntrustedOrigin,
   flushDesktopSentry,
   initDesktopSentry,
   redactSensitiveText,
@@ -74,6 +84,7 @@ let mainWindow = null;
 let bridgeServer = null;
 let bridgeLanUrl = "http://localhost:11470";
 let bridgePairingToken = "";
+let rendererBridgeAccessSession = null;
 let bridgeStartSequence = 0;
 let bridgeState = {
   status: "stopped",
@@ -270,7 +281,6 @@ function snapshotDownloadJob(job) {
   return {
     id: job.id,
     status: job.status,
-    downloadUrl: job.downloadUrl,
     filename: job.filename,
     totalBytesWritten: job.totalBytesWritten,
     totalBytesExpectedToWrite: job.totalBytesExpectedToWrite,
@@ -278,21 +288,8 @@ function snapshotDownloadJob(job) {
     contentType: job.contentType || undefined,
     metadataBytes: Math.max(0, Number(job.metadataBytes) || 0),
     error: job.error || undefined,
-  };
-}
-
-function serializeDownloadJob(job) {
-  return {
-    id: job.id,
-    status: job.status,
-    downloadUrl: job.downloadUrl,
-    filename: job.filename,
-    totalBytesWritten: job.totalBytesWritten,
-    totalBytesExpectedToWrite: job.totalBytesExpectedToWrite,
-    localUri: job.localUri || undefined,
-    contentType: job.contentType || undefined,
-    metadataBytes: Math.max(0, Number(job.metadataBytes) || 0),
-    error: job.error || undefined,
+    failureReason: job.failureReason || undefined,
+    requiresReplan: Boolean(job.requiresReplan),
   };
 }
 
@@ -302,10 +299,10 @@ function persistDownloadJobsNow() {
     persistDownloadJobsTimer = null;
   }
 
-  const jobs = Array.from(downloadJobs.values()).map(serializeDownloadJob);
+  const payload = serializeDownloadJobsV2(downloadJobs.values());
   const tempPath = `${downloadJobsPath}.tmp`;
   try {
-    fs.writeFileSync(tempPath, JSON.stringify({ version: 1, jobs }), {
+    fs.writeFileSync(tempPath, JSON.stringify(payload), {
       encoding: "utf8",
       mode: 0o600,
     });
@@ -338,54 +335,41 @@ function restoreDownloadJobs() {
     const jobs = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
 
     for (const storedJob of jobs) {
-      if (
-        !storedJob ||
-        typeof storedJob.id !== "string" ||
-        typeof storedJob.downloadUrl !== "string" ||
-        typeof storedJob.filename !== "string"
-      ) {
-        continue;
-      }
+      if (!storedJob || typeof storedJob.filename !== "string") continue;
 
       const filename = sanitizeDownloadFilename(storedJob.filename);
       const filePath = path.join(downloadsPath, filename);
       const tempPath = `${filePath}.part`;
       const completedFileExists = fs.existsSync(filePath);
       const partialFileExists = fs.existsSync(tempPath);
-      const storedStatus = storedJob.status;
-      const status =
-        storedStatus === "Completed"
-          ? completedFileExists
-            ? "Completed"
-            : "Error"
-          : storedStatus === "Error"
-            ? "Error"
-            : "Paused";
-      const totalBytesWritten = partialFileExists
-        ? fs.statSync(tempPath).size
-        : completedFileExists
+      const restored = normalizePersistedDownloadJob(storedJob, {
+        completedFileExists,
+        partialFileBytes: partialFileExists ? fs.statSync(tempPath).size : 0,
+        completedFileBytes: completedFileExists
           ? fs.statSync(filePath).size
-          : Math.max(0, Number(storedJob.totalBytesWritten) || 0);
+          : 0,
+      });
+      if (!restored) continue;
 
-      downloadJobs.set(storedJob.id, {
-        id: storedJob.id,
-        downloadUrl: storedJob.downloadUrl,
+      downloadJobs.set(restored.id, {
+        id: restored.id,
+        downloadUrl: null,
         filename,
         filePath,
         tempPath,
-        status,
-        totalBytesWritten,
-        totalBytesExpectedToWrite: Math.max(
-          totalBytesWritten,
-          Number(storedJob.totalBytesExpectedToWrite) || 0,
-        ),
+        status: restored.status,
+        totalBytesWritten: restored.totalBytesWritten,
+        totalBytesExpectedToWrite: restored.totalBytesExpectedToWrite,
         localUri: completedFileExists ? toStreamerUri(filePath) : null,
-        contentType: storedJob.contentType || null,
-        metadataBytes: Math.max(0, Number(storedJob.metadataBytes) || 0),
+        contentType: restored.contentType,
+        metadataBytes: restored.metadataBytes,
         error:
-          status === "Error"
-            ? storedJob.error || "Downloaded file could not be found."
+          restored.status === "Error"
+            ? failureMessage(restored.failureReason)
             : null,
+        failureReason: restored.failureReason,
+        requiresReplan: restored.requiresReplan,
+        downloadPolicyKind: null,
         req: null,
         file: null,
         pauseRequested: false,
@@ -416,7 +400,6 @@ function emitDownloadJob(job) {
   schedulePersistDownloadJobs();
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("download-progress", snapshot);
-    mainWindow.webContents.send("download-job-updated", snapshot);
   }
 }
 
@@ -435,8 +418,16 @@ function settleDownloadJob(job) {
 }
 
 function failDownloadJob(job, error) {
+  const failureReason = classifyDownloadFailure(error);
   job.status = "Error";
-  job.error = error?.message || String(error);
+  job.error = failureMessage(failureReason);
+  job.failureReason = failureReason;
+  job.requiresReplan = [
+    "source_access_expired",
+    "source_unavailable",
+    "invalid_source",
+    "redirect_limit",
+  ].includes(failureReason);
   job.req = null;
   job.file = null;
   emitDownloadJob(job);
@@ -447,6 +438,8 @@ function completeDownloadJob(job) {
   job.status = "Completed";
   job.localUri = toStreamerUri(job.filePath);
   job.error = null;
+  job.failureReason = null;
+  job.requiresReplan = false;
   job.req = null;
   job.file = null;
   emitDownloadJob(job);
@@ -459,19 +452,35 @@ function parseContentRangeTotal(contentRange) {
   return match ? Number(match[1]) : 0;
 }
 
-function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(job.downloadUrl);
-  } catch {
-    failDownloadJob(job, new Error("Download URL is invalid"));
+async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
+  if (!job.downloadUrl) {
+    job.status = "Paused";
+    job.error = failureMessage("interrupted");
+    job.failureReason = "interrupted";
+    job.requiresReplan = true;
+    emitDownloadJob(job);
     return;
   }
 
-  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-    failDownloadJob(job, new Error("Download URL must use HTTP or HTTPS"));
+  let validatedUrl;
+  try {
+    validatedUrl = await validateDownloadUrlWithDns(job.downloadUrl);
+  } catch (error) {
+    failDownloadJob(
+      job,
+      error instanceof Error ? error : new Error("Download URL is invalid"),
+    );
     return;
   }
+
+  if (job.downloadPolicyKind && job.downloadPolicyKind !== validatedUrl.kind) {
+    failDownloadJob(job, new Error("Download URL changed security boundary"));
+    return;
+  }
+  job.downloadPolicyKind = validatedUrl.kind;
+  if (job.pauseRequested || job.cancelRequested) return;
+
+  const parsedUrl = validatedUrl.parsed;
 
   let startByte = Math.max(0, resumeAt);
   if (startByte > 0 && fs.existsSync(job.tempPath)) {
@@ -482,14 +491,20 @@ function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
 
   job.status = "Downloading";
   job.error = null;
+  job.failureReason = null;
+  job.requiresReplan = false;
   job.pauseRequested = false;
   job.cancelRequested = false;
   job.totalBytesWritten = startByte;
   emitDownloadJob(job);
 
   const client = parsedUrl.protocol === "https:" ? https : http;
-  const options =
-    startByte > 0 ? { headers: { Range: `bytes=${startByte}-` } } : {};
+  const options = {
+    ...(startByte > 0 ? { headers: { Range: `bytes=${startByte}-` } } : {}),
+    ...(validatedUrl.addresses.length
+      ? { lookup: createPinnedLookup(validatedUrl.addresses) }
+      : {}),
+  };
   const req = client.get(parsedUrl, options, (res) => {
     const statusCode = res.statusCode || 0;
     const location = res.headers.location;
@@ -501,7 +516,7 @@ function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
         return;
       }
       job.downloadUrl = new URL(location, parsedUrl).toString();
-      startDownloadRequest(job, startByte, redirectCount + 1);
+      void startDownloadRequest(job, startByte, redirectCount + 1);
       return;
     }
 
@@ -515,7 +530,7 @@ function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
       try {
         fs.rmSync(job.tempPath, { force: true });
       } catch {}
-      startDownloadRequest(job, 0, redirectCount);
+      void startDownloadRequest(job, 0, redirectCount);
       return;
     }
 
@@ -612,8 +627,22 @@ function startDownloadJob(id, rawUrl, filename) {
     existingJob &&
     ["Pending", "Downloading", "Paused", "Completed"].includes(
       existingJob.status,
-    )
+    ) &&
+    !existingJob.requiresReplan
   ) {
+    return snapshotDownloadJob(existingJob);
+  }
+
+  if (existingJob?.requiresReplan) {
+    existingJob.downloadUrl = rawUrl;
+    existingJob.downloadPolicyKind = null;
+    existingJob.requiresReplan = false;
+    existingJob.failureReason = null;
+    existingJob.error = null;
+    const resumeAt = fs.existsSync(existingJob.tempPath)
+      ? fs.statSync(existingJob.tempPath).size
+      : 0;
+    void startDownloadRequest(existingJob, resumeAt);
     return snapshotDownloadJob(existingJob);
   }
 
@@ -633,6 +662,9 @@ function startDownloadJob(id, rawUrl, filename) {
     contentType: null,
     metadataBytes: 0,
     error: null,
+    failureReason: null,
+    requiresReplan: false,
+    downloadPolicyKind: null,
     req: null,
     file: null,
     pauseRequested: false,
@@ -642,7 +674,7 @@ function startDownloadJob(id, rawUrl, filename) {
 
   downloadJobs.set(id, job);
   schedulePersistDownloadJobs();
-  startDownloadRequest(job, 0);
+  void startDownloadRequest(job, 0);
   return snapshotDownloadJob(job);
 }
 
@@ -668,11 +700,20 @@ function resumeDownloadJob(id) {
   const job = downloadJobs.get(id);
   if (!job) return null;
 
+  if (job.requiresReplan || !job.downloadUrl) {
+    job.status = "Paused";
+    job.error = failureMessage("interrupted");
+    job.failureReason = "interrupted";
+    job.requiresReplan = true;
+    emitDownloadJob(job);
+    return snapshotDownloadJob(job);
+  }
+
   if (job.status === "Paused" || job.status === "Error") {
     const resumeAt = fs.existsSync(job.tempPath)
       ? fs.statSync(job.tempPath).size
       : 0;
-    startDownloadRequest(job, resumeAt);
+    void startDownloadRequest(job, resumeAt);
   }
 
   return snapshotDownloadJob(job);
@@ -752,7 +793,7 @@ function assertTrustedIpcSender(event) {
     captureDesktopMessage("Blocked IPC from untrusted renderer", {
       component: "electron-security",
       action: "ipc-blocked",
-      senderUrl,
+      senderProtocol: classifyUntrustedOrigin(senderUrl),
     });
     throw new Error("Blocked IPC from untrusted renderer");
   }
@@ -764,17 +805,6 @@ function handleTrusted(channel, handler) {
   }
 
   electron_1.ipcMain.handle(channel, async (event, ...args) => {
-    assertTrustedIpcSender(event);
-    return handler(event, ...args);
-  });
-}
-
-function onTrusted(channel, handler) {
-  if (!SEND_IPC_CHANNELS.includes(channel)) {
-    throw new Error(`IPC channel is not allowlisted: ${channel}`);
-  }
-
-  electron_1.ipcMain.on(channel, (event, ...args) => {
     assertTrustedIpcSender(event);
     return handler(event, ...args);
   });
@@ -918,34 +948,6 @@ function clearBridgeOwnerClaim() {
   }
 }
 
-function killBridgePortProcesses() {
-  if (process.platform !== "darwin" && process.platform !== "linux") {
-    return;
-  }
-
-  try {
-    const output = execFileSync("lsof", ["-ti", ":11470"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    const pids = output
-      .split(/\s+/)
-      .map((pid) => Number(pid))
-      .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
-
-    for (const pid of pids) {
-      try {
-        process.kill(pid, "SIGKILL");
-        console.log(`[stream-server] Cleared stale bridge process ${pid}`);
-      } catch {
-        // Process may have exited between lsof and kill.
-      }
-    }
-  } catch {
-    // No process was listening on the bridge port.
-  }
-}
-
 function getBridgeHealthOwner(health) {
   return health?.runtime?.owner || null;
 }
@@ -1060,6 +1062,12 @@ function getNodeArch(nodeExecutable) {
 function classifyBridgeError(error) {
   const message = String(error?.message || error || "");
   if (
+    error?.code === "BRIDGE_PORT_IN_USE" ||
+    message.includes("Bridge port 11470 is already in use")
+  ) {
+    return "bridge-port-owned-by-other-process";
+  }
+  if (
     message.includes("No Node.js runtime matches node-datachannel architecture")
   ) {
     return "native-architecture-mismatch";
@@ -1074,6 +1082,28 @@ function classifyBridgeError(error) {
     return "missing-stream-server-build";
   }
   return "bridge-start-failed";
+}
+
+function isBridgePortListening(timeoutMs = 300) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (listening) => {
+      if (settled) return;
+      settled = true;
+      resolve(listening);
+    };
+    const socket = net.createConnection({ host: "127.0.0.1", port: 11470 });
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => {
+      socket.destroy();
+      finish(true);
+    });
+    socket.once("timeout", () => {
+      socket.destroy();
+      finish(false);
+    });
+    socket.once("error", () => finish(false));
+  });
 }
 
 function setBridgeState(patch) {
@@ -1153,10 +1183,18 @@ async function startBridgeDaemon() {
   const startSequence = ++bridgeStartSequence;
   const pairingToken = getBridgePairingToken();
   const runtimeDiagnostics = getBridgeRuntimeDiagnostics();
+  const bridgePublicOrigin =
+    process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN?.trim() || resolveLanBridgeUrl();
+  bridgeLanUrl = bridgePublicOrigin;
+
+  if (await isBridgePortListening()) {
+    const error = new Error("Bridge port 11470 is already in use.");
+    error.code = "BRIDGE_PORT_IN_USE";
+    throw error;
+  }
 
   writeBridgeOwnerClaim("starting");
-  killBridgePortProcesses();
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  rendererBridgeAccessSession = null;
 
   setBridgeState({
     status: "starting",
@@ -1176,6 +1214,7 @@ async function startBridgeDaemon() {
   if (process.env.STREAMER_BRIDGE_IN_PROCESS === "1") {
     process.env.STREAMER_BRIDGE_TOKEN = pairingToken;
     process.env.STREAMER_BRIDGE_OWNER = "desktop";
+    process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN = bridgePublicOrigin;
     process.env.STREAMER_BRIDGE_CLAIM_FILE = getBridgeOwnerClaimPath();
     process.env.STREAMER_APP_VERSION = desktopBuildMetadata.appVersion;
     process.env.STREAMER_GIT_SHA = desktopBuildMetadata.gitSha;
@@ -1214,6 +1253,7 @@ async function startBridgeDaemon() {
       PORT: "11470",
       STREAMER_BRIDGE_TOKEN: pairingToken,
       STREAMER_BRIDGE_OWNER: "desktop",
+      STREAMER_BRIDGE_PUBLIC_ORIGIN: bridgePublicOrigin,
       STREAMER_BRIDGE_CLAIM_FILE: getBridgeOwnerClaimPath(),
       STREAMER_APP_VERSION: desktopBuildMetadata.appVersion,
       STREAMER_GIT_SHA: desktopBuildMetadata.gitSha,
@@ -1331,6 +1371,96 @@ function readBridgeHealth() {
   });
 }
 
+function isFreshRendererBridgeAccessSession(session) {
+  return (
+    session &&
+    typeof session.accessToken === "string" &&
+    session.accessToken.length >= 32 &&
+    typeof session.expiresAt === "string" &&
+    Date.parse(session.expiresAt) > Date.now() + 30_000
+  );
+}
+
+function requestRendererBridgeAccessSession() {
+  if (isFreshRendererBridgeAccessSession(rendererBridgeAccessSession)) {
+    return Promise.resolve(rendererBridgeAccessSession);
+  }
+
+  const body = JSON.stringify({
+    scopes: [
+      "capabilities:read",
+      "jobs:read",
+      "jobs:write",
+      "cast:read",
+      "cast:write",
+    ],
+    ttlSeconds: 300,
+  });
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (session) => {
+      if (settled) return;
+      settled = true;
+      rendererBridgeAccessSession = session;
+      resolve(session);
+    };
+    const req = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: 11470,
+        path: "/api/bridge/v1/access-sessions",
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getBridgePairingToken()}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let responseBody = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          responseBody += chunk;
+          if (responseBody.length > 16 * 1024) {
+            res.destroy();
+            finish(null);
+          }
+        });
+        res.on("end", () => {
+          if (res.statusCode !== 200) return finish(null);
+          try {
+            const parsed = JSON.parse(responseBody);
+            if (
+              parsed?.protocolVersion !== 1 ||
+              typeof parsed.sessionId !== "string" ||
+              typeof parsed.accessToken !== "string" ||
+              parsed.accessToken.length < 32 ||
+              parsed.accessToken.length > 512 ||
+              typeof parsed.expiresAt !== "string" ||
+              Date.parse(parsed.expiresAt) <= Date.now()
+            ) {
+              return finish(null);
+            }
+            return finish({
+              accessToken: parsed.accessToken,
+              expiresAt: parsed.expiresAt,
+            });
+          } catch {
+            return finish(null);
+          }
+        });
+      },
+    );
+    req.setTimeout(1_500, () => {
+      req.destroy();
+      finish(null);
+    });
+    req.on("error", () => finish(null));
+    req.end(body);
+  });
+}
+
 async function getBridgeInfoSnapshot() {
   const rawHealth = bridgeServer ? await readBridgeHealth() : null;
   const healthOwner = getBridgeHealthOwner(rawHealth);
@@ -1338,7 +1468,6 @@ async function getBridgeInfoSnapshot() {
     !!rawHealth && !!healthOwner && healthOwner !== "desktop";
   const health = hasForeignBridgeOwner ? null : rawHealth;
   const torrentEngine = health?.torrentEngine || null;
-  const runtimeDiagnostics = getBridgeRuntimeDiagnostics();
   const status = bridgeServer
     ? hasForeignBridgeOwner
       ? "starting"
@@ -1348,34 +1477,40 @@ async function getBridgeInfoSnapshot() {
           ? "error"
           : "running"
     : bridgeState.status;
+  const available =
+    !!bridgeServer && !!health && torrentEngine?.available !== false;
+  const accessSession = available
+    ? await requestRendererBridgeAccessSession()
+    : null;
 
   return {
-    available: !!bridgeServer && !!health && torrentEngine?.available !== false,
+    available,
     localUrl: "http://localhost:11470",
     lanUrl: bridgeLanUrl,
-    pairingToken: getBridgePairingToken(),
+    ...(accessSession ? { accessSession } : {}),
     build: desktopBuildMetadata,
     desktopRuntime,
     diagnostics: {
-      ...bridgeState,
       status,
+      startedAt: bridgeState.startedAt,
+      updatedAt: bridgeState.updatedAt,
       reason: hasForeignBridgeOwner
         ? "bridge-port-owned-by-other-process"
         : torrentEngine?.reason || bridgeState.reason || undefined,
       message: hasForeignBridgeOwner
         ? `Waiting for the desktop bridge to reclaim port 11470 from ${healthOwner}.`
-        : torrentEngine?.message || bridgeState.error || undefined,
+        : torrentEngine?.message || undefined,
       processArch: torrentEngine?.processArch || process.arch,
       platform: torrentEngine?.platform || process.platform,
-      nativeBinary: bridgeState.nativeBinary || runtimeDiagnostics.nativeBinary,
-      nativeArch: bridgeState.nativeArch || runtimeDiagnostics.nativeArch,
+      selfTest: health?.selfTest,
+      repair: health?.repair,
       build: desktopBuildMetadata,
-      health: health || rawHealth,
     },
   };
 }
 
 async function restartBridgeDaemon() {
+  rendererBridgeAccessSession = null;
   if (disableBridgeForDesktopSmoke) {
     bridgeServer = null;
     setBridgeState({
@@ -1388,10 +1523,8 @@ async function restartBridgeDaemon() {
     return getBridgeInfoSnapshot();
   }
 
-  try {
-    bridgeServer?.close?.();
-  } catch {}
-  bridgeServer = null;
+  const stopped = await stopTrackedBridgeDaemon();
+  if (!stopped) return getBridgeInfoSnapshot();
   setBridgeState({
     status: "starting",
     error: null,
@@ -1413,6 +1546,72 @@ async function restartBridgeDaemon() {
   }
 
   return getBridgeInfoSnapshot();
+}
+
+function waitForTrackedChildExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (stopped) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      resolve(stopped);
+    };
+    const onExit = () => finish(true);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    child.once("exit", onExit);
+
+    try {
+      if (!child.killed) child.kill("SIGTERM");
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+function waitForInProcessBridgeClose(server, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (stopped) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(stopped);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    try {
+      server.close((error) => finish(!error));
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+async function stopTrackedBridgeDaemon(timeoutMs = 5_000) {
+  const activeBridge = bridgeServer;
+  bridgeServer = null;
+  rendererBridgeAccessSession = null;
+  if (!activeBridge) return true;
+
+  const stopped = activeBridge.process
+    ? await waitForTrackedChildExit(activeBridge.process, timeoutMs)
+    : await waitForInProcessBridgeClose(activeBridge, timeoutMs);
+
+  if (!stopped) {
+    setBridgeState({
+      status: "error",
+      error: "Tracked bridge did not stop before the restart deadline.",
+      reason: "bridge-process-stop-timeout",
+      pid: activeBridge.process?.pid || null,
+    });
+  }
+  return stopped;
 }
 
 function createWindow() {
@@ -1485,26 +1684,6 @@ electron_1.app.whenReady().then(async () => {
   });
 
   // Set up IPC Handlers
-  onTrusted("handoff-play", (event, data) => {
-    const payload = normalizeHandoffPayload(data);
-    if (mainWindow) {
-      console.log(
-        `[handoff] Directing UI to play${payload.title ? `: ${payload.title}` : ""}`,
-      );
-
-      const playerUrl = buildRendererUrl("/player", {
-        magnet: payload.magnet,
-        startTime: payload.position,
-        title: payload.title,
-        itemId: payload.itemId,
-      });
-
-      mainWindow.loadURL(playerUrl);
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-
   handleTrusted("check-file", async (event, localUri) => {
     const filePath = resolveManagedDownloadPath(
       downloadsPath,
@@ -1544,6 +1723,12 @@ electron_1.app.whenReady().then(async () => {
 
   handleTrusted("get-bridge-info", async () => getBridgeInfoSnapshot());
 
+  handleTrusted("refresh-bridge-access-session", async () => {
+    rendererBridgeAccessSession = null;
+    const info = await getBridgeInfoSnapshot();
+    return info.accessSession || null;
+  });
+
   handleTrusted("restart-bridge", async () => restartBridgeDaemon());
 
   handleTrusted("get-storage-info", async () => getStorageInfo());
@@ -1568,20 +1753,20 @@ electron_1.app.whenReady().then(async () => {
   });
 
   handleTrusted("download-job-get", async (event, id) => {
-    const job = downloadJobs.get(normalizeIpcId(id));
+    const job = downloadJobs.get(normalizeDownloadJobId(id));
     return job ? snapshotDownloadJob(job) : null;
   });
 
   handleTrusted("download-job-pause", async (event, id) => {
-    return pauseDownloadJob(normalizeIpcId(id));
+    return pauseDownloadJob(normalizeDownloadJobId(id));
   });
 
   handleTrusted("download-job-resume", async (event, id) => {
-    return resumeDownloadJob(normalizeIpcId(id));
+    return resumeDownloadJob(normalizeDownloadJobId(id));
   });
 
   handleTrusted("download-job-cancel", async (event, id) => {
-    return cancelDownloadJob(normalizeIpcId(id));
+    return cancelDownloadJob(normalizeDownloadJobId(id));
   });
 
   if (disableBridgeForDesktopSmoke) {

@@ -11,7 +11,10 @@ import { getBridgeStatusPresentation } from "../services/streamEngine/bridgeStat
 import { diagnosticsFromDesktopBridge } from "../services/streamEngine/desktopBridgeDiagnostics";
 import type { DesktopBridgeInfo } from "../services/desktop-bridge";
 import { preflightBridgeAction } from "../services/actionPreflight";
-import { getBridgeAuthHeaders } from "../services/bridgeAuth";
+import {
+  getBridgeAuthHeaders,
+  setDesktopBridgeAccessSession,
+} from "../services/bridgeAuth";
 import { createDebugBundle, exportDebugBundle } from "../services/debugBundle";
 import { hapticSelection, hapticSuccess } from "../lib/haptics";
 import { formatBytes } from "../components/downloads/downloadPresentation";
@@ -88,7 +91,7 @@ export function usePlaybackEnvironmentStatus() {
         const info = await window.desktopBridge.getBridgeInfo();
         if (!isCancelled?.()) {
           setBridgeInfo(info);
-          if (info.pairingToken) setPairingTokenInput(info.pairingToken);
+          setDesktopBridgeAccessSession(info.accessSession);
           if (info.lanUrl) setStreamInput((current) => current || info.lanUrl);
         }
         return info;
@@ -228,8 +231,8 @@ export function usePlaybackEnvironmentStatus() {
     try {
       const info = await window.desktopBridge.restartBridge();
       setBridgeInfo(info);
+      setDesktopBridgeAccessSession(info.accessSession);
       if (info.localUrl) setStreamInput(info.localUrl);
-      if (info.pairingToken) setPairingTokenInput(info.pairingToken);
       await streamEngineManager.detectBridge();
     } finally {
       syncDiagnostics();

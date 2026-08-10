@@ -6,6 +6,7 @@ import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSignedGatewayStreamPath,
+  getConfiguredBridgePublicOrigin,
   requireBridgeAuth,
   validateCastPlaybackUrl,
   validateGatewayStreamSignature,
@@ -314,9 +315,9 @@ describe("Gateway stream URL signing", () => {
 });
 
 describe("stream-server log redaction", () => {
-  it("redacts signed gateway URLs, magnets, and bearer tokens", () => {
+  it("redacts signed gateway and bridge v1 URLs, magnets, and bearer tokens", () => {
     const output = redactSensitiveText(
-      "Bearer bridge-token magnet:?xt=urn:btih:abcdef http://127.0.0.1:11470/api/gateway/jobs/job-1/stream?expires=123&signature=sig",
+      "Bearer bridge-token magnet:?xt=urn:btih:abcdef http://127.0.0.1:11470/api/gateway/jobs/job-1/stream?expires=123&signature=sig http://bridge.local:11470/api/bridge/v1/jobs/job-2/stream?expires=456&signature=v1-sig",
     );
 
     expect(output).toContain("Bearer [redacted]");
@@ -324,9 +325,13 @@ describe("stream-server log redaction", () => {
     expect(output).toContain(
       "http://127.0.0.1:11470/api/gateway/jobs/[job]/stream?[signed]",
     );
+    expect(output).toContain(
+      "http://bridge.local:11470/api/bridge/v1/jobs/[job]/stream?[signed]",
+    );
     expect(output).not.toContain("bridge-token");
     expect(output).not.toContain("abcdef");
     expect(output).not.toContain("signature=sig");
+    expect(output).not.toContain("signature=v1-sig");
   });
 });
 
@@ -408,6 +413,39 @@ describe("Cast playback URL validation", () => {
         allowedHosts: ["fd00::25"],
       }),
     ).toMatchObject({ ok: true });
+  });
+
+  it.each(["fe90::1", "fea0::1", "febf::1"])(
+    "classifies every IPv6 link-local range as private (%s)",
+    (address) => {
+      expect(
+        validateCastPlaybackUrl(`http://[${address}]:11470/movie.mp4`),
+      ).toMatchObject({
+        ok: false,
+        reason: "Private network playback URLs must point to this bridge",
+      });
+    },
+  );
+
+  it("accepts only a canonical configured bridge public origin", () => {
+    const previous = process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN;
+    try {
+      process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN = "http://bridge.lan:11470/";
+      expect(getConfiguredBridgePublicOrigin()).toBe("http://bridge.lan:11470");
+
+      process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN =
+        "http://user:pass@bridge.lan:11470";
+      expect(getConfiguredBridgePublicOrigin()).toBeNull();
+      process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN =
+        "http://bridge.lan:11470/path";
+      expect(getConfiguredBridgePublicOrigin()).toBeNull();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN;
+      } else {
+        process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN = previous;
+      }
+    }
   });
 });
 

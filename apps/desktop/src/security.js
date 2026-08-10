@@ -10,6 +10,7 @@ const INVOKE_IPC_CHANNELS = Object.freeze([
   "inspect-file",
   "delete-file",
   "get-bridge-info",
+  "refresh-bridge-access-session",
   "restart-bridge",
   "get-storage-info",
   "get-update-status",
@@ -23,7 +24,10 @@ const INVOKE_IPC_CHANNELS = Object.freeze([
   "download-job-cancel",
 ]);
 
-const SEND_IPC_CHANNELS = Object.freeze(["handoff-play"]);
+const SUBSCRIBE_IPC_CHANNELS = Object.freeze([
+  "download-progress",
+  "update-status-changed",
+]);
 
 function normalizeHostname(hostname) {
   return String(hostname || "")
@@ -164,6 +168,18 @@ function normalizeIpcId(value) {
   return requireIpcString(value, "id", 200);
 }
 
+function normalizeDownloadJobId(value) {
+  const id = normalizeIpcId(value);
+  if (
+    /^https?:\/\//i.test(id) ||
+    /^magnet:/i.test(id) ||
+    /^[a-f0-9]{32,64}$/i.test(id)
+  ) {
+    throw new Error("download id must be opaque");
+  }
+  return id;
+}
+
 function normalizeLocalUri(value) {
   return requireIpcString(value, "localUri", 2048);
 }
@@ -175,35 +191,20 @@ function normalizeDownloadIpcArgs(id, rawUrl, filename) {
   }
 
   return {
-    id: normalizeIpcId(id),
+    id: normalizeDownloadJobId(id),
     url: parsedUrl.toString(),
     filename: requireIpcString(filename, "filename", 255),
   };
 }
 
-function normalizeHandoffPayload(data) {
-  if (!data || typeof data !== "object") {
-    throw new Error("handoff payload must be an object");
-  }
-
-  return {
-    magnet: requireIpcString(data.magnet, "magnet", 8192),
-    position: Math.max(0, Number(data.position) || 0),
-    title:
-      typeof data.title === "string" ? data.title.trim().slice(0, 500) : "",
-    itemId:
-      typeof data.itemId === "string" ? data.itemId.trim().slice(0, 200) : "",
-  };
-}
-
 module.exports = {
   INVOKE_IPC_CHANNELS,
-  SEND_IPC_CHANNELS,
+  SUBSCRIBE_IPC_CHANNELS,
   createContentSecurityPolicy,
   isAllowedExternalUrl,
   isAllowedRendererUrl,
   normalizeDownloadIpcArgs,
-  normalizeHandoffPayload,
+  normalizeDownloadJobId,
   normalizeIpcId,
   normalizeLocalUri,
 };

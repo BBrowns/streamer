@@ -1,4 +1,7 @@
-import { ExpoMediaPlayerAdapter } from "../MediaPlayerAdapter";
+import {
+  NativeExpoVideoAdapter,
+  WebVideoAdapter,
+} from "../mediaPlayerAdapters";
 
 function createPlayer() {
   return {
@@ -24,10 +27,10 @@ function createPlayer() {
   };
 }
 
-describe("ExpoMediaPlayerAdapter", () => {
+describe("explicit media player adapters", () => {
   it("returns a normalized runtime snapshot", () => {
     const player = createPlayer();
-    const adapter = new ExpoMediaPlayerAdapter(player as any, "web");
+    const adapter = new WebVideoAdapter(player as any);
 
     expect(adapter.snapshot()).toMatchObject({
       status: "ready",
@@ -44,7 +47,7 @@ describe("ExpoMediaPlayerAdapter", () => {
 
   it("enables bounded scrubbing optimizations only during a drag", () => {
     const player = createPlayer();
-    const adapter = new ExpoMediaPlayerAdapter(player as any, "android");
+    const adapter = new NativeExpoVideoAdapter(player as any, "android");
 
     adapter.beginScrubbing();
     expect(player.scrubbingModeOptions).toEqual({
@@ -70,7 +73,7 @@ describe("ExpoMediaPlayerAdapter", () => {
   it("pauses iOS while scrubbing and preserves an intentional pause", () => {
     const player = createPlayer();
     player.playing = false;
-    const adapter = new ExpoMediaPlayerAdapter(player as any, "ios");
+    const adapter = new NativeExpoVideoAdapter(player as any, "ios");
 
     adapter.beginScrubbing();
     expect(player.pause).toHaveBeenCalledTimes(1);
@@ -82,7 +85,7 @@ describe("ExpoMediaPlayerAdapter", () => {
 
   it("uses precise committed seeks after preview scrubbing", () => {
     const player = createPlayer();
-    const adapter = new ExpoMediaPlayerAdapter(player as any, "ios");
+    const adapter = new NativeExpoVideoAdapter(player as any, "ios");
 
     adapter.beginScrubbing();
     adapter.previewSeek(33.4);

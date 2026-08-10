@@ -10,6 +10,41 @@ stream gateway in `packages/stream-server`, and subtitle aggregation in
 The player is a composition surface around the existing `PlaybackSession`
 control plane. It does not introduce a second persisted state machine.
 
+The durable decisions behind this structure are recorded in
+[the playback ADR index](./adr/README.md).
+
+## Dependency Direction
+
+```mermaid
+flowchart TD
+  presentation["PlayerScreen and presentation"] --> bindings["React bindings and application coordinators"]
+  bindings --> session["PlaybackSession control plane"]
+  session --> contracts["Shared routes, schemas and ports"]
+  session --> preparer["SourcePreparer"]
+  presentation --> playerPort["MediaPlayerAdapter port"]
+  preparer --> sourceAdapters["Direct, HLS, legacy and bridge adapters"]
+  playerPort --> playerAdapters["Native, web and Electron adapters"]
+  sourceAdapters --> bridgeClient["Typed bridge v1 client"]
+  bridgeClient --> streamServer["Node, WebTorrent and FFmpeg media service"]
+  session --> planner["Server Planner v3"]
+  planner --> contracts
+```
+
+Infrastructure adapters do not import screens. Runtime media values flow into
+one active prepared-source lease, not into persisted control-plane state.
+
+## Responsibility Migration
+
+| Concern                          | Previous concentration                    | Current owner                                             |
+| -------------------------------- | ----------------------------------------- | --------------------------------------------------------- |
+| Candidate and fallback authority | Planner v2 plus player/engine inference   | Planner v3 route plus `PlaybackSessionPlaybackService`    |
+| Direct/HLS/torrent preparation   | Player and broad stream engines           | `SourcePreparer` and route adapters                       |
+| Bridge execution                 | Local gateway implementation details      | Shared bridge-v1 schemas, typed client and opaque runtime |
+| Platform playback differences    | `Platform.OS` branches in player behavior | Native, web and Electron media adapters                   |
+| Effective capability decisions   | URL/container/platform inference          | Pure route/runtime/adapter capability policy              |
+| Runtime cleanup                  | Screen, engine and gateway callbacks      | Session-owned idempotent prepared-source lease            |
+| Tracks and subtitles             | Several player/engine arrays              | Normalized deterministic catalog and subtitle renderer    |
+
 ## Boundaries
 
 ### Persisted control plane
@@ -48,10 +83,30 @@ This state is runtime-only. It prevents contradictory UI such as “playing and
 scrubbing” or “failed and preparing” from being represented as unrelated
 booleans.
 
+### Source preparation and runtime ownership
+
+Planner v3 selects an explicit, URL-free `PlaybackRoute`: candidate ID,
+execution target, delivery and the capabilities that route may expose.
+`SourcePreparer` binds that route and action to one adapter and returns a
+runtime-only `PreparedSource` lease. Direct, HLS, legacy-engine and bridge-v1
+adapters all use the same lease contract.
+
+The session service is the sole owner of the lease. It adopts a result only
+when the session, candidate, exact attempt and complete route are still
+current; late or mismatched results are released immediately. Player code can
+read only an attempt-bound handoff containing the safe route, opaque bridge job
+ID and optional runtime. It cannot read the lease release function through
+that handoff or create a second engine for a session-owned source.
+
+Resolve and fallback advances share one per-session single-flight. This keeps
+source preparation serial and prevents concurrent failures from overwriting a
+lease.
+
 ### Media adapter
 
-`MediaPlayerAdapter.ts` is the application-facing boundary around
-`expo-video`. It normalizes:
+`MediaPlayerAdapter.ts` is the platform-neutral player port. The implementations
+in `mediaPlayerAdapters/` select native iOS/Android, web or Electron behavior
+at the composition boundary. They normalize:
 
 - status, playing and accepted time events
 - duration and buffered position
@@ -60,9 +115,27 @@ booleans.
 - playback rate, mute and volume
 - native audio and subtitle tracks
 - thumbnail generation when the platform exposes it
+- fullscreen and picture-in-picture through the concrete surface owned by the
+  current player instance
 
-Platform-specific `expo-video` behavior should stay in this adapter. The screen
-may still own `VideoView` presentation concerns such as fullscreen and PiP.
+Platform-specific `expo-video` behavior stays in these adapters. Web and
+Electron fail closed for track selection that Expo does not expose. The
+effective player capability is the intersection of the Planner v3 route,
+runtime provider and concrete media adapter. Legacy inference is used only
+when no v3 route exists.
+
+### Bridge protocol v1 runtime
+
+Bridge routes use the typed `BridgeClient` and `BridgeV1PlaybackRuntime`. The
+bridge job is bound immutably to one opaque UUID, delivery and approved
+local/LAN origin. Signed stream URLs exist only inside the active prepared
+source lease and are never persisted or logged.
+
+The runtime reuses that prepared job for lazy metrics, the URL-free track
+catalog, bounded subtitle documents, bounded thumbnails and an optional
+seekable-cache handoff. Every request carries the exact job ID. Runtime
+`stop()` aborts observation only; releasing the prepared-source lease owns the
+single bridge-job cancellation.
 
 ### Timeline
 
@@ -111,22 +184,44 @@ The visible player has three disclosure layers:
 
 Technical transport details do not belong in the normal watch flow.
 
+## Capability Matrix
+
+This matrix describes the implemented contract behavior, not completed
+real-device certification. A Planner route may further restrict every target.
+
+| Capability                        | Native Expo Video                              | Web                                 | Electron renderer                     |
+| --------------------------------- | ---------------------------------------------- | ----------------------------------- | ------------------------------------- |
+| Seek                              | Route plus known duration/handoff              | Route plus known duration/handoff   | Route plus known duration/handoff     |
+| Player volume                     | System-owned; no fake slider                   | Supported by player adapter         | Supported by renderer adapter         |
+| Audio/embedded subtitle selection | Exposed only when Expo reports tracks          | Fail closed                         | Fail closed                           |
+| External subtitles                | Route/runtime catalog plus renderer            | Route/runtime catalog plus renderer | Route/runtime catalog plus renderer   |
+| Fullscreen                        | Current `VideoView` surface                    | Current player-owned video element  | Current player-owned video element    |
+| Picture-in-picture                | OS/surface support                             | Browser/element support             | Browser/element support               |
+| Timeline thumbnails               | Native generation or approved runtime provider | Approved bridge runtime only        | Native sidecar runtime provider       |
+| Cast                              | Planner route and device flow                  | Planner route and device flow       | Planner route and sidecar/device flow |
+
+Unsupported capabilities are hidden or return false/null; an adapter does not
+pretend another platform's behavior exists.
+
 ## Play Press To First Rendered Frame
 
 1. Detail or Continue Watching creates a runtime-only launch intent and opens
    the player immediately.
-2. `PlaybackOrchestrator.playBest()` requests and validates Planner v2 output.
-   The client creates a persistence-safe `PlaybackSession` and keeps the raw
-   planner candidates only in memory.
+2. `PlaybackOrchestrator.playBest()` requests and validates Planner v3 output.
+   Planner v2 remains an isolated compatibility input. The client creates a
+   persistence-safe `PlaybackSession` and keeps raw candidates and routes only
+   in memory.
 3. `PlaybackSessionPlaybackService` selects the first eligible opaque
-   candidate and resolves candidates serially. Torrent candidates are never
-   raced through the singleton torrent engine.
-4. Direct/HLS candidates expose a runtime media URI. Torrent candidates create
-   a protected gateway job bound to one exact selected torrent file index.
+   candidate and prepares candidates serially through `SourcePreparer`.
+   Torrent candidates are never raced through the singleton torrent engine.
+4. Direct/HLS routes return a scoped runtime URI. A local-sidecar or
+   paired-bridge torrent route creates one protocol-v1 gateway job bound to the
+   exact selected torrent file.
 5. Gateway readiness proves peer/metadata/first-byte conditions. A progressive
    fMP4 may become usable before optional seekable-cache preparation finishes.
-6. `PlayerScreen` supplies the resolved runtime URI to the media adapter and
-   enters `loading_media`.
+6. `PlayerScreen` supplies the resolved runtime URI to the media adapter,
+   adopts the attempt-bound runtime handoff and enters `loading_media`. It does
+   not resolve a parallel legacy engine or open legacy info-hash metrics.
 7. `readyToPlay` means the media implementation can be used; it does not count
    as watched playback.
 8. `VideoView.onFirstFrameRender` is the first-frame boundary. A real playing
@@ -170,7 +265,8 @@ When a source fails or the bounded stall watchdog accepts a stall:
 6. restore play/pause intent and reapply track preferences
 
 The fallback gap and preview seeks are not reported as watched time. Session
-attempt bounds prevent loops.
+attempt bounds prevent loops, and concurrent fallback signals join the same
+single-flight operation.
 
 ## Torrent Track And Subtitle Flow
 
@@ -179,15 +275,15 @@ active PlaybackSession candidate
         |
 protected gateway job + exact selectedFileIndex
         |
-GET /jobs/:jobId/tracks
+GET /api/bridge/v1/jobs/:opaqueJobId/tracks
         |
 bounded ffprobe + adjacent-file discovery
         |
 URL-free track/subtitle descriptors
         |
-TorrentEngine unified track catalog
+BridgeV1PlaybackRuntime unified track catalog
         |
-GET /jobs/:jobId/subtitles/:opaqueIdentity
+GET /api/bridge/v1/jobs/:opaqueJobId/subtitles/:opaqueDocumentId
         |
 catalog-approved exact file/extraction only
         |
@@ -290,17 +386,37 @@ classifications, counts and numeric timings only.
 
 ## Known Evidence Limits
 
-Automated tests cover contracts, reducers, timeline input, handoff/fallback
-continuity, track ranking, parser bounds, gateway auth and cancellation.
+Automated tests cover Planner v2/v3 contracts, route selection, source leases,
+attempt/fallback races, bridge-v1 schemas and client/runtime boundaries,
+reducers, timeline input, handoff/fallback continuity, media capability policy,
+track ranking, parser bounds, gateway auth and cancellation.
 Actual multi-audio exposure and switching still require verification on each
-supported Expo Video target. PiP subtitle rendering remains platform-owned;
+supported Expo Video target. Paired-LAN playback, real torrents/FFmpeg,
+packaged Electron sidecar ownership, native downloads, Chromecast/AirPlay and
+bridge failure during playback still require real-target evidence. PiP
+subtitle rendering remains platform-owned;
 the external React Native overlay is not claimed to render inside native PiP.
 Web thumbnails are available only for an active gateway job that owns a
 retained seekable remux cache. Direct and cross-origin media without a safe
 frame path deliberately fall back to timestamp-only preview.
 `player.tsx` now delegates the reusable state, media, timeline, subtitle,
-selection, continuity, segment, diagnostic and direct media-control concerns
-described above; styles also live outside the route. It remains a large
-lifecycle/composition host. Later scoped extraction of cast ownership,
-seekable-cache polling and subtitle catalog coordination can reduce its size
-further without introducing another playback state machine.
+selection, continuity, segment, diagnostic, cast and direct media-control
+concerns described above; styles also live outside the route. Cast modal state,
+active-session binding, start/stop behavior and close cleanup live in
+`usePlayerCastController`. The route remains a large lifecycle/composition
+host. Later scoped extraction of seekable-cache polling and subtitle catalog
+coordination can reduce its size further without introducing another playback
+state machine.
+
+## Extension Points
+
+- Alternative media bridge: implement the versioned bridge schemas and typed
+  job semantics; clients must not depend on WebTorrent or FFmpeg internals.
+- New player target or native module: implement `MediaPlayerAdapter` and expose
+  only verified capabilities.
+- Debrid or remote bridge: add planner execution-node support and one
+  `SourcePreparationAdapter`; do not inject provider URLs into player state.
+- Offline files: add an `offline-file` preparer whose lease owns the scoped
+  filesystem permission and verified local file.
+- New track provider: emit normalized, URL-free catalog entries and provide
+  bounded documents through an authenticated opaque identity.

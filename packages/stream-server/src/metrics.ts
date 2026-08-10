@@ -17,6 +17,20 @@ function getTorrentState(torrent: Torrent): TorrentMetrics["state"] {
   return "finding_peers";
 }
 
+export function getTorrentMetricsSnapshot(
+  infoHash: string,
+): TorrentMetrics | undefined {
+  const torrent = getTorrent(infoHash);
+  if (!torrent) return undefined;
+  return {
+    state: getTorrentState(torrent),
+    numPeers: torrent.numPeers,
+    downloadSpeed: torrent.downloadSpeed,
+    progress: torrent.progress,
+    downloaded: torrent.downloaded,
+  };
+}
+
 export function metricsHandler(req: Request, res: Response): void {
   const { infoHash } = req.params;
 

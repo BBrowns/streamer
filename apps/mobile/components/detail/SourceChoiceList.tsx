@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { PlaybackPlan } from "@streamer/shared";
+import type { PlaybackPlanResponse } from "@streamer/shared";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
 import { getPlaybackPlanWithBridgeRetry } from "../../services/playback/PlaybackPlanService";
@@ -29,7 +29,7 @@ export type SourceChoiceQuery = {
 };
 
 export type SourceChoicePlanState = {
-  plan: PlaybackPlan | null;
+  plan: PlaybackPlanResponse | null;
   choices: SourceChoice[];
   loading: boolean;
   error: string | null;
@@ -38,7 +38,7 @@ export type SourceChoicePlanState = {
 
 type SourceChoiceListProps = {
   state: SourceChoicePlanState;
-  onSelect: (plan: PlaybackPlan, candidateId: string) => void;
+  onSelect: (plan: PlaybackPlanResponse, candidateId: string) => void;
 };
 
 export function useSourceChoicePlan({
@@ -48,7 +48,7 @@ export function useSourceChoicePlan({
   episode,
 }: SourceChoiceQuery): SourceChoicePlanState {
   const { t } = useTranslation();
-  const [plan, setPlan] = useState<PlaybackPlan | null>(null);
+  const [plan, setPlan] = useState<PlaybackPlanResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState(0);

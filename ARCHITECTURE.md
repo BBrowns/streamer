@@ -3,16 +3,20 @@
 > **Audience:** Engineers (human or AI agent) who need to understand, extend, or debug this system.
 > This document is the canonical technical reference. Keep it up-to-date whenever the architecture changes.
 > For the current playback, bridge, download, casting, and UI roadmap, see [AGENT_HANDOFF.md](./AGENT_HANDOFF.md).
+> Playback architecture decisions are indexed in [docs/adr/README.md](./docs/adr/README.md), with runtime detail in [docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md).
 
 ---
 
 ## Current Project Phase
 
 Streamer is in the reliability and productization phase. The shared
-`PlaybackSession` control plane, Planner v2, Play Best, downloads, cast,
-gateway/range hardening, bridge security baseline, observability baseline, and
-desktop sidecar/package inputs exist. Future work should harden those flows and
-produce release evidence, not replace them with a new macro architecture.
+`PlaybackSession` control plane, Planner v2/v3, explicit playback routes,
+source-preparation and media-player adapters, bridge protocol v1, Play Best,
+downloads, cast, gateway/range hardening, bridge security baseline,
+observability baseline, and desktop sidecar/package inputs exist. Planner v2
+is a bounded compatibility path while v3 rolls out. Future work should harden
+these flows and produce release evidence, not replace them with a new macro
+architecture.
 
 Do not claim production-ready or release-ready status from architecture alone.
 Real-device QA and release-candidate evidence remain open and are tracked in
@@ -51,7 +55,7 @@ streamer/
 
 **Build system:** [Turborepo](https://turbo.build/) orchestrates all tasks. It caches outputs and understands the dependency graph (`^build` means "build dependencies first"). This means `turbo run build` always builds `packages/shared` before `server` or `mobile`.
 
-**Package manager:** npm workspaces, pinned to npm ≥ 10.9. The `overrides` block in the root `package.json` enforces unified versions of `react`, `react-dom`, and `zod` across all workspaces to avoid duplicate installs.
+**Package manager:** npm workspaces, pinned to npm 11.18 on Node 24.18 LTS. The `overrides` block in the root `package.json` enforces unified versions of `react`, `react-dom`, and `zod` across all workspaces to avoid duplicate installs.
 
 ---
 
@@ -473,12 +477,12 @@ Important client modules:
 
 Manual source selection still exists as an advanced fallback, but the product direction is to keep `Play Best` as the default user flow.
 
-Planner v2 exposes deterministic ordered candidates, top-level selection and
-fallbacks, typed rejection reasons, requested-action eligibility, compatibility
-details, timeout budgets, and a safe `sourceDiscovery` status/count. Candidate
-IDs are opaque UUIDs. The nested `plan` object is a temporary compatibility
-wrapper for the current resolver; new orchestration code should use the
-top-level fields.
+Planner v3 exposes deterministic ordered candidates, top-level selection and
+fallbacks, typed rejection reasons, requested-action eligibility, explicit
+execution target/delivery/capabilities, compatibility details, timeout budgets,
+and a safe `sourceDiscovery` status/count. Candidate IDs are opaque UUIDs.
+Planner v2 and its nested `plan` object remain a temporary compatibility input;
+new orchestration code uses the v3 route.
 
 ### 6.4.1 Fast Plan Reuse, Cancellation, And Ranking
 

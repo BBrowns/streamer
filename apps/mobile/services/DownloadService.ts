@@ -1245,6 +1245,9 @@ export class DownloadService {
         const existingJob = desktopBridge.resumeDownloadJob
           ? await desktopBridge.resumeDownloadJob(id)
           : null;
+        if (existingJob?.requiresReplan) {
+          return this.restartDownloadFromPlan(id);
+        }
         const job =
           existingJob ||
           (await desktopBridge.startDownloadJob(

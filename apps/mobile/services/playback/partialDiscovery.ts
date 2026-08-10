@@ -1,4 +1,4 @@
-import type { PlannedMediaCandidate } from "@streamer/shared";
+import type { PlaybackPlanCandidate } from "@streamer/shared";
 
 /**
  * Planner candidate ids are deliberately fresh per plan. Compare only the
@@ -6,7 +6,7 @@ import type { PlannedMediaCandidate } from "@streamer/shared";
  * failed partial plan something genuinely new to try.
  */
 export function getStableCandidateSourceIdentity(
-  candidate: PlannedMediaCandidate,
+  candidate: PlaybackPlanCandidate,
 ) {
   const stream = candidate.stream;
   if (stream.infoHash) return `infohash:${stream.infoHash.toLowerCase()}`;
@@ -16,8 +16,8 @@ export function getStableCandidateSourceIdentity(
 }
 
 export function hasNewStablePlaybackCandidate(
-  previous: PlannedMediaCandidate[],
-  replacement: PlannedMediaCandidate[],
+  previous: readonly PlaybackPlanCandidate[],
+  replacement: readonly PlaybackPlanCandidate[],
 ) {
   const previousSourceIdentities = new Set(
     previous

@@ -30,9 +30,14 @@ function isIpv4Lan(host: string) {
 }
 
 function isIpv6Lan(host: string) {
-  return (
-    host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:")
-  );
+  // URL only permits an IPv6 host literal when it is bracketed. `normalizeHost`
+  // removes those brackets, so require the remaining colon before interpreting
+  // the first hextet. Without this guard, ordinary domains such as fdevil.com
+  // would be mistaken for an IPv6 ULA and could receive bridge credentials.
+  if (!host.includes(":")) return false;
+
+  const [firstHextet] = host.split(":");
+  return /^(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f])$/i.test(firstHextet);
 }
 
 export function classifyActionEndpoint(

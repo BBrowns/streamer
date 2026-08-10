@@ -295,7 +295,9 @@ test("matches the dark player recovery and non-seekable baselines", async ({
     }),
   ).toHaveAttribute("aria-disabled", "true");
   await expect(
-    page.getByText("Seeking will start preparing after playback begins."),
+    page.getByText(
+      "Preparing seek controls in the background. Playback can continue while this finishes.",
+    ),
   ).toBeVisible();
   await settleVisualFrame(page);
   await expect(page).toHaveScreenshot(

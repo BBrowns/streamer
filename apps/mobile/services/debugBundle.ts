@@ -2,9 +2,9 @@ import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import type {
-  PlaybackPlan,
-  PlannedMediaCandidate,
-  RejectedCandidate,
+  PlaybackPlanCandidate,
+  PlaybackPlanRejectedCandidate,
+  PlaybackPlanResponse,
 } from "@streamer/shared";
 import type { PlaybackSession } from "@streamer/shared";
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
@@ -33,7 +33,7 @@ type JsonValue =
 
 export interface DebugBundleInput {
   sessionId?: string | null;
-  plan?: PlaybackPlan | null;
+  plan?: PlaybackPlanResponse | null;
   context?: Record<string, unknown>;
 }
 
@@ -115,7 +115,7 @@ export function sanitizeDebugValue(
   return output;
 }
 
-function candidateTitle(candidate: PlannedMediaCandidate) {
+function candidateTitle(candidate: PlaybackPlanCandidate) {
   const stream = candidate.stream as Record<string, unknown> | undefined;
   const rawTitle =
     typeof stream?.title === "string"
@@ -126,7 +126,7 @@ function candidateTitle(candidate: PlannedMediaCandidate) {
   return rawTitle ? redactPathLikeText(rawTitle) : undefined;
 }
 
-function safePlannedCandidate(candidate: PlannedMediaCandidate) {
+function safePlannedCandidate(candidate: PlaybackPlanCandidate) {
   return sanitizeDebugValue({
     candidateId: candidate.id,
     rank: candidate.rank,
@@ -149,7 +149,7 @@ function safePlannedCandidate(candidate: PlannedMediaCandidate) {
   });
 }
 
-function safeRejectedCandidate(candidate: RejectedCandidate) {
+function safeRejectedCandidate(candidate: PlaybackPlanRejectedCandidate) {
   return sanitizeDebugValue({
     candidateId: candidate.candidateId,
     title: candidate.title ? redactPathLikeText(candidate.title) : undefined,
@@ -162,7 +162,9 @@ function safeRejectedCandidate(candidate: RejectedCandidate) {
   });
 }
 
-export function createSafePlaybackPlanSnapshot(plan?: PlaybackPlan | null) {
+export function createSafePlaybackPlanSnapshot(
+  plan?: PlaybackPlanResponse | null,
+) {
   if (!plan) return undefined;
 
   return sanitizeDebugValue({
@@ -188,15 +190,16 @@ export function createSafePlaybackPlanSnapshot(plan?: PlaybackPlan | null) {
     requiresBridge: plan.requiresBridge,
     requiresRemux: plan.requiresRemux,
     deviceCompatibility: plan.deviceCompatibility,
-    plan: plan.plan
-      ? {
-          mode: plan.plan.mode,
-          selectedCandidateId: plan.plan.selectedCandidate.id,
-          fallbackCandidateIds:
-            plan.plan.fallbackCandidates?.map((candidate) => candidate.id) ??
-            [],
-        }
-      : undefined,
+    plan:
+      plan.version === 2 && plan.plan
+        ? {
+            mode: plan.plan.mode,
+            selectedCandidateId: plan.plan.selectedCandidate.id,
+            fallbackCandidateIds:
+              plan.plan.fallbackCandidates?.map((candidate) => candidate.id) ??
+              [],
+          }
+        : undefined,
     userMessage: plan.userMessage
       ? redactPathLikeText(plan.userMessage)
       : undefined,

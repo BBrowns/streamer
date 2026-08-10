@@ -2,7 +2,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type {
   PlaybackAction,
-  PlaybackPlan,
+  PlaybackPlanResponse,
   PlaybackRuntimeError,
 } from "@streamer/shared";
 import { useTheme } from "../../hooks/useTheme";
@@ -57,7 +57,9 @@ function attemptedOptionsCopy(errors: string[]) {
     : undefined;
 }
 
-function isQualitySelectionExclusion(plan: PlaybackPlan | null): boolean {
+function isQualitySelectionExclusion(
+  plan: PlaybackPlanResponse | null,
+): boolean {
   return (
     plan?.state === "unsupported" &&
     plan.rejectedCandidates.length > 0 &&
@@ -82,7 +84,7 @@ function qualitySelectionCopy(): PlaybackReadinessNoticeCopy {
 }
 
 export function getPlaybackReadinessCopy(
-  plan: PlaybackPlan | null,
+  plan: PlaybackPlanResponse | null,
   fallback: string,
   action: PlaybackAction,
   errors: string[] = [],

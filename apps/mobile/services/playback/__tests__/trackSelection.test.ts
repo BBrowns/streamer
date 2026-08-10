@@ -1,4 +1,5 @@
 import {
+  buildMediaAdapterTrackCatalog,
   buildPlayerTrackCatalog,
   buildTrackRows,
   findPreferredPlayerTrack,
@@ -76,6 +77,80 @@ describe("trackSelection", () => {
         fetchIdentity: "opaque-nl",
       }),
     ]);
+  });
+
+  it("uses media-adapter capabilities as the authority for selectable tracks", () => {
+    const mediaAudioTracks = [
+      {
+        id: "adapter-audio",
+        kind: "audio" as const,
+        language: "eng",
+        label: "English",
+        active: true,
+        isDefault: true,
+        autoSelect: true,
+      },
+    ];
+    const mediaSubtitleTracks = [
+      {
+        id: "adapter-subtitle",
+        kind: "subtitle" as const,
+        language: "nld",
+        label: "Nederlands",
+        active: true,
+        isDefault: false,
+        autoSelect: false,
+      },
+    ];
+    const engineSubtitles = [
+      {
+        id: "bridge-subtitle",
+        label: "English",
+        language: "en",
+        active: false,
+        source: "torrent-file" as const,
+        fetchIdentity: "opaque-document",
+      },
+    ];
+
+    expect(
+      buildMediaAdapterTrackCatalog({
+        capabilities: { audioTracks: true, embeddedSubtitles: true },
+        mediaAudioTracks,
+        mediaSubtitleTracks,
+        engineSubtitles,
+      }),
+    ).toEqual({
+      audioTracks: [
+        expect.objectContaining({
+          id: "adapter-audio",
+          language: "en",
+          active: true,
+        }),
+      ],
+      subtitles: [
+        expect.objectContaining({
+          id: "bridge-subtitle",
+          source: "torrent-file",
+        }),
+        expect.objectContaining({
+          id: "adapter-subtitle",
+          source: "embedded",
+        }),
+      ],
+    });
+
+    expect(
+      buildMediaAdapterTrackCatalog({
+        capabilities: { audioTracks: false, embeddedSubtitles: false },
+        mediaAudioTracks,
+        mediaSubtitleTracks,
+        engineSubtitles,
+      }),
+    ).toEqual({
+      audioTracks: [],
+      subtitles: engineSubtitles,
+    });
   });
 
   it("expands accessibility track abbreviations into understandable labels", () => {

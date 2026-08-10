@@ -1,9 +1,12 @@
 import type {
   PlaybackGatewayPhase,
   PlaybackRuntimeError,
+  PlaybackRoute,
   PlaybackSession,
   PlaybackSessionStatus,
+  PlaybackPlanCandidate,
   PlannedMediaCandidate,
+  PlannedMediaCandidateV3,
   Stream,
 } from "@streamer/shared";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
@@ -17,6 +20,18 @@ import {
   type IStreamEngine,
 } from "../streamEngine/IStreamEngine";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import {
+  BridgeV1SourceAdapter,
+  DirectSourceAdapter,
+  HlsSourceAdapter,
+  LegacyStreamEngineAdapter,
+  SourcePreparationError,
+  SourcePreparationRegistry,
+  SourcePreparer,
+  isSourcePreparationError,
+  type PreparedSource,
+  type SourcePreparationAdapter,
+} from "../sourcePreparation";
 import { getUnsupportedWebCodecReason } from "../streamEngine/codecSupport";
 import {
   createPlaybackRuntimeError,
@@ -27,6 +42,7 @@ import { toPlaybackSessionError } from "./PlaybackSessionReducer";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
 import {
   ActionPreflightError,
+  buildActionBridgeHint,
   preflightStreamAction,
   requireActionPreflight,
 } from "../actionPreflight";
@@ -38,12 +54,59 @@ const TERMINAL_STATUSES = new Set<PlaybackSessionStatus>([
   "cancelled",
 ]);
 
-const activeEngineBySession = new Map<string, IStreamEngine>();
+const activeSourceBySession = new Map<string, PreparedSource>();
+const activeReleaseBySession = new Map<string, Promise<void>>();
+const preparationAbortBySession = new Map<string, AbortController>();
 const resolutionBySession = new Map<
   string,
   Promise<PlaybackSessionInternalResolutionResult>
 >();
 const lastGatewayBreadcrumbPhaseBySession = new Map<string, string>();
+
+/**
+ * Runtime-only handoff for the active player. Deliberately excludes the
+ * resolved URI and source payload so neither can leak into UI state or
+ * persistence while the screen adopts the prepared runtime.
+ */
+export interface ActivePlaybackSourceRuntime {
+  route?: PlaybackRoute;
+  bridgeJobId?: string;
+  runtime?: IStreamEngine;
+}
+
+export function getActivePlaybackSourceRuntime(
+  sessionId: string,
+  attemptId: string,
+): ActivePlaybackSourceRuntime | null {
+  const source = activeSourceBySession.get(sessionId);
+  const session = getSession(sessionId);
+  const attempt = session?.attempts.find((item) => item.id === attemptId);
+  if (
+    !source ||
+    source.released ||
+    source.attemptId !== attemptId ||
+    !session ||
+    isTerminal(session) ||
+    !attempt ||
+    attempt.status !== "ready" ||
+    session.selectedCandidateId !== attempt.candidateId
+  ) {
+    return null;
+  }
+
+  return {
+    ...(source.route
+      ? {
+          route: {
+            ...source.route,
+            capabilities: { ...source.route.capabilities },
+          },
+        }
+      : {}),
+    ...(source.bridgeJobId ? { bridgeJobId: source.bridgeJobId } : {}),
+    ...(source.runtime ? { runtime: source.runtime } : {}),
+  };
+}
 
 export interface PlaybackSessionResolutionSuccess {
   ok: true;
@@ -52,6 +115,9 @@ export interface PlaybackSessionResolutionSuccess {
   attemptId: string;
   stream: Stream;
   uri: string;
+  route?: PlaybackRoute;
+  bridgeJobId?: string;
+  runtime?: IStreamEngine;
   fallbackReason?: string;
 }
 
@@ -153,9 +219,86 @@ function getErrorMessage(error: unknown): string {
   return typeof message === "string" ? message : "";
 }
 
+function isRoutedCandidate(
+  candidate: PlaybackPlanCandidate,
+): candidate is PlannedMediaCandidateV3 {
+  return "route" in candidate;
+}
+
+function sameRoute(
+  left: PlaybackRoute | undefined,
+  right: PlaybackRoute | undefined,
+) {
+  if (!left || !right) return left === right;
+
+  return (
+    left.candidateId === right.candidateId &&
+    left.executionTarget === right.executionTarget &&
+    left.delivery === right.delivery &&
+    left.capabilities.seek === right.capabilities.seek &&
+    left.capabilities.audioTracks === right.capabilities.audioTracks &&
+    left.capabilities.embeddedSubtitles ===
+      right.capabilities.embeddedSubtitles &&
+    left.capabilities.externalSubtitles ===
+      right.capabilities.externalSubtitles &&
+    left.capabilities.cast === right.capabilities.cast &&
+    left.capabilities.offline === right.capabilities.offline &&
+    left.capabilities.thumbnails === right.capabilities.thumbnails
+  );
+}
+
+function buildRuntimeSourcePreparer(
+  candidate: PlaybackPlanCandidate,
+  session: PlaybackSession,
+) {
+  const adapters: SourcePreparationAdapter[] = [
+    new DirectSourceAdapter(),
+    new HlsSourceAdapter(),
+  ];
+
+  if (
+    isRoutedCandidate(candidate) &&
+    (candidate.route.executionTarget === "local-sidecar" ||
+      candidate.route.executionTarget === "paired-bridge")
+  ) {
+    const bridgeUrl = buildActionBridgeHint({
+      deviceProfile: session.deviceProfile,
+    }).url;
+    if (!bridgeUrl) {
+      throw new SourcePreparationError(
+        "BRIDGE_UNAVAILABLE",
+        "The selected bridge route has no trusted runtime endpoint.",
+        { retryable: true, shouldFallback: false },
+      );
+    }
+    adapters.push(
+      new BridgeV1SourceAdapter({
+        executionTarget: candidate.route.executionTarget,
+        baseUrl: bridgeUrl,
+      }),
+    );
+  }
+
+  return new SourcePreparer(
+    new SourcePreparationRegistry(adapters),
+    new LegacyStreamEngineAdapter(streamEngineManager),
+  );
+}
+
+function candidateWithPreparationStream(
+  candidate: PlaybackPlanCandidate,
+  stream: Stream,
+): PlaybackPlanCandidate {
+  if (isRoutedCandidate(candidate)) return candidate;
+  return {
+    ...(candidate as PlannedMediaCandidate),
+    stream,
+  };
+}
+
 function toSafeRuntimeError(
   error: unknown,
-  candidate: PlannedMediaCandidate | null,
+  candidate: PlaybackPlanCandidate | null,
   shouldFallback: boolean,
 ): PlaybackRuntimeError {
   if (error instanceof ActionPreflightError) {
@@ -170,6 +313,27 @@ function toSafeRuntimeError(
     return createPlaybackRuntimeError(code, error.message, {
       retryable: error.eligibility.mode === "bridge-torrent",
       shouldFallback,
+    });
+  }
+
+  if (isSourcePreparationError(error)) {
+    const causeMessage = getErrorMessage(error.cause);
+    const inferredCode = causeMessage
+      ? inferPlaybackErrorCodeFromMessages([causeMessage])
+      : undefined;
+    const code =
+      inferredCode ||
+      (error.code === "UNSUPPORTED_ROUTE"
+        ? candidate?.requiresBridge
+          ? "BRIDGE_UNSUPPORTED"
+          : "SOURCE_UNAVAILABLE"
+        : error.code === "INVALID_SOURCE" || error.code === "CANCELLED"
+          ? "SOURCE_UNAVAILABLE"
+          : error.code);
+    return createPlaybackRuntimeError(code, undefined, {
+      retryable: error.retryable,
+      shouldFallback: shouldFallback && error.shouldFallback,
+      debugMessage: causeMessage || error.message,
     });
   }
 
@@ -210,12 +374,12 @@ function dispatchSessionStatus(
 
 function getCandidateStream(
   sessionId: string,
-  candidate: PlannedMediaCandidate,
+  candidate: PlaybackPlanCandidate,
 ): Stream {
   const plan = usePlaybackSessionStore.getState().getRuntimePlan(sessionId);
   const playbackUrl =
-    plan?.plan?.selectedCandidate.id === candidate.id
-      ? plan.plan.playbackUrl
+    plan?.version === 2 && plan.plan?.selectedCandidate.id === candidate.id
+      ? plan.plan?.playbackUrl
       : undefined;
 
   return playbackUrl
@@ -241,7 +405,7 @@ function getRemainingBudgetMs(session: PlaybackSession) {
 
 function getCandidateTimeoutMs(
   session: PlaybackSession,
-  candidate: PlannedMediaCandidate,
+  candidate: PlaybackPlanCandidate,
 ) {
   const plan = usePlaybackSessionStore.getState().getRuntimePlan(session.id);
   const timeoutBudget = plan?.timeoutBudget;
@@ -383,10 +547,75 @@ function withTimeout<T>(
   });
 }
 
-function stopActiveEngine(sessionId: string) {
-  const engine = activeEngineBySession.get(sessionId);
-  activeEngineBySession.delete(sessionId);
-  engine?.stop?.();
+function abortActivePreparation(sessionId: string, reason?: string) {
+  const controller = preparationAbortBySession.get(sessionId);
+  preparationAbortBySession.delete(sessionId);
+  if (controller && !controller.signal.aborted) controller.abort(reason);
+}
+
+async function releaseActiveSource(sessionId: string): Promise<void> {
+  const existingRelease = activeReleaseBySession.get(sessionId);
+  if (existingRelease) {
+    await existingRelease;
+    return;
+  }
+
+  const source = activeSourceBySession.get(sessionId);
+  activeSourceBySession.delete(sessionId);
+  if (!source) return;
+
+  const release = source
+    .release()
+    .catch(() => {
+      console.warn("[PlaybackSession] Failed to release prepared source.");
+    })
+    .finally(() => {
+      if (activeReleaseBySession.get(sessionId) === release) {
+        activeReleaseBySession.delete(sessionId);
+      }
+    });
+  activeReleaseBySession.set(sessionId, release);
+  await release;
+}
+
+async function stopActiveSource(sessionId: string, reason?: string) {
+  abortActivePreparation(sessionId, reason);
+  await releaseActiveSource(sessionId);
+}
+
+async function releasePreparedSource(source: PreparedSource) {
+  try {
+    await source.release();
+  } catch {
+    console.warn("[PlaybackSession] Failed to release prepared source.");
+  }
+}
+
+function isPreparationLifecycleCurrent(
+  sessionId: string,
+  candidateId: string,
+  candidate: PlaybackPlanCandidate,
+  attemptId: string,
+  preparationController: AbortController,
+) {
+  const currentSession = getSession(sessionId);
+  const currentCandidate = usePlaybackSessionStore
+    .getState()
+    .getRuntimeCandidate(sessionId, candidateId);
+  const currentAttempt = currentSession?.attempts.find(
+    (item) => item.id === attemptId,
+  );
+
+  return (
+    preparationAbortBySession.get(sessionId) === preparationController &&
+    !preparationController.signal.aborted &&
+    !!currentSession &&
+    !isTerminal(currentSession) &&
+    currentSession.selectedCandidateId === candidateId &&
+    currentCandidate === candidate &&
+    currentAttempt?.candidateId === candidateId &&
+    currentAttempt.status === "attempting"
+  );
 }
 
 function clearSessionBreadcrumbState(sessionId: string) {
@@ -608,39 +837,13 @@ async function attemptCandidate(
     return { ok: false, sessionId, error };
   }
 
-  const engine = streamEngineManager.resolveEngine(stream);
-  if (!engine) {
-    const error = createPlaybackRuntimeError("SOURCE_UNAVAILABLE", undefined, {
-      retryable: true,
-      shouldFallback: hasFallback,
-    });
-    store.dispatchPlaybackEvent(sessionId, {
-      type: "attempt_failed",
-      attemptId: attempt.id,
-      candidateId,
-      error: toPlaybackSessionError(error),
-    });
-    addMobileBreadcrumb({
-      category: "playback",
-      message: "playback.candidate_failed",
-      level: "warning",
-      data: {
-        sessionId,
-        action,
-        candidateId,
-        attemptId: attempt.id,
-        code: error.code,
-        shouldFallback: error.shouldFallback,
-      },
-    });
-    return { ok: false, sessionId, error };
-  }
-
   // Primary viewing can consume a fragmented MP4 as the torrent arrives. Keep
   // the completed seekable MP4 path for download and cast, which need stable
-  // byte ranges rather than the fastest possible first frame.
+  // byte ranges rather than the fastest possible first frame. Planner v3
+  // already carries this decision in its exact delivery route, so only the
+  // isolated v2 compatibility adapter still needs the legacy hint.
   const streamForResolution: Stream =
-    action === "play" && stream.infoHash
+    !isRoutedCandidate(candidate) && action === "play" && stream.infoHash
       ? {
           ...stream,
           behaviorHints: {
@@ -650,8 +853,17 @@ async function attemptCandidate(
         }
       : stream;
 
-  stopActiveEngine(sessionId);
-  activeEngineBySession.set(sessionId, engine);
+  await stopActiveSource(sessionId, "Preparing the selected source.");
+  const sessionAfterRelease = getSession(sessionId);
+  if (!sessionAfterRelease || isTerminal(sessionAfterRelease)) {
+    return {
+      ok: false,
+      sessionId,
+      error: sessionAfterRelease
+        ? runtimeErrorFromSession(sessionAfterRelease)
+        : createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
+    };
+  }
 
   if (candidate.requiresBridge || candidate.kind === "torrent") {
     dispatchSessionStatus(sessionId, "checking_bridge");
@@ -661,7 +873,8 @@ async function attemptCandidate(
 
   const onGateway = (progress: GatewayJobProgress) =>
     recordGatewayEvent(sessionId, candidateId, progress);
-  engine.on("gateway", onGateway);
+  const preparationController = new AbortController();
+  preparationAbortBySession.set(sessionId, preparationController);
 
   try {
     const actionDeviceProfile =
@@ -684,18 +897,88 @@ async function attemptCandidate(
     }
 
     const timeoutMs = getCandidateTimeoutMs(currentSession, candidate);
-    const uri = await withTimeout(
-      engine.getPlaybackUri(streamForResolution),
+    const sourcePreparer = buildRuntimeSourcePreparer(
+      candidate,
+      currentSession,
+    );
+    const preparationCandidate = candidateWithPreparationStream(
+      candidate,
+      streamForResolution,
+    );
+    const preparation = isRoutedCandidate(preparationCandidate)
+      ? sourcePreparer.prepare({
+          action,
+          attemptId: attempt.id,
+          requestId: attempt.id,
+          candidate: preparationCandidate,
+          route: preparationCandidate.route,
+          signal: preparationController.signal,
+          onGatewayProgress: onGateway,
+        })
+      : sourcePreparer.prepare({
+          action,
+          attemptId: attempt.id,
+          requestId: attempt.id,
+          candidate: preparationCandidate,
+          signal: preparationController.signal,
+          onGatewayProgress: onGateway,
+        });
+    const preparedSource = await withTimeout(
+      preparation,
       timeoutMs,
       getActionMessage(action, {
         play: "Playback source preparation timed out.",
         download: "Download source preparation timed out.",
         cast: "Cast source preparation timed out.",
       }),
-      () => stopActiveEngine(sessionId),
+      () => {
+        if (
+          preparationAbortBySession.get(sessionId) === preparationController
+        ) {
+          preparationController.abort("Source preparation timed out.");
+        }
+      },
     );
+
+    if (
+      !isPreparationLifecycleCurrent(
+        sessionId,
+        candidateId,
+        candidate,
+        attempt.id,
+        preparationController,
+      )
+    ) {
+      await releasePreparedSource(preparedSource);
+      const supersededSession = getSession(sessionId);
+      return {
+        ok: false,
+        sessionId,
+        error: supersededSession
+          ? runtimeErrorFromSession(supersededSession)
+          : createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
+      };
+    }
+
+    const expectedRoute = isRoutedCandidate(candidate)
+      ? candidate.route
+      : undefined;
+    if (
+      preparedSource.released ||
+      preparedSource.attemptId !== attempt.id ||
+      !sameRoute(preparedSource.route, expectedRoute)
+    ) {
+      await releasePreparedSource(preparedSource);
+      throw new SourcePreparationError(
+        "INVALID_SOURCE",
+        "The prepared source does not match the active playback attempt and route.",
+        { retryable: false, shouldFallback: false },
+      );
+    }
+
     const latestSession = getSession(sessionId);
     if (!latestSession || isTerminal(latestSession)) {
+      await releasePreparedSource(preparedSource);
       return {
         ok: false,
         sessionId,
@@ -705,7 +988,9 @@ async function attemptCandidate(
       };
     }
 
+    const { uri } = preparedSource;
     if (!uri || uri.length === 0) {
+      await releasePreparedSource(preparedSource);
       if (candidate.requiresBridge || candidate.kind === "torrent") {
         requireActionPreflight(
           preflightStreamAction(action, stream, {
@@ -720,10 +1005,8 @@ async function attemptCandidate(
       throw new Error("Source did not return a playback URL.");
     }
 
-    const resolvedStream =
-      streamForResolution.url === uri
-        ? streamForResolution
-        : { ...streamForResolution, url: uri };
+    activeSourceBySession.set(sessionId, preparedSource);
+    const resolvedStream = preparedSource.stream;
     const eligibility =
       action === "download"
         ? requireOfflineDownloadEligibility(resolvedStream)
@@ -755,10 +1038,16 @@ async function attemptCandidate(
       attemptId: attempt.id,
       stream: resolvedStream,
       uri,
+      route: preparedSource.route,
+      bridgeJobId: preparedSource.bridgeJobId,
+      runtime: preparedSource.runtime,
       eligibility,
     };
   } catch (error) {
-    if (isStreamEngineCancellationError(error)) {
+    if (
+      isStreamEngineCancellationError(error) ||
+      (isSourcePreparationError(error) && error.isCancellation)
+    ) {
       let cancelledSession = getSession(sessionId);
       if (cancelledSession && !isTerminal(cancelledSession)) {
         store.cancelSession(
@@ -772,7 +1061,7 @@ async function attemptCandidate(
         cancelledSession = getSession(sessionId);
       }
 
-      stopActiveEngine(sessionId);
+      await stopActiveSource(sessionId, "Source preparation was cancelled.");
       clearSessionBreadcrumbState(sessionId);
       return {
         ok: false,
@@ -788,6 +1077,7 @@ async function attemptCandidate(
 
     const latestSession = getSession(sessionId);
     if (!latestSession || isTerminal(latestSession)) {
+      await stopActiveSource(sessionId, "Playback session ended.");
       return {
         ok: false,
         sessionId,
@@ -817,10 +1107,12 @@ async function attemptCandidate(
         shouldFallback: runtimeError.shouldFallback,
       },
     });
-    stopActiveEngine(sessionId);
+    await stopActiveSource(sessionId, "Source preparation failed.");
     return { ok: false, sessionId, error: runtimeError };
   } finally {
-    engine.off("gateway", onGateway);
+    if (preparationAbortBySession.get(sessionId) === preparationController) {
+      preparationAbortBySession.delete(sessionId);
+    }
   }
 }
 
@@ -931,37 +1223,38 @@ async function resolveCandidateChain(
   return { ok: false, sessionId, error: terminalError };
 }
 
+function runSessionResolutionSingleFlight(
+  sessionId: string,
+  resolve: () => Promise<PlaybackSessionInternalResolutionResult>,
+) {
+  const existing = resolutionBySession.get(sessionId);
+  if (existing) return existing;
+
+  const resolution = resolve().finally(() => {
+    if (resolutionBySession.get(sessionId) === resolution) {
+      resolutionBySession.delete(sessionId);
+    }
+  });
+  resolutionBySession.set(sessionId, resolution);
+  return resolution;
+}
+
 export function resolvePlaybackSession(
   sessionId: string,
   startCandidateId?: string,
 ): Promise<PlaybackSessionResolutionResult> {
-  const existing = resolutionBySession.get(sessionId);
-  if (existing) return existing;
-
-  const resolution = resolveCandidateChain(
-    sessionId,
-    "play",
-    startCandidateId,
-  ).finally(() => {
-    resolutionBySession.delete(sessionId);
-  });
-  resolutionBySession.set(sessionId, resolution);
-  return resolution;
+  return runSessionResolutionSingleFlight(sessionId, () =>
+    resolveCandidateChain(sessionId, "play", startCandidateId),
+  );
 }
 
 export async function resolveDownloadSession(
   sessionId: string,
   startCandidateId?: string,
 ): Promise<PlaybackSessionDownloadResolutionResult> {
-  const existing = resolutionBySession.get(sessionId);
-  const resolution =
-    existing ||
-    resolveCandidateChain(sessionId, "download", startCandidateId).finally(
-      () => {
-        resolutionBySession.delete(sessionId);
-      },
-    );
-  if (!existing) resolutionBySession.set(sessionId, resolution);
+  const resolution = runSessionResolutionSingleFlight(sessionId, () =>
+    resolveCandidateChain(sessionId, "download", startCandidateId),
+  );
 
   const result = await resolution;
   if (!result.ok) return result;
@@ -987,18 +1280,9 @@ export function resolveCastSession(
   sessionId: string,
   startCandidateId?: string,
 ): Promise<PlaybackSessionResolutionResult> {
-  const existing = resolutionBySession.get(sessionId);
-  if (existing) return existing;
-
-  const resolution = resolveCandidateChain(
-    sessionId,
-    "cast",
-    startCandidateId,
-  ).finally(() => {
-    resolutionBySession.delete(sessionId);
-  });
-  resolutionBySession.set(sessionId, resolution);
-  return resolution;
+  return runSessionResolutionSingleFlight(sessionId, () =>
+    resolveCandidateChain(sessionId, "cast", startCandidateId),
+  );
 }
 
 async function advanceSessionAfterFailure(
@@ -1024,7 +1308,7 @@ async function advanceSessionAfterFailure(
     return { ok: false, sessionId, error: runtimeErrorFromSession(session) };
   }
 
-  stopActiveEngine(sessionId);
+  await stopActiveSource(sessionId, "Switching to a fallback source.");
   const attempt =
     session.attempts.find((item) => item.id === attemptId) ||
     [...session.attempts]
@@ -1073,12 +1357,14 @@ export function advancePlaybackSessionAfterFailure(
   attemptId: string | null,
   error: PlaybackRuntimeError,
 ): Promise<PlaybackSessionResolutionResult> {
-  return advanceSessionAfterFailure(
-    sessionId,
-    candidateId,
-    attemptId,
-    error,
-    "play",
+  return runSessionResolutionSingleFlight(sessionId, () =>
+    advanceSessionAfterFailure(
+      sessionId,
+      candidateId,
+      attemptId,
+      error,
+      "play",
+    ),
   );
 }
 
@@ -1088,12 +1374,14 @@ export function advanceCastSessionAfterFailure(
   attemptId: string | null,
   error: PlaybackRuntimeError,
 ): Promise<PlaybackSessionResolutionResult> {
-  return advanceSessionAfterFailure(
-    sessionId,
-    candidateId,
-    attemptId,
-    error,
-    "cast",
+  return runSessionResolutionSingleFlight(sessionId, () =>
+    advanceSessionAfterFailure(
+      sessionId,
+      candidateId,
+      attemptId,
+      error,
+      "cast",
+    ),
   );
 }
 
@@ -1113,7 +1401,7 @@ export function failPlaybackSession(
   sessionId: string,
   error: PlaybackRuntimeError,
 ) {
-  stopActiveEngine(sessionId);
+  void stopActiveSource(sessionId, "Playback session failed.");
   clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
   if (session && !isTerminal(session)) {
@@ -1122,7 +1410,7 @@ export function failPlaybackSession(
 }
 
 export function completePlaybackSession(sessionId: string) {
-  stopActiveEngine(sessionId);
+  void stopActiveSource(sessionId, "Playback session completed.");
   clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
   if (session && !isTerminal(session)) {
@@ -1137,6 +1425,6 @@ export function cancelPlaybackSession(sessionId: string, reason?: string) {
     usePlaybackSessionStore.getState().cancelSession(sessionId, reason);
   }
 
-  stopActiveEngine(sessionId);
+  void stopActiveSource(sessionId, reason || "Playback session cancelled.");
   clearSessionBreadcrumbState(sessionId);
 }

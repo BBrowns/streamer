@@ -35,6 +35,18 @@ function redactSensitiveText(value) {
     .replace(/(C:\\Users\\)[^\\\s"'<>]+/gi, "$1[redacted]");
 }
 
+function classifyUntrustedOrigin(value) {
+  try {
+    const protocol = new URL(String(value)).protocol.toLowerCase();
+    if (protocol === "file:") return "file";
+    if (protocol === "http:") return "http";
+    if (protocol === "https:") return "https";
+  } catch {
+    // Invalid sender URLs are intentionally grouped without retaining input.
+  }
+  return "other";
+}
+
 function isEnabledFlag(value) {
   return ["1", "true", "yes", "on"].includes(
     String(value ?? "")
@@ -179,6 +191,7 @@ function flushDesktopSentry(timeoutMs = 2000) {
 module.exports = {
   captureDesktopException,
   captureDesktopMessage,
+  classifyUntrustedOrigin,
   createDesktopSentryOptions,
   flushDesktopSentry,
   initDesktopSentry,
