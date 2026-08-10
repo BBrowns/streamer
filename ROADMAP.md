@@ -243,7 +243,10 @@ and preserve URL-free persistence and capability-gated native behavior.
 2. **Planner v3 rollout:** aggregate v3 success, unsupported fallback, and
    explicit legacy selection; block new v2 call sites outside the compatibility
    adapter; mark v2 deprecated in response metadata and documentation; remove
-   it only after 30 days with no fallback from all supported releases.
+   it only after 30 days with no fallback from all supported releases. The
+   initial rollout slice adds bounded process-local counters, an explicit v2
+   deprecation marker, and a boundary check that keeps the legacy endpoint in
+   the mobile compatibility adapter.
 3. **Player/session decomposition:** extract remaining planning, replan,
    fallback, route-exit, cleanup, and attempt/lease coordination from the
    player host into one binding hook/service. Do not create a second store or

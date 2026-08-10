@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   playbackPlanV3Schema,
+  plannerTelemetryMetricsV1Schema,
   type DeviceProfile,
   type PlaybackExecutionNode,
   type PlaybackPlanV3Request,
@@ -29,6 +30,10 @@ import { playbackRouter } from "../src/modules/playback/playback.routes.js";
 import { playbackPlannerService } from "../src/modules/playback/playback-planner.service.js";
 import { playbackPlannerV3Service } from "../src/modules/playback/playback-planner-v3.service.js";
 import { aggregatorService } from "../src/modules/aggregator/aggregator.service.js";
+import {
+  __resetPlannerTelemetryForTests,
+  getPlannerTelemetryMetricsSnapshot,
+} from "../src/modules/playback/planner-telemetry.service.js";
 
 const capabilities: PlaybackRouteCapabilities = {
   seek: "immediate",
@@ -84,6 +89,7 @@ describe("playback planning routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetPlannerTelemetryForTests();
     vi.mocked(aggregatorService.getStreamDiscovery).mockImplementation(
       async (userId, type, id, requestId, options) => ({
         streams: await aggregatorService.getStreams(
@@ -169,11 +175,72 @@ describe("playback planning routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.version).toBe(2);
+    expect(response.body.deprecation).toEqual({
+      status: "deprecated",
+      replacementVersion: 3,
+    });
+    expect(
+      getPlannerTelemetryMetricsSnapshot().counters.v2_legacy_selection,
+    ).toBe(1);
     expect(createPlan).toHaveBeenCalledWith(
       "route-user",
       expect.objectContaining({ type: "movie", action: "play" }),
       "route-request",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("records v3 success and exposes only aggregate planner metrics", async () => {
+    const response = await request(app)
+      .post("/api/playback/plan/v3")
+      .send(planRequest());
+
+    expect(response.status).toBe(200);
+    const metricsResponse = await request(app).get("/api/playback/metrics");
+
+    expect(metricsResponse.status).toBe(200);
+    expect(() =>
+      plannerTelemetryMetricsV1Schema.parse(metricsResponse.body),
+    ).not.toThrow();
+    expect(metricsResponse.body.counters).toEqual(
+      expect.objectContaining({ v3_success: 1 }),
+    );
+    expect(JSON.stringify(metricsResponse.body)).not.toMatch(
+      /tt-route|route-user|route-request|https?:\/\//,
+    );
+  });
+
+  it("records a bounded v3 unsupported fallback signal on the v2 route", async () => {
+    const expected = await playbackPlannerService.createPlan(
+      "route-user",
+      {
+        type: "movie",
+        id: "tt-route",
+        action: "play",
+        deviceProfile,
+      },
+      "route-request",
+    );
+    vi.spyOn(playbackPlannerService, "createPlan").mockResolvedValue(
+      expected as any,
+    );
+
+    const response = await request(app)
+      .post("/api/playback/plan")
+      .set("X-Playback-Planner-Compatibility", "v3-unsupported-fallback")
+      .send({
+        type: "movie",
+        id: "tt-route",
+        action: "play",
+        deviceProfile,
+      });
+
+    expect(response.status).toBe(200);
+    expect(getPlannerTelemetryMetricsSnapshot().counters).toEqual(
+      expect.objectContaining({
+        v2_legacy_selection: 1,
+        v3_unsupported_fallback: 1,
+      }),
     );
   });
 });

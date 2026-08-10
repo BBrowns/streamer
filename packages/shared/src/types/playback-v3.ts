@@ -124,6 +124,7 @@ export interface PlaybackPlanV3 extends Omit<
   | "rejectedCandidates"
   | "actionEligibility"
   | "plan"
+  | "deprecation"
   | "debug"
 > {
   version: 3;

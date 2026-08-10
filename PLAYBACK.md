@@ -46,6 +46,15 @@ client validate the versioned response with the shared Zod schemas. A v3 route
 never silently downgrades to URL inference when its execution target or
 delivery cannot be prepared.
 
+The legacy `/api/playback/plan` response is explicitly marked deprecated and
+points consumers to the v3 route through response metadata. The mobile client
+keeps the v2 request in one compatibility adapter only: it uses the v3 route
+first and sends a bounded compatibility signal when an older server requires a
+fallback. Server-side planner evidence exposes only process-level counters for
+v3 success, v3 no-route outcomes, unsupported compatibility fallback, and v2
+legacy selection. It never includes account ids, request ids, titles,
+candidate ids, source data, URLs, or error text.
+
 `PlaybackSession` is the persistence-safe source of truth for one play,
 download, or cast workflow. It stores:
 

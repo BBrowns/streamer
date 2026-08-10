@@ -1,7 +1,17 @@
 import type { Context } from "hono";
-import { playbackPlanSchema, playbackPlanV3Schema } from "@streamer/shared";
+import {
+  PLAYBACK_PLANNER_COMPATIBILITY_HEADER,
+  playbackPlanSchema,
+  playbackPlanV3Schema,
+  playbackPlannerCompatibilitySignalSchema,
+} from "@streamer/shared";
 import { playbackPlannerService } from "./playback-planner.service.js";
 import { playbackPlannerV3Service } from "./playback-planner-v3.service.js";
+import {
+  getPlannerTelemetryMetricsSnapshot,
+  recordPlannerV2Selection,
+  recordPlannerV3Outcome,
+} from "./planner-telemetry.service.js";
 
 export class PlaybackController {
   async plan(c: Context) {
@@ -16,7 +26,23 @@ export class PlaybackController {
       { signal: c.req.raw.signal },
     );
 
-    return c.json(playbackPlanSchema.parse(plan));
+    const compatibilitySignal =
+      playbackPlannerCompatibilitySignalSchema.safeParse(
+        c.req.header(PLAYBACK_PLANNER_COMPATIBILITY_HEADER),
+      );
+    recordPlannerV2Selection(
+      compatibilitySignal.success ? compatibilitySignal.data : undefined,
+    );
+
+    return c.json(
+      playbackPlanSchema.parse({
+        ...plan,
+        deprecation: {
+          status: "deprecated",
+          replacementVersion: 3,
+        },
+      }),
+    );
   }
 
   async planV3(c: Context) {
@@ -31,7 +57,12 @@ export class PlaybackController {
       { signal: c.req.raw.signal },
     );
 
+    recordPlannerV3Outcome(plan.state);
     return c.json(playbackPlanV3Schema.parse(plan));
+  }
+
+  metrics(c: Context) {
+    return c.json(getPlannerTelemetryMetricsSnapshot());
   }
 }
 

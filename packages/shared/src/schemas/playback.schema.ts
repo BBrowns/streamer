@@ -250,9 +250,17 @@ export const playbackSourceDiscoverySchema = z
   })
   .strict();
 
+export const playbackPlanDeprecationSchema = z
+  .object({
+    status: z.literal("deprecated"),
+    replacementVersion: z.literal(3),
+  })
+  .strict();
+
 export const playbackPlanSchema = z
   .object({
     version: z.literal(2),
+    deprecation: playbackPlanDeprecationSchema.optional(),
     action: playbackActionSchema,
     state: z.enum([
       "ready",
