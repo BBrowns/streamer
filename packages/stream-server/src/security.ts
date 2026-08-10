@@ -17,6 +17,7 @@ import {
   type BridgeV1ErrorCode,
   type CreateBridgeAccessSessionV1,
 } from "@streamer/shared";
+import { recordBridgeOperationalEvent } from "./bridge-metrics.js";
 
 export interface CastUrlValidationOptions {
   allowedHosts?: string[];
@@ -351,6 +352,7 @@ export function createBridgeV1AccessSession(
     scopes: new Set(parsed.scopes),
     expiresAt,
   });
+  recordBridgeOperationalEvent("session_issued");
 
   return bridgeAccessSessionV1Schema.parse({
     protocolVersion: 1,
@@ -358,6 +360,17 @@ export function createBridgeV1AccessSession(
     accessToken,
     expiresAt: new Date(expiresAt).toISOString(),
   });
+}
+
+export function revokeBridgeV1AccessSession(sessionId: string) {
+  pruneBridgeV1AccessSessions();
+  for (const [tokenHash, session] of bridgeV1AccessSessions) {
+    if (session.sessionId !== sessionId) continue;
+    bridgeV1AccessSessions.delete(tokenHash);
+    recordBridgeOperationalEvent("session_revoked");
+    return true;
+  }
+  return false;
 }
 
 export function __resetBridgeV1AccessSessionsForTests() {

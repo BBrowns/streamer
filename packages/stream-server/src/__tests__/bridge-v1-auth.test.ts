@@ -5,6 +5,7 @@ import {
   createBridgeV1AccessSession,
   requireBridgeV1MasterAuth,
   requireBridgeV1Scope,
+  revokeBridgeV1AccessSession,
 } from "../security.js";
 
 const previousBridgeToken = process.env.STREAMER_BRIDGE_TOKEN;
@@ -154,6 +155,24 @@ describe("bridge v1 authentication", () => {
 
     expect(expired.status).toBe(401);
     expect(expired.body).toMatchObject({
+      error: { code: "AUTH_REQUIRED" },
+    });
+  });
+
+  it("revokes a scoped session without exposing session existence", () => {
+    const created = createBridgeV1AccessSession({
+      scopes: ["jobs:read"],
+      ttlSeconds: 60,
+    });
+
+    expect(revokeBridgeV1AccessSession(created.sessionId)).toBe(true);
+    expect(revokeBridgeV1AccessSession(created.sessionId)).toBe(false);
+
+    const revoked = runMiddleware(requireBridgeV1Scope("jobs:read"), {
+      bearer: created.accessToken,
+    });
+    expect(revoked.status).toBe(401);
+    expect(revoked.body).toMatchObject({
       error: { code: "AUTH_REQUIRED" },
     });
   });
