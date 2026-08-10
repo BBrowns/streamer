@@ -44,6 +44,7 @@ one active prepared-source lease, not into persisted control-plane state.
 | Effective capability decisions   | URL/container/platform inference          | Pure route/runtime/adapter capability policy              |
 | Runtime cleanup                  | Screen, engine and gateway callbacks      | Session-owned idempotent prepared-source lease            |
 | Player session binding           | Player host planning/replan/exit          | `usePlaybackSessionBinding`                               |
+| Player URI binding               | Player host source URI resolution         | `usePlaybackUriBinding`                                   |
 | Tracks and subtitles             | Several player/engine arrays              | Normalized deterministic catalog and subtitle renderer    |
 
 ## Boundaries
@@ -92,8 +93,13 @@ single-flight, and route-exit cancellation/removal of provisional sessions.
 It delegates session events and prepared-source leases to
 `PlaybackSessionPlaybackService` and `playbackSessionStore`; it does not create
 another store or orchestration state machine. Seekable-cache and track-catalog
-hooks remain separate runtime capabilities. Source-URI resolution remains to
-move into this binding in a follow-up slice.
+hooks remain separate runtime capabilities.
+
+`usePlaybackUriBinding.ts` resolves the current opaque URI at the session
+boundary. It joins the session resolver for session-owned candidates and uses
+the stream-engine adapter for legacy candidates, applying the web codec policy
+and delegating fallback ownership back to the session binding. Resolved URIs
+remain transient and are never persisted.
 
 ### Source preparation and runtime ownership
 
