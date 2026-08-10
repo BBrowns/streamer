@@ -81,6 +81,17 @@ describe("buildPlaybackExecutionNodes", () => {
     );
   });
 
+  it("marks on-device HLS offline-capable only for Electron", () => {
+    const nodes = buildPlaybackExecutionNodes({
+      deviceProfile: { ...deviceProfile, platform: "electron" },
+    });
+
+    expect(
+      nodes[0]?.deliveries.find((delivery) => delivery.delivery === "hls")
+        ?.capabilities.offline,
+    ).toBe(true);
+  });
+
   it("maps loopback ownership to a local sidecar", () => {
     const nodes = buildPlaybackExecutionNodes({
       deviceProfile: { ...deviceProfile, platform: "electron" },

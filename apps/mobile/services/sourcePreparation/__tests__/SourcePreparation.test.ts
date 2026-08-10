@@ -280,7 +280,7 @@ describe("SourcePreparer route registry", () => {
     expect(engine.stop).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects unsafe direct URLs and offline HLS preparation", async () => {
+  it("rejects unsafe direct URLs and prepares desktop HLS downloads", async () => {
     const registry = new SourcePreparationRegistry([
       new DirectSourceAdapter(),
       new HlsSourceAdapter(),
@@ -301,21 +301,22 @@ describe("SourcePreparer route registry", () => {
       }),
     ).rejects.toMatchObject({ code: "INVALID_SOURCE" });
 
-    await expect(
-      preparer.prepare({
-        action: "download",
-        attemptId: "attempt-hls-download",
-        requestId: REQUEST_ID,
-        candidate: candidateFor(hlsRoute, {
-          stream: { url: "https://media.example.test/master.m3u8" },
-          actionEligibility: { action: "download", eligible: true },
-        }),
-        route: hlsRoute,
+    const hlsDownloadRoute = {
+      ...hlsRoute,
+      capabilities: { ...hlsRoute.capabilities, offline: true },
+    } satisfies PlaybackRoute;
+    const hlsDownload = await preparer.prepare({
+      action: "download",
+      attemptId: "attempt-hls-download",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(hlsDownloadRoute, {
+        stream: { url: "https://media.example.test/master.m3u8" },
+        actionEligibility: { action: "download", eligible: true },
       }),
-    ).rejects.toMatchObject({
-      code: "INVALID_SOURCE",
-      shouldFallback: false,
+      route: hlsDownloadRoute,
     });
+    expect(hlsDownload.uri).toBe("https://media.example.test/master.m3u8");
+    await hlsDownload.release();
   });
 });
 

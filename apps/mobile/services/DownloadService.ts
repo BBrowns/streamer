@@ -364,7 +364,11 @@ export class DownloadService {
         return;
       }
 
-      const playable = await probeLocalMedia(localUri!);
+      const playable = await probeLocalMedia(
+        localUri!,
+        undefined,
+        currentTask.contentType,
+      );
       if (!playable) {
         const message =
           "Downloaded file is not a playable media file on this device.";
@@ -580,8 +584,9 @@ export class DownloadService {
       job.totalBytesExpectedToWrite,
     );
     setDownloadMetadata(job.id, {
-      expectedMediaBytes:
-        job.totalBytesExpectedToWrite > 0
+      expectedMediaBytes: job.contentType?.toLowerCase().includes("mpegurl")
+        ? undefined
+        : job.totalBytesExpectedToWrite > 0
           ? job.totalBytesExpectedToWrite
           : undefined,
       metadataBytes: job.metadataBytes,
@@ -764,7 +769,10 @@ export class DownloadService {
       return;
     }
 
-    if (downloadUrl.includes(".m3u8")) {
+    if (
+      downloadUrl.toLowerCase().includes(".m3u8") &&
+      eligibility.mode !== "desktop-hls"
+    ) {
       this.markTaskFailed(
         id,
         "HLS downloads are not supported",
@@ -1019,7 +1027,10 @@ export class DownloadService {
       expectedMediaBytes: task.expectedMediaBytes,
       contentType: task.contentType,
     });
-    if (validation.ok && (await probeLocalMedia(task.localUri))) {
+    if (
+      validation.ok &&
+      (await probeLocalMedia(task.localUri, undefined, task.contentType))
+    ) {
       useDownloadStore
         .getState()
         .markVerified(id, task.localUri, validation.sizeBytes);

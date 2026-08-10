@@ -69,6 +69,12 @@ Implemented through PR #160:
   failed download offers one context-specific retry, replan, verify, storage,
   bridge-repair, or remove action, while cast discovery/source/device failures
   offer refresh, fallback, or bridge repair without retrying loopback URLs.
+- Electron now supports bounded, managed HLS VOD offline bundles for finite
+  media playlists. The packager rejects master/live/DRM/byte-range and
+  auxiliary-resource playlists, validates every public HTTPS resource, and
+  verifies the managed segment bundle before exposing it as offline-playable.
+  Browser, iOS, and Android HLS offline downloads remain unsupported until
+  native-target evidence and a platform-appropriate packager exist.
 - Playback architecture v3 is merged: shared Planner v3 contracts and routes,
   explicit unsupported fallback, attempt-bound `SourcePreparer` leases, and a
   typed Bridge v1 client/runtime now share one session-owned control plane.
@@ -272,7 +278,9 @@ and preserve URL-free persistence and capability-gated native behavior.
    quality policies using the existing planner/session path.
 6. **HLS offline v2 (desktop-first):** add bounded playlist/segment downloads,
    redirect/SSRF protection, managed bundle verification, and explicit
-   unsupported handling for DRM, live, and incomplete media.
+   unsupported handling for DRM, live, and incomplete media. The Electron
+   implementation is now in place; native/browser support remains a separate
+   evidence-gated follow-up.
 7. **Cast/remote playback:** add capability caching, reconnect/status recovery,
    and safe remote controls behind the Bridge v1 boundary; keep AirPlay,
    Chromecast, and Real-Debrid capability-gated/off by default.

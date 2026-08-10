@@ -117,8 +117,9 @@ ownership and keep platform-native behavior capability-gated:
 4. Add URL-free, versioned download-recovery metadata and restart-time
    replanning; reuse partial files only after validator and integrity checks.
 5. Add a verified Electron offline-file adapter and opt-in Smart Downloads;
-   defer HLS offline, remote playback and richer discovery facets until these
-   foundations have evidence.
+   the Electron HLS offline adapter is now bounded to finite VOD media
+   playlists, while remote playback and richer discovery facets remain
+   evidence-gated follow-up work.
 
 Known physical-device and packaged-release gaps stay recorded in
 `docs/QA_MATRIX.md`, `docs/PLAYER_ARCHITECTURE.md`, and
@@ -642,7 +643,10 @@ Still open:
 
 - Validate pause, resume, delete, restart recovery, and storage reporting with
   real large files on desktop, iPhone, and Android.
-- Keep HLS offline unsupported in v1 unless a proper segment packager is built.
+- Electron HLS offline now uses a bounded managed segment packager for finite
+  VOD media playlists only. Master/live/DRM/byte-range/auxiliary playlists are
+  rejected, and browser/iOS/Android remain unsupported pending native-target
+  evidence and a platform-appropriate packager.
 - Torrent downloads on mobile should use the desktop bridge/gateway as
   resolver/downloader where needed.
 - Validate safe replan-on-resume with real large files after app restart on
