@@ -48,14 +48,27 @@ test("summarizes outdated packages with bounded version data", () => {
 });
 
 test("detects tag-pinned workflow actions", () => {
-  const result = parseActionPins(process.cwd());
-  assert.ok(result.workflowCount >= 3);
-  assert.ok(result.actionCount > 0);
-  assert.ok(
-    result.unpinnedCount > 0,
-    "baseline should expose current tag-pinned actions",
-  );
-  assert.ok(result.unpinned.every((entry) => !entry.action.includes("secret")));
+  const root = mkdtempSync(join(process.cwd(), ".maintenance-test-"));
+  try {
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(root, ".github", "workflows", "actions.yml"),
+      [
+        "steps:",
+        "  - uses: actions/checkout@v4",
+        "  - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+        "",
+      ].join("\\n"),
+    );
+    const result = parseActionPins(root);
+    assert.equal(result.workflowCount, 1);
+    assert.equal(result.unpinnedCount, 1);
+    assert.equal(result.unpinned[0].action, "actions/checkout");
+    assert.ok(result.actionCount > 0);
+    assert.ok(result.unpinned.every((entry) => !entry.action.includes("secret")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("detects folded YAML action references", () => {
