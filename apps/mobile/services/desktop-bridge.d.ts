@@ -238,7 +238,13 @@ export interface DesktopBridge {
   /**
    * Returns device storage information (total, free, and optional app usage bytes).
    */
-  getStorageInfo(): Promise<{ total: number; free: number; appUsage?: number }>;
+  getStorageInfo(): Promise<{
+    total: number;
+    free: number;
+    appUsage?: number;
+    /** False when the desktop shell could not read statfs diagnostics. */
+    known?: boolean;
+  }>;
 
   /**
    * Reads the current desktop update status without starting a new check.

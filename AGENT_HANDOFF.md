@@ -629,6 +629,11 @@ The main download queue and persistence pass is complete:
   tasks for a fresh session replan. Electron partial files are reused only when
   the recorded size, expected size, and an ETag/Last-Modified validator agree;
   otherwise the managed `.part` file is discarded and restarted safely.
+- Electron download starts are bounded to two active jobs. Additional jobs stay
+  queued as `Pending`, and a storage preflight reserves known remaining bytes
+  plus a 64 MiB safety margin while accounting for active reservations. If
+  `statfs` diagnostics are unavailable, the preflight fails open and the write
+  path remains the final local-storage guard.
 - Failed and paused queue items now derive one context-specific recovery action
   from a persisted non-sensitive failure reason: resume, replan, verify, free
   storage, repair the bridge, or remove an unsupported item.

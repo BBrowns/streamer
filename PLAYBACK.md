@@ -175,8 +175,14 @@ reason, and timestamps. Hydrated interrupted tasks always replan through the
 playback session before they can resume. Electron partial files are appended
 only when their recorded size, expected size, and persisted ETag or
 Last-Modified validator agree; a mismatch discards the partial and restarts
-from byte zero. Electron `streamer://` playback, file verification, and
-deletion are limited to its app-managed offline-media directory.
+from byte zero. Electron starts at most two download requests at once and
+keeps additional jobs queued as `Pending`. Before a queued job starts, the
+desktop shell reserves the known remaining bytes plus a 64 MiB safety margin
+(or the margin alone when the response size is not known yet), accounting for
+reservations held by active jobs. If reliable `statfs` data is unavailable the
+preflight fails open and the write path remains the final ENOSPC/EACCES guard.
+Electron `streamer://` playback, file verification, and deletion are limited
+to its app-managed offline-media directory.
 
 Primary Cast now creates and resolves a `PlaybackSession` through
 `PlaybackOrchestrator`. The cast dialog prepares a cast-ready source before

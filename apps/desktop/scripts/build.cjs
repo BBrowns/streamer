@@ -11,6 +11,7 @@ const entryFiles = [
   "build-metadata.js",
   "download-paths.js",
   "download-job-persistence.js",
+  "download-recovery-policy.js",
   "download-url-policy.js",
   "sentry.js",
   "bridge-runtime.js",

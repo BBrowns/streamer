@@ -103,7 +103,7 @@ export function classifyDownloadFailure(
     return "bridge_unavailable";
   }
   if (
-    /enospc|no space|disk full|storage (?:is )?full|not enough (?:disk )?space/.test(
+    /enospc|no space|disk full|storage (?:is )?full|not enough (?:disk )?space|(?:not enough|insufficient) (?:local )?(?:disk )?storage/.test(
       text,
     )
   ) {
