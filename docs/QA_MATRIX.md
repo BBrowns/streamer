@@ -1,6 +1,6 @@
 # Playback QA Matrix
 
-Last updated: 2026-07-29.
+Last updated: 2026-08-10.
 
 This matrix tracks real target validation for Streamer playback, downloads,
 casting, bridge health, and remux behavior. A target is not considered supported
@@ -13,8 +13,9 @@ Automated renderer regression coverage is documented in
 [AUTOMATED_GOLDEN_PATHS.md](./AUTOMATED_GOLDEN_PATHS.md). It does not change the
 `Unknown` status of native or packaged targets below.
 
-Current project phase: architecture complete enough; reliability,
-productization, real-device QA, and release evidence are still open. This
+Current project phase: playback architecture v3 and Bridge v1 are merged;
+post-v3 reliability/productization, real-device QA, and release evidence are
+still open. This
 matrix is intentionally conservative and should not be backfilled from unit
 tests alone.
 
