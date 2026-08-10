@@ -74,8 +74,8 @@
     "@opentelemetry/resources": "^2.8.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
     "form-data": "^4.0.6",
-    "hono": "^4.12.30",
-    "js-yaml": "^4.2.1",
+    "hono": "4.12.34",
+    "js-yaml": "4.3.1",
     "nodemailer": "^9.0.3",
     "zod": "^4.3.6",
     "rimraf": "^6.0.1",
@@ -87,7 +87,14 @@
     "webtorrent": "^2.8.5",
     "castv2-client": "^1.2.0",
     "shell-quote": "^1.10.0",
-    "fast-uri": "^3.1.4",
+    "fast-uri": "3.1.5",
+    "ip-address": "10.5.0",
+    "postcss": "8.5.26",
+    "brace-expansion": "5.0.9",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "nanoid@^3.0.0": "3.3.17",
     "castv2": {
       "protobufjs": "^7.6.5"
     },
