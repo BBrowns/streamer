@@ -106,6 +106,18 @@ describe("playbackPlanSchema", () => {
     expect(playbackPlanSchema.parse(makePlan())).toEqual(makePlan());
   });
 
+  it("accepts bounded deprecation metadata on the legacy response", () => {
+    const plan = makePlan();
+    plan.deprecation = {
+      status: "deprecated",
+      replacementVersion: 3,
+    };
+
+    expect(playbackPlanSchema.parse(plan).deprecation).toEqual(
+      plan.deprecation,
+    );
+  });
+
   it("accepts the safe partial source-discovery summary", () => {
     const plan = makePlan();
     plan.sourceDiscovery = {

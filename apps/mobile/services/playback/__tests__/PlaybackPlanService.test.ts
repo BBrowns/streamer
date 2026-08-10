@@ -311,6 +311,11 @@ describe("PlaybackPlanService", () => {
       "/api/playback/plan/v3",
       "/api/playback/plan",
     ]);
+    expect((api.post as jest.Mock).mock.calls[1][2]).toEqual({
+      headers: {
+        "X-Playback-Planner-Compatibility": "v3-unsupported-fallback",
+      },
+    });
   });
 
   it("uses planner v2 when bridge negotiation explicitly selects legacy", async () => {
@@ -329,6 +334,11 @@ describe("PlaybackPlanService", () => {
     expect(api.post).toHaveBeenCalledWith(
       "/api/playback/plan",
       expect.objectContaining({ bridge: expect.any(Object) }),
+      {
+        headers: {
+          "X-Playback-Planner-Compatibility": "legacy-negotiated",
+        },
+      },
     );
   });
 

@@ -484,6 +484,14 @@ and a safe `sourceDiscovery` status/count. Candidate IDs are opaque UUIDs.
 Planner v2 and its nested `plan` object remain a temporary compatibility input;
 new orchestration code uses the v3 route.
 
+The legacy v2 response carries bounded deprecation metadata naming Planner v3 as
+the replacement. The mobile compatibility adapter is the only production
+caller permitted to issue a v2 request, and marks an unsupported-v3 retry with
+an enumerable request signal. Planner rollout metrics are process-local and
+aggregate only v3 success, no eligible route, unsupported compatibility
+fallback, and v2 legacy selection; they contain no user, request, title,
+candidate, source, URL, or error identity.
+
 ### 6.4.1 Fast Plan Reuse, Cancellation, And Ranking
 
 Detail prefetch begins after 600 ms of idle time and on desktop Play

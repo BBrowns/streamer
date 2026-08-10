@@ -60,3 +60,22 @@ test("allows ports to depend on shared contracts and infrastructure to stay isol
     ],
   );
 });
+
+test("keeps the legacy planner endpoint inside the compatibility adapter", () => {
+  assert.deepEqual(
+    checkPlaybackBoundary(
+      "apps/mobile/services/playback/NewCaller.ts",
+      'return api.post("/api/playback/plan", payload);',
+    ),
+    [
+      "apps/mobile/services/playback/NewCaller.ts: legacy planner endpoint must remain inside PlaybackPlanService compatibility adapter",
+    ],
+  );
+  assert.deepEqual(
+    checkPlaybackBoundary(
+      "apps/mobile/services/playback/PlaybackPlanService.ts",
+      'return api.post("/api/playback/plan", payload);',
+    ),
+    [],
+  );
+});

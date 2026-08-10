@@ -16,6 +16,9 @@ const PLATFORM_NEUTRAL_FILES = new Set([
 
 const PLATFORM_MODULE = /^(?:react(?:-native)?|expo(?:-|$)|electron(?:$|\/))/;
 const PRESENTATION_PATH = /(?:^|\/)(?:app|components|hooks)(?:\/|$)/;
+const LEGACY_PLANNER_ADAPTER =
+  "apps/mobile/services/playback/PlaybackPlanService.ts";
+const LEGACY_PLANNER_ENDPOINT = /["'`]\/api\/playback\/plan["'`]/;
 
 export function extractModuleSpecifiers(source) {
   const specifiers = [];
@@ -40,6 +43,14 @@ function isProductionSource(relativePath) {
 export function checkPlaybackBoundary(relativePath, source) {
   if (!isProductionSource(relativePath)) return [];
   const violations = [];
+  if (
+    LEGACY_PLANNER_ENDPOINT.test(source) &&
+    relativePath !== LEGACY_PLANNER_ADAPTER
+  ) {
+    violations.push(
+      `${relativePath}: legacy planner endpoint must remain inside PlaybackPlanService compatibility adapter`,
+    );
+  }
   const specifiers = extractModuleSpecifiers(source);
   const isMediaPort =
     relativePath.startsWith("apps/mobile/services/sourcePreparation/") ||

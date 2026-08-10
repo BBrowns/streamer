@@ -5,6 +5,7 @@ import type {
   ActionBridgeEndpointSnapshot,
   ActionPreflightReason,
 } from "./action-preflight";
+import type { PlaybackPlanDeprecationMetadata } from "./playback-telemetry";
 
 export type PlaybackAction = "play" | "download" | "cast";
 
@@ -262,6 +263,8 @@ export interface RejectedCandidate {
 
 export interface PlaybackPlan {
   version: 2;
+  /** Present only on the bounded legacy compatibility response. */
+  deprecation?: PlaybackPlanDeprecationMetadata;
   action: PlaybackAction;
   state: PlaybackPlanState;
   /** Present on plans produced by the current planner; optional for v2 compatibility. */

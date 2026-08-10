@@ -7,7 +7,10 @@ import type {
   PlaybackPlanV3Request,
   Stream,
 } from "@streamer/shared";
-import { playbackPlanResponseSchema } from "@streamer/shared";
+import {
+  PLAYBACK_PLANNER_COMPATIBILITY_HEADER,
+  playbackPlanResponseSchema,
+} from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import {
@@ -215,13 +218,42 @@ async function requestPlaybackPlan(
       return playbackPlanResponseSchema.parse(response.data);
     } catch (error) {
       if (!isPlannerV3Unsupported(error)) throw error;
+
+      return requestLegacyPlaybackPlan(
+        payload,
+        signal,
+        "v3-unsupported-fallback",
+      );
     }
   }
 
-  const response = signal
-    ? await api.post<PlaybackPlanResponse>("/api/playback/plan", payload, {
-        signal,
-      })
+  return requestLegacyPlaybackPlan(payload, signal, "legacy-negotiated");
+}
+
+async function requestLegacyPlaybackPlan(
+  payload: PlaybackPlanRequest,
+  signal?: AbortSignal,
+  compatibilitySignal?: "v3-unsupported-fallback" | "legacy-negotiated",
+): Promise<PlaybackPlanResponse> {
+  const config =
+    signal || compatibilitySignal
+      ? {
+          ...(signal ? { signal } : {}),
+          ...(compatibilitySignal
+            ? {
+                headers: {
+                  [PLAYBACK_PLANNER_COMPATIBILITY_HEADER]: compatibilitySignal,
+                },
+              }
+            : {}),
+        }
+      : undefined;
+  const response = config
+    ? await api.post<PlaybackPlanResponse>(
+        "/api/playback/plan",
+        payload,
+        config,
+      )
     : await api.post<PlaybackPlanResponse>("/api/playback/plan", payload);
 
   return playbackPlanResponseSchema.parse(response.data);

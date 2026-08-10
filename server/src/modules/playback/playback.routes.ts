@@ -20,4 +20,5 @@ export const playbackRouter = new Hono<HonoEnv>()
     authMiddleware,
     zValidator("json", playbackPlanRequestSchema),
     (c) => playbackController.plan(c),
-  );
+  )
+  .get("/metrics", authMiddleware, (c) => playbackController.metrics(c));
