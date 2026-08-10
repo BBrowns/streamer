@@ -16,9 +16,11 @@ const {
 } = require("./download-paths");
 const {
   classifyDownloadFailure,
+  canReusePartialDownload,
   failureMessage,
   normalizePersistedDownloadJob,
-  serializeDownloadJobsV2,
+  normalizeValidator,
+  serializeDownloadJobsV3,
 } = require("./download-job-persistence");
 const {
   createPinnedLookup,
@@ -299,7 +301,7 @@ function persistDownloadJobsNow() {
     persistDownloadJobsTimer = null;
   }
 
-  const payload = serializeDownloadJobsV2(downloadJobs.values());
+  const payload = serializeDownloadJobsV3(downloadJobs.values());
   const tempPath = `${downloadJobsPath}.tmp`;
   try {
     fs.writeFileSync(tempPath, JSON.stringify(payload), {
@@ -363,6 +365,8 @@ function restoreDownloadJobs() {
         localUri: completedFileExists ? toStreamerUri(filePath) : null,
         contentType: restored.contentType,
         metadataBytes: restored.metadataBytes,
+        etag: restored.etag || null,
+        lastModified: restored.lastModified || null,
         error:
           restored.status === "Error"
             ? failureMessage(restored.failureReason)
@@ -452,6 +456,63 @@ function parseContentRangeTotal(contentRange) {
   return match ? Number(match[1]) : 0;
 }
 
+function parseContentRange(contentRange) {
+  const match = String(contentRange || "").match(
+    /^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i,
+  );
+  if (!match) return null;
+  return {
+    start: Number(match[1]),
+    end: Number(match[2]),
+    total: match[3] === "*" ? 0 : Number(match[3]),
+  };
+}
+
+function getSafeResumeOffset(job, requestedOffset) {
+  const requested = Math.max(0, Number(requestedOffset) || 0);
+  if (!requested || !fs.existsSync(job.tempPath)) return 0;
+
+  let partialBytes = 0;
+  try {
+    partialBytes = fs.statSync(job.tempPath).size;
+  } catch {
+    return 0;
+  }
+
+  if (
+    !canReusePartialDownload({
+      partialFileBytes: partialBytes,
+      recordedBytes: job.totalBytesWritten,
+      expectedBytes: job.totalBytesExpectedToWrite,
+      etag: job.etag,
+      lastModified: job.lastModified,
+    })
+  ) {
+    try {
+      fs.rmSync(job.tempPath, { force: true });
+    } catch {}
+    job.totalBytesWritten = 0;
+    job.etag = null;
+    job.lastModified = null;
+    return 0;
+  }
+
+  return partialBytes;
+}
+
+function responseMatchesResumeValidator(job, headers) {
+  if (job.etag && normalizeValidator(headers.etag) !== job.etag) {
+    return false;
+  }
+  if (
+    job.lastModified &&
+    normalizeValidator(headers["last-modified"]) !== job.lastModified
+  ) {
+    return false;
+  }
+  return Boolean(job.etag || job.lastModified);
+}
+
 async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
   if (!job.downloadUrl) {
     job.status = "Paused";
@@ -482,12 +543,7 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
 
   const parsedUrl = validatedUrl.parsed;
 
-  let startByte = Math.max(0, resumeAt);
-  if (startByte > 0 && fs.existsSync(job.tempPath)) {
-    startByte = fs.statSync(job.tempPath).size;
-  } else if (startByte > 0) {
-    startByte = 0;
-  }
+  let startByte = getSafeResumeOffset(job, resumeAt);
 
   job.status = "Downloading";
   job.error = null;
@@ -499,8 +555,16 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
   emitDownloadJob(job);
 
   const client = parsedUrl.protocol === "https:" ? https : http;
+  const resumeValidator = job.etag || job.lastModified;
   const options = {
-    ...(startByte > 0 ? { headers: { Range: `bytes=${startByte}-` } } : {}),
+    ...(startByte > 0
+      ? {
+          headers: {
+            Range: `bytes=${startByte}-`,
+            "If-Range": resumeValidator,
+          },
+        }
+      : {}),
     ...(validatedUrl.addresses.length
       ? { lookup: createPinnedLookup(validatedUrl.addresses) }
       : {}),
@@ -518,6 +582,25 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
       job.downloadUrl = new URL(location, parsedUrl).toString();
       void startDownloadRequest(job, startByte, redirectCount + 1);
       return;
+    }
+
+    if (startByte > 0 && statusCode === 206) {
+      const range = parseContentRange(res.headers["content-range"]);
+      if (
+        !range ||
+        range.start !== startByte ||
+        !responseMatchesResumeValidator(job, res.headers)
+      ) {
+        res.resume();
+        try {
+          fs.rmSync(job.tempPath, { force: true });
+        } catch {}
+        job.totalBytesWritten = 0;
+        job.etag = null;
+        job.lastModified = null;
+        void startDownloadRequest(job, 0, redirectCount);
+        return;
+      }
     }
 
     if (startByte > 0 && statusCode === 200) {
@@ -550,6 +633,8 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
     job.contentType = Array.isArray(res.headers["content-type"])
       ? res.headers["content-type"][0]
       : res.headers["content-type"] || null;
+    job.etag = normalizeValidator(res.headers.etag);
+    job.lastModified = normalizeValidator(res.headers["last-modified"]);
 
     const file = fs.createWriteStream(job.tempPath, {
       flags: startByte > 0 ? "a" : "w",
@@ -587,13 +672,26 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
           failDownloadJob(job, closeError);
           return;
         }
+        job.totalBytesExpectedToWrite =
+          job.totalBytesExpectedToWrite || job.totalBytesWritten;
+        if (
+          job.totalBytesExpectedToWrite > 0 &&
+          job.totalBytesWritten !== job.totalBytesExpectedToWrite
+        ) {
+          try {
+            fs.rmSync(job.tempPath, { force: true });
+          } catch {}
+          failDownloadJob(
+            job,
+            new Error("Downloaded file size did not match expected size"),
+          );
+          return;
+        }
         fs.rename(job.tempPath, job.filePath, (error) => {
           if (error) {
             failDownloadJob(job, error);
             return;
           }
-          job.totalBytesExpectedToWrite =
-            job.totalBytesExpectedToWrite || job.totalBytesWritten;
           completeDownloadJob(job);
         });
       });
@@ -639,9 +737,12 @@ function startDownloadJob(id, rawUrl, filename) {
     existingJob.requiresReplan = false;
     existingJob.failureReason = null;
     existingJob.error = null;
-    const resumeAt = fs.existsSync(existingJob.tempPath)
-      ? fs.statSync(existingJob.tempPath).size
-      : 0;
+    const resumeAt = getSafeResumeOffset(
+      existingJob,
+      fs.existsSync(existingJob.tempPath)
+        ? fs.statSync(existingJob.tempPath).size
+        : 0,
+    );
     void startDownloadRequest(existingJob, resumeAt);
     return snapshotDownloadJob(existingJob);
   }
@@ -661,6 +762,8 @@ function startDownloadJob(id, rawUrl, filename) {
     localUri: null,
     contentType: null,
     metadataBytes: 0,
+    etag: null,
+    lastModified: null,
     error: null,
     failureReason: null,
     requiresReplan: false,
@@ -710,9 +813,10 @@ function resumeDownloadJob(id) {
   }
 
   if (job.status === "Paused" || job.status === "Error") {
-    const resumeAt = fs.existsSync(job.tempPath)
-      ? fs.statSync(job.tempPath).size
-      : 0;
+    const resumeAt = getSafeResumeOffset(
+      job,
+      fs.existsSync(job.tempPath) ? fs.statSync(job.tempPath).size : 0,
+    );
     void startDownloadRequest(job, resumeAt);
   }
 

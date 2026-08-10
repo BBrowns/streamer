@@ -6,11 +6,12 @@ const {
   DOWNLOAD_JOBS_FILE_VERSION,
   classifyDownloadFailure,
   normalizePersistedDownloadJob,
-  serializeDownloadJobsV2,
+  serializeDownloadJobsV3,
+  canReusePartialDownload,
 } = require("./download-job-persistence");
 
-test("persists URL-free version 2 download metadata", () => {
-  const payload = serializeDownloadJobsV2([
+test("persists URL-free version 3 download metadata", () => {
+  const payload = serializeDownloadJobsV3([
     {
       id: "download-1",
       status: "Downloading",
@@ -24,6 +25,8 @@ test("persists URL-free version 2 download metadata", () => {
       totalBytesExpectedToWrite: 1024,
       contentType: "video/mp4",
       metadataBytes: 20,
+      etag: '"opaque-etag"',
+      lastModified: "Wed, 01 Jan 2025 00:00:00 GMT",
     },
   ]);
 
@@ -37,6 +40,8 @@ test("persists URL-free version 2 download metadata", () => {
       totalBytesExpectedToWrite: 1024,
       contentType: "video/mp4",
       metadataBytes: 20,
+      etag: '"opaque-etag"',
+      lastModified: "Wed, 01 Jan 2025 00:00:00 GMT",
       requiresReplan: true,
     },
   ]);
@@ -111,7 +116,7 @@ test("classifies source-access failures without retaining raw messages", () => {
 });
 
 test("drops legacy jobs whose id itself contains source material", () => {
-  const payload = serializeDownloadJobsV2([
+  const payload = serializeDownloadJobsV3([
     {
       id: "https://signed.example.test/movie.mp4?token=secret",
       status: "Paused",
@@ -121,4 +126,27 @@ test("drops legacy jobs whose id itself contains source material", () => {
 
   assert.deepEqual(payload.jobs, []);
   assert.equal(JSON.stringify(payload).includes("https://"), false);
+});
+
+test("only reuses a partial file when its validator and byte counts agree", () => {
+  const reusable = {
+    partialFileBytes: 512,
+    recordedBytes: 512,
+    expectedBytes: 1024,
+    etag: '"opaque-etag"',
+  };
+
+  assert.equal(canReusePartialDownload(reusable), true);
+  assert.equal(
+    canReusePartialDownload({ ...reusable, recordedBytes: 256 }),
+    false,
+  );
+  assert.equal(
+    canReusePartialDownload({ ...reusable, partialFileBytes: 1024 }),
+    false,
+  );
+  assert.equal(
+    canReusePartialDownload({ ...reusable, etag: undefined }),
+    false,
+  );
 });

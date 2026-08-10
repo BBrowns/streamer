@@ -10,15 +10,25 @@ const entryFiles = [
   "security.js",
   "build-metadata.js",
   "download-paths.js",
+  "download-job-persistence.js",
+  "download-url-policy.js",
   "sentry.js",
   "bridge-runtime.js",
 ];
 
-fs.rmSync(distDir, { recursive: true, force: true });
-fs.mkdirSync(distDir, { recursive: true });
+function build() {
+  fs.rmSync(distDir, { recursive: true, force: true });
+  fs.mkdirSync(distDir, { recursive: true });
 
-for (const file of entryFiles) {
-  fs.copyFileSync(path.join(srcDir, file), path.join(distDir, file));
+  for (const file of entryFiles) {
+    fs.copyFileSync(path.join(srcDir, file), path.join(distDir, file));
+  }
+
+  console.log(`[desktop] Built ${entryFiles.join(", ")} into dist/`);
 }
 
-console.log(`[desktop] Built ${entryFiles.join(", ")} into dist/`);
+if (require.main === module) {
+  build();
+}
+
+module.exports = { build, entryFiles };

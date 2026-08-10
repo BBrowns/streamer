@@ -77,6 +77,11 @@ export interface DownloadTask {
   // Runtime-only. Sanitized out of persisted storage.
   originalStream?: Stream;
   replanContext?: DownloadReplanContext;
+  /** Versioned, URL-free recovery metadata. */
+  recoveryVersion?: number;
+  recoveryAction?: "download";
+  managedFileId?: string;
+  needsReplan?: boolean;
 }
 
 export interface DownloadState {
@@ -134,9 +139,11 @@ export interface DownloadState {
     error: string,
     reason: DownloadFailureReason,
   ) => void;
+  markTasksForRecovery: () => void;
 }
 
-export const DOWNLOAD_STORE_VERSION = 5;
+export const DOWNLOAD_STORE_VERSION = 6;
+export const DOWNLOAD_RECOVERY_VERSION = 2;
 
 function nowIso() {
   return new Date().toISOString();
@@ -199,6 +206,10 @@ export function safeDownloadTaskId(
   return undefined;
 }
 
+export function buildManagedDownloadFileId(id: string) {
+  return `managed-${stableDownloadHash(id)}`;
+}
+
 export function sanitizeDownloadTaskForPersistence(task: DownloadTask) {
   const {
     originalStream: _originalStream,
@@ -212,14 +223,75 @@ export function sanitizeDownloadTaskForPersistence(task: DownloadTask) {
     totalBytesExpectedToWrite?: number;
   };
 
+  const safeMediaInfo: DownloadMediaItem = {
+    type: safeTask.mediaInfo.type,
+    itemId: safeTask.mediaInfo.itemId,
+    title: safeTask.mediaInfo.title,
+    ...(safeTask.mediaInfo.poster ? { poster: safeTask.mediaInfo.poster } : {}),
+    ...(safeTask.mediaInfo.season !== undefined
+      ? { season: safeTask.mediaInfo.season }
+      : {}),
+    ...(safeTask.mediaInfo.episode !== undefined
+      ? { episode: safeTask.mediaInfo.episode }
+      : {}),
+    ...(safeDownloadTaskId(safeTask.mediaInfo.sourceId, safeTask.mediaInfo)
+      ? {
+          sourceId: safeDownloadTaskId(
+            safeTask.mediaInfo.sourceId,
+            safeTask.mediaInfo,
+          ),
+        }
+      : {}),
+    downloadUrl: "",
+  };
+  const context =
+    safeTask.replanContext || buildDownloadReplanContext(safeTask.mediaInfo);
+  const safeReplanContext = context
+    ? {
+        type: context.type,
+        id: context.id,
+        ...(context.title ? { title: context.title } : {}),
+        ...(context.poster ? { poster: context.poster } : {}),
+        ...(context.season !== undefined ? { season: context.season } : {}),
+        ...(context.episode !== undefined ? { episode: context.episode } : {}),
+        ...(context.episodeTitle ? { episodeTitle: context.episodeTitle } : {}),
+      }
+    : undefined;
+
   return {
-    ...safeTask,
-    mediaInfo: {
-      ...safeTask.mediaInfo,
-      downloadUrl: "",
-    },
-    replanContext:
-      safeTask.replanContext || buildDownloadReplanContext(safeTask.mediaInfo),
+    id: safeTask.id,
+    mediaInfo: safeMediaInfo,
+    ...(safeTask.localUri ? { localUri: safeTask.localUri } : {}),
+    progress: safeTask.progress,
+    status: safeTask.status,
+    ...(safeTask.error ? { error: safeTask.error } : {}),
+    ...(safeTask.failureReason
+      ? { failureReason: safeTask.failureReason }
+      : {}),
+    downloadedBytes: safeTask.downloadedBytes,
+    metadataBytes: safeTask.metadataBytes,
+    expectedMediaBytes: safeTask.expectedMediaBytes,
+    verifiedFileSizeBytes: safeTask.verifiedFileSizeBytes,
+    verificationState: safeTask.verificationState,
+    playableState: safeTask.playableState,
+    ...(safeTask.verificationError
+      ? { verificationError: safeTask.verificationError }
+      : {}),
+    ...(safeTask.contentType ? { contentType: safeTask.contentType } : {}),
+    ...(safeTask.playbackSession
+      ? { playbackSession: safeTask.playbackSession }
+      : {}),
+    createdAt: safeTask.createdAt,
+    updatedAt: safeTask.updatedAt,
+    offlineVerifiedAt: safeTask.offlineVerifiedAt,
+    recoveryVersion: DOWNLOAD_RECOVERY_VERSION,
+    recoveryAction: "download" as const,
+    managedFileId:
+      safeTask.managedFileId || buildManagedDownloadFileId(safeTask.id),
+    ...(safeTask.needsReplan !== undefined
+      ? { needsReplan: safeTask.needsReplan }
+      : {}),
+    ...(safeReplanContext ? { replanContext: safeReplanContext } : {}),
   };
 }
 
@@ -282,6 +354,12 @@ export function migrateDownloadTasks(
       // Existing completed tasks predate explicit local-file verification.
       // DownloadService.initialize() will verify and restore this marker.
       offlineVerifiedAt: legacyTask ? undefined : task.offlineVerifiedAt,
+      recoveryVersion: DOWNLOAD_RECOVERY_VERSION,
+      recoveryAction: "download",
+      managedFileId: task.managedFileId || buildManagedDownloadFileId(safeId),
+      needsReplan:
+        task.status !== "Completed" &&
+        (legacyTask || task.needsReplan !== false),
     });
   }
 
@@ -318,6 +396,10 @@ export const useDownloadStore = create<DownloadState>()(
               originalStream,
               replanContext:
                 replanContext || buildDownloadReplanContext(mediaInfo),
+              recoveryVersion: DOWNLOAD_RECOVERY_VERSION,
+              recoveryAction: "download",
+              managedFileId: buildManagedDownloadFileId(safeId),
+              needsReplan: false,
               createdAt: state.tasks[safeId]?.createdAt || timestamp,
               updatedAt: timestamp,
             },
@@ -413,6 +495,12 @@ export const useDownloadStore = create<DownloadState>()(
                   status === "Error"
                     ? error || task.verificationError
                     : undefined,
+                needsReplan:
+                  status === "Completed"
+                    ? false
+                    : status === "Error"
+                      ? true
+                      : task.needsReplan,
                 updatedAt: nowIso(),
               },
             },
@@ -452,6 +540,7 @@ export const useDownloadStore = create<DownloadState>()(
                   ...task.mediaInfo,
                   downloadUrl,
                 },
+                needsReplan: false,
                 updatedAt: nowIso(),
               },
             },
@@ -547,6 +636,7 @@ export const useDownloadStore = create<DownloadState>()(
                 verificationState: "incomplete",
                 playableState: "unplayable",
                 verificationError: error,
+                needsReplan: true,
                 updatedAt: nowIso(),
               },
             },
@@ -569,6 +659,7 @@ export const useDownloadStore = create<DownloadState>()(
                 verificationState: "failed",
                 playableState: "unplayable",
                 verificationError: error,
+                needsReplan: true,
                 updatedAt: nowIso(),
               },
             },
@@ -590,10 +681,29 @@ export const useDownloadStore = create<DownloadState>()(
                 verificationState: "failed",
                 playableState: "unplayable",
                 verificationError: error,
+                needsReplan: true,
                 updatedAt: nowIso(),
               },
             },
           };
+        }),
+      markTasksForRecovery: () =>
+        set((state) => {
+          let changed = false;
+          const tasks: Record<string, DownloadTask> = {};
+          for (const [id, task] of Object.entries(state.tasks)) {
+            const shouldReplan = task.status !== "Completed";
+            if (task.needsReplan !== shouldReplan) changed = true;
+            tasks[id] = {
+              ...task,
+              recoveryVersion: DOWNLOAD_RECOVERY_VERSION,
+              recoveryAction: "download",
+              managedFileId:
+                task.managedFileId || buildManagedDownloadFileId(task.id),
+              needsReplan: shouldReplan,
+            };
+          }
+          return changed ? { tasks } : state;
         }),
     }),
     {
@@ -615,6 +725,9 @@ export const useDownloadStore = create<DownloadState>()(
       version: DOWNLOAD_STORE_VERSION,
       migrate: (persistedState, persistedVersion) =>
         migrateDownloadTasks(persistedState, persistedVersion),
+      onRehydrateStorage: () => (state) => {
+        state?.markTasksForRecovery();
+      },
       partialize: (state) => {
         const tasks: Record<string, DownloadTask> = {};
         for (const [id, task] of Object.entries(state.tasks)) {

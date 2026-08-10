@@ -1,4 +1,5 @@
 import {
+  DOWNLOAD_RECOVERY_VERSION,
   isTaskOfflinePlayable,
   migrateDownloadTasks,
   sanitizeDownloadTaskForPersistence,
@@ -317,6 +318,77 @@ describe("downloadStore", () => {
     expect(safeTask.replanContext).toMatchObject({
       type: "movie",
       id: "tt123",
+    });
+    expect(safeTask).toMatchObject({
+      recoveryVersion: DOWNLOAD_RECOVERY_VERSION,
+      recoveryAction: "download",
+      managedFileId: expect.stringMatching(/^managed-/),
+    });
+  });
+
+  it("allowlists persisted media metadata instead of copying source fields", () => {
+    const safeTask = sanitizeDownloadTaskForPersistence({
+      id: "source-1",
+      mediaInfo: {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        poster: "https://image.example.test/poster.jpg",
+        downloadUrl: "https://signed.example.test/movie.mp4?token=secret",
+        externalUrl: "https://signed.example.test/external.mp4",
+      } as any,
+      progress: 0.5,
+      status: "Paused",
+      downloadedBytes: 500,
+      metadataBytes: 0,
+      expectedMediaBytes: 1000,
+      verificationState: "pending",
+      playableState: "unknown",
+      createdAt: "2026-06-04T10:00:00.000Z",
+      updatedAt: "2026-06-04T10:05:00.000Z",
+      unsafeSource: "https://signed.example.test/unsafe.mp4",
+    } as any);
+
+    expect(safeTask.mediaInfo).toEqual({
+      type: "movie",
+      itemId: "tt123",
+      title: "Example Movie",
+      poster: "https://image.example.test/poster.jpg",
+      sourceId: "download-pp2stt",
+      downloadUrl: "",
+    });
+    expect("externalUrl" in safeTask.mediaInfo).toBe(false);
+    expect("unsafeSource" in safeTask).toBe(false);
+  });
+
+  it("marks interrupted persisted tasks for a fresh replan", () => {
+    const migrated = migrateDownloadTasks(
+      {
+        tasks: {
+          "source-1": {
+            id: "source-1",
+            mediaInfo: {
+              type: "movie",
+              itemId: "tt123",
+              title: "Example Movie",
+            },
+            status: "Paused",
+            progress: 0.5,
+            downloadedBytes: 500,
+            expectedMediaBytes: 1000,
+            verificationState: "pending",
+            playableState: "unknown",
+          },
+        },
+      },
+      5,
+    );
+
+    expect(migrated?.tasks?.["source-1"]).toMatchObject({
+      recoveryVersion: DOWNLOAD_RECOVERY_VERSION,
+      recoveryAction: "download",
+      needsReplan: true,
+      managedFileId: expect.stringMatching(/^managed-/),
     });
   });
 
