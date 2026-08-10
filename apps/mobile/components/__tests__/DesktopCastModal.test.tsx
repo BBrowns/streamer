@@ -1,7 +1,7 @@
 import React from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { DesktopCastModal } from "../DesktopCastModal";
-import { castService } from "../../services/CastService";
+import { castService, type CastDevice } from "../../services/CastService";
 import { prepareCast } from "../../services/playback/PlaybackOrchestrator";
 import { startCastSession } from "../../services/playback/PlaybackSessionCastService";
 import { cancelPlaybackSession } from "../../services/playback/PlaybackSessionPlaybackService";
@@ -470,6 +470,124 @@ describe("DesktopCastModal", () => {
     });
     expect(getDevices).toHaveBeenLastCalledWith({ forceRefresh: true });
     expect(prepare).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns to explicit device selection when a rotated id has duplicate names", async () => {
+    const onCastStart = jest.fn();
+    getDevices
+      .mockResolvedValueOnce([
+        { id: "living-room-old", name: "Living Room", type: "chromecast" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "living-room-a", name: "Living Room", type: "chromecast" },
+        { id: "living-room-b", name: "Living Room", type: "chromecast" },
+      ]);
+    start.mockResolvedValueOnce({
+      ok: false,
+      sessionId: "session-1",
+      error: {
+        code: "SOURCE_UNAVAILABLE",
+        message: "The selected display could not be reached.",
+        retryable: true,
+        shouldFallback: false,
+      },
+    });
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        title="Example Movie"
+        orchestratorInput={{
+          type: "movie",
+          id: "tt123",
+          title: "Example Movie",
+        }}
+        onClose={jest.fn()}
+        onCastStart={onCastStart}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Living Room")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText("Living Room"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Try again")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText("Try again"));
+    await waitFor(() => {
+      expect(getDevices).toHaveBeenLastCalledWith({ forceRefresh: true });
+      expect(screen.getAllByText("Living Room")).toHaveLength(2);
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(onCastStart).not.toHaveBeenCalled();
+  });
+
+  it("ignores a second retry tap while force-refresh discovery is pending", async () => {
+    let releaseRefresh!: (devices: CastDevice[]) => void;
+    getDevices.mockResolvedValueOnce([
+      { id: "living-room", name: "Living Room", type: "chromecast" },
+    ]);
+    getDevices.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseRefresh = resolve;
+        }),
+    );
+    start
+      .mockResolvedValueOnce({
+        ok: false,
+        sessionId: "session-1",
+        error: {
+          code: "SOURCE_UNAVAILABLE",
+          message: "The selected display could not be reached.",
+          retryable: true,
+          shouldFallback: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        sessionId: "session-1",
+        candidateId: "candidate-1",
+        attemptId: "attempt-1",
+        stream: preparedCast.stream,
+        uri: preparedCast.resolvedUrl,
+      });
+
+    const screen = render(
+      <DesktopCastModal
+        visible
+        title="Example Movie"
+        orchestratorInput={{
+          type: "movie",
+          id: "tt123",
+          title: "Example Movie",
+        }}
+        onClose={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Living Room")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText("Living Room"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Try again")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText("Try again"));
+    fireEvent.press(screen.getByLabelText("Try again"));
+    expect(getDevices).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      releaseRefresh([
+        { id: "living-room", name: "Living Room", type: "chromecast" },
+      ]);
+    });
+    await waitFor(() => {
+      expect(start).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("shows one casting state while the session resolver tries its fallback", async () => {

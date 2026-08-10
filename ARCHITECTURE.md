@@ -600,8 +600,11 @@ The server maintains a `TraktSyncQueue` for failed scrobble attempts and retries
   `castv2-client` is used. The Electron bridge exposes cast control to the web
   client and `DesktopCastModal` handles source preparation, capability hints,
   device selection, session fallback, and typed recovery actions. The mobile
-  cast service keeps a short-lived, runtime-only device/capability snapshot and
-  force-refreshes it after an explicit reconnect or transport failure; no
+  cast service keeps only unauthenticated legacy device/capability snapshots in
+  a short-lived runtime cache; authenticated Bridge v1 discovery always
+  re-checks authorization. Explicit reconnects reset negotiation and force a
+  fresh snapshot, while rotated opaque ids require an exact or unique
+  name/type match before retry. Ambiguous matches return to the picker, and no
   network identity is persisted.
 
 All cast URLs are preflighted before bridge dispatch. Loopback-only media URLs

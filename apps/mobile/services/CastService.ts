@@ -30,7 +30,9 @@ export interface CastPlaybackStatus {
   playerState: string;
 }
 export type CastContentType =
-  "video/mp4" | "application/vnd.apple.mpegurl" | "application/x-mpegURL";
+  | "video/mp4"
+  | "application/vnd.apple.mpegurl"
+  | "application/x-mpegURL";
 
 export type CastServiceErrorCode =
   | "CAST_DEVICES_UNREACHABLE"
@@ -157,6 +159,7 @@ class CastService {
     BridgeProtocolSelection["kind"]
   >();
   private deviceCache: CastDeviceCache | null = null;
+  private deviceDiscoveryGeneration = 0;
 
   getBridgeUrl(): string {
     return streamEngineManager.getBridgeUrl();
@@ -176,8 +179,13 @@ class CastService {
     );
 
     const bridgeUrl = this.getBridgeUrl();
+    const authHeaders = getBridgeAuthHeaders();
+    // Authenticated snapshots must always cross the authorization boundary.
+    // This avoids serving a cached device list after a scope/session change.
+    const cacheable = Object.keys(authHeaders).length === 0;
     const cached = this.deviceCache;
     if (
+      cacheable &&
       !options.forceRefresh &&
       cached &&
       cached.bridgeUrl === bridgeUrl &&
@@ -187,12 +195,19 @@ class CastService {
       return cloneDevices(cached.devices);
     }
 
+    const generation = ++this.deviceDiscoveryGeneration;
     const client = getBridgeClient(bridgeUrl);
+    if (options.forceRefresh) client.resetNegotiation();
+    const invalidateCurrentCache = () => {
+      if (generation === this.deviceDiscoveryGeneration) {
+        this.invalidateDeviceCache();
+      }
+    };
     let protocol: BridgeProtocolSelection;
     try {
       protocol = await client.negotiate();
     } catch (error) {
-      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
+      if (shouldInvalidateDeviceCache(error)) invalidateCurrentCache();
       throw toV1CastServiceError(
         error,
         "CAST_DEVICES_UNREACHABLE",
@@ -202,11 +217,13 @@ class CastService {
     if (protocol.kind === "v1") {
       try {
         const devices = (await client.getCastDevices()).devices;
-        this.rememberDeviceProtocols(devices, "v1");
-        this.cacheDevices(bridgeUrl, "v1", devices);
+        if (generation === this.deviceDiscoveryGeneration) {
+          this.rememberDeviceProtocols(devices, "v1");
+          this.cacheDevices(bridgeUrl, "v1", devices, cacheable);
+        }
         return cloneDevices(devices);
       } catch (error) {
-        this.invalidateDeviceCache();
+        invalidateCurrentCache();
         throw toV1CastServiceError(
           error,
           "CAST_DEVICES_UNREACHABLE",
@@ -215,7 +232,6 @@ class CastService {
       }
     }
 
-    const authHeaders = getBridgeAuthHeaders();
     let res: Response;
     try {
       res =
@@ -225,15 +241,20 @@ class CastService {
             })
           : await fetch(`${bridgeUrl}/api/cast/devices`);
     } catch {
-      this.invalidateDeviceCache();
+      invalidateCurrentCache();
       throw new CastServiceError(
         "CAST_DEVICES_UNREACHABLE",
         "Could not search for displays on the configured bridge.",
       );
     }
     if (!res.ok) {
-      if (res.status === 404 || res.status >= 500) {
-        this.invalidateDeviceCache();
+      if (
+        res.status === 401 ||
+        res.status === 403 ||
+        res.status === 404 ||
+        res.status >= 500
+      ) {
+        invalidateCurrentCache();
       }
       throw new CastServiceError(
         "CAST_BRIDGE_REJECTED",
@@ -249,7 +270,7 @@ class CastService {
     try {
       data = await res.json();
     } catch (error) {
-      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
+      if (shouldInvalidateDeviceCache(error)) invalidateCurrentCache();
       throw new CastServiceError(
         "CAST_DEVICES_UNREACHABLE",
         "Could not search for displays on the configured bridge.",
@@ -263,8 +284,10 @@ class CastService {
           Array.isArray(data.devices)
         ? (data.devices as CastDevice[])
         : [];
-    this.rememberDeviceProtocols(devices, "legacy");
-    this.cacheDevices(bridgeUrl, "legacy", devices);
+    if (generation === this.deviceDiscoveryGeneration) {
+      this.rememberDeviceProtocols(devices, "legacy");
+      this.cacheDevices(bridgeUrl, "legacy", devices, cacheable);
+    }
     return cloneDevices(devices);
   }
 
@@ -488,7 +511,12 @@ class CastService {
     bridgeUrl: string,
     protocol: BridgeProtocolSelection["kind"],
     devices: CastDevice[],
+    cacheable: boolean,
   ) {
+    if (!cacheable) {
+      this.invalidateDeviceCache();
+      return;
+    }
     this.deviceCache = {
       bridgeUrl,
       expiresAt: Date.now() + CAST_DEVICE_CACHE_TTL_MS,
@@ -504,6 +532,7 @@ class CastService {
   __resetForTests() {
     this.deviceProtocols.clear();
     this.invalidateDeviceCache();
+    this.deviceDiscoveryGeneration = 0;
   }
 }
 
@@ -511,7 +540,14 @@ function cloneDevices(devices: CastDevice[]): CastDevice[] {
   return devices.map((device) => ({
     ...device,
     ...(device.capabilities
-      ? { capabilities: { ...device.capabilities } }
+      ? {
+          capabilities: {
+            ...device.capabilities,
+            ...(device.capabilities.supportedCodecs
+              ? { supportedCodecs: [...device.capabilities.supportedCodecs] }
+              : {}),
+          },
+        }
       : {}),
   }));
 }

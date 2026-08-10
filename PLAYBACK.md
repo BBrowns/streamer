@@ -208,13 +208,17 @@ management, bridge repair, or removal. Offline readiness still requires a
 verified managed local file.
 
 Cast transport errors are similarly typed as discovery, device, source, or
-bridge failures. Device and capability snapshots are runtime-only and cached
-for a short bounded interval; an explicit recovery action invalidates that
-snapshot and force-refreshes discovery so a restarted bridge can issue fresh
-opaque device identities. The cast dialog exposes refresh, session-driven
-source fallback, or bridge repair and shows when another planned candidate is
-being attempted. It never retries a loopback-only source for a remote display,
-and cast controls remain explicit user actions rather than automatic retries.
+bridge failures. Only unauthenticated legacy device and capability snapshots
+are runtime-only and cached for a short bounded interval; authenticated Bridge
+v1 discovery always crosses the authorization boundary. An explicit recovery
+action invalidates the snapshot and force-refreshes negotiation/discovery so a
+restarted bridge can issue fresh opaque device identities. If an opaque id
+rotates and a name/type match is missing or ambiguous, the dialog requires an
+explicit device selection rather than silently choosing a display. The cast
+dialog exposes refresh, session-driven source fallback, or bridge repair and
+shows when another planned candidate is being attempted. It never retries a
+loopback-only source for a remote display, and cast controls remain explicit
+user actions rather than automatic retries.
 These states are deterministic UX behavior, not evidence of native/background
 cast support on untested devices.
 

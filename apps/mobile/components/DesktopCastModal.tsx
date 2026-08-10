@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useReducer, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   Text,
@@ -79,6 +85,8 @@ export function DesktopCastModal({
   const requestIdRef = useRef(0);
   const preparedSessionIdRef = useRef<string | null>(null);
   const handedOffSessionIdRef = useRef<string | null>(null);
+  const reconnectInFlightRef = useRef(false);
+  const [reconnectPending, setReconnectPending] = useState(false);
 
   useEffect(() => {
     orchestratorInputRef.current = orchestratorInput;
@@ -165,24 +173,32 @@ export function DesktopCastModal({
   );
 
   const discoverDevices = useCallback(
-    async (requestId: number, forceRefresh = false) => {
+    async (
+      requestId: number,
+      forceRefresh = false,
+      devicesOverride?: CastDevice[],
+    ) => {
       dispatch({ type: "discoveryStarted" });
       let devices: CastDevice[];
-      try {
-        devices = await castService.getDevices(
-          forceRefresh ? { forceRefresh: true } : undefined,
-        );
-      } catch (error) {
-        if (requestId !== requestIdRef.current) return;
-        const nextRecovery = getCastRecovery(error);
-        if (__DEV__) {
-          console.warn(
-            "[DesktopCastModal] Device discovery failed:",
-            nextRecovery.reason,
+      if (devicesOverride) {
+        devices = devicesOverride;
+      } else {
+        try {
+          devices = await castService.getDevices(
+            forceRefresh ? { forceRefresh: true } : undefined,
           );
+        } catch (error) {
+          if (requestId !== requestIdRef.current) return;
+          const nextRecovery = getCastRecovery(error);
+          if (__DEV__) {
+            console.warn(
+              "[DesktopCastModal] Device discovery failed:",
+              nextRecovery.reason,
+            );
+          }
+          dispatch({ type: "discoveryFailed", recovery: nextRecovery });
+          return;
         }
-        dispatch({ type: "discoveryFailed", recovery: nextRecovery });
-        return;
       }
 
       if (requestId !== requestIdRef.current) return;
@@ -380,22 +396,43 @@ export function DesktopCastModal({
 
   const reconnectAndRetry = useCallback(
     async (device: CastDevice) => {
-      let nextDevice = device;
+      if (reconnectInFlightRef.current) return;
+      reconnectInFlightRef.current = true;
+      setReconnectPending(true);
       try {
         const devices = await castService.getDevices({ forceRefresh: true });
-        nextDevice =
-          devices.find((candidate) => candidate.id === device.id) ||
-          devices.find(
-            (candidate) =>
-              candidate.name === device.name && candidate.type === device.type,
-          ) ||
-          device;
+        const exactDevice = devices.find(
+          (candidate) => candidate.id === device.id,
+        );
+        if (exactDevice) {
+          await handleCast(exactDevice);
+          return;
+        }
+
+        const sameNameDevices = devices.filter(
+          (candidate) =>
+            candidate.name === device.name && candidate.type === device.type,
+        );
+        if (sameNameDevices.length === 1) {
+          await handleCast(sameNameDevices[0]);
+          return;
+        }
+
+        // A rotated opaque id plus a duplicate (or missing) name is not a
+        // safe identity match. Re-discover and let the user choose explicitly
+        // instead of silently sending the source to the wrong display.
+        cancelPreparedSession();
+        const requestId = ++requestIdRef.current;
+        await discoverDevices(requestId, false, devices);
+        return;
       } catch {
         // Keep the explicit retry useful when discovery is temporarily down.
+      } finally {
+        reconnectInFlightRef.current = false;
+        setReconnectPending(false);
       }
-      await handleCast(nextDevice);
     },
-    [handleCast],
+    [cancelPreparedSession, discoverDevices, handleCast],
   );
 
   const handleRecovery = useCallback(() => {
@@ -688,6 +725,7 @@ export function DesktopCastModal({
               variant="secondary"
               size="small"
               onPress={handleRecovery}
+              disabled={statusBusy || reconnectPending}
               style={styles.recoveryButton}
             />
           ) : null}
