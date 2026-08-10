@@ -43,6 +43,7 @@ one active prepared-source lease, not into persisted control-plane state.
 | Platform playback differences    | `Platform.OS` branches in player behavior | Native, web and Electron media adapters                   |
 | Effective capability decisions   | URL/container/platform inference          | Pure route/runtime/adapter capability policy              |
 | Runtime cleanup                  | Screen, engine and gateway callbacks      | Session-owned idempotent prepared-source lease            |
+| Player session binding           | Player host planning/replan/exit          | `usePlaybackSessionBinding`                               |
 | Tracks and subtitles             | Several player/engine arrays              | Normalized deterministic catalog and subtitle renderer    |
 
 ## Boundaries
@@ -82,6 +83,17 @@ transient interaction state into one discriminated player view state:
 This state is runtime-only. It prevents contradictory UI such as “playing and
 scrubbing” or “failed and preparing” from being represented as unrelated
 booleans.
+
+### Player session binding
+
+`usePlaybackSessionBinding.ts` is the route binding for transient session
+ownership. It owns planning-launch adoption, partial-discovery replan
+single-flight, and route-exit cancellation/removal of provisional sessions.
+It delegates session events and prepared-source leases to
+`PlaybackSessionPlaybackService` and `playbackSessionStore`; it does not create
+another store or orchestration state machine. Seekable-cache and track-catalog
+hooks remain separate runtime capabilities. Source-URI resolution remains to
+move into this binding in a follow-up slice.
 
 ### Source preparation and runtime ownership
 

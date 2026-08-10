@@ -91,6 +91,10 @@ The mobile client now has:
   Download candidate preparation, planner timeout budgets, gateway progress,
   single-flight fallback, attempt-bound prepared-source lease ownership,
   action-aware offline eligibility, and persistence-safe runtime error handling
+- `hooks/usePlaybackSessionBinding.ts` for player-route planning ownership,
+  partial-discovery replan single-flight, and provisional-session route-exit
+  cleanup; it delegates all durable session transitions to the existing store
+  and playback service
 - `services/sourcePreparation/` for exact route binding and direct, HLS,
   bridge-v1 and bounded legacy preparation adapters
 - `services/bridge/BridgeV1PlaybackRuntime.ts` for the already-prepared opaque
