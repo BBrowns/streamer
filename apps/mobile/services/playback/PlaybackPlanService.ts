@@ -1,11 +1,13 @@
 import type {
+  BridgeDelivery,
   DeviceProfile,
   PlaybackAction,
-  PlaybackPlan,
   PlaybackPlanRequest,
+  PlaybackPlanResponse,
+  PlaybackPlanV3Request,
   Stream,
 } from "@streamer/shared";
-import { playbackPlanSchema } from "@streamer/shared";
+import { playbackPlanResponseSchema } from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import {
@@ -15,6 +17,8 @@ import {
 import { useAuthStore } from "../../stores/authStore";
 import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
 import { buildActionBridgeHint } from "../actionPreflight";
+import { BridgeClientError, getBridgeClient } from "../bridge/BridgeClient";
+import { buildPlaybackExecutionNodes } from "./PlaybackExecutionInventory";
 
 /**
  * Planner responses contain transient source data. Keep them in memory only,
@@ -55,7 +59,7 @@ type PreparedPlaybackPlanRequest = {
 };
 
 type CachedPlaybackPlan = {
-  plan: PlaybackPlan;
+  plan: PlaybackPlanResponse;
   expiresAt: number;
 };
 
@@ -63,7 +67,7 @@ type InFlightPlaybackPlan = {
   cacheKey: string;
   generation: number;
   controller: AbortController;
-  promise: Promise<PlaybackPlan>;
+  promise: Promise<PlaybackPlanResponse>;
   foregroundConsumers: number;
   backgroundConsumers: number;
   foregroundConsumerAttached: boolean;
@@ -194,12 +198,116 @@ function preparePlaybackPlanRequest(
 async function requestPlaybackPlan(
   payload: PlaybackPlanRequest,
   signal?: AbortSignal,
-): Promise<PlaybackPlan> {
-  const response = signal
-    ? await api.post<PlaybackPlan>("/api/playback/plan", payload, { signal })
-    : await api.post<PlaybackPlan>("/api/playback/plan", payload);
+): Promise<PlaybackPlanResponse> {
+  const v3Payload = await preparePlaybackPlanV3Request(payload, signal);
+  if (v3Payload) {
+    try {
+      const response = signal
+        ? await api.post<PlaybackPlanResponse>(
+            "/api/playback/plan/v3",
+            v3Payload,
+            { signal },
+          )
+        : await api.post<PlaybackPlanResponse>(
+            "/api/playback/plan/v3",
+            v3Payload,
+          );
+      return playbackPlanResponseSchema.parse(response.data);
+    } catch (error) {
+      if (!isPlannerV3Unsupported(error)) throw error;
+    }
+  }
 
-  return playbackPlanSchema.parse(response.data);
+  const response = signal
+    ? await api.post<PlaybackPlanResponse>("/api/playback/plan", payload, {
+        signal,
+      })
+    : await api.post<PlaybackPlanResponse>("/api/playback/plan", payload);
+
+  return playbackPlanResponseSchema.parse(response.data);
+}
+
+function isPlannerV3Unsupported(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    response?: { status?: unknown; data?: unknown };
+  };
+  if (
+    candidate.response?.status === 404 ||
+    candidate.response?.status === 501
+  ) {
+    return true;
+  }
+  const data = candidate.response?.data;
+  return (
+    !!data &&
+    typeof data === "object" &&
+    (data as { error?: { code?: unknown } }).error?.code ===
+      "PROTOCOL_UNSUPPORTED"
+  );
+}
+
+function isAbortLike(error: unknown, signal?: AbortSignal) {
+  return (
+    signal?.aborted ||
+    (!!error &&
+      typeof error === "object" &&
+      ["AbortError", "CanceledError"].includes(
+        String((error as { name?: unknown }).name),
+      ))
+  );
+}
+
+async function preparePlaybackPlanV3Request(
+  payload: PlaybackPlanRequest,
+  signal?: AbortSignal,
+): Promise<PlaybackPlanV3Request | null> {
+  const bridge = payload.bridge;
+  let bridgeProtocolVersion: 1 | undefined;
+  let bridgeDeliveries: BridgeDelivery[] | undefined;
+  let bridgeCastAvailable = false;
+
+  if (
+    bridge?.url &&
+    bridge.configured === true &&
+    bridge.endpoint?.deviceReachable === true &&
+    (bridge.status === "available" || bridge.status === "no-peers")
+  ) {
+    try {
+      const client = getBridgeClient(bridge.url);
+      const selection = await client.negotiate(signal);
+      if (signal?.aborted) throw createAbortError();
+      if (selection.kind === "legacy") return null;
+
+      const capabilities = await client.getCapabilities(signal);
+      if (signal?.aborted) throw createAbortError();
+      bridgeProtocolVersion = capabilities.protocolVersion;
+      bridgeDeliveries = capabilities.capabilities.jobs.deliveries
+        .filter((delivery) => delivery.available)
+        .map((delivery) => delivery.delivery);
+      bridgeCastAvailable = capabilities.capabilities.cast.available;
+    } catch (error) {
+      if (isAbortLike(error, signal)) throw error;
+      // Authentication, network and malformed responses never trigger a
+      // silent protocol downgrade. The v3 request simply omits that executor
+      // and therefore fails closed for bridge-only candidates.
+      if (!(error instanceof BridgeClientError)) throw error;
+    }
+  }
+
+  const { bridge: _legacyBridge, ...request } = payload;
+  if (signal?.aborted) throw createAbortError();
+  return {
+    ...request,
+    version: 3,
+    executionNodes: buildPlaybackExecutionNodes({
+      deviceProfile: payload.deviceProfile,
+      bridge,
+      bridgeProtocolVersion,
+      bridgeDeliveries,
+      bridgeCastAvailable,
+    }),
+  };
 }
 
 function createAbortError() {
@@ -234,7 +342,7 @@ function attachPlaybackPlanConsumer(
   requestKey: string,
   entry: InFlightPlaybackPlan,
   options: PlaybackPlanRequestOptions,
-): Promise<PlaybackPlan> {
+): Promise<PlaybackPlanResponse> {
   const { signal } = options;
   const isPrefetch = options.consumer === "prefetch";
 
@@ -255,7 +363,7 @@ function attachPlaybackPlanConsumer(
     entry.foregroundConsumerAttached = true;
   }
 
-  return new Promise<PlaybackPlan>((resolve, reject) => {
+  return new Promise<PlaybackPlanResponse>((resolve, reject) => {
     let settled = false;
 
     const release = (aborted: boolean) => {
@@ -312,7 +420,7 @@ function attachPlaybackPlanConsumer(
 export function getPlaybackPlan(
   input: PlaybackPlanInput,
   options: PlaybackPlanRequestOptions = {},
-): Promise<PlaybackPlan> {
+): Promise<PlaybackPlanResponse> {
   if (options.signal?.aborted) return Promise.reject(createAbortError());
 
   pruneExpiredPlaybackPlans();
@@ -408,7 +516,7 @@ export function detectPlaybackBridgeOnce(): Promise<boolean> {
 export async function createPlaybackPlan(
   input: PlaybackPlanInput,
   options: Pick<PlaybackPlanRequestOptions, "signal"> = {},
-): Promise<PlaybackPlan> {
+): Promise<PlaybackPlanResponse> {
   if (options.signal?.aborted) throw createAbortError();
   const { payload } = preparePlaybackPlanRequest(input);
   return requestPlaybackPlan(payload, options.signal);
@@ -421,7 +529,7 @@ export async function createPlaybackPlan(
 export async function getPlaybackPlanWithBridgeRetry(
   input: PlaybackPlanInput,
   options: PlaybackPlanRequestOptions = {},
-): Promise<PlaybackPlan> {
+): Promise<PlaybackPlanResponse> {
   const bridgeDetection = detectPlaybackBridgeOnce();
   const plan = await getPlaybackPlan(input, options);
   if (plan.state !== "needsBridge") return plan;
@@ -444,7 +552,7 @@ export async function getPlaybackPlanWithBridgeRetry(
 export async function getPlaybackPlanAfterPartialDiscovery(
   input: PlaybackPlanInput,
   options: PlaybackPlanRequestOptions = {},
-): Promise<PlaybackPlan> {
+): Promise<PlaybackPlanResponse> {
   let plan = await getPlaybackPlanWithBridgeRetry(input, {
     ...options,
     forceRefresh: true,
@@ -467,7 +575,7 @@ export async function getPlaybackPlanAfterPartialDiscovery(
 export function createPlaybackPlanWithBridgeRetry(
   input: PlaybackPlanInput,
   options: PlaybackPlanRequestOptions = {},
-): Promise<PlaybackPlan> {
+): Promise<PlaybackPlanResponse> {
   return getPlaybackPlanWithBridgeRetry(input, options);
 }
 
@@ -571,13 +679,13 @@ export interface PlaybackPlanResolveResult {
   remainingStreams: Stream[];
 }
 
-export function getReadyPlanStreams(plan: PlaybackPlan): Stream[] {
+export function getReadyPlanStreams(plan: PlaybackPlanResponse): Stream[] {
   if (plan.state !== "ready" || !plan.selectedCandidate) return [];
 
   const entries = [
     {
       candidate: plan.selectedCandidate,
-      playbackUrl: plan.plan?.playbackUrl,
+      playbackUrl: plan.version === 2 ? plan.plan?.playbackUrl : undefined,
     },
     ...plan.fallbackCandidates.map((candidate) => ({
       candidate,
@@ -604,7 +712,7 @@ export function getReadyPlanStreams(plan: PlaybackPlan): Stream[] {
 }
 
 export async function resolvePlaybackPlan(
-  plan: PlaybackPlan,
+  plan: PlaybackPlanResponse,
 ): Promise<PlaybackPlanResolveResult> {
   const streams = getReadyPlanStreams(plan);
   const errors: string[] = [];
@@ -645,7 +753,7 @@ export async function resolvePlaybackPlan(
 }
 
 export async function resolveFirstPlayablePlanStream(
-  plan: PlaybackPlan,
+  plan: PlaybackPlanResponse,
 ): Promise<ResolvedPlaybackPlanStream | null> {
   const result = await resolvePlaybackPlan(plan);
   return result.resolved;

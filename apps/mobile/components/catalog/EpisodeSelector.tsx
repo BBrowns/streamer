@@ -1,7 +1,11 @@
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { memo, useState, useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import type { PlaybackPlan, VideoEntry, Stream } from "@streamer/shared";
+import type {
+  PlaybackPlanResponse,
+  VideoEntry,
+  Stream,
+} from "@streamer/shared";
 import { hapticImpactLight } from "../../lib/haptics";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
@@ -222,7 +226,7 @@ function EpisodeStreamList({
   episode: number;
   episodeTitle: string;
   onPlayCandidate: (
-    plan: PlaybackPlan,
+    plan: PlaybackPlanResponse,
     candidateId: string,
     episodeTitle: string,
     season: number,
@@ -279,7 +283,7 @@ interface EpisodeSelectorProps {
   onPlayStream: (episodeTitle: string, season: number, episode: number) => void;
   onPlayIntent?: (season: number, episode: number) => void;
   onPlayCandidate: (
-    plan: PlaybackPlan,
+    plan: PlaybackPlanResponse,
     candidateId: string,
     episodeTitle?: string,
     season?: number,

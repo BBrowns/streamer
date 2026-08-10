@@ -32,13 +32,15 @@ import {
 import { streamEngineManager } from "../services/streamEngine/StreamEngineManager";
 import { usePlayerController } from "../hooks/usePlayerController";
 import { usePlayerMediaControls } from "../hooks/usePlayerMediaControls";
+import { usePlayerCastController } from "../hooks/usePlayerCastController";
+import { useSeekableCacheHandoff } from "../hooks/useSeekableCacheHandoff";
+import { usePlayerTrackCatalog } from "../hooks/usePlayerTrackCatalog";
 
 // UI Components
 import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
-import { replaceWithSeekableSource } from "../components/player/seekablePlaybackHandoff";
 import { PlayerInteractionLayer } from "../components/player/PlayerInteractionLayer";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
@@ -50,7 +52,6 @@ import {
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
 import {
-  buildPlayerTrackCatalog,
   findPreferredPlayerTrack,
   normalizeTrackLanguage,
 } from "../services/playback/trackSelection";
@@ -72,8 +73,6 @@ import {
   markPlaybackSessionPlaying,
   resolvePlaybackSession,
 } from "../services/playback/PlaybackSessionPlaybackService";
-import { stopCastSession } from "../services/playback/PlaybackSessionCastService";
-import { useCastStore } from "../stores/castStore";
 import { PlaybackStatusPanel } from "../components/ui/PlaybackStatusPanel";
 import { hasNewStablePlaybackCandidate } from "../services/playback/partialDiscovery";
 import {
@@ -82,22 +81,13 @@ import {
   hasPlaybackProgressed,
   shouldAdvanceAfterPlaybackStall,
 } from "../components/player/playbackStallWatchdog";
-import { ExpoMediaPlayerAdapter } from "../services/playback/MediaPlayerAdapter";
+import { createMediaPlayerAdapter } from "../services/playback/mediaPlayerAdapters";
+import { resolveEffectivePlayerCapabilities } from "../services/playback/PlayerCapabilityPolicy";
 import {
   initialPlaybackRuntimeViewState,
   reducePlaybackRuntimeViewState,
 } from "../services/playback/PlaybackRuntimeCoordinator";
 import { ExternalSubtitleRenderer } from "../components/player/ExternalSubtitleRenderer";
-import {
-  parseSubtitleDocument,
-  type SubtitleCue,
-} from "../services/playback/SubtitleParser";
-import {
-  getAddonSubtitles,
-  loadAddonSubtitleDocument,
-  mergeSubtitleTracks,
-} from "../services/playback/AddonSubtitleService";
-import type { SubtitleTrack } from "../services/streamEngine/IStreamEngine";
 import {
   captureFallbackContinuity,
   resolveFallbackResumePosition,
@@ -114,7 +104,6 @@ import { createPlayerScreenStyles } from "../components/player/playerScreenStyle
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
 const PLAYBACK_START_TIMEOUT_MS = 60_000;
-const SEEKABLE_CACHE_POLL_INTERVAL_MS = 2_000;
 
 type SeekableCacheStatus =
   | "not_started"
@@ -123,24 +112,18 @@ type SeekableCacheStatus =
   | "ready"
   | "unavailable";
 
-function waitForSeekableCachePoll(signal: AbortSignal) {
-  return new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, SEEKABLE_CACHE_POLL_INTERVAL_MS);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
-}
-
 function getPlayerVisibility() {
   if (AppState.currentState !== "active") return false;
   if (Platform.OS !== "web" || typeof document === "undefined") return true;
   return document.visibilityState !== "hidden";
+}
+
+function resolveOwnedWebVideoElement(surface: any) {
+  if (!surface) return null;
+  if (surface.tagName?.toLowerCase?.() === "video") return surface;
+  return typeof surface.querySelector === "function"
+    ? surface.querySelector("video")
+    : null;
 }
 
 export default function PlayerScreen() {
@@ -212,9 +195,15 @@ export default function PlayerScreen() {
   const activeSession = usePlaybackSessionStore((s) =>
     playbackSessionId ? s.sessions[playbackSessionId] || null : null,
   );
-  const activeCast = useCastStore((s) => s.activeCast);
-  const setActiveCast = useCastStore((s) => s.setActiveCast);
-  const clearActiveCast = useCastStore((s) => s.clearActiveCast);
+  const {
+    activeCast,
+    castModalOpen,
+    openCastModal,
+    closeCastModal,
+    handleCastStarted,
+    stopCasting,
+    stopCastingOnPlayerClose,
+  } = usePlayerCastController({ router, currentStream });
   const planningLaunchId =
     playbackLaunchIntent?.type === "planning"
       ? playbackLaunchIntent.launchId
@@ -245,7 +234,6 @@ export default function PlayerScreen() {
   const playbackSessionTimeoutBudgetMs = activeSession?.timeoutBudgetMs;
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [castModalOpen, setCastModalOpen] = useState(false);
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -257,14 +245,6 @@ export default function PlayerScreen() {
   const [seekableCacheStatus, setSeekableCacheStatus] =
     useState<SeekableCacheStatus>("not_started");
   const [seekableHandoffApplied, setSeekableHandoffApplied] = useState(false);
-  const [trackCatalogRevision, setTrackCatalogRevision] = useState(0);
-  const [externalSubtitleCues, setExternalSubtitleCues] = useState<
-    SubtitleCue[]
-  >([]);
-  const [addonSubtitles, setAddonSubtitles] = useState<SubtitleTrack[]>([]);
-  const [subtitleLoadState, setSubtitleLoadState] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
   const [diagnosticsRevision, setDiagnosticsRevision] = useState(0);
   const [runtimeViewState, dispatchRuntimeViewEvent] = useReducer(
     reducePlaybackRuntimeViewState,
@@ -308,7 +288,6 @@ export default function PlayerScreen() {
   const seekingUntilRef = useRef(0);
   const stallFallbackTriggeredRef = useRef(false);
   const seekableHandoffControllerRef = useRef<AbortController | null>(null);
-  const subtitleDocumentControllerRef = useRef<AbortController | null>(null);
   const seekableHandoffInFlightRef = useRef(false);
   const seekableHandoffShouldResumeRef = useRef<boolean | null>(null);
   const pausedAfterSeekableHandoffRef = useRef(false);
@@ -428,12 +407,7 @@ export default function PlayerScreen() {
       partialReplanControllerRef.current = null;
       seekableHandoffControllerRef.current?.abort();
       seekableHandoffControllerRef.current = null;
-      if (activeCast) {
-        void stopCastSession(activeCast.device.id, activeCast.sessionId).catch(
-          (error) => console.error("Failed to stop cast", error),
-        );
-        clearActiveCast();
-      }
+      stopCastingOnPlayerClose();
       if (planningLaunchId) {
         cancelPlaybackLaunch(planningLaunchId, reason);
       }
@@ -453,13 +427,12 @@ export default function PlayerScreen() {
       setTimeout(() => clearPlayer(), 100);
     },
     [
-      activeCast,
-      clearActiveCast,
       clearPlayer,
       currentStream,
       planningLaunchId,
       playbackSessionId,
       router,
+      stopCastingOnPlayerClose,
     ],
   );
 
@@ -1131,17 +1104,35 @@ export default function PlayerScreen() {
     p.showNowPlayingNotification = true;
     p.play();
   });
+  const platformPiPSupported = useMemo(() => {
+    if (Platform.OS === "web") {
+      return Boolean(
+        typeof document !== "undefined" &&
+        ((document as any).pictureInPictureEnabled ||
+          (document.createElement("video") as any)
+            .webkitSupportsPresentationMode),
+      );
+    }
+    try {
+      return isPictureInPictureSupported();
+    } catch {
+      return false;
+    }
+  }, []);
   const mediaAdapter = useMemo(
     () =>
-      new ExpoMediaPlayerAdapter(
+      createMediaPlayerAdapter({
         player,
-        Platform.OS === "ios"
-          ? "ios"
-          : Platform.OS === "android"
-            ? "android"
-            : "web",
-      ),
-    [player],
+        native: {
+          resolveSurface: () => videoViewRef.current,
+          pictureInPictureSupported: platformPiPSupported,
+        },
+        web: {
+          resolveVideoElement: () =>
+            resolveOwnedWebVideoElement(videoViewRef.current),
+        },
+      }),
+    [platformPiPSupported, player],
   );
 
   const handleFirstFrameRendered = useCallback(() => {
@@ -1503,6 +1494,8 @@ export default function PlayerScreen() {
     subtitles: engineSubtitles,
     stats,
     engine,
+    playbackRoute,
+    bridgeJobId: preparedBridgeJobId,
     showResumePrompt,
     resumePromptTimeSeconds,
     handleResumeResponse,
@@ -1567,232 +1560,37 @@ export default function PlayerScreen() {
     recordExplicitSeek,
   ]);
 
-  const subtitles = useMemo(
-    () => mergeSubtitleTracks([...engineSubtitles, ...addonSubtitles]),
-    [addonSubtitles, engineSubtitles],
-  );
-
-  useEffect(() => {
-    setAddonSubtitles([]);
-    if (!mediaInfo) return;
-
-    const controller = new AbortController();
-    const startedAt = Date.now();
-    void getAddonSubtitles(mediaInfo, controller.signal)
-      .then((tracks) => {
-        if (!controller.signal.aborted) {
-          recordDiagnostic({
-            type: "subtitle_provider",
-            outcome: "succeeded",
-            latencyMs: Date.now() - startedAt,
-          });
-          setAddonSubtitles(tracks);
-        }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          recordDiagnostic({
-            type: "subtitle_provider",
-            outcome: "failed",
-            latencyMs: Date.now() - startedAt,
-          });
-          setAddonSubtitles([]);
-        }
-      });
-    return () => controller.abort();
-  }, [
-    mediaInfo?.episode,
-    mediaInfo?.itemId,
-    mediaInfo?.season,
-    mediaInfo?.type,
+  const {
+    subtitles,
+    externalSubtitleCues,
+    subtitleLoadState,
+    trackCatalogRevision,
+    handleSubtitleSelection,
+    refreshPlayerTracks,
+  } = usePlayerTrackCatalog({
+    mediaInfo,
+    engine,
+    engineSubtitles,
+    playbackRoute,
+    playbackUri,
+    player,
+    mediaAdapter,
+    setAudioTracks,
+    setSubtitles,
     recordDiagnostic,
-  ]);
-
-  const refreshPlayerTracks = useCallback(() => {
-    if (!player) {
-      setAudioTracks([]);
-      setSubtitles(engine?.getSubtitles() || []);
-      return;
-    }
-
-    const availableAudioTracks = player.availableAudioTracks || [];
-    const availableSubtitleTracks = player.availableSubtitleTracks || [];
-    const catalog = buildPlayerTrackCatalog({
-      availableAudioTracks,
-      activeAudioTrack: player.audioTrack,
-      availableSubtitleTracks,
-      activeSubtitleTrack: player.subtitleTrack,
-      engineSubtitles: engine?.getSubtitles() || [],
-    });
-    setAudioTracks(catalog.audioTracks);
-    setSubtitles(catalog.subtitles);
-  }, [engine, player, setAudioTracks, setSubtitles]);
-
-  const handleSubtitleSelection = useCallback(
-    async (id: string | null) => {
-      subtitleDocumentControllerRef.current?.abort();
-      subtitleDocumentControllerRef.current = null;
-      setExternalSubtitleCues([]);
-      setSubtitleLoadState("idle");
-      const addonTrack = id
-        ? addonSubtitles.find((track) => track.id === id)
-        : undefined;
-
-      if (mediaAdapter.selectSubtitleTrack(id)) {
-        engine?.setSubtitle(null);
-        setAddonSubtitles((tracks) =>
-          tracks.map((track) => ({ ...track, active: false })),
-        );
-        refreshPlayerTracks();
-        return;
-      }
-
-      if (!id) {
-        engine?.setSubtitle(null);
-        setAddonSubtitles((tracks) =>
-          tracks.map((track) => ({ ...track, active: false })),
-        );
-        refreshPlayerTracks();
-        return;
-      }
-      mediaAdapter.selectSubtitleTrack(null);
-      if (addonTrack) {
-        engine?.setSubtitle(null);
-        setAddonSubtitles((tracks) =>
-          tracks.map((track) => ({ ...track, active: track.id === id })),
-        );
-      } else {
-        engine?.setSubtitle(id);
-        setAddonSubtitles((tracks) =>
-          tracks.map((track) => ({ ...track, active: false })),
-        );
-      }
-      if (!addonTrack && !engine?.loadSubtitleDocument) {
-        refreshPlayerTracks();
-        return;
-      }
-
-      const controller = new AbortController();
-      subtitleDocumentControllerRef.current = controller;
-      setSubtitleLoadState("loading");
-      try {
-        const document = addonTrack
-          ? await loadAddonSubtitleDocument(addonTrack, controller.signal)
-          : await engine!.loadSubtitleDocument!(id, controller.signal);
-        if (controller.signal.aborted) return;
-        const cues = parseSubtitleDocument(
-          document,
-          addonTrack?.format || "vtt",
-        );
-        if (cues.length === 0) {
-          throw new Error("Subtitle document contains no usable cues");
-        }
-        recordDiagnostic({
-          type: "subtitle_parse",
-          outcome: "succeeded",
-          cueCount: cues.length,
-        });
-        setExternalSubtitleCues(cues);
-        setSubtitleLoadState("ready");
-      } catch {
-        if (controller.signal.aborted) return;
-        recordDiagnostic({
-          type: "subtitle_parse",
-          outcome: "failed",
-        });
-        engine?.setSubtitle(null);
-        setAddonSubtitles((tracks) =>
-          tracks.map((track) => ({ ...track, active: false })),
-        );
-        setExternalSubtitleCues([]);
-        setSubtitleLoadState("error");
-      } finally {
-        if (subtitleDocumentControllerRef.current === controller) {
-          subtitleDocumentControllerRef.current = null;
-        }
-        refreshPlayerTracks();
-      }
-    },
-    [
-      addonSubtitles,
-      engine,
-      mediaAdapter,
-      recordDiagnostic,
-      refreshPlayerTracks,
-    ],
-  );
-
-  useEffect(() => {
-    return () => {
-      subtitleDocumentControllerRef.current?.abort();
-      subtitleDocumentControllerRef.current = null;
-      setExternalSubtitleCues([]);
-      setSubtitleLoadState("idle");
-    };
-  }, [engine, playbackUri]);
-
-  useEffect(() => {
-    appliedTrackPreferencesRef.current = null;
-    setAudioTracks([]);
-    setSubtitles(engine?.getSubtitles() || []);
-
-    if (!engine) return;
-    const controller = new AbortController();
-    const handleEngineTracks = () => refreshPlayerTracks();
-    engine.on("tracks", handleEngineTracks);
-    void engine.refreshTrackCatalog?.(controller.signal).catch(() => {
-      // Track discovery is optional. Native tracks and playback stay usable
-      // when the bridge cannot provide richer metadata.
-    });
-
-    return () => {
-      controller.abort();
-      engine.off("tracks", handleEngineTracks);
-    };
-  }, [engine, playbackUri, refreshPlayerTracks, setAudioTracks, setSubtitles]);
-
-  useEffect(() => {
-    if (!player) return;
-
-    refreshPlayerTracks();
-
-    const audioListSub = player.addListener?.(
-      "availableAudioTracksChange",
-      refreshPlayerTracks,
-    );
-    const audioTrackSub = player.addListener?.(
-      "audioTrackChange",
-      refreshPlayerTracks,
-    );
-    const subtitleListSub = player.addListener?.(
-      "availableSubtitleTracksChange",
-      refreshPlayerTracks,
-    );
-    const subtitleTrackSub = player.addListener?.(
-      "subtitleTrackChange",
-      refreshPlayerTracks,
-    );
-    const sourceLoadSub = player.addListener?.("sourceLoad", () => {
-      appliedTrackPreferencesRef.current = null;
-      refreshPlayerTracks();
-      setTrackCatalogRevision((revision) => revision + 1);
-    });
-
-    return () => {
-      audioListSub?.remove?.();
-      audioTrackSub?.remove?.();
-      subtitleListSub?.remove?.();
-      subtitleTrackSub?.remove?.();
-      sourceLoadSub?.remove?.();
-    };
-  }, [player, refreshPlayerTracks]);
+  });
 
   useEffect(() => {
     if (!player || !playbackUri) return;
     if (appliedTrackPreferencesRef.current === playbackUri) return;
 
-    const availableAudioTracks = player.availableAudioTracks || [];
-    const availableSubtitleTracks = player.availableSubtitleTracks || [];
+    const mediaCapabilities = mediaAdapter.getCapabilities();
+    const availableAudioTracks = mediaCapabilities.audioTracks
+      ? mediaAdapter.getAudioTracks()
+      : [];
+    const availableSubtitleTracks = mediaCapabilities.embeddedSubtitles
+      ? mediaAdapter.getSubtitleTracks()
+      : [];
     const waitingForPreferredAudio =
       Boolean(preferredAudioLang || originalLanguage) &&
       availableAudioTracks.length === 0;
@@ -1807,11 +1605,11 @@ export default function PlayerScreen() {
       preferredAudioLang || originalLanguage,
     );
     if (audioTrack) {
-      player.audioTrack = audioTrack;
+      mediaAdapter.selectAudioTrack(audioTrack.id);
     }
 
     if (subtitleMode === "off") {
-      player.subtitleTrack = null;
+      mediaAdapter.selectSubtitleTrack(null);
       void handleSubtitleSelection(null);
     } else {
       const subtitleTrack = findPreferredPlayerTrack(
@@ -1819,7 +1617,7 @@ export default function PlayerScreen() {
         preferredSubtitleLang,
       );
       if (subtitleTrack) {
-        player.subtitleTrack = subtitleTrack;
+        mediaAdapter.selectSubtitleTrack(subtitleTrack.id);
       } else if (preferredSubtitleLang && subtitles.length > 0) {
         const preferredLanguage = normalizeTrackLanguage(preferredSubtitleLang);
         const candidates = subtitles
@@ -1841,8 +1639,8 @@ export default function PlayerScreen() {
             );
           });
         const selectedAudioLanguage = normalizeTrackLanguage(
-          player.audioTrack?.language ||
-            audioTracks.find((track) => track.active)?.language,
+          mediaAdapter.getAudioTracks().find((track) => track.active)
+            ?.language || audioTracks.find((track) => track.active)?.language,
         );
         const engineSubtitle = candidates.find(
           (track) =>
@@ -1863,6 +1661,7 @@ export default function PlayerScreen() {
     playbackUri,
     audioTracks.length,
     handleSubtitleSelection,
+    mediaAdapter,
     preferredAudioLang,
     preferredSubtitleLang,
     originalLanguage,
@@ -1888,6 +1687,7 @@ export default function PlayerScreen() {
   const hasKnownDuration =
     Number.isFinite(playerDuration) && playerDuration > 0;
   const isProgressiveRemuxPlayback =
+    playbackRoute?.delivery === "progressive-fmp4" ||
     currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4";
   const isRemuxPlayback = Boolean(
     currentStream?.behaviorHints?.remuxToMp4 ||
@@ -1901,12 +1701,19 @@ export default function PlayerScreen() {
   );
   const hasSeekableProgressiveHandoff =
     isProgressiveRemuxPlayback && seekableHandoffApplied;
-  const canSeekPlayback = Boolean(
-    !activeCast &&
-    (!isRemuxPlayback || hasSeekableProgressiveHandoff) &&
-    hasKnownDuration &&
-    !isLivePlayback,
-  );
+  const effectivePlayerCapabilities = resolveEffectivePlayerCapabilities({
+    route: playbackRoute,
+    mediaAdapter: mediaAdapter.getCapabilities(),
+    activeCast: Boolean(activeCast),
+    isWeb: Platform.OS === "web",
+    hasMediaInfo: Boolean(mediaInfo),
+    hasKnownDuration,
+    isLivePlayback,
+    isRemuxPlayback,
+    hasSeekableProgressiveHandoff,
+    hasRuntimeThumbnailProvider: Boolean(engine?.getThumbnail),
+  });
+  const canSeekPlayback = effectivePlayerCapabilities.canSeek;
   const activePlaybackSegment = useMemo(
     () =>
       canSeekPlayback
@@ -2007,6 +1814,8 @@ export default function PlayerScreen() {
         name: activeCast.device.name,
       })
     : null;
+  const canUseTimelineThumbnails =
+    effectivePlayerCapabilities.canUseTimelineThumbnails;
   const playerCapabilities = useMemo(
     () => ({
       canSeek: canSeekPlayback,
@@ -2019,20 +1828,21 @@ export default function PlayerScreen() {
             ? undefined
             : seekableCacheStatus
           : undefined,
-      canUseVolume: Platform.OS === "web" && !activeCast,
-      canUseFullscreen: !activeCast,
+      canUseVolume: effectivePlayerCapabilities.canUseVolume,
+      canUseFullscreen: effectivePlayerCapabilities.canUseFullscreen,
       hasCaptions: subtitles.length > 0,
-      canCast: Platform.OS === "web" && Boolean(mediaInfo) && !activeCast,
+      canCast: effectivePlayerCapabilities.canCast,
       canRetry: Boolean(playbackSessionId && (runtimeError || fallbackReason)),
     }),
     [
-      activeCast,
       canSeekPlayback,
+      effectivePlayerCapabilities.canCast,
+      effectivePlayerCapabilities.canUseFullscreen,
+      effectivePlayerCapabilities.canUseVolume,
       fallbackReason,
       isLivePlayback,
       isProgressiveRemuxPlayback,
       isRemuxPlayback,
-      mediaInfo,
       playbackSessionId,
       runtimeError,
       seekableCacheStatus,
@@ -2043,207 +1853,43 @@ export default function PlayerScreen() {
 
   // A primary torrent starts as a live fragmented MP4 so it can show a frame
   // quickly. The bridge prepares its range-seekable cache only after that
-  // first consumer exists. Poll that one existing gateway job here; this
-  // never plans a second candidate or creates another torrent.
-  useEffect(() => {
-    if (
-      !player ||
-      !playbackUri ||
-      !engine?.getSeekablePlaybackHandoff ||
-      !isProgressiveRemuxPlayback ||
-      !hasPlaybackStarted ||
-      !playbackSessionId ||
-      !playbackCandidateId ||
-      !playbackAttemptId ||
-      activeCast ||
-      seekableHandoffApplied
-    ) {
-      return;
-    }
-
-    const getSeekablePlaybackHandoff =
-      engine.getSeekablePlaybackHandoff.bind(engine);
-    const controller = new AbortController();
-    seekableHandoffControllerRef.current?.abort();
-    seekableHandoffControllerRef.current = controller;
-    const sessionSnapshot = {
-      sessionId: playbackSessionId,
-      candidateId: playbackCandidateId,
-      attemptId: playbackAttemptId,
-    };
-    // The opaque gateway ID is already session-owned state, so using it here
-    // prevents a late monitor from ever observing a gateway job selected by a
-    // different candidate or player.
-    let expectedGatewayJobId: string | undefined = activeGatewayJobId;
-
-    const isCurrentAttempt = () => {
-      const state = usePlayerStore.getState();
-      const currentSession =
-        usePlaybackSessionStore.getState().sessions[sessionSnapshot.sessionId];
-      return (
-        state.playbackSessionId === sessionSnapshot.sessionId &&
-        state.playbackCandidateId === sessionSnapshot.candidateId &&
-        state.playbackAttemptId === sessionSnapshot.attemptId &&
-        currentSession?.selectedCandidateId === sessionSnapshot.candidateId &&
-        currentSession.status !== "cancelled" &&
-        currentSession.status !== "failed" &&
-        currentSession.status !== "completed" &&
-        state.currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4"
-      );
-    };
-
-    const markSeekableHandoffUnavailable = () => {
-      if (controller.signal.aborted || !isCurrentAttempt()) return;
-      // A seekable cache is an enhancement to the already-live fMP4. If the
-      // replacement cannot be completed, keep that candidate alive; a real
-      // player error will still follow the normal serial fallback path.
-      setSeekableCacheStatus("unavailable");
-      recordDiagnostic({
-        type: "seekable_handoff",
-        state: "unavailable",
-      });
-      if (player.playing) {
-        setBuffering(false);
-        setPlaying(true);
-        setStreamStatus("playing");
-        markPlaybackSessionPlaying(sessionSnapshot.sessionId);
-      }
-    };
-
-    const monitor = async () => {
-      while (!controller.signal.aborted && isCurrentAttempt()) {
-        let handoff;
-        try {
-          handoff = await getSeekablePlaybackHandoff({
-            expectedGatewayJobId,
-            signal: controller.signal,
-          });
-        } catch {
-          // The live stream remains valid when a status request has a
-          // transient network failure. Keep the monitor bounded and try the
-          // same gateway job again instead of treating cache observability as
-          // a playback failure.
-          if (controller.signal.aborted) return;
-          await waitForSeekableCachePoll(controller.signal);
-          continue;
-        }
-
-        if (controller.signal.aborted || !isCurrentAttempt()) return;
-        if (
-          expectedGatewayJobId &&
-          handoff.gatewayJobId &&
-          handoff.gatewayJobId !== expectedGatewayJobId
-        ) {
-          return;
-        }
-        expectedGatewayJobId = handoff.gatewayJobId ?? expectedGatewayJobId;
-        setSeekableCacheStatus(handoff.status);
-
-        if (handoff.status === "unavailable") {
-          recordDiagnostic({
-            type: "seekable_handoff",
-            state: "unavailable",
-          });
-          return;
-        }
-        if (handoff.status !== "ready" || !handoff.uri) {
-          await waitForSeekableCachePoll(controller.signal);
-          continue;
-        }
-        recordDiagnostic({ type: "seekable_handoff", state: "ready" });
-
-        const resumeAt = Number.isFinite(player.currentTime)
-          ? Math.max(0, player.currentTime)
-          : 0;
-        const shouldResume = Boolean(player.playing);
-        seekableHandoffInFlightRef.current = true;
-        seekableHandoffShouldResumeRef.current = shouldResume;
-        pausedAfterSeekableHandoffRef.current = !shouldResume;
-        recordDiagnostic({ type: "seekable_handoff", state: "started" });
-        dispatchRuntimeViewEvent({
-          type: "source_replacement_started",
-          reason: "seekable_handoff",
-          resumeAt,
-        });
-        setBuffering(true);
-        setRuntimeState("buffering");
-        beginProgressSourceReplacement();
-        let replacementCompleted = false;
-        try {
-          await replaceWithSeekableSource({
-            player,
-            source: handoff.uri,
-            resumeAt,
-            shouldResume,
-            signal: controller.signal,
-          });
-          if (controller.signal.aborted || !isCurrentAttempt()) return;
-          completeProgressSourceReplacement(resumeAt);
-          replacementCompleted = true;
-          dispatchRuntimeViewEvent({
-            type: "source_replacement_completed",
-          });
-          setSeekableHandoffApplied(true);
-          setSeekableCacheStatus("ready");
-          recordDiagnostic({
-            type: "seekable_handoff",
-            state: "completed",
-          });
-          return;
-        } catch {
-          completeProgressSourceReplacement(resumeAt);
-          replacementCompleted = true;
-          dispatchRuntimeViewEvent({
-            type: "source_replacement_completed",
-          });
-          markSeekableHandoffUnavailable();
-          return;
-        } finally {
-          if (!replacementCompleted) {
-            completeProgressSourceReplacement(resumeAt);
-          }
-          seekableHandoffInFlightRef.current = false;
-          seekableHandoffShouldResumeRef.current = null;
-          if (shouldResume) {
-            pausedAfterSeekableHandoffRef.current = false;
-          }
-        }
-      }
-    };
-
-    void monitor();
-    return () => {
-      controller.abort();
-      if (seekableHandoffControllerRef.current === controller) {
-        seekableHandoffControllerRef.current = null;
-      }
-    };
-  }, [
-    activeCast,
-    activeGatewayJobId,
-    beginProgressSourceReplacement,
-    completeProgressSourceReplacement,
-    engine,
-    hasPlaybackStarted,
-    isProgressiveRemuxPlayback,
-    playbackAttemptId,
-    playbackCandidateId,
-    playbackSessionId,
-    playbackUri,
+  // first consumer exists. The hook polls that one existing gateway job and
+  // owns the in-attempt source handoff without planning a second torrent.
+  useSeekableCacheHandoff({
     player,
-    recordDiagnostic,
+    playbackUri,
+    engine,
+    isProgressiveRemuxPlayback,
+    hasPlaybackStarted,
+    playbackSessionId,
+    playbackCandidateId,
+    playbackAttemptId,
+    playbackDelivery: playbackRoute?.delivery,
+    activeCast,
     seekableHandoffApplied,
+    preparedBridgeJobId,
+    activeGatewayJobId,
+    controllerRef: seekableHandoffControllerRef,
+    handoffInFlightRef: seekableHandoffInFlightRef,
+    handoffShouldResumeRef: seekableHandoffShouldResumeRef,
+    pausedAfterHandoffRef: pausedAfterSeekableHandoffRef,
+    setSeekableCacheStatus,
+    setSeekableHandoffApplied,
+    recordDiagnostic,
+    dispatchRuntimeViewEvent,
     setBuffering,
     setPlaying,
     setRuntimeState,
     setStreamStatus,
-  ]);
+    beginProgressSourceReplacement,
+    completeProgressSourceReplacement,
+  });
 
   useEffect(() => {
-    if (player && player.playbackRate !== playbackRate) {
-      player.playbackRate = playbackRate;
+    if (mediaAdapter.snapshot().playbackRate !== playbackRate) {
+      mediaAdapter.setPlaybackRate(playbackRate);
     }
-  }, [player, playbackRate]);
+  }, [mediaAdapter, playbackRate]);
 
   const {
     muted,
@@ -2270,24 +1916,8 @@ export default function PlayerScreen() {
   });
 
   const handleToggleFullscreen = useCallback(() => {
-    try {
-      if (Platform.OS === "web") {
-        const videoElement = document.querySelector("video");
-        if (videoElement) {
-          if (!document.fullscreenElement) {
-            videoElement.requestFullscreen().catch(console.error);
-          } else {
-            document.exitFullscreen().catch(console.error);
-          }
-        }
-      } else if (videoViewRef.current?.enterFullscreen) {
-        videoViewRef.current.enterFullscreen().catch(console.error);
-      }
-      showControls();
-    } catch (e) {
-      console.warn("Fullscreen failed", e);
-    }
-  }, [showControls]);
+    void mediaAdapter.requestFullscreen().then(() => showControls());
+  }, [mediaAdapter, showControls]);
 
   const preparationActive = Boolean(
     (planningLaunchId && streamState !== "error") ||
@@ -2310,7 +1940,7 @@ export default function PlayerScreen() {
       return true;
     }
     if (action === "closeCast") {
-      setCastModalOpen(false);
+      closeCastModal();
       return true;
     }
     if (action === "cancelPreparation") {
@@ -2318,7 +1948,13 @@ export default function PlayerScreen() {
       return true;
     }
     return false;
-  }, [castModalOpen, handleCancelPreparation, preparationActive, settingsOpen]);
+  }, [
+    castModalOpen,
+    closeCastModal,
+    handleCancelPreparation,
+    preparationActive,
+    settingsOpen,
+  ]);
 
   usePlayerHotkeys({
     player,
@@ -2333,21 +1969,6 @@ export default function PlayerScreen() {
     onSeekPercent: handleSeekPercent,
     onEscape: handleEscape,
   });
-
-  const stopCasting = async () => {
-    if (!activeCast) return;
-    const closeRemoteOnlyPlayer = !currentStream;
-    try {
-      await stopCastSession(activeCast.device.id, activeCast.sessionId);
-    } catch (e) {
-      console.error("Failed to stop cast", e);
-    } finally {
-      clearActiveCast();
-      if (closeRemoteOnlyPlayer) {
-        goBackOrReplace(router);
-      }
-    }
-  };
 
   const waitingTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2383,40 +2004,10 @@ export default function PlayerScreen() {
   );
 
   const handleTogglePiP = useCallback(() => {
-    try {
-      if (Platform.OS === "web") {
-        const videoElement = document.querySelector("video");
-        if (
-          videoElement &&
-          (videoElement as any).requestPictureInPicture &&
-          videoElement.readyState >= 1
-        ) {
-          (videoElement as any).requestPictureInPicture().catch(console.error);
-        }
-      } else {
-        videoViewRef.current?.startPictureInPicture?.() ||
-          videoViewRef.current?.enterPictureInPicture?.();
-      }
-    } catch (e) {
-      console.warn("PiP failed", e);
-    }
-  }, []);
+    void mediaAdapter.requestPictureInPicture();
+  }, [mediaAdapter]);
 
-  const isPiPSupported = useMemo(() => {
-    if (Platform.OS === "web") {
-      return Boolean(
-        typeof document !== "undefined" &&
-        ((document as any).pictureInPictureEnabled ||
-          (document.createElement("video") as any)
-            .webkitSupportsPresentationMode),
-      );
-    }
-    try {
-      return isPictureInPictureSupported();
-    } catch {
-      return false;
-    }
-  }, []);
+  const isPiPSupported = effectivePlayerCapabilities.canUsePictureInPicture;
 
   const styles = useMemo(
     () => createPlayerScreenStyles(colors, isDark),
@@ -2629,7 +2220,7 @@ export default function PlayerScreen() {
               engineType={engine?.getEngineType() ?? "Unknown"}
               stats={stats}
               onClose={handleClose}
-              onWebCast={() => setCastModalOpen(true)}
+              onWebCast={openCastModal}
               onTogglePiP={handleTogglePiP}
               isPiPSupported={isPiPSupported}
               showInfoBar={false}
@@ -2679,7 +2270,9 @@ export default function PlayerScreen() {
             onSeekTo={handleSeekTo}
             onPreviewSeek={handlePreviewSeek}
             onScrubbingChange={handleScrubbingChange}
-            getThumbnail={getTimelineThumbnail}
+            getThumbnail={
+              canUseTimelineThumbnails ? getTimelineThumbnail : undefined
+            }
             onToggleMute={handleToggleMute}
             onVolumeChange={handleVolumeChange}
             onToggleFullscreen={handleToggleFullscreen}
@@ -2687,7 +2280,7 @@ export default function PlayerScreen() {
               setShowNextEpisodeOverlay(false);
               setSettingsOpen(true);
             }}
-            onOpenCast={() => setCastModalOpen(true)}
+            onOpenCast={openCastModal}
             onRetry={handleRetryPlayback}
             onSkipSegment={handleSeekTo}
             onPlayPause={() => {
@@ -2780,7 +2373,7 @@ export default function PlayerScreen() {
         {castModalOpen && (
           <DesktopCastModal
             visible={castModalOpen}
-            onClose={() => setCastModalOpen(false)}
+            onClose={closeCastModal}
             orchestratorInput={
               mediaInfo
                 ? {
@@ -2796,12 +2389,12 @@ export default function PlayerScreen() {
             playbackUri={playbackUri || ""}
             title={mediaInfo?.title || ""}
             onOpenSourcesDevices={() => {
-              setCastModalOpen(false);
+              closeCastModal();
               router.push("/settings/sources" as any);
             }}
             onCastStart={(device, details) => {
               if (player?.playing) player.pause();
-              setActiveCast({
+              handleCastStarted({
                 device,
                 mediaInfo: details.source?.mediaInfo ||
                   mediaInfo || {
@@ -2811,7 +2404,6 @@ export default function PlayerScreen() {
                   },
                 sessionId: details.sessionId,
               });
-              setCastModalOpen(false);
             }}
           />
         )}

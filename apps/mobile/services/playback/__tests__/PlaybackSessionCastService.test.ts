@@ -115,6 +115,31 @@ describe("PlaybackSessionCastService", () => {
     });
   });
 
+  it("hands an opaque prepared bridge job to the v1 cast boundary", async () => {
+    const bridgeJobId = "00000000-0000-4000-8000-000000000103";
+
+    await startCastSession(
+      { id: "living-room", name: "Living Room", type: "chromecast" },
+      "Example Movie",
+      {
+        sessionId: "session-1",
+        candidateId: "candidate-1",
+        attemptId: "attempt-1",
+        stream: { infoHash: "runtime-only" },
+        uri: "http://bridge.test/runtime-signed-location",
+        bridgeJobId,
+      },
+    );
+
+    expect(play).toHaveBeenCalledWith(
+      "living-room",
+      "http://bridge.test/runtime-signed-location",
+      "Example Movie",
+      "video/mp4",
+      { bridgeJobId },
+    );
+  });
+
   it("cancels the playback session even when stopping the display fails", async () => {
     control.mockRejectedValueOnce(new Error("Device unavailable"));
 

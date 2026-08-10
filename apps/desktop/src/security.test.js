@@ -9,11 +9,11 @@ const {
   isAllowedExternalUrl,
   isAllowedRendererUrl,
   normalizeDownloadIpcArgs,
-  normalizeHandoffPayload,
+  normalizeDownloadJobId,
   normalizeIpcId,
   normalizeLocalUri,
 } = require("./security");
-const { INVOKE_IPC_CHANNELS } = require("./security");
+const { INVOKE_IPC_CHANNELS, SUBSCRIBE_IPC_CHANNELS } = require("./security");
 
 test("allows only explicit renderer origins", () => {
   assert.equal(
@@ -106,22 +106,15 @@ test("validates IPC ids and local URIs", () => {
   assert.throws(() => normalizeLocalUri(null), /localUri must be a string/);
 });
 
-test("normalizes handoff payloads without exposing arbitrary fields", () => {
-  assert.deepEqual(
-    normalizeHandoffPayload({
-      magnet: "magnet:?xt=urn:btih:abc",
-      position: "12",
-      title: " Movie ",
-      itemId: "tt123",
-      ignored: "value",
-    }),
-    {
-      magnet: "magnet:?xt=urn:btih:abc",
-      position: 12,
-      title: "Movie",
-      itemId: "tt123",
-    },
-  );
+test("requires opaque download job ids", () => {
+  assert.equal(normalizeDownloadJobId("download-1"), "download-1");
+  for (const sensitiveId of [
+    "https://signed.example/movie.mp4?token=secret",
+    "magnet:?xt=urn:btih:abc",
+    "0123456789abcdef0123456789abcdef01234567",
+  ]) {
+    assert.throws(() => normalizeDownloadJobId(sensitiveId), /must be opaque/);
+  }
 });
 
 test("allowlists update IPC channels explicitly", () => {
@@ -133,4 +126,11 @@ test("allowlists update IPC channels explicitly", () => {
 test("allowlists safe managed-file inspection while retaining check-file compatibility", () => {
   assert.equal(INVOKE_IPC_CHANNELS.includes("check-file"), true);
   assert.equal(INVOKE_IPC_CHANNELS.includes("inspect-file"), true);
+});
+
+test("allowlists only the renderer subscriptions exposed by preload", () => {
+  assert.deepEqual(SUBSCRIBE_IPC_CHANNELS, [
+    "download-progress",
+    "update-status-changed",
+  ]);
 });

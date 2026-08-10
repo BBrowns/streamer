@@ -1,10 +1,17 @@
 const { contextBridge, ipcRenderer } = require("electron");
+const { INVOKE_IPC_CHANNELS, SUBSCRIBE_IPC_CHANNELS } = require("./security");
 
 function safeInvoke(channel, ...args) {
+  if (!INVOKE_IPC_CHANNELS.includes(channel)) {
+    throw new Error(`IPC channel is not allowlisted: ${channel}`);
+  }
   return ipcRenderer.invoke(channel, ...args);
 }
 
 function subscribe(channel, callback) {
+  if (!SUBSCRIBE_IPC_CHANNELS.includes(channel)) {
+    throw new Error(`IPC subscription is not allowlisted: ${channel}`);
+  }
   if (typeof callback !== "function") {
     return () => {};
   }
@@ -27,6 +34,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   inspectFile: (localUri) => safeInvoke("inspect-file", localUri),
   deleteFile: (localUri) => safeInvoke("delete-file", localUri),
   getBridgeInfo: () => safeInvoke("get-bridge-info"),
+  refreshBridgeAccessSession: () => safeInvoke("refresh-bridge-access-session"),
   restartBridge: () => safeInvoke("restart-bridge"),
   getStorageInfo: () => safeInvoke("get-storage-info"),
   getUpdateStatus: () => safeInvoke("get-update-status"),

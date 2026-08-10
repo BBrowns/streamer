@@ -2,7 +2,7 @@ import type {
   ActionPreflightResult,
   PlaybackAction,
   PlaybackErrorCode,
-  PlaybackPlan,
+  PlaybackPlanResponse,
   PlaybackRuntimeError,
   PlaybackRuntimeState,
 } from "@streamer/shared";
@@ -210,7 +210,7 @@ export function inferPlaybackErrorCodeFromMessages(
 }
 
 export function mapPlaybackPlanToRuntimeFailure(
-  plan: PlaybackPlan | null,
+  plan: PlaybackPlanResponse | null,
   fallback: string,
 ): PlaybackRuntimeFailure {
   if (!plan) {

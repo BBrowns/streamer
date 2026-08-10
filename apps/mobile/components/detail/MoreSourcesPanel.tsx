@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { PlaybackPlan } from "@streamer/shared";
+import type { PlaybackPlanResponse } from "@streamer/shared";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
 import { hapticImpactLight } from "../../lib/haptics";
@@ -18,7 +18,7 @@ type MoreSourcesPanelProps = {
   contentId: string;
   title: string;
   initiallyOpen?: boolean;
-  onSelect: (plan: PlaybackPlan, candidateId: string) => void;
+  onSelect: (plan: PlaybackPlanResponse, candidateId: string) => void;
 };
 
 export function MoreSourcesPanel({

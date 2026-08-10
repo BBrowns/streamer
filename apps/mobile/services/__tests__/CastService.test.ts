@@ -1,20 +1,62 @@
+import * as Crypto from "expo-crypto";
 import { castService, CastServiceError } from "../CastService";
 import { useAuthStore } from "../../stores/authStore";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
 import { Platform } from "react-native";
+import { __resetBridgeClientsForTests } from "../bridge/BridgeClient";
+
+jest.mock("expo-crypto", () => ({ randomUUID: jest.fn() }));
+
+const REQUEST_ID = "00000000-0000-4000-8000-000000000101";
+const DEVICE_ID = "00000000-0000-4000-8000-000000000102";
+const JOB_ID = "00000000-0000-4000-8000-000000000103";
+const BRIDGE_HELLO = {
+  protocol: {
+    name: "streamer-bridge",
+    current: 1,
+    supported: [1],
+  },
+  serviceVersion: "1.0.0",
+  auth: {
+    required: true,
+    methods: ["bearer", "x-streamer-bridge-token"],
+  },
+};
+
+function response(status: number, body: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: jest.fn().mockResolvedValue(body),
+    text: jest.fn().mockResolvedValue(JSON.stringify(body)),
+  } as unknown as Response;
+}
+
+function installLegacyBridgeMock() {
+  global.fetch = jest.fn(async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/bridge/v1/hello")) {
+      return response(404, {});
+    }
+    if (url.endsWith("/api/cast/devices")) {
+      return response(200, [
+        { id: "living-room", name: "Living Room", type: "chromecast" },
+      ]);
+    }
+    return response(200, { success: true });
+  }) as jest.Mock;
+}
 
 describe("CastService", () => {
   beforeEach(() => {
+    __resetBridgeClientsForTests();
+    (castService as unknown as { __resetForTests(): void }).__resetForTests();
+    jest.mocked(Crypto.randomUUID).mockReturnValue(REQUEST_ID);
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "web",
     });
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [
-        { id: "living-room", name: "Living Room", type: "chromecast" },
-      ],
-    }) as jest.Mock;
+    installLegacyBridgeMock();
     useAuthStore.setState({
       streamServerUrl: "http://192.168.1.25:11470",
       streamServerToken: null,
@@ -49,6 +91,11 @@ describe("CastService", () => {
     );
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
+      "http://192.168.1.25:11470/api/bridge/v1/hello",
+      { redirect: "error", signal: undefined },
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
       "http://192.168.1.25:11470/api/cast/devices",
     );
   });
@@ -154,11 +201,10 @@ describe("CastService", () => {
   });
 
   it("returns a typed recovery error when a selected device disappeared", async () => {
-    jest.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      text: async () => JSON.stringify({ error: "Device not found" }),
-    } as Response);
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(404, {}))
+      .mockResolvedValueOnce(response(404, { error: "Device not found" }));
 
     await expect(
       castService.play(
@@ -175,7 +221,10 @@ describe("CastService", () => {
   });
 
   it("returns a typed recovery error when cast control loses the device", async () => {
-    jest.mocked(global.fetch).mockRejectedValueOnce(new Error("fetch failed"));
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(404, {}))
+      .mockRejectedValueOnce(new Error("fetch failed"));
 
     await expect(
       castService.control("living-room", "pause"),
@@ -202,15 +251,17 @@ describe("CastService", () => {
   });
 
   it("loads normalized playback status from the selected display", async () => {
-    jest.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        currentTime: 42,
-        duration: 120,
-        isPaused: false,
-        playerState: "PLAYING",
-      }),
-    } as Response);
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(404, {}))
+      .mockResolvedValueOnce(
+        response(200, {
+          currentTime: 42,
+          duration: 120,
+          isPaused: false,
+          playerState: "PLAYING",
+        }),
+      );
 
     await expect(castService.getStatus("living-room:8009")).resolves.toEqual({
       currentTime: 42,
@@ -222,5 +273,108 @@ describe("CastService", () => {
       "http://192.168.1.25:11470/api/cast/status/living-room%3A8009",
       { headers: {} },
     );
+  });
+
+  it("uses strict bridge v1 device discovery when available", async () => {
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(200, BRIDGE_HELLO))
+      .mockResolvedValueOnce(
+        response(200, {
+          protocolVersion: 1,
+          devices: [{ id: DEVICE_ID, name: "Living Room", type: "chromecast" }],
+        }),
+      );
+
+    await expect(castService.getDevices()).resolves.toEqual([
+      { id: DEVICE_ID, name: "Living Room", type: "chromecast" },
+    ]);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://192.168.1.25:11470/api/bridge/v1/cast/devices",
+      expect.objectContaining({ headers: {} }),
+    );
+    expect(
+      jest
+        .mocked(global.fetch)
+        .mock.calls.some(([url]) => String(url).endsWith("/api/cast/devices")),
+    ).toBe(false);
+  });
+
+  it("prefers an opaque bridge-job cast source over forwarding a signed URL", async () => {
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(200, BRIDGE_HELLO))
+      .mockResolvedValueOnce(
+        response(200, { protocolVersion: 1, success: true }),
+      );
+
+    await castService.play(
+      DEVICE_ID,
+      `http://192.168.1.25:11470/api/bridge/v1/jobs/${JOB_ID}/stream?expires=1&signature=secret`,
+      "Movie",
+    );
+
+    const request = jest.mocked(global.fetch).mock.calls[1];
+    expect(request[0]).toBe(
+      "http://192.168.1.25:11470/api/bridge/v1/cast/play",
+    );
+    expect(JSON.parse(String((request[1] as RequestInit).body))).toEqual({
+      requestId: REQUEST_ID,
+      deviceId: DEVICE_ID,
+      source: { kind: "bridge-job", jobId: JOB_ID },
+      title: "Movie",
+    });
+    expect(String((request[1] as RequestInit).body)).not.toContain("signature");
+  });
+
+  it("uses the prepared opaque job identity without deriving it from a runtime URL", async () => {
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(200, BRIDGE_HELLO))
+      .mockResolvedValueOnce(
+        response(200, { protocolVersion: 1, success: true }),
+      );
+
+    await castService.play(
+      DEVICE_ID,
+      "https://runtime-location.example.test/movie.mp4?signature=secret",
+      "Movie",
+      "video/mp4",
+      { bridgeJobId: JOB_ID },
+    );
+
+    const body = JSON.parse(
+      String((jest.mocked(global.fetch).mock.calls[1][1] as RequestInit).body),
+    );
+    expect(body.source).toEqual({ kind: "bridge-job", jobId: JOB_ID });
+    expect(JSON.stringify(body)).not.toContain("runtime-location");
+    expect(JSON.stringify(body)).not.toContain("signature");
+  });
+
+  it("does not fall back to v0 after a v1 authorization failure", async () => {
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response(200, BRIDGE_HELLO))
+      .mockResolvedValueOnce(
+        response(401, {
+          protocolVersion: 1,
+          error: {
+            code: "AUTH_REQUIRED",
+            message: "Bridge authentication is required.",
+            retryable: false,
+          },
+        }),
+      );
+
+    await expect(castService.getDevices()).rejects.toMatchObject({
+      code: "CAST_BRIDGE_REJECTED",
+      status: 401,
+    });
+    expect(
+      jest
+        .mocked(global.fetch)
+        .mock.calls.some(([url]) => String(url).endsWith("/api/cast/devices")),
+    ).toBe(false);
   });
 });

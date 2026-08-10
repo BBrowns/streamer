@@ -19,7 +19,11 @@ import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../../stores/toastStore";
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
 import { goBackOrReplace } from "../../../lib/navigation";
-import type { PlaybackAction, PlaybackPlan, Stream } from "@streamer/shared";
+import type {
+  PlaybackAction,
+  PlaybackPlanResponse,
+  Stream,
+} from "@streamer/shared";
 import {
   playCandidate,
   prepareDownload,
@@ -328,7 +332,7 @@ export default function DetailScreen() {
   };
 
   const handlePlayCandidate = async (
-    plan: PlaybackPlan,
+    plan: PlaybackPlanResponse,
     candidateId: string,
     episodeTitle?: string,
     season?: number,
@@ -461,7 +465,7 @@ export default function DetailScreen() {
   };
 
   function showPlanMessage(
-    plan: PlaybackPlan | null,
+    plan: PlaybackPlanResponse | null,
     fallback: string,
     action: PlaybackAction = "play",
     errors: string[] = [],

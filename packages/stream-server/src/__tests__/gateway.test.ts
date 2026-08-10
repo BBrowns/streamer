@@ -159,7 +159,6 @@ describe("gateway jobs", () => {
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({
       state: "preparing",
-      phase: "preparing_metadata",
       mode: "remux",
       infoHash: "abcdef123456",
       fileIdx: 0,
@@ -1032,13 +1031,25 @@ describe("gateway jobs", () => {
   });
 
   it("rejects playback for no-peers jobs without retrying torrent streaming", async () => {
-    (ensureTorrentReady as any).mockRejectedValueOnce(
-      new Error("Torrent peer discovery timeout"),
+    let rejectPreparation: ((error: Error) => void) | undefined;
+    (ensureTorrentReady as any).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectPreparation = reject;
+      }),
     );
 
     const created = await request(app)
       .post("/api/gateway/jobs")
       .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+    const preparing = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+    const playbackUrl = preparing.body.playbackUrl;
+    expect(playbackUrl).toEqual(
+      expect.stringMatching(/^\/api\/gateway\/jobs\//),
+    );
+
+    rejectPreparation?.(new Error("Torrent peer discovery timeout"));
 
     await vi.waitFor(async () => {
       const status = await request(app).get(
@@ -1048,7 +1059,7 @@ describe("gateway jobs", () => {
     });
     vi.clearAllMocks();
 
-    const streamed = await request(app).get(created.body.playbackUrl);
+    const streamed = await request(app).get(playbackUrl);
 
     expect(streamed.status).toBe(503);
     expect(streamed.body).toMatchObject({

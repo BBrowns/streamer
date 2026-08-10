@@ -165,7 +165,7 @@ class SupervisorService {
         ...process.env,
         PORT: "11470",
         NODE_ENV: env.nodeEnv,
-        STREAMER_BRIDGE_OWNER: "server-supervisor",
+        STREAMER_BRIDGE_OWNER: "api-supervisor",
         STREAMER_BRIDGE_CLAIM_FILE: BRIDGE_CLAIM_FILE,
       },
     });

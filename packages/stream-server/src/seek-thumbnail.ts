@@ -3,6 +3,7 @@ import { spawn as nodeSpawn } from "child_process";
 const DEFAULT_MAX_ENTRIES = 96;
 const DEFAULT_MAX_CACHE_BYTES = 24 * 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
+export const MAX_SEEK_THUMBNAIL_BYTES = DEFAULT_MAX_OUTPUT_BYTES;
 const DEFAULT_TTL_MS = 10 * 60_000;
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_TIMEOUT_MS = 8_000;

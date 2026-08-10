@@ -1,4 +1,4 @@
-import type { PlaybackPlan } from "@streamer/shared";
+import type { PlaybackPlanResponse } from "@streamer/shared";
 
 export type SourceChoice = {
   candidateId: string;
@@ -28,7 +28,9 @@ function sourceLanguage(language?: string): SourceChoice["language"] {
   return { kind: "code", code: language };
 }
 
-export function createSourceChoices(plan: PlaybackPlan): SourceChoice[] {
+export function createSourceChoices(
+  plan: PlaybackPlanResponse,
+): SourceChoice[] {
   return plan.orderedCandidates
     .filter((candidate) => candidate.actionEligibility.eligible)
     .map((candidate) => ({

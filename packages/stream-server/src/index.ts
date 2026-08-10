@@ -2,6 +2,10 @@ import express from "express";
 import cors from "cors";
 import { pathToFileURL } from "url";
 import {
+  BRIDGE_V1_MAX_REQUEST_BYTES,
+  bridgeErrorResponseV1Schema,
+} from "@streamer/shared";
+import {
   streamRequest,
   cleanupInactiveTorrentCache,
   getClient,
@@ -16,6 +20,7 @@ import { metricsHandler } from "./metrics.js";
 import { legacySubtitlesRetiredRequest } from "./subtitles.js";
 import { handoffRouter } from "./handoff.js";
 import { gatewayRouter } from "./gateway.js";
+import { bridgeV1Router } from "./bridge-v1.js";
 import { getBridgeAuthDiagnostics, requireBridgeAuth } from "./security.js";
 import { redactSensitiveText } from "./redaction.js";
 import { streamServerBuildMetadata } from "./build-metadata.js";
@@ -265,8 +270,9 @@ export function createStreamServerApp() {
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: BRIDGE_V1_MAX_REQUEST_BYTES }));
 
+  app.use("/api/bridge/v1", bridgeV1Router);
   app.use("/api/cast", castRouter);
   app.use("/api/gateway", gatewayRouter);
 
@@ -383,6 +389,19 @@ export function createStreamServerApp() {
 
       if (res.headersSent) {
         return next(err);
+      }
+
+      if ((err as Error & { type?: string }).type === "entity.too.large") {
+        return res.status(413).json(
+          bridgeErrorResponseV1Schema.parse({
+            protocolVersion: 1,
+            error: {
+              code: "INVALID_REQUEST",
+              message: "The request exceeds the bridge size limit.",
+              retryable: false,
+            },
+          }),
+        );
       }
 
       return res.status(500).json({ error: "Internal bridge error" });

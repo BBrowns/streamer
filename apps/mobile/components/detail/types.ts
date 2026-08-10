@@ -1,4 +1,4 @@
-import type { PlaybackPlan, Stream } from "@streamer/shared";
+import type { PlaybackPlanResponse, Stream } from "@streamer/shared";
 import type {
   PlaybackReadinessActionTarget,
   PlaybackReadinessNoticeCopy,
@@ -25,7 +25,7 @@ export interface DetailLayoutProps {
     episode?: number,
   ) => void;
   handlePlayCandidate: (
-    plan: PlaybackPlan,
+    plan: PlaybackPlanResponse,
     candidateId: string,
     episodeTitle?: string,
     season?: number,

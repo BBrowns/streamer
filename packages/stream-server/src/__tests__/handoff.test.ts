@@ -1,29 +1,54 @@
-import request from "supertest";
-import express from "express";
-import { handoffRouter } from "../handoff.js";
-import { jest } from "@jest/globals";
+import type { Request, Response } from "express";
+import { describe, expect, it, vi } from "vitest";
+import { legacyHandoffRequest } from "../handoff.js";
 
-const app = express();
-app.use(express.json());
-app.use("/api/handoff", handoffRouter);
+function responseDouble() {
+  const response = {
+    status: vi.fn(),
+    json: vi.fn(),
+  };
+  response.status.mockReturnValue(response);
+  response.json.mockReturnValue(response);
+  return response as unknown as Response & {
+    status: ReturnType<typeof vi.fn>;
+    json: ReturnType<typeof vi.fn>;
+  };
+}
 
 describe("Handoff API", () => {
-  it("should return 400 if magnet is missing", async () => {
-    const res = await request(app).post("/api/handoff").send({});
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe("Magnet link is required");
+  it("returns 400 if magnet is missing", () => {
+    const response = responseDouble();
+
+    legacyHandoffRequest({ body: {} } as Request, response);
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith({
+      error: "Magnet link is required",
+    });
   });
 
-  it("should return success and emit events on valid handoff", async () => {
-    const res = await request(app).post("/api/handoff").send({
-      magnet: "magnet:?xt=urn:btih:test",
-      title: "Test Movie",
-      position: 120,
-    });
+  it("retires legacy magnet handoff without claiming false success", () => {
+    const magnet = "magnet:?xt=urn:btih:sensitive";
+    const response = responseDouble();
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    // Note: Electron emission depends on mock or environment,
-    // but the code should handle missing electron gracefully.
+    legacyHandoffRequest(
+      {
+        body: { magnet, title: "Test Movie", position: 120 },
+      } as Request,
+      response,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(410);
+    const body = response.json.mock.calls[0]?.[0];
+    expect(body).toEqual({
+      protocolVersion: 1,
+      error: {
+        code: "PROTOCOL_UNSUPPORTED",
+        message:
+          "Legacy playback handoff is retired. Create a bridge v1 job instead.",
+        retryable: false,
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(magnet);
   });
 });

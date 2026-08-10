@@ -9,6 +9,8 @@ export interface DesktopDownloadProgressData {
   contentType?: string;
   metadataBytes?: number;
   error?: string;
+  failureReason?: DesktopDownloadFailureReason;
+  requiresReplan?: boolean;
 }
 
 export type DesktopDownloadJobStatus =
@@ -19,10 +21,20 @@ export type DesktopDownloadJobStatus =
   | "Error"
   | "Canceled";
 
+export type DesktopDownloadFailureReason =
+  | "source_access_expired"
+  | "source_unavailable"
+  | "invalid_source"
+  | "redirect_limit"
+  | "network_timeout"
+  | "local_storage_failed"
+  | "file_missing"
+  | "interrupted"
+  | "download_failed";
+
 export interface DesktopDownloadJob {
   id: string;
   status: DesktopDownloadJobStatus;
-  downloadUrl: string;
   filename: string;
   totalBytesWritten: number;
   totalBytesExpectedToWrite: number;
@@ -30,6 +42,8 @@ export interface DesktopDownloadJob {
   contentType?: string;
   metadataBytes?: number;
   error?: string;
+  failureReason?: DesktopDownloadFailureReason;
+  requiresReplan?: boolean;
 }
 
 export type DesktopBridgeSelfTestStatus = "pass" | "warn" | "fail";
@@ -113,7 +127,10 @@ export interface DesktopBridgeInfo {
   available: boolean;
   localUrl: string;
   lanUrl: string;
-  pairingToken?: string;
+  accessSession?: {
+    accessToken: string;
+    expiresAt: string;
+  };
   build?: BuildMetadata;
   desktopRuntime?: {
     productVersion: string;
@@ -123,20 +140,12 @@ export interface DesktopBridgeInfo {
     status?: "starting" | "running" | "stopped" | "error";
     startedAt?: number | null;
     updatedAt?: number;
-    error?: string | null;
     reason?: string | null;
     message?: string;
-    nodeExecutable?: string | null;
-    nodeArch?: string | null;
-    nativeBinary?: string | null;
-    nativeArch?: string | null;
-    entrypoint?: string | null;
-    pid?: number | null;
     processArch?: string;
     platform?: string;
     selfTest?: DesktopBridgeSelfTest;
     repair?: DesktopBridgeRepairPlan;
-    health?: DesktopBridgeHealthPayload;
     build?: BuildMetadata;
   };
 }
@@ -215,6 +224,11 @@ export interface DesktopBridge {
    * Returns the local and LAN bridge URLs exposed by the desktop shell.
    */
   getBridgeInfo(): Promise<DesktopBridgeInfo>;
+
+  /** Rotates the renderer's short-lived, scope-limited bridge session. */
+  refreshBridgeAccessSession?(): Promise<
+    DesktopBridgeInfo["accessSession"] | null
+  >;
 
   /**
    * Restarts the desktop stream bridge daemon and returns fresh bridge info.

@@ -9,8 +9,12 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:e2e": "detox test --configuration ios.sim.debug",
-    "build:e2e": "detox build --configuration ios.sim.debug"
+    "test:e2e": "npm run test:e2e:ios",
+    "test:e2e:ios": "detox test --configuration ios.sim.debug",
+    "test:e2e:android": "detox test --configuration android.emu.debug",
+    "build:e2e": "npm run build:e2e:ios",
+    "build:e2e:ios": "detox build --configuration ios.sim.debug",
+    "build:e2e:android": "detox build --configuration android.emu.debug"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

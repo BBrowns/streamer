@@ -4,6 +4,9 @@ import { usePlayerStore } from "../../stores/playerStore";
 import { usePlayerController } from "../usePlayerController";
 
 let mockContinueWatchingItems: Array<Record<string, unknown>> = [];
+const originalSubscribeToStreamMetrics =
+  usePlayerStore.getState().subscribeToStreamMetrics;
+const mockSubscribeToStreamMetrics = jest.fn();
 
 const mockEngine = {
   getAudioTracks: jest.fn(() => []),
@@ -12,11 +15,33 @@ const mockEngine = {
   off: jest.fn(),
   stop: jest.fn(),
 };
+const mockPreparedEngine = {
+  getAudioTracks: jest.fn(() => []),
+  getSubtitles: jest.fn(() => []),
+  on: jest.fn(),
+  off: jest.fn(),
+  stop: jest.fn(),
+};
+const mockResolveEngine = jest.fn((_stream?: unknown) => mockEngine);
+let mockActivePlaybackSourceRuntime: {
+  route?: Record<string, unknown>;
+  bridgeJobId?: string;
+  runtime?: typeof mockPreparedEngine;
+} | null = null;
+const mockGetActivePlaybackSourceRuntime = jest.fn(
+  (_sessionId?: string, _attemptId?: string) => mockActivePlaybackSourceRuntime,
+);
 
 jest.mock("../../services/streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
-    resolveEngine: () => mockEngine,
+    resolveEngine: (stream: unknown) => mockResolveEngine(stream),
   },
+}));
+
+jest.mock("../../services/playback/PlaybackSessionPlaybackService", () => ({
+  completePlaybackSession: jest.fn(),
+  getActivePlaybackSourceRuntime: (sessionId: string, attemptId: string) =>
+    mockGetActivePlaybackSourceRuntime(sessionId, attemptId),
 }));
 
 jest.mock("../useSync", () => ({
@@ -85,7 +110,7 @@ function startSession(
     },
     "session-launch",
     "candidate-launch",
-    null,
+    "attempt-launch",
     null,
     intent,
   );
@@ -94,12 +119,105 @@ function startSession(
 describe("usePlayerController playback launch intent", () => {
   beforeEach(() => {
     mockContinueWatchingItems = [];
+    mockActivePlaybackSourceRuntime = null;
     jest.clearAllMocks();
     usePlayerStore.getState().clearPlayer();
+    usePlayerStore.setState({
+      subscribeToStreamMetrics: mockSubscribeToStreamMetrics,
+    });
+  });
+
+  it("adopts the session-owned prepared runtime without legacy resolution or cleanup", () => {
+    const player = createMockPlayer();
+    mockActivePlaybackSourceRuntime = {
+      route: {
+        candidateId: "candidate-launch",
+        executionTarget: "on-device",
+        delivery: "direct",
+        capabilities: {},
+      },
+      bridgeJobId: "bridge-job",
+      runtime: mockPreparedEngine,
+    };
+    startSession({ type: "play" });
+
+    const screen = renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    expect(screen.result.current.engine).toBe(mockPreparedEngine);
+    expect(screen.result.current.playbackRoute).toMatchObject({
+      delivery: "direct",
+    });
+    expect(screen.result.current.bridgeJobId).toBe("bridge-job");
+    expect(mockGetActivePlaybackSourceRuntime).toHaveBeenCalledWith(
+      "session-launch",
+      "attempt-launch",
+    );
+    expect(mockResolveEngine).not.toHaveBeenCalled();
+    screen.unmount();
+    expect(mockPreparedEngine.stop).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve a second engine while a session-owned source is pending", () => {
+    const player = createMockPlayer();
+    startSession({ type: "play" });
+
+    const screen = renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri: null,
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    expect(screen.result.current.engine).toBeNull();
+    expect(mockResolveEngine).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it("does not open legacy info-hash metrics for a session-owned source", () => {
+    const player = createMockPlayer();
+    usePlayerStore.getState().setSessionStream(
+      {
+        infoHash: "0123456789abcdef0123456789abcdef01234567",
+        url: "http://192.168.1.25:11470/api/bridge/v1/jobs/runtime/stream",
+      } as Stream,
+      {
+        type: "movie",
+        itemId: "tt-launch",
+        title: "Launch Movie",
+      },
+      "session-launch",
+      "candidate-launch",
+      "attempt-launch",
+    );
+
+    const screen = renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri:
+          "http://192.168.1.25:11470/api/bridge/v1/jobs/runtime/stream",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    expect(mockSubscribeToStreamMetrics).not.toHaveBeenCalled();
+    screen.unmount();
   });
 
   afterEach(() => {
     usePlayerStore.getState().clearPlayer();
+    usePlayerStore.setState({
+      subscribeToStreamMetrics: originalSubscribeToStreamMetrics,
+    });
   });
 
   it("waits for the resolved source ready event before consuming Resume", async () => {

@@ -1,5 +1,7 @@
 const REDACTED = "[redacted]";
 const REDACTED_URL = "[url]";
+const SIGNED_STREAM_PATH_PATTERN =
+  /^\/api\/(?:gateway|bridge\/v1)\/jobs\/[^/]+\/stream$/i;
 const SENSITIVE_KEY_PATTERN =
   /(^|[_-])(access|refresh|reset|verification|bridge|gateway)?(token|secret|password|signature|authorization|credential|apikey|api_key)([_-]|$)|^(auth|bearer)$/i;
 const SENSITIVE_VALUE_KEY_PATTERN =
@@ -14,15 +16,15 @@ export function redactSensitiveText(text: string) {
         /[?&](token|access_token|refresh_token|signature|auth|authorization|key|api_key)=/i.test(
           match,
         ) ||
-        /\/api\/gateway\/jobs\/[^/]+\/stream/i.test(match)
+        /\/api\/(?:gateway|bridge\/v1)\/jobs\/[^/]+\/stream/i.test(match)
       ) {
         try {
           const parsed = new URL(match);
-          if (
-            parsed.pathname.includes("/api/gateway/jobs/") &&
-            parsed.pathname.endsWith("/stream")
-          ) {
-            parsed.pathname = "/api/gateway/jobs/[job]/stream";
+          if (SIGNED_STREAM_PATH_PATTERN.test(parsed.pathname)) {
+            const streamRoot = parsed.pathname.startsWith("/api/bridge/v1/")
+              ? "/api/bridge/v1/jobs"
+              : "/api/gateway/jobs";
+            parsed.pathname = `${streamRoot}/[job]/stream`;
             parsed.search = parsed.search ? "?[signed]" : "";
             return parsed.toString();
           }

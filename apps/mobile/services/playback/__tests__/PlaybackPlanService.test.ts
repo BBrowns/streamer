@@ -1,5 +1,6 @@
 import { api } from "../../api";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
+import { getBridgeClient } from "../../bridge/BridgeClient";
 import { usePlayerStore } from "../../../stores/playerStore";
 import {
   makePlaybackPlan,
@@ -36,6 +37,14 @@ jest.mock("../../streamEngine/StreamEngineManager", () => ({
   },
 }));
 
+jest.mock("../../bridge/BridgeClient", () => {
+  class MockBridgeClientError extends Error {}
+  return {
+    BridgeClientError: MockBridgeClientError,
+    getBridgeClient: jest.fn(),
+  };
+});
+
 describe("PlaybackPlanService", () => {
   const getPlaybackUri =
     streamEngineManager.getPlaybackUri as jest.MockedFunction<
@@ -66,6 +75,32 @@ describe("PlaybackPlanService", () => {
       preferredSubtitleLang: null,
       autoPlayNext: true,
     });
+    (getBridgeClient as jest.Mock).mockReturnValue({
+      negotiate: jest.fn().mockResolvedValue({
+        kind: "v1",
+        hello: {
+          protocol: {
+            name: "streamer-bridge",
+            current: 1,
+            supported: [1],
+          },
+        },
+      }),
+      getCapabilities: jest.fn().mockResolvedValue({
+        protocolVersion: 1,
+        health: "ready",
+        capabilities: {
+          jobs: {
+            deliveries: [
+              { delivery: "range-http", available: true },
+              { delivery: "progressive-fmp4", available: true },
+              { delivery: "seekable-cache", available: true },
+            ],
+          },
+          cast: { available: true },
+        },
+      }),
+    });
   });
 
   afterEach(() => {
@@ -89,8 +124,9 @@ describe("PlaybackPlanService", () => {
     await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
 
     expect(api.post).toHaveBeenCalledWith(
-      "/api/playback/plan",
+      "/api/playback/plan/v3",
       expect.objectContaining({
+        version: 3,
         deviceProfile: expect.objectContaining({
           maxQuality: "2160p",
         }),
@@ -141,7 +177,7 @@ describe("PlaybackPlanService", () => {
     await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
 
     expect(api.post).toHaveBeenCalledWith(
-      "/api/playback/plan",
+      "/api/playback/plan/v3",
       expect.objectContaining({
         preferences: {
           allowedQualities: ["2160p", "1080p", "720p", "480p"],
@@ -150,7 +186,7 @@ describe("PlaybackPlanService", () => {
     );
   });
 
-  it("includes bridge diagnostics when requesting a playback plan", async () => {
+  it("fails closed without advertising an unsupported bridge", async () => {
     (streamEngineManager as any).bridgeStatus = "unsupported";
     (
       streamEngineManager.getBridgeDiagnostics as jest.MockedFunction<
@@ -172,14 +208,16 @@ describe("PlaybackPlanService", () => {
     await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
 
     expect(api.post).toHaveBeenCalledWith(
-      "/api/playback/plan",
+      "/api/playback/plan/v3",
       expect.objectContaining({
-        bridge: expect.objectContaining({
-          status: "unsupported",
-          url: "http://192.168.1.25:11470",
-          reason: "native-architecture-mismatch",
-        }),
+        version: 3,
+        executionNodes: [
+          expect.objectContaining({ executionTarget: "on-device" }),
+        ],
       }),
+    );
+    expect((api.post as jest.Mock).mock.calls[0][1]).not.toHaveProperty(
+      "bridge",
     );
   });
 
@@ -202,7 +240,7 @@ describe("PlaybackPlanService", () => {
     await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
 
     expect(api.post).toHaveBeenCalledWith(
-      "/api/playback/plan",
+      "/api/playback/plan/v3",
       expect.objectContaining({
         preferences: expect.objectContaining({
           preferredAudioLanguage: "es",
@@ -212,7 +250,7 @@ describe("PlaybackPlanService", () => {
     );
   });
 
-  it("keeps the quality allowlist while omitting empty language preferences and invalid bridge URLs", async () => {
+  it("keeps the quality allowlist while omitting invalid bridge URLs from v3", async () => {
     usePlayerStore.setState({
       preferredAudioLang: null,
       preferredSubtitleLang: null,
@@ -245,23 +283,52 @@ describe("PlaybackPlanService", () => {
     await createPlaybackPlan({ type: "movie", id: "tt123", action: "play" });
 
     expect(api.post).toHaveBeenCalledWith(
-      "/api/playback/plan",
+      "/api/playback/plan/v3",
       expect.objectContaining({
         preferences: {
           allowedQualities: ["2160p", "1080p", "720p", "480p"],
         },
       }),
     );
+    const payload = (api.post as jest.Mock).mock.calls[0][1];
+    expect(payload).not.toHaveProperty("bridge");
+    expect(payload.executionNodes).toEqual([
+      expect.objectContaining({ executionTarget: "on-device" }),
+    ]);
+  });
+
+  it("falls back to planner v2 only when the v3 endpoint is unsupported", async () => {
+    const plan = makePlaybackPlan({ state: "notFound" });
+    (api.post as jest.Mock)
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockResolvedValueOnce({ data: plan });
+
+    await expect(
+      createPlaybackPlan({ type: "movie", id: "tt-v2", action: "play" }),
+    ).resolves.toEqual(plan);
+
+    expect((api.post as jest.Mock).mock.calls.map((call) => call[0])).toEqual([
+      "/api/playback/plan/v3",
+      "/api/playback/plan",
+    ]);
+  });
+
+  it("uses planner v2 when bridge negotiation explicitly selects legacy", async () => {
+    (getBridgeClient as jest.Mock).mockReturnValue({
+      negotiate: jest.fn().mockResolvedValue({ kind: "legacy" }),
+    });
+    const plan = makePlaybackPlan({ state: "notFound" });
+    (api.post as jest.Mock).mockResolvedValueOnce({ data: plan });
+
+    await createPlaybackPlan({
+      type: "movie",
+      id: "tt-legacy",
+      action: "play",
+    });
+
     expect(api.post).toHaveBeenCalledWith(
       "/api/playback/plan",
-      expect.objectContaining({
-        bridge: expect.objectContaining({
-          status: "wrong-url",
-          reason: "not-local-or-lan",
-          configured: false,
-          endpoint: expect.objectContaining({ scope: "remote" }),
-        }),
-      }),
+      expect.objectContaining({ bridge: expect.any(Object) }),
     );
   });
 
@@ -388,7 +455,8 @@ describe("PlaybackPlanService", () => {
 
     await expect(playerPlan).rejects.toMatchObject({ name: "AbortError" });
     await expect(prefetched).resolves.toBeNull();
-    expect(requestSignal?.aborted).toBe(true);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(requestSignal).toBeUndefined();
   });
 
   it("force-refreshes a partial plan until the warmed cache returns complete", async () => {
@@ -463,6 +531,9 @@ describe("PlaybackPlanService", () => {
 
     const initial = getPlaybackPlan(input);
     const forced = getPlaybackPlan(input, { forceRefresh: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(resolveRequests).toHaveLength(2);
 
     resolveRequests[1]({ data: complete });

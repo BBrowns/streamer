@@ -22,13 +22,15 @@ catalog, subtitle fetch paths and lifecycle cleanup are documented in
 `MediaCandidate` contains a full `Stream`, which may include short-lived or
 sensitive fields such as URLs, magnet-derived identifiers, or external URLs.
 
-Planner v2 returns:
+Planner v3 returns:
 
 - opaque UUID candidate IDs
 - a deterministic `orderedCandidates` list
 - top-level `selectedCandidate` and `fallbackCandidates`
 - typed `rejectedCandidates` and decision reasons
 - requested-action eligibility
+- an explicit execution target, delivery and capability set for every accepted
+  route
 - selected-path bridge, remux, and device compatibility details
 - action-specific timeout budgets
 - `sourceDiscovery` with only `partial`/`complete` status and a usable-candidate
@@ -38,10 +40,11 @@ Candidate ordering is deterministic for the same normalized source set and
 device/action input. Candidate IDs are opaque and plan-local; callers must not
 expect the same UUID across separate plan requests.
 
-The top-level Planner v2 fields are canonical for new code. The nested `plan`
-object remains temporarily for download/cast compatibility and its optional
-direct playback URL. Server and client both validate the response with
-`playbackPlanSchema`.
+Planner v3 fields are canonical for new code. Planner v2 and its nested `plan`
+object remain an isolated compatibility input during migration. Server and
+client validate the versioned response with the shared Zod schemas. A v3 route
+never silently downgrades to URL inference when its execution target or
+delivery cannot be prepared.
 
 `PlaybackSession` is the persistence-safe source of truth for one play,
 download, or cast workflow. It stores:
@@ -76,9 +79,14 @@ The mobile client now has:
   selection, typed event dispatch, attempt creation, gateway progress,
   fallback, failure, and cancellation helpers
 - `services/playback/PlaybackSessionPlaybackService.ts` for Play Best and
-  Download candidate resolution, planner timeout budgets, gateway progress,
-  automatic fallback, active-engine cancellation, action-aware offline
-  eligibility, and persistence-safe runtime error handling
+  Download candidate preparation, planner timeout budgets, gateway progress,
+  single-flight fallback, attempt-bound prepared-source lease ownership,
+  action-aware offline eligibility, and persistence-safe runtime error handling
+- `services/sourcePreparation/` for exact route binding and direct, HLS,
+  bridge-v1 and bounded legacy preparation adapters
+- `services/bridge/BridgeV1PlaybackRuntime.ts` for the already-prepared opaque
+  bridge job's runtime-only metrics, track, subtitle, thumbnail and seekable
+  handoff capabilities
 - an in-memory runtime mapping from session-local candidate IDs to planner
   candidates
 

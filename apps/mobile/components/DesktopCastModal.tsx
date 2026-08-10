@@ -289,6 +289,7 @@ export function DesktopCastModal({
               attemptId: source.attemptId,
               stream: source.stream,
               uri: source.resolvedUrl,
+              bridgeJobId: source.bridgeJobId,
             },
             {
               onFallback: () => dispatch({ type: "castFallbackStarted" }),

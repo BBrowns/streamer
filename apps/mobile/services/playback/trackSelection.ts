@@ -4,6 +4,10 @@ import type {
 } from "expo-video";
 import type { NormalizedMediaTrack } from "@streamer/shared";
 import type { AudioTrack, SubtitleTrack } from "../streamEngine/IStreamEngine";
+import type {
+  MediaPlayerCapabilities,
+  NormalizedMediaTrack as MediaAdapterTrack,
+} from "./MediaPlayerAdapter";
 
 type ExpoTrack = ExpoAudioTrack | ExpoSubtitleTrack;
 type TrackRow = AudioTrack | SubtitleTrack;
@@ -174,6 +178,49 @@ export function buildPlayerTrackCatalog({
       "audio",
     ),
     subtitles: mergeSubtitleTracks([...nativeSubtitles, ...engineSubtitles]),
+  };
+}
+
+export function buildMediaAdapterTrackCatalog({
+  capabilities,
+  mediaAudioTracks,
+  mediaSubtitleTracks,
+  engineSubtitles,
+}: {
+  capabilities: Pick<
+    MediaPlayerCapabilities,
+    "audioTracks" | "embeddedSubtitles"
+  >;
+  mediaAudioTracks: MediaAdapterTrack[];
+  mediaSubtitleTracks: MediaAdapterTrack[];
+  engineSubtitles: SubtitleTrack[];
+}) {
+  const audioTracks: AudioTrack[] = capabilities.audioTracks
+    ? mediaAudioTracks
+        .filter((track) => track.kind === "audio")
+        .map((track) => ({
+          id: track.id,
+          label: formatMediaTrackLabel(track.label, "audio"),
+          language: normalizeTrackLanguage(track.language),
+          active: track.active,
+        }))
+    : [];
+  const embeddedSubtitles: SubtitleTrack[] = capabilities.embeddedSubtitles
+    ? mediaSubtitleTracks
+        .filter((track) => track.kind === "subtitle")
+        .map((track) => ({
+          id: track.id,
+          label: formatMediaTrackLabel(track.label, "subtitle"),
+          language: normalizeTrackLanguage(track.language),
+          active: track.active,
+          source: "embedded",
+          confidence: 1,
+        }))
+    : [];
+
+  return {
+    audioTracks,
+    subtitles: mergeSubtitleTracks([...embeddedSubtitles, ...engineSubtitles]),
   };
 }
 

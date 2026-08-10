@@ -1,12 +1,18 @@
 import * as Crypto from "expo-crypto";
 import type {
+  BridgeJobResponseV1,
   DeviceProfile,
+  PlaybackDelivery,
+  PlaybackExecutionTarget,
+  PlaybackRoute,
   PlaybackRuntimeError,
   Stream,
 } from "@streamer/shared";
 import {
   makePlaybackPlan,
+  makePlaybackPlanV3,
   makePlannedMediaCandidate,
+  makePlannedMediaCandidateV3,
 } from "../../../test-utils/playbackPlan";
 import { usePlaybackSessionStore } from "../../../stores/playbackSessionStore";
 import {
@@ -16,10 +22,17 @@ import {
   type StreamEngineEventMap,
 } from "../../streamEngine/IStreamEngine";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
+import * as BridgeClientModule from "../../bridge/BridgeClient";
+import {
+  SourcePreparer,
+  type PreparedSource,
+  type SourcePreparationRequest,
+} from "../../sourcePreparation";
 import {
   advanceCastSessionAfterFailure,
   advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
+  getActivePlaybackSourceRuntime,
   markPlaybackSessionBuffering,
   markPlaybackSessionPlaying,
   resolveCastSession,
@@ -43,6 +56,7 @@ jest.mock("../../streamEngine/StreamEngineManager", () => ({
 const PRIMARY_PLAN_ID = "00000000-0000-4000-8000-000000000101";
 const FALLBACK_PLAN_ID = "00000000-0000-4000-8000-000000000102";
 const GATEWAY_JOB_ID = "00000000-0000-4000-8000-000000000301";
+const BRIDGE_JOB_ID = "00000000-0000-4000-8000-000000000302";
 
 const deviceProfile: DeviceProfile = {
   platform: "ios",
@@ -125,6 +139,79 @@ function createSession(
   });
 }
 
+function makeV3Candidate(
+  stream: Stream,
+  options: {
+    id?: string;
+    rank?: number;
+    action?: "play" | "download" | "cast";
+    delivery?: PlaybackDelivery;
+    executionTarget?: PlaybackExecutionTarget;
+  } = {},
+) {
+  const id = options.id ?? PRIMARY_PLAN_ID;
+  const action = options.action ?? "play";
+  const executionTarget = options.executionTarget ?? "on-device";
+  const delivery =
+    options.delivery ?? (stream.url?.includes(".m3u8") ? "hls" : "direct");
+  return makePlannedMediaCandidateV3({
+    id,
+    rank: options.rank ?? 0,
+    kind: stream.infoHash ? "torrent" : delivery === "hls" ? "hls" : "direct",
+    stream,
+    requiresBridge: executionTarget !== "on-device",
+    requiresRemux:
+      delivery === "progressive-fmp4" || delivery === "seekable-cache",
+    actionEligibility: { action, eligible: true },
+    route: {
+      candidateId: id,
+      executionTarget,
+      delivery,
+      capabilities: {
+        seek: delivery === "progressive-fmp4" ? "preparing" : "immediate",
+        audioTracks: delivery === "hls",
+        embeddedSubtitles: delivery === "hls",
+        externalSubtitles: true,
+        cast: true,
+        offline: delivery === "direct" || delivery === "seekable-cache",
+        thumbnails: false,
+      },
+    },
+  });
+}
+
+function createV3Session(
+  primary: Stream,
+  options: {
+    fallback?: Stream;
+    primaryDelivery?: PlaybackDelivery;
+    primaryExecutionTarget?: PlaybackExecutionTarget;
+  } = {},
+) {
+  const selectedCandidate = makeV3Candidate(primary, {
+    delivery: options.primaryDelivery,
+    executionTarget: options.primaryExecutionTarget,
+  });
+  const fallbackCandidate = options.fallback
+    ? makeV3Candidate(options.fallback, {
+        id: FALLBACK_PLAN_ID,
+        rank: 1,
+      })
+    : undefined;
+  const fallbackCandidates = fallbackCandidate ? [fallbackCandidate] : [];
+  return usePlaybackSessionStore.getState().createSession({
+    plan: makePlaybackPlanV3({
+      state: "ready",
+      selectedCandidate,
+      fallbackCandidates,
+      orderedCandidates: [selectedCandidate, ...fallbackCandidates],
+    }),
+    content: { type: "movie", id: "tt123" },
+    deviceProfile,
+    bridge: { status: "available" },
+  });
+}
+
 function makeEngine(
   getPlaybackUri: (stream: Stream) => Promise<string>,
 ): IStreamEngine & {
@@ -175,6 +262,300 @@ describe("PlaybackSessionPlaybackService", () => {
     const sessionId = usePlaybackSessionStore.getState().activeSessionId;
     if (sessionId) cancelPlaybackSession(sessionId, "Test cleanup.");
     usePlaybackSessionStore.getState().clearAllSessions();
+  });
+
+  it.each([
+    ["direct", "https://cdn.example.test/movie.mp4"],
+    ["hls", "https://cdn.example.test/master.m3u8"],
+  ] as const)(
+    "executes a Planner v3 %s route without legacy engine resolution",
+    async (delivery, url) => {
+      const session = createV3Session({ url, title: delivery } as Stream, {
+        primaryDelivery: delivery,
+      });
+
+      const result = await resolvePlaybackSession(session.id);
+
+      expect(result).toMatchObject({
+        ok: true,
+        uri: url,
+        route: {
+          executionTarget: "on-device",
+          delivery,
+        },
+      });
+      expect(
+        result.ok
+          ? getActivePlaybackSourceRuntime(session.id, result.attemptId)
+          : null,
+      ).toMatchObject({
+        route: {
+          executionTarget: "on-device",
+          delivery,
+        },
+        runtime: expect.objectContaining({
+          getEngineType: expect.any(Function),
+        }),
+      });
+      expect(resolveEngine).not.toHaveBeenCalled();
+    },
+  );
+
+  it("adopts one Planner v3 bridge job as the session-owned playback runtime", async () => {
+    const readyJob: BridgeJobResponseV1 = {
+      protocolVersion: 1,
+      job: {
+        id: BRIDGE_JOB_ID,
+        state: "ready",
+        phase: "ready",
+        delivery: "progressive-fmp4",
+        peerCount: 4,
+        readinessProgress: 1,
+        elapsedMs: 100,
+        readyTimeoutMs: 45_000,
+        media: {
+          container: "mp4",
+          remuxed: true,
+          seek: "preparing",
+          seekableCache: { status: "preparing" },
+        },
+        stream: {
+          path: `/api/bridge/v1/jobs/${BRIDGE_JOB_ID}/stream?expires=4102444800000&signature=signed`,
+          expiresAt: "2100-01-01T00:00:00.000Z",
+        },
+      },
+    };
+    const bridgeClient = {
+      createJob: jest.fn().mockResolvedValue(readyJob),
+      getJob: jest.fn().mockResolvedValue(readyJob),
+      cancelJob: jest.fn().mockResolvedValue(null),
+      getCapabilities: jest.fn(),
+      getJobMetrics: jest.fn(),
+      getTrackCatalog: jest.fn(),
+      getSubtitleDocument: jest.fn(),
+      getThumbnail: jest.fn(),
+    };
+    const getBridgeClient = jest
+      .spyOn(BridgeClientModule, "getBridgeClient")
+      .mockReturnValue(
+        bridgeClient as unknown as ReturnType<
+          typeof BridgeClientModule.getBridgeClient
+        >,
+      );
+    const session = createV3Session(
+      {
+        infoHash: "0123456789abcdef0123456789abcdef01234567",
+        fileIdx: 3,
+        title: "Bridge source",
+      } as Stream,
+      {
+        primaryDelivery: "progressive-fmp4",
+        primaryExecutionTarget: "paired-bridge",
+      },
+    );
+
+    try {
+      const result = await resolvePlaybackSession(session.id);
+
+      expect(result).toMatchObject({
+        ok: true,
+        bridgeJobId: BRIDGE_JOB_ID,
+        route: {
+          executionTarget: "paired-bridge",
+          delivery: "progressive-fmp4",
+        },
+        runtime: expect.objectContaining({
+          getEngineType: expect.any(Function),
+        }),
+      });
+      if (!result.ok) return;
+      expect(result.runtime?.getEngineType()).toBe("bridge-v1");
+      expect(result.runtime?.canPlay(result.stream)).toBe(true);
+      expect(
+        getActivePlaybackSourceRuntime(session.id, result.attemptId),
+      ).toMatchObject({
+        bridgeJobId: BRIDGE_JOB_ID,
+        runtime: result.runtime,
+      });
+      expect(resolveEngine).not.toHaveBeenCalled();
+      expect(bridgeClient.createJob).toHaveBeenCalledTimes(1);
+
+      cancelPlaybackSession(session.id, "Test cleanup.");
+      await Promise.resolve();
+      expect(bridgeClient.cancelJob).toHaveBeenCalledTimes(1);
+      expect(
+        getActivePlaybackSourceRuntime(session.id, result.attemptId),
+      ).toBeNull();
+    } finally {
+      getBridgeClient.mockRestore();
+    }
+  });
+
+  it("exposes an active lease only to its exact playback attempt", async () => {
+    const session = createV3Session({
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Direct",
+    } as Stream);
+
+    const result = await resolvePlaybackSession(session.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(
+      getActivePlaybackSourceRuntime(session.id, "older-attempt"),
+    ).toBeNull();
+    const runtime = getActivePlaybackSourceRuntime(
+      session.id,
+      result.attemptId,
+    );
+    expect(runtime).toMatchObject({
+      route: { candidateId: PRIMARY_PLAN_ID, delivery: "direct" },
+      runtime: expect.any(Object),
+    });
+    expect(Object.keys(runtime!).sort()).toEqual(["route", "runtime"]);
+  });
+
+  it("makes the attempt-bound runtime accessor empty as soon as cancellation releases the lease", async () => {
+    const session = createV3Session({
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Direct",
+    } as Stream);
+    const result = await resolvePlaybackSession(session.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(
+      getActivePlaybackSourceRuntime(session.id, result.attemptId),
+    ).not.toBeNull();
+
+    cancelPlaybackSession(session.id, "User left.");
+
+    expect(
+      getActivePlaybackSourceRuntime(session.id, result.attemptId),
+    ).toBeNull();
+  });
+
+  it.each(["attempt", "route"] as const)(
+    "releases and rejects a prepared source whose exact %s binding does not match",
+    async (mismatch) => {
+      const session = createV3Session({
+        url: "https://cdn.example.test/movie.mp4",
+        title: "Direct",
+      } as Stream);
+      const release = jest.fn(async () => undefined);
+      let capturedRequest: SourcePreparationRequest | undefined;
+      const prepareSpy = jest
+        .spyOn(SourcePreparer.prototype, "prepare")
+        .mockImplementation(async (request: SourcePreparationRequest) => {
+          capturedRequest = request;
+          const preparedRoute: PlaybackRoute | undefined =
+            mismatch === "route" && request.route
+              ? {
+                  ...request.route,
+                  capabilities: {
+                    ...request.route.capabilities,
+                    thumbnails: !request.route.capabilities.thumbnails,
+                  },
+                }
+              : request.route;
+          return {
+            uri: request.candidate.stream.url!,
+            stream: request.candidate.stream,
+            attemptId:
+              mismatch === "attempt"
+                ? `${request.attemptId}-mismatch`
+                : request.attemptId,
+            route: preparedRoute,
+            released: false,
+            release,
+          } satisfies PreparedSource;
+        });
+
+      try {
+        const result = await resolvePlaybackSession(session.id);
+
+        expect(capturedRequest).toBeDefined();
+        expect(result).toMatchObject({
+          ok: false,
+          error: { code: "SOURCE_UNAVAILABLE", shouldFallback: false },
+        });
+        expect(release).toHaveBeenCalledTimes(1);
+        expect(
+          getActivePlaybackSourceRuntime(
+            session.id,
+            capturedRequest!.attemptId,
+          ),
+        ).toBeNull();
+      } finally {
+        prepareSpy.mockRestore();
+      }
+    },
+  );
+
+  it("releases a prepared source that arrives after the session was cancelled", async () => {
+    const session = createV3Session({
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Direct",
+    } as Stream);
+    const release = jest.fn(async () => undefined);
+    let capturedRequest: SourcePreparationRequest | undefined;
+    let resolvePreparation!: (source: PreparedSource) => void;
+    const prepareSpy = jest
+      .spyOn(SourcePreparer.prototype, "prepare")
+      .mockImplementation(
+        (request: SourcePreparationRequest) =>
+          new Promise<PreparedSource>((resolve) => {
+            capturedRequest = request;
+            resolvePreparation = resolve;
+          }),
+      );
+
+    try {
+      const resolution = resolvePlaybackSession(session.id);
+      for (let turn = 0; turn < 10 && !capturedRequest; turn += 1) {
+        await Promise.resolve();
+      }
+      expect(capturedRequest).toBeDefined();
+      cancelPlaybackSession(session.id, "User left before preparation.");
+
+      resolvePreparation({
+        uri: capturedRequest!.candidate.stream.url!,
+        stream: capturedRequest!.candidate.stream,
+        attemptId: capturedRequest!.attemptId,
+        route: capturedRequest!.route,
+        released: false,
+        release,
+      });
+
+      await expect(resolution).resolves.toMatchObject({ ok: false });
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(
+        getActivePlaybackSourceRuntime(session.id, capturedRequest!.attemptId),
+      ).toBeNull();
+    } finally {
+      prepareSpy.mockRestore();
+    }
+  });
+
+  it("fails closed for an unsupported Planner v3 route without invoking legacy resolution", async () => {
+    const primary = {
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Unsupported route",
+    } as Stream;
+    const session = createV3Session(primary, {
+      primaryDelivery: "range-http",
+    });
+
+    const result = await resolvePlaybackSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "SOURCE_UNAVAILABLE", shouldFallback: false },
+    });
+    expect(resolveEngine).not.toHaveBeenCalled();
+    expect(usePlaybackSessionStore.getState().sessions[session.id].status).toBe(
+      "failed",
+    );
   });
 
   it("records a failed primary attempt and resolves the next planned candidate", async () => {
@@ -540,6 +921,68 @@ describe("PlaybackSessionPlaybackService", () => {
       { status: "ready" },
     ]);
     expect(primaryEngine.stop).toHaveBeenCalled();
+  });
+
+  it("single-flights concurrent fallback advances for the same session", async () => {
+    const primary = {
+      url: "https://cdn.example.test/primary.mp4",
+      title: "Primary",
+    } as Stream;
+    const fallback = {
+      url: "https://cdn.example.test/fallback.mp4",
+      title: "Fallback",
+    } as Stream;
+    const primaryEngine = makeEngine(async () => primary.url!);
+    let resolveFallback!: (uri: string) => void;
+    const fallbackPreparation = new Promise<string>((resolve) => {
+      resolveFallback = resolve;
+    });
+    const fallbackEngine = makeEngine(() => fallbackPreparation);
+    resolveEngine.mockImplementation((stream) =>
+      stream.url === primary.url ? primaryEngine : fallbackEngine,
+    );
+    const session = createSession(primary, fallback);
+    const first = await resolvePlaybackSession(session.id);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const failure: PlaybackRuntimeError = {
+      code: "PLAYBACK_TIMEOUT",
+      message: "Playback did not start in time.",
+      retryable: true,
+      shouldFallback: true,
+    };
+    const firstAdvance = advancePlaybackSessionAfterFailure(
+      session.id,
+      first.candidateId,
+      first.attemptId,
+      failure,
+    );
+    const secondAdvance = advancePlaybackSessionAfterFailure(
+      session.id,
+      first.candidateId,
+      first.attemptId,
+      failure,
+    );
+
+    expect(secondAdvance).toBe(firstAdvance);
+    for (
+      let turn = 0;
+      turn < 10 &&
+      !jest.mocked(fallbackEngine.getPlaybackUri).mock.calls.length;
+      turn += 1
+    ) {
+      await Promise.resolve();
+    }
+    expect(fallbackEngine.getPlaybackUri).toHaveBeenCalledTimes(1);
+    resolveFallback(fallback.url!);
+    await expect(Promise.all([firstAdvance, secondAdvance])).resolves.toEqual([
+      expect.objectContaining({ ok: true, uri: fallback.url }),
+      expect.objectContaining({ ok: true, uri: fallback.url }),
+    ]);
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id].attempts,
+    ).toHaveLength(2);
   });
 
   it("completes the golden path from first-frame timeout through fallback to playing", async () => {

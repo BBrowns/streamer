@@ -1,9 +1,9 @@
 import {
-  playbackPlanSchema,
+  playbackPlanResponseSchema,
   playbackSessionEventSchema,
   playbackSessionSchema,
   type DeviceProfile,
-  type PlaybackPlan,
+  type PlaybackPlanResponse,
   type PlaybackRuntimeError,
   type PlaybackSession,
   type PlaybackSessionBridgeSnapshot,
@@ -14,6 +14,7 @@ import {
   type PlaybackSessionEvent,
   type PlaybackSessionStatus,
   type PlannedMediaCandidate,
+  type PlannedMediaCandidateV3,
 } from "@streamer/shared";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
@@ -26,7 +27,7 @@ export type PlaybackSessionEventInput = DistributiveOmit<
 >;
 
 export interface CreatePlaybackSessionInput {
-  plan: PlaybackPlan;
+  plan: PlaybackPlanResponse;
   content: PlaybackSessionContent;
   deviceProfile: DeviceProfile;
   bridge?: PlaybackSessionBridgeSnapshot;
@@ -34,8 +35,8 @@ export interface CreatePlaybackSessionInput {
 }
 
 export interface PlaybackSessionRuntime {
-  plan: PlaybackPlan;
-  candidates: Record<string, PlannedMediaCandidate>;
+  plan: PlaybackPlanResponse;
+  candidates: Record<string, PlannedMediaCandidate | PlannedMediaCandidateV3>;
 }
 
 export interface PlaybackSessionBundle {
@@ -78,7 +79,7 @@ function cloneDeviceProfile(deviceProfile: DeviceProfile): DeviceProfile {
 }
 
 function toSessionCandidate(
-  candidate: PlannedMediaCandidate,
+  candidate: PlannedMediaCandidate | PlannedMediaCandidateV3,
   id: string,
 ): PlaybackSessionCandidate {
   return {
@@ -127,10 +128,13 @@ export function createPlaybackSessionFromPlan(
   input: CreatePlaybackSessionInput,
   options: PlaybackSessionFactoryOptions,
 ): PlaybackSessionBundle {
-  const plan = playbackPlanSchema.parse(input.plan);
+  const plan = playbackPlanResponseSchema.parse(input.plan);
   const sessionId = options.idFactory();
   const createdAt = options.now();
-  const runtimeCandidates: Record<string, PlannedMediaCandidate> = {};
+  const runtimeCandidates: Record<
+    string,
+    PlannedMediaCandidate | PlannedMediaCandidateV3
+  > = {};
   const planCandidateToSessionCandidate = new Map<string, string>();
 
   const candidates = plan.orderedCandidates.map((candidate) => {

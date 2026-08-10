@@ -151,6 +151,60 @@ describe("DownloadService - Replan & Diagnostics", () => {
     );
   });
 
+  it("replans a restored desktop job that no longer owns a source URL", async () => {
+    setPlatform("web");
+    const id = "task-restored";
+    const originalStream = { infoHash: "hash-restored" };
+    const mediaInfo = {
+      type: "movie",
+      itemId: "tt-restored",
+      title: "Restored",
+      sourceId: id,
+      downloadUrl: "http://possibly-expired.test",
+    } as any;
+
+    useDownloadStore
+      .getState()
+      .addTask(id, mediaInfo, undefined, originalStream);
+    useDownloadStore.getState().setStatus(id, "Paused");
+
+    window.desktopBridge = {
+      resumeDownloadJob: jest.fn().mockResolvedValue({
+        id,
+        status: "Paused",
+        filename: "restored.mp4",
+        totalBytesWritten: 50,
+        totalBytesExpectedToWrite: 100,
+        failureReason: "interrupted",
+        requiresReplan: true,
+      }),
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id,
+        status: "Downloading",
+        filename: "restored.mp4",
+        totalBytesWritten: 50,
+        totalBytesExpectedToWrite: 100,
+        requiresReplan: false,
+      }),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    jest
+      .mocked(streamEngineManager.getPlaybackUri)
+      .mockResolvedValue("http://fresh-restored.test");
+
+    const service = new DownloadService();
+    await expect(service.resumeDownload(id)).resolves.toEqual({ ok: true });
+
+    expect(streamEngineManager.getPlaybackUri).toHaveBeenCalledWith(
+      originalStream,
+    );
+    expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
+      id,
+      "http://fresh-restored.test",
+      expect.any(String),
+    );
+  });
+
   it("calculates app download usage from task state", async () => {
     useDownloadStore
       .getState()
