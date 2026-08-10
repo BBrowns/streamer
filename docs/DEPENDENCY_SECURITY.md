@@ -34,6 +34,21 @@ npm run security:install-scripts
 npm run security:audit
 ```
 
+CI also:
+
+- validates every GitHub Actions workflow with `actionlint@v1.7.12`;
+- requires external GitHub Actions to use reviewed full commit SHAs;
+- reviews the dependency delta on pull requests and blocks newly introduced
+  high or critical advisories;
+- checks npm and GitHub Actions dependency drift through grouped weekly
+  Dependabot updates;
+- runs GitHub CodeQL default setup for Actions and JavaScript/TypeScript.
+
+Repository secret scanning and push protection must remain enabled in GitHub.
+Push protection is the preventive secret gate; do not replace it with an ad hoc
+regular-expression scan. If these server-side controls are unavailable or
+disabled, restore an equivalent reviewed scanner before removing this policy.
+
 `security:audit` rejects **high and critical production dependency findings**.
 It runs npm's production audit and permits only exact, unexpired advisory
 exceptions recorded in `scripts/security-audit.mjs` and the table below.

@@ -43,6 +43,8 @@
     "agents:bootstrap": "node scripts/bootstrap-external-skills.mjs",
     "agents:check": "node scripts/bootstrap-external-skills.mjs --check",
     "maintenance:collect": "node .agents/skills/streamer-maintenance-radar/scripts/collect.mjs",
+    "workflows:check": "node scripts/check-github-actions.mjs",
+    "workflows:check:test": "node --test scripts/check-github-actions.test.mjs",
     "release:gate": "node scripts/release-gate.mjs",
     "rc:evidence": "node scripts/rc-evidence.mjs",
     "rc:evidence:test": "node --test scripts/rc-evidence.test.mjs",
