@@ -91,6 +91,8 @@ function checkCiWorkflow() {
     ["npm run sentry:release:dry-run", "Sentry release dry-run"],
     ["security:install-scripts", "dependency install-script policy"],
     ["security:audit", "production dependency audit"],
+    ["npm run process:check", "agent process asset validation"],
+    ["npm run process:check:test", "agent process validator tests"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
     ["smoke-server-container.sh", "server production container smoke"],
