@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-07-29.
+> Last updated: 2026-08-01.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -12,7 +12,16 @@ restart the project around a different control plane.
 
 Current phase:
 
-- Architecture complete enough: `PlaybackSession`, Planner v2, session-driven
+- Playback architecture v3 implementation is active on
+  `codex/playback-architecture-v3`, based on merged `master` commit
+  `8640a714eac7c0d08709ed736ed87b898252eec6` (PR #159). The working branch is
+  not yet committed, pushed, reviewed or merged; do not describe it as shipped.
+  It adds Planner v3 routes, typed bridge protocol v1, `SourcePreparer` leases,
+  an attempt-bound bridge runtime and platform media adapters while retaining
+  Planner v2 as an isolated compatibility path.
+
+- Architecture complete enough: `PlaybackSession`, Planner v2/v3,
+  session-driven
   Play Best, downloads, cast, gateway/range hardening, security baseline,
   Sentry/build metadata, desktop sidecar/package inputs, manual update policy,
   and first UI primitives are already present.
@@ -57,6 +66,16 @@ Current phase:
   fallback, next-episode preplanning and evidence-only segment skipping are in
   place. See
   [docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md).
+- The v3 player cutover keeps `PlaybackSessionPlaybackService` as the sole
+  `PreparedSource` lease owner. Runtime handoff is exact-attempt-bound and
+  exposes only the URL-free route, opaque bridge job ID and optional runtime.
+  Resolve and fallback are per-session single-flight; late/mismatched results
+  are released. A session-owned source never constructs a second legacy engine
+  or subscribes to legacy info-hash SSE.
+- `MediaPlayerAdapter` is now a platform-neutral port with native, web and
+  Electron implementations. Route capability, runtime provider and the
+  instance-owned player surface jointly decide seeking, tracks, thumbnails,
+  cast, volume, fullscreen and PiP. Web/Electron track selection fails closed.
 - Native target setup: Xcode's compatible iOS 26.5 build 23F77, an iPhone 15
   simulator, the Android API 34 ARM64 image, and the exact configured Detox AVD
   are installed. A disposable iOS development client build/install/launch and
@@ -68,10 +87,10 @@ Current phase:
   consumer closes, while genuine source errors still close the response and
   use redacted diagnostics.
 
-The merged implementation roadmap is complete through **PR #154** in
-[ROADMAP.md](./ROADMAP.md); the capability-aware Search follow-up is the active
-branch. Real-target QA and RC evidence remain intentionally deferred until the
-required targets and release credentials are available.
+The merged implementation roadmap is complete through **PR #159** in
+[ROADMAP.md](./ROADMAP.md). Playback architecture v3 is the active unmerged
+follow-up. Real-target QA and RC evidence remain intentionally deferred until
+the required targets and release credentials are available.
 
 PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
 11.18 are the supported toolchain, production high/critical audit findings
@@ -223,13 +242,16 @@ Recent work stabilized the server/add-on boundary:
 Playback is now structured around planning rather than rendering-time resolution:
 
 - Device profiles and bridge state are sent to the playback planner.
-- Planner v2 ranks and rejects sources server-side using opaque UUID candidate
+- Planner v3 ranks and rejects sources server-side using opaque UUID candidate
   IDs, deterministic ordering, typed rejection reasons, action eligibility,
-  compatibility details, and timeout budgets.
+  compatibility details and timeout budgets. Each accepted candidate includes
+  an explicit execution target, delivery and capability set. Planner v2 remains
+  accepted only through the bounded compatibility path.
 - Top-level `selectedCandidate`, `fallbackCandidates`, and `orderedCandidates`
   are canonical for new code. The nested `plan` object remains a temporary
   compatibility wrapper for the current mobile resolver.
-- Server and mobile validate planner responses with `playbackPlanSchema`.
+- Server and mobile validate versioned planner responses with the shared Zod
+  schemas.
 - The client no longer needs to resolve every visible stream card.
 - Source cards should remain cheap metadata views; resolution should happen only on Play, Download, or Cast.
 
@@ -279,6 +301,37 @@ The mobile app now has typed playback orchestration:
   player.
 - Manual advanced source playback still exists and is intentionally separate.
 
+### Planner v3, Source Preparation And Bridge v1
+
+- `PlaybackRoute` is a URL-free runtime contract containing candidate ID,
+  execution target (`on-device`, `local-sidecar`, `paired-bridge` or remote),
+  delivery and explicit seek/track/subtitle/cast/offline/thumbnail
+  capabilities. Full route equality is checked before execution and adoption.
+- `SourcePreparer` selects exactly one route adapter. A `PreparedSource` owns
+  the runtime URI, safe route, optional opaque bridge job ID/runtime and one
+  idempotent release operation. Runtime URLs, magnets, hashes and raw streams
+  remain outside persisted session state and telemetry.
+- Bridge protocol v1 has shared schemas for hello/capabilities/jobs/errors,
+  typed mobile client calls and URL-free public job DTOs. Signed stream URLs
+  are bound to one approved origin, opaque UUID, exact path and expiration.
+- `BridgeV1PlaybackRuntime` reuses the already prepared job for lazy metrics,
+  track catalog, bounded subtitle documents/thumbnails and seekable handoff.
+  Runtime stop aborts observers; the prepared-source lease owns job
+  cancellation exactly once.
+- Electron owns its sidecar and scoped renderer access sessions. IPC remains
+  canonical through preload, stored download records exclude runtime URLs, and
+  startup never kills a foreign process merely because it occupies the bridge
+  port.
+- Download and Cast consume the planner's explicit route eligibility. A direct
+  download copies/verifies the planned source; bridge delivery propagates only
+  the opaque prepared job identity rather than reconstructing a source URL.
+
+Still required before merge/release claims: disposable-database integration,
+full socket-bound stream-server suites outside this sandbox, real iOS/Android
+playback and offline verification, paired-LAN bridge, real torrent/FFmpeg,
+packaged Electron, Chromecast/AirPlay, accessibility target QA and release
+credentials.
+
 ### Playback Session Control Plane
 
 `@streamer/shared` defines a persistence-safe `PlaybackSession` contract for
@@ -327,7 +380,8 @@ The mobile client now also has:
   cancellation
 - `services/playback/PlaybackSessionPlaybackService.ts`, which resolves Play
   Best candidates in planner order, applies timeout budgets, records gateway
-  progress, performs automatic fallback, and cancels active engines/jobs
+  progress, prepares exact routes, performs single-flight automatic fallback,
+  rejects stale attempt results, and releases active prepared-source leases
 - explicit `requiresReplan` behavior when a persisted session is rehydrated
   without its runtime candidate mapping
 
@@ -800,9 +854,10 @@ explicitly deferred real-device QA phase are maintained in
     and richer PiP polish remain deferred.
 
 Do not reintroduce completed roadmap items as new standalone work:
-`PlaybackSession`, Planner v2, Play Best via sessions, downloads via sessions,
-cast via sessions, broad Plex/Jellyfin replacement, central transcoding farm,
-or a full Tamagui migration.
+`PlaybackSession`, Planner v2/v3, explicit playback routes, source-preparation
+or media-player adapters, bridge protocol v1, Play Best via sessions, downloads
+via sessions, cast via sessions, broad Plex/Jellyfin replacement, central
+transcoding farm, or a full Tamagui migration.
 
 ## Engineering Rules For Future Agents
 

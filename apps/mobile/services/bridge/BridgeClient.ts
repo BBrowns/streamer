@@ -226,7 +226,7 @@ export class BridgeClient {
 
   constructor(options: BridgeClientOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.authHeaders = options.authHeaders ?? getBridgeAuthHeaders;
     this.jsonHeaders = options.jsonHeaders ?? withBridgeJsonHeaders;
     this.refreshAuth = options.refreshAuth ?? refreshDesktopBridgeAccessSession;
