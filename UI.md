@@ -151,7 +151,9 @@ primary for movies, keep series playback on episode rows, and keep Download,
 The downloads queue now uses `AppButton`, `Surface`, `StatusPill`, and
 `SelectionActionBar` for queue cards, deferred bulk deletion, summary metrics,
 and verified-offline status. Smart Downloads preferences live only in Settings;
-Downloads shows one compact status row and its read-only planned queue.
+Downloads shows one compact status row and its read-only planned queue. Each
+intent carries its requested quality, and Wi-Fi/storage policy blocks are
+shown inline without implying that a background download completed.
 
 PR #116 tightened the pilot by moving `Surface`, `AppButton`, `StatusPill`,
 `SettingsSection`, `PlaybackStatusPanel`, `DownloadQueueCard`, and the desktop
@@ -840,7 +842,9 @@ its detail page.
 
 Smart Downloads stays opt-in and disabled by default. HLS offline limitations
 and planned-next-episode intents must never be presented as completed offline
-files. A download is Ready offline only after managed-path type/size checks,
+files. Policy-blocked next-episode intents must expose the reason (for example,
+waiting for Wi-Fi or reaching the storage limit) and remain read-only. A
+download is Ready offline only after managed-path type/size checks,
 reliable Content-Length comparison, metadata rejection, and a successful local
 `expo-video` readiness/duration probe. Existing completion records migrate to
 pending verification. Playback quality is always passed to the internal

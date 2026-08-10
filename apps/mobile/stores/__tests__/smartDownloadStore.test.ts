@@ -55,6 +55,7 @@ describe("smartDownloadStore", () => {
       seriesId: "series-1",
       season: 1,
       episode: 3,
+      quality: "720p",
       status: "planned",
     });
   });

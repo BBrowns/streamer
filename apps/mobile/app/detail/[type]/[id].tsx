@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 import { getMetaLoadFailureKind, useMeta } from "../../../hooks/useMeta";
 import { useStreams } from "../../../hooks/useStreams";
 import { usePlayerStore } from "../../../stores/playerStore";
@@ -33,7 +33,11 @@ import { prefetchPlaybackPlan } from "../../../services/playback/PlaybackPlanSer
 import { DesktopCastModal } from "../../../components/DesktopCastModal";
 import { useCastStore } from "../../../stores/castStore";
 import { useSmartDownloadStore } from "../../../stores/smartDownloadStore";
-import { createNextEpisodePlan } from "../../../services/SmartDownloadPlanner";
+import {
+  createNextEpisodePlan,
+  evaluateSmartDownloadPolicy,
+  type SmartDownloadNetwork,
+} from "../../../services/SmartDownloadPlanner";
 import { useWindowClass } from "../../../hooks/useWindowClass";
 
 import { DesktopDetailLayout } from "../../../components/detail/DesktopDetailLayout";
@@ -306,9 +310,10 @@ export default function DetailScreen() {
     }
   };
 
-  const maybePlanNextEpisode = (
+  const maybePlanNextEpisode = async (
     downloadedSeason?: number,
     downloadedEpisode?: number,
+    estimatedBytes?: number,
   ) => {
     const smartDownloads = useSmartDownloadStore.getState();
     if (
@@ -321,12 +326,41 @@ export default function DetailScreen() {
       return;
     }
 
+    let network: SmartDownloadNetwork = "unknown";
+    if (Platform.OS !== "web") {
+      try {
+        // Keep the network dependency lazy so web/Electron builds do not load
+        // a native module during renderer startup.
+        const Network = await import("expo-network");
+        const networkType = String(
+          (await Network.getNetworkStateAsync())?.type || "",
+        ).toLowerCase();
+        if (networkType.includes("cellular")) network = "cellular";
+        else if (networkType.includes("wifi")) network = "wifi";
+      } catch {
+        // Unknown network state is intentionally fail-open for a recorded
+        // intent; no background download is started from this path.
+      }
+    }
+
+    const storage = await downloadService
+      .getStorageDiagnostics()
+      .catch(() => undefined);
+    const policy = evaluateSmartDownloadPolicy(smartDownloads.preferences, {
+      network,
+      appUsageBytes: storage?.appUsage,
+      estimatedBytes,
+    });
+
     const plan = createNextEpisodePlan({
       seriesId: id || "unknown",
       title: meta?.name,
       videos: meta?.videos || [],
       downloadedSeason,
       downloadedEpisode,
+      quality: policy.quality,
+      status: policy.status,
+      reason: policy.reason,
     });
     if (plan) smartDownloads.planNextEpisode(plan);
   };
@@ -433,7 +467,11 @@ export default function DetailScreen() {
             },
             metadataBytes: result.plan.selectedCandidate?.sizeBytes,
           });
-          maybePlanNextEpisode(season, episode);
+          await maybePlanNextEpisode(
+            season,
+            episode,
+            result.plan.selectedCandidate?.sizeBytes,
+          );
           return;
         } finally {
           setPlanningAction(null);
@@ -452,7 +490,7 @@ export default function DetailScreen() {
         season,
         episode,
       });
-      maybePlanNextEpisode(season, episode);
+      await maybePlanNextEpisode(season, episode);
     } catch (e) {
       showPlanMessage(null, t("detail.errors.downloadFailed"), "download");
     }
