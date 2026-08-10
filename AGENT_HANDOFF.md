@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-08-01.
+> Last updated: 2026-08-10.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -12,13 +12,15 @@ restart the project around a different control plane.
 
 Current phase:
 
-- Playback architecture v3 implementation is active on
-  `codex/playback-architecture-v3`, based on merged `master` commit
-  `8640a714eac7c0d08709ed736ed87b898252eec6` (PR #159). The working branch is
-  not yet committed, pushed, reviewed or merged; do not describe it as shipped.
-  It adds Planner v3 routes, typed bridge protocol v1, `SourcePreparer` leases,
-  an attempt-bound bridge runtime and platform media adapters while retaining
-  Planner v2 as an isolated compatibility path.
+- Playback architecture v3 is shipped in `master` through PR #160 (merge
+  commit `cf8ed11480a63e33f766209061b13a140f590df9`). The merged implementation
+  includes Planner v3 routes and schemas, Bridge protocol v1, `SourcePreparer`
+  leases, an attempt-bound bridge runtime and platform media adapters while
+  retaining Planner v2 as an isolated compatibility path.
+- Bridge v1 now has bounded request/idempotency state and route-level rate
+  limiting. Session expiry and explicit revocation, client renewal policy,
+  privacy-safe operational counters and reconnect recovery remain the next
+  hardening slice.
 
 - Architecture complete enough: `PlaybackSession`, Planner v2/v3,
   session-driven
@@ -87,10 +89,38 @@ Current phase:
   consumer closes, while genuine source errors still close the response and
   use redacted diagnostics.
 
-The merged implementation roadmap is complete through **PR #159** in
-[ROADMAP.md](./ROADMAP.md). Playback architecture v3 is the active unmerged
-follow-up. Real-target QA and RC evidence remain intentionally deferred until
-the required targets and release credentials are available.
+The merged implementation roadmap is complete through **PR #160** in
+[ROADMAP.md](./ROADMAP.md). The next phase is post-v3 hardening and
+productization: bridge session/reconnect operations, Planner v3 outcome
+evidence and bounded v2 deprecation, player lifecycle decomposition, URL-free
+download recovery, and capability-gated desktop/offline features. Real-target
+QA and RC evidence remain intentionally deferred until the required targets and
+release credentials are available.
+
+## Next Engineering Phase
+
+Work in this phase must preserve the existing `PlaybackSession`/planner/source
+ownership and keep platform-native behavior capability-gated:
+
+1. Complete Bridge v1 operations: access-session revoke, bounded client renewal,
+   reconnect/status recovery, idempotency conflict evidence and privacy-safe
+   counters without logging URLs, tokens or media identifiers.
+2. Measure Planner v3 success, unsupported fallback and explicit legacy
+   selection; block new v2 call sites outside the compatibility adapter and
+   remove v2 only after 30 days without fallback evidence from supported
+   releases.
+3. Extract the remaining player session/attempt lifecycle coordination without
+   introducing a second store or orchestration state machine.
+4. Add URL-free, versioned download-recovery metadata and restart-time
+   replanning; reuse partial files only after validator and integrity checks.
+5. Add a verified Electron offline-file adapter and opt-in Smart Downloads;
+   defer HLS offline, remote playback and richer discovery facets until these
+   foundations have evidence.
+
+Known physical-device and packaged-release gaps stay recorded in
+`docs/QA_MATRIX.md`, `docs/PLAYER_ARCHITECTURE.md`, and
+`docs/RC_CHECKLIST.md`; browser and CI evidence must not be promoted to native
+support claims.
 
 PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
 11.18 are the supported toolchain, production high/critical audit findings

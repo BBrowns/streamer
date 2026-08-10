@@ -1,8 +1,8 @@
 # Streamer Roadmap
 
-Last updated: 2026-07-18.
+Last updated: 2026-08-10.
 
-This is the current source of truth for work after PR #141. The architecture
+This is the current source of truth for work after PR #160. The architecture
 does not need another control-plane rewrite. The next phase is to reduce
 security and release risk, make the existing click-and-play paths easier to
 prove automatically, and continue product polish without claiming real-device
@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #151:
+Implemented through PR #160:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -69,6 +69,12 @@ Implemented through PR #151:
   failed download offers one context-specific retry, replan, verify, storage,
   bridge-repair, or remove action, while cast discovery/source/device failures
   offer refresh, fallback, or bridge repair without retrying loopback URLs.
+- Playback architecture v3 is merged: shared Planner v3 contracts and routes,
+  explicit unsupported fallback, attempt-bound `SourcePreparer` leases, and a
+  typed Bridge v1 client/runtime now share one session-owned control plane.
+- Bridge v1 access sessions, job/cast-play idempotency, bounded in-memory state,
+  and normal/pairing route rate limits are shipped. Session revoke, renewal,
+  reconnect recovery, and operational counters are post-v3 hardening work.
 - PR #152 introduces the adaptive UX foundation: semantic state tokens,
   compact/medium/expanded/large window classes, four primary destinations,
   deduplicated Home composition, canonical Search state, recoverable
@@ -110,17 +116,18 @@ The next priorities are based on observed gaps, not old roadmap numbering:
 
 ## Active Roadmap
 
-### In Review: Adaptive UX Correctness And Search Reliability
+### Completed: PR #152–#160 — Adaptive UX, playback v3, and Bridge v1 hardening
 
 Goal: harden the merged screen-level redesign without changing the playback
 control plane or exposing source complexity as the default experience.
 
 Merged PR #152 contains the responsive shell and stacked Obsidian screen pass.
-Merged PR #154 owns the broader correctness, player-recovery, and QA work. The
-active follow-up completes the capability-aware Search work listed below,
+Merged PR #154 owns the broader correctness, player-recovery, and QA work. PR
+#160 completes the playback architecture v3 and Bridge v1 implementation,
 including bounded provider fan-out, stable cursor failure semantics,
-account-scoped recents, immediate add-on cache invalidation, and retention of
-usable cached results during background and next-page failures.
+account-scoped recents, immediate add-on cache invalidation, retention of
+usable cached results during background and next-page failures, typed v3
+planning, attempt-bound source leases, and bridge rate limiting.
 
 The current discovery/viewing pass extends that follow-up without changing
 routes, planner/session ownership, or the Obsidian direction. Its constraints
@@ -221,6 +228,51 @@ Acceptance:
 - Settings and Search visibly depart from their legacy long-list/card-stack
   compositions and keep controls, focus, and content usable at 390, 768, 1024,
   and 1440 pixel widths.
+
+### Post-v3 hardening and productization
+
+This is the active implementation order after PR #160. Each slice must keep
+the existing session/planner/source ownership, add focused regression tests,
+and preserve URL-free persistence and capability-gated native behavior.
+
+1. **Bridge v1 operations:** add master-authenticated access-session revoke,
+   single-flight bounded client renewal, reconnect/status recovery, and
+   privacy-safe counters for rate limits, renewal, idempotency conflicts, and
+   terminal states. Keep job and cast-play `requestId` semantics unchanged;
+   cast control must not auto-retry.
+2. **Planner v3 rollout:** aggregate v3 success, unsupported fallback, and
+   explicit legacy selection; block new v2 call sites outside the compatibility
+   adapter; mark v2 deprecated in response metadata and documentation; remove
+   it only after 30 days with no fallback from all supported releases.
+3. **Player/session decomposition:** extract remaining planning, replan,
+   fallback, route-exit, cleanup, and attempt/lease coordination from the
+   player host into one binding hook/service. Do not create a second store or
+   orchestration state machine, and retain the existing seekable-cache and
+   track-catalog hooks.
+4. **Download recovery v2:** persist only versioned URL-free recovery metadata
+   (opaque task identity, content/action, managed-file identity, expected
+   bytes, status, and timestamps); always replan after restart; reuse partial
+   files only when validators, size, and integrity checks match; bound
+   concurrency and storage pressure.
+5. **Desktop offline and Smart Downloads:** allow offline playback only through
+   verified Electron-managed files and add opt-in next-episode/Wi-Fi/storage/
+   quality policies using the existing planner/session path.
+6. **HLS offline v2 (desktop-first):** add bounded playlist/segment downloads,
+   redirect/SSRF protection, managed bundle verification, and explicit
+   unsupported handling for DRM, live, and incomplete media.
+7. **Cast/remote playback:** add capability caching, reconnect/status recovery,
+   and safe remote controls behind the Bridge v1 boundary; keep AirPlay,
+   Chromecast, and Real-Debrid capability-gated/off by default.
+8. **Discovery and personalization:** add provider/audio/subtitle/quality
+   facets only when normalized provider metadata supplies them; keep local
+   preferences and Home/More Sources ownership honest and source-free.
+9. **Observability and release:** add privacy-safe planner/first-frame/fallback/
+   stall/gateway/rate-limit/download signals, then assemble SBOM/provenance,
+   release notes, rollback, and Sentry dry-run evidence. Signing/store builds
+   remain blocked on credentials and target access.
+
+Physical-device QA remains a separate blocked lane and must not be inferred
+from these automated milestones.
 
 ### Completed: PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
