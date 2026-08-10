@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
+import { join } from "node:path";
 
 import {
+  parseRemote,
   parseActionPins,
   summarizeAudit,
   summarizeOutdated,
 } from "./collect.mjs";
+
+test("rejects remotes with credentials or non-GitHub API path components", () => {
+  assert.equal(parseRemote("https://user:secret@github.com/owner/repo.git"), null);
+  assert.equal(parseRemote("https://github.com/owner/repo.git"), "owner/repo");
+  assert.equal(parseRemote("git@github.com:owner/repo.git"), "owner/repo");
+});
 
 test("summarizes audit severities without exposing advisory details", () => {
   const summary = summarizeAudit({
@@ -47,4 +56,20 @@ test("detects tag-pinned workflow actions", () => {
     "baseline should expose current tag-pinned actions",
   );
   assert.ok(result.unpinned.every((entry) => !entry.action.includes("secret")));
+});
+
+test("detects folded YAML action references", () => {
+  const root = mkdtempSync(join(process.cwd(), ".maintenance-test-"));
+  try {
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(root, ".github", "workflows", "folded.yml"),
+      "steps:\n  - uses: >-\n      actions/checkout@v4\n",
+    );
+    const result = parseActionPins(root);
+    assert.equal(result.actionCount, 1);
+    assert.equal(result.unpinnedCount, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

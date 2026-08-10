@@ -15,24 +15,25 @@ NPM_MAX_MAJOR = 12
 EXPECTED_NPM = "11.18.0"
 
 DESTRUCTIVE_PATTERNS = (
-    (re.compile(r"(?:^|[;&|]\s*)git\s+reset\s+--hard(?:\s|$)"), "git reset --hard"),
-    (re.compile(r"(?:^|[;&|]\s*)git\s+clean\s+-[^\s]*f[^\s]*(?:\s|$)"), "git clean with force"),
+    (re.compile(r"\bgit\s+reset\s+--hard(?:\s|$)"), "git reset --hard"),
+    (re.compile(r"\bgit\s+clean\s+-[^\s]*f[^\s]*(?:\s|$)"), "git clean with force"),
     (
         re.compile(
-            r"(?:^|[;&|]\s*)git\s+push\b[^\n;&|]*(?:--force(?:-with-lease|-if-includes)?|(?:^|\s)-f(?:\s|$))"
+            r"\bgit\s+push\b[^\n;&|]*(?:--force(?:-with-lease|-if-includes)?|(?:^|\s)-f(?:\s|$))"
         ),
         "forced git push",
     ),
 )
 
 DEPENDENCY_MUTATION = re.compile(
-    r"(?:^|[;&|]\s*)(?:npm\s+(?:ci|i|install|rebuild|uninstall|remove|update|upgrade)\b|npx\b[^;&|\n]*\bnpm@[^\s]+\s+(?:ci|i|install|rebuild)\b)"
+    r"(?:\bnpm\s+(?:ci|i|install|rebuild|uninstall|remove|update|upgrade)\b|\bnpx\b[^;&|\n]*\bnpm@[^\s]+\s+(?:ci|i|install|rebuild)\b)"
 )
 NATIVE_RUNTIME = re.compile(
-    r"(?:npm\s+run\s+(?:dev:(?:desktop|stream-server|repair-native)|test:electron-smoke|package(?::[^\s]+)?|vendor)\b|"
-    r"npm\b[^;&|\n]*--workspace=(?:@streamer/(?:desktop|stream-server)|apps/desktop)\b|"
+    r"(?:\bnpm\s+run\s+(?:dev:(?:desktop|stream-server|repair-native)|test:electron-smoke|package(?::[^\s]+)?|vendor)\b|"
+    r"\bnpm\b[^;&|\n]*--workspace=(?:@streamer/(?:desktop|stream-server)|apps/desktop)\b|"
     r"\b(?:electron-builder|node-gyp)\b)"
 )
+UNSUPPORTED_SHELL = re.compile(r"(?:\r|\n|`|\$\(|\(\s*(?:git|npm|npx)\b|\b(?:bash|sh|zsh)\s+-c\b)")
 PINNED_NPM_COMMAND = re.compile(
     r"^\s*npx(?:\s+--[a-z-]+(?:=[^\s]+)?)*\s+npm@11\.18\.0\s+"
     r"(?:ci|i|install|rebuild)\b[^;&|\n]*$"
@@ -113,6 +114,11 @@ def runtime_warning(status):
 def blocking_reason(command, status=None):
     for pattern, label in DESTRUCTIVE_PATTERNS:
         if pattern.search(command):
+            if UNSUPPORTED_SHELL.search(command):
+                return (
+                    f"Blocked {label} inside unsupported shell syntax; use a simple command "
+                    "or disable the hook after explicit user authorization."
+                )
             return f"Blocked {label}; use a non-destructive alternative or disable the hook after explicit user authorization."
 
     if not (DEPENDENCY_MUTATION.search(command) or NATIVE_RUNTIME.search(command)):

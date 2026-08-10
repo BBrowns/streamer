@@ -9,14 +9,53 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const lockPath = join(root, ".agents", "external-skills.lock.json");
+const skillsRoot = join(root, ".agents", "skills");
+const SAFE_NAME = /^[a-z0-9][a-z0-9-]*$/;
+const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const SAFE_SHA = /^[0-9a-f]{40}$/i;
+
+function isSafeRelativePath(value) {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.startsWith("-") ||
+    value.includes("\\") ||
+    value.includes("\0") ||
+    isAbsolute(value)
+  )
+    return false;
+  return value
+    .split("/")
+    .every((segment) => segment && segment !== "." && segment !== "..");
+}
+
+export function validateEntry(entry) {
+  if (!entry || typeof entry !== "object")
+    throw new Error("External skill lock entries must be objects");
+  if (!SAFE_NAME.test(entry.name ?? ""))
+    throw new Error(`Invalid external skill name: ${entry.name}`);
+  if (!SAFE_REPOSITORY.test(entry.repository ?? ""))
+    throw new Error(`Invalid external skill repository: ${entry.repository}`);
+  if (!isSafeRelativePath(entry.path))
+    throw new Error(`Invalid external skill path: ${entry.path}`);
+  if (!SAFE_SHA.test(entry.ref ?? ""))
+    throw new Error(
+      `External skill ref must be a full commit SHA: ${entry.name}`,
+    );
+  return entry;
+}
 
 function readLock() {
-  return JSON.parse(readFileSync(lockPath, "utf8"));
+  const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+  if (!lock || !Array.isArray(lock.skills))
+    throw new Error("External skill lock must contain a skills array");
+  lock.skills.forEach(validateEntry);
+  return lock;
 }
 
 function markerPath(destination) {
@@ -38,15 +77,21 @@ function expectedMarker(entry) {
   );
 }
 
-function destinationFor(entry) {
-  return join(
-    root,
-    ".agents",
-    "skills",
+export function destinationFor(entry) {
+  validateEntry(entry);
+  const name =
     entry.name === "vercel-react-native-skills"
       ? "react-native-skills"
-      : entry.name,
-  );
+      : entry.name;
+  const destination = resolve(skillsRoot, name);
+  const relativeDestination = relative(skillsRoot, destination);
+  if (
+    !relativeDestination ||
+    relativeDestination.startsWith("..") ||
+    isAbsolute(relativeDestination)
+  )
+    throw new Error(`External skill destination escapes ${skillsRoot}`);
+  return destination;
 }
 
 function install(entry, force) {

@@ -67,13 +67,15 @@ function gitValue(root, args) {
   return result.ok ? result.stdout.trim() : null;
 }
 
-function parseRemote(remote) {
+export function parseRemote(remote) {
   if (!remote) return null;
   const normalized = remote
     .replace(/^git@github\.com:/, "")
     .replace(/^https?:\/\/github\.com\//, "")
     .replace(/\.git$/, "");
-  return normalized.includes("/") ? normalized : null;
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(normalized)
+    ? normalized
+    : null;
 }
 
 function collectWorkflowFiles(root) {
@@ -92,7 +94,10 @@ export function parseActionPins(root) {
   for (const file of collectWorkflowFiles(root)) {
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
     lines.forEach((line, index) => {
-      const match = line.match(/\buses:\s*([^\s#]+)@([^\s#]+)/);
+      let match = line.match(/\buses:\s*([^\s#]+)@([^\s#]+)/);
+      if (!match && /^\s*(?:-\s*)?uses:\s*[>|][-+]?\s*$/.test(line)) {
+        match = lines[index + 1]?.trim().match(/^([^\s#]+)@([^\s#]+)/);
+      }
       if (!match || match[1].startsWith("./")) return;
       actionCount += 1;
       if (!/^[0-9a-f]{40}$/i.test(match[2])) {

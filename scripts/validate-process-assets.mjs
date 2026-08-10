@@ -12,6 +12,63 @@ function readFrontmatter(source) {
   return { name, description };
 }
 
+export function validateHooks(hooks, root = process.cwd()) {
+  const errors = [];
+  const groups = hooks?.hooks;
+  if (!groups || typeof groups !== "object") {
+    return [".codex/hooks.json: missing hooks object"];
+  }
+
+  const findGroup = (event, matcher) => {
+    const group = Array.isArray(groups[event])
+      ? groups[event].find((candidate) => candidate?.matcher === matcher)
+      : null;
+    if (!group) {
+      errors.push(`.codex/hooks.json: missing ${event}/${matcher} hook group`);
+      return null;
+    }
+    if (
+      !Array.isArray(group.hooks) ||
+      group.hooks.some((hook) => hook?.type !== "command")
+    ) {
+      errors.push(
+        `.codex/hooks.json: ${event}/${matcher} must contain command hooks`,
+      );
+    }
+    return group;
+  };
+
+  const sessionStart = findGroup("SessionStart", "startup|resume");
+  const preToolUse = findGroup("PreToolUse", "Bash");
+  const commands = (group) =>
+    Array.isArray(group?.hooks)
+      ? group.hooks
+          .map((hook) => hook?.command)
+          .filter((command) => typeof command === "string")
+      : [];
+  const sessionCommands = commands(sessionStart);
+  const bashCommands = commands(preToolUse);
+  if (
+    !sessionCommands.some((command) => command.includes("runtime_policy.py"))
+  ) {
+    errors.push(".codex/hooks.json: SessionStart must run runtime_policy.py");
+  }
+  if (!bashCommands.some((command) => command.includes("runtime_policy.py"))) {
+    errors.push(
+      ".codex/hooks.json: PreToolUse/Bash must run runtime_policy.py",
+    );
+  }
+  if (!bashCommands.some((command) => command.includes("graphify_hook.py"))) {
+    errors.push(".codex/hooks.json: PreToolUse/Bash must run graphify_hook.py");
+  }
+  for (const script of ["runtime_policy.py", "graphify_hook.py"]) {
+    if (!existsSync(join(root, ".codex", "hooks", script))) {
+      errors.push(`.codex/hooks/${script}: referenced hook script is missing`);
+    }
+  }
+  return errors;
+}
+
 export function validateProcessAssets(root = process.cwd()) {
   const errors = [];
   const skillRoot = join(root, ".agents", "skills");
@@ -55,7 +112,9 @@ export function validateProcessAssets(root = process.cwd()) {
     errors.push("missing .codex/hooks.json");
   } else {
     try {
-      JSON.parse(readFileSync(hookFile, "utf8"));
+      errors.push(
+        ...validateHooks(JSON.parse(readFileSync(hookFile, "utf8")), root),
+      );
     } catch {
       errors.push(".codex/hooks.json is not valid JSON");
     }

@@ -35,6 +35,20 @@ class RuntimePolicyTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn("Blocked", runtime_policy.blocking_reason(command, status()))
 
+    def test_blocks_destructive_git_commands_inside_shell_wrappers(self):
+        commands = (
+            "printf ready\ngit reset --hard HEAD~1",
+            'echo "$(git clean -fdx)"',
+            "FOO=1 git push origin master --force-with-lease",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertIn("Blocked", runtime_policy.blocking_reason(command, status()))
+
+    def test_blocks_dependency_mutation_after_an_environment_prefix(self):
+        reason = runtime_policy.blocking_reason("NPM_CONFIG_LOGLEVEL=silent npm ci", status("npm"))
+        self.assertIn("runtime mismatch", reason)
+
     def test_blocks_dependency_mutation_with_wrong_npm(self):
         reason = runtime_policy.blocking_reason("npm ci", status("npm"))
         self.assertIn("runtime mismatch", reason)
