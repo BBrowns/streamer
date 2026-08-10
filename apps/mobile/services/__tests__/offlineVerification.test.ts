@@ -79,6 +79,7 @@ describe("validateOfflineInspection", () => {
 describe("probeLocalMedia", () => {
   const originalPlatform = Platform.OS;
   const originalDocument = (global as any).document;
+  const originalWindow = (global as any).window;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -99,6 +100,11 @@ describe("probeLocalMedia", () => {
       delete (global as any).document;
     } else {
       (global as any).document = originalDocument;
+    }
+    if (originalWindow === undefined) {
+      delete (global as any).window;
+    } else {
+      (global as any).window = originalWindow;
     }
   });
 
@@ -128,6 +134,25 @@ describe("probeLocalMedia", () => {
     listeners.get("statusChange")?.({ status: "readyToPlay" });
 
     await expect(result).resolves.toBe(true);
+    expect(player.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the HLS content type to the native offline probe", async () => {
+    const { listeners, player } = mockNativePlayer();
+    const result = probeLocalMedia(
+      "streamer:///downloads/movie.m3u8",
+      undefined,
+      "application/vnd.apple.mpegurl",
+    );
+
+    listeners.get("sourceLoad")?.({ duration: 7_200 });
+    listeners.get("statusChange")?.({ status: "readyToPlay" });
+
+    await expect(result).resolves.toBe(true);
+    expect(require("expo-video").createVideoPlayer).toHaveBeenCalledWith({
+      uri: "streamer:///downloads/movie.m3u8",
+      contentType: "hls",
+    });
     expect(player.release).toHaveBeenCalledTimes(1);
   });
 
@@ -221,5 +246,20 @@ describe("probeLocalMedia", () => {
     listeners.get("canplay")?.();
 
     await expect(result).resolves.toBe(true);
+  });
+
+  it("accepts a validated Electron HLS bundle on web", async () => {
+    mockWebVideo();
+    (global as any).window = {
+      desktopBridge: { inspectFile: jest.fn() },
+    };
+
+    await expect(
+      probeLocalMedia(
+        "streamer:///downloads/movie.m3u8",
+        10,
+        "application/vnd.apple.mpegurl",
+      ),
+    ).resolves.toBe(true);
   });
 });

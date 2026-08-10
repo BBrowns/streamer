@@ -98,6 +98,7 @@ function createDownloadSessionContext() {
 
 describe("getDownloadEligibility", () => {
   const originalPlatform = Platform.OS;
+  const originalDesktopBridge = window.desktopBridge;
 
   beforeEach(() => {
     jest.restoreAllMocks();
@@ -110,6 +111,7 @@ describe("getDownloadEligibility", () => {
   afterEach(() => {
     jest.restoreAllMocks();
     setPlatform(originalPlatform);
+    window.desktopBridge = originalDesktopBridge;
   });
 
   it("does not mark HLS streams offline-playable", () => {
@@ -119,6 +121,20 @@ describe("getDownloadEligibility", () => {
       mode: "unsupported",
       canDownload: false,
       offlinePlayable: false,
+    });
+  });
+
+  it("allows HLS downloads only through the Electron desktop bridge", () => {
+    window.desktopBridge = {
+      startDownloadJob: jest.fn(),
+    } as any;
+
+    expect(
+      getDownloadEligibility({ url: "https://example.test/vod/movie.m3u8" }),
+    ).toMatchObject({
+      mode: "desktop-hls",
+      canDownload: true,
+      offlinePlayable: true,
     });
   });
 

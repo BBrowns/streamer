@@ -7,6 +7,7 @@ import {
 
 export type DownloadEligibilityMode =
   | "direct-file"
+  | "desktop-hls"
   | "bridge-torrent"
   | "browser-external"
   | "unsupported";
@@ -31,6 +32,17 @@ export function getDownloadEligibility(stream: Stream): DownloadEligibility {
   const isHls = url.includes(".m3u8") || externalUrl.includes(".m3u8");
 
   if (isHls) {
+    const desktopHlsAvailable =
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      typeof window.desktopBridge?.startDownloadJob === "function";
+    if (desktopHlsAvailable) {
+      return {
+        mode: "desktop-hls",
+        canDownload: true,
+        offlinePlayable: true,
+      };
+    }
     const preflight = preflightStreamAction("download", stream);
     return {
       mode: "unsupported",

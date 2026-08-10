@@ -196,6 +196,7 @@ function desiredDelivery(
   candidate: MediaCandidate,
   action: PlaybackAction,
   requiresRemux: boolean,
+  platform: PlaybackPlanV3Request["deviceProfile"]["platform"],
 ): PlaybackDelivery | undefined {
   if (candidate.kind === "direct") {
     // DownloadService still has to copy and verify a remote direct response.
@@ -203,7 +204,7 @@ function desiredDelivery(
     return "direct";
   }
   if (candidate.kind === "hls") {
-    return action === "download" ? undefined : "hls";
+    return action === "download" && platform !== "electron" ? undefined : "hls";
   }
   if (candidate.kind === "torrent") {
     // The bridge materializes a stable seekable cache; the client then owns
@@ -376,7 +377,12 @@ function evaluateCandidate(
   const requiresRemux =
     candidate.kind === "torrent" &&
     candidateNeedsRemux(candidate, request.deviceProfile);
-  const delivery = desiredDelivery(candidate, request.action, requiresRemux);
+  const delivery = desiredDelivery(
+    candidate,
+    request.action,
+    requiresRemux,
+    request.deviceProfile.platform,
+  );
   const routeSelection = delivery
     ? selectRoute(candidate, delivery, request)
     : undefined;
@@ -409,7 +415,11 @@ function evaluateCandidate(
     rejectionReason = "unknown_stream_type";
   } else if (!qualityAllowedByPreferences(candidate, request.preferences)) {
     rejectionReason = "quality_not_allowed";
-  } else if (candidate.kind === "hls" && request.action === "download") {
+  } else if (
+    candidate.kind === "hls" &&
+    request.action === "download" &&
+    request.deviceProfile.platform !== "electron"
+  ) {
     rejectionReason = "hls_offline_unsupported";
   } else if (!sourceReachable && request.action === "cast") {
     rejectionReason = "localhost_not_castable";

@@ -18,15 +18,19 @@ const directCapabilities: PlaybackRouteCapabilities = {
   thumbnails: false,
 };
 
-const hlsCapabilities: PlaybackRouteCapabilities = {
-  seek: "immediate",
-  audioTracks: true,
-  embeddedSubtitles: true,
-  externalSubtitles: true,
-  cast: true,
-  offline: false,
-  thumbnails: false,
-};
+function hlsCapabilities(
+  deviceProfile: DeviceProfile,
+): PlaybackRouteCapabilities {
+  return {
+    seek: "immediate",
+    audioTracks: true,
+    embeddedSubtitles: true,
+    externalSubtitles: true,
+    cast: true,
+    offline: deviceProfile.platform === "electron",
+    thumbnails: false,
+  };
+}
 
 export interface PlaybackExecutionInventoryInput {
   deviceProfile: DeviceProfile;
@@ -43,7 +47,10 @@ function onDeviceNode(deviceProfile: DeviceProfile): PlaybackExecutionNode {
     deliveries.push({ delivery: "direct", capabilities: directCapabilities });
   }
   if (deviceProfile.supports.hls) {
-    deliveries.push({ delivery: "hls", capabilities: hlsCapabilities });
+    deliveries.push({
+      delivery: "hls",
+      capabilities: hlsCapabilities(deviceProfile),
+    });
   }
 
   return {

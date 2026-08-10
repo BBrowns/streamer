@@ -75,6 +75,13 @@ function classifyDownloadFailure(error) {
   }
   if (/too many download redirects/i.test(message)) return "redirect_limit";
   if (
+    /HLS (?:playlist|resource|download)|live HLS|encrypted HLS|byte-range/i.test(
+      message,
+    )
+  ) {
+    return "invalid_source";
+  }
+  if (
     /download (?:url|source)|external downloads|must use http|invalid url|security boundary/i.test(
       message,
     )

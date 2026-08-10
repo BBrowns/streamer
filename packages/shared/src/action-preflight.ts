@@ -132,7 +132,7 @@ export function getActionPreflightMessage(
     case "source_unsupported":
       return `This source cannot be used to ${verb} inside the app.`;
     case "hls_offline_unsupported":
-      return "HLS sources are streaming-only and cannot be saved offline yet.";
+      return "HLS sources cannot be saved offline on this device.";
     case "cast_source_loopback":
       return "The cast device cannot access a source that only exists on localhost.";
     case "cast_source_unreachable":
@@ -198,7 +198,11 @@ export function evaluateActionPreflight(
     return result(input, "source_unsupported", false);
   }
 
-  if (input.action === "download" && source.kind === "hls") {
+  if (
+    input.action === "download" &&
+    source.kind === "hls" &&
+    input.platform !== "electron"
+  ) {
     return result(input, "hls_offline_unsupported", false);
   }
 
