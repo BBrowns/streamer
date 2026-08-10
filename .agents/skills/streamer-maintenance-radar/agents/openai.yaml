@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maintenance Radar"
+  short_description: "Find actionable maintenance and process drift"
+  default_prompt: "Use $streamer-maintenance-radar to produce a read-only maintenance report for this repository."

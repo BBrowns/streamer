@@ -1,0 +1,4 @@
+interface:
+  display_name: "Performance Profiling"
+  short_description: "Measure and fix user-visible performance bottlenecks"
+  default_prompt: "Use $streamer-performance-profiling to reproduce, measure, diagnose, improve, and verify this performance problem."

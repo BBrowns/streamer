@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture Guardrails"
+  short_description: "Shape evolvable components and system boundaries"
+  default_prompt: "Use $streamer-architecture-guardrails to choose and design the right repair, refactor, split, merge, or replacement with explicit tradeoffs and migration."
