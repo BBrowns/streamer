@@ -78,6 +78,110 @@ describe("CastService", () => {
     ).toBe(true);
   });
 
+  it("reuses a short-lived device and capability snapshot until a refresh is requested", async () => {
+    const first = await castService.getDevices();
+    const callsAfterFirstDiscovery = jest.mocked(global.fetch).mock.calls
+      .length;
+
+    await expect(castService.getDevices()).resolves.toEqual(first);
+    expect(jest.mocked(global.fetch).mock.calls).toHaveLength(
+      callsAfterFirstDiscovery,
+    );
+
+    await castService.getDevices({ forceRefresh: true });
+    expect(jest.mocked(global.fetch).mock.calls.length).toBeGreaterThan(
+      callsAfterFirstDiscovery,
+    );
+  });
+
+  it("does not reuse an authenticated snapshot across discovery calls", async () => {
+    useAuthStore.setState({ streamServerToken: "scoped-pairing-token" });
+
+    await castService.getDevices();
+    const callsAfterFirstDiscovery = jest.mocked(global.fetch).mock.calls
+      .length;
+
+    await castService.getDevices();
+
+    expect(jest.mocked(global.fetch).mock.calls.length).toBeGreaterThan(
+      callsAfterFirstDiscovery,
+    );
+  });
+
+  it("deep-clones supported codec hints returned from the runtime cache", async () => {
+    global.fetch = jest.fn(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/api/bridge/v1/hello")) {
+        return response(404, {});
+      }
+      if (url.endsWith("/api/cast/devices")) {
+        return response(200, [
+          {
+            id: "living-room",
+            name: "Living Room",
+            type: "chromecast",
+            capabilities: { supportedCodecs: ["h264"] },
+          },
+        ]);
+      }
+      return response(200, { success: true });
+    }) as jest.Mock;
+
+    const first = await castService.getDevices();
+    first[0].capabilities?.supportedCodecs?.push("mutated-by-consumer");
+
+    await expect(castService.getDevices()).resolves.toEqual([
+      {
+        id: "living-room",
+        name: "Living Room",
+        type: "chromecast",
+        capabilities: { supportedCodecs: ["h264"] },
+      },
+    ]);
+  });
+
+  it("keeps a fresh force-refresh result when discovery completes out of order", async () => {
+    const pendingDeviceResponses: Array<(value: Response) => void> = [];
+    global.fetch = jest.fn((input) => {
+      const url = String(input);
+      if (url.endsWith("/api/bridge/v1/hello")) {
+        return Promise.resolve(response(404, {}));
+      }
+      if (url.endsWith("/api/cast/devices")) {
+        return new Promise<Response>((resolve) => {
+          pendingDeviceResponses.push(resolve);
+        });
+      }
+      return Promise.resolve(response(200, { success: true }));
+    }) as jest.Mock;
+
+    const firstDiscovery = castService.getDevices({ forceRefresh: true });
+    const secondDiscovery = castService.getDevices({ forceRefresh: true });
+    for (
+      let attempt = 0;
+      attempt < 20 && pendingDeviceResponses.length < 2;
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(pendingDeviceResponses).toHaveLength(2);
+
+    pendingDeviceResponses[1](
+      response(200, [{ id: "fresh", name: "Living Room", type: "chromecast" }]),
+    );
+    await expect(secondDiscovery).resolves.toEqual([
+      { id: "fresh", name: "Living Room", type: "chromecast" },
+    ]);
+    pendingDeviceResponses[0](
+      response(200, [{ id: "stale", name: "Living Room", type: "chromecast" }]),
+    );
+    await firstDiscovery;
+
+    await expect(castService.getDevices()).resolves.toEqual([
+      { id: "fresh", name: "Living Room", type: "chromecast" },
+    ]);
+  });
+
   it("waits for the shared bridge probe before web device discovery", async () => {
     streamEngineManager.bridgeAvailable = false;
     streamEngineManager.bridgeStatus = "unreachable";

@@ -665,6 +665,13 @@ Casting now uses the playback session control plane for the primary flow:
 - Cast device capabilities include HLS/MP4/MKV support, codec hints, localhost
   reachability, remote-URL requirement, and remux allowance. The desktop cast
   modal surfaces the most important format/remux hints in the device list.
+- The mobile cast service caches only unauthenticated legacy
+  device/capability snapshots in a bounded runtime-only window; authenticated
+  Bridge v1 discovery always re-checks authorization. Transport failures and
+  explicit discovery/retry actions invalidate/reset negotiation and force a
+  fresh snapshot. Rotated opaque identities require an exact or unique
+  name/type match; ambiguous matches return to explicit device selection
+  without persisting network details.
 - Manual advanced-source casting is allowed only after client-side preflight;
   localhost, `127.0.0.1`, IPv6 loopback, and `.localhost` playback URLs are
   rejected before the bridge cast request is sent.

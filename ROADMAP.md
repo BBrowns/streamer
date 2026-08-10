@@ -281,9 +281,14 @@ and preserve URL-free persistence and capability-gated native behavior.
    unsupported handling for DRM, live, and incomplete media. The Electron
    implementation is now in place; native/browser support remains a separate
    evidence-gated follow-up.
-7. **Cast/remote playback:** add capability caching, reconnect/status recovery,
-   and safe remote controls behind the Bridge v1 boundary; keep AirPlay,
-   Chromecast, and Real-Debrid capability-gated/off by default.
+7. **Cast/remote playback:** unauthenticated legacy capability/device snapshots
+   use a bounded runtime cache; authenticated Bridge v1 discovery always
+   re-checks the authorization boundary. An explicit force-refresh reconnect
+   resets negotiation and requires an exact or unique name/type identity match;
+   ambiguous rotated ids return to the picker. Safe remote controls remain
+   user-triggered and never auto-retry. Keep AirPlay, Chromecast, and
+   Real-Debrid capability-gated/off by default, with real-device validation
+   still pending.
 8. **Discovery and personalization:** add provider/audio/subtitle/quality
    facets only when normalized provider metadata supplies them; keep local
    preferences and Home/More Sources ownership honest and source-free.
