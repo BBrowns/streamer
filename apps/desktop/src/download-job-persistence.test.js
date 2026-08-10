@@ -115,6 +115,15 @@ test("classifies source-access failures without retaining raw messages", () => {
   );
 });
 
+test("classifies storage preflight failures as recoverable local storage errors", () => {
+  assert.equal(
+    classifyDownloadFailure(
+      new Error("Not enough local storage is available for this download."),
+    ),
+    "local_storage_failed",
+  );
+});
+
 test("drops legacy jobs whose id itself contains source material", () => {
   const payload = serializeDownloadJobsV3([
     {

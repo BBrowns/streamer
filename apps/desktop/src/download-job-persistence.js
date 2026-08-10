@@ -82,7 +82,12 @@ function classifyDownloadFailure(error) {
     return "invalid_source";
   }
   if (/timed?\s*out|etimedout/i.test(message)) return "network_timeout";
-  if (/\b(?:eacces|enospc|erofs|eperm)\b/i.test(message)) {
+  if (
+    /\b(?:eacces|enospc|erofs|eperm)\b/i.test(message) ||
+    /(?:not enough|insufficient) (?:local )?(?:disk )?storage|storage (?:is )?full/i.test(
+      message,
+    )
+  ) {
     return "local_storage_failed";
   }
   if (/http\s+(?:4\d\d|5\d\d)|unavailable/i.test(message)) {

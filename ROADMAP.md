@@ -264,7 +264,9 @@ and preserve URL-free persistence and capability-gated native behavior.
    concurrency and storage pressure. The first recovery slice now versions
    mobile metadata, forces a fresh session replan after hydration, and protects
    Electron partial-file reuse with ETag/Last-Modified, byte-count, and range
-   validation. Concurrency and storage-pressure limits remain the next slice.
+   validation. The follow-up now bounds Electron work to two active jobs,
+   queues the rest, and applies a 64 MiB storage-headroom preflight with active
+   reservations.
 5. **Desktop offline and Smart Downloads:** allow offline playback only through
    verified Electron-managed files and add opt-in next-episode/Wi-Fi/storage/
    quality policies using the existing planner/session path.

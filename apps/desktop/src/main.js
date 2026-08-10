@@ -27,6 +27,12 @@ const {
   validateDownloadUrlWithDns,
 } = require("./download-url-policy");
 const {
+  DownloadScheduler,
+  MAX_ACTIVE_DOWNLOADS,
+  evaluateDownloadStart,
+  getDownloadReservationBytes,
+} = require("./download-recovery-policy");
+const {
   INVOKE_IPC_CHANNELS,
   createContentSecurityPolicy,
   isAllowedExternalUrl,
@@ -252,6 +258,7 @@ function getStorageInfo() {
     total: 0,
     free: 0,
     appUsage: getDirectorySizeBytes(downloadsPath),
+    known: false,
   };
 
   try {
@@ -259,6 +266,7 @@ function getStorageInfo() {
     const blockSize = Number(stats.bsize || 0);
     info.total = Number(stats.blocks || 0) * blockSize;
     info.free = Number(stats.bavail || 0) * blockSize;
+    info.known = true;
   } catch (error) {
     console.warn(
       "[downloads] Failed to read storage info:",
@@ -267,6 +275,23 @@ function getStorageInfo() {
   }
 
   return info;
+}
+
+let downloadScheduler;
+
+function releaseDownloadSlot(job) {
+  if (job) downloadScheduler?.release(job.id);
+}
+
+function enqueueDownloadRequest(job, resumeAt = 0) {
+  if (!job || job.status === "Completed" || job.cancelRequested) return;
+  job.status = "Pending";
+  job.error = null;
+  job.failureReason = null;
+  job.pauseRequested = false;
+  job.cancelRequested = false;
+  emitDownloadJob(job);
+  downloadScheduler.enqueue(job, resumeAt);
 }
 
 const downloadJobsPath = path.join(downloadsPath, "download-jobs.json");
@@ -407,6 +432,46 @@ function emitDownloadJob(job) {
   }
 }
 
+downloadScheduler = new DownloadScheduler({
+  maxActiveDownloads: MAX_ACTIVE_DOWNLOADS,
+  preflight: (job, activeJobs) => {
+    const storage = getStorageInfo();
+    const reservedBytes = activeJobs.reduce(
+      (total, activeJob) =>
+        total +
+        getDownloadReservationBytes({
+          expectedBytes: activeJob.totalBytesExpectedToWrite,
+          downloadedBytes: activeJob.totalBytesWritten,
+        }),
+      0,
+    );
+    return evaluateDownloadStart({
+      activeCount: activeJobs.length,
+      maxActiveDownloads: MAX_ACTIVE_DOWNLOADS,
+      freeBytes: storage.free,
+      storageKnown: storage.known,
+      reservedBytes,
+      expectedBytes: job.totalBytesExpectedToWrite,
+      downloadedBytes: job.totalBytesWritten,
+    });
+  },
+  start: (job, resumeAt) => {
+    void startDownloadRequest(job, resumeAt).catch((error) => {
+      failDownloadJob(
+        job,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    });
+  },
+  onRejected: (job, decision) => {
+    const message =
+      decision.reason === "storage_pressure"
+        ? "Not enough local storage is available for this download."
+        : "The download could not be started.";
+    failDownloadJob(job, new Error(message));
+  },
+});
+
 function settleDownloadJob(job) {
   if (!job.waiters?.length) return;
   const waiters = job.waiters.splice(0);
@@ -422,6 +487,14 @@ function settleDownloadJob(job) {
 }
 
 function failDownloadJob(job, error) {
+  if (
+    job.status === "Completed" ||
+    job.status === "Canceled" ||
+    (job.status === "Error" && !job.waiters?.length)
+  ) {
+    releaseDownloadSlot(job);
+    return;
+  }
   const failureReason = classifyDownloadFailure(error);
   job.status = "Error";
   job.error = failureMessage(failureReason);
@@ -436,6 +509,7 @@ function failDownloadJob(job, error) {
   job.file = null;
   emitDownloadJob(job);
   settleDownloadJob(job);
+  releaseDownloadSlot(job);
 }
 
 function completeDownloadJob(job) {
@@ -448,6 +522,7 @@ function completeDownloadJob(job) {
   job.file = null;
   emitDownloadJob(job);
   settleDownloadJob(job);
+  releaseDownloadSlot(job);
 }
 
 function parseContentRangeTotal(contentRange) {
@@ -520,6 +595,7 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
     job.failureReason = "interrupted";
     job.requiresReplan = true;
     emitDownloadJob(job);
+    releaseDownloadSlot(job);
     return;
   }
 
@@ -539,7 +615,10 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
     return;
   }
   job.downloadPolicyKind = validatedUrl.kind;
-  if (job.pauseRequested || job.cancelRequested) return;
+  if (job.pauseRequested || job.cancelRequested) {
+    releaseDownloadSlot(job);
+    return;
+  }
 
   const parsedUrl = validatedUrl.parsed;
 
@@ -569,136 +648,145 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
       ? { lookup: createPinnedLookup(validatedUrl.addresses) }
       : {}),
   };
-  const req = client.get(parsedUrl, options, (res) => {
-    const statusCode = res.statusCode || 0;
-    const location = res.headers.location;
+  let req;
+  try {
+    req = client.get(parsedUrl, options, (res) => {
+      const statusCode = res.statusCode || 0;
+      const location = res.headers.location;
 
-    if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
-      res.resume();
-      if (redirectCount >= 5) {
-        failDownloadJob(job, new Error("Too many download redirects"));
+      if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
+        res.resume();
+        if (redirectCount >= 5) {
+          failDownloadJob(job, new Error("Too many download redirects"));
+          return;
+        }
+        job.downloadUrl = new URL(location, parsedUrl).toString();
+        void startDownloadRequest(job, startByte, redirectCount + 1);
         return;
       }
-      job.downloadUrl = new URL(location, parsedUrl).toString();
-      void startDownloadRequest(job, startByte, redirectCount + 1);
-      return;
-    }
 
-    if (startByte > 0 && statusCode === 206) {
-      const range = parseContentRange(res.headers["content-range"]);
-      if (
-        !range ||
-        range.start !== startByte ||
-        !responseMatchesResumeValidator(job, res.headers)
-      ) {
+      if (startByte > 0 && statusCode === 206) {
+        const range = parseContentRange(res.headers["content-range"]);
+        if (
+          !range ||
+          range.start !== startByte ||
+          !responseMatchesResumeValidator(job, res.headers)
+        ) {
+          res.resume();
+          try {
+            fs.rmSync(job.tempPath, { force: true });
+          } catch {}
+          job.totalBytesWritten = 0;
+          job.etag = null;
+          job.lastModified = null;
+          void startDownloadRequest(job, 0, redirectCount);
+          return;
+        }
+      }
+
+      if (startByte > 0 && statusCode === 200) {
+        startByte = 0;
+        job.totalBytesWritten = 0;
+      }
+
+      if (statusCode === 416) {
         res.resume();
         try {
           fs.rmSync(job.tempPath, { force: true });
         } catch {}
-        job.totalBytesWritten = 0;
-        job.etag = null;
-        job.lastModified = null;
         void startDownloadRequest(job, 0, redirectCount);
         return;
       }
-    }
 
-    if (startByte > 0 && statusCode === 200) {
-      startByte = 0;
-      job.totalBytesWritten = 0;
-    }
-
-    if (statusCode === 416) {
-      res.resume();
-      try {
-        fs.rmSync(job.tempPath, { force: true });
-      } catch {}
-      void startDownloadRequest(job, 0, redirectCount);
-      return;
-    }
-
-    if (statusCode < 200 || statusCode >= 300) {
-      res.resume();
-      failDownloadJob(
-        job,
-        new Error(`Download failed with HTTP ${statusCode}`),
-      );
-      return;
-    }
-
-    const contentLength = parseInt(res.headers["content-length"] || "0", 10);
-    const rangeTotal = parseContentRangeTotal(res.headers["content-range"]);
-    job.totalBytesExpectedToWrite =
-      rangeTotal || (contentLength ? contentLength + startByte : 0);
-    job.contentType = Array.isArray(res.headers["content-type"])
-      ? res.headers["content-type"][0]
-      : res.headers["content-type"] || null;
-    job.etag = normalizeValidator(res.headers.etag);
-    job.lastModified = normalizeValidator(res.headers["last-modified"]);
-
-    const file = fs.createWriteStream(job.tempPath, {
-      flags: startByte > 0 ? "a" : "w",
-    });
-    job.file = file;
-
-    const fail = (error) => {
-      if (job.pauseRequested || job.cancelRequested) return;
-      failDownloadJob(
-        job,
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    };
-
-    res.on("data", (chunk) => {
-      job.totalBytesWritten += chunk.length;
-      if (job.totalBytesWritten % (1024 * 512) < chunk.length) {
-        emitDownloadJob(job);
-      }
-    });
-
-    res.on("error", fail);
-    file.on("error", fail);
-    file.on("finish", () => {
-      if (
-        job.pauseRequested ||
-        job.cancelRequested ||
-        job.status !== "Downloading"
-      ) {
+      if (statusCode < 200 || statusCode >= 300) {
+        res.resume();
+        failDownloadJob(
+          job,
+          new Error(`Download failed with HTTP ${statusCode}`),
+        );
         return;
       }
 
-      file.close((closeError) => {
-        if (closeError) {
-          failDownloadJob(job, closeError);
-          return;
+      const contentLength = parseInt(res.headers["content-length"] || "0", 10);
+      const rangeTotal = parseContentRangeTotal(res.headers["content-range"]);
+      job.totalBytesExpectedToWrite =
+        rangeTotal || (contentLength ? contentLength + startByte : 0);
+      job.contentType = Array.isArray(res.headers["content-type"])
+        ? res.headers["content-type"][0]
+        : res.headers["content-type"] || null;
+      job.etag = normalizeValidator(res.headers.etag);
+      job.lastModified = normalizeValidator(res.headers["last-modified"]);
+
+      const file = fs.createWriteStream(job.tempPath, {
+        flags: startByte > 0 ? "a" : "w",
+      });
+      job.file = file;
+
+      const fail = (error) => {
+        if (job.pauseRequested || job.cancelRequested) return;
+        failDownloadJob(
+          job,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      };
+
+      res.on("data", (chunk) => {
+        job.totalBytesWritten += chunk.length;
+        if (job.totalBytesWritten % (1024 * 512) < chunk.length) {
+          emitDownloadJob(job);
         }
-        job.totalBytesExpectedToWrite =
-          job.totalBytesExpectedToWrite || job.totalBytesWritten;
+      });
+
+      res.on("error", fail);
+      file.on("error", fail);
+      file.on("finish", () => {
         if (
-          job.totalBytesExpectedToWrite > 0 &&
-          job.totalBytesWritten !== job.totalBytesExpectedToWrite
+          job.pauseRequested ||
+          job.cancelRequested ||
+          job.status !== "Downloading"
         ) {
-          try {
-            fs.rmSync(job.tempPath, { force: true });
-          } catch {}
-          failDownloadJob(
-            job,
-            new Error("Downloaded file size did not match expected size"),
-          );
           return;
         }
-        fs.rename(job.tempPath, job.filePath, (error) => {
-          if (error) {
-            failDownloadJob(job, error);
+
+        file.close((closeError) => {
+          if (closeError) {
+            failDownloadJob(job, closeError);
             return;
           }
-          completeDownloadJob(job);
+          job.totalBytesExpectedToWrite =
+            job.totalBytesExpectedToWrite || job.totalBytesWritten;
+          if (
+            job.totalBytesExpectedToWrite > 0 &&
+            job.totalBytesWritten !== job.totalBytesExpectedToWrite
+          ) {
+            try {
+              fs.rmSync(job.tempPath, { force: true });
+            } catch {}
+            failDownloadJob(
+              job,
+              new Error("Downloaded file size did not match expected size"),
+            );
+            return;
+          }
+          fs.rename(job.tempPath, job.filePath, (error) => {
+            if (error) {
+              failDownloadJob(job, error);
+              return;
+            }
+            completeDownloadJob(job);
+          });
         });
       });
-    });
 
-    res.pipe(file);
-  });
+      res.pipe(file);
+    });
+  } catch (error) {
+    failDownloadJob(
+      job,
+      error instanceof Error ? error : new Error(String(error)),
+    );
+    return;
+  }
 
   job.req = req;
   req.setTimeout(30_000, () => {
@@ -743,7 +831,7 @@ function startDownloadJob(id, rawUrl, filename) {
         ? fs.statSync(existingJob.tempPath).size
         : 0,
     );
-    void startDownloadRequest(existingJob, resumeAt);
+    enqueueDownloadRequest(existingJob, resumeAt);
     return snapshotDownloadJob(existingJob);
   }
 
@@ -777,7 +865,7 @@ function startDownloadJob(id, rawUrl, filename) {
 
   downloadJobs.set(id, job);
   schedulePersistDownloadJobs();
-  void startDownloadRequest(job, 0);
+  enqueueDownloadRequest(job, 0);
   return snapshotDownloadJob(job);
 }
 
@@ -788,12 +876,14 @@ function pauseDownloadJob(id) {
   if (job.status === "Downloading" || job.status === "Pending") {
     job.pauseRequested = true;
     job.status = "Paused";
+    downloadScheduler.remove(id);
     job.req?.destroy();
     job.file?.destroy();
     if (fs.existsSync(job.tempPath)) {
       job.totalBytesWritten = fs.statSync(job.tempPath).size;
     }
     emitDownloadJob(job);
+    releaseDownloadSlot(job);
   }
 
   return snapshotDownloadJob(job);
@@ -817,7 +907,7 @@ function resumeDownloadJob(id) {
       job,
       fs.existsSync(job.tempPath) ? fs.statSync(job.tempPath).size : 0,
     );
-    void startDownloadRequest(job, resumeAt);
+    enqueueDownloadRequest(job, resumeAt);
   }
 
   return snapshotDownloadJob(job);
@@ -829,6 +919,7 @@ function cancelDownloadJob(id) {
 
   job.cancelRequested = true;
   job.status = "Canceled";
+  downloadScheduler.remove(id);
   job.req?.destroy();
   job.file?.destroy();
   try {
@@ -836,6 +927,7 @@ function cancelDownloadJob(id) {
   } catch {}
   emitDownloadJob(job);
   settleDownloadJob(job);
+  releaseDownloadSlot(job);
   downloadJobs.delete(id);
   schedulePersistDownloadJobs();
   return snapshotDownloadJob(job);

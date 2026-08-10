@@ -21,6 +21,14 @@ describe("actionRecovery", () => {
     });
   });
 
+  it("classifies a desktop storage preflight failure", () => {
+    expect(
+      classifyDownloadFailure(
+        new Error("Not enough local storage is available for this download."),
+      ),
+    ).toBe("storage_pressure");
+  });
+
   it("replans a missing offline file instead of calling it ready", () => {
     expect(
       getDownloadRecovery({
