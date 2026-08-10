@@ -5,6 +5,21 @@ import { useAuthStore } from "./authStore";
 
 export type SmartDownloadQuality = "best" | "1080p" | "720p" | "480p";
 
+export const SMART_DOWNLOAD_QUALITIES: SmartDownloadQuality[] = [
+  "best",
+  "1080p",
+  "720p",
+  "480p",
+];
+
+export function normalizeSmartDownloadQuality(
+  value: unknown,
+): SmartDownloadQuality {
+  return SMART_DOWNLOAD_QUALITIES.includes(value as SmartDownloadQuality)
+    ? (value as SmartDownloadQuality)
+    : "best";
+}
+
 export interface SmartDownloadPreferences {
   enabled: boolean;
   autoDownloadNextEpisode: boolean;
@@ -15,11 +30,7 @@ export interface SmartDownloadPreferences {
 }
 
 export type SmartNextEpisodePlanStatus =
-  | "planned"
-  | "queued"
-  | "downloaded"
-  | "blocked"
-  | "skipped";
+  "planned" | "queued" | "downloaded" | "blocked" | "skipped";
 
 export interface SmartNextEpisodePlan {
   seriesId: string;
@@ -27,6 +38,7 @@ export interface SmartNextEpisodePlan {
   season: number;
   episode: number;
   episodeTitle?: string;
+  quality?: SmartDownloadQuality;
   status: SmartNextEpisodePlanStatus;
   reason?: string;
   updatedAt?: string;
@@ -70,6 +82,17 @@ function normalizePreferences(
     ...DEFAULT_SMART_DOWNLOAD_PREFERENCES,
     ...preferences,
     storageLimitGb: clampStorageLimitGb(preferences?.storageLimitGb),
+    quality: normalizeSmartDownloadQuality(preferences?.quality),
+  };
+}
+
+function normalizePlan(
+  plan: SmartNextEpisodePlan,
+  fallbackQuality: SmartDownloadQuality = "best",
+): SmartNextEpisodePlan {
+  return {
+    ...plan,
+    quality: normalizeSmartDownloadQuality(plan.quality ?? fallbackQuality),
   };
 }
 
@@ -79,7 +102,16 @@ export function sanitizeSmartDownloadState(
   const preferences = normalizePreferences(state.preferences);
   return {
     preferences,
-    nextEpisodePlans: preferences.enabled ? state.nextEpisodePlans || {} : {},
+    nextEpisodePlans: preferences.enabled
+      ? Object.fromEntries(
+          Object.entries(state.nextEpisodePlans || {}).map(
+            ([seriesId, plan]) => [
+              seriesId,
+              normalizePlan(plan, preferences.quality),
+            ],
+          ),
+        )
+      : {},
   };
 }
 
@@ -111,7 +143,7 @@ export const useSmartDownloadStore = create<SmartDownloadState>()(
             nextEpisodePlans: {
               ...state.nextEpisodePlans,
               [plan.seriesId]: {
-                ...plan,
+                ...normalizePlan(plan, state.preferences.quality),
                 updatedAt: nowIso(),
               },
             },

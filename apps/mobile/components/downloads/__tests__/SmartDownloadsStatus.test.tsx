@@ -62,6 +62,7 @@ describe("SmartDownloadsStatus", () => {
           season: 2,
           episode: 4,
           episodeTitle: "The Return",
+          quality: "720p",
           status: "planned",
         },
       },
@@ -71,8 +72,35 @@ describe("SmartDownloadsStatus", () => {
 
     expect(getByText("Planned next episodes")).toBeTruthy();
     expect(getByText("Example Series")).toBeTruthy();
-    expect(getByText("S2 E4 · The Return")).toBeTruthy();
+    expect(getByText("S2 E4 · The Return · 720p")).toBeTruthy();
     expect(getByText("Planned")).toBeTruthy();
     expect(queryByRole("switch")).toBeNull();
+  });
+
+  it("explains why a planned episode is blocked", () => {
+    useSmartDownloadStore.setState({
+      preferences: {
+        ...useSmartDownloadStore.getState().preferences,
+        enabled: true,
+        autoDownloadNextEpisode: true,
+      },
+      nextEpisodePlans: {
+        series: {
+          seriesId: "series",
+          title: "Example Series",
+          season: 2,
+          episode: 4,
+          status: "blocked",
+          reason: "wifi_only",
+          quality: "480p",
+        },
+      },
+    });
+
+    const { getByText } = render(<SmartDownloadPlans />);
+
+    expect(getByText("S2 E4 · 480p")).toBeTruthy();
+    expect(getByText("Waiting for Wi-Fi")).toBeTruthy();
+    expect(getByText("Blocked")).toBeTruthy();
   });
 });
