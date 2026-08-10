@@ -78,6 +78,22 @@ describe("CastService", () => {
     ).toBe(true);
   });
 
+  it("reuses a short-lived device and capability snapshot until a refresh is requested", async () => {
+    const first = await castService.getDevices();
+    const callsAfterFirstDiscovery = jest.mocked(global.fetch).mock.calls
+      .length;
+
+    await expect(castService.getDevices()).resolves.toEqual(first);
+    expect(jest.mocked(global.fetch).mock.calls).toHaveLength(
+      callsAfterFirstDiscovery,
+    );
+
+    await castService.getDevices({ forceRefresh: true });
+    expect(jest.mocked(global.fetch).mock.calls.length).toBeGreaterThan(
+      callsAfterFirstDiscovery,
+    );
+  });
+
   it("waits for the shared bridge probe before web device discovery", async () => {
     streamEngineManager.bridgeAvailable = false;
     streamEngineManager.bridgeStatus = "unreachable";

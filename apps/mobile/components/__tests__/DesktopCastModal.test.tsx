@@ -468,6 +468,7 @@ describe("DesktopCastModal", () => {
       expect(start).toHaveBeenCalledTimes(2);
       expect(onCastStart).toHaveBeenCalledTimes(1);
     });
+    expect(getDevices).toHaveBeenLastCalledWith({ forceRefresh: true });
     expect(prepare).toHaveBeenCalledTimes(2);
   });
 

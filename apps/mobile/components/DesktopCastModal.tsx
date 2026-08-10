@@ -165,11 +165,13 @@ export function DesktopCastModal({
   );
 
   const discoverDevices = useCallback(
-    async (requestId: number) => {
+    async (requestId: number, forceRefresh = false) => {
       dispatch({ type: "discoveryStarted" });
       let devices: CastDevice[];
       try {
-        devices = await castService.getDevices();
+        devices = await castService.getDevices(
+          forceRefresh ? { forceRefresh: true } : undefined,
+        );
       } catch (error) {
         if (requestId !== requestIdRef.current) return;
         const nextRecovery = getCastRecovery(error);
@@ -213,7 +215,7 @@ export function DesktopCastModal({
   const restartDiscovery = useCallback(() => {
     cancelPreparedSession();
     const requestId = ++requestIdRef.current;
-    void discoverDevices(requestId);
+    void discoverDevices(requestId, true);
   }, [cancelPreparedSession, discoverDevices]);
 
   useEffect(() => {
@@ -235,7 +237,9 @@ export function DesktopCastModal({
       const isConnectionRetry =
         state.status === "connectionFailure" &&
         state.phase === "connection" &&
-        state.device?.id === device.id;
+        (state.device?.id === device.id ||
+          (state.device?.name === device.name &&
+            state.device?.type === device.type));
       if (
         state.status !== "ready" &&
         !isConnectionRetry &&
@@ -374,6 +378,26 @@ export function DesktopCastModal({
     ],
   );
 
+  const reconnectAndRetry = useCallback(
+    async (device: CastDevice) => {
+      let nextDevice = device;
+      try {
+        const devices = await castService.getDevices({ forceRefresh: true });
+        nextDevice =
+          devices.find((candidate) => candidate.id === device.id) ||
+          devices.find(
+            (candidate) =>
+              candidate.name === device.name && candidate.type === device.type,
+          ) ||
+          device;
+      } catch {
+        // Keep the explicit retry useful when discovery is temporarily down.
+      }
+      await handleCast(nextDevice);
+    },
+    [handleCast],
+  );
+
   const handleRecovery = useCallback(() => {
     if (state.status === "noDevices") {
       restartDiscovery();
@@ -429,7 +453,7 @@ export function DesktopCastModal({
         restartDiscovery();
         return;
       }
-      if (state.device) void handleCast(state.device);
+      if (state.device) void reconnectAndRetry(state.device);
     }
   }, [
     cancelPreparedSession,
@@ -437,6 +461,7 @@ export function DesktopCastModal({
     onClose,
     onOpenSourcesDevices,
     prepareSource,
+    reconnectAndRetry,
     restartDiscovery,
     state,
   ]);

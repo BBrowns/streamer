@@ -30,9 +30,7 @@ export interface CastPlaybackStatus {
   playerState: string;
 }
 export type CastContentType =
-  | "video/mp4"
-  | "application/vnd.apple.mpegurl"
-  | "application/x-mpegURL";
+  "video/mp4" | "application/vnd.apple.mpegurl" | "application/x-mpegURL";
 
 export type CastServiceErrorCode =
   | "CAST_DEVICES_UNREACHABLE"
@@ -40,6 +38,15 @@ export type CastServiceErrorCode =
   | "CAST_SOURCE_REJECTED"
   | "CAST_BRIDGE_REJECTED"
   | "CAST_FAILED";
+
+export const CAST_DEVICE_CACHE_TTL_MS = 15_000;
+
+interface CastDeviceCache {
+  bridgeUrl: string;
+  expiresAt: number;
+  protocol: BridgeProtocolSelection["kind"];
+  devices: CastDevice[];
+}
 
 export class CastServiceError extends Error {
   constructor(
@@ -50,6 +57,23 @@ export class CastServiceError extends Error {
     super(redactSensitiveText(message));
     this.name = "CastServiceError";
   }
+}
+
+function shouldInvalidateDeviceCache(error: unknown) {
+  if (error instanceof CastServiceError) {
+    return (
+      error.code === "CAST_DEVICE_UNREACHABLE" ||
+      error.code === "CAST_DEVICES_UNREACHABLE"
+    );
+  }
+  if (error instanceof BridgeClientError) {
+    return [
+      "CAST_DEVICE_NOT_FOUND",
+      "CAST_SESSION_NOT_FOUND",
+      "BRIDGE_UNREACHABLE",
+    ].includes(error.code);
+  }
+  return true;
 }
 
 async function getCastResponseError(response: Response, fallback: string) {
@@ -132,12 +156,15 @@ class CastService {
     string,
     BridgeProtocolSelection["kind"]
   >();
+  private deviceCache: CastDeviceCache | null = null;
 
   getBridgeUrl(): string {
     return streamEngineManager.getBridgeUrl();
   }
 
-  async getDevices(): Promise<CastDevice[]> {
+  async getDevices(
+    options: { forceRefresh?: boolean } = {},
+  ): Promise<CastDevice[]> {
     if (!streamEngineManager.bridgeAvailable) {
       // The web cast dialog can open before the app's opportunistic startup
       // probe has completed. Join the same single-flight probe used by Play
@@ -149,11 +176,23 @@ class CastService {
     );
 
     const bridgeUrl = this.getBridgeUrl();
+    const cached = this.deviceCache;
+    if (
+      !options.forceRefresh &&
+      cached &&
+      cached.bridgeUrl === bridgeUrl &&
+      cached.expiresAt > Date.now()
+    ) {
+      this.rememberDeviceProtocols(cached.devices, cached.protocol);
+      return cloneDevices(cached.devices);
+    }
+
     const client = getBridgeClient(bridgeUrl);
     let protocol: BridgeProtocolSelection;
     try {
       protocol = await client.negotiate();
     } catch (error) {
+      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
       throw toV1CastServiceError(
         error,
         "CAST_DEVICES_UNREACHABLE",
@@ -164,8 +203,10 @@ class CastService {
       try {
         const devices = (await client.getCastDevices()).devices;
         this.rememberDeviceProtocols(devices, "v1");
-        return devices;
+        this.cacheDevices(bridgeUrl, "v1", devices);
+        return cloneDevices(devices);
       } catch (error) {
+        this.invalidateDeviceCache();
         throw toV1CastServiceError(
           error,
           "CAST_DEVICES_UNREACHABLE",
@@ -184,12 +225,16 @@ class CastService {
             })
           : await fetch(`${bridgeUrl}/api/cast/devices`);
     } catch {
+      this.invalidateDeviceCache();
       throw new CastServiceError(
         "CAST_DEVICES_UNREACHABLE",
         "Could not search for displays on the configured bridge.",
       );
     }
     if (!res.ok) {
+      if (res.status === 404 || res.status >= 500) {
+        this.invalidateDeviceCache();
+      }
       throw new CastServiceError(
         "CAST_BRIDGE_REJECTED",
         await getCastResponseError(
@@ -200,10 +245,27 @@ class CastService {
       );
     }
 
-    const data = await res.json();
-    const devices = Array.isArray(data) ? data : data.devices || [];
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch (error) {
+      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
+      throw new CastServiceError(
+        "CAST_DEVICES_UNREACHABLE",
+        "Could not search for displays on the configured bridge.",
+      );
+    }
+    const devices: CastDevice[] = Array.isArray(data)
+      ? (data as CastDevice[])
+      : data &&
+          typeof data === "object" &&
+          "devices" in data &&
+          Array.isArray(data.devices)
+        ? (data.devices as CastDevice[])
+        : [];
     this.rememberDeviceProtocols(devices, "legacy");
-    return devices;
+    this.cacheDevices(bridgeUrl, "legacy", devices);
+    return cloneDevices(devices);
   }
 
   async play(
@@ -241,6 +303,7 @@ class CastService {
         return;
       }
     } catch (error) {
+      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
       throw toV1CastServiceError(
         error,
         "CAST_DEVICE_UNREACHABLE",
@@ -256,6 +319,7 @@ class CastService {
         body: JSON.stringify({ deviceId, url, title, contentType }),
       });
     } catch {
+      this.invalidateDeviceCache();
       throw new CastServiceError(
         "CAST_DEVICE_UNREACHABLE",
         "The selected display could not be reached.",
@@ -263,6 +327,9 @@ class CastService {
     }
 
     if (!res.ok) {
+      if (res.status === 404 || res.status >= 500) {
+        this.invalidateDeviceCache();
+      }
       const code: CastServiceErrorCode =
         res.status === 404
           ? "CAST_DEVICE_UNREACHABLE"
@@ -303,6 +370,7 @@ class CastService {
         return;
       }
     } catch (error) {
+      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
       throw toV1CastServiceError(
         error,
         "CAST_DEVICE_UNREACHABLE",
@@ -317,6 +385,7 @@ class CastService {
         body: JSON.stringify({ deviceId, action, position }),
       });
     } catch {
+      this.invalidateDeviceCache();
       throw new CastServiceError(
         "CAST_DEVICE_UNREACHABLE",
         "The selected display could not be reached.",
@@ -324,6 +393,9 @@ class CastService {
     }
 
     if (!res.ok) {
+      if (res.status === 404 || res.status >= 500) {
+        this.invalidateDeviceCache();
+      }
       throw new CastServiceError(
         res.status === 404 ? "CAST_DEVICE_UNREACHABLE" : "CAST_FAILED",
         await getCastResponseError(res, "Cast control failed."),
@@ -350,6 +422,7 @@ class CastService {
         };
       }
     } catch (error) {
+      if (shouldInvalidateDeviceCache(error)) this.invalidateDeviceCache();
       throw toV1CastServiceError(
         error,
         "CAST_DEVICE_UNREACHABLE",
@@ -363,12 +436,16 @@ class CastService {
         { headers: getBridgeAuthHeaders() },
       );
     } catch {
+      this.invalidateDeviceCache();
       throw new CastServiceError(
         "CAST_DEVICE_UNREACHABLE",
         "The selected display status could not be reached.",
       );
     }
     if (!res.ok) {
+      if (res.status === 404 || res.status >= 500) {
+        this.invalidateDeviceCache();
+      }
       throw new CastServiceError(
         res.status === 404 ? "CAST_DEVICE_UNREACHABLE" : "CAST_FAILED",
         await getCastResponseError(res, "Cast status could not be loaded."),
@@ -407,9 +484,36 @@ class CastService {
     }
   }
 
+  private cacheDevices(
+    bridgeUrl: string,
+    protocol: BridgeProtocolSelection["kind"],
+    devices: CastDevice[],
+  ) {
+    this.deviceCache = {
+      bridgeUrl,
+      expiresAt: Date.now() + CAST_DEVICE_CACHE_TTL_MS,
+      protocol,
+      devices: cloneDevices(devices),
+    };
+  }
+
+  private invalidateDeviceCache() {
+    this.deviceCache = null;
+  }
+
   __resetForTests() {
     this.deviceProtocols.clear();
+    this.invalidateDeviceCache();
   }
+}
+
+function cloneDevices(devices: CastDevice[]): CastDevice[] {
+  return devices.map((device) => ({
+    ...device,
+    ...(device.capabilities
+      ? { capabilities: { ...device.capabilities } }
+      : {}),
+  }));
 }
 
 export const castService = new CastService();
