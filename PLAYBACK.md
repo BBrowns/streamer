@@ -95,6 +95,9 @@ The mobile client now has:
   partial-discovery replan single-flight, and provisional-session route-exit
   cleanup; it delegates all durable session transitions to the existing store
   and playback service
+- `hooks/usePlaybackUriBinding.ts` for the transient session/legacy source URI
+  boundary, codec policy, and fallback handoff; it never persists a resolved
+  media URL
 - `services/sourcePreparation/` for exact route binding and direct, HLS,
   bridge-v1 and bounded legacy preparation adapters
 - `services/bridge/BridgeV1PlaybackRuntime.ts` for the already-prepared opaque

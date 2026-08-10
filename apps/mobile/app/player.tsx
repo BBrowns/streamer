@@ -34,6 +34,10 @@ import { usePlayerController } from "../hooks/usePlayerController";
 import { usePlayerMediaControls } from "../hooks/usePlayerMediaControls";
 import { usePlayerCastController } from "../hooks/usePlayerCastController";
 import { usePlaybackSessionBinding } from "../hooks/usePlaybackSessionBinding";
+import {
+  usePlaybackUriBinding,
+  type PlaybackUriMessage,
+} from "../hooks/usePlaybackUriBinding";
 import { useSeekableCacheHandoff } from "../hooks/useSeekableCacheHandoff";
 import { usePlayerTrackCatalog } from "../hooks/usePlayerTrackCatalog";
 
@@ -47,11 +51,11 @@ import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
 import { DesktopCastModal } from "../components/DesktopCastModal";
 import { goBackOrReplace } from "../lib/navigation";
-import { getUnsupportedWebCodecReason } from "../services/streamEngine/codecSupport";
 import {
   createPlaybackRuntimeError,
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
+import { getUnsupportedWebCodecReason } from "../services/streamEngine/codecSupport";
 import {
   findPreferredPlayerTrack,
   normalizeTrackLanguage,
@@ -62,7 +66,6 @@ import {
   cancelPlaybackSession,
   markPlaybackSessionBuffering,
   markPlaybackSessionPlaying,
-  resolvePlaybackSession,
 } from "../services/playback/PlaybackSessionPlaybackService";
 import { PlaybackStatusPanel } from "../components/ui/PlaybackStatusPanel";
 import {
@@ -291,6 +294,23 @@ export default function PlayerScreen() {
     [t],
   );
 
+  const getPlaybackUriErrorMessage = useCallback(
+    (message: PlaybackUriMessage) => {
+      switch (message) {
+        case "unsupportedCodec":
+          return t("player.errors.unsupportedCodec");
+        case "bridgeUnavailable":
+          return t("player.errors.bridgeUnavailable");
+        case "noStream":
+          return t("player.errors.noStream");
+        case "playbackFailed":
+          return t("player.errors.playbackFailed");
+      }
+      return t("player.errors.playbackFailed");
+    },
+    [t],
+  );
+
   const {
     launchOwnedSessionIdRef,
     partialReplanControllerRef,
@@ -322,6 +342,22 @@ export default function PlayerScreen() {
     getFallbackStatusMessage,
     abortSeekableHandoff,
     requestLegacyFallback,
+  });
+
+  usePlaybackUriBinding({
+    currentStream,
+    mediaInfo,
+    playbackSessionId,
+    playbackCandidateId,
+    playbackAttemptId,
+    resolveAttempt,
+    setPlaybackUri,
+    setStreamStatus,
+    setSessionStream,
+    setRuntimeFailure,
+    getErrorMessage: getPlaybackUriErrorMessage,
+    tryReplanPartialPlayback,
+    tryAdvanceToFallback,
   });
 
   useEffect(() => {
@@ -561,123 +597,6 @@ export default function PlayerScreen() {
     setRuntimeFailure,
     setSessionStream,
     setStreamStatus,
-  ]);
-
-  // Effect to resolve playback URI
-  useEffect(() => {
-    let isMounted = true;
-    const resolve = async () => {
-      if (!currentStream) {
-        setPlaybackUri(null);
-        return;
-      }
-
-      if (
-        playbackSessionId &&
-        playbackCandidateId &&
-        playbackAttemptId &&
-        currentStream.url
-      ) {
-        setPlaybackUri(currentStream.url);
-        return;
-      }
-
-      setStreamStatus("loading_metrics");
-
-      if (playbackSessionId) {
-        const result = await resolvePlaybackSession(
-          playbackSessionId,
-          playbackCandidateId || undefined,
-        );
-        if (!isMounted) return;
-
-        if (!result.ok) {
-          if (await tryReplanPartialPlayback(playbackSessionId)) return;
-          setPlaybackUri(null);
-          setRuntimeFailure(result.error);
-          return;
-        }
-
-        setSessionStream(
-          result.stream,
-          mediaInfo || undefined,
-          result.sessionId,
-          result.candidateId,
-          result.attemptId,
-          result.fallbackReason,
-        );
-        setPlaybackUri(result.uri);
-        return;
-      }
-
-      const unsupportedCodecReason =
-        getUnsupportedWebCodecReason(currentStream);
-      if (unsupportedCodecReason) {
-        const message = t("player.errors.unsupportedCodec");
-        const error = createPlaybackRuntimeError("UNSUPPORTED_CODEC", message, {
-          retryable: false,
-          shouldFallback: false,
-        });
-        if (await tryAdvanceToFallback(error, message)) return;
-        if (!isMounted) return;
-        setPlaybackUri(null);
-        setRuntimeFailure(error);
-        return;
-      }
-
-      try {
-        const uri = await streamEngineManager.getPlaybackUri(currentStream);
-        if (!isMounted) return;
-
-        if (uri && uri.length > 0) {
-          setPlaybackUri(uri);
-          return;
-        }
-
-        const message = currentStream.infoHash
-          ? t("player.errors.bridgeUnavailable")
-          : t("player.errors.noStream");
-        const error = createPlaybackRuntimeError(
-          currentStream.infoHash ? "BRIDGE_UNAVAILABLE" : "SOURCE_UNAVAILABLE",
-          message,
-          { retryable: true, shouldFallback: false },
-        );
-        if (await tryAdvanceToFallback(error, message)) return;
-
-        setPlaybackUri(null);
-        setRuntimeFailure(error);
-      } catch (err: any) {
-        if (!isMounted) return;
-        const message = err?.message || t("player.errors.playbackFailed");
-        const error = mapPlaybackMessageToRuntimeFailure(
-          message,
-          currentStream.infoHash ? "BRIDGE_UNAVAILABLE" : "SOURCE_UNAVAILABLE",
-          { retryable: true, shouldFallback: false },
-        ).error;
-        if (await tryAdvanceToFallback(error, message)) return;
-
-        setPlaybackUri(null);
-        setRuntimeFailure(error);
-      }
-    };
-
-    void resolve();
-    return () => {
-      isMounted = false;
-    };
-  }, [
-    currentStream,
-    mediaInfo,
-    playbackAttemptId,
-    playbackCandidateId,
-    playbackSessionId,
-    resolveAttempt,
-    setRuntimeFailure,
-    setSessionStream,
-    setStreamStatus,
-    t,
-    tryAdvanceToFallback,
-    tryReplanPartialPlayback,
   ]);
 
   useEffect(() => {

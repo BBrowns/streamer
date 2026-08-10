@@ -254,8 +254,9 @@ and preserve URL-free persistence and capability-gated native behavior.
    track-catalog hooks. The initial slice now lives in
    `usePlaybackSessionBinding`: planning-launch ownership, partial-discovery
    replan single-flight, and route-exit cleanup are covered by focused hook
-   tests. Fallback coordination is now part of the binding; source-URI
-   resolution remains the next slice.
+   tests. Fallback coordination is now part of the binding. Source-URI
+   resolution now lives in `usePlaybackUriBinding`, with session resolution,
+   codec policy, engine adapter fallback, and focused contract tests.
 4. **Download recovery v2:** persist only versioned URL-free recovery metadata
    (opaque task identity, content/action, managed-file identity, expected
    bytes, status, and timestamps); always replan after restart; reuse partial
