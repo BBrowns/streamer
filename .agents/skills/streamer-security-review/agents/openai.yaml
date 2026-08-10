@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Review"
+  short_description: "Threat-model and harden sensitive changes"
+  default_prompt: "Use $streamer-security-review to review this change through assets, trust boundaries, abuse cases, least privilege, secure defaults, and verification evidence."

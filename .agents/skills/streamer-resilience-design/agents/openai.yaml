@@ -1,0 +1,4 @@
+interface:
+  display_name: "Resilience Design"
+  short_description: "Design bounded failure and recovery behavior"
+  default_prompt: "Use $streamer-resilience-design to model failure, recovery, and verification for this boundary."

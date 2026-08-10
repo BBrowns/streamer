@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feature Framing"
+  short_description: "Frame outcomes before planning changes"
+  default_prompt: "Use $streamer-feature-framing to frame this outcome before making an implementation plan."

@@ -26,6 +26,10 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
+      - name: Validate agent process assets
+        run: npm run process:check
+      - name: Test agent process validators
+        run: npm run process:check:test
       - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma

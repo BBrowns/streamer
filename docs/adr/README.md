@@ -13,3 +13,7 @@ claimed only where the repository has corresponding evidence.
 
 New records are additive. Superseded records stay in this directory with an
 updated status and a link to their replacement.
+
+Use [TEMPLATE.md](./TEMPLATE.md) for new durable decisions. Do not create an
+ADR for a routine local implementation choice; record temporary task state in
+the PR instead.

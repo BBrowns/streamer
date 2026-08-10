@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Upgrades"
+  short_description: "Upgrade dependencies with controlled compatibility risk"
+  default_prompt: "Use $streamer-dependency-upgrades to assess and execute this dependency change with provenance, compatibility, security, and runtime evidence."

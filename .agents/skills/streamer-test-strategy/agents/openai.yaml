@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Strategy"
+  short_description: "Choose and execute high-value tests with TDD"
+  default_prompt: "Use $streamer-test-strategy to plan and validate this change with risk-based tests, red-green-refactor, realistic boundaries, and completion evidence."

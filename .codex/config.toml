@@ -1,0 +1,88 @@
+# Project-scoped MCP servers. Codex loads this file only for trusted clones.
+
+[agents]
+max_concurrent_threads_per_session = 4
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@3.2.5"]
+env_vars = ["CONTEXT7_API_KEY"]
+enabled = true
+enabled_tools = ["resolve-library-id", "query-docs"]
+default_tools_approval_mode = "auto"
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+[mcp_servers.chrome-devtools-streamer]
+command = "npx"
+args = [
+  "-y",
+  "chrome-devtools-mcp@1.6.0",
+  "--headless=true",
+  "--isolated=true",
+  "--no-usage-statistics",
+  "--no-performance-crux",
+  "--redact-network-headers",
+  "--screenshot-format=webp",
+  "--screenshot-quality=80",
+  "--screenshot-max-width=1600",
+]
+enabled = true
+enabled_tools = [
+  "list_pages",
+  "new_page",
+  "select_page",
+  "navigate_page",
+  "wait_for",
+  "emulate",
+  "resize_page",
+  "list_console_messages",
+  "get_console_message",
+  "list_network_requests",
+  "get_network_request",
+  "performance_start_trace",
+  "performance_stop_trace",
+  "performance_analyze_insight",
+  "lighthouse_audit",
+  "take_screenshot",
+  "take_snapshot",
+]
+default_tools_approval_mode = "auto"
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+
+[mcp_servers.sentry-streamer]
+url = "https://mcp.sentry.dev/mcp"
+auth = "oauth"
+enabled = true
+enabled_tools = [
+  "find_organizations",
+  "find_projects",
+  "search_issues",
+  "search_events",
+  "get_sentry_resource",
+  "search_sentry_tools",
+  "execute_sentry_tool",
+]
+default_tools_approval_mode = "writes"
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+
+[mcp_servers.sentry-streamer.tools.search_sentry_tools]
+approval_mode = "approve"
+
+[mcp_servers.sentry-streamer.tools.execute_sentry_tool]
+approval_mode = "prompt"
+
+[mcp_servers.agent-memory-streamer]
+command = "npx"
+args = ["-y", "@xchucx/agent-memory@0.5.1", "mcp", "--root", "."]
+enabled = true
+enabled_tools = [
+  "memory.fetch_context",
+  "memory.propose_update",
+  "memory.status",
+]
+default_tools_approval_mode = "writes"
+startup_timeout_sec = 30
+tool_timeout_sec = 60
