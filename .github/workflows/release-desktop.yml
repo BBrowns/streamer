@@ -64,11 +64,12 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+        run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
 
       - name: Stamp build metadata
         run: |
-          echo "STREAMER_APP_VERSION=$(node -p \"require('./package.json').version\")" >> "$GITHUB_ENV"
+          streamer_app_version="$(node --print 'require("./package.json").version')"
+          echo "STREAMER_APP_VERSION=${streamer_app_version}" >> "$GITHUB_ENV"
           echo "STREAMER_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Validate release configuration

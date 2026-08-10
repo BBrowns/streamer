@@ -32,7 +32,9 @@ jobs:
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Check GitHub Actions workflows
-        run: "$(go env GOPATH)/bin/actionlint"
+        run: |
+          actionlint_path="$(go env GOPATH)/bin/actionlint"
+          "${actionlint_path}"
       - name: Check full commit pin policy
         run: npm run workflows:check
 
@@ -49,7 +51,7 @@ jobs:
         run: npm run process:check
       - name: Test agent process validators
         run: npm run process:check:test
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Lint All Workspaces
@@ -72,7 +74,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Check formatting
         run: npm run format:check
 
@@ -85,11 +87,11 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Verify dependency install-script policy
-        run: npx --yes npm@${NPM_VERSION} run security:install-scripts
+        run: npx --yes "npm@${NPM_VERSION}" run security:install-scripts
       - name: Audit production dependencies
-        run: npx --yes npm@${NPM_VERSION} run security:audit
+        run: npx --yes "npm@${NPM_VERSION}" run security:audit
 
   test-shared:
     name: Shared Tests
@@ -101,7 +103,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Run Shared Tests
         run: npm run test --workspace=@streamer/shared
       - name: Write CI summary
@@ -153,13 +155,13 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Push DB Schema
         run: npx prisma db push --schema=server/prisma/schema.prisma
       - name: Force Install Missing Native/Coverage Dependencies
-        run: npx --yes npm@${NPM_VERSION} install --no-save @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@4.1.10
+        run: npx --yes "npm@${NPM_VERSION}" install --no-save @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@4.1.10
       - name: Run Tests with Coverage
         run: npm run test --workspace=server -- --coverage
         env:
@@ -208,7 +210,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Validate Dev Runtime Selection
         run: npm run dev:runtime:test
       - name: Type Check Stream Server
@@ -244,7 +246,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Type Check Mobile
@@ -280,7 +282,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Restore Playwright browser cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.2.4
         with:
@@ -336,7 +338,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Restore Playwright browser cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.2.4
         with:
@@ -374,7 +376,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Build Shared
@@ -447,7 +449,7 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Build macOS desktop package directory
         run: npm run package:mac --workspace=@streamer/desktop
       - name: Validate packaged inputs
