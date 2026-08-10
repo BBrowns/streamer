@@ -43,6 +43,8 @@ export const metaPreviewSchema = z.object({
   imdbRating: optionalStringFromPrimitive,
   aliases: optionalStringArray,
   alternativeTitles: optionalStringArray,
+  genres: optionalStringArray,
+  originalLanguage: optionalString,
 });
 export const videoEntrySchema = z
   .object({

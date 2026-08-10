@@ -45,6 +45,10 @@ import {
   type SearchSort,
   type SearchTypeFilter,
 } from "../../services/searchState";
+import {
+  buildSearchFacetOptions,
+  matchesSearchFacet,
+} from "../../services/searchFacets";
 import { EmptyState } from "../ui/EmptyState";
 import { ContentBoundary } from "../ui/ContentBoundary";
 import { ContentTabs } from "../ui/ContentTabs";
@@ -57,6 +61,7 @@ import { SearchResultCard } from "./SearchResultCard";
 import { SearchSuggestions } from "./SearchSuggestions";
 
 type YearFilter = "all" | string;
+type FacetFilter = "all" | string;
 type SearchScreenResultState =
   | SearchInteractionState
   | "filter-pagination-limit";
@@ -94,6 +99,8 @@ export function SearchScreen() {
     type?: string;
     year?: string;
     provider?: string;
+    genre?: string;
+    language?: string;
     sort?: string;
   }>();
   const routeState = parseSearchRouteState(params);
@@ -108,6 +115,10 @@ export function SearchScreen() {
   );
   const [yearFilter, setYearFilter] = useState<YearFilter>(routeState.year);
   const [providerFilter, setProviderFilter] = useState(routeState.provider);
+  const [genreFilter, setGenreFilter] = useState<FacetFilter>(routeState.genre);
+  const [languageFilter, setLanguageFilter] = useState<FacetFilter>(
+    routeState.language,
+  );
   const [sort, setSort] = useState<SearchSort>(routeState.sort);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchFieldFocused, setSearchFieldFocused] = useState(false);
@@ -155,8 +166,17 @@ export function SearchScreen() {
     setTypeFilter(routeState.type);
     setYearFilter(routeState.year);
     setProviderFilter(routeState.provider);
+    setGenreFilter(routeState.genre);
+    setLanguageFilter(routeState.language);
     setSort(routeState.sort);
-  }, [routeState.provider, routeState.sort, routeState.type, routeState.year]);
+  }, [
+    routeState.genre,
+    routeState.language,
+    routeState.provider,
+    routeState.sort,
+    routeState.type,
+    routeState.year,
+  ]);
 
   const syncRoute = useCallback(
     (overrides: Partial<Parameters<typeof searchRouteParams>[0]>) => {
@@ -167,12 +187,23 @@ export function SearchScreen() {
           type: typeFilter,
           year: yearFilter,
           provider: providerFilter,
+          genre: genreFilter,
+          language: languageFilter,
           sort,
           ...overrides,
         }) as any,
       );
     },
-    [providerFilter, router, sort, submittedQuery, typeFilter, yearFilter],
+    [
+      genreFilter,
+      languageFilter,
+      providerFilter,
+      router,
+      sort,
+      submittedQuery,
+      typeFilter,
+      yearFilter,
+    ],
   );
 
   const submitSearch = useCallback(
@@ -186,6 +217,8 @@ export function SearchScreen() {
       setTypeFilter(defaults.type);
       setYearFilter(defaults.year);
       setProviderFilter(defaults.provider);
+      setGenreFilter(defaults.genre);
+      setLanguageFilter(defaults.language);
       setSort(defaults.sort);
       setSuggestionsDismissed(true);
       void searchController.rememberSearch(clean);
@@ -209,6 +242,8 @@ export function SearchScreen() {
     setTypeFilter(defaults.type);
     setYearFilter(defaults.year);
     setProviderFilter(defaults.provider);
+    setGenreFilter(defaults.genre);
+    setLanguageFilter(defaults.language);
     setSort(defaults.sort);
     syncRoute({ q: "", ...defaults });
   }, [searchController, syncRoute]);
@@ -218,6 +253,8 @@ export function SearchScreen() {
     setTypeFilter(defaults.type);
     setYearFilter(defaults.year);
     setProviderFilter(defaults.provider);
+    setGenreFilter(defaults.genre);
+    setLanguageFilter(defaults.language);
     setSort(defaults.sort);
     syncRoute(defaults);
   }, [syncRoute]);
@@ -230,6 +267,20 @@ export function SearchScreen() {
         .sort((left, right) => left.label.localeCompare(right.label)),
     [fullSearch.data?.providers],
   );
+  const genres = useMemo(
+    () =>
+      buildSearchFacetOptions(results, "genre", t("search.filters.anyGenre")),
+    [results, t],
+  );
+  const languages = useMemo(
+    () =>
+      buildSearchFacetOptions(
+        results,
+        "language",
+        t("search.filters.anyLanguage"),
+      ),
+    [results, t],
+  );
   const filteredResults = useMemo(() => {
     const filtered = results.filter((item) => {
       if (typeFilter !== "all" && item.type !== typeFilter) return false;
@@ -241,6 +292,8 @@ export function SearchScreen() {
       ) {
         return false;
       }
+      if (!matchesSearchFacet(item, "genre", genreFilter)) return false;
+      if (!matchesSearchFacet(item, "language", languageFilter)) return false;
       return true;
     });
     if (sort === "title") {
@@ -255,18 +308,30 @@ export function SearchScreen() {
       );
     }
     return filtered;
-  }, [providerFilter, results, sort, typeFilter, yearFilter]);
+  }, [
+    genreFilter,
+    languageFilter,
+    providerFilter,
+    results,
+    sort,
+    typeFilter,
+    yearFilter,
+  ]);
 
   const activeFilterCount = countActiveSearchFilters({
     type: typeFilter,
     year: yearFilter,
     provider: providerFilter,
+    genre: genreFilter,
+    language: languageFilter,
     sort,
   });
   const secondaryFilterCount = countActiveSearchFilters({
     type: "all",
     year: yearFilter,
     provider: providerFilter,
+    genre: genreFilter,
+    language: languageFilter,
     sort,
   });
   const filterPaginationState = getSearchFilterPaginationState({
@@ -338,8 +403,12 @@ export function SearchScreen() {
   const filterProps = {
     years: yearOptions,
     providers: providerOptions,
+    genres,
+    languages,
     year: yearFilter,
     provider: providerFilter,
+    genre: genreFilter,
+    language: languageFilter,
     sort,
     onYearChange: (value: string) => {
       setYearFilter(value);
@@ -348,6 +417,14 @@ export function SearchScreen() {
     onProviderChange: (value: string) => {
       setProviderFilter(value);
       syncRoute({ provider: value });
+    },
+    onGenreChange: (value: string) => {
+      setGenreFilter(value);
+      syncRoute({ genre: value });
+    },
+    onLanguageChange: (value: string) => {
+      setLanguageFilter(value);
+      syncRoute({ language: value });
     },
     onSortChange: (value: SearchSort) => {
       setSort(value);

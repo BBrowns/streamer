@@ -190,6 +190,8 @@ function metadataCompletenessValue(meta: MetaPreview): number {
   }
   score += Math.min(meta.aliases?.length ?? 0, 20) * 10;
   score += Math.min(meta.alternativeTitles?.length ?? 0, 20) * 10;
+  score += Math.min(meta.genres?.length ?? 0, 16) * 20;
+  if (meta.originalLanguage) score += 15;
   return score;
 }
 
@@ -205,6 +207,8 @@ function stableMetadataKey(meta: MetaPreview): string {
     meta.description ?? "",
     [...(meta.aliases ?? [])].sort(),
     [...(meta.alternativeTitles ?? [])].sort(),
+    [...(meta.genres ?? [])].sort(),
+    meta.originalLanguage ?? "",
   ]);
 }
 

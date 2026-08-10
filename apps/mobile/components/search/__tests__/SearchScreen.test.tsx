@@ -198,6 +198,8 @@ describe("SearchScreen keyboard behavior", () => {
         type: undefined,
         year: undefined,
         provider: undefined,
+        genre: undefined,
+        language: undefined,
         sort: undefined,
       },
     });

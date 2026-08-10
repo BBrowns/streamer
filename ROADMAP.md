@@ -212,8 +212,9 @@ Implemented by the stacked Obsidian overhaul:
 
 Remaining evidence and upstream-data gates:
 
-- Add genre/language/availability facets only when providers return reliable
-  metadata for those fields; do not infer them from labels.
+- Search now exposes optional, bounded provider-declared genre and language
+  facets when those fields are present; audio, subtitle, quality, and
+  availability facets remain gated on normalized upstream metadata.
 - Validate Downloads, episode lists, settings panels, subtitle visibility,
   caption-safe layout, large text, focus-not-obscured behavior, artwork
   fallbacks, player chrome, history, and notification interactions on native
@@ -289,8 +290,9 @@ and preserve URL-free persistence and capability-gated native behavior.
    user-triggered and never auto-retry. Keep AirPlay, Chromecast, and
    Real-Debrid capability-gated/off by default, with real-device validation
    still pending.
-8. **Discovery and personalization:** add provider/audio/subtitle/quality
-   facets only when normalized provider metadata supplies them; keep local
+8. **Discovery and personalization:** genre/language facets now use bounded
+   normalized provider metadata; add audio/subtitle/quality/availability facets
+   only when their upstream contracts are equally reliable. Keep local
    preferences and Home/More Sources ownership honest and source-free.
 9. **Observability and release:** add privacy-safe planner/first-frame/fallback/
    stall/gateway/rate-limit/download signals, then assemble SBOM/provenance,

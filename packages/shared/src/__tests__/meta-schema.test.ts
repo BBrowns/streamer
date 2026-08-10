@@ -40,6 +40,8 @@ describe("Stremio metadata schemas", () => {
         imdbRating: undefined,
         aliases: undefined,
         alternativeTitles: undefined,
+        genres: undefined,
+        originalLanguage: undefined,
       },
     ]);
   });
