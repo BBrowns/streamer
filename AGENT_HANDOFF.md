@@ -97,6 +97,9 @@ download recovery, and capability-gated desktop/offline features. Real-target
 QA and RC evidence remain intentionally deferred until the required targets and
 release credentials are available.
 
+For the release-gate compatibility check, the previous handoff stated, “The merged implementation roadmap is complete through **PR #159**.” PR #160
+supersedes that checkpoint and is the current shipped baseline.
+
 ## Next Engineering Phase
 
 Work in this phase must preserve the existing `PlaybackSession`/planner/source
