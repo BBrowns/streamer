@@ -30,7 +30,11 @@ export interface SmartDownloadPreferences {
 }
 
 export type SmartNextEpisodePlanStatus =
-  "planned" | "queued" | "downloaded" | "blocked" | "skipped";
+  | "planned"
+  | "queued"
+  | "downloaded"
+  | "blocked"
+  | "skipped";
 
 export interface SmartNextEpisodePlan {
   seriesId: string;
