@@ -1,4 +1,7 @@
-import type { SubtitleCandidateFormat } from "@streamer/shared";
+import {
+  stripSubtitleMarkup,
+  type SubtitleCandidateFormat,
+} from "@streamer/shared";
 
 export interface SubtitleCue {
   id: string;
@@ -31,15 +34,9 @@ function parseTimestamp(value: string) {
 }
 
 export function sanitizeSubtitleText(value: string) {
-  return value
-    .replace(/\{\\[^}]+\}/g, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&")
-    .replace(/\r/g, "")
+  return stripSubtitleMarkup(value)
+    .split("\r")
+    .join("")
     .slice(0, MAX_SUBTITLE_CUE_TEXT_LENGTH)
     .trim();
 }
