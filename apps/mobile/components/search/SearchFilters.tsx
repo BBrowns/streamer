@@ -41,11 +41,17 @@ export function getRadioNavigationIndex(
 interface SearchFilterControlsProps {
   years: SearchFilterOption[];
   providers: SearchFilterOption[];
+  genres: SearchFilterOption[];
+  languages: SearchFilterOption[];
   year: string;
   provider: string;
+  genre: string;
+  language: string;
   sort: SearchSort;
   onYearChange: (value: string) => void;
   onProviderChange: (value: string) => void;
+  onGenreChange: (value: string) => void;
+  onLanguageChange: (value: string) => void;
   onSortChange: (value: SearchSort) => void;
   onReset: () => void;
 }
@@ -181,11 +187,17 @@ function ChoiceRow<T extends string>({
 function SearchFilterControls({
   years,
   providers,
+  genres,
+  languages,
   year,
   provider,
+  genre,
+  language,
   sort,
   onYearChange,
   onProviderChange,
+  onGenreChange,
+  onLanguageChange,
   onSortChange,
   onReset,
 }: SearchFilterControlsProps) {
@@ -215,6 +227,22 @@ function SearchFilterControls({
           options={providers}
           value={provider}
           onChange={onProviderChange}
+        />
+      )}
+      {genres.length > 1 && (
+        <ChoiceGroup
+          label={t("search.filters.genre")}
+          options={genres}
+          value={genre}
+          onChange={onGenreChange}
+        />
+      )}
+      {languages.length > 1 && (
+        <ChoiceGroup
+          label={t("search.filters.language")}
+          options={languages}
+          value={language}
+          onChange={onLanguageChange}
         />
       )}
       <ChoiceGroup

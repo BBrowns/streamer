@@ -15,6 +15,8 @@ describe("search route state", () => {
         type: "movie",
         year: "2024",
         provider: "addon-1",
+        genre: "Science Fiction",
+        language: "en",
         sort: "year",
       }),
     ).toEqual({
@@ -22,6 +24,8 @@ describe("search route state", () => {
       type: "movie",
       year: "2024",
       provider: "addon-1",
+      genre: "Science Fiction",
+      language: "en",
       sort: "year",
     });
   });
@@ -34,6 +38,8 @@ describe("search route state", () => {
       type: "all",
       year: "all",
       provider: "all",
+      genre: "all",
+      language: "all",
       sort: "default",
     });
   });
@@ -45,6 +51,8 @@ describe("search route state", () => {
         type: "all",
         year: "all",
         provider: "all",
+        genre: "all",
+        language: "all",
         sort: "default",
       }),
     ).toEqual({
@@ -52,6 +60,8 @@ describe("search route state", () => {
       type: undefined,
       year: undefined,
       provider: undefined,
+      genre: undefined,
+      language: undefined,
       sort: undefined,
     });
   });
@@ -68,6 +78,8 @@ describe("search route state", () => {
       type: "all",
       year: "all",
       provider: "all",
+      genre: "all",
+      language: "all",
       sort: "default",
     });
   });

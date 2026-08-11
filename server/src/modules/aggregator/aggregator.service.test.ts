@@ -43,6 +43,33 @@ describe("AggregatorService", () => {
     service = new AggregatorService();
   });
 
+  it("bounds provider genre and language facets before validation", () => {
+    const bounded = boundSearchCatalogPayload({
+      metas: [
+        {
+          id: "tt-facets",
+          type: "movie",
+          name: "Facet title",
+          genres: [" Sci-Fi ", "Drama", "sci-fi"],
+          language: " en ",
+        },
+      ],
+    });
+
+    expect(bounded.payload).toEqual({
+      metas: [
+        expect.objectContaining({
+          genres: [" Sci-Fi ", "Drama", "sci-fi"],
+          originalLanguage: " en ",
+        }),
+      ],
+    });
+    const longFacet = boundSearchCatalogPayload({
+      metas: [{ genres: ["x".repeat(200)] }],
+    });
+    expect((longFacet.payload as any).metas[0].genres[0].length).toBe(65);
+  });
+
   describe("subtitle resources", () => {
     it("keeps provider URLs server-side and scopes document identities to the user", async () => {
       vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
@@ -592,6 +619,8 @@ describe("AggregatorService", () => {
               type: "movie",
               name: "The Matrix",
               released: null,
+              genres: [" Sci-Fi ", "Drama", "sci-fi"],
+              language: "en",
             },
             {
               id: "tt-malformed",
@@ -606,7 +635,15 @@ describe("AggregatorService", () => {
         await expect(
           service.searchWithProvenance("user-1", query, `req-${query}`),
         ).resolves.toMatchObject({
-          metas: [{ id: "tt0133093", type: "movie", name: "The Matrix" }],
+          metas: [
+            {
+              id: "tt0133093",
+              type: "movie",
+              name: "The Matrix",
+              genres: ["Sci-Fi", "Drama", "sci-fi"],
+              originalLanguage: "en",
+            },
+          ],
           partial: false,
         });
       }

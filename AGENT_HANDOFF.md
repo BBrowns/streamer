@@ -749,9 +749,10 @@ reviewed there before merge. See
 
 The remaining work is validation or depends on trustworthy upstream metadata:
 
-- Search provider provenance and partial-failure counts are reliable. Add genre,
-  language, quality, or richer availability facets only when upstream metadata
-  is reliable.
+- Search provider provenance and partial-failure counts are reliable. Search
+  now exposes bounded genre and language facets when upstream metadata supplies
+  them; add quality or richer availability facets only when those contracts are
+  equally reliable.
 - Validate the new artwork fallback, player chrome, history, and notification
   interactions on real iPhone/iPad and Android targets; browser emulation and
   desktop-renderer screenshots do not prove native video, safe-area, or touch

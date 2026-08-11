@@ -37,11 +37,17 @@ describe("Search filters accessibility", () => {
           { label: "2026", value: "2026" },
         ]}
         providers={[{ label: "All sources", value: "all" }]}
+        genres={[{ label: "Any genre", value: "all" }]}
+        languages={[{ label: "Any language", value: "all" }]}
         year="all"
         provider="all"
+        genre="all"
+        language="all"
         sort="default"
         onYearChange={jest.fn()}
         onProviderChange={jest.fn()}
+        onGenreChange={jest.fn()}
+        onLanguageChange={jest.fn()}
         onSortChange={jest.fn()}
         onReset={jest.fn()}
       />,
@@ -62,6 +68,41 @@ describe("Search filters accessibility", () => {
     expect(getRadioNavigationIndex(1, 3, "End")).toBe(2);
   });
 
+  it("shows metadata facets only when providers supply options", () => {
+    const onGenreChange = jest.fn();
+    const onLanguageChange = jest.fn();
+    const screen = render(
+      <FilterSidebar
+        years={[{ label: "Any year", value: "all" }]}
+        providers={[{ label: "All sources", value: "all" }]}
+        genres={[
+          { label: "Any genre", value: "all" },
+          { label: "Drama", value: "drama" },
+        ]}
+        languages={[
+          { label: "Any language", value: "all" },
+          { label: "English", value: "en" },
+        ]}
+        year="all"
+        provider="all"
+        genre="all"
+        language="all"
+        sort="default"
+        onYearChange={jest.fn()}
+        onProviderChange={jest.fn()}
+        onGenreChange={onGenreChange}
+        onLanguageChange={onLanguageChange}
+        onSortChange={jest.fn()}
+        onReset={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByRole("radio", { name: "Drama" }));
+    fireEvent.press(screen.getByRole("radio", { name: "English" }));
+    expect(onGenreChange).toHaveBeenCalledWith("drama");
+    expect(onLanguageChange).toHaveBeenCalledWith("en");
+  });
+
   it("keeps the filter panel separate from its dismissible scrim", () => {
     const onClose = jest.fn();
     const screen = render(
@@ -70,11 +111,17 @@ describe("Search filters accessibility", () => {
         onClose={onClose}
         years={[{ label: "Any year", value: "all" }]}
         providers={[{ label: "All sources", value: "all" }]}
+        genres={[{ label: "Any genre", value: "all" }]}
+        languages={[{ label: "Any language", value: "all" }]}
         year="all"
         provider="all"
+        genre="all"
+        language="all"
         sort="default"
         onYearChange={jest.fn()}
         onProviderChange={jest.fn()}
+        onGenreChange={jest.fn()}
+        onLanguageChange={jest.fn()}
         onSortChange={jest.fn()}
         onReset={jest.fn()}
       />,
