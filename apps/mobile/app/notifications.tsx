@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { InAppNotification } from "@streamer/shared";
+import { Stack } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,13 +19,10 @@ import {
   type NotificationGroup,
 } from "../components/notifications/notificationPresentation";
 import { AppButton } from "../components/ui/AppButton";
-import { ContentBoundary } from "../components/ui/ContentBoundary";
+import { AdaptiveRoutePage } from "../components/ui/AdaptiveRoutePage";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
-import { PageLayout } from "../components/ui/PageLayout";
 import {
   getWebFocusStyle,
-  uiLayout,
   uiRadii,
   uiSpacing,
   uiTouchTarget,
@@ -33,6 +31,7 @@ import {
 import { useNotifications } from "../hooks/useNotifications";
 import { useTheme } from "../hooks/useTheme";
 import { useWebPressableActivation } from "../hooks/useWebPressableActivation";
+import { useWindowClass } from "../hooks/useWindowClass";
 
 const groupTranslationKeys = {
   today: "notifications.groups.today",
@@ -43,6 +42,7 @@ const groupTranslationKeys = {
 export default function NotificationsScreen() {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
+  const { isLarge } = useWindowClass();
   const {
     notifications,
     unreadCount,
@@ -81,33 +81,40 @@ export default function NotificationsScreen() {
     : t("notifications.allCaughtUpDescription");
 
   return (
-    <PageLayout contained={false} testID="notifications-screen">
-      <ContentBoundary
-        maxWidth={uiLayout.readingMaxWidth}
-        style={styles.contentBoundary}
+    <>
+      <Stack.Screen
+        options={{
+          title: t("notifications.title"),
+          headerShown: !isLarge,
+          headerBackTitle: t("navigation.back"),
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+        }}
+      />
+      <AdaptiveRoutePage
+        title={t("notifications.title")}
+        eyebrow={t("notifications.eyebrow")}
+        description={description}
+        boundary="reading"
+        testID="notifications-screen"
+        boundaryStyle={styles.contentBoundary}
+        actions={
+          unreadCount > 0 ? (
+            <AppButton
+              testID="notifications-mark-all-read"
+              label={t("notifications.markAllRead")}
+              icon="checkmark-done-outline"
+              variant="ghost"
+              loading={markAllAsRead.isPending}
+              onPress={() => markAllAsRead.mutate()}
+              accessibilityLabel={t("notifications.markAllReadA11y", {
+                count: unreadCount,
+              })}
+              accessibilityHint={t("notifications.markAllReadHint")}
+            />
+          ) : null
+        }
       >
-        <PageHeader
-          eyebrow={t("notifications.eyebrow")}
-          title={t("notifications.title")}
-          description={description}
-          actions={
-            unreadCount > 0 ? (
-              <AppButton
-                testID="notifications-mark-all-read"
-                label={t("notifications.markAllRead")}
-                icon="checkmark-done-outline"
-                variant="ghost"
-                loading={markAllAsRead.isPending}
-                onPress={() => markAllAsRead.mutate()}
-                accessibilityLabel={t("notifications.markAllReadA11y", {
-                  count: unreadCount,
-                })}
-                accessibilityHint={t("notifications.markAllReadHint")}
-              />
-            ) : null
-          }
-        />
-
         {markAllAsRead.isError ? (
           <ActionError
             message={t("notifications.markAllReadError")}
@@ -183,8 +190,8 @@ export default function NotificationsScreen() {
             showsVerticalScrollIndicator={false}
           />
         )}
-      </ContentBoundary>
-    </PageLayout>
+      </AdaptiveRoutePage>
+    </>
   );
 }
 

@@ -1,15 +1,15 @@
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import type { MetaPreview } from "@streamer/shared";
 import { useTranslation } from "react-i18next";
 import type { SearchMetaPreview } from "../../hooks/useSearch";
 import { useTheme } from "../../hooks/useTheme";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
-import { getWebFocusStyle } from "../ui/designSystem";
+import { getWebFocusStyle, uiMotion } from "../ui/designSystem";
+import { MediaArtwork } from "../ui/MediaArtwork";
 
 type SearchCardItem = MetaPreview | SearchMetaPreview;
 
@@ -34,11 +34,8 @@ function SearchResultCardInner({
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useUiMotion();
   const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
-  const [imageFailed, setImageFailed] = useState(!posterUri);
-
-  useEffect(() => setImageFailed(!posterUri), [item.id, posterUri]);
 
   const openDetail = useCallback(() => {
     if (onPress) onPress();
@@ -84,26 +81,16 @@ function SearchResultCardInner({
           { backgroundColor: colors.surfaceElevated },
         ]}
       >
-        {!imageFailed && posterUri ? (
-          <Image
-            source={{ uri: posterUri }}
-            style={styles.poster}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            transition={reducedMotion ? 0 : 160}
-            recyclingKey={`${item.type}:${item.id}:${posterUri}`}
-            accessibilityLabel={t("search.a11y.poster", { title: item.name })}
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <View style={styles.posterFallback}>
-            <Ionicons
-              name={item.type === "movie" ? "film-outline" : "tv-outline"}
-              size={compact ? 20 : 28}
-              color={colors.textSecondary}
-            />
-          </View>
-        )}
+        <MediaArtwork
+          uri={posterUri}
+          title={compact ? undefined : item.name}
+          variant="poster"
+          accessible={false}
+          accessibilityLabel={t("search.a11y.poster", {
+            title: item.name,
+          })}
+          style={styles.poster}
+        />
       </View>
 
       <View style={[styles.copy, compact && styles.compactCopy]}>
@@ -171,7 +158,7 @@ const styles = StyleSheet.create({
   } as any,
   animatedCard: {
     // @ts-ignore web-only
-    transition: "transform 140ms ease, opacity 140ms ease",
+    transition: `transform ${uiMotion.feedback}ms ease, opacity ${uiMotion.feedback}ms ease`,
   } as any,
   hovered: { transform: [{ translateY: -3 }] },
   compactCard: {
@@ -194,7 +181,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   poster: { width: "100%", height: "100%" },
-  posterFallback: { flex: 1, alignItems: "center", justifyContent: "center" },
   copy: { gap: 4 },
   compactCopy: { flex: 1, minWidth: 0 },
   title: { fontSize: 15, lineHeight: 20, fontWeight: "700" },

@@ -1,10 +1,11 @@
 import { memo } from "react";
-import { Image, Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import type { MetaPreview, WatchProgress } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { AppButton } from "../ui/AppButton";
+import { MediaArtwork } from "../ui/MediaArtwork";
 import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
 
 type HomeHeroBannerProps = {
@@ -34,12 +35,12 @@ function HomeHeroBannerInner({
       style={[styles.hero, { height: heroHeight }]}
       accessibilityLabel={t("home.hero.a11y", { title: item.name })}
     >
-      <Image
-        source={{ uri: item.poster }}
-        style={styles.heroBackdrop}
-        resizeMode="cover"
+      <MediaArtwork
+        uri={item.poster}
+        variant="backdrop"
         blurRadius={10}
-        accessibilityIgnoresInvertColors
+        accessible={false}
+        style={styles.heroBackdrop}
       />
 
       {Platform.OS === "web" ? (
@@ -135,11 +136,11 @@ function HomeHeroBannerInner({
 
         {showPoster ? (
           <View style={styles.posterShell}>
-            <Image
-              source={{ uri: item.poster }}
+            <MediaArtwork
+              uri={item.poster}
+              variant="poster"
+              accessible={false}
               style={styles.heroPoster}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
             />
           </View>
         ) : null}

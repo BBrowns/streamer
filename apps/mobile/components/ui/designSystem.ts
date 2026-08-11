@@ -34,7 +34,20 @@ export const uiMotion = {
   fast: 120,
   standard: 180,
   slow: 280,
-};
+  feedback: 120,
+  content: 180,
+  overlay: 280,
+  loadingLoop: 1500,
+} as const;
+
+export type UiMotionIntent = "feedback" | "content" | "overlay" | "loadingLoop";
+
+export function resolveMotionDuration(
+  intent: UiMotionIntent,
+  reducedMotion: boolean,
+) {
+  return reducedMotion ? 0 : uiMotion[intent];
+}
 
 export const uiLayout = {
   contentMaxWidth: 1600,

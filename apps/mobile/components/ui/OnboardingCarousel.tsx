@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   useWindowDimensions,
-  Image,
   Pressable,
   ImageSourcePropType,
   Platform,
@@ -22,7 +21,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import * as Haptics from "expo-haptics";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import {
   getWebFocusStyle,
   uiRadii,
@@ -31,6 +30,7 @@ import {
 } from "./designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { useTranslation } from "react-i18next";
+import { BrandIllustration } from "./BrandIllustration";
 
 export interface OnboardingStep {
   id: string;
@@ -62,7 +62,7 @@ function OnboardingItem({
   isDesktop,
 }: OnboardingItemProps) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useUiMotion();
   const STEP_WIDTH = width;
   const inputRange = [
     (index - 1) * STEP_WIDTH,
@@ -134,10 +134,10 @@ function OnboardingItem({
           animatedImageStyle,
         ]}
       >
-        <Image
+        <BrandIllustration
           source={item.image}
+          contentFit="contain"
           style={styles.image}
-          resizeMode="contain"
           accessible={false}
         />
       </Animated.View>
@@ -246,7 +246,7 @@ export function OnboardingCarousel({
   const scrollX = useSharedValue(0);
   const flatListRef = useRef<Animated.FlatList<OnboardingStep>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion } = useUiMotion();
   const isDesktop = isExpanded || isLarge;
   const itemPadding = isDesktop ? 32 : 24;
 

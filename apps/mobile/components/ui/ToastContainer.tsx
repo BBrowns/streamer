@@ -13,7 +13,7 @@ import {
   type Toast,
   type ToastType,
 } from "../../stores/toastStore";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import { getWebFocusStyle } from "./designSystem";
@@ -23,7 +23,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   const { dismiss } = useToastStore();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(16)).current;
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, duration } = useUiMotion();
   const { colors } = useTheme();
   const { t } = useTranslation();
 
@@ -58,17 +58,17 @@ function ToastItem({ toast }: { toast: Toast }) {
         Animated.parallel([
           Animated.timing(opacity, {
             toValue: 0,
-            duration: 200,
+            duration: duration("feedback"),
             useNativeDriver: true,
           }),
           Animated.timing(translateY, {
             toValue: -10,
-            duration: 200,
+            duration: duration("feedback"),
             useNativeDriver: true,
           }),
         ]).start();
       },
-      Math.max(0, (toast.duration ?? 3500) - 300),
+      Math.max(0, (toast.duration ?? 3500) - duration("overlay")),
     );
 
     return () => clearTimeout(timer);

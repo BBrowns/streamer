@@ -9,7 +9,7 @@ import { hapticImpactLight } from "../../lib/haptics";
 import { useCastStore } from "../../stores/castStore";
 import { castService } from "../../services/CastService";
 import { useWindowClass } from "../../hooks/useWindowClass";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { useTranslation } from "react-i18next";
 import { AppButton } from "../ui/AppButton";
 import {
@@ -69,7 +69,7 @@ export function RemoteControlBar() {
   const { t } = useTranslation();
   const router = useRouter();
   const { isCompact } = useWindowClass();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, duration } = useUiMotion();
 
   const refreshCastStatus = useCallback(async () => {
     if (!activeCast) return;
@@ -150,9 +150,13 @@ export function RemoteControlBar() {
   return (
     <Animated.View
       entering={
-        reducedMotion ? undefined : SlideInDown.duration(400).springify()
+        reducedMotion
+          ? undefined
+          : SlideInDown.duration(duration("overlay")).springify()
       }
-      exiting={reducedMotion ? undefined : SlideOutDown.duration(300)}
+      exiting={
+        reducedMotion ? undefined : SlideOutDown.duration(duration("overlay"))
+      }
       style={[styles.wrapper, !isCompact && styles.wrapperWide]}
     >
       <View

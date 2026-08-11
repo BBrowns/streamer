@@ -1,6 +1,5 @@
 import React, { ReactNode } from "react";
 import {
-  Image,
   ImageSourcePropType,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +14,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { Stack } from "expo-router";
 import { uiRadii, uiTypography } from "../ui/designSystem";
+import { BrandIllustration } from "../ui/BrandIllustration";
 
 interface AuthScaffoldProps {
   title: string;
@@ -58,7 +58,11 @@ export function AuthScaffold({
           >
             <View style={[styles.shell, isWide && styles.shellWide]}>
               <View style={[styles.previewPane, isWide && styles.previewWide]}>
-                <Image source={image} style={styles.previewImage} />
+                <BrandIllustration
+                  source={image}
+                  contentFit="cover"
+                  style={styles.previewImage}
+                />
                 <View
                   style={[
                     styles.previewGlass,
