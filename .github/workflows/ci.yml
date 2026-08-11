@@ -49,6 +49,10 @@ jobs:
           cache: "npm"
       - name: Validate agent process assets
         run: npm run process:check
+      - name: Validate architecture budgets
+        run: npm run architecture:check
+      - name: Test architecture budget validator
+        run: npm run architecture:budget:test
       - name: Test agent process validators
         run: npm run process:check:test
       - name: Test maintenance report classifier

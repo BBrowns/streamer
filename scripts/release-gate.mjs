@@ -93,6 +93,11 @@ function checkCiWorkflow() {
     ["security:audit", "production dependency audit"],
     ["npm run process:check", "agent process asset validation"],
     ["npm run process:check:test", "agent process validator tests"],
+    [
+      "npm run architecture:check",
+      "architecture boundary and budget validation",
+    ],
+    ["npm run architecture:budget:test", "architecture budget validator tests"],
     ["npm run maintenance:report:test", "maintenance report classifier tests"],
     ["actionlint@v1.7.12", "pinned GitHub Actions lint"],
     ["npm run workflows:check", "full GitHub Actions SHA policy"],
@@ -180,6 +185,7 @@ function checkDocs() {
   requireFile("AGENT_HANDOFF.md");
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
+  requireFile("docs/ARCHITECTURE_MAINTENANCE.md");
   requireText(
     "docs/DEPENDENCY_SECURITY.md",
     "secret scanning and push protection",
