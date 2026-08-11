@@ -271,6 +271,7 @@ function collectRemote(repo, since, root) {
 
 function collectLocal(root, now, sinceDays) {
   const audit = run("npm", ["audit", "--omit=dev", "--json"], { cwd: root });
+  const auditPolicy = run("npm", ["run", "security:audit"], { cwd: root });
   const outdated = run("npm", ["outdated", "--json"], { cwd: root });
   const auditReport = parseJsonOutput(audit);
   const outdatedReport = parseJsonOutput(outdated);
@@ -286,6 +287,7 @@ function collectLocal(root, now, sinceDays) {
     workflows: parseActionPins(root),
     exceptions: collectExceptions(root, now),
     audit: summarizeAudit(auditReport),
+    auditPolicy: { available: true, passed: auditPolicy.ok },
     outdated: summarizeOutdated(outdatedReport),
     recentCommits: recent.ok
       ? recent.stdout.split(/\r?\n/).filter(Boolean).length

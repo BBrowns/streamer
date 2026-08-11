@@ -9,6 +9,7 @@ function evidence(overrides = {}) {
     repository: { repository: "BBrowns/streamer", commit: "abc123" },
     local: {
       audit: { counts: { critical: 0, high: 0 } },
+      auditPolicy: { available: true, passed: true },
       exceptions: { expired: [], expiring: [] },
       workflows: { unpinnedCount: 0, actionCount: 12 },
       outdated: { count: 0 },
@@ -28,6 +29,7 @@ test("classifies blocking production and security signals as Now", () => {
     evidence({
       local: {
         audit: { counts: { critical: 1, high: 0 } },
+        auditPolicy: { available: true, passed: false },
         exceptions: { expired: [], expiring: [] },
         workflows: { unpinnedCount: 0, actionCount: 12 },
         outdated: { count: 0 },
@@ -66,4 +68,23 @@ test("renders bounded evidence and omits raw source details", () => {
   assert.match(report, /GitHub evidence was unavailable/);
   assert.match(report, /privacy-safe maintenance evidence/);
   assert.doesNotMatch(report, /secret-looking|magnet:|infoHash|token=/i);
+});
+
+test("reports raw findings as Watch when the project policy reviews them", () => {
+  const findings = classifyEvidence(
+    evidence({
+      local: {
+        audit: { counts: { critical: 0, high: 2 } },
+        auditPolicy: { available: true, passed: true },
+        exceptions: { expired: [], expiring: [] },
+        workflows: { unpinnedCount: 0, actionCount: 12 },
+        outdated: { count: 0 },
+      },
+    }),
+  );
+
+  assert.deepEqual(
+    findings.map(({ key, priority }) => ({ key, priority })),
+    [{ key: "reviewed-audit-exceptions", priority: "Watch" }],
+  );
 });

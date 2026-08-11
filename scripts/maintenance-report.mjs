@@ -23,7 +23,13 @@ export function classifyEvidence(evidence) {
   const findings = [];
   const { local, remote } = evidence;
 
-  if (hasBlockingSeverity(local.audit?.counts)) {
+  const rawAuditHasBlockingSeverity = hasBlockingSeverity(local.audit?.counts);
+  const auditPolicyFailed =
+    local.auditPolicy?.available === false
+      ? rawAuditHasBlockingSeverity
+      : local.auditPolicy?.passed === false;
+
+  if (auditPolicyFailed) {
     addFinding(findings, {
       priority: "Now",
       key: "local-production-audit",
@@ -34,6 +40,19 @@ export function classifyEvidence(evidence) {
         "Create a focused remediation or a reviewed, expiring containment exception.",
       closeWhen:
         "The production audit is clean or every remaining finding has an exact active exception.",
+    });
+  }
+
+  if (!auditPolicyFailed && rawAuditHasBlockingSeverity) {
+    addFinding(findings, {
+      priority: "Watch",
+      key: "reviewed-audit-exceptions",
+      title: "Production audit findings are covered by reviewed exceptions",
+      evidence: `${local.audit.counts.critical ?? 0} critical and ${local.audit.counts.high ?? 0} high raw audit record(s) remain under the project audit policy.`,
+      owner: "Platform maintainers",
+      nextAction:
+        "Track each exception owner and remove the exception by its review deadline or before the next release candidate.",
+      closeWhen: "The raw audit is clean and no exception is required.",
     });
   }
 
