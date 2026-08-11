@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { ScrollView } from "react-native";
 import { SearchScreen } from "../SearchScreen";
 
 const mockPush = jest.fn();
@@ -84,11 +85,36 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 
 jest.mock("../../ui/PageLayout", () => {
   const { View } = require("react-native");
-  return { PageLayout: ({ children }: any) => <View>{children}</View> };
+  return {
+    PageLayout: ({ children, testID, scroll, boundary, contained }: any) => (
+      <View
+        testID={testID}
+        accessibilityLabel={`scroll:${String(scroll)} boundary:${String(
+          boundary,
+        )} contained:${String(contained)}`}
+      >
+        {children}
+      </View>
+    ),
+  };
 });
 jest.mock("../../ui/ContentBoundary", () => {
   const { View } = require("react-native");
-  return { ContentBoundary: ({ children }: any) => <View>{children}</View> };
+  return {
+    ContentBoundary: ({ children, size = "content" }: any) => (
+      <View testID={`content-boundary-${size}`}>{children}</View>
+    ),
+  };
+});
+jest.mock("../../ui/PageHeader", () => {
+  const { Text } = require("react-native");
+  return {
+    PageHeader: ({ testID, title, titleVisibility }: any) => (
+      <Text testID={testID} accessibilityLabel={titleVisibility}>
+        {titleVisibility === "visible" ? title : null}
+      </Text>
+    ),
+  };
 });
 jest.mock("../../ui/ContentTabs", () => ({ ContentTabs: () => null }));
 jest.mock("../../ui/EmptyState", () => {
@@ -169,7 +195,20 @@ describe("SearchScreen keyboard behavior", () => {
     const screen = render(<SearchScreen />);
 
     expect(screen.queryByText("search.title")).toBeNull();
+    expect(
+      screen.getByTestId("search-page-header").props.accessibilityLabel,
+    ).toBe("navigation-owned");
     expect(screen.getByTestId("search-field")).toBeTruthy();
+  });
+
+  it("keeps a single results scroller inside explicit content boundaries", () => {
+    const screen = render(<SearchScreen />);
+
+    expect(screen.getByTestId("search-screen").props.accessibilityLabel).toBe(
+      "scroll:undefined boundary:false contained:undefined",
+    );
+    expect(screen.getAllByTestId("content-boundary-content")).toHaveLength(2);
+    expect(screen.UNSAFE_getAllByType(ScrollView)).toHaveLength(1);
   });
 
   it("moves shared suggestion selection with arrows and exposes the index", () => {

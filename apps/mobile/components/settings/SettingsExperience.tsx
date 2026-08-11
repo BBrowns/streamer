@@ -30,6 +30,7 @@ import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeS
 import { EmptyState } from "../ui/EmptyState";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { AppButton } from "../ui/AppButton";
+import { ContentBoundary } from "../ui/ContentBoundary";
 import { PageHeader } from "../ui/PageHeader";
 import { PageLayout } from "../ui/PageLayout";
 import { AppearanceSection } from "./AppearanceSection";
@@ -87,27 +88,15 @@ function SectionHeading({
   showTitle: boolean;
 }) {
   const { t } = useTranslation();
-  const { colors } = useTheme();
   const definition = getSettingsSection(section);
-
-  if (!showTitle) {
-    return (
-      <Text
-        style={[
-          styles.compactSectionDescription,
-          { color: colors.textSecondary },
-        ]}
-      >
-        {t(definition.descriptionKey)}
-      </Text>
-    );
-  }
 
   return (
     <PageHeader
-      eyebrow="Streamer"
+      eyebrow={showTitle ? "Streamer" : undefined}
       title={t(definition.titleKey)}
       description={t(definition.descriptionKey)}
+      compact={!showTitle}
+      titleVisibility={showTitle ? "visible" : "navigation-owned"}
       style={styles.pageHeader}
     />
   );
@@ -146,97 +135,94 @@ function SettingsOverview({
     <ScrollView
       testID="settings-overview"
       style={styles.scroll}
-      contentContainerStyle={styles.overviewContent}
       showsVerticalScrollIndicator={false}
     >
-      {isCompact ? (
-        <Text
-          style={[
-            styles.compactSectionDescription,
-            { color: colors.textSecondary },
-          ]}
-        >
-          {t("settings.overview.subtitle")}
-        </Text>
-      ) : (
+      <ContentBoundary
+        size="reading"
+        maxWidth={720}
+        style={styles.overviewContent}
+      >
         <PageHeader
+          testID="settings-page-header"
           title={t("settings.overview.title")}
           description={t("settings.overview.subtitle")}
+          compact={isCompact}
+          titleVisibility={isCompact ? "navigation-owned" : "visible"}
           style={styles.pageHeader}
         />
-      )}
 
-      <View style={[styles.profileSummary, { backgroundColor: colors.card }]}>
+        <View style={[styles.profileSummary, { backgroundColor: colors.card }]}>
+          <View
+            style={[styles.avatar, { backgroundColor: colors.surfaceElevated }]}
+          >
+            <Ionicons name="person-outline" size={24} color={colors.text} />
+          </View>
+          <View style={styles.summaryText}>
+            <Text
+              style={[styles.summaryTitle, { color: colors.text }]}
+              numberOfLines={1}
+            >
+              {user?.displayName || user?.email}
+            </Text>
+            <Text
+              style={[styles.summarySubtitle, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {user?.email}
+            </Text>
+          </View>
+        </View>
+
         <View
-          style={[styles.avatar, { backgroundColor: colors.surfaceElevated }]}
+          style={[
+            styles.readinessSummary,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
         >
-          <Ionicons name="person-outline" size={24} color={colors.text} />
+          <Ionicons
+            name={isReady ? "checkmark-circle-outline" : "alert-circle-outline"}
+            size={22}
+            color={isReady ? colors.success : colors.warning}
+          />
+          <View style={styles.summaryText}>
+            <Text style={[styles.summaryTitle, { color: colors.text }]}>
+              {isReady
+                ? t("settings.readiness.readyTitle")
+                : t("settings.readiness.attentionTitle")}
+            </Text>
+            <Text
+              style={[styles.summarySubtitle, { color: colors.textSecondary }]}
+            >
+              {isReady
+                ? t("settings.readiness.readyDescription")
+                : t("settings.readiness.attentionDescription")}
+            </Text>
+          </View>
+          <AppButton
+            label={t("settings.readiness.review")}
+            variant="ghost"
+            size="small"
+            onPress={() => onSelect("sources")}
+          />
         </View>
-        <View style={styles.summaryText}>
-          <Text
-            style={[styles.summaryTitle, { color: colors.text }]}
-            numberOfLines={1}
-          >
-            {user?.displayName || user?.email}
-          </Text>
-          <Text
-            style={[styles.summarySubtitle, { color: colors.textSecondary }]}
-            numberOfLines={1}
-          >
-            {user?.email}
-          </Text>
-        </View>
-      </View>
 
-      <View
-        style={[
-          styles.readinessSummary,
-          { backgroundColor: colors.card, borderColor: colors.border },
-        ]}
-      >
-        <Ionicons
-          name={isReady ? "checkmark-circle-outline" : "alert-circle-outline"}
-          size={22}
-          color={isReady ? colors.success : colors.warning}
-        />
-        <View style={styles.summaryText}>
-          <Text style={[styles.summaryTitle, { color: colors.text }]}>
-            {isReady
-              ? t("settings.readiness.readyTitle")
-              : t("settings.readiness.attentionTitle")}
+        <View style={styles.navigationBlock}>
+          <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>
+            {t("settings.overview.categories")}
           </Text>
-          <Text
-            style={[styles.summarySubtitle, { color: colors.textSecondary }]}
-          >
-            {isReady
-              ? t("settings.readiness.readyDescription")
-              : t("settings.readiness.attentionDescription")}
-          </Text>
+          <SettingsRowGroup>
+            {SETTINGS_SECTIONS.map((section) => (
+              <SettingsNavRow
+                key={section.id}
+                section={section}
+                title={t(section.titleKey)}
+                subtitle={t(section.descriptionKey)}
+                onPress={() => onSelect(section.id)}
+              />
+            ))}
+          </SettingsRowGroup>
         </View>
-        <AppButton
-          label={t("settings.readiness.review")}
-          variant="ghost"
-          size="small"
-          onPress={() => onSelect("sources")}
-        />
-      </View>
-
-      <View style={styles.navigationBlock}>
-        <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>
-          {t("settings.overview.categories")}
-        </Text>
-        <SettingsRowGroup>
-          {SETTINGS_SECTIONS.map((section) => (
-            <SettingsNavRow
-              key={section.id}
-              section={section}
-              title={t(section.titleKey)}
-              subtitle={t(section.descriptionKey)}
-              onPress={() => onSelect(section.id)}
-            />
-          ))}
-        </SettingsRowGroup>
-      </View>
+      </ContentBoundary>
     </ScrollView>
   );
 }
@@ -556,11 +542,16 @@ function SettingsDetail({
     <ScrollView
       testID={`settings-detail-${section}`}
       style={styles.scroll}
-      contentContainerStyle={styles.detailContent}
       showsVerticalScrollIndicator={false}
     >
-      <SectionHeading section={section} showTitle={showTitle} />
-      {content}
+      <ContentBoundary
+        size="reading"
+        maxWidth={800}
+        style={styles.detailContent}
+      >
+        <SectionHeading section={section} showTitle={showTitle} />
+        {content}
+      </ContentBoundary>
     </ScrollView>
   );
 }
@@ -783,47 +774,45 @@ function SettingsExperienceContent({
   };
 
   return (
-    <PageLayout
-      testID="settings-screen"
-      contained={false}
-      style={styles.screen}
-    >
+    <PageLayout testID="settings-screen" boundary={false} style={styles.screen}>
       {isLarge ? (
-        <View style={styles.largeLayout}>
-          <View
-            style={[
-              styles.largeNavigation,
-              { borderRightColor: colors.border },
-            ]}
-          >
-            <View style={styles.largeNavigationHeading}>
-              <Text style={[styles.navTitle, { color: colors.text }]}>
-                {t("settings.overview.title")}
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={[styles.navAccount, { color: colors.textSecondary }]}
-              >
-                {user?.displayName || user?.email}
-              </Text>
+        <ContentBoundary size="detail" style={styles.largeBoundary}>
+          <View style={styles.largeLayout}>
+            <View
+              style={[
+                styles.largeNavigation,
+                { borderRightColor: colors.border },
+              ]}
+            >
+              <View style={styles.largeNavigationHeading}>
+                <Text style={[styles.navTitle, { color: colors.text }]}>
+                  {t("settings.overview.title")}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.navAccount, { color: colors.textSecondary }]}
+                >
+                  {user?.displayName || user?.email}
+                </Text>
+              </View>
+              <ScrollView contentContainerStyle={styles.largeNavigationList}>
+                {SETTINGS_SECTIONS.map((definition) => (
+                  <SettingsNavRow
+                    key={definition.id}
+                    section={definition}
+                    title={t(definition.titleKey)}
+                    selected={definition.id === activeSection}
+                    compact
+                    onPress={() => selectSection(definition.id)}
+                  />
+                ))}
+              </ScrollView>
             </View>
-            <ScrollView contentContainerStyle={styles.largeNavigationList}>
-              {SETTINGS_SECTIONS.map((definition) => (
-                <SettingsNavRow
-                  key={definition.id}
-                  section={definition}
-                  title={t(definition.titleKey)}
-                  selected={definition.id === activeSection}
-                  compact
-                  onPress={() => selectSection(definition.id)}
-                />
-              ))}
-            </ScrollView>
+            <View style={styles.largeDetail}>
+              <SettingsDetail {...detailProps} showTitle />
+            </View>
           </View>
-          <View style={styles.largeDetail}>
-            <SettingsDetail {...detailProps} showTitle />
-          </View>
-        </View>
+        </ContentBoundary>
       ) : section ? (
         <SettingsDetail {...detailProps} showTitle={false} />
       ) : (
@@ -866,20 +855,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   scroll: { flex: 1 },
   overviewContent: {
-    width: "100%",
-    maxWidth: 720,
-    alignSelf: "center",
-    paddingHorizontal: 20,
     paddingTop: 28,
     paddingBottom: 56,
     gap: 20,
   },
   pageHeader: { marginBottom: 0 },
-  compactSectionDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-    maxWidth: 640,
-  },
   profileSummary: {
     minHeight: 80,
     borderRadius: 12,
@@ -927,10 +907,9 @@ const styles = StyleSheet.create({
   largeLayout: {
     flex: 1,
     flexDirection: "row",
-    alignSelf: "center",
     width: "100%",
-    maxWidth: 1180,
   },
+  largeBoundary: { flex: 1 },
   largeNavigation: {
     width: 256,
     borderRightWidth: StyleSheet.hairlineWidth,
@@ -948,10 +927,6 @@ const styles = StyleSheet.create({
   largeNavigationList: { gap: 4, paddingBottom: 32 },
   largeDetail: { flex: 1 },
   detailContent: {
-    width: "100%",
-    maxWidth: 800,
-    alignSelf: "center",
-    paddingHorizontal: 32,
     paddingTop: 40,
     paddingBottom: 64,
     gap: 28,
