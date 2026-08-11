@@ -8,6 +8,7 @@ import {
   Platform,
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { hapticSelection } from "../../lib/haptics";
 import {
   getWebFocusStyle,
@@ -39,6 +40,8 @@ export function FilterChipBar<T extends string | null = string>({
 }: FilterChipBarProps<T>) {
   const { colors, isDark } = useTheme();
   const isWeb = Platform.OS === "web";
+  const { duration } = useUiMotion();
+  const feedbackDuration = duration("feedback");
 
   const handlePress = useCallback(
     (option: FilterChipOption<T>) => {
@@ -80,6 +83,10 @@ export function FilterChipBar<T extends string | null = string>({
                   },
                 pressed && { opacity: 0.8 },
                 isWeb && focused && getWebFocusStyle(colors.tint),
+                isWeb &&
+                  ({
+                    transition: `background-color ${feedbackDuration}ms ease`,
+                  } as any),
               ]}
               onPress={() => handlePress(option)}
               accessibilityRole="button"
@@ -124,8 +131,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: uiRadii.pill,
     borderWidth: 1,
-    // @ts-ignore web-only
-    transition: "background-color 0.15s ease",
     cursor: Platform.OS === "web" ? "pointer" : undefined,
   } as any,
   chipText: {

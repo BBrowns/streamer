@@ -1,21 +1,15 @@
 import { existsSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { FIXTURE_MOVIE_ID, type GoldenPathScenario } from "./fixtures";
 import {
-  FIXTURE_MOVIE_ID,
-  installGoldenPathRoutes,
-  type GoldenPathScenario,
-} from "./fixtures";
+  deterministicScreenshotOptions,
+  loginToFixtureShell,
+  settleVisualFrame,
+} from "./ui-test-helpers";
 
 const visualProjects = new Set(["phone-web", "desktop-renderer"]);
 const visualBaselineUpdateEnabled =
   process.env.STREAMER_VISUAL_BASELINES === "1";
-
-const screenshotOptions = {
-  animations: "disabled" as const,
-  caret: "hide" as const,
-  fullPage: true,
-  scale: "css" as const,
-};
 
 function snapshotNames(scheme: "dark" | "light", projectName: string) {
   const names = [
@@ -65,43 +59,11 @@ function skipUnsupportedVisualEnvironment(
   );
 }
 
-async function settleVisualFrame(page: Page) {
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    await Promise.all(
-      Array.from(document.images, (image) =>
-        image.decode().catch(() => undefined),
-      ),
-    );
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-  });
-}
-
-async function loginToFixtureShell(
-  page: Page,
-  scheme: "dark" | "light",
-  scenario: GoldenPathScenario = "direct",
-) {
-  await installGoldenPathRoutes(page, scenario);
-  await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
-  await page.addInitScript(() => {
-    window.localStorage.setItem("HAS_SEEN_ONBOARDING", "true");
-  });
-  await page.goto("/login");
-  await page.getByPlaceholder("Email").fill("qa@example.test");
-  await page.getByPlaceholder("Password").fill("fixture-password");
-  await page.getByTestId("login-submit").click();
-  await expect(page.getByTestId("home-screen")).toBeVisible();
-  await settleVisualFrame(page);
-}
-
 async function openFixturePlayer(
   page: Page,
   scenario: GoldenPathScenario = "direct-visual",
 ) {
-  await loginToFixtureShell(page, "dark", scenario);
+  await loginToFixtureShell(page, { colorScheme: "dark", scenario });
   await page
     .getByTestId("home-hero")
     .getByRole("button", { name: "View details" })
@@ -129,12 +91,12 @@ for (const scheme of ["dark", "light"] as const) {
       ).toBe(true);
     }
 
-    await loginToFixtureShell(page, scheme);
+    await loginToFixtureShell(page, { colorScheme: scheme });
 
     await expect(page.getByTestId("home-hero")).toBeVisible();
     await expect(page).toHaveScreenshot(
       `home-${scheme}-${testInfo.project.name}.png`,
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
 
     await page.goto("/settings");
@@ -142,7 +104,7 @@ for (const scheme of ["dark", "light"] as const) {
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(
       `settings-overview-${scheme}-${testInfo.project.name}.png`,
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
 
     await page.goto("/search?q=Golden");
@@ -150,7 +112,7 @@ for (const scheme of ["dark", "light"] as const) {
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(
       `search-results-${scheme}-${testInfo.project.name}.png`,
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
   });
 }
@@ -220,7 +182,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   await settleUnfocusedPlayerFrame();
   await expect(page).toHaveScreenshot(
     `player-dark-${testInfo.project.name}.png`,
-    screenshotOptions,
+    deterministicScreenshotOptions,
   );
 
   const timelineBox = await timeline.boundingBox();
@@ -238,7 +200,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   // This frame is already settled above. Comparing the direct buffer avoids
   // toHaveScreenshot's stabilization loop reintroducing the prior button
   // focus style while it takes repeated captures.
-  expect(await page.screenshot(screenshotOptions)).toMatchSnapshot(
+  expect(await page.screenshot(deterministicScreenshotOptions)).toMatchSnapshot(
     previewSnapshotName,
     {
       maxDiffPixels: 500,
@@ -258,7 +220,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     testInfo.project.name === "phone-web"
       ? "player-subtitle-sheet-dark-phone-web.png"
       : "player-inspect-sheet-dark-desktop-renderer.png",
-    screenshotOptions,
+    deterministicScreenshotOptions,
   );
 });
 
@@ -282,7 +244,7 @@ test("matches the dark player recovery and non-seekable baselines", async ({
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(
       "player-actionable-fallback-dark-phone-web.png",
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
     return;
   }
@@ -302,6 +264,6 @@ test("matches the dark player recovery and non-seekable baselines", async ({
   await settleVisualFrame(page);
   await expect(page).toHaveScreenshot(
     "player-progressive-nonseekable-dark-desktop-renderer.png",
-    screenshotOptions,
+    deterministicScreenshotOptions,
   );
 });

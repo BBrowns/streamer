@@ -544,11 +544,7 @@ function SettingsDetail({
       style={styles.scroll}
       showsVerticalScrollIndicator={false}
     >
-      <ContentBoundary
-        size="reading"
-        maxWidth={800}
-        style={styles.detailContent}
-      >
+      <ContentBoundary size="reading" style={styles.detailContent}>
         <SectionHeading section={section} showTitle={showTitle} />
         {content}
       </ContentBoundary>
