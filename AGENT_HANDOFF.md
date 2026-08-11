@@ -69,6 +69,9 @@ Current phase:
   prepares torrent candidates serially; no parallel torrent hedge is implied.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
+  The automated release-evidence slice is now merged through PR #186; this
+  remaining lane is intentionally limited to real targets, packaging, and
+  credentials rather than another playback/control-plane rewrite.
 - Consumer-player implementation pass: normalized media/runtime/timeline
   boundaries, true cross-input scrubbing, selected-file gateway track probing,
   URL-free torrent and add-on subtitle pipelines, accepted-clock external
@@ -97,37 +100,36 @@ Current phase:
   consumer closes, while genuine source errors still close the response and
   use redacted diagnostics.
 
-The merged implementation roadmap is complete through **PR #160** in
+The merged implementation roadmap is complete through **PR #186** in
 [ROADMAP.md](./ROADMAP.md). The next phase is post-v3 hardening and
-productization: bridge session/reconnect operations, Planner v3 outcome
-evidence and bounded v2 deprecation, player lifecycle decomposition, URL-free
-download recovery, and capability-gated desktop/offline features. Real-target
-QA and RC evidence remain intentionally deferred until the required targets and
-release credentials are available.
+productization. Bridge operations, Planner v3 rollout evidence, player
+lifecycle decomposition, URL-free download recovery, HLS/cast/discovery
+hardening, and desktop release evidence are all shipped in master through PR
+#186. Real-target QA and RC evidence remain intentionally deferred until the
+required targets and release credentials are available.
 
-For the release-gate compatibility check, the previous handoff stated, “The merged implementation roadmap is complete through **PR #159**.” PR #160
-supersedes that checkpoint and is the current shipped baseline.
+For historical release-gate compatibility checks, earlier handoffs referenced
+PRs #159 and #160. PR #186 is the current shipped baseline for the completed
+implementation slices; only evidence-gated target validation remains open.
 
 ## Next Engineering Phase
 
-Work in this phase must preserve the existing `PlaybackSession`/planner/source
-ownership and keep platform-native behavior capability-gated:
+The implementation phase is complete through PR #186. Preserve the existing
+`PlaybackSession`/planner/source ownership while the remaining evidence lane is
+executed:
 
-1. Complete Bridge v1 operations: access-session revoke, bounded client renewal,
-   reconnect/status recovery, idempotency conflict evidence and privacy-safe
-   counters without logging URLs, tokens or media identifiers.
-2. Measure Planner v3 success, unsupported fallback and explicit legacy
-   selection; block new v2 call sites outside the compatibility adapter and
-   remove v2 only after 30 days without fallback evidence from supported
-   releases.
-3. Extract the remaining player session/attempt lifecycle coordination without
-   introducing a second store or orchestration state machine.
-4. Add URL-free, versioned download-recovery metadata and restart-time
-   replanning; reuse partial files only after validator and integrity checks.
-5. Add a verified Electron offline-file adapter and opt-in Smart Downloads;
-   the Electron HLS offline adapter is now bounded to finite VOD media
-   playlists, while remote playback and richer discovery facets remain
-   evidence-gated follow-up work.
+1. Keep Bridge v1 and Planner v3 telemetry bounded and privacy-safe. Do not add
+   a second control plane or remove the v2 compatibility adapter before the
+   documented 30-day, no-fallback window is met.
+2. Run the QA matrix on packaged macOS, browser web, iPhone, and Android;
+   validate direct/fallback/torrent/remux/seek/download/cast/restart flows and
+   record every result as pass, fail, blocked, or unknown.
+3. Run signed/notarized desktop and mobile preview workflows with production-
+   like credentials when available, attach SBOM/provenance subjects, and make
+   the release go/no-go decision from the recorded evidence.
+4. Keep native/browser HLS, cast, and richer discovery support capability-gated
+   until their target-specific evidence exists. Never promote CI or simulator
+   coverage into a physical-device support claim.
 
 Known physical-device and packaged-release gaps stay recorded in
 `docs/QA_MATRIX.md`, `docs/PLAYER_ARCHITECTURE.md`, and
