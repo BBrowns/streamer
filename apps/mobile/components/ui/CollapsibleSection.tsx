@@ -10,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { hapticSelection } from "../../lib/haptics";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { getWebFocusStyle, uiTouchTarget } from "./designSystem";
 
 interface CollapsibleSectionProps {
@@ -36,7 +36,8 @@ export function CollapsibleSection({
     new Animated.Value(defaultExpanded ? 1 : 0),
   ).current;
   const isWeb = Platform.OS === "web";
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, duration } = useUiMotion();
+  const feedbackDuration = duration("feedback");
 
   const toggle = () => {
     hapticSelection();
@@ -44,11 +45,10 @@ export function CollapsibleSection({
     if (reducedMotion) {
       rotateAnim.setValue(nextExpanded ? 1 : 0);
     } else {
-      Animated.spring(rotateAnim, {
+      Animated.timing(rotateAnim, {
         toValue: nextExpanded ? 1 : 0,
+        duration: feedbackDuration,
         useNativeDriver: true,
-        tension: 80,
-        friction: 12,
       }).start();
     }
     setExpanded(nextExpanded);
@@ -80,6 +80,10 @@ export function CollapsibleSection({
             },
           pressed && { opacity: 0.8 },
           isWeb && focused && getWebFocusStyle(colors.tint),
+          isWeb &&
+            ({
+              transition: `background-color ${feedbackDuration}ms ease`,
+            } as any),
         ]}
         onPress={toggle}
         accessibilityRole="button"
@@ -129,7 +133,6 @@ const styles = StyleSheet.create({
     gap: 10,
     // @ts-ignore web-only
     cursor: Platform.OS === "web" ? "pointer" : undefined,
-    transition: "background-color 0.15s ease",
   } as any,
   iconWrap: {
     width: 28,

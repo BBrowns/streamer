@@ -42,7 +42,7 @@ export function DetailLoadState({
 
   return (
     <PageLayout
-      contained={false}
+      boundary="detail"
       testID={`detail-load-state-${kind}`}
       contentContainerStyle={styles.pageContent}
     >
@@ -128,7 +128,6 @@ export function DetailLoadState({
 const styles = StyleSheet.create({
   pageContent: {
     flex: 1,
-    paddingHorizontal: uiSpacing.xxl,
     paddingVertical: uiSpacing.xl,
   },
   backRow: {

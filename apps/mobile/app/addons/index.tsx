@@ -30,6 +30,7 @@ import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { AppButton } from "../../components/ui/AppButton";
 import { AdaptiveRoutePage } from "../../components/ui/AdaptiveRoutePage";
+import { InlineNotice } from "../../components/ui/InlineNotice";
 import { Surface } from "../../components/ui/Surface";
 import { TextField } from "../../components/ui/TextField";
 import {
@@ -197,7 +198,12 @@ export default function AddonsScreen() {
               ]}
             />
           </View>
-          {!!installFeedback && <InlineFeedback feedback={installFeedback} />}
+          {!!installFeedback && (
+            <InlineNotice
+              tone={installFeedback.tone}
+              message={installFeedback.message}
+            />
+          )}
         </Surface>
 
         <View style={styles.listSection}>
@@ -351,11 +357,9 @@ export default function AddonsScreen() {
                       </Pressable>
                     </Surface>
                     {removalError?.addonId === item.id && (
-                      <InlineFeedback
-                        feedback={{
-                          tone: "error",
-                          message: removalError.message,
-                        }}
+                      <InlineNotice
+                        tone="error"
+                        message={removalError.message}
                         actionLabel={t("common.retry")}
                         onAction={() => uninstallMutation.mutate(item.id)}
                       />
@@ -377,40 +381,6 @@ export default function AddonsScreen() {
         </View>
       </AdaptiveRoutePage>
     </>
-  );
-}
-
-function InlineFeedback({
-  feedback,
-  actionLabel,
-  onAction,
-}: {
-  feedback: Feedback;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  const { colors } = useTheme();
-  const isError = feedback.tone === "error";
-
-  return (
-    <Surface variant={isError ? "danger" : "accent"} style={styles.feedback}>
-      <Ionicons
-        name={isError ? "alert-circle-outline" : "checkmark-circle-outline"}
-        size={18}
-        color={isError ? colors.error : colors.success}
-      />
-      <Text style={[styles.feedbackText, { color: colors.text }]}>
-        {feedback.message}
-      </Text>
-      {!!actionLabel && !!onAction && (
-        <AppButton
-          label={actionLabel}
-          size="small"
-          variant="ghost"
-          onPress={onAction}
-        />
-      )}
-    </Surface>
   );
 }
 
@@ -507,18 +477,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
-  },
-  feedback: {
-    minHeight: uiTouchTarget,
-    paddingVertical: uiSpacing.sm,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.sm,
-  },
-  feedbackText: {
-    ...uiTypography.body,
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
   },
 });

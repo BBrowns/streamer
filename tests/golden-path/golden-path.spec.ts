@@ -6,25 +6,14 @@ import {
   type GoldenPathScenario,
 } from "./fixtures";
 import { expectAccessibleSurface } from "./accessibility";
-
-async function loginToFixtureShell(
-  page: Page,
-  scenario: GoldenPathScenario = "direct",
-) {
-  const controls = await installGoldenPathRoutes(page, scenario);
-  await page.addInitScript(() => {
-    window.localStorage.setItem("HAS_SEEN_ONBOARDING", "true");
-  });
-  await page.goto("/login");
-  await page.getByPlaceholder("Email").fill("qa@example.test");
-  await page.getByPlaceholder("Password").fill("fixture-password");
-  await page.getByTestId("login-submit").click();
-  await expect(page.getByTestId("home-screen")).toBeVisible();
-  return controls;
-}
+import {
+  expectNoHorizontalPageOverflow,
+  loginToFixtureShell,
+  settleVisualFrame,
+} from "./ui-test-helpers";
 
 async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
-  const controls = await loginToFixtureShell(page, scenario);
+  const controls = await loginToFixtureShell(page, { scenario });
   await expect.poll(controls.bridgeProbes).toBeGreaterThan(0);
   await page
     .getByTestId("home-hero")
@@ -35,14 +24,6 @@ async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
   );
   await expect(page.getByRole("button", { name: "Play" })).toBeEnabled();
   return controls;
-}
-
-async function expectNoHorizontalPageOverflow(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    content: document.documentElement.scrollWidth,
-  }));
-  expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport + 1);
 }
 
 async function settleVisualTheme(
@@ -64,20 +45,6 @@ async function settleVisualTheme(
     )
     .toBe(expectedBackground);
   await settleVisualFrame(page);
-}
-
-async function settleVisualFrame(page: Page) {
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    await Promise.all(
-      Array.from(document.images, (image) =>
-        image.decode().catch(() => undefined),
-      ),
-    );
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-  });
 }
 
 async function expectPointerFocusWithoutKeyboardRing(locator: Locator) {
@@ -1017,7 +984,7 @@ test("Search distinguishes a completed search with no results", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await loginToFixtureShell(page, "search-empty");
+  await loginToFixtureShell(page, { scenario: "search-empty" });
   await page.goto("/search?q=Impossible%20Fixture");
   await expect(
     page.getByText("No titles found", { exact: true }),
@@ -1048,7 +1015,7 @@ test("Search explains when no searchable provider is installed", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await loginToFixtureShell(page, "search-no-provider");
+  await loginToFixtureShell(page, { scenario: "search-no-provider" });
   await page.goto("/search?q=The%20Matrix");
   await expect(
     page.getByText("A searchable catalog is required", { exact: true }),
@@ -1081,7 +1048,7 @@ test("Search explains when no searchable provider is installed", async ({
 test("Search distinguishes unavailable providers from missing capability", async ({
   page,
 }) => {
-  await loginToFixtureShell(page, "search-unavailable");
+  await loginToFixtureShell(page, { scenario: "search-unavailable" });
   await page.goto("/search?q=The%20Matrix");
   await expect(
     page.getByText("Sources are temporarily unavailable", { exact: true }),
@@ -1295,7 +1262,7 @@ test("Search clear, resubmit, back, and forward restore route state", async ({
 test("partial provider failures keep successful Search results visible", async ({
   page,
 }, testInfo) => {
-  await loginToFixtureShell(page, "search-partial");
+  await loginToFixtureShell(page, { scenario: "search-partial" });
   await page.goto("/search?q=Golden");
 
   await expect(page.getByTestId("search-results-grid")).toBeVisible();
