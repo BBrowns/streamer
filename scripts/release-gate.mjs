@@ -93,8 +93,15 @@ function checkCiWorkflow() {
     ["security:audit", "production dependency audit"],
     ["npm run process:check", "agent process asset validation"],
     ["npm run process:check:test", "agent process validator tests"],
+    [
+      "npm run architecture:check",
+      "architecture boundary and budget validation",
+    ],
+    ["npm run architecture:budget:test", "architecture budget validator tests"],
+    ["npm run maintenance:report:test", "maintenance report classifier tests"],
     ["actionlint@v1.7.12", "pinned GitHub Actions lint"],
     ["npm run workflows:check", "full GitHub Actions SHA policy"],
+    ["merge_group:", "merge queue CI trigger"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
     ["npm run release:sbom:test", "lockfile SBOM generator test"],
@@ -153,6 +160,7 @@ function checkCiWorkflow() {
 
   const dependencyReviewWorkflow = ".github/workflows/dependency-review.yml";
   requireFile(dependencyReviewWorkflow);
+  requireFile(".github/workflows/maintenance-radar.yml");
   requireText(
     dependencyReviewWorkflow,
     "actions/dependency-review-action@",
@@ -162,6 +170,21 @@ function checkCiWorkflow() {
     dependencyReviewWorkflow,
     "fail-on-severity: high",
     "high-severity dependency gate",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "merge_group:",
+    "merge queue dependency review trigger",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "base-ref:",
+    "merge queue dependency review base reference",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "head-ref:",
+    "merge queue dependency review head reference",
   );
   requirePattern(
     dependencyReviewWorkflow,
@@ -178,6 +201,7 @@ function checkDocs() {
   requireFile("AGENT_HANDOFF.md");
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
+  requireFile("docs/ARCHITECTURE_MAINTENANCE.md");
   requireText(
     "docs/DEPENDENCY_SECURITY.md",
     "secret scanning and push protection",
