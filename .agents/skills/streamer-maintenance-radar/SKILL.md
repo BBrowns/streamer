@@ -62,6 +62,11 @@ Do not convert the report into a PR or issue automatically. A human decides
 whether a finding becomes implementation work, a security response, or a
 scheduled migration.
 
+The scheduled GitHub Actions workflow may write the generated report to a
+short-lived workflow artifact and job summary. This is evidence output, not a
+repository mutation; the radar still does not create issues, PRs, approvals, or
+settings changes.
+
 ## Streamer Adapter
 
 - Read `docs/DEPENDENCY_SECURITY.md`, `AGENT_HANDOFF.md`, and relevant runbooks

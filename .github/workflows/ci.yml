@@ -5,6 +5,8 @@ on:
     branches: [main, master]
   push:
     branches: [main, master]
+  merge_group:
+    types: [checks_requested]
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
@@ -49,8 +51,14 @@ jobs:
           cache: "npm"
       - name: Validate agent process assets
         run: npm run process:check
+      - name: Validate architecture budgets
+        run: npm run architecture:check
+      - name: Test architecture budget validator
+        run: npm run architecture:budget:test
       - name: Test agent process validators
         run: npm run process:check:test
+      - name: Test maintenance report classifier
+        run: npm run maintenance:report:test
       - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
@@ -275,6 +283,7 @@ jobs:
   test-golden-path:
     name: Golden Path Browser Tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     needs: [lint-and-typecheck, format-check]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -293,7 +302,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run deterministic product flows
-        run: npm run test:golden-path
+        run: npm run test:golden-path -- --global-timeout=2700000
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -312,7 +321,7 @@ jobs:
           # Golden Path Browser Tests
 
           - Status: ${{ job.status }}
-          - Command: `npm run test:golden-path`
+          - Command: `npm run test:golden-path -- --global-timeout=2700000`
           - Scope: deterministic phone-web and desktop-renderer Play Best, fallback, no-peers, bridge, download, and cast product flows.
           - Evidence boundary: automated renderer regression coverage, not real-device QA.
           EOF

@@ -43,6 +43,23 @@ inventory, generates `npm run release:sbom`, uploads
 `streamer-desktop-macos-release` with the SBOM and release notes, and can create
 a draft GitHub Release. Update feeds remain separate release work.
 
+## Merge Queue
+
+The default branch is intended to use GitHub's merge queue with strict required
+status checks. Both `CI` and `Dependency Review` listen for
+`merge_group.checks_requested`, so queued commits are tested against the
+current default branch and any compatible entries ahead of them in the queue.
+
+Queue policy:
+
+- keep `Release Gate`, `Review Dependency Changes`, and CodeQL analysis required;
+- use a small merge group for compatible low-risk maintenance changes;
+- keep native framework upgrades, security fixes, and process changes separate;
+- do not bypass the queue or weaken strict status checks to avoid a rebuild.
+
+The dependency review workflow supplies the merge group's base and head SHAs
+explicitly because a merge-group event has no pull-request base/head context.
+
 ## Gate Policy
 
 `npm run release:gate` validates:

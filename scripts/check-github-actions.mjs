@@ -34,8 +34,25 @@ export function findUnpinnedActions(root = process.cwd()) {
   return findings;
 }
 
+const mergeQueueWorkflows = [
+  ".github/workflows/ci.yml",
+  ".github/workflows/dependency-review.yml",
+];
+
+export function findMissingMergeQueueTriggers(root = process.cwd()) {
+  return mergeQueueWorkflows.filter((relativePath) => {
+    const file = join(root, relativePath);
+    if (!existsSync(file)) return true;
+    const content = readFileSync(file, "utf8");
+    return !/\n\s+merge_group:\s*\n\s+types:\s+\[checks_requested\]/.test(
+      content,
+    );
+  });
+}
+
 export function main() {
   const findings = findUnpinnedActions();
+  const missingMergeQueueTriggers = findMissingMergeQueueTriggers();
   if (findings.length > 0) {
     console.error("Every external GitHub Action must use a full commit SHA:");
     for (const finding of findings) {
@@ -43,9 +60,21 @@ export function main() {
         `- ${finding.file}:${finding.line} ${finding.action}@${finding.ref}`,
       );
     }
+  }
+  if (missingMergeQueueTriggers.length > 0) {
+    console.error(
+      "Required merge-queue workflows must handle checks_requested:",
+    );
+    for (const workflow of missingMergeQueueTriggers) {
+      console.error(`- ${workflow}`);
+    }
+  }
+  if (findings.length > 0 || missingMergeQueueTriggers.length > 0) {
     return 1;
   }
-  console.log("All external GitHub Actions are pinned to full commit SHAs.");
+  console.log(
+    "All external GitHub Actions are pinned and merge-queue triggers are configured.",
+  );
   return 0;
 }
 
