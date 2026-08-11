@@ -19,7 +19,7 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { playerChrome } from "./playerChrome";
@@ -162,7 +162,7 @@ export function PlayerControls({
 }: PlayerControlsProps) {
   const { t } = useTranslation();
   const { isCompact } = useWindowClass();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, duration: motionDuration } = useUiMotion();
   const insets = useSafeAreaInsets();
   const compactLayout = isCompact;
   const [volumeTrackWidth, setVolumeTrackWidth] = useState(0);
@@ -300,8 +300,12 @@ export function PlayerControls({
 
   return (
     <Animated.View
-      entering={reducedMotion ? undefined : FadeIn.duration(200)}
-      exiting={reducedMotion ? undefined : FadeOut.duration(200)}
+      entering={
+        reducedMotion ? undefined : FadeIn.duration(motionDuration("overlay"))
+      }
+      exiting={
+        reducedMotion ? undefined : FadeOut.duration(motionDuration("overlay"))
+      }
       style={[
         styles.container,
         Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,

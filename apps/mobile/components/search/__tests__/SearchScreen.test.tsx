@@ -165,6 +165,13 @@ describe("SearchScreen keyboard behavior", () => {
     };
   });
 
+  it("lets the compact tab header own the page title", () => {
+    const screen = render(<SearchScreen />);
+
+    expect(screen.queryByText("search.title")).toBeNull();
+    expect(screen.getByTestId("search-field")).toBeTruthy();
+  });
+
   it("moves shared suggestion selection with arrows and exposes the index", () => {
     const screen = render(<SearchScreen />);
 

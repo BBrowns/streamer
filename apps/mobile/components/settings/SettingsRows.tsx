@@ -9,7 +9,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
-import { getWebAriaChecked, getWebFocusStyle } from "../ui/designSystem";
+import {
+  getWebAriaChecked,
+  getWebFocusStyle,
+  uiRadii,
+  uiSpacing,
+  uiTouchTarget,
+  uiTypography,
+} from "../ui/designSystem";
 import { AppSwitch } from "../ui/AppSwitch";
 import type { SettingsSectionDefinition } from "./settingsSections";
 
@@ -425,37 +432,37 @@ export function SettingsRowGroup({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   group: {
-    borderRadius: 12,
+    borderRadius: uiRadii.card,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   row: {
-    minHeight: 44,
+    minHeight: uiTouchTarget,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 8,
+    gap: uiSpacing.md,
+    borderRadius: uiRadii.control,
   },
   overviewRow: {
-    minHeight: 72,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    minHeight: uiTouchTarget + 28,
+    paddingHorizontal: uiSpacing.md + 2,
+    paddingVertical: uiSpacing.md,
     borderRadius: 0,
   },
   compactRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm + 2,
   },
   actionRow: {
-    minHeight: 64,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    minHeight: uiTouchTarget + 20,
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.sm + 2,
     borderRadius: 0,
   },
   radioRow: {
-    minHeight: 52,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    minHeight: uiTouchTarget + 8,
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.sm,
     borderRadius: 0,
   },
   radioIndicator: {
@@ -467,22 +474,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   infoRow: {
-    minHeight: 52,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    minHeight: uiTouchTarget + 8,
+    paddingHorizontal: uiSpacing.lg,
+    paddingVertical: uiSpacing.sm + 2,
     borderRadius: 0,
   },
   infoLabel: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
+    ...uiTypography.label,
   },
   infoValue: {
     flex: 1.4,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
+    ...uiTypography.label,
     textAlign: "right",
   },
   icon: {

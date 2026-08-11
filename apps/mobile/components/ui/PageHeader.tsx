@@ -9,6 +9,8 @@ type PageHeaderProps = {
   description?: string;
   actions?: ReactNode;
   compact?: boolean;
+  titleVisibility?: "visible" | "navigation-owned";
+  testID?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -18,27 +20,37 @@ export function PageHeader({
   description,
   actions,
   compact = false,
+  titleVisibility = "visible",
+  testID,
   style,
 }: PageHeaderProps) {
   const { colors } = useTheme();
+  const showTitle = titleVisibility === "visible";
+
+  if (!showTitle && !eyebrow && !description && !actions) return null;
 
   return (
-    <View style={[styles.header, compact && styles.headerCompact, style]}>
+    <View
+      testID={testID}
+      style={[styles.header, compact && styles.headerCompact, style]}
+    >
       <View style={styles.copy}>
         {eyebrow ? (
           <Text style={[styles.eyebrow, { color: colors.tint }]}>
             {eyebrow}
           </Text>
         ) : null}
-        <Text
-          accessibilityRole="header"
-          style={[
-            compact ? styles.compactTitle : styles.title,
-            { color: colors.text },
-          ]}
-        >
-          {title}
-        </Text>
+        {showTitle ? (
+          <Text
+            accessibilityRole="header"
+            style={[
+              compact ? styles.compactTitle : styles.title,
+              { color: colors.text },
+            ]}
+          >
+            {title}
+          </Text>
+        ) : null}
         {description ? (
           <Text style={[styles.description, { color: colors.textSecondary }]}>
             {description}

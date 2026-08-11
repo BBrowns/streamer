@@ -67,6 +67,31 @@ describe("MediaArtwork", () => {
     expect(screen.UNSAFE_getByType(ExpoImageHost).props.transition).toBe(0);
   });
 
+  it("marks unlabeled artwork as decorative on web", () => {
+    const screen = render(
+      <MediaArtwork
+        uri="https://images.example.test/hero.jpg"
+        accessible={false}
+      />,
+    );
+
+    const image = screen.UNSAFE_getByType(ExpoImageHost);
+    expect(image.props.accessibilityLabel).toBe("");
+    expect(image.props.accessible).toBe(false);
+  });
+
+  it("passes a deliberate backdrop blur through the shared image primitive", () => {
+    const screen = render(
+      <MediaArtwork
+        uri="https://images.example.test/arrival.jpg"
+        variant="backdrop"
+        blurRadius={20}
+      />,
+    );
+
+    expect(screen.UNSAFE_getByType(ExpoImageHost).props.blurRadius).toBe(20);
+  });
+
   it("removes the loading skeleton after the image finishes loading", () => {
     const screen = render(
       <MediaArtwork

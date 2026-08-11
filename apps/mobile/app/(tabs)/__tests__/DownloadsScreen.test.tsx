@@ -5,6 +5,7 @@ import DownloadsScreen from "../downloads";
 import { clearPendingUndoableActionsForTests } from "../../../services/undoableAction";
 
 const mockPush = jest.fn();
+let mockIsCompact = false;
 
 const mockReadyTask = {
   id: "download-episode-1",
@@ -87,7 +88,7 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 jest.mock("../../../hooks/useWindowClass", () => ({
-  useWindowClass: () => ({ isCompact: false }),
+  useWindowClass: () => ({ isCompact: mockIsCompact }),
 }));
 
 jest.mock("../../../lib/haptics", () => ({
@@ -219,6 +220,7 @@ describe("DownloadsScreen selection", () => {
     clearPendingUndoableActionsForTests();
     Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
     window.confirm = jest.fn(() => true);
+    mockIsCompact = false;
   });
 
   afterEach(() => {
@@ -252,6 +254,20 @@ describe("DownloadsScreen selection", () => {
 
     fireEvent.press(screen.getByLabelText("filter-attention"));
     await waitFor(() => expect(screen.queryByText("Select")).toBeNull());
+  });
+
+  it("lets the compact tab header own the Downloads title", async () => {
+    mockIsCompact = true;
+    const screen = render(<DownloadsScreen />);
+
+    await waitFor(() =>
+      expect(mockDownloadService.refreshQueue).toHaveBeenCalled(),
+    );
+
+    expect(screen.queryByText("downloads.title")).toBeNull();
+    expect(
+      screen.getByText("Your queue and verified offline files on this device"),
+    ).toBeTruthy();
   });
 
   it("defers bulk deletion for exactly seven seconds", async () => {

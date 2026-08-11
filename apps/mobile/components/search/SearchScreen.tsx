@@ -523,14 +523,16 @@ export function SearchScreen() {
       >
         <ContentBoundary padded={false} style={styles.stickyHeaderContent}>
           <View style={styles.heading}>
-            <View style={styles.headingCopy}>
-              <Text style={[styles.eyebrow, { color: colors.tint }]}>
-                {t("search.eyebrow")}
-              </Text>
-              <Text style={[styles.pageTitle, { color: colors.text }]}>
-                {t("search.title")}
-              </Text>
-            </View>
+            {!isCompact ? (
+              <View style={styles.headingCopy}>
+                <Text style={[styles.eyebrow, { color: colors.tint }]}>
+                  {t("search.eyebrow")}
+                </Text>
+                <Text style={[styles.pageTitle, { color: colors.text }]}>
+                  {t("search.title")}
+                </Text>
+              </View>
+            ) : null}
 
             <View
               ref={searchAreaRef}
