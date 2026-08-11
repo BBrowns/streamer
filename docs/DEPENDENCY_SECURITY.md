@@ -44,6 +44,16 @@ CI also:
   Dependabot updates;
 - runs GitHub CodeQL default setup for Actions and JavaScript/TypeScript.
 
+The weekly Maintenance Radar runs the read-only collector and stores a bounded
+Markdown/JSON report as a workflow artifact. It does not open issues, change
+repository settings, or approve dependency updates. Use the report to create a
+focused maintenance task with an owner and removal condition.
+
+Dependabot security updates are grouped only for compatible patch/minor paths.
+Framework, native, and major upgrades remain separately reviewable so a
+security PR cannot silently become an Electron, Expo, React Native, Prisma, or
+Vite migration.
+
 Repository secret scanning and push protection must remain enabled in GitHub.
 Push protection is the preventive secret gate; do not replace it with an ad hoc
 regular-expression scan. If these server-side controls are unavailable or

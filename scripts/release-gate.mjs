@@ -93,6 +93,7 @@ function checkCiWorkflow() {
     ["security:audit", "production dependency audit"],
     ["npm run process:check", "agent process asset validation"],
     ["npm run process:check:test", "agent process validator tests"],
+    ["npm run maintenance:report:test", "maintenance report classifier tests"],
     ["actionlint@v1.7.12", "pinned GitHub Actions lint"],
     ["npm run workflows:check", "full GitHub Actions SHA policy"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
@@ -153,6 +154,7 @@ function checkCiWorkflow() {
 
   const dependencyReviewWorkflow = ".github/workflows/dependency-review.yml";
   requireFile(dependencyReviewWorkflow);
+  requireFile(".github/workflows/maintenance-radar.yml");
   requireText(
     dependencyReviewWorkflow,
     "actions/dependency-review-action@",
