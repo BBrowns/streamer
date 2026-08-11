@@ -48,6 +48,14 @@ Current phase:
   submitted Search remains the active title-retrieval flow. Continue Watching
   **Resume** goes through the existing planner/session path with a runtime-only
   saved-position intent.
+- Playback diagnostics now exports a bounded Sentry breadcrumb slice for plan
+  usability, first frame, initial buffering, stalls, and fallback. Values are
+  rounded/capped, the player session emits at most 24 such breadcrumbs, and
+  the full numeric snapshot remains local to the diagnostics panel/debug
+  bundle. No track labels, seek positions, source identities, titles, or
+  provider details cross the Sentry boundary. Desktop release evidence now
+  includes a production-only SPDX SBOM, provenance attestations for the signed
+  artifacts, and an explicit manual-update rollback posture.
 - Current media/personal pass: `MediaArtwork` unifies resilient remote artwork
   for `PosterCard` and detail layouts; provider-declared trailers are restricted
   to safe YouTube destinations; player chrome is always cinema-dark; Library
@@ -61,6 +69,9 @@ Current phase:
   prepares torrent candidates serially; no parallel torrent hedge is implied.
 - QA and release evidence still open: real-device QA and release-candidate
   evidence are required before making production-ready or release-ready claims.
+  The automated release-evidence slice is now merged through PR #186; this
+  remaining lane is intentionally limited to real targets, packaging, and
+  credentials rather than another playback/control-plane rewrite.
 - Consumer-player implementation pass: normalized media/runtime/timeline
   boundaries, true cross-input scrubbing, selected-file gateway track probing,
   URL-free torrent and add-on subtitle pipelines, accepted-clock external
@@ -89,36 +100,36 @@ Current phase:
   consumer closes, while genuine source errors still close the response and
   use redacted diagnostics.
 
-The merged implementation roadmap is complete through **PR #160** in
+The merged implementation roadmap is complete through **PR #186** in
 [ROADMAP.md](./ROADMAP.md). The next phase is post-v3 hardening and
-productization: bridge session/reconnect operations, Planner v3 outcome
-evidence and bounded v2 deprecation, player lifecycle decomposition, URL-free
-download recovery, and capability-gated desktop/offline features. Real-target
-QA and RC evidence remain intentionally deferred until the required targets and
-release credentials are available.
+productization. Bridge operations, Planner v3 rollout evidence, player
+lifecycle decomposition, URL-free download recovery, HLS/cast/discovery
+hardening, and desktop release evidence are all shipped in master through PR
+#186. Real-target QA and RC evidence remain intentionally deferred until the
+required targets and release credentials are available.
 
-For the release-gate compatibility check, the previous handoff stated, “The merged implementation roadmap is complete through **PR #159**.” PR #160
-supersedes that checkpoint and is the current shipped baseline.
+For historical release-gate compatibility checks, earlier handoffs referenced
+PRs #159 and #160. PR #186 is the current shipped baseline for the completed
+implementation slices; only evidence-gated target validation remains open.
 
 ## Next Engineering Phase
 
-Work in this phase must preserve the existing `PlaybackSession`/planner/source
-ownership and keep platform-native behavior capability-gated:
+The implementation phase is complete through PR #186. Preserve the existing
+`PlaybackSession`/planner/source ownership while the remaining evidence lane is
+executed:
 
-1. Complete Bridge v1 operations: access-session revoke, bounded client renewal,
-   reconnect/status recovery, idempotency conflict evidence and privacy-safe
-   counters without logging URLs, tokens or media identifiers.
-2. Measure Planner v3 success, unsupported fallback and explicit legacy
-   selection; block new v2 call sites outside the compatibility adapter and
-   remove v2 only after 30 days without fallback evidence from supported
-   releases.
-3. Extract the remaining player session/attempt lifecycle coordination without
-   introducing a second store or orchestration state machine.
-4. Add URL-free, versioned download-recovery metadata and restart-time
-   replanning; reuse partial files only after validator and integrity checks.
-5. Add a verified Electron offline-file adapter and opt-in Smart Downloads;
-   defer HLS offline, remote playback and richer discovery facets until these
-   foundations have evidence.
+1. Keep Bridge v1 and Planner v3 telemetry bounded and privacy-safe. Do not add
+   a second control plane or remove the v2 compatibility adapter before the
+   documented 30-day, no-fallback window is met.
+2. Run the QA matrix on packaged macOS, browser web, iPhone, and Android;
+   validate direct/fallback/torrent/remux/seek/download/cast/restart flows and
+   record every result as pass, fail, blocked, or unknown.
+3. Run signed/notarized desktop and mobile preview workflows with production-
+   like credentials when available, attach SBOM/provenance subjects, and make
+   the release go/no-go decision from the recorded evidence.
+4. Keep native/browser HLS, cast, and richer discovery support capability-gated
+   until their target-specific evidence exists. Never promote CI or simulator
+   coverage into a physical-device support claim.
 
 Known physical-device and packaged-release gaps stay recorded in
 `docs/QA_MATRIX.md`, `docs/PLAYER_ARCHITECTURE.md`, and
@@ -642,7 +653,10 @@ Still open:
 
 - Validate pause, resume, delete, restart recovery, and storage reporting with
   real large files on desktop, iPhone, and Android.
-- Keep HLS offline unsupported in v1 unless a proper segment packager is built.
+- Electron HLS offline now uses a bounded managed segment packager for finite
+  VOD media playlists only. Master/live/DRM/byte-range/auxiliary playlists are
+  rejected, and browser/iOS/Android remain unsupported pending native-target
+  evidence and a platform-appropriate packager.
 - Torrent downloads on mobile should use the desktop bridge/gateway as
   resolver/downloader where needed.
 - Validate safe replan-on-resume with real large files after app restart on
@@ -661,6 +675,13 @@ Casting now uses the playback session control plane for the primary flow:
 - Cast device capabilities include HLS/MP4/MKV support, codec hints, localhost
   reachability, remote-URL requirement, and remux allowance. The desktop cast
   modal surfaces the most important format/remux hints in the device list.
+- The mobile cast service caches only unauthenticated legacy
+  device/capability snapshots in a bounded runtime-only window; authenticated
+  Bridge v1 discovery always re-checks authorization. Transport failures and
+  explicit discovery/retry actions invalidate/reset negotiation and force a
+  fresh snapshot. Rotated opaque identities require an exact or unique
+  name/type match; ambiguous matches return to explicit device selection
+  without persisting network details.
 - Manual advanced-source casting is allowed only after client-side preflight;
   localhost, `127.0.0.1`, IPv6 loopback, and `.localhost` playback URLs are
   rejected before the bridge cast request is sent.
@@ -738,9 +759,10 @@ reviewed there before merge. See
 
 The remaining work is validation or depends on trustworthy upstream metadata:
 
-- Search provider provenance and partial-failure counts are reliable. Add genre,
-  language, quality, or richer availability facets only when upstream metadata
-  is reliable.
+- Search provider provenance and partial-failure counts are reliable. Search
+  now exposes bounded genre and language facets when upstream metadata supplies
+  them; add quality or richer availability facets only when those contracts are
+  equally reliable.
 - Validate the new artwork fallback, player chrome, history, and notification
   interactions on real iPhone/iPad and Android targets; browser emulation and
   desktop-renderer screenshots do not prove native video, safe-area, or touch
@@ -874,10 +896,11 @@ explicitly deferred real-device QA phase are maintained in
 17. **PR #122: Smart Downloads.** Add opt-in next-episode, storage-limit,
     Wi-Fi-only, quality, and per-series download rules after Offline Library v2.
     Current implementation keeps automation disabled by default, stores local
-    smart-download preferences and planned next-episode intents, shows those
-    controls on Downloads and Settings, and only records a next-episode plan
-    after a series download starts. It does not claim background downloads are
-    reliable across mobile platforms yet.
+    smart-download preferences, policy-evaluated next-episode intents, and
+    requested quality, shows those controls on Downloads and Settings, and only
+    records a next-episode plan after a series download starts. Wi-Fi/storage
+    blocks remain read-only intent state; it does not claim background downloads
+    are reliable across mobile platforms yet.
 18. **PR #123: Personalization and profiles light.** Add local preferences for
     quality, subtitles, audio language, autoplay, preferred providers, and watch
     history improvements. Current implementation keeps this intentionally

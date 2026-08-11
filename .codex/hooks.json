@@ -1,0 +1,37 @@
+{
+  "description": "Fast project runtime and destructive-command guardrails.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/runtime_policy.py\"",
+            "timeout": 5,
+            "statusMessage": "Checking Streamer runtime",
+            "additionalContextLimit": 256
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/graphify_hook.py\" hook-check",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/runtime_policy.py\"",
+            "timeout": 5,
+            "statusMessage": "Checking repository command policy"
+          }
+        ]
+      }
+    ]
+  }
+}

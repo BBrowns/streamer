@@ -5,10 +5,15 @@ on:
     branches: [main, master]
   push:
     branches: [main, master]
+  merge_group:
+    types: [checks_requested]
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
   NPM_VERSION: "11.18.0"
+
+permissions:
+  contents: read
 
 # A newer commit on the same PR supersedes every earlier CI run. Main/master
 # releases retain their full history and are never cancelled by this policy.
@@ -17,16 +22,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  workflow-lint:
+    name: GitHub Actions Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.25.0"
+          cache: false
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Check GitHub Actions workflows
+        run: |
+          actionlint_path="$(go env GOPATH)/bin/actionlint"
+          "${actionlint_path}"
+      - name: Check full commit pin policy
+        run: npm run workflows:check
+
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - name: Validate agent process assets
+        run: npm run process:check
+      - name: Validate architecture budgets
+        run: npm run architecture:check
+      - name: Test architecture budget validator
+        run: npm run architecture:budget:test
+      - name: Test agent process validators
+        run: npm run process:check:test
+      - name: Test maintenance report classifier
+        run: npm run maintenance:report:test
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Lint All Workspaces
@@ -44,12 +77,12 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Check formatting
         run: npm run format:check
 
@@ -57,36 +90,28 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Verify dependency install-script policy
-        run: npx --yes npm@${NPM_VERSION} run security:install-scripts
+        run: npx --yes "npm@${NPM_VERSION}" run security:install-scripts
       - name: Audit production dependencies
-        run: npx --yes npm@${NPM_VERSION} run security:audit
-      - name: Scan for secrets in staged files
-        run: |
-          # Check for common secret patterns in tracked files
-          if git grep -rIl '(PRIVATE_KEY|password\s*=\s*["\x27]|api_key\s*=)' -- ':!*.test.*' ':!*.md' ':!*.yml' ':!*.lock' 2>/dev/null; then
-            echo "⚠️ Potential secrets found in tracked files"
-            exit 1
-          fi
-          echo "✅ No secrets detected"
+        run: npx --yes "npm@${NPM_VERSION}" run security:audit
 
   test-shared:
     name: Shared Tests
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Run Shared Tests
         run: npm run test --workspace=@streamer/shared
       - name: Write CI summary
@@ -102,7 +127,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-shared-tests
           path: artifacts/ci-summaries/shared-tests.md
@@ -133,31 +158,31 @@ jobs:
       JWT_SECRET: ci-test-secret
       NODE_ENV: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Push DB Schema
         run: npx prisma db push --schema=server/prisma/schema.prisma
       - name: Force Install Missing Native/Coverage Dependencies
-        run: npx --yes npm@${NPM_VERSION} install --no-save @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@4.1.10
+        run: npx --yes "npm@${NPM_VERSION}" install --no-save @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@4.1.10
       - name: Run Tests with Coverage
         run: npm run test --workspace=server -- --coverage
         env:
           LOG_LEVEL: silent
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: server-coverage
           path: server/coverage/
           retention-days: 14
       - name: Coverage summary comment
-        uses: davelosert/vitest-coverage-report-action@v2
+        uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2
         if: github.event_name == 'pull_request'
         with:
           working-directory: server
@@ -177,7 +202,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-server-tests
           path: artifacts/ci-summaries/server-tests.md
@@ -188,12 +213,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Validate Dev Runtime Selection
         run: npm run dev:runtime:test
       - name: Type Check Stream Server
@@ -213,7 +238,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-stream-server-tests
           path: artifacts/ci-summaries/stream-server-tests.md
@@ -224,12 +249,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Type Check Mobile
@@ -249,7 +274,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-mobile-tests
           path: artifacts/ci-summaries/mobile-tests.md
@@ -258,16 +283,17 @@ jobs:
   test-golden-path:
     name: Golden Path Browser Tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     needs: [lint-and-typecheck, format-check]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Restore Playwright browser cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -276,10 +302,10 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run deterministic product flows
-        run: npm run test:golden-path
+        run: npm run test:golden-path -- --global-timeout=2700000
       - name: Upload browser evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: golden-path-browser-report
           path: |
@@ -295,13 +321,13 @@ jobs:
           # Golden Path Browser Tests
 
           - Status: ${{ job.status }}
-          - Command: `npm run test:golden-path`
+          - Command: `npm run test:golden-path -- --global-timeout=2700000`
           - Scope: deterministic phone-web and desktop-renderer Play Best, fallback, no-peers, bridge, download, and cast product flows.
           - Evidence boundary: automated renderer regression coverage, not real-device QA.
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-golden-path-tests
           path: artifacts/ci-summaries/golden-path-tests.md
@@ -316,14 +342,14 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [lint-and-typecheck, format-check]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Restore Playwright browser cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -340,7 +366,7 @@ jobs:
           --source-commit ${{ github.sha }}
           --output artifacts/visual-baselines/linux-manifest.json
       - name: Upload Linux baseline candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: visual-baseline-candidate-linux
           path: |
@@ -354,12 +380,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Build Shared
@@ -385,6 +411,8 @@ jobs:
           STREAMER_BUILD_ENVIRONMENT: test
       - name: Validate RC evidence generator
         run: npm run rc:evidence:test
+      - name: Validate production SBOM generator
+        run: npm run release:sbom:test
       - name: Upload Sentry Release Artifacts
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: npm run sentry:release
@@ -407,7 +435,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-build-check
           path: artifacts/ci-summaries/build-check.md
@@ -418,7 +446,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, format-check]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build and start production server container
         run: bash scripts/smoke-server-container.sh
 
@@ -427,18 +455,18 @@ jobs:
     runs-on: macos-latest
     needs: build-check
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes npm@${NPM_VERSION} ci --no-audit --no-fund
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Build macOS desktop package directory
         run: npm run package:mac --workspace=@streamer/desktop
       - name: Validate packaged inputs
         run: npm run package:check --workspace=@streamer/desktop
       - name: Upload desktop package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: desktop-macos-package-dir
           path: apps/desktop/release/**
@@ -458,7 +486,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-desktop-package
           path: artifacts/ci-summaries/desktop-package.md
@@ -469,6 +497,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - workflow-lint
       - lint-and-typecheck
       - format-check
       - security-audit
@@ -481,8 +510,23 @@ jobs:
       - server-container
       - desktop-package
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Verify required CI jobs succeeded
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module <<'NODE'
+          const needs = JSON.parse(process.env.CI_NEEDS);
+          const failures = Object.entries(needs)
+            .filter(([, value]) => value.result !== "success")
+            .map(([name, value]) => `${name}:${value.result}`);
+          if (failures.length > 0) {
+            console.error(`Required CI jobs did not succeed: ${failures.join(", ")}`);
+            process.exit(1);
+          }
+          console.log("All required CI jobs succeeded.");
+          NODE
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
       - name: Run release gate
@@ -496,14 +540,14 @@ jobs:
           STREAMER_BUILD_ENVIRONMENT: test
       - name: Upload release gate summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-summary-release-gate
           path: artifacts/ci-summaries/release-gate.md
           retention-days: 14
       - name: Upload RC evidence bundle
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rc-evidence-bundle
           path: artifacts/rc-evidence/rc-evidence.md

@@ -27,6 +27,12 @@ const {
   validateDownloadUrlWithDns,
 } = require("./download-url-policy");
 const {
+  HLS_LIMITS,
+  isHlsUrl,
+  isRejectedHlsContentType,
+  parseHlsMediaPlaylist,
+} = require("./hls-offline");
+const {
   DownloadScheduler,
   MAX_ACTIVE_DOWNLOADS,
   evaluateDownloadStart,
@@ -404,6 +410,7 @@ function restoreDownloadJobs() {
         file: null,
         pauseRequested: false,
         cancelRequested: false,
+        hlsStagingDir: null,
         waiters: [],
       });
     }
@@ -597,6 +604,11 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
     job.requiresReplan = true;
     emitDownloadJob(job);
     releaseDownloadSlot(job);
+    return;
+  }
+
+  if (isHlsUrl(job.downloadUrl)) {
+    await startHlsDownloadRequest(job);
     return;
   }
 
@@ -800,6 +812,278 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
   });
 }
 
+const HLS_STORAGE_SAFETY_BYTES = 64 * 1024 * 1024;
+
+async function requestHlsResource(job, rawUrl, maxBytes, redirectCount = 0) {
+  if (job.pauseRequested || job.cancelRequested) {
+    throw new Error("HLS download interrupted");
+  }
+  const validatedUrl = await validateDownloadUrlWithDns(rawUrl);
+  const parsedUrl = validatedUrl.parsed;
+  const client = parsedUrl.protocol === "https:" ? https : http;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      job.req = null;
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const options = validatedUrl.addresses.length
+      ? { lookup: createPinnedLookup(validatedUrl.addresses) }
+      : {};
+    const req = client.get(parsedUrl, options, (res) => {
+      const statusCode = res.statusCode || 0;
+      const location = res.headers.location;
+      if ([301, 302, 303, 307, 308].includes(statusCode) && location) {
+        res.resume();
+        if (redirectCount >= 5) {
+          finish(new Error("HLS resource redirected too many times"));
+          return;
+        }
+        let nextUrl;
+        try {
+          nextUrl = new URL(location, parsedUrl).toString();
+        } catch {
+          finish(new Error("HLS resource redirect is invalid"));
+          return;
+        }
+        requestHlsResource(job, nextUrl, maxBytes, redirectCount + 1)
+          .then((value) => finish(null, value))
+          .catch((error) => finish(error));
+        return;
+      }
+      if (statusCode < 200 || statusCode >= 300) {
+        res.resume();
+        finish(new Error(`HLS resource failed with HTTP ${statusCode}`));
+        return;
+      }
+
+      const contentLength = Number(res.headers["content-length"] || 0);
+      if (contentLength > maxBytes) {
+        res.resume();
+        finish(new Error("HLS resource exceeds the offline size limit"));
+        return;
+      }
+
+      const chunks = [];
+      let totalBytes = 0;
+      const onData = (chunk) => {
+        totalBytes += chunk.length;
+        if (totalBytes > maxBytes) {
+          res.destroy(new Error("HLS resource exceeds the offline size limit"));
+          return;
+        }
+        chunks.push(chunk);
+      };
+      const onError = (error) => finish(error);
+      res.on("data", onData);
+      res.once("error", onError);
+      res.once("end", () => {
+        if (totalBytes === 0) {
+          finish(new Error("HLS resource is empty"));
+          return;
+        }
+        finish(null, {
+          body: Buffer.concat(chunks, totalBytes),
+          contentType: Array.isArray(res.headers["content-type"])
+            ? res.headers["content-type"][0]
+            : res.headers["content-type"] || "",
+        });
+      });
+    });
+    job.req = req;
+    req.setTimeout(30_000, () => {
+      req.destroy(new Error("HLS resource request timed out"));
+    });
+    req.once("error", (error) => finish(error));
+  });
+}
+
+function removeHlsStaging(job) {
+  const stagingDir = job.hlsStagingDir;
+  if (stagingDir) {
+    try {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+    } catch {}
+  }
+  try {
+    fs.rmSync(job.tempPath, { force: true });
+  } catch {}
+  job.hlsStagingDir = null;
+}
+
+function isPathInsideDirectory(rootPath, candidatePath) {
+  const relativePath = path.relative(
+    path.resolve(rootPath),
+    path.resolve(candidatePath),
+  );
+  return Boolean(
+    relativePath &&
+    !relativePath.startsWith("..") &&
+    !path.isAbsolute(relativePath),
+  );
+}
+
+function inspectManagedHlsManifest(filePath) {
+  let text;
+  try {
+    text = fs.readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+  if (!/^#EXTM3U(?:\r?\n|$)/.test(text)) return null;
+  if (!/#EXT-X-ENDLIST(?:\r?\n|$)/i.test(text)) return null;
+
+  const references = new Set();
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (/(?:https?|file|streamer):\/\//i.test(line)) return null;
+    const uriAttribute = /URI\s*=\s*"([^"]+)"/i.exec(line)?.[1];
+    if (uriAttribute) references.add(uriAttribute);
+    if (line && !line.startsWith("#")) references.add(line);
+  }
+  if (!references.size || references.size > HLS_LIMITS.maxSegments + 1) {
+    return null;
+  }
+
+  let mediaBytes = 0;
+  for (const reference of references) {
+    if (/^(?:[a-z]+:|\/)/i.test(reference)) return null;
+    const referencedPath = path.resolve(path.dirname(filePath), reference);
+    if (!isPathInsideDirectory(downloadsPath, referencedPath)) return null;
+    try {
+      const stats = fs.statSync(referencedPath);
+      if (!stats.isFile() || stats.size <= 0) return null;
+      mediaBytes += stats.size;
+    } catch {
+      return null;
+    }
+    if (mediaBytes > HLS_LIMITS.maxTotalBytes) return null;
+  }
+
+  return {
+    mediaBytes,
+    contentType: "application/vnd.apple.mpegurl",
+  };
+}
+
+async function startHlsDownloadRequest(job) {
+  const stagingDir = `${job.filePath}.segments.part`;
+  const finalSegmentDir = `${job.filePath}.segments`;
+  job.hlsStagingDir = stagingDir;
+  removeHlsStaging(job);
+  job.hlsStagingDir = stagingDir;
+  fs.mkdirSync(stagingDir, { recursive: true });
+  try {
+    fs.rmSync(finalSegmentDir, { recursive: true, force: true });
+  } catch {}
+
+  job.status = "Downloading";
+  job.error = null;
+  job.failureReason = null;
+  job.requiresReplan = false;
+  job.pauseRequested = false;
+  job.cancelRequested = false;
+  job.totalBytesWritten = 0;
+  job.totalBytesExpectedToWrite = 0;
+  job.metadataBytes = 0;
+  job.contentType = "application/vnd.apple.mpegurl";
+  emitDownloadJob(job);
+
+  try {
+    const playlistResponse = await requestHlsResource(
+      job,
+      job.downloadUrl,
+      HLS_LIMITS.maxPlaylistBytes,
+    );
+    if (
+      isRejectedHlsContentType(playlistResponse.contentType, {
+        allowPlaylist: true,
+      })
+    ) {
+      throw new Error("HLS playlist response is not a playlist");
+    }
+    const playlist = parseHlsMediaPlaylist(
+      playlistResponse.body.toString("utf8"),
+      job.downloadUrl,
+      `${path.basename(job.filename)}.segments`,
+    );
+    let totalBytes = 0;
+    for (const resource of playlist.resources) {
+      if (job.pauseRequested || job.cancelRequested) {
+        throw new Error("HLS download interrupted");
+      }
+      const response = await requestHlsResource(
+        job,
+        resource.url,
+        HLS_LIMITS.maxSegmentBytes,
+      );
+      if (isRejectedHlsContentType(response.contentType)) {
+        throw new Error("HLS segment response contains metadata");
+      }
+      totalBytes += response.body.length;
+      if (totalBytes > HLS_LIMITS.maxTotalBytes) {
+        throw new Error("HLS download exceeds the offline size limit");
+      }
+      const storage = getStorageInfo();
+      if (
+        storage.known &&
+        storage.free < response.body.length + HLS_STORAGE_SAFETY_BYTES
+      ) {
+        throw new Error(
+          "Not enough local storage is available for this HLS download",
+        );
+      }
+      const relativePath = resource.localPath.slice(
+        `${path.basename(job.filename)}.segments/`.length,
+      );
+      fs.writeFileSync(path.join(stagingDir, relativePath), response.body, {
+        flag: "wx",
+        mode: 0o600,
+      });
+      job.totalBytesWritten = totalBytes;
+      // Segment sizes are not known until each resource is fetched. Keep the
+      // expected byte count unknown while streaming instead of reporting a
+      // false 100% after the first segment; completion emits the final total.
+      job.totalBytesExpectedToWrite = 0;
+      job.metadataBytes = totalBytes;
+      emitDownloadJob(job);
+    }
+
+    for (const resource of playlist.resources) {
+      const relativePath = resource.localPath.slice(
+        `${path.basename(job.filename)}.segments/`.length,
+      );
+      if (!fs.existsSync(path.join(stagingDir, relativePath))) {
+        throw new Error("HLS resource verification failed");
+      }
+    }
+    fs.writeFileSync(job.tempPath, playlist.manifest, { mode: 0o600 });
+    fs.renameSync(stagingDir, finalSegmentDir);
+    fs.renameSync(job.tempPath, job.filePath);
+    job.hlsStagingDir = null;
+    job.totalBytesExpectedToWrite = totalBytes;
+    job.contentType = "application/vnd.apple.mpegurl";
+    completeDownloadJob(job);
+  } catch (error) {
+    job.req?.destroy();
+    job.req = null;
+    if (job.pauseRequested || job.cancelRequested) {
+      removeHlsStaging(job);
+      releaseDownloadSlot(job);
+      return;
+    }
+    removeHlsStaging(job);
+    failDownloadJob(
+      job,
+      error instanceof Error ? error : new Error(String(error)),
+    );
+  }
+}
+
 function startDownloadJob(id, rawUrl, filename) {
   let existingJob = downloadJobs.get(id);
   if (
@@ -836,7 +1120,11 @@ function startDownloadJob(id, rawUrl, filename) {
     return snapshotDownloadJob(existingJob);
   }
 
-  const safeFilename = sanitizeDownloadFilename(filename);
+  const sanitizedFilename = sanitizeDownloadFilename(filename);
+  const safeFilename =
+    isHlsUrl(rawUrl) && !sanitizedFilename.toLowerCase().endsWith(".m3u8")
+      ? `${sanitizedFilename}.m3u8`
+      : sanitizedFilename;
   const filePath = path.join(downloadsPath, safeFilename);
   const tempPath = `${filePath}.part`;
   const job = {
@@ -861,6 +1149,7 @@ function startDownloadJob(id, rawUrl, filename) {
     file: null,
     pauseRequested: false,
     cancelRequested: false,
+    hlsStagingDir: null,
     waiters: [],
   };
 
@@ -880,6 +1169,7 @@ function pauseDownloadJob(id) {
     downloadScheduler.remove(id);
     job.req?.destroy();
     job.file?.destroy();
+    if (job.hlsStagingDir) removeHlsStaging(job);
     if (fs.existsSync(job.tempPath)) {
       job.totalBytesWritten = fs.statSync(job.tempPath).size;
     }
@@ -923,6 +1213,7 @@ function cancelDownloadJob(id) {
   downloadScheduler.remove(id);
   job.req?.destroy();
   job.file?.destroy();
+  if (job.hlsStagingDir) removeHlsStaging(job);
   try {
     fs.rmSync(job.tempPath, { force: true });
   } catch {}
@@ -1904,10 +2195,18 @@ electron_1.app.whenReady().then(async () => {
       return { exists: false, isFile: false, sizeBytes: 0 };
     }
     const stats = fs.statSync(filePath);
+    const hlsManifest = stats.isFile()
+      ? inspectManagedHlsManifest(filePath)
+      : null;
     return {
       exists: true,
       isFile: stats.isFile(),
-      sizeBytes: stats.isFile() ? Math.max(0, stats.size) : 0,
+      sizeBytes:
+        hlsManifest?.mediaBytes ??
+        (stats.isFile() ? Math.max(0, stats.size) : 0),
+      ...(hlsManifest
+        ? { contentType: hlsManifest.contentType, isHls: true }
+        : {}),
     };
   });
 
@@ -1922,6 +2221,7 @@ electron_1.app.whenReady().then(async () => {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
+    fs.rmSync(`${filePath}.segments`, { recursive: true, force: true });
   });
 
   handleTrusted("get-bridge-info", async () => getBridgeInfoSnapshot());

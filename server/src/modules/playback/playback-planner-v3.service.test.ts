@@ -144,6 +144,42 @@ describe("PlaybackPlannerV3Service", () => {
     expect(playbackPlanV3Schema.safeParse(plan).success).toBe(true);
   });
 
+  it("selects the bounded HLS offline route only for Electron", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        url: "https://cdn.example.test/vod/movie.m3u8",
+        title: "Movie HLS VOD",
+        resolution: "1080p",
+      },
+    ] as Stream[]);
+
+    const desktopPlan = await service.createPlanV3(
+      "user-1",
+      request([node()], {
+        action: "download",
+        deviceProfile: { ...webProfile, platform: "electron" },
+      }),
+      "req-hls-desktop",
+    );
+
+    expect(desktopPlan.selectedCandidate?.route).toMatchObject({
+      executionTarget: "on-device",
+      delivery: "hls",
+      capabilities: { offline: true },
+    });
+    expect(playbackPlanV3Schema.safeParse(desktopPlan).success).toBe(true);
+
+    const webPlan = await service.createPlanV3(
+      "user-1",
+      request([node()], { action: "download" }),
+      "req-hls-web",
+    );
+    expect(webPlan.selectedCandidate).toBeUndefined();
+    expect(webPlan.rejectedCandidates[0]?.reasonCode).toBe(
+      "hls_offline_unsupported",
+    );
+  });
+
   it("routes a directly streamable torrent through bridge range HTTP", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {

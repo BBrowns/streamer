@@ -112,8 +112,10 @@ npm run test:electron-smoke
 
 Failures retain screenshots, traces, videos, and an HTML report under
 `artifacts/`. Successful screenshot calls are also written into their
-Playwright result directories. CI uploads these artifacts; they are run
-evidence, not source-controlled product assets.
+Playwright result directories. CI also writes a bounded JSON result file with
+per-test durations and runs the suite with a 60-minute job timeout plus an
+explicit 45-minute Playwright global timeout. CI uploads these artifacts; they
+are run evidence, not source-controlled product assets.
 
 The earlier checked-in Obsidian references remain under
 [`docs/pr-assets/obsidian-editorial`](./pr-assets/obsidian-editorial/). They are

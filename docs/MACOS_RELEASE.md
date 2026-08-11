@@ -89,8 +89,21 @@ npm run package:mac:release --workspace=@streamer/desktop
 ```
 
 Then it validates that DMG/ZIP artifacts exist, uploads
-`streamer-desktop-macos-release`, writes a release-notes draft, and optionally
-creates a draft GitHub Release with those artifacts attached.
+`streamer-desktop-macos-release`, generates a production-only SPDX SBOM from
+`package-lock.json`, writes a release-notes draft, and optionally creates a
+draft GitHub Release with those artifacts attached. Before upload, the workflow
+creates signed GitHub build-provenance attestations for every DMG, ZIP, and the
+SBOM. The release job pins every action that receives repository write or OIDC
+permissions to a reviewed commit.
+
+The SBOM is generated without installing or embedding development dependencies:
+
+```bash
+npm run release:sbom
+```
+
+The default output is `artifacts/release/sbom.spdx.json`. Treat it as release
+evidence and publish it alongside the exact signed artifacts it inventories.
 
 ## Artifact Validation
 
@@ -100,6 +113,7 @@ After building a signed app, inspect the `.app` before distribution:
 codesign -dvvv --entitlements :- "apps/desktop/release/mac-arm64/Streamer.app"
 spctl -a -vv "apps/desktop/release/mac-arm64/Streamer.app"
 xcrun stapler validate "apps/desktop/release/Streamer-*.dmg"
+gh attestation verify "apps/desktop/release/Streamer-*.dmg" --repo BBrowns/streamer
 ```
 
 Expected results:
@@ -108,6 +122,8 @@ Expected results:
 - Entitlements include Electron hardened-runtime allowances.
 - `spctl` accepts the app after notarization.
 - `stapler` validates notarized DMG artifacts.
+- `gh attestation verify` confirms the artifact was produced by this
+  repository's GitHub Actions workflow.
 
 ## Current Limits
 

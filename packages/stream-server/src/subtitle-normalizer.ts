@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { stripSubtitleMarkup } from "@streamer/shared";
 
 export const MAX_SUBTITLE_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const SUBTITLE_EXTRACTION_TIMEOUT_MS = 15_000;
@@ -88,16 +89,7 @@ function parseTimestamp(value: string) {
 }
 
 function sanitizeText(value: string) {
-  return value
-    .replace(/\{\\[^}]+\}/g, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/\r/g, "")
-    .trim();
+  return stripSubtitleMarkup(value).split("\r").join("").trim();
 }
 
 function parseBlockCues(document: string) {

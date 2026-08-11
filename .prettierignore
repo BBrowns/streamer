@@ -4,3 +4,5 @@
 .codex/
 graphify-out/
 AGENTS.md
+.agent-memory/
+.agents/

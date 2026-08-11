@@ -57,6 +57,27 @@ describe("action preflight", () => {
     });
   });
 
+  it("allows HLS offline preparation only on the desktop target", () => {
+    expect(
+      evaluateActionPreflight(
+        input({
+          action: "download",
+          platform: "electron",
+          source: { kind: "hls", endpoint: "remote" },
+        }),
+      ),
+    ).toMatchObject({ ready: true, reason: "ready" });
+    expect(
+      evaluateActionPreflight(
+        input({
+          action: "download",
+          platform: "web",
+          source: { kind: "hls", endpoint: "remote" },
+        }),
+      ).reason,
+    ).toBe("hls_offline_unsupported");
+  });
+
   it("uses the same unavailable reason for torrent play and download", () => {
     const bridge = {
       configured: true,

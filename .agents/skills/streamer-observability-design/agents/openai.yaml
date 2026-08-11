@@ -1,0 +1,4 @@
+interface:
+  display_name: "Observability Design"
+  short_description: "Design safe actionable telemetry and SLOs"
+  default_prompt: "Use $streamer-observability-design to design privacy-safe metrics, traces, logs, SLOs, and actionable alerts for this change."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer UI Quality"
+  short_description: "Design, implement, and review Streamer UI changes"
+  default_prompt: "Use $streamer-ui-quality to design or review this Streamer UI change with accessibility, adaptive layouts, shared tokens, platform compatibility, and visual QA."

@@ -104,12 +104,25 @@ export function validateOfflineInspection({
 export async function probeLocalMedia(
   localUri: string,
   timeoutMs = OFFLINE_MEDIA_PROBE_TIMEOUT_MS,
+  contentType?: string,
 ): Promise<boolean> {
   try {
     if (Platform.OS === "web" && typeof document !== "undefined") {
+      // Chromium/Electron does not expose native HLS playback through the
+      // HTMLMediaElement. The desktop main process has already validated the
+      // managed manifest and every segment in `inspect-file`; accept that
+      // trusted HLS inspection instead of incorrectly rejecting a valid local
+      // bundle through the progressive web probe.
+      if (
+        contentType?.toLowerCase().includes("mpegurl") &&
+        typeof window !== "undefined" &&
+        typeof window.desktopBridge?.inspectFile === "function"
+      ) {
+        return true;
+      }
       return await probeLocalMediaOnWeb(localUri, timeoutMs);
     }
-    return await probeLocalMediaWithExpoVideo(localUri, timeoutMs);
+    return await probeLocalMediaWithExpoVideo(localUri, timeoutMs, contentType);
   } catch {
     return false;
   }
@@ -178,6 +191,7 @@ async function probeLocalMediaOnWeb(localUri: string, timeoutMs: number) {
 async function probeLocalMediaWithExpoVideo(
   localUri: string,
   timeoutMs: number,
+  contentType?: string,
 ) {
   // Keep the native module out of web and unit-test initialization. Metro
   // still resolves this static require for native bundles.
@@ -185,7 +199,9 @@ async function probeLocalMediaWithExpoVideo(
     require("expo-video") as typeof import("expo-video");
   const player = createVideoPlayer({
     uri: localUri,
-    contentType: "progressive",
+    contentType: contentType?.toLowerCase().includes("mpegurl")
+      ? "hls"
+      : "progressive",
   });
   try {
     return await new Promise<boolean>((resolve) => {

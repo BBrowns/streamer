@@ -1,0 +1,52 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: master
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    groups:
+      npm-security-runtime:
+        applies-to: security-updates
+        dependency-type: production
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      npm-security-development:
+        applies-to: security-updates
+        dependency-type: development
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: master
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:15"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 3
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

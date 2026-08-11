@@ -30,13 +30,6 @@ export class HlsSourceAdapter implements SourcePreparationAdapter {
         { retryable: false, shouldFallback: false },
       );
     }
-    if (request.action === "download") {
-      throw new SourcePreparationError(
-        "SOURCE_UNAVAILABLE",
-        "HLS sources cannot be prepared for offline download.",
-        { retryable: false, shouldFallback: true },
-      );
-    }
     if (request.candidate.kind !== "hls") {
       throw new SourcePreparationError(
         "INVALID_SOURCE",

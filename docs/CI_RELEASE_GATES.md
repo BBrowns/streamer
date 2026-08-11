@@ -30,6 +30,8 @@ CI uploads:
 - `server-coverage`
 - per-job Markdown summaries under `ci-summary-*`
 - `desktop-macos-package-dir`, an unsigned macOS Electron package directory
+- `streamer-desktop-macos-release`, a signed DMG/ZIP release bundle with a
+  production-only SPDX SBOM and release notes
 
 The desktop artifact is a smoke/review artifact, not a distributable release.
 Signing and notarization config is validated by CI, but the pull-request
@@ -37,8 +39,35 @@ artifact remains unsigned. Real DMG/ZIP release publishing requires Apple
 secrets and follows [MACOS_RELEASE.md](./MACOS_RELEASE.md). The manual
 `Desktop Release` workflow validates the release config, runs
 `npm run package:mac:release --workspace=@streamer/desktop`, checks DMG/ZIP
-inventory, uploads `streamer-desktop-macos-release`, writes release notes, and
-can create a draft GitHub Release. Update feeds remain separate release work.
+inventory, generates `npm run release:sbom`, uploads
+`streamer-desktop-macos-release` with the SBOM and release notes, and can create
+a draft GitHub Release. Update feeds remain separate release work.
+
+## Merge Queue Readiness
+
+The CI is ready for GitHub's merge queue while the default branch keeps strict
+required status checks. Both `CI` and `Dependency Review` listen for
+`merge_group.checks_requested`, so queued commits will be tested against the
+current default branch and any compatible entries ahead of them in the queue.
+
+GitHub currently limits merge queues to public repositories owned by an
+organization. `BBrowns/streamer` is public but owned by the personal `BBrowns`
+account, so the `Protect master` ruleset cannot enable the `merge_queue` rule
+yet. Until the repository is transferred to an organization, strict required
+status checks remain the active protection and merges continue through the
+normal pull-request flow. After a transfer, enable the queue with a minimum
+group size of 1, a one-minute grouping wait, a maximum group size of 2, a
+build concurrency of 2, `HEADGREEN`, and a 60-minute check timeout.
+
+Queue policy:
+
+- keep `Release Gate`, `Review Dependency Changes`, and CodeQL analysis required;
+- use a small merge group for compatible low-risk maintenance changes;
+- keep native framework upgrades, security fixes, and process changes separate;
+- do not bypass the queue or weaken strict status checks to avoid a rebuild.
+
+The dependency review workflow supplies the merge group's base and head SHAs
+explicitly because a merge-group event has no pull-request base/head context.
 
 ## Gate Policy
 

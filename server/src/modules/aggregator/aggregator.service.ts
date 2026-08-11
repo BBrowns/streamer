@@ -266,6 +266,8 @@ const MAX_SEARCH_SHORT_TEXT_LENGTH = 128;
 const MAX_SEARCH_TITLE_ALIASES = 32;
 const MAX_SEARCH_ALIAS_LENGTH = 512;
 const MAX_SEARCH_PROVIDER_NAME_LENGTH = 256;
+const MAX_SEARCH_FACETS = 16;
+const MAX_SEARCH_FACET_LENGTH = 64;
 const MAX_RESILIENCE_DIAGNOSTIC_PROVIDERS = 64;
 const GLOBAL_SEARCH_MAX_CONCURRENT = 8;
 const GLOBAL_SEARCH_MAX_QUEUED = 64;
@@ -306,6 +308,40 @@ const boundedOptionalStringArray = z
   .nullish()
   .transform((value) => value ?? undefined);
 
+function normalizeBoundedFacetList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MAX_SEARCH_FACETS)
+      .map((entry) =>
+        typeof entry === "string"
+          ? entry.trim().slice(0, MAX_SEARCH_FACET_LENGTH)
+          : entry,
+      )
+      .filter((entry) => typeof entry === "string" && entry.length > 0);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",", MAX_SEARCH_FACETS + 1)
+      .map((entry) => entry.trim().slice(0, MAX_SEARCH_FACET_LENGTH))
+      .filter(Boolean)
+      .slice(0, MAX_SEARCH_FACETS);
+  }
+  return value;
+}
+
+const boundedOptionalFacetArray = z.preprocess(
+  normalizeBoundedFacetList,
+  z
+    .array(z.string().min(1).max(MAX_SEARCH_FACET_LENGTH))
+    .max(MAX_SEARCH_FACETS)
+    .nullish()
+    .transform((value) =>
+      value == null
+        ? undefined
+        : Array.from(new Set(value.map((entry) => entry.trim()))),
+    ),
+);
+
 const boundedSearchMetaPreviewSchema = metaPreviewSchema.extend({
   id: z.string().min(1).max(MAX_SEARCH_ID_LENGTH),
   type: z.enum(["movie", "series"]),
@@ -321,6 +357,8 @@ const boundedSearchMetaPreviewSchema = metaPreviewSchema.extend({
   imdbRating: boundedOptionalShortStringFromPrimitive,
   aliases: boundedOptionalStringArray,
   alternativeTitles: boundedOptionalStringArray,
+  genres: boundedOptionalFacetArray,
+  originalLanguage: boundedOptionalString(MAX_SEARCH_FACET_LENGTH),
 });
 
 function normalizeBoundedSearchMetas(value: unknown) {
@@ -359,6 +397,20 @@ function boundSearchStringList(value: unknown) {
       .split(",", MAX_SEARCH_TITLE_ALIASES + 1)
       .map((entry) => entry.trim().slice(0, MAX_SEARCH_ALIAS_LENGTH + 1))
       .filter(Boolean);
+  }
+  return value;
+}
+
+function boundSearchFacetList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MAX_SEARCH_FACETS + 1)
+      .map((entry) => boundSearchString(entry, MAX_SEARCH_FACET_LENGTH));
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",", MAX_SEARCH_FACETS + 1)
+      .map((entry) => entry.trim().slice(0, MAX_SEARCH_FACET_LENGTH + 1));
   }
   return value;
 }
@@ -412,6 +464,11 @@ export function boundSearchCatalogPayload(value: unknown) {
         ),
         aliases: boundSearchStringList(meta.aliases),
         alternativeTitles: boundSearchStringList(meta.alternativeTitles),
+        genres: boundSearchFacetList(meta.genres),
+        originalLanguage: boundSearchString(
+          meta.originalLanguage ?? meta.original_language ?? meta.language,
+          MAX_SEARCH_FACET_LENGTH,
+        ),
       };
     });
 

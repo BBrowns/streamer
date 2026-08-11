@@ -8,6 +8,8 @@ export interface SearchRouteState {
   type: SearchTypeFilter;
   year: string;
   provider: string;
+  genre: string;
+  language: string;
   sort: SearchSort;
 }
 
@@ -15,6 +17,8 @@ export const DEFAULT_SEARCH_FILTERS = {
   type: "all" as const,
   year: "all",
   provider: "all",
+  genre: "all",
+  language: "all",
   sort: "default" as const,
 };
 
@@ -53,6 +57,11 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function parseFacet(value: string | string[] | undefined) {
+  const clean = first(value)?.trim() ?? "";
+  return clean && clean !== "all" ? clean.slice(0, 64) : "all";
+}
+
 export function parseSearchRouteState(
   params: Record<string, string | string[] | undefined>,
 ): SearchRouteState {
@@ -65,19 +74,27 @@ export function parseSearchRouteState(
       ? first(params.year)!
       : "all",
     provider: first(params.provider)?.trim() || "all",
+    genre: parseFacet(params.genre),
+    language: parseFacet(params.language),
     // `relevance` is retained as a backwards-compatible alias.
     sort: sort === "title" || sort === "year" ? sort : "default",
   };
 }
 
 export function searchRouteParams(
-  state: Omit<SearchRouteState, "provider"> & { provider?: string },
+  state: Omit<SearchRouteState, "provider" | "genre" | "language"> & {
+    provider?: string;
+    genre?: string;
+    language?: string;
+  },
 ) {
   return {
     q: state.q || undefined,
     type: state.type === "all" ? undefined : state.type,
     year: state.year === "all" ? undefined : state.year,
     provider: state.provider === "all" ? undefined : state.provider,
+    genre: state.genre === "all" ? undefined : state.genre,
+    language: state.language === "all" ? undefined : state.language,
     sort: state.sort === "default" ? undefined : state.sort,
   };
 }
@@ -93,12 +110,17 @@ export function clearSearchFilters(): typeof DEFAULT_SEARCH_FILTERS {
 }
 
 export function countActiveSearchFilters(
-  state: Pick<SearchRouteState, "type" | "year" | "provider" | "sort">,
+  state: Pick<
+    SearchRouteState,
+    "type" | "year" | "provider" | "genre" | "language" | "sort"
+  >,
 ) {
   return (
     Number(state.type !== "all") +
     Number(state.year !== "all") +
     Number(state.provider !== "all") +
+    Number(state.genre !== "all") +
+    Number(state.language !== "all") +
     Number(state.sort !== "default")
   );
 }

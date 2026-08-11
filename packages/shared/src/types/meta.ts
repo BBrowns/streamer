@@ -10,6 +10,10 @@ export interface MetaPreview {
   imdbRating?: string;
   aliases?: string[];
   alternativeTitles?: string[];
+  /** Provider-declared genres; absent when a catalog does not supply them. */
+  genres?: string[];
+  /** Provider-declared original language (usually an ISO code). */
+  originalLanguage?: string;
 }
 
 /** Episode/video within a series */
@@ -38,7 +42,6 @@ export interface MetaDetail extends MetaPreview {
   cast?: string[];
   director?: string[];
   runtime?: string;
-  originalLanguage?: string;
   videos?: VideoEntry[];
   trailers?: MediaTrailer[];
 }

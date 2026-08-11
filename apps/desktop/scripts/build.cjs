@@ -13,6 +13,7 @@ const entryFiles = [
   "download-job-persistence.js",
   "download-recovery-policy.js",
   "download-url-policy.js",
+  "hls-offline.js",
   "sentry.js",
   "bridge-runtime.js",
 ];

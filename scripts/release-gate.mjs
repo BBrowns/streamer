@@ -91,14 +91,26 @@ function checkCiWorkflow() {
     ["npm run sentry:release:dry-run", "Sentry release dry-run"],
     ["security:install-scripts", "dependency install-script policy"],
     ["security:audit", "production dependency audit"],
+    ["npm run process:check", "agent process asset validation"],
+    ["npm run process:check:test", "agent process validator tests"],
+    [
+      "npm run architecture:check",
+      "architecture boundary and budget validation",
+    ],
+    ["npm run architecture:budget:test", "architecture budget validator tests"],
+    ["npm run maintenance:report:test", "maintenance report classifier tests"],
+    ["actionlint@v1.7.12", "pinned GitHub Actions lint"],
+    ["npm run workflows:check", "full GitHub Actions SHA policy"],
+    ["merge_group:", "merge queue CI trigger"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
+    ["npm run release:sbom:test", "lockfile SBOM generator test"],
     ["smoke-server-container.sh", "server production container smoke"],
     ["npm run release:gate", "release gate"],
     ["ci-summaries", "test summary artifacts"],
     ["rc-evidence-bundle", "RC evidence artifact"],
     ["apps/desktop/release", "desktop package artifact"],
-    ["actions/upload-artifact@v4", "artifact upload"],
+    ["actions/upload-artifact@", "artifact upload"],
   ];
 
   for (const [needle, label] of requiredSnippets) {
@@ -114,10 +126,71 @@ function checkCiWorkflow() {
     ],
     ["STREAMER_NOTARIZE", "notarization gate"],
     ["softprops/action-gh-release", "GitHub Release draft action"],
-    ["actions/upload-artifact@v4", "release artifact upload"],
+    ["actions/upload-artifact@", "release artifact upload"],
+    ["actions/attest@", "release provenance attestation"],
+    [
+      "npm run release:sbom -- --output artifacts/release/sbom.spdx.json",
+      "lockfile SBOM generation",
+    ],
+    ["artifacts/release/sbom.spdx.json", "lockfile SBOM release artifact"],
   ]) {
     requireText(releaseWorkflow, needle, label);
   }
+  for (const [action, label] of [
+    ["actions/checkout", "release checkout action pinned to a commit"],
+    ["actions/setup-node", "release Node setup action pinned to a commit"],
+    ["actions/attest", "release attestation action pinned to a commit"],
+    [
+      "actions/upload-artifact",
+      "release artifact upload action pinned to a commit",
+    ],
+    ["softprops/action-gh-release", "GitHub Release action pinned to a commit"],
+  ]) {
+    requirePattern(
+      releaseWorkflow,
+      new RegExp(`uses:\\s*${action.replace("/", "\\/")}@[0-9a-f]{40}\\b`),
+      label,
+    );
+  }
+  requireText(
+    workflow,
+    "Verify required CI jobs succeeded",
+    "release gate upstream result verification",
+  );
+
+  const dependencyReviewWorkflow = ".github/workflows/dependency-review.yml";
+  requireFile(dependencyReviewWorkflow);
+  requireFile(".github/workflows/maintenance-radar.yml");
+  requireText(
+    dependencyReviewWorkflow,
+    "actions/dependency-review-action@",
+    "dependency review action",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "fail-on-severity: high",
+    "high-severity dependency gate",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "merge_group:",
+    "merge queue dependency review trigger",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "base-ref:",
+    "merge queue dependency review base reference",
+  );
+  requireText(
+    dependencyReviewWorkflow,
+    "head-ref:",
+    "merge queue dependency review head reference",
+  );
+  requirePattern(
+    dependencyReviewWorkflow,
+    /uses:\s*actions\/dependency-review-action@[0-9a-f]{40}\b/,
+    "dependency review action pinned to a commit",
+  );
 }
 
 function checkDocs() {
@@ -128,9 +201,25 @@ function checkDocs() {
   requireFile("AGENT_HANDOFF.md");
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
+  requireFile("docs/ARCHITECTURE_MAINTENANCE.md");
+  requireText(
+    "docs/DEPENDENCY_SECURITY.md",
+    "secret scanning and push protection",
+    "secret scanning and push protection policy",
+  );
   requireFile("docs/AUTOMATED_GOLDEN_PATHS.md");
   requireFile("docs/MOBILE_RELEASE.md");
   requireFile("docs/SERVER_PRODUCTION.md");
+  requireText(
+    "docs/MACOS_RELEASE.md",
+    "gh attestation verify",
+    "desktop provenance verification",
+  );
+  requireText(
+    "docs/MACOS_RELEASE.md",
+    "npm run release:sbom",
+    "production SBOM generation",
+  );
   requireFile("playwright.config.ts");
   requireFile("tests/golden-path/golden-path.spec.ts");
   requireFile("tests/golden-path/visual-regression.spec.ts");
@@ -153,8 +242,8 @@ function checkDocs() {
   );
   requireText(
     "AGENT_HANDOFF.md",
-    "The merged implementation roadmap is complete through **PR #159**",
-    "merged implementation roadmap is complete through PR #159",
+    "The merged implementation roadmap is complete through **PR #186**",
+    "merged implementation roadmap is complete through PR #186",
   );
   requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
   requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
@@ -190,6 +279,11 @@ function checkDocs() {
     "docs/RC_CHECKLIST.md",
     "Decision: pending.",
     "pending RC decision",
+  );
+  requireText(
+    "docs/RC_CHECKLIST.md",
+    "Production SBOM",
+    "production SBOM release input",
   );
   requireText(
     "docs/RC_CHECKLIST.md",

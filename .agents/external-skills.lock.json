@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "policy": "Install locally from the pinned source; do not vendor content whose redistribution terms are unclear.",
+  "skills": [
+    {
+      "name": "frontend-design",
+      "repository": "anthropics/skills",
+      "path": "skills/frontend-design",
+      "ref": "f17010c9bb483898c1d9c9f42dde2b3a98889434",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "vercel-react-native-skills",
+      "repository": "vercel-labs/agent-skills",
+      "path": "skills/react-native-skills",
+      "ref": "7c180d9044c9ae2b442b567aad4e42a28dd5ed62",
+      "license": "MIT (declared by the skill metadata)"
+    },
+    {
+      "name": "web-design-guidelines",
+      "repository": "vercel-labs/agent-skills",
+      "path": "skills/web-design-guidelines",
+      "ref": "7c180d9044c9ae2b442b567aad4e42a28dd5ed62",
+      "license": "Install-only; upstream redistribution terms are not specified"
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "repository": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "path": ".claude/skills/ui-ux-pro-max",
+      "ref": "abb7f2fd5a083fa1ff55c326a963ff0d95c33f99",
+      "license": "MIT"
+    }
+  ]
+}

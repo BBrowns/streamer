@@ -555,7 +555,13 @@ new primary-flow work should use the session contracts in
 | Web (Electron) | `window.desktopBridge.downloadMedia()` — calls into Electron's main process to perform the download natively in Node.js, with progress events bridged back via IPC.                                             |
 | Web (browser)  | Anchor element click — no progress tracking; treated as external/browser-only and not verified offline unless a local URI is returned by a trusted runtime.                                                     |
 
-**HLS downloads are explicitly blocked** with a user-facing `Alert`: HLS is an adaptive streaming format split into many `.ts` segment files and is not meaningfully downloadable to a single file using this approach.
+**HLS offline is capability-gated.** Electron uses a bounded managed bundle
+adapter for finite VOD media playlists: the desktop main process downloads the
+playlist and segments under redirect/SSRF, size, storage, and content-type
+limits, then verifies the managed bundle before marking it offline-playable.
+Master/live/DRM/byte-range/auxiliary playlists are rejected. Browser, iOS, and
+Android keep the unsupported path until native-target evidence and a suitable
+platform packager are available.
 
 After a verified completion, the service fires a `POST /api/notifications` to
 create a server-side notification, which can then sync to other devices.
@@ -593,7 +599,13 @@ The server maintains a `TraktSyncQueue` for failed scrobble attempts and retries
 - **Desktop/Web:** The stream-server daemon's Bonjour discovery plus
   `castv2-client` is used. The Electron bridge exposes cast control to the web
   client and `DesktopCastModal` handles source preparation, capability hints,
-  device selection, session fallback, and typed recovery actions.
+  device selection, session fallback, and typed recovery actions. The mobile
+  cast service keeps only unauthenticated legacy device/capability snapshots in
+  a short-lived runtime cache; authenticated Bridge v1 discovery always
+  re-checks authorization. Explicit reconnects reset negotiation and force a
+  fresh snapshot, while rotated opaque ids require an exact or unique
+  name/type match before retry. Ambiguous matches return to the picker, and no
+  network identity is persisted.
 
 All cast URLs are preflighted before bridge dispatch. Loopback-only media URLs
 are rejected for remote displays, and transport errors are converted to
@@ -743,9 +755,14 @@ Add-ons are **HTTPS-only JSON REST APIs**. The manifest (`/manifest.json`) decla
 
 iOS's `AVPlayer` cannot handle raw magnet links or MKV containers. The fix is the stream-server daemon: it runs locally, accepts a magnet through a gateway job, warms up WebTorrent metadata/peers, then returns an HTTP stream URL for `expo-video`. The mobile app should never point `expo-video` directly at a magnet. Prefer `/api/gateway/jobs/:id/stream` over the legacy `/stream?magnet=...` path because gateway jobs expose readiness, cancellation, progress, and remux hooks.
 
-### HLS on Non-Web Platforms
+### HLS offline support
 
-HLS (`.m3u8`) streams work natively in `expo-video` on iOS/Android and on Web. They do **not** work for offline downloads (blocked by `DownloadService` with a user-facing error). The reason: HLS is a multi-segment adaptive format; there's no single URL to download.
+HLS (`.m3u8`) streams work natively in `expo-video` on iOS/Android and on
+Web. Electron additionally supports offline playback for bounded finite VOD
+media playlists by storing a verified local manifest plus managed segment
+files. Browser, iOS, and Android offline downloads remain unsupported; live,
+master, encrypted, byte-range, and auxiliary-resource playlists are rejected
+on every platform.
 
 ### React 19 + React Native
 

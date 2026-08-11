@@ -22,6 +22,12 @@ const PLAN_STATUS_DEFAULTS = {
   skipped: "Skipped",
 } as const;
 
+const PLAN_REASON_DEFAULTS = {
+  disabled: "Smart Downloads are disabled",
+  wifi_only: "Waiting for Wi-Fi",
+  storage_limit: "Storage limit reached",
+} as const;
+
 export function SmartDownloadsStatusRow({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -114,8 +120,20 @@ export function SmartDownloadPlans() {
             >
               {`S${plan.season} E${plan.episode}${
                 plan.episodeTitle ? ` · ${plan.episodeTitle}` : ""
-              }`}
+              }${plan.quality ? ` · ${plan.quality}` : ""}`}
             </Text>
+            {plan.reason ? (
+              <Text
+                style={[styles.statusSubtitle, { color: colors.textSecondary }]}
+              >
+                {t(`downloads.smart.planReason.${plan.reason}`, {
+                  defaultValue:
+                    PLAN_REASON_DEFAULTS[
+                      plan.reason as keyof typeof PLAN_REASON_DEFAULTS
+                    ] || plan.reason,
+                })}
+              </Text>
+            ) : null}
           </View>
           <StatusPill
             label={t(`downloads.smart.planStatus.${plan.status}`, {

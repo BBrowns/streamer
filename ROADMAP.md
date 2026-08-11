@@ -1,8 +1,8 @@
 # Streamer Roadmap
 
-Last updated: 2026-08-10.
+Last updated: 2026-08-11.
 
-This is the current source of truth for work after PR #160. The architecture
+This is the current source of truth for work after PR #186. The architecture
 does not need another control-plane rewrite. The next phase is to reduce
 security and release risk, make the existing click-and-play paths easier to
 prove automatically, and continue product polish without claiming real-device
@@ -69,6 +69,12 @@ Implemented through PR #160:
   failed download offers one context-specific retry, replan, verify, storage,
   bridge-repair, or remove action, while cast discovery/source/device failures
   offer refresh, fallback, or bridge repair without retrying loopback URLs.
+- Electron now supports bounded, managed HLS VOD offline bundles for finite
+  media playlists. The packager rejects master/live/DRM/byte-range and
+  auxiliary-resource playlists, validates every public HTTPS resource, and
+  verifies the managed segment bundle before exposing it as offline-playable.
+  Browser, iOS, and Android HLS offline downloads remain unsupported until
+  native-target evidence and a platform-appropriate packager exist.
 - Playback architecture v3 is merged: shared Planner v3 contracts and routes,
   explicit unsupported fallback, attempt-bound `SourcePreparer` leases, and a
   typed Bridge v1 client/runtime now share one session-owned control plane.
@@ -206,8 +212,9 @@ Implemented by the stacked Obsidian overhaul:
 
 Remaining evidence and upstream-data gates:
 
-- Add genre/language/availability facets only when providers return reliable
-  metadata for those fields; do not infer them from labels.
+- Search now exposes optional, bounded provider-declared genre and language
+  facets when those fields are present; audio, subtitle, quality, and
+  availability facets remain gated on normalized upstream metadata.
 - Validate Downloads, episode lists, settings panels, subtitle visibility,
   caption-safe layout, large text, focus-not-obscured behavior, artwork
   fallbacks, player chrome, history, and notification interactions on native
@@ -272,20 +279,62 @@ and preserve URL-free persistence and capability-gated native behavior.
    quality policies using the existing planner/session path.
 6. **HLS offline v2 (desktop-first):** add bounded playlist/segment downloads,
    redirect/SSRF protection, managed bundle verification, and explicit
-   unsupported handling for DRM, live, and incomplete media.
-7. **Cast/remote playback:** add capability caching, reconnect/status recovery,
-   and safe remote controls behind the Bridge v1 boundary; keep AirPlay,
-   Chromecast, and Real-Debrid capability-gated/off by default.
-8. **Discovery and personalization:** add provider/audio/subtitle/quality
-   facets only when normalized provider metadata supplies them; keep local
+   unsupported handling for DRM, live, and incomplete media. The Electron
+   implementation is now in place; native/browser support remains a separate
+   evidence-gated follow-up.
+7. **Cast/remote playback:** unauthenticated legacy capability/device snapshots
+   use a bounded runtime cache; authenticated Bridge v1 discovery always
+   re-checks the authorization boundary. An explicit force-refresh reconnect
+   resets negotiation and requires an exact or unique name/type identity match;
+   ambiguous rotated ids return to the picker. Safe remote controls remain
+   user-triggered and never auto-retry. Keep AirPlay, Chromecast, and
+   Real-Debrid capability-gated/off by default, with real-device validation
+   still pending.
+8. **Discovery and personalization:** genre/language facets now use bounded
+   normalized provider metadata; add audio/subtitle/quality/availability facets
+   only when their upstream contracts are equally reliable. Keep local
    preferences and Home/More Sources ownership honest and source-free.
 9. **Observability and release:** add privacy-safe planner/first-frame/fallback/
    stall/gateway/rate-limit/download signals, then assemble SBOM/provenance,
    release notes, rollback, and Sentry dry-run evidence. Signing/store builds
-   remain blocked on credentials and target access.
+   remain blocked on credentials and target access. The first-frame slice now
+   exports only bounded plan/first-frame/initial-buffering/stall/fallback
+   breadcrumbs from the existing player diagnostics recorder; the complete
+   numeric snapshot remains local and each player session is capped at 24 such
+   breadcrumbs. The manual desktop release path now also emits a production-
+   only SPDX SBOM beside signed DMG/ZIP artifacts, attests all three subjects,
+   and records rollback posture in the RC evidence bundle.
 
 Physical-device QA remains a separate blocked lane and must not be inferred
 from these automated milestones.
+
+### Post-v3 implementation status after PR #186
+
+The post-v3 hardening slices listed above are now merged in `master`:
+
+- PR #162: Bridge v1 access-session operations, renewal/reconnect behavior,
+  bounded idempotency state, rate limits, and privacy-safe operational metrics.
+- PR #163: Planner v3 rollout counters, explicit v2 deprecation metadata, and
+  the compatibility boundary check.
+- PRs #164–#165: player/session lifecycle and source-URI binding decomposition.
+- PRs #166 and #168: URL-free download restart recovery, validator checks,
+  bounded concurrency, and storage-pressure reservations.
+- PR #182: desktop-first finite-VOD HLS offline bundles with verification and
+  unsupported handling.
+- PR #183: cast snapshot recovery with authorization/cache boundaries and
+  safe rotated-device rematching; PR #184: bounded discovery facets.
+- PRs #185–#186: privacy-safe playback breadcrumbs, production-only SPDX SBOM,
+  provenance subjects, release evidence, and manual-update rollback posture.
+
+No second implementation branch should be opened for these slices. Keep the
+Planner v2 compatibility adapter until the rollout counters show at least 30
+days without unsupported fallback from every supported release; removing v2 is
+still a separately reviewed compatibility decision.
+
+The remaining work is evidence-gated: execute the native/browser/package QA
+matrix, record signed/notarized release-candidate evidence when credentials
+and targets are available, and make the release go/no-go decision. Until then,
+unknown target states remain `unknown` and must not be described as support.
 
 ### Completed: PR #143 - Dependency Security Remediation And Blocking Audit Gate
 

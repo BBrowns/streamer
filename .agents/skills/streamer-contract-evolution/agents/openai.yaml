@@ -1,0 +1,4 @@
+interface:
+  display_name: "Contract Evolution"
+  short_description: "Evolve shared contracts without breaking consumers"
+  default_prompt: "Use $streamer-contract-evolution to evolve this contract with explicit compatibility, migration, verification, and retirement steps."
