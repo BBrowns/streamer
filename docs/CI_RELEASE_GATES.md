@@ -43,12 +43,21 @@ inventory, generates `npm run release:sbom`, uploads
 `streamer-desktop-macos-release` with the SBOM and release notes, and can create
 a draft GitHub Release. Update feeds remain separate release work.
 
-## Merge Queue
+## Merge Queue Readiness
 
-The default branch is intended to use GitHub's merge queue with strict required
-status checks. Both `CI` and `Dependency Review` listen for
-`merge_group.checks_requested`, so queued commits are tested against the
+The CI is ready for GitHub's merge queue while the default branch keeps strict
+required status checks. Both `CI` and `Dependency Review` listen for
+`merge_group.checks_requested`, so queued commits will be tested against the
 current default branch and any compatible entries ahead of them in the queue.
+
+GitHub currently limits merge queues to public repositories owned by an
+organization. `BBrowns/streamer` is public but owned by the personal `BBrowns`
+account, so the `Protect master` ruleset cannot enable the `merge_queue` rule
+yet. Until the repository is transferred to an organization, strict required
+status checks remain the active protection and merges continue through the
+normal pull-request flow. After a transfer, enable the queue with a minimum
+group size of 1, a one-minute grouping wait, a maximum group size of 2, a
+build concurrency of 2, `HEADGREEN`, and a 60-minute check timeout.
 
 Queue policy:
 
