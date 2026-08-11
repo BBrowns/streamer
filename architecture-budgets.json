@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "scope": "server/src/modules",
+  "defaultMaxLines": 900,
+  "exceptions": {
+    "server/src/modules/aggregator/aggregator.service.ts": {
+      "maxLines": 2300,
+      "owner": "server platform maintainers",
+      "reviewBy": "2026-09-30",
+      "reason": "Central legacy boundary with existing characterization coverage.",
+      "nextAction": "Extract fetch and validation, search/cache, subtitles, and stream discovery behind stable service contracts."
+    }
+  }
+}

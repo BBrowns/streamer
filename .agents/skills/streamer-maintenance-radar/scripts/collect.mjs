@@ -181,6 +181,7 @@ function collectRemote(repo, since, root) {
     return { available: false, reason: "GitHub origin is unavailable" };
   const endpoint = (path) => `repos/${repo}/${path}`;
   const call = (path) => run("gh", ["api", endpoint(path)], { cwd: root });
+  let successfulSources = 0;
   const result = {
     available: true,
     repository: repo,
@@ -195,6 +196,7 @@ function collectRemote(repo, since, root) {
     `actions/runs?per_page=50&created=>=${encodeURIComponent(since)}`,
   );
   if (runs.ok) {
+    successfulSources += 1;
     const data = parseJsonOutput(runs);
     const entries = Array.isArray(data?.workflow_runs)
       ? data.workflow_runs
@@ -212,6 +214,7 @@ function collectRemote(repo, since, root) {
 
   const codeql = call("code-scanning/alerts?state=open&per_page=100");
   if (codeql.ok) {
+    successfulSources += 1;
     const alerts = parseJsonOutput(codeql);
     const entries = Array.isArray(alerts) ? alerts : [];
     result.codeql.available = true;
@@ -225,6 +228,7 @@ function collectRemote(repo, since, root) {
 
   const dependabot = call("dependabot/alerts?state=open&per_page=100");
   if (dependabot.ok) {
+    successfulSources += 1;
     const alerts = parseJsonOutput(dependabot);
     const entries = Array.isArray(alerts) ? alerts : [];
     result.dependabot.available = true;
@@ -238,6 +242,7 @@ function collectRemote(repo, since, root) {
 
   const permissions = call("actions/permissions");
   if (permissions.ok) {
+    successfulSources += 1;
     const data = parseJsonOutput(permissions);
     result.permissions = {
       enabled: data?.enabled ?? null,
@@ -248,6 +253,7 @@ function collectRemote(repo, since, root) {
 
   const rulesets = call("rulesets");
   if (rulesets.ok) {
+    successfulSources += 1;
     const data = parseJsonOutput(rulesets);
     result.rulesets = {
       count: Array.isArray(data) ? data.length : null,
@@ -256,22 +262,32 @@ function collectRemote(repo, since, root) {
         : null,
     };
   }
+  if (successfulSources === 0) {
+    result.available = false;
+    result.reason = "GitHub API sources were unavailable";
+  }
   return result;
 }
 
-function collectLocal(root, now) {
+function collectLocal(root, now, sinceDays) {
   const audit = run("npm", ["audit", "--omit=dev", "--json"], { cwd: root });
+  const auditPolicy = run("npm", ["run", "security:audit"], { cwd: root });
   const outdated = run("npm", ["outdated", "--json"], { cwd: root });
   const auditReport = parseJsonOutput(audit);
   const outdatedReport = parseJsonOutput(outdated);
-  const recent = run("git", ["log", "--since=7 days ago", "--format=%H"], {
-    cwd: root,
-  });
+  const recent = run(
+    "git",
+    ["log", `--since=${sinceDays} days ago`, "--format=%H"],
+    {
+      cwd: root,
+    },
+  );
   return {
     files: countTrackedFiles(root),
     workflows: parseActionPins(root),
     exceptions: collectExceptions(root, now),
     audit: summarizeAudit(auditReport),
+    auditPolicy: { available: true, passed: auditPolicy.ok },
     outdated: summarizeOutdated(outdatedReport),
     recentCommits: recent.ok
       ? recent.stdout.split(/\r?\n/).filter(Boolean).length
@@ -294,7 +310,7 @@ export function collectEvidence({
       commit: gitValue(root, ["rev-parse", "HEAD"]),
       repository: remote,
     },
-    local: collectLocal(root, now),
+    local: collectLocal(root, now, sinceDays),
     remote: collectRemote(remote, since.toISOString(), root),
   };
 }

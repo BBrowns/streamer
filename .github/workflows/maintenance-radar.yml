@@ -1,0 +1,54 @@
+name: Maintenance Radar
+
+on:
+  schedule:
+    - cron: "15 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: read
+
+concurrency:
+  group: maintenance-radar
+  cancel-in-progress: true
+
+env:
+  NPM_VERSION: "11.18.0"
+
+jobs:
+  radar:
+    name: Collect maintenance evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Generate maintenance report
+        run: >-
+          npx --yes "npm@${NPM_VERSION}" run maintenance:report --
+          --since-days 7
+          --output artifacts/maintenance-radar/report.md
+          --json-output artifacts/maintenance-radar/report.json
+
+      - name: Add report to workflow summary
+        if: always()
+        run: |
+          if [ -f artifacts/maintenance-radar/report.md ]; then
+            cat artifacts/maintenance-radar/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Maintenance report was not generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload maintenance report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maintenance-radar-report
+          path: artifacts/maintenance-radar/
+          if-no-files-found: warn
+          retention-days: 30
