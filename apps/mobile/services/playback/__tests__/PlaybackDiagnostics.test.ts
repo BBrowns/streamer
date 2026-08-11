@@ -1,6 +1,7 @@
 import {
   buildPlaybackDiagnostics,
   PlaybackDiagnosticsRecorder,
+  toPlaybackDiagnosticBreadcrumb,
 } from "../PlaybackDiagnostics";
 
 describe("playback diagnostics", () => {
@@ -54,5 +55,50 @@ describe("playback diagnostics", () => {
     expect(JSON.stringify(snapshot)).not.toMatch(
       /https?:|magnet:|btih|infohash|authorization/i,
     );
+  });
+
+  it("maps bounded first-frame and fallback milestones to safe breadcrumbs", () => {
+    expect(
+      toPlaybackDiagnosticBreadcrumb({
+        type: "first_frame",
+        elapsedMs: Number.POSITIVE_INFINITY,
+      }),
+    ).toEqual({
+      category: "playback",
+      message: "playback.first_frame",
+      data: { elapsedMs: 0 },
+    });
+    expect(
+      toPlaybackDiagnosticBreadcrumb({
+        type: "stall",
+        durationMs: 60 * 60 * 1000,
+      }),
+    ).toEqual({
+      category: "playback",
+      message: "playback.stall",
+      level: "warning",
+      data: { durationMs: 30 * 60 * 1000 },
+    });
+    expect(toPlaybackDiagnosticBreadcrumb({ type: "fallback" })).toEqual({
+      category: "playback",
+      message: "playback.fallback",
+      level: "warning",
+    });
+  });
+
+  it("does not turn high-frequency track and seek events into breadcrumbs", () => {
+    expect(
+      toPlaybackDiagnosticBreadcrumb({
+        type: "seek",
+        outcome: "accepted",
+      }),
+    ).toBeNull();
+    expect(
+      toPlaybackDiagnosticBreadcrumb({
+        type: "subtitle_provider",
+        outcome: "succeeded",
+        latencyMs: 120,
+      }),
+    ).toBeNull();
   });
 });

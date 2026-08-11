@@ -90,6 +90,15 @@ privacy-safe. They may include:
 - cast device type and content type
 - typed error codes and fallback decisions
 
+The player also emits a bounded set of runtime milestones from the existing
+diagnostics recorder: `playback.plan_usable`, `playback.first_frame`,
+`playback.initial_buffering`, `playback.stall`, and `playback.fallback`. These
+breadcrumbs carry only rounded duration values where applicable, cap each
+player session at 24 diagnostic breadcrumbs, and deliberately omit track
+labels, seek positions, source identities, titles, and provider details. The
+full numeric snapshot remains local to the diagnostics panel/debug bundle and
+is not exported as a Sentry event.
+
 They must not include:
 
 - raw media URLs

@@ -48,6 +48,12 @@ Current phase:
   submitted Search remains the active title-retrieval flow. Continue Watching
   **Resume** goes through the existing planner/session path with a runtime-only
   saved-position intent.
+- Playback diagnostics now exports a bounded Sentry breadcrumb slice for plan
+  usability, first frame, initial buffering, stalls, and fallback. Values are
+  rounded/capped, the player session emits at most 24 such breadcrumbs, and
+  the full numeric snapshot remains local to the diagnostics panel/debug
+  bundle. No track labels, seek positions, source identities, titles, or
+  provider details cross the Sentry boundary.
 - Current media/personal pass: `MediaArtwork` unifies resilient remote artwork
   for `PosterCard` and detail layouts; provider-declared trailers are restricted
   to safe YouTube destinations; player chrome is always cinema-dark; Library

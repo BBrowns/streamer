@@ -1,3 +1,5 @@
+import type { StreamerBreadcrumbInput } from "@streamer/shared";
+
 export interface PlaybackDiagnosticsInput {
   engineType: string;
   sourceKind: "direct" | "hls" | "torrent" | "offline" | "unknown";
@@ -98,8 +100,60 @@ function createDiagnosticsSnapshot(): PlaybackDiagnosticsSnapshot {
   };
 }
 
+const MAX_DIAGNOSTIC_DURATION_MS = 30 * 60 * 1000;
+
 function safeMetric(value: number) {
-  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+  return Number.isFinite(value)
+    ? Math.min(MAX_DIAGNOSTIC_DURATION_MS, Math.max(0, Math.round(value)))
+    : 0;
+}
+
+/**
+ * Maps only the playback milestones that answer the first-frame/stall
+ * reliability question to a bounded Sentry breadcrumb. The recorder keeps
+ * the complete runtime snapshot for the diagnostics panel; this smaller
+ * contract deliberately omits seeks, track labels, source identity, and
+ * media details so normal playback cannot produce a high-volume telemetry
+ * stream.
+ */
+export function toPlaybackDiagnosticBreadcrumb(
+  event: PlaybackDiagnosticEvent,
+): StreamerBreadcrumbInput | null {
+  switch (event.type) {
+    case "plan_usable":
+      return {
+        category: "playback",
+        message: "playback.plan_usable",
+        data: { elapsedMs: safeMetric(event.elapsedMs) },
+      };
+    case "first_frame":
+      return {
+        category: "playback",
+        message: "playback.first_frame",
+        data: { elapsedMs: safeMetric(event.elapsedMs) },
+      };
+    case "initial_buffering":
+      return {
+        category: "playback",
+        message: "playback.initial_buffering",
+        data: { durationMs: safeMetric(event.durationMs) },
+      };
+    case "stall":
+      return {
+        category: "playback",
+        message: "playback.stall",
+        level: "warning",
+        data: { durationMs: safeMetric(event.durationMs) },
+      };
+    case "fallback":
+      return {
+        category: "playback",
+        message: "playback.fallback",
+        level: "warning",
+      };
+    default:
+      return null;
+  }
 }
 
 /**
