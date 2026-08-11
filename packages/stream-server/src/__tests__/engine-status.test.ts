@@ -116,6 +116,23 @@ describe("torrent engine native load failures", () => {
     );
     expect(res.json.mock.calls[0][0].error).not.toContain("dlopen");
   });
+
+  it("rejects array-valued magnet query parameters before engine access", async () => {
+    const res = makeRes();
+
+    await streamRequest(
+      {
+        query: { magnet: ["magnet:?xt=urn:btih:123"] },
+        hostname: "127.0.0.1",
+      } as any,
+      res as any,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Magnet link is required",
+    });
+  });
 });
 
 describe("torrent lookup", () => {
