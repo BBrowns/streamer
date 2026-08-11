@@ -3,6 +3,8 @@ name: Dependency Review
 on:
   pull_request:
     branches: [main, master]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -16,8 +18,16 @@ jobs:
     name: Review Dependency Changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Review dependency delta
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Review dependency delta (pull request)
+        if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+      - name: Review dependency delta (merge group)
+        if: github.event_name == 'merge_group'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          base-ref: ${{ github.event.merge_group.base_sha }}
+          head-ref: ${{ github.sha }}

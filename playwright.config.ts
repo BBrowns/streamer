@@ -30,6 +30,7 @@ export default defineConfig({
   reporter: [
     ["list"],
     ["html", { outputFolder: "artifacts/playwright-report", open: "never" }],
+    ["json", { outputFile: "artifacts/playwright-report/results.json" }],
   ],
   use: {
     baseURL,
