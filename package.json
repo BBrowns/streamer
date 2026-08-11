@@ -68,7 +68,7 @@
     "@playwright/test": "^1.60.0",
     "@prisma/config": "^7.8.0",
     "dotenv": "^17.4.2",
-    "electron": "^40.6.1",
+    "electron": "^43.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.3.2",
     "patch-package": "^8.0.1",
@@ -178,7 +178,6 @@
     "utf-8-validate": false,
     "esbuild@0.28.1": true,
     "detox@20.51.4": true,
-    "electron@40.10.6": true,
     "node-datachannel@0.32.3": true
   }
 }
