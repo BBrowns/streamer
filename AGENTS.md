@@ -57,6 +57,12 @@ Rules:
 - Finish with delivery evidence proportional to risk. Feed genuine production failures back through incident triage, regression coverage, and reviewed durable decisions.
 - Temporary adapters, feature flags, dual paths, audit exceptions, and compatibility shims need an owner and removal condition so evolutionary work does not become permanent process or code debt.
 - Use the maintenance radar weekly or on demand to turn changed CI, dependency, security, release, and process evidence into a small prioritized queue. Do not make it an automatic fixer.
+- Use `npm run maintenance:report -- --since-days 7` when a human-readable
+  maintenance receipt is needed; the scheduled workflow may store only its
+  bounded Markdown/JSON artifact and must remain read-only toward GitHub.
+- Treat `architecture-budgets.json` and `docs/ARCHITECTURE_MAINTENANCE.md` as
+  architecture gates. A temporary module exception requires an owner, reason,
+  next action, and review deadline; never increase a budget to avoid a split.
 
 ## Project Rules
 
