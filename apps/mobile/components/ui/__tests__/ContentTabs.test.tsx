@@ -1,7 +1,11 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
 import { Platform, StyleSheet } from "react-native";
-import { ContentTabs, getContentTabNavigationIndex } from "../ContentTabs";
+import {
+  ContentTabs,
+  getContentTabNavigationIndex,
+  getContentTabScrollOffset,
+} from "../ContentTabs";
 
 const mockHapticSelection = jest.fn();
 
@@ -132,5 +136,13 @@ describe("ContentTabs", () => {
     expect(getContentTabNavigationIndex(1, 3, "Home")).toBe(0);
     expect(getContentTabNavigationIndex(1, 3, "End")).toBe(2);
     expect(getContentTabNavigationIndex(1, 3, "Enter")).toBeNull();
+  });
+
+  it("calculates the smallest scroll needed to reveal a focused tab", () => {
+    expect(getContentTabScrollOffset({ x: 4, width: 80 }, 320, 40)).toBe(0);
+    expect(getContentTabScrollOffset({ x: 520, width: 90 }, 320, 120)).toBe(
+      306,
+    );
+    expect(getContentTabScrollOffset({ x: 160, width: 80 }, 320, 0)).toBe(0);
   });
 });

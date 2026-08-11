@@ -3,6 +3,7 @@ import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { AppButton } from "../ui/AppButton";
 import { Surface } from "../ui/Surface";
 import { useTranslation } from "react-i18next";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 type DetailActionPanelProps = {
   castType: "movie" | "series";
@@ -37,12 +38,13 @@ export function DetailActionPanel({
   style,
 }: DetailActionPanelProps) {
   const { t } = useTranslation();
+  const { isCompact } = useWindowClass();
   const isMovie = castType !== "series";
   const actionDisabled = !!planningAction;
 
   return (
     <Surface variant="plain" padded={false} style={[styles.panel, style]}>
-      <View style={styles.actionRow}>
+      <View style={[styles.actionRow, isCompact && styles.actionRowCompact]}>
         {isMovie ? (
           <>
             <AppButton
@@ -63,7 +65,10 @@ export function DetailActionPanel({
               onPress={onPlayBest}
               onFocus={onPlayIntent}
               onHoverIn={onPlayIntent}
-              style={styles.primaryButton}
+              style={[
+                styles.primaryButton,
+                isCompact && styles.primaryButtonCompact,
+              ]}
             />
             <AppButton
               label={
@@ -77,7 +82,10 @@ export function DetailActionPanel({
               disabled={actionDisabled}
               loading={planningAction === "download"}
               onPress={onDownload}
-              style={styles.secondaryButton}
+              style={[
+                styles.secondaryButton,
+                isCompact && styles.secondaryButtonCompact,
+              ]}
             />
             {onCast ? (
               <AppButton
@@ -94,7 +102,10 @@ export function DetailActionPanel({
                 disabled={actionDisabled}
                 loading={planningAction === "cast"}
                 onPress={onCast}
-                style={styles.secondaryButton}
+                style={[
+                  styles.secondaryButton,
+                  isCompact && styles.secondaryButtonCompact,
+                ]}
               />
             ) : null}
           </>
@@ -107,7 +118,10 @@ export function DetailActionPanel({
             variant="secondary"
             size="large"
             onPress={onWatchTrailer}
-            style={styles.secondaryButton}
+            style={[
+              styles.secondaryButton,
+              isCompact && styles.secondaryButtonCompact,
+            ]}
           />
         ) : null}
 
@@ -123,7 +137,10 @@ export function DetailActionPanel({
           variant="secondary"
           size="large"
           onPress={onToggleLibrary}
-          style={styles.secondaryButton}
+          style={[
+            styles.secondaryButton,
+            isCompact && styles.secondaryButtonCompact,
+          ]}
         />
       </View>
     </Surface>
@@ -140,12 +157,21 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
+  actionRowCompact: {
+    gap: 8,
+  },
   primaryButton: {
     flexGrow: 1,
     flexBasis: 190,
   },
+  primaryButtonCompact: {
+    flexBasis: "100%",
+  },
   secondaryButton: {
     flexGrow: 1,
     flexBasis: 124,
+  },
+  secondaryButtonCompact: {
+    flexBasis: 140,
   },
 });

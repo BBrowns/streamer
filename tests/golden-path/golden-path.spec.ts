@@ -839,14 +839,20 @@ test("Search keeps active retrieval focused and results media-first", async ({
   expect(searchShellBox!.height).toBeLessThanOrEqual(64);
   expect(searchShellBox!.width).toBeLessThanOrEqual(762);
 
-  const titleBox = await page
-    .getByText("Find a movie or series", { exact: true })
-    .boundingBox();
-  expect(titleBox).not.toBeNull();
-  expect(Math.abs(searchShellBox!.x - titleBox!.x)).toBeLessThanOrEqual(2);
-  expect(searchShellBox!.y).toBeGreaterThanOrEqual(
-    titleBox!.y + titleBox!.height,
-  );
+  const pageTitle = page.getByText("Find a movie or series", { exact: true });
+  if (testInfo.project.name === "phone-web") {
+    await expect(pageTitle).toHaveCount(0);
+    await expect(
+      page.getByText("Search", { exact: true }).first(),
+    ).toBeVisible();
+  } else {
+    const titleBox = await pageTitle.boundingBox();
+    expect(titleBox).not.toBeNull();
+    expect(Math.abs(searchShellBox!.x - titleBox!.x)).toBeLessThanOrEqual(2);
+    expect(searchShellBox!.y).toBeGreaterThanOrEqual(
+      titleBox!.y + titleBox!.height,
+    );
+  }
   await expectNoHorizontalPageOverflow(page);
   await page.screenshot({
     path: testInfo.outputPath(`search-empty-dark-${testInfo.project.name}.png`),

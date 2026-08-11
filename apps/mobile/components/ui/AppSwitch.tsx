@@ -10,6 +10,7 @@ import { useReducedMotion } from "../../hooks/useReducedMotion";
 import {
   getWebAriaChecked,
   getWebFocusStyle,
+  uiMotion,
   uiTouchTarget,
 } from "./designSystem";
 
@@ -90,7 +91,7 @@ const styles = StyleSheet.create<Record<string, ViewStyle>>({
     borderRadius: 10,
   },
   thumbMotion: {
-    transition: "transform 160ms ease",
+    transition: `transform ${uiMotion.feedback}ms ease`,
   } as ViewStyle,
   pressed: { opacity: 0.72 },
   disabled: { opacity: 0.42 },

@@ -10,6 +10,9 @@ import {
   uiSpacing,
   uiTouchTarget,
   uiTypography,
+  uiLayout,
+  uiMotion,
+  resolveMotionDuration,
 } from "../designSystem";
 
 function relativeLuminance(hex: string) {
@@ -50,6 +53,26 @@ describe("design system tokens", () => {
       lineHeight: 20,
       fontWeight: "700",
     });
+  });
+
+  it("exposes semantic content widths and motion intents", () => {
+    expect(uiLayout).toMatchObject({
+      contentMaxWidth: 1600,
+      detailMaxWidth: 1120,
+      readingMaxWidth: 760,
+    });
+    expect(uiMotion).toMatchObject({
+      feedback: 120,
+      content: 180,
+      overlay: 280,
+      loadingLoop: 1500,
+    });
+  });
+
+  it("resolves motion to zero when reduced motion is requested", () => {
+    expect(resolveMotionDuration("feedback", false)).toBe(120);
+    expect(resolveMotionDuration("overlay", false)).toBe(280);
+    expect(resolveMotionDuration("loadingLoop", true)).toBe(0);
   });
 
   it("provides a visible keyboard focus treatment", () => {

@@ -6,10 +6,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Stack } from "expo-router";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -23,19 +23,17 @@ import {
   useAddons,
 } from "../../hooks/useAddons";
 import { useTheme } from "../../hooks/useTheme";
+import { useWindowClass } from "../../hooks/useWindowClass";
 import { api } from "../../services/api";
 import { invalidatePlaybackPlanCache } from "../../services/playback/PlaybackPlanService";
 import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { AppButton } from "../../components/ui/AppButton";
-import { ContentBoundary } from "../../components/ui/ContentBoundary";
-import { PageHeader } from "../../components/ui/PageHeader";
-import { PageLayout } from "../../components/ui/PageLayout";
+import { AdaptiveRoutePage } from "../../components/ui/AdaptiveRoutePage";
 import { Surface } from "../../components/ui/Surface";
 import { TextField } from "../../components/ui/TextField";
 import {
   getWebFocusStyle,
-  uiLayout,
   uiSpacing,
   uiTouchTarget,
   uiTypography,
@@ -59,8 +57,7 @@ export default function AddonsScreen() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 600;
+  const { isCompact, isLarge } = useWindowClass();
   const [addonUrl, setAddonUrl] = useState("");
   const [installFeedback, setInstallFeedback] = useState<Feedback | null>(null);
   const [removalError, setRemovalError] = useState<{
@@ -150,18 +147,24 @@ export default function AddonsScreen() {
   };
 
   return (
-    <PageLayout contained={false} testID="addons-screen">
-      <ContentBoundary
-        maxWidth={uiLayout.readingMaxWidth}
-        style={styles.content}
+    <>
+      <Stack.Screen
+        options={{
+          title: t("addons.title"),
+          headerShown: !isLarge,
+          headerBackTitle: t("navigation.back"),
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+        }}
+      />
+      <AdaptiveRoutePage
+        title={t("addons.title")}
+        eyebrow="Streamer"
+        description={t("addons.install.hint")}
+        boundary="reading"
+        testID="addons-screen"
+        boundaryStyle={styles.content}
       >
-        <PageHeader
-          eyebrow="Streamer"
-          title={t("addons.title")}
-          description={t("addons.install.hint")}
-          style={styles.pageHeader}
-        />
-
         <Surface style={styles.installSection}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {t("addons.install.title")}
@@ -372,8 +375,8 @@ export default function AddonsScreen() {
             />
           )}
         </View>
-      </ContentBoundary>
-    </PageLayout>
+      </AdaptiveRoutePage>
+    </>
   );
 }
 
@@ -415,9 +418,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingTop: uiSpacing.xxl,
-  },
-  pageHeader: {
-    marginBottom: uiSpacing.xxxl,
   },
   installSection: {
     gap: uiSpacing.lg,

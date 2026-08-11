@@ -10,7 +10,7 @@ import Animated, {
   cancelAnimation,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 
 interface SkeletonProps {
   variant?: "card" | "row" | "text" | "circle";
@@ -33,7 +33,7 @@ export function SkeletonLoader({
   style,
 }: SkeletonProps) {
   const { isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, duration } = useUiMotion();
   const shimmerValue = useSharedValue(0);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export function SkeletonLoader({
       return;
     }
     shimmerValue.value = withRepeat(
-      withTiming(1, { duration: 1500 }),
+      withTiming(1, { duration: duration("loadingLoop") }),
       -1,
       false,
     );

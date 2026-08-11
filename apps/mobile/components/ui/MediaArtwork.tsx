@@ -9,7 +9,7 @@ import {
   type ImageStyle,
   type ViewStyle,
 } from "react-native";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import { useTheme } from "../../hooks/useTheme";
 import { uiSpacing, uiTypography } from "./designSystem";
 
@@ -22,6 +22,7 @@ type MediaArtworkProps = {
   accessibilityLabel?: string;
   accessible?: boolean;
   contentFit?: ImageContentFit;
+  blurRadius?: number;
   style?: StyleProp<ViewStyle>;
   imageStyle?: StyleProp<ImageStyle>;
   testID?: string;
@@ -55,12 +56,13 @@ export function MediaArtwork({
   accessibilityLabel,
   accessible,
   contentFit = "cover",
+  blurRadius,
   style,
   imageStyle,
   testID,
 }: MediaArtworkProps) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { duration } = useUiMotion();
   const sourceUri = normalizeUri(uri);
   const [loadState, setLoadState] = useState<ArtworkLoadState>(() => ({
     uri: sourceUri,
@@ -83,8 +85,11 @@ export function MediaArtwork({
         ? "loading"
         : "fallback";
 
+  // Expo Image maps `accessibilityLabel` to the web `<img alt>` attribute.
+  // An explicit empty label keeps decorative artwork out of the accessibility
+  // tree while still satisfying the browser's required image alternative.
   const imageAccessibilityLabel =
-    accessibilityLabel ?? (title ? `${title} ${variant}` : undefined);
+    accessibilityLabel ?? (title ? `${title} ${variant}` : "");
   const shouldExposeImage = accessible ?? Boolean(imageAccessibilityLabel);
   const fallbackTitle = variant === "poster" ? title?.trim() : undefined;
   const recyclingKey = useMemo(
@@ -102,9 +107,10 @@ export function MediaArtwork({
           source={{ uri: sourceUri }}
           style={[styles.image, imageStyle]}
           contentFit={contentFit}
+          blurRadius={blurRadius}
           cachePolicy="memory-disk"
           recyclingKey={recyclingKey}
-          transition={reducedMotion ? 0 : 180}
+          transition={duration("content")}
           accessibilityLabel={imageAccessibilityLabel}
           accessible={shouldExposeImage}
           onLoad={() => {
@@ -142,7 +148,7 @@ export function MediaArtwork({
             styles.skeleton,
             {
               backgroundColor: colors.surfaceSubtle,
-              opacity: reducedMotion ? 1 : 0.82,
+              opacity: duration("loadingLoop") === 0 ? 1 : 0.82,
             },
           ]}
         >

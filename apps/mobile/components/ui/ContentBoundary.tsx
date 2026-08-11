@@ -3,16 +3,28 @@ import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { uiLayout } from "./designSystem";
 
+export type ContentBoundarySize = "content" | "detail" | "reading";
+
 type ContentBoundaryProps = {
   children: ReactNode;
+  size?: ContentBoundarySize;
   maxWidth?: number;
   padded?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
+export function getContentBoundaryMaxWidth(
+  size: ContentBoundarySize = "content",
+) {
+  if (size === "reading") return uiLayout.readingMaxWidth;
+  if (size === "detail") return uiLayout.detailMaxWidth;
+  return uiLayout.contentMaxWidth;
+}
+
 export function ContentBoundary({
   children,
-  maxWidth = uiLayout.contentMaxWidth,
+  size = "content",
+  maxWidth,
   padded = true,
   style,
 }: ContentBoundaryProps) {
@@ -28,7 +40,7 @@ export function ContentBoundary({
     <View
       style={[
         styles.boundary,
-        { maxWidth },
+        { maxWidth: maxWidth ?? getContentBoundaryMaxWidth(size) },
         padded && { paddingHorizontal: horizontalPadding },
         style,
       ]}
