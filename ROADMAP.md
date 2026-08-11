@@ -301,7 +301,9 @@ and preserve URL-free persistence and capability-gated native behavior.
    exports only bounded plan/first-frame/initial-buffering/stall/fallback
    breadcrumbs from the existing player diagnostics recorder; the complete
    numeric snapshot remains local and each player session is capped at 24 such
-   breadcrumbs.
+   breadcrumbs. The manual desktop release path now also emits a production-
+   only SPDX SBOM beside signed DMG/ZIP artifacts, attests all three subjects,
+   and records rollback posture in the RC evidence bundle.
 
 Physical-device QA remains a separate blocked lane and must not be inferred
 from these automated milestones.

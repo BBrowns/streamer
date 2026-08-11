@@ -22,6 +22,7 @@ Record these before starting RC validation:
 | Git SHA          |       |
 | Build channel    |       |
 | Desktop artifact |       |
+| Production SBOM  |       |
 | Mobile preview   |       |
 | Tester           |       |
 | Date             |       |
@@ -38,6 +39,7 @@ npm run test --workspace=server -- --coverage
 npm run test --workspace=@streamer/stream-server
 npm run test --workspace=apps/mobile -- --runInBand
 npm run test --workspace=@streamer/desktop
+npm run release:sbom
 npm run release:gate
 ```
 
@@ -46,6 +48,7 @@ Confirm CI artifacts exist:
 - server coverage
 - per-job CI summaries
 - desktop macOS package directory
+- production SPDX SBOM attached to the signed release bundle
 - release gate summary
 - RC evidence bundle (`rc-evidence-bundle`)
 

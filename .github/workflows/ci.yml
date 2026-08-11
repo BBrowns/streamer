@@ -402,6 +402,8 @@ jobs:
           STREAMER_BUILD_ENVIRONMENT: test
       - name: Validate RC evidence generator
         run: npm run rc:evidence:test
+      - name: Validate production SBOM generator
+        run: npm run release:sbom:test
       - name: Upload Sentry Release Artifacts
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: npm run sentry:release

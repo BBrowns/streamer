@@ -72,6 +72,9 @@ jobs:
           echo "STREAMER_APP_VERSION=${streamer_app_version}" >> "$GITHUB_ENV"
           echo "STREAMER_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
+      - name: Generate production SBOM
+        run: npm run release:sbom -- --output artifacts/release/sbom.spdx.json
+
       - name: Validate release configuration
         run: npm run release:check --workspace=@streamer/desktop
 
@@ -113,6 +116,7 @@ jobs:
           - Build date: ${STREAMER_BUILD_DATE}
           - Channel: ${STREAMER_BUILD_CHANNEL}
           - macOS artifacts: DMG and ZIP from \`apps/desktop/release\`
+          - Production SBOM: \`artifacts/release/sbom.spdx.json\`
           - Notarization requested: ${STREAMER_NOTARIZE}
 
           ## QA Evidence
@@ -129,6 +133,7 @@ jobs:
           subject-path: |
             apps/desktop/release/**/*.dmg
             apps/desktop/release/**/*.zip
+            artifacts/release/sbom.spdx.json
 
       - name: Upload macOS release artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -137,6 +142,7 @@ jobs:
           path: |
             apps/desktop/release/**/*.dmg
             apps/desktop/release/**/*.zip
+            artifacts/release/sbom.spdx.json
             artifacts/release/release-notes.md
           if-no-files-found: error
           retention-days: 30

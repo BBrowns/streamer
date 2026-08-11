@@ -97,6 +97,7 @@ function checkCiWorkflow() {
     ["npm run workflows:check", "full GitHub Actions SHA policy"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
+    ["npm run release:sbom:test", "lockfile SBOM generator test"],
     ["smoke-server-container.sh", "server production container smoke"],
     ["npm run release:gate", "release gate"],
     ["ci-summaries", "test summary artifacts"],
@@ -120,6 +121,11 @@ function checkCiWorkflow() {
     ["softprops/action-gh-release", "GitHub Release draft action"],
     ["actions/upload-artifact@", "release artifact upload"],
     ["actions/attest@", "release provenance attestation"],
+    [
+      "npm run release:sbom -- --output artifacts/release/sbom.spdx.json",
+      "lockfile SBOM generation",
+    ],
+    ["artifacts/release/sbom.spdx.json", "lockfile SBOM release artifact"],
   ]) {
     requireText(releaseWorkflow, needle, label);
   }
@@ -185,6 +191,11 @@ function checkDocs() {
     "gh attestation verify",
     "desktop provenance verification",
   );
+  requireText(
+    "docs/MACOS_RELEASE.md",
+    "npm run release:sbom",
+    "production SBOM generation",
+  );
   requireFile("playwright.config.ts");
   requireFile("tests/golden-path/golden-path.spec.ts");
   requireFile("tests/golden-path/visual-regression.spec.ts");
@@ -244,6 +255,11 @@ function checkDocs() {
     "docs/RC_CHECKLIST.md",
     "Decision: pending.",
     "pending RC decision",
+  );
+  requireText(
+    "docs/RC_CHECKLIST.md",
+    "Production SBOM",
+    "production SBOM release input",
   );
   requireText(
     "docs/RC_CHECKLIST.md",
