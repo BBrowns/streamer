@@ -535,7 +535,7 @@ jobs:
         run: npm run rc:evidence
         env:
           STREAMER_GIT_SHA: ${{ github.sha }}
-          STREAMER_BUILD_DATE: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.run_started_at }}
+          STREAMER_BUILD_DATE: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
           STREAMER_BUILD_CHANNEL: ci
           STREAMER_BUILD_ENVIRONMENT: test
       - name: Upload release gate summary
