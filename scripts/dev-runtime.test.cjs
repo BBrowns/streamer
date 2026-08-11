@@ -6,12 +6,15 @@ const test = require("node:test");
 const {
   detectHostArch,
   determineTargetArch,
+  findProcessGroupId,
   isSupportedNodeVersion,
   normalizeArch,
   parseNpmCommandArgs,
+  parseProcessGroupId,
   resolveNpmRunner,
   runForeground,
   selectNodeRuntime,
+  stopListeningProcesses,
 } = require("./dev-runtime.cjs");
 
 test("normalizes common CPU architecture names", () => {
@@ -132,6 +135,50 @@ test("rejects malformed guarded npm arguments", () => {
     /valid TCP port/,
   );
   assert.throws(() => parseNpmCommandArgs(["--"]), /requires npm arguments/);
+});
+
+test("parses process group ids from ps output", () => {
+  assert.equal(parseProcessGroupId(" 94778\n"), 94778);
+  assert.equal(parseProcessGroupId("not-a-pid"), null);
+  assert.equal(parseProcessGroupId("0"), null);
+});
+
+test("resolves a listener process group on Unix", () => {
+  const calls = [];
+  const groupId = findProcessGroupId(95048, {
+    platform: "darwin",
+    spawnSync: (command, args, options) => {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: " 94778\n" };
+    },
+  });
+
+  assert.equal(groupId, 94778);
+  assert.deepEqual(calls[0].args, ["-o", "pgid=", "-p", "95048"]);
+});
+
+test("terminates a stale listener's process group without touching its own group", async () => {
+  const snapshots = [[95048, 95049], [95048, 95049], []];
+  const groups = new Map([
+    [95048, 94778],
+    [95049, 12345],
+  ]);
+  const signals = [];
+
+  await stopListeningProcesses(3001, {
+    currentProcessGroupId: 12345,
+    findListeningPids: () => snapshots.shift() || [],
+    findProcessGroupId: (pid) => groups.get(pid) || null,
+    kill: (target, signal) => signals.push({ target, signal }),
+    sleep: async () => {},
+  });
+
+  assert.deepEqual(signals, [
+    { target: -94778, signal: "SIGTERM" },
+    { target: 95049, signal: "SIGTERM" },
+    { target: -94778, signal: "SIGKILL" },
+    { target: 95049, signal: "SIGKILL" },
+  ]);
 });
 
 test("uses Corepack to honor the pinned npm version when available", () => {

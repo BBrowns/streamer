@@ -1,8 +1,8 @@
 # Streamer Roadmap
 
-Last updated: 2026-08-10.
+Last updated: 2026-08-11.
 
-This is the current source of truth for work after PR #160. The architecture
+This is the current source of truth for work after PR #186. The architecture
 does not need another control-plane rewrite. The next phase is to reduce
 security and release risk, make the existing click-and-play paths easier to
 prove automatically, and continue product polish without claiming real-device
@@ -307,6 +307,34 @@ and preserve URL-free persistence and capability-gated native behavior.
 
 Physical-device QA remains a separate blocked lane and must not be inferred
 from these automated milestones.
+
+### Post-v3 implementation status after PR #186
+
+The post-v3 hardening slices listed above are now merged in `master`:
+
+- PR #162: Bridge v1 access-session operations, renewal/reconnect behavior,
+  bounded idempotency state, rate limits, and privacy-safe operational metrics.
+- PR #163: Planner v3 rollout counters, explicit v2 deprecation metadata, and
+  the compatibility boundary check.
+- PRs #164–#165: player/session lifecycle and source-URI binding decomposition.
+- PRs #166 and #168: URL-free download restart recovery, validator checks,
+  bounded concurrency, and storage-pressure reservations.
+- PR #182: desktop-first finite-VOD HLS offline bundles with verification and
+  unsupported handling.
+- PR #183: cast snapshot recovery with authorization/cache boundaries and
+  safe rotated-device rematching; PR #184: bounded discovery facets.
+- PRs #185–#186: privacy-safe playback breadcrumbs, production-only SPDX SBOM,
+  provenance subjects, release evidence, and manual-update rollback posture.
+
+No second implementation branch should be opened for these slices. Keep the
+Planner v2 compatibility adapter until the rollout counters show at least 30
+days without unsupported fallback from every supported release; removing v2 is
+still a separately reviewed compatibility decision.
+
+The remaining work is evidence-gated: execute the native/browser/package QA
+matrix, record signed/notarized release-candidate evidence when credentials
+and targets are available, and make the release go/no-go decision. Until then,
+unknown target states remain `unknown` and must not be described as support.
 
 ### Completed: PR #143 - Dependency Security Remediation And Blocking Audit Gate
 
