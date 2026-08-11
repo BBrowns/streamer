@@ -317,29 +317,65 @@ function findListeningPids(port, options = {}) {
     .filter((pid) => Number.isInteger(pid) && pid > 0 && pid !== process.pid);
 }
 
+function parseProcessGroupId(value) {
+  const groupId = Number(String(value || "").trim());
+  return Number.isInteger(groupId) && groupId > 0 ? groupId : null;
+}
+
+function findProcessGroupId(pid, options = {}) {
+  if ((options.platform || process.platform) === "win32") return null;
+  const run = options.spawnSync || spawnSync;
+  const result = run("ps", ["-o", "pgid=", "-p", String(pid)], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status !== 0) return null;
+  return parseProcessGroupId(result.stdout);
+}
+
 async function stopListeningProcesses(port, options = {}) {
-  const pids = findListeningPids(port, options);
+  const findPids =
+    options.findListeningPids || ((value) => findListeningPids(value, options));
+  const resolveGroup =
+    options.findProcessGroupId || ((pid) => findProcessGroupId(pid, options));
+  const kill = options.kill || ((pid, signal) => process.kill(pid, signal));
+  const sleep =
+    options.sleep ||
+    ((milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const currentGroupId = Object.prototype.hasOwnProperty.call(
+    options,
+    "currentProcessGroupId",
+  )
+    ? options.currentProcessGroupId
+    : resolveGroup(process.pid);
+  const signalListeners = (listenerPids, signal) => {
+    const targets = new Set();
+    for (const pid of listenerPids) {
+      const groupId = resolveGroup(pid);
+      const target =
+        groupId && currentGroupId && groupId !== currentGroupId
+          ? -groupId
+          : pid;
+      if (targets.has(target)) continue;
+      targets.add(target);
+      try {
+        kill(target, signal);
+      } catch {
+        // The listener may already have exited.
+      }
+    }
+  };
+
+  const pids = findPids(port);
   if (pids.length === 0) return;
 
   console.log(
     `[dev-runtime] Stopping ${pids.length} existing listener(s) on port ${port}.`,
   );
-  for (const pid of pids) {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      // The listener may already have exited.
-    }
-  }
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  for (const pid of findListeningPids(port, options)) {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // The listener may already have exited.
-    }
-  }
+  signalListeners(pids, "SIGTERM");
+  await sleep(500);
+  signalListeners(findPids(port), "SIGKILL");
 }
 
 function runForeground(command, args, options = {}) {
@@ -532,13 +568,16 @@ module.exports = {
   detectBinaryArch,
   detectHostArch,
   determineTargetArch,
+  findProcessGroupId,
   inspectInstalledNativeArchitectures,
   isSupportedNodeVersion,
   normalizeArch,
   parseNpmCommandArgs,
   parseNodeVersion,
+  parseProcessGroupId,
   resolveNpmCli,
   resolveNpmRunner,
   runForeground,
   selectNodeRuntime,
+  stopListeningProcesses,
 };
