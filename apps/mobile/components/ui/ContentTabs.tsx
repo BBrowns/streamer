@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -34,6 +34,22 @@ export function getContentTabNavigationIndex(
   return null;
 }
 
+export function getContentTabScrollOffset(
+  layout: { x: number; width: number },
+  viewportWidth: number,
+  currentOffset: number,
+  padding = 16,
+) {
+  if (viewportWidth <= 0) return currentOffset;
+  const visibleStart = currentOffset + padding;
+  const visibleEnd = currentOffset + viewportWidth - padding;
+  if (layout.x < visibleStart) return Math.max(0, layout.x - padding);
+  if (layout.x + layout.width > visibleEnd) {
+    return Math.max(0, layout.x + layout.width - viewportWidth + padding);
+  }
+  return currentOffset;
+}
+
 type ContentTabsProps<T extends string> = {
   options: readonly ContentTabOption<T>[];
   value: T;
@@ -59,12 +75,33 @@ export function ContentTabs<T extends string>({
 }: ContentTabsProps<T>) {
   const { colors } = useTheme();
   const tabRefs = useRef<any[]>([]);
+  const tabLayouts = useRef<Record<number, { x: number; width: number }>>({});
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffset = useRef(0);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const ensureTabVisible = useCallback(
+    (index: number) => {
+      const layout = tabLayouts.current[index];
+      if (!layout) return;
+      const nextOffset = getContentTabScrollOffset(
+        layout,
+        viewportWidth,
+        scrollOffset.current,
+      );
+      if (nextOffset !== scrollOffset.current) {
+        scrollOffset.current = nextOffset;
+        scrollRef.current?.scrollTo({ x: nextOffset, animated: true });
+      }
+    },
+    [viewportWidth],
+  );
   const handleChange = useCallback(
-    (nextValue: T) => {
+    (nextValue: T, index?: number) => {
       hapticSelection();
       onChange(nextValue);
+      if (typeof index === "number") ensureTabVisible(index);
     },
-    [onChange],
+    [ensureTabVisible, onChange],
   );
   const handleTabKeyDown = useCallback(
     (event: any, currentIndex: number) => {
@@ -79,7 +116,7 @@ export function ContentTabs<T extends string>({
       event.stopPropagation?.();
       const nextOption = options[nextIndex];
       if (!nextOption) return true;
-      handleChange(nextOption.value);
+      handleChange(nextOption.value, nextIndex);
       tabRefs.current[nextIndex]?.focus?.();
       return true;
     },
@@ -89,10 +126,16 @@ export function ContentTabs<T extends string>({
   return (
     <ScrollView
       horizontal
+      ref={scrollRef}
       testID={testID}
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
       showsHorizontalScrollIndicator={false}
+      onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+      onScroll={(event) => {
+        scrollOffset.current = event.nativeEvent.contentOffset.x;
+      }}
+      scrollEventThrottle={16}
       style={[
         style,
         variant === "segmented" && [
@@ -111,10 +154,16 @@ export function ContentTabs<T extends string>({
           option={option}
           selected={option.value === value}
           variant={variant}
-          onChange={handleChange}
+          onChange={(nextValue) => handleChange(nextValue, index)}
           onKeyDown={(event) => handleTabKeyDown(event, index)}
           registerRef={(node) => {
             tabRefs.current[index] = node;
+          }}
+          onLayout={(event) => {
+            tabLayouts.current[index] = {
+              x: event.nativeEvent.layout.x,
+              width: event.nativeEvent.layout.width,
+            };
           }}
         />
       ))}
@@ -129,6 +178,7 @@ function ContentTab<T extends string>({
   onChange,
   onKeyDown,
   registerRef,
+  onLayout,
 }: {
   option: ContentTabOption<T>;
   selected: boolean;
@@ -136,6 +186,7 @@ function ContentTab<T extends string>({
   onChange: (value: T) => void;
   onKeyDown: (event: any) => boolean;
   registerRef: (node: any) => void;
+  onLayout: (event: any) => void;
 }) {
   const { colors, isDark } = useTheme();
   const activate = useCallback(
@@ -156,6 +207,7 @@ function ContentTab<T extends string>({
     <Pressable
       {...webPressableProps}
       ref={registerRef}
+      onLayout={onLayout}
       tabIndex={Platform.OS === "web" ? (selected ? 0 : -1) : undefined}
       {...(Platform.OS === "web" ? ({ onKeyDown: handleKeyDown } as any) : {})}
       accessibilityRole="tab"

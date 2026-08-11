@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import type { SearchMetaPreview } from "../../hooks/useSearch";
 import { useSearchController } from "../../hooks/useSearchController";
 import { useTheme } from "../../hooks/useTheme";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useUiMotion } from "../../hooks/useUiMotion";
 import {
   SEARCH_MINIMUM_LENGTH,
   getSearchSelectionDirection,
@@ -37,7 +37,7 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const { reducedMotion, duration } = useUiMotion();
   const searchController = useSearchController({ enabled: visible });
   const {
     query,
@@ -71,7 +71,7 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
         }),
         Animated.timing(opacity, {
           toValue: 1,
-          duration: 140,
+          duration: duration("content"),
           useNativeDriver: true,
         }),
       ]).start();

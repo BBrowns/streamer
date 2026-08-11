@@ -7,14 +7,16 @@ import {
   ViewStyle,
 } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
-import { ContentBoundary } from "./ContentBoundary";
+import { ContentBoundary, type ContentBoundarySize } from "./ContentBoundary";
 import { uiSpacing } from "./designSystem";
 
 type PageLayoutProps = {
   children: ReactNode;
   scroll?: boolean;
   contained?: boolean;
+  boundary?: ContentBoundarySize | false;
   maxWidth?: number;
+  boundaryStyle?: StyleProp<ViewStyle>;
   testID?: string;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
@@ -24,14 +26,23 @@ export function PageLayout({
   children,
   scroll = false,
   contained = true,
+  boundary,
   maxWidth,
+  boundaryStyle,
   testID,
   style,
   contentContainerStyle,
 }: PageLayoutProps) {
   const { colors } = useTheme();
-  const content = contained ? (
-    <ContentBoundary maxWidth={maxWidth}>{children}</ContentBoundary>
+  const shouldContain = boundary === undefined ? contained : boundary !== false;
+  const content = shouldContain ? (
+    <ContentBoundary
+      size={boundary === undefined || boundary === false ? "content" : boundary}
+      maxWidth={maxWidth}
+      style={boundaryStyle}
+    >
+      {children}
+    </ContentBoundary>
   ) : (
     children
   );

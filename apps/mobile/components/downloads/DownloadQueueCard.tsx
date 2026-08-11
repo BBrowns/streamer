@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,6 +16,7 @@ import {
   getDownloadStatusKey,
 } from "./downloadPresentation";
 import { AppButton } from "../ui/AppButton";
+import { MediaArtwork } from "../ui/MediaArtwork";
 import { StatusPill } from "../ui/StatusPill";
 import { Surface } from "../ui/Surface";
 import {
@@ -193,8 +193,11 @@ export function DownloadQueueCard({
         }
       >
         <View>
-          <Image
-            source={{ uri: task.mediaInfo.poster ?? undefined }}
+          <MediaArtwork
+            uri={task.mediaInfo.poster}
+            title={task.mediaInfo.title}
+            variant="poster"
+            accessible={false}
             style={[styles.poster, compact && styles.posterCompact]}
           />
           {isSelectionMode ? (

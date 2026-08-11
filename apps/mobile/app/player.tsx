@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useReducer,
 } from "react";
-import { AppState, View, Text, Pressable, Platform, Image } from "react-native";
+import { AppState, View, Text, Pressable, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import {
   VideoView,
@@ -44,6 +44,7 @@ import { usePlayerTrackCatalog } from "../hooks/usePlayerTrackCatalog";
 // UI Components
 import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
+import { MediaArtwork } from "../components/ui/MediaArtwork";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
 import { PlayerInteractionLayer } from "../components/player/PlayerInteractionLayer";
@@ -1635,8 +1636,10 @@ export default function PlayerScreen() {
           {activeCast ? (
             <View style={styles.castContainer}>
               {activeCast.mediaInfo.poster && (
-                <Image
-                  source={{ uri: activeCast.mediaInfo.poster }}
+                <MediaArtwork
+                  uri={activeCast.mediaInfo.poster}
+                  variant="backdrop"
+                  accessible={false}
                   style={styles.castBg}
                   blurRadius={20}
                 />

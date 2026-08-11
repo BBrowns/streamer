@@ -467,9 +467,11 @@ export default function DownloadsScreen() {
               ]}
             >
               <View style={styles.headerText}>
-                <Text style={[styles.title, { color: colors.text }]}>
-                  {t("downloads.title", { defaultValue: "Downloads" })}
-                </Text>
+                {!compact ? (
+                  <Text style={[styles.title, { color: colors.text }]}>
+                    {t("downloads.title", { defaultValue: "Downloads" })}
+                  </Text>
+                ) : null}
                 <Text
                   style={[styles.subtitle, { color: colors.textSecondary }]}
                 >

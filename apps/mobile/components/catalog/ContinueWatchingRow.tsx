@@ -1,6 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -26,6 +25,7 @@ import {
 } from "../ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { MediaRail } from "../ui/MediaRail";
+import { MediaArtwork } from "../ui/MediaArtwork";
 import { playBest } from "../../services/playback/PlaybackOrchestrator";
 import { usePlayerStore } from "../../stores/playerStore";
 import { extractErrorMessage } from "../../utils/error";
@@ -207,23 +207,13 @@ function ContinueWatchingCard({
             },
           ]}
         >
-          {posterUri ? (
-            <Image
-              source={{ uri: posterUri }}
-              style={styles.poster}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              accessibilityLabel={`${item.title} poster`}
-            />
-          ) : (
-            <View style={styles.posterFallback}>
-              <Ionicons
-                name={item.type === "movie" ? "film-outline" : "tv-outline"}
-                size={24}
-                color={colors.tint}
-              />
-            </View>
-          )}
+          <MediaArtwork
+            uri={posterUri}
+            title={item.title}
+            variant="poster"
+            accessible={false}
+            style={styles.poster}
+          />
           {durationIsTrusted && (
             <ProgressBar current={item.currentTime} total={item.duration} />
           )}
@@ -465,11 +455,6 @@ const styles = StyleSheet.create({
   poster: {
     width: "100%",
     height: "100%",
-  },
-  posterFallback: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   progressTrack: {
     position: "absolute",
