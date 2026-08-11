@@ -110,6 +110,15 @@ ${requiredCiJobs.map((job) => `- ${job}: confirm passed in CI summary artifacts`
 
 ${failureBuckets.map((bucket) => `- ${bucket}`).join("\n")}
 
+## Release Evidence
+
+- Production dependency inventory: \`artifacts/release/sbom.spdx.json\` is generated
+  from \`package-lock.json\` with development dependencies omitted.
+- Artifact provenance: signed DMG, ZIP, and SBOM subjects are attested by the
+  manual Desktop Release workflow when release credentials are available.
+- Rollback posture: desktop updates remain manual notices; retain the previous
+  signed tag and release artifacts for rollback before publishing a new build.
+
 ## QA Evidence Links
 
 - QA matrix: [docs/QA_MATRIX.md](../../docs/QA_MATRIX.md)

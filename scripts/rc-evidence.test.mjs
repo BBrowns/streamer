@@ -25,11 +25,16 @@ test("creates RC evidence without making a release-ready claim", () => {
 
   assert.match(content, /Version \| 1\.2\.3/);
   assert.match(content, /Git SHA \| abcdef1234567890/);
-  assert.match(content, /CI run \| https:\/\/github\.com\/BBrowns\/streamer\/actions\/runs\/123/);
+  assert.match(
+    content,
+    /CI run \| https:\/\/github\.com\/BBrowns\/streamer\/actions\/runs\/123/,
+  );
   assert.match(content, /not a\s+release-ready claim/i);
   assert.match(content, /no_peers/);
   assert.match(content, /download_verification_failed/);
   assert.match(content, /No raw media URLs, magnets, tokens, info hashes/);
+  assert.match(content, /artifacts\/release\/sbom\.spdx\.json/);
+  assert.match(content, /manual notices/);
 });
 
 test("keeps the expected failure bucket taxonomy explicit", () => {

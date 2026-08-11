@@ -53,7 +53,9 @@ Current phase:
   rounded/capped, the player session emits at most 24 such breadcrumbs, and
   the full numeric snapshot remains local to the diagnostics panel/debug
   bundle. No track labels, seek positions, source identities, titles, or
-  provider details cross the Sentry boundary.
+  provider details cross the Sentry boundary. Desktop release evidence now
+  includes a production-only SPDX SBOM, provenance attestations for the signed
+  artifacts, and an explicit manual-update rollback posture.
 - Current media/personal pass: `MediaArtwork` unifies resilient remote artwork
   for `PosterCard` and detail layouts; provider-declared trailers are restricted
   to safe YouTube destinations; player chrome is always cinema-dark; Library
