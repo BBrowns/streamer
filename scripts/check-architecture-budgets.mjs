@@ -33,7 +33,8 @@ function sourceFiles(directory) {
 }
 
 function lineCount(file) {
-  return readFileSync(file, "utf8").split(/\r?\n/).length - 1;
+  const source = readFileSync(file, "utf8");
+  return source.split(/\r?\n/).length - (source.endsWith("\n") ? 1 : 0);
 }
 
 export function evaluateArchitectureBudget({
@@ -44,6 +45,18 @@ export function evaluateArchitectureBudget({
 }) {
   const failures = [];
   const exceptionsUsed = [];
+  const filePaths = new Set(files.map((file) => file.relativePath));
+
+  for (const [path, exception] of Object.entries(exceptions)) {
+    if (!filePaths.has(path)) {
+      failures.push(`${path} has a stale architecture exception.`);
+    } else if (
+      typeof exception.maxLines !== "number" ||
+      typeof exception.reviewBy !== "string"
+    ) {
+      failures.push(`${path} has an invalid architecture exception budget.`);
+    }
+  }
 
   for (const file of files) {
     const lines =

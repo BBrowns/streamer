@@ -56,3 +56,22 @@ test("rejects an expired architecture exception", () => {
   assert.equal(result.failures.length, 1);
   assert.match(result.failures[0], /expired/);
 });
+
+test("rejects an exception for a removed module", () => {
+  const result = evaluateArchitectureBudget({
+    files: [],
+    defaultMaxLines: 900,
+    exceptions: {
+      "server/src/modules/removed.ts": {
+        maxLines: 1000,
+        owner: "platform",
+        reviewBy: "2026-09-30",
+        reason: "Temporary",
+        nextAction: "Remove",
+      },
+    },
+  });
+
+  assert.equal(result.failures.length, 1);
+  assert.match(result.failures[0], /stale/);
+});
