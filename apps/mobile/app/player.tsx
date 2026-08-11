@@ -85,14 +85,17 @@ import { resolveFallbackResumePosition } from "../services/playback/FallbackCont
 import {
   buildPlaybackDiagnostics,
   PlaybackDiagnosticsRecorder,
+  toPlaybackDiagnosticBreadcrumb,
   type PlaybackDiagnosticEvent,
 } from "../services/playback/PlaybackDiagnostics";
+import { addMobileBreadcrumb } from "../services/sentryBreadcrumbs";
 import { getActivePlaybackSegment } from "../services/playback/PlaybackSegmentsProvider";
 import { createPlayerScreenStyles } from "../components/player/playerScreenStyles";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
 const PLAYBACK_START_TIMEOUT_MS = 60_000;
+const MAX_PLAYBACK_DIAGNOSTIC_BREADCRUMBS = 24;
 
 type SeekableCacheStatus =
   | "not_started"
@@ -269,10 +272,20 @@ export default function PlayerScreen() {
   const playbackDiagnosticsRecorderRef = useRef(
     new PlaybackDiagnosticsRecorder(),
   );
+  const playbackDiagnosticBreadcrumbCountRef = useRef(0);
   const planObservedKeyRef = useRef<string | null>(null);
 
   const recordDiagnostic = useCallback((event: PlaybackDiagnosticEvent) => {
     playbackDiagnosticsRecorderRef.current.record(event);
+    const breadcrumb = toPlaybackDiagnosticBreadcrumb(event);
+    if (
+      breadcrumb &&
+      playbackDiagnosticBreadcrumbCountRef.current <
+        MAX_PLAYBACK_DIAGNOSTIC_BREADCRUMBS
+    ) {
+      addMobileBreadcrumb(breadcrumb);
+      playbackDiagnosticBreadcrumbCountRef.current += 1;
+    }
     setDiagnosticsRevision((revision) => revision + 1);
   }, []);
 
@@ -362,6 +375,7 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     playbackDiagnosticsRecorderRef.current = new PlaybackDiagnosticsRecorder();
+    playbackDiagnosticBreadcrumbCountRef.current = 0;
     planObservedKeyRef.current = null;
     setDiagnosticsRevision((revision) => revision + 1);
   }, [
@@ -369,6 +383,7 @@ export default function PlayerScreen() {
     mediaInfo?.itemId,
     mediaInfo?.season,
     mediaInfo?.type,
+    playbackSessionId,
   ]);
 
   useEffect(() => {

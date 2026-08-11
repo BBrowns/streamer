@@ -297,7 +297,11 @@ and preserve URL-free persistence and capability-gated native behavior.
 9. **Observability and release:** add privacy-safe planner/first-frame/fallback/
    stall/gateway/rate-limit/download signals, then assemble SBOM/provenance,
    release notes, rollback, and Sentry dry-run evidence. Signing/store builds
-   remain blocked on credentials and target access.
+   remain blocked on credentials and target access. The first-frame slice now
+   exports only bounded plan/first-frame/initial-buffering/stall/fallback
+   breadcrumbs from the existing player diagnostics recorder; the complete
+   numeric snapshot remains local and each player session is capped at 24 such
+   breadcrumbs.
 
 Physical-device QA remains a separate blocked lane and must not be inferred
 from these automated milestones.
