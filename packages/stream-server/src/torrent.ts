@@ -2079,7 +2079,8 @@ export function validateTorrentFiles(torrent: any) {
 }
 
 export async function streamRequest(req: Request, res: Response) {
-  const magnet = req.query.magnet as string;
+  const rawMagnet = req.query.magnet;
+  const magnet = typeof rawMagnet === "string" ? rawMagnet : null;
 
   console.log(
     `[stream-server] Received magnet request at:`,

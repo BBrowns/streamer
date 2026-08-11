@@ -81,6 +81,18 @@ Overlap`,
     expect(cue.text).not.toContain("<");
   });
 
+  it("sanitizes encoded markup before it reaches subtitle rendering", () => {
+    const [cue] = parseSubtitleDocument(
+      `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+&lt;script&gt;alert(1)&lt;/script&gt;&lt;br/&gt;Hello`,
+      "vtt",
+    );
+
+    expect(cue.text).toBe("alert(1)\nHello");
+  });
+
   it("bounds cue count and cue text from untrusted subtitle documents", () => {
     const document = Array.from(
       { length: MAX_SUBTITLE_CUES + 2 },

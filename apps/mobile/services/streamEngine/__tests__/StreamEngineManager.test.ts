@@ -229,7 +229,7 @@ describe("StreamEngineManager", () => {
         jest
           .mocked(global.fetch)
           .mock.calls.every(
-            ([url]) => !String(url).includes("bridge.example.com"),
+            ([url]) => new URL(String(url)).hostname !== "bridge.example.com",
           ),
       ).toBe(true);
       expect(manager.getBridgeDiagnostics()).toMatchObject({

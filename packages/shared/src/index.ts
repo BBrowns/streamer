@@ -38,6 +38,7 @@ export * from "./build-metadata";
 export * from "./action-preflight";
 export * from "./addon-capabilities";
 export * from "./sentry-breadcrumbs";
+export * from "./sanitize";
 export {
   catalogLayoutSchema,
   catalogManifestSchema,
