@@ -28,7 +28,7 @@
     "@streamer/shared": "*",
     "@tanstack/react-query": "^5.90.0",
     "axios": "^1.7.9",
-    "expo": "~55.0.28",
+    "expo": "~57.0.11",
     "expo-blur": "~55.0.16",
     "expo-constants": "~55.0.17",
     "expo-crypto": "~55.0.17",
