@@ -386,13 +386,13 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   buffered: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     right: undefined,
     borderRadius: uiRadii.pill,
     backgroundColor: "rgba(244,245,247,0.48)",
   },
   watched: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     right: undefined,
     borderRadius: uiRadii.pill,
     backgroundColor: playerChrome.accent,

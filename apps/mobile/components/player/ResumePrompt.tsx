@@ -117,7 +117,7 @@ function formatResumeTime(seconds: number) {
 
 const styles = StyleSheet.create({
   resumeOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
     zIndex: 50,

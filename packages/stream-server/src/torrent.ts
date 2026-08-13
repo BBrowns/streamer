@@ -1,5 +1,5 @@
 /**
- * Torrent streaming handler — integrates with webtorrent v2 (ESM-only).
+ * Torrent streaming handler — integrates with webtorrent v3 (ESM-only).
  *
  * Architecture: "kick-and-redirect"
  * 1. Client hits GET /stream?magnet=...
@@ -1685,7 +1685,7 @@ export async function getClient(): Promise<any> {
         throw new Error("WebTorrent HTTP server API is unavailable");
       }
 
-      // Create the shared HTTP server (webtorrent v2 API)
+      // Create the shared HTTP server (webtorrent v3 API)
       serverInstance = client.createServer();
       await new Promise<void>((resolve, reject) => {
         serverInstance.server.listen(0, "0.0.0.0", () => {

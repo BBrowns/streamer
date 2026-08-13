@@ -113,7 +113,7 @@ export function BiometricLockOverlay() {
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 9999,
     justifyContent: "center",
     alignItems: "center",

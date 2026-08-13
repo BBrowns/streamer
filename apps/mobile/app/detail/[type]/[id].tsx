@@ -1,5 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Linking, Platform } from "react-native";
 import { getMetaLoadFailureKind, useMeta } from "../../../hooks/useMeta";
