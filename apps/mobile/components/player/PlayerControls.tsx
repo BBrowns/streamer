@@ -38,10 +38,7 @@ export interface PlayerControlCapabilities {
   isProgressiveRemux?: boolean;
   /** Runtime-only state of the optional seekable cache behind a live fMP4. */
   seekableCacheStatus?:
-    | "not_started"
-    | "evaluating"
-    | "preparing"
-    | "unavailable";
+    "not_started" | "evaluating" | "preparing" | "unavailable";
   canUseVolume?: boolean;
   canUseFullscreen?: boolean;
   hasCaptions?: boolean;

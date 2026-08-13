@@ -112,6 +112,19 @@ The `ws` overrides preserve the major line expected by each consumer while
 raising each line to a patched release. Avoid a global `ws` major override,
 which would make Expo/React Native tooling invalid.
 
+The root Hono override is pinned to `4.13.2`, and the server/mobile direct
+dependencies resolve that same tested line. Keep the override and direct
+specifications aligned when upgrading Hono so the Hono adapters and shared
+client code are verified against one runtime contract.
+
+The mobile app intentionally tracks React `19.2.8` and the compatible
+React Native `4.5.x` native-module line ahead of Expo SDK 57's bundled patch
+versions. The corresponding `expo.install.exclude` entries are reviewed
+exceptions, not permission to skip native validation; revisit them with the
+next Expo SDK upgrade and rebuild native projects after changing these modules.
+`@shopify/flash-list` is also an existing intentional exception because the
+repository tracks its tested release above the SDK 57 bundled version.
+
 ## Upgrade Routine
 
 1. Switch to the pinned Node/npm versions.
@@ -126,6 +139,7 @@ Latest does not mean automatically accepting every major release. Framework
 majors such as Expo, Electron, Prisma, or Vite require their own migration and
 runtime QA rather than being folded into a security patch.
 
-Prettier remains pinned to 3.8.1 because 3.9 changes formatting across unrelated
-source files. Upgrade it in a dedicated formatting-only change rather than
-mixing repository-wide churn into dependency security work.
+Prettier is pinned exactly to 3.9.6. Its formatter changes are intentionally
+included in the dedicated dependency upgrade; future Prettier upgrades should
+remain exact-version changes with repository-wide formatting and review of the
+resulting churn.

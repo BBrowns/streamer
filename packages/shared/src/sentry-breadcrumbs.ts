@@ -1,8 +1,5 @@
 export type StreamerBreadcrumbCategory =
-  | "playback"
-  | "gateway"
-  | "download"
-  | "cast";
+  "playback" | "gateway" | "download" | "cast";
 
 export type StreamerBreadcrumbLevel = "debug" | "info" | "warning" | "error";
 

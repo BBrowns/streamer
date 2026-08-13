@@ -39,13 +39,10 @@ export const BRIDGE_V1_CLIENT_MAX_SUBTITLE_BYTES = 8 * 1024 * 1024;
 export const BRIDGE_V1_CLIENT_MAX_THUMBNAIL_BYTES = 512 * 1024;
 
 export type BridgeProtocolSelection =
-  | { kind: "v1"; hello: BridgeHelloV1 }
-  | { kind: "legacy" };
+  { kind: "v1"; hello: BridgeHelloV1 } | { kind: "legacy" };
 
 export type BridgeClientErrorCode =
-  | BridgeV1ErrorCode
-  | "BRIDGE_UNREACHABLE"
-  | "BRIDGE_RESPONSE_INVALID";
+  BridgeV1ErrorCode | "BRIDGE_UNREACHABLE" | "BRIDGE_RESPONSE_INVALID";
 
 export class BridgeClientError extends Error {
   readonly code: BridgeClientErrorCode;

@@ -8,10 +8,7 @@
 export type MediaAdapterPlatform = "ios" | "android" | "web";
 
 export type MediaPlayerTarget =
-  | "native-ios"
-  | "native-android"
-  | "web"
-  | "electron";
+  "native-ios" | "native-android" | "web" | "electron";
 
 export type MediaAdapterStatus = "idle" | "loading" | "ready" | "error";
 

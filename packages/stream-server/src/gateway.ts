@@ -56,16 +56,9 @@ export type GatewayJobState =
 export type GatewayJobMode = "bridge" | "remux";
 export type GatewayRemuxStrategy = "seekable-cache" | "progressive-fmp4";
 export type GatewaySeekableCacheStatus =
-  | "not_started"
-  | "evaluating"
-  | "preparing"
-  | "ready"
-  | "unavailable";
+  "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
 type GatewaySeekableCacheUnavailableReason =
-  | SeekableRemuxUnavailableReason
-  | "remux_failed"
-  | "timed_out"
-  | "cancelled";
+  SeekableRemuxUnavailableReason | "remux_failed" | "timed_out" | "cancelled";
 type GatewayJobPhase =
   | "finding_peers"
   | "no_peers"

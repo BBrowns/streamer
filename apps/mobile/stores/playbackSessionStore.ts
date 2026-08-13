@@ -370,8 +370,7 @@ export const usePlaybackSessionStore = create<PlaybackSessionStoreState>()(
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as
-          | Partial<PlaybackSessionStoreState>
-          | undefined;
+          Partial<PlaybackSessionStoreState> | undefined;
         const persistedSessions = sanitizePersistedSessions(
           persisted?.sessions,
         );

@@ -19,9 +19,7 @@ interface UsePlayerHotkeysArgs {
 }
 
 export type PlayerEscapeAction =
-  | "closeSettings"
-  | "closeCast"
-  | "cancelPreparation";
+  "closeSettings" | "closeCast" | "cancelPreparation";
 
 export function getPlayerEscapeAction({
   settingsOpen,
@@ -74,8 +72,7 @@ export function isPlayerHotkeyTargetInteractive(
 }
 
 export type PlayerSeekShortcut =
-  | { type: "relative"; seconds: number }
-  | { type: "percent"; percent: number };
+  { type: "relative"; seconds: number } | { type: "percent"; percent: number };
 
 export function getPlayerSeekShortcut(
   rawKey: string,

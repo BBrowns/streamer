@@ -34,8 +34,7 @@ export interface LegacySourcePreparationRequest extends SourcePreparationRequest
 }
 
 export type SourcePreparationRequest =
-  | RoutedSourcePreparationRequest
-  | LegacySourcePreparationRequest;
+  RoutedSourcePreparationRequest | LegacySourcePreparationRequest;
 
 export interface SourcePreparationRouteBinding {
   executionTarget: PlaybackExecutionTarget;
@@ -68,10 +67,7 @@ export interface LegacySourcePreparationAdapter {
 }
 
 export type SourcePreparationErrorCode =
-  | PlaybackErrorCode
-  | "UNSUPPORTED_ROUTE"
-  | "INVALID_SOURCE"
-  | "CANCELLED";
+  PlaybackErrorCode | "UNSUPPORTED_ROUTE" | "INVALID_SOURCE" | "CANCELLED";
 
 const retryableCodes = new Set<SourcePreparationErrorCode>([
   "NO_PEERS",

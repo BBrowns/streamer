@@ -28,21 +28,10 @@ export type PlaybackSessionStatus =
   | "cancelled";
 
 export type PlaybackSessionSourceType =
-  | "direct"
-  | "hls"
-  | "torrent"
-  | "external"
-  | "unknown"
-  | "debrid"
-  | "gateway";
+  "direct" | "hls" | "torrent" | "external" | "unknown" | "debrid" | "gateway";
 
 export type PlaybackAttemptStatus =
-  | "pending"
-  | "attempting"
-  | "ready"
-  | "failed"
-  | "skipped"
-  | "cancelled";
+  "pending" | "attempting" | "ready" | "failed" | "skipped" | "cancelled";
 
 export type PlaybackGatewayPhase =
   | "creating_gateway_job"

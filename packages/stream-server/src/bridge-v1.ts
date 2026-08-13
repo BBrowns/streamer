@@ -914,9 +914,7 @@ bridgeV1Router.post(
 
     let sourceUrl: string;
     let contentType:
-      | "video/mp4"
-      | "application/vnd.apple.mpegurl"
-      | "application/x-mpegURL";
+      "video/mp4" | "application/vnd.apple.mpegurl" | "application/x-mpegURL";
     if (parsed.data.source.kind === "bridge-job") {
       const job = getGatewayJob(parsed.data.source.jobId);
       if (!job) {

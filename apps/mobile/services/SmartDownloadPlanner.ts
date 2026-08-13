@@ -10,9 +10,7 @@ import {
 export type SmartDownloadNetwork = "wifi" | "cellular" | "unknown";
 
 export type SmartDownloadPolicyReason =
-  | "disabled"
-  | "wifi_only"
-  | "storage_limit";
+  "disabled" | "wifi_only" | "storage_limit";
 
 export interface SmartDownloadPolicyContext {
   network?: SmartDownloadNetwork;

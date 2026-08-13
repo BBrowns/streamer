@@ -6,9 +6,7 @@ export type BridgeProtocolVersion = 1;
 export const BRIDGE_V1_MAX_REQUEST_BYTES = 16 * 1024;
 
 export type BridgeDelivery =
-  | "range-http"
-  | "progressive-fmp4"
-  | "seekable-cache";
+  "range-http" | "progressive-fmp4" | "seekable-cache";
 
 export type BridgeJobState =
   | "preparing"
@@ -140,11 +138,7 @@ export interface CreateBridgeJobV1 {
 }
 
 export type BridgeSeekableCacheStatus =
-  | "not_started"
-  | "evaluating"
-  | "preparing"
-  | "ready"
-  | "unavailable";
+  "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
 
 export type BridgeSeekableCacheUnavailableReason =
   | "source_too_large"
@@ -249,11 +243,7 @@ export interface BridgeCastPlayV1 {
 }
 
 export type BridgeCastControlAction =
-  | "play"
-  | "pause"
-  | "resume"
-  | "seek"
-  | "stop";
+  "play" | "pause" | "resume" | "seek" | "stop";
 
 export interface BridgeCastControlV1 {
   deviceId: string;
@@ -307,11 +297,7 @@ export interface BridgeCastStatusV1 {
 }
 
 export type BridgeAccessScope =
-  | "capabilities:read"
-  | "jobs:read"
-  | "jobs:write"
-  | "cast:read"
-  | "cast:write";
+  "capabilities:read" | "jobs:read" | "jobs:write" | "cast:read" | "cast:write";
 
 export interface CreateBridgeAccessSessionV1 {
   scopes: BridgeAccessScope[];

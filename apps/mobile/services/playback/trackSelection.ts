@@ -161,13 +161,11 @@ export function buildPlayerTrackCatalog({
     availableSubtitleTracks,
     activeSubtitleTrack,
     "subtitle",
-  ).map(
-    (track): SubtitleTrack => ({
-      ...track,
-      source: "embedded",
-      confidence: 1,
-    }),
-  );
+  ).map((track): SubtitleTrack => ({
+    ...track,
+    source: "embedded",
+    confidence: 1,
+  }));
 
   return {
     // Gateway audio descriptors are discovery metadata. Only tracks exposed by

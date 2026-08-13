@@ -25,10 +25,7 @@ export const DEFAULT_SEARCH_FILTERS = {
 export const MAX_COMPLETE_SEARCH_FILTER_PAGES = 20;
 
 export type SearchFilterPaginationState =
-  | "ready"
-  | "loading"
-  | "limit"
-  | "error";
+  "ready" | "loading" | "limit" | "error";
 
 /**
  * Secondary filters and client-side sorting are only correct after every

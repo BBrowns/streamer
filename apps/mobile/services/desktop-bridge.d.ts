@@ -14,12 +14,7 @@ export interface DesktopDownloadProgressData {
 }
 
 export type DesktopDownloadJobStatus =
-  | "Pending"
-  | "Downloading"
-  | "Paused"
-  | "Completed"
-  | "Error"
-  | "Canceled";
+  "Pending" | "Downloading" | "Paused" | "Completed" | "Error" | "Canceled";
 
 export type DesktopDownloadFailureReason =
   | "source_access_expired"

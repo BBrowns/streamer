@@ -1,9 +1,5 @@
 export type PlaybackSegmentKind =
-  | "intro"
-  | "recap"
-  | "credits"
-  | "preview"
-  | "post_credits";
+  "intro" | "recap" | "credits" | "preview" | "post_credits";
 
 export interface PlaybackSegment {
   id: string;

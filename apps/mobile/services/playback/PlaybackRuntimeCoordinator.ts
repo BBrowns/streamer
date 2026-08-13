@@ -1,9 +1,7 @@
 import type { PlaybackRuntimeError } from "@streamer/shared";
 
 export type PlaybackSourceReplacementReason =
-  | "seekable_handoff"
-  | "audio_track"
-  | "quality";
+  "seekable_handoff" | "audio_track" | "quality";
 
 export type PlaybackRuntimeViewState =
   | { kind: "idle" }

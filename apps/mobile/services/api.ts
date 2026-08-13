@@ -147,8 +147,7 @@ api.interceptors.response.use(
         })
           .then((token) => {
             const headers = originalRequest.headers as
-              | Record<string, unknown>
-              | undefined;
+              Record<string, unknown> | undefined;
             if (headers) headers.Authorization = `Bearer ${token}`;
             return api(originalRequest);
           })
@@ -180,8 +179,7 @@ api.interceptors.response.use(
 
         processQueue(null, data.accessToken);
         const headers = originalRequest.headers as
-          | Record<string, unknown>
-          | undefined;
+          Record<string, unknown> | undefined;
         if (headers) headers.Authorization = `Bearer ${data.accessToken}`;
         return api(originalRequest);
       } catch (err) {

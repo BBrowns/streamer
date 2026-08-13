@@ -1,18 +1,10 @@
 export type ActionPreflightAction = "play" | "download" | "cast";
 
 export type ActionPreflightSourceKind =
-  | "direct"
-  | "hls"
-  | "torrent"
-  | "external"
-  | "unknown";
+  "direct" | "hls" | "torrent" | "external" | "unknown";
 
 export type ActionEndpointScope =
-  | "loopback"
-  | "lan"
-  | "remote"
-  | "invalid"
-  | "unknown";
+  "loopback" | "lan" | "remote" | "invalid" | "unknown";
 
 export type ActionBridgeUrlValidationReason =
   | "missing-url"

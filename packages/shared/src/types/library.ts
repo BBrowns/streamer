@@ -11,10 +11,7 @@ export interface LibraryItem {
 
 /** Watch progress for resume / continue-watching */
 export type WatchProgressDurationSource =
-  | "metadata"
-  | "media"
-  | "unknown"
-  | "legacy";
+  "metadata" | "media" | "unknown" | "legacy";
 
 export interface WatchProgress {
   id: string;
