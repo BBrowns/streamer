@@ -2,16 +2,11 @@
   "expo": {
     "name": "Streamer",
     "slug": "streamer",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "streamer",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#fbf6f4"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.bbrowns.streamer",
@@ -46,7 +41,16 @@
       "expo-image",
       "expo-localization",
       "expo-sharing",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#fbf6f4"
+        }
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true

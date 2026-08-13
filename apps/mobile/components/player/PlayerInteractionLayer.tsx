@@ -47,7 +47,7 @@ export function PlayerInteractionLayer({
 
 const styles = StyleSheet.create({
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 10,
     flexDirection: "row",
   },

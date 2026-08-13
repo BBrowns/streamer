@@ -724,7 +724,7 @@ function StatusPill({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 15,
     justifyContent: "space-between",
   },

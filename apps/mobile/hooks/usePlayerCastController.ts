@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import type { Router } from "expo-router";
 import type { Stream } from "@streamer/shared";
 
 import { goBackOrReplace } from "../lib/navigation";
+import type { Router } from "../lib/navigation";
 import { stopCastSession } from "../services/playback/PlaybackSessionCastService";
 import { useCastStore, type ActiveCastSession } from "../stores/castStore";
 

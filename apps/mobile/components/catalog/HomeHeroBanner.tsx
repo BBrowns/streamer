@@ -161,15 +161,15 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   heroBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: "108%",
     height: "108%",
     left: -12,
     top: -12,
   },
-  heroOverlay: { ...StyleSheet.absoluteFillObject } as any,
+  heroOverlay: { ...StyleSheet.absoluteFill } as any,
   heroContent: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     padding: uiSpacing.xxl,
     justifyContent: "flex-end",
   },

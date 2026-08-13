@@ -196,10 +196,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   skeleton: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: "hidden",
   },
   skeletonHighlight: {
