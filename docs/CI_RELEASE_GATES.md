@@ -14,6 +14,11 @@ The release gate expects the workflow to run:
   `npm run test --workspace=server -- --coverage`
 - stream-server tests: `npm run test --workspace=@streamer/stream-server`
 - mobile Jest tests: `npm run test --workspace=apps/mobile -- --runInBand`
+- browser golden paths: `npm run test:golden-path:project`, executed once per
+  `phone-web`, `tablet-portrait-web`, `tablet-landscape-web`, and
+  `desktop-renderer` project
+- committed Linux visual regression: `tests/golden-path/visual-regression.spec.ts`
+  on the `phone-web` and `desktop-renderer` projects
 - desktop package input smoke:
   `npm run package:check --workspace=@streamer/desktop`
 - desktop release signing/notarization config smoke:
@@ -23,12 +28,40 @@ The release gate expects the workflow to run:
 - production high/critical dependency audit: `npm run security:audit`
 - release gate: `npm run release:gate`
 
+## Pull Request Scope Selection
+
+Every CI event starts the workflow and runs `ci_scope`. Pull requests use the
+detector from the base commit for its fail-closed path classification, so a PR
+cannot change the detector and use that change to skip validation. Pushes to
+`main`/`master`, merge-group checks, workflow dispatches, missing Git history,
+unknown paths, workflow/configuration changes, dependency changes,
+shared-package changes, and native/release-sensitive changes always run full
+CI. A detector that does not yet exist at the base commit also falls back to
+full CI.
+
+Skipped job checks remain present because selection happens at job level, not
+with a top-level workflow `paths` filter. `release-gate` validates the scope
+detector itself and rejects a detector failure or an unexpected skipped job.
+The detector writes its mode, reason, changed-file count, and selected jobs to
+the CI job summary.
+
+## Dependency Cache Policy
+
+CI keeps the existing `setup-node` npm cache, keyed by the lockfile. It does
+not cache or upload `node_modules`: the repository includes native and
+platform-specific dependencies, so sharing installed modules across runners
+would weaken reproducibility and can cross OS or architecture boundaries.
+Playwright evidence remains job-local and is uploaded with a unique project
+artifact name.
+
 ## Artifacts
 
 CI uploads:
 
 - `server-coverage`
 - per-job Markdown summaries under `ci-summary-*`
+- one browser report and summary artifact per Playwright project
+- committed Linux visual comparison evidence (`visual-regression-linux-report`)
 - `desktop-macos-package-dir`, an unsigned macOS Electron package directory
 - `streamer-desktop-macos-release`, a signed DMG/ZIP release bundle with a
   production-only SPDX SBOM and release notes
