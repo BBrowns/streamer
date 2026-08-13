@@ -29,22 +29,27 @@ test("requires the exact non-empty visual baseline set and records provenance", 
       sourceCommit: "fixture-commit",
     });
 
-    assert.equal(manifest.expectedFileCount, 20);
+    assert.equal(manifest.expectedFileCount, 44);
     assert.equal(manifest.platform, "linux");
     assert.equal(manifest.sourceCommit, "fixture-commit");
-    assert.equal(manifest.files.length, 20);
+    assert.equal(manifest.files.length, 44);
     assert.equal(manifest.files[0].sha256.length, 64);
   });
 });
 
 test("rejects an incomplete or unexpected visual baseline set", () => {
   withBaselineDirectory((directory) => {
-    writeFileSync(join(directory, visualBaselineFileNames[0]), "");
+    const missingFile = "detail-actions-dark-desktop-renderer.png";
+    for (const file of visualBaselineFileNames) {
+      if (file !== missingFile) writeFileSync(join(directory, file), "pixels");
+    }
     writeFileSync(join(directory, "unreviewed.png"), "pixels");
 
     assert.throws(
       () => collectVisualBaselineManifest(directory),
-      /Visual baseline set is invalid .*missing:.*unexpected:/,
+      new RegExp(
+        `Visual baseline set is invalid \\(missing: ${missingFile}; unexpected: unreviewed\\.png\\)`,
+      ),
     );
   });
 });
@@ -60,7 +65,7 @@ test("rejects an empty screenshot even when every expected name exists", () => {
 
     assert.throws(
       () => collectVisualBaselineManifest(directory),
-      /not a non-empty regular file: home-dark-desktop-renderer\.png/,
+      /not a non-empty regular file: addons-install-success-dark-desktop-renderer\.png/,
     );
   });
 });

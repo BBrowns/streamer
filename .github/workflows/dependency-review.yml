@@ -2,7 +2,7 @@ name: Dependency Review
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, master, codex/smart-downloads]
   merge_group:
     types: [checks_requested]
 

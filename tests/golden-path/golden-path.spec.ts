@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { playbackPlanRequestSchema } from "@streamer/shared";
 import {
+  FIXTURE_USER_ID,
   FIXTURE_MOVIE_ID,
   installGoldenPathRoutes,
   type GoldenPathScenario,
@@ -1314,4 +1315,79 @@ test("resetting Search filters clears provider and URL state", async ({
       );
     })
     .toEqual([]);
+});
+
+test("Notifications group populated records and recover a failed mark-read", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page, {
+    fixture: { notifications: "mark-read-fails-once" },
+    fixedTime: "2026-07-18T15:00:00.000Z",
+  });
+  await page.goto("/notifications");
+  await expect(page.getByTestId("notifications-list")).toBeVisible();
+  await expect(page.getByText("Today", { exact: true })).toBeVisible();
+  const unread = page.getByTestId(
+    "notification-00000000-0000-4000-8000-000000000101",
+  );
+  await unread.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  const retry = page.getByRole("button", { name: "Retry" });
+  const responsePromise = page.waitForResponse(
+    (candidate) =>
+      candidate.url().includes("/api/notifications/") &&
+      candidate.request().method() === "PATCH" &&
+      candidate.status() === 200,
+  );
+  await retry.click();
+  const response = await responsePromise;
+  const body = (await response.json()) as {
+    status: string;
+    notification: { userId: string; read: boolean };
+  };
+  expect(body).toMatchObject({
+    status: "success",
+    notification: { userId: FIXTURE_USER_ID, read: true },
+  });
+});
+
+test("Add-ons expose a recoverable install retry and successful state", async ({
+  page,
+}) => {
+  const controls = await loginToFixtureShell(page, {
+    fixture: { addonInstall: "fail-once" },
+  });
+  await page.goto("/addons");
+  await page
+    .getByLabel("Manifest URL")
+    .fill("https://fixture.example.test/recommendations.json");
+  await page.getByRole("button", { name: "Install" }).click();
+  await expect(
+    page.getByText(/Fixture installation failed once/i),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Install" }).click();
+  await expect(
+    page.getByText("New content will appear on Discover.", { exact: true }),
+  ).toBeVisible();
+  expect(controls.addonInstallAttempts()).toBe(2);
+});
+
+test("Downloads presents active, attention, and offline-ready states", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page, { downloads: "mixed" });
+  await page.goto("/downloads");
+  await expect(
+    page.getByText("Fixture in progress", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Fixture needs attention", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Fixture ready offline", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Ready 1", exact: true }).click();
+  await expect(
+    page.getByText("Fixture ready offline", { exact: true }),
+  ).toBeVisible();
 });
