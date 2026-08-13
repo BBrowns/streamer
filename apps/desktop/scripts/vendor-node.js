@@ -4,7 +4,7 @@ const https = require("https");
 const crypto = require("crypto");
 const { execSync } = require("child_process");
 
-const NODE_VERSION = "24.18.0";
+const NODE_VERSION = "26.7.0";
 const ARCHITECTURES = ["arm64", "x64"];
 const PLATFORM = "darwin"; // Focused on macOS for this fix, easy to expand
 

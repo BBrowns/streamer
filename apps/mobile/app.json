@@ -43,7 +43,10 @@
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-image"
+      "expo-image",
+      "expo-localization",
+      "expo-sharing",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

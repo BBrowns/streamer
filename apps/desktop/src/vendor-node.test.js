@@ -16,24 +16,24 @@ const {
 test("reuses only the expected vendored Node version and architecture", () => {
   assert.equal(
     isExpectedNodeRuntime(
-      { version: "24.18.0", arch: "arm64" },
-      "24.18.0",
+      { version: "26.7.0", arch: "arm64" },
+      "26.7.0",
       "arm64",
     ),
     true,
   );
   assert.equal(
     isExpectedNodeRuntime(
-      { version: "24.2.0", arch: "arm64" },
-      "24.18.0",
+      { version: "26.6.0", arch: "arm64" },
+      "26.7.0",
       "arm64",
     ),
     false,
   );
   assert.equal(
     isExpectedNodeRuntime(
-      { version: "24.18.0", arch: "x64" },
-      "24.18.0",
+      { version: "26.7.0", arch: "x64" },
+      "26.7.0",
       "arm64",
     ),
     false,
@@ -42,11 +42,11 @@ test("reuses only the expected vendored Node version and architecture", () => {
 
 test("reads a Node version from the bundled release header", () => {
   assert.equal(
-    parseNodeVersionHeader(`#define NODE_MAJOR_VERSION 24
-#define NODE_MINOR_VERSION 18
+    parseNodeVersionHeader(`#define NODE_MAJOR_VERSION 26
+#define NODE_MINOR_VERSION 7
 #define NODE_PATCH_VERSION 0
 `),
-    "24.18.0",
+    "26.7.0",
   );
   assert.equal(parseNodeVersionHeader("#define NODE_MAJOR_VERSION 24"), null);
 });
@@ -73,8 +73,8 @@ test("inspects a foreign-platform vendored runtime without executing it", () => 
     fs.mkdirSync(path.join(runtimeRoot, "bin"), { recursive: true });
     fs.writeFileSync(
       path.join(runtimeRoot, "include/node/node_version.h"),
-      `#define NODE_MAJOR_VERSION 24
-#define NODE_MINOR_VERSION 18
+      `#define NODE_MAJOR_VERSION 26
+#define NODE_MINOR_VERSION 7
 #define NODE_PATCH_VERSION 0
 `,
     );
@@ -84,7 +84,7 @@ test("inspects a foreign-platform vendored runtime without executing it", () => 
     fs.writeFileSync(path.join(runtimeRoot, "bin/node"), binaryHeader);
 
     assert.deepEqual(inspectVendoredNodeRuntime(runtimeRoot), {
-      version: "24.18.0",
+      version: "26.7.0",
       arch: "arm64",
     });
   } finally {
@@ -98,13 +98,13 @@ test("treats an incomplete vendored runtime as unavailable", () => {
 
 test("finds only exact archive checksums in the Node manifest", () => {
   const checksum = "a".repeat(64);
-  const manifest = `${"b".repeat(64)}  node-v24.18.0-darwin-x64.tar.gz\n${checksum}  node-v24.18.0-darwin-arm64.tar.gz\n`;
+  const manifest = `${"b".repeat(64)}  node-v26.7.0-darwin-x64.tar.gz\n${checksum}  node-v26.7.0-darwin-arm64.tar.gz\n`;
   assert.equal(
-    getExpectedChecksum(manifest, "node-v24.18.0-darwin-arm64.tar.gz"),
+    getExpectedChecksum(manifest, "node-v26.7.0-darwin-arm64.tar.gz"),
     checksum,
   );
   assert.equal(
-    getExpectedChecksum(manifest, "node-v24.18.0-darwin-arm.tar.gz"),
+    getExpectedChecksum(manifest, "node-v26.7.0-darwin-arm.tar.gz"),
     null,
   );
 });

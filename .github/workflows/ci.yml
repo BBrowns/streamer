@@ -3,6 +3,7 @@ name: CI
 on:
   pull_request:
     branches: [main, master, codex/smart-downloads]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, master, codex/smart-downloads]
   merge_group:
@@ -10,7 +11,7 @@ on:
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=public
-  NPM_VERSION: "11.18.0"
+  NPM_VERSION: "12.0.2"
 
 permissions:
   contents: read
@@ -49,6 +50,7 @@ jobs:
           CI_EVENT_NAME: ${{ github.event_name }}
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CI_IS_DRAFT: ${{ github.event.pull_request.draft || false }}
         run: |
           if [[ "${CI_EVENT_NAME}" != "pull_request" ]]; then
             echo "full_ci=true" >> "${GITHUB_OUTPUT}"
@@ -62,6 +64,25 @@ jobs:
               echo ""
               echo "- Mode: full CI"
               echo "- Reason: event:${CI_EVENT_NAME}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          elif [[ "${CI_IS_DRAFT}" == "true" ]]; then
+            {
+              echo "full_ci=false"
+              for output in run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
+                echo "${output}=false"
+              done
+              echo "run_lint=true"
+              echo "run_format=true"
+              echo "run_security=true"
+              echo "scope_reason=draft-pull-request"
+              echo "changed_file_count=0"
+            } >> "${GITHUB_OUTPUT}"
+            {
+              echo "## CI scope"
+              echo ""
+              echo "- Mode: draft fast CI"
+              echo "- Reason: draft-pull-request"
+              echo "- Extended jobs run when the pull request is marked ready for review."
             } >> "${GITHUB_STEP_SUMMARY}"
           elif git cat-file -e "${CI_BASE_SHA}:scripts/ci-affected.mjs" 2>/dev/null; then
             git show "${CI_BASE_SHA}:scripts/ci-affected.mjs" > "${RUNNER_TEMP}/ci-affected.mjs"

@@ -66,7 +66,7 @@ Rules:
 
 ## Project Rules
 
-- This is an npm 11.18 / Node 24.18 monorepo. Use the repository scripts and the runtime guard; do not use Node 25 or bypass `scripts/dev-runtime.cjs` for native bridge work.
+- This is an npm 12.0.2 / Node 26.7.0 monorepo. Use the repository scripts and the runtime guard; do not bypass `scripts/dev-runtime.cjs` for native bridge work.
 - Read the task-specific reference before changing a subsystem: `ARCHITECTURE.md` for ownership and service boundaries, `PLAYBACK.md` for session and stream contracts, `UI.md` for mobile UI behavior, and `AGENT_HANDOFF.md` for current priorities and known gaps.
 - Keep shared API types and Zod schemas in `packages/shared`. Do not duplicate cross-client contracts in the server or mobile app.
 - Playback sessions and events must remain persistence-safe: never persist or log resolved media URLs, magnets, info hashes, raw `Stream` objects, or bridge URLs. Keep Play Best as the primary flow; manual source selection is an advanced fallback.

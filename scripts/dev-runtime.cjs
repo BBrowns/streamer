@@ -6,8 +6,9 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "..");
-const REQUIRED_NODE_MAJOR = 24;
-const REQUIRED_NODE_MINOR = 18;
+const REQUIRED_NODE_MAJOR = 26;
+const REQUIRED_NODE_MINOR = 7;
+const PINNED_NPM_VERSION = "12.0.2";
 const SUPPORTED_ARCHES = ["arm64", "x64"];
 
 function normalizeArch(value) {
@@ -166,7 +167,7 @@ function resolveRuntimeCandidates(options = {}) {
         .readFileSync(path.join(repositoryRoot, ".nvmrc"), "utf8")
         .trim();
     } catch {
-      return "24.18.0";
+      return `${REQUIRED_NODE_MAJOR}.${REQUIRED_NODE_MINOR}.0`;
     }
   })();
   const pathCandidates = String(env.PATH || "")
@@ -238,7 +239,7 @@ function selectNodeRuntime(candidates, targetArch, options = {}) {
     ? inspected.map((item) => `${item.version}/${item.arch}`).join(", ")
     : "none";
   throw new Error(
-    `No supported Node.js runtime was found for ${targetArch}. Streamer requires Node 24.18 or newer within Node 24. Found: ${found}. Run \`nvm install\` and \`nvm use\`, or set STREAMER_DEV_NODE.`,
+    `No supported Node.js runtime was found for ${targetArch}. Streamer requires Node ${REQUIRED_NODE_MAJOR}.${REQUIRED_NODE_MINOR} or newer within Node ${REQUIRED_NODE_MAJOR}. Found: ${found}. Run \`nvm install\` and \`nvm use\`, or set STREAMER_DEV_NODE.`,
   );
 }
 
@@ -255,18 +256,65 @@ function resolveNpmCli(nodeExecPath, options = {}) {
   return candidates.find((candidate) => exists(candidate)) || null;
 }
 
-function resolveNpmRunner(nodeExecPath, options = {}) {
+function resolveNpxCli(nodeExecPath, options = {}) {
   const exists = options.exists || fs.existsSync;
-  const corepackCli = path.resolve(
+  const candidate = path.resolve(
     path.dirname(nodeExecPath),
-    "../lib/node_modules/corepack/dist/corepack.js",
+    "../lib/node_modules/npm/bin/npx-cli.js",
   );
-  if (exists(corepackCli)) {
-    return { cli: corepackCli, prefixArgs: ["npm"] };
+  return exists(candidate) ? candidate : null;
+}
+
+function resolveNpmRunner(nodeExecPath, options = {}) {
+  const npxCli = resolveNpxCli(nodeExecPath, options);
+  if (npxCli) {
+    return {
+      cli: npxCli,
+      prefixArgs: ["--yes", `npm@${PINNED_NPM_VERSION}`],
+    };
   }
 
   const npmCli = resolveNpmCli(nodeExecPath, options);
   return npmCli ? { cli: npmCli, prefixArgs: [] } : null;
+}
+
+function resolveNpmEnvironment(options = {}) {
+  const env = options.env || process.env;
+  if (env.NPM_CONFIG_CACHE) return env;
+
+  const homeDir = options.homeDir || os.homedir();
+  return {
+    ...env,
+    NPM_CONFIG_CACHE: path.join(
+      homeDir,
+      ".cache",
+      "streamer",
+      "npm",
+      PINNED_NPM_VERSION,
+    ),
+  };
+}
+
+function verifyNpmRunner(nodeExecPath, npmRunner, options = {}) {
+  const run = options.spawnSync || spawnSync;
+  const result = run(
+    nodeExecPath,
+    [npmRunner.cli, ...npmRunner.prefixArgs, "--version"],
+    {
+      cwd: options.cwd || REPOSITORY_ROOT,
+      env: options.env || resolveNpmEnvironment(options),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const actualVersion = String(result.stdout || "").trim();
+  if (result.status !== 0 || actualVersion !== PINNED_NPM_VERSION) {
+    const detail = String(result.stderr || result.stdout || "").trim();
+    throw new Error(
+      `The selected Node runtime could not provide npm ${PINNED_NPM_VERSION}; received ${actualVersion || "no version"}.${detail ? ` ${detail}` : ""}`,
+    );
+  }
+  return actualVersion;
 }
 
 function parseNpmCommandArgs(args) {
@@ -479,6 +527,9 @@ async function runNpmCommand(rawArgs) {
       `Could not find npm next to ${runtime.execPath}. Run \`nvm install\` and \`nvm use\` to install the supported toolchain.`,
     );
   }
+  const npmEnv = resolveNpmEnvironment();
+  fs.mkdirSync(npmEnv.NPM_CONFIG_CACHE, { recursive: true });
+  verifyNpmRunner(runtime.execPath, npmRunner, { env: npmEnv });
   if (port) await stopListeningProcesses(port);
 
   console.log(
@@ -489,7 +540,7 @@ async function runNpmCommand(rawArgs) {
     [npmRunner.cli, ...npmRunner.prefixArgs, ...npmArgs],
     {
       env: {
-        ...process.env,
+        ...npmEnv,
         PATH: `${path.dirname(runtime.execPath)}${path.delimiter}${process.env.PATH || ""}`,
       },
     },
@@ -506,6 +557,9 @@ async function repairNativeDependencies() {
       `Could not find npm next to ${runtime.execPath}. Run \`nvm use\` followed by \`npm rebuild esbuild node-datachannel\`.`,
     );
   }
+  const npmEnv = resolveNpmEnvironment();
+  fs.mkdirSync(npmEnv.NPM_CONFIG_CACHE, { recursive: true });
+  verifyNpmRunner(runtime.execPath, npmRunner, { env: npmEnv });
 
   console.log(
     `[dev-runtime] Rebuilding native dependencies with ${runtime.version}/${runtime.arch}.`,
@@ -521,7 +575,7 @@ async function repairNativeDependencies() {
     ],
     {
       env: {
-        ...process.env,
+        ...npmEnv,
         PATH: `${path.dirname(runtime.execPath)}${path.delimiter}${process.env.PATH || ""}`,
       },
     },
@@ -576,7 +630,10 @@ module.exports = {
   parseNodeVersion,
   parseProcessGroupId,
   resolveNpmCli,
+  resolveNpxCli,
+  resolveNpmEnvironment,
   resolveNpmRunner,
+  verifyNpmRunner,
   runForeground,
   selectNodeRuntime,
   stopListeningProcesses,

@@ -50,3 +50,19 @@ updates:
         update-types:
           - minor
           - patch
+
+  - package-ecosystem: docker
+    directory: /server
+    target-branch: master
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      docker-patch:
+        patterns:
+          - "*"
+        update-types:
+          - patch

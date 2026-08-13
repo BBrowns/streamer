@@ -101,7 +101,7 @@ for (const [profile, profileEnvironment] of Object.entries(
   assertStableIdentity(config, profile);
   assert.equal(profileConfig.environment, profile);
   assert.equal(profileConfig.channel, profile);
-  assert.equal(profileConfig.node, "24.18.0");
+  assert.equal(profileConfig.node, "26.7.0");
   assert.equal(config.extra.streamer.buildEnvironment, profile);
   assert.equal(config.extra.streamer.buildChannel, profile);
   assert.equal(config.extra.streamer.updates.channel, profile);

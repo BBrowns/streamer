@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:26.7.0-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS base
 WORKDIR /app
 
 # Install dependencies
@@ -9,7 +9,7 @@ COPY packages/shared/package.json ./packages/shared/
 # Keep container installs aligned with the repository lockfile/toolchain. Root
 # lifecycle scripts target the full desktop/mobile workspace and are not needed
 # for this server-only image; Prisma generation runs explicitly below.
-RUN npx --yes npm@11.18.0 ci --ignore-scripts --no-audit --no-fund \
+RUN npx --yes npm@12.0.2 ci --ignore-scripts --no-audit --no-fund \
     --workspace=server --workspace=packages/shared
 
 # Copy source
@@ -28,10 +28,10 @@ CMD ["npm", "run", "dev", "--workspace=server"]
 FROM base AS build
 WORKDIR /app
 RUN npm run build --workspace=server
-RUN npx --yes npm@11.18.0 prune --omit=dev --ignore-scripts \
+RUN npx --yes npm@12.0.2 prune --omit=dev --ignore-scripts \
     --workspace=server --workspace=packages/shared
 
-FROM node:24-alpine AS production
+FROM node:26.7.0-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS production
 WORKDIR /app
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/package.json ./server/

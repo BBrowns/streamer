@@ -12,6 +12,7 @@ const {
   parseNpmCommandArgs,
   parseProcessGroupId,
   resolveNpmRunner,
+  verifyNpmRunner,
   runForeground,
   selectNodeRuntime,
   stopListeningProcesses,
@@ -23,11 +24,12 @@ test("normalizes common CPU architecture names", () => {
   assert.equal(normalizeArch("mips"), null);
 });
 
-test("accepts supported Node 24 runtimes only", () => {
-  assert.equal(isSupportedNodeVersion("v24.18.0"), true);
-  assert.equal(isSupportedNodeVersion("v24.20.1"), true);
-  assert.equal(isSupportedNodeVersion("v24.17.9"), false);
+test("accepts supported Node 26 runtimes only", () => {
+  assert.equal(isSupportedNodeVersion("v26.7.0"), true);
+  assert.equal(isSupportedNodeVersion("v26.8.1"), true);
+  assert.equal(isSupportedNodeVersion("v26.6.9"), false);
   assert.equal(isSupportedNodeVersion("v25.6.0"), false);
+  assert.equal(isSupportedNodeVersion("v24.18.0"), false);
 });
 
 test("detects Apple Silicon even when the parent Node process is translated", () => {
@@ -85,10 +87,10 @@ test("accepts an architecture when esbuild has multiple compatible binaries", ()
   );
 });
 
-test("selects a matching supported runtime and skips Node 25", () => {
+test("selects a matching supported runtime and skips unsupported majors", () => {
   const runtimes = new Map([
     ["system", { execPath: "system", arch: "x64", version: "v25.6.0" }],
-    ["nvm", { execPath: "nvm", arch: "arm64", version: "v24.18.0" }],
+    ["nvm", { execPath: "nvm", arch: "arm64", version: "v26.7.0" }],
   ]);
   const selected = selectNodeRuntime(["system", "nvm"], "arm64", {
     inspectRuntime: (candidate) => runtimes.get(candidate),
@@ -181,14 +183,14 @@ test("terminates a stale listener's process group without touching its own group
   ]);
 });
 
-test("uses Corepack to honor the pinned npm version when available", () => {
+test("uses the selected runtime's npx to honor the pinned npm version", () => {
   const runner = resolveNpmRunner("/runtime/bin/node", {
-    exists: (candidate) => candidate.endsWith("corepack/dist/corepack.js"),
+    exists: (candidate) => candidate.endsWith("npm/bin/npx-cli.js"),
   });
 
   assert.deepEqual(runner, {
-    cli: "/runtime/lib/node_modules/corepack/dist/corepack.js",
-    prefixArgs: ["npm"],
+    cli: "/runtime/lib/node_modules/npm/bin/npx-cli.js",
+    prefixArgs: ["--yes", "npm@12.0.2"],
   });
 });
 
@@ -202,6 +204,31 @@ test("falls back to the runtime npm CLI when Corepack is unavailable", () => {
     cli: "/runtime/lib/node_modules/npm/bin/npm-cli.js",
     prefixArgs: [],
   });
+});
+
+test("verifies the exact npm version exposed by the selected runner", () => {
+  const calls = [];
+  const runner = {
+    cli: "/runtime/lib/node_modules/npm/bin/npx-cli.js",
+    prefixArgs: ["--yes", "npm@12.0.2"],
+  };
+
+  assert.equal(
+    verifyNpmRunner("/runtime/bin/node", runner, {
+      env: { NPM_CONFIG_CACHE: "/tmp/streamer-npm-cache" },
+      spawnSync: (command, args, options) => {
+        calls.push({ command, args, options });
+        return { status: 0, stdout: "12.0.2\n", stderr: "" };
+      },
+    }),
+    "12.0.2",
+  );
+  assert.deepEqual(calls[0].args, [
+    runner.cli,
+    "--yes",
+    "npm@12.0.2",
+    "--version",
+  ]);
 });
 
 test("can detach daemon stdin while preserving output and signal forwarding", async () => {
