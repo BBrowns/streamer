@@ -99,11 +99,7 @@ const PLAYBACK_START_TIMEOUT_MS = 60_000;
 const MAX_PLAYBACK_DIAGNOSTIC_BREADCRUMBS = 24;
 
 type SeekableCacheStatus =
-  | "not_started"
-  | "evaluating"
-  | "preparing"
-  | "ready"
-  | "unavailable";
+  "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
 
 function getPlayerVisibility() {
   if (AppState.currentState !== "active") return false;

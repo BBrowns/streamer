@@ -29,9 +29,7 @@ interface CastDevice {
 }
 
 export type CastOperationFailure =
-  | "device_not_found"
-  | "session_not_found"
-  | "unavailable";
+  "device_not_found" | "session_not_found" | "unavailable";
 
 export type CastOperationResult<T = undefined> =
   | (T extends undefined ? { ok: true } : { ok: true; value: T })

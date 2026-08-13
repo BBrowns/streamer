@@ -49,22 +49,22 @@
     "expo-updates": "~57.0.13",
     "expo-video": "~57.0.2",
     "expo-web-browser": "~57.0.2",
-    "hono": "^4.12.30",
+    "hono": "^4.13.2",
     "i18next": "^26.0.3",
     "nativewind": "^4.2.2",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "react-i18next": "^17.0.2",
     "react-native": "0.86.2",
     "react-native-airplay-btn": "^1.1.0",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-google-cast": "^4.9.1",
-    "react-native-reanimated": "4.5.1",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.26.0",
+    "react-native-reanimated": "4.5.3",
+    "react-native-safe-area-context": "~5.8.1",
+    "react-native-screens": "~4.27.0",
     "react-native-sse": "^1.2.1",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1",
+    "react-native-worklets": "0.11.3",
     "semver": "^6.3.1",
     "tailwindcss": "3.3.2",
     "zustand": "^5.0.3"
@@ -76,14 +76,21 @@
     "detox": "^20.31.0",
     "jest": "~29.7.0",
     "jest-expo": "~57.0.4",
-    "react-test-renderer": "19.2.3",
+    "react-test-renderer": "19.2.8",
     "ts-jest": "^29.2.5",
     "typescript": "~6.0.3"
   },
   "expo": {
     "install": {
       "exclude": [
-        "@sentry/react-native"
+        "@sentry/react-native",
+        "@shopify/flash-list",
+        "react",
+        "react-dom",
+        "react-native-reanimated",
+        "react-native-safe-area-context",
+        "react-native-screens",
+        "react-native-worklets"
       ]
     }
   },

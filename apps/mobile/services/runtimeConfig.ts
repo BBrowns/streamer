@@ -54,8 +54,7 @@ function resolveBuildEnvironment(value: unknown): MobileBuildEnvironment {
 
 export function getClientRuntimeConfig(): ClientRuntimeConfig {
   const extra = (Constants.expoConfig?.extra?.streamer || {}) as
-    | StreamerRuntimeExtra
-    | undefined;
+    StreamerRuntimeExtra | undefined;
   const buildEnvironment = resolveBuildEnvironment(extra?.buildEnvironment);
   const buildChannel = optionalString(extra?.buildChannel) || buildEnvironment;
 

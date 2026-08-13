@@ -35,8 +35,7 @@ export interface CastSessionStartFailure {
 }
 
 export type CastSessionStartResult =
-  | CastSessionStartSuccess
-  | CastSessionStartFailure;
+  CastSessionStartSuccess | CastSessionStartFailure;
 
 export function getCastContentType(
   stream: Stream,

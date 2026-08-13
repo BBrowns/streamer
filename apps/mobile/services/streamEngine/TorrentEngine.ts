@@ -40,11 +40,7 @@ interface GatewayJobResponse extends GatewayJobProgress {
     cacheStatus?: string;
     seekableCache?: {
       status?:
-        | "not_started"
-        | "evaluating"
-        | "preparing"
-        | "ready"
-        | "unavailable";
+        "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
       unavailableReason?: SeekablePlaybackHandoff["unavailableReason"] | null;
       startedAt?: string | null;
       completedAt?: string | null;

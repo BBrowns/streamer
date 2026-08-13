@@ -52,11 +52,7 @@ type PersistedDownloadTask = {
   verifiedFileSizeBytes?: number;
   contentType?: string;
   verificationState:
-    | "pending"
-    | "checking"
-    | "verified"
-    | "incomplete"
-    | "failed";
+    "pending" | "checking" | "verified" | "incomplete" | "failed";
   playableState: "unknown" | "checking" | "playable" | "unplayable";
   createdAt: string;
   updatedAt: string;

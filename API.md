@@ -146,11 +146,7 @@ interface GatewayJobResponse {
   id: string;
   state: "preparing" | "ready" | "error" | "cancelled";
   phase:
-    | "finding_peers"
-    | "preparing_metadata"
-    | "ready"
-    | "error"
-    | "cancelled";
+    "finding_peers" | "preparing_metadata" | "ready" | "error" | "cancelled";
   mode: "bridge" | "remux";
   infoHash?: string;
   fileIdx?: number;

@@ -1,15 +1,8 @@
 export type BuildRuntimeType =
-  | "mobile"
-  | "desktop-main"
-  | "desktop-renderer"
-  | "server"
-  | "stream-server";
+  "mobile" | "desktop-main" | "desktop-renderer" | "server" | "stream-server";
 
 export type BuildEnvironment =
-  | "development"
-  | "preview"
-  | "production"
-  | "test";
+  "development" | "preview" | "production" | "test";
 
 export interface BuildMetadata {
   appVersion: string;

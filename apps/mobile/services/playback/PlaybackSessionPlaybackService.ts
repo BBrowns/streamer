@@ -128,24 +128,21 @@ export interface PlaybackSessionResolutionFailure {
 }
 
 export type PlaybackSessionResolutionResult =
-  | PlaybackSessionResolutionSuccess
-  | PlaybackSessionResolutionFailure;
+  PlaybackSessionResolutionSuccess | PlaybackSessionResolutionFailure;
 
 export interface PlaybackSessionDownloadResolutionSuccess extends PlaybackSessionResolutionSuccess {
   eligibility: DownloadEligibility;
 }
 
 export type PlaybackSessionDownloadResolutionResult =
-  | PlaybackSessionDownloadResolutionSuccess
-  | PlaybackSessionResolutionFailure;
+  PlaybackSessionDownloadResolutionSuccess | PlaybackSessionResolutionFailure;
 
 interface PlaybackSessionInternalResolutionSuccess extends PlaybackSessionResolutionSuccess {
   eligibility?: DownloadEligibility;
 }
 
 type PlaybackSessionInternalResolutionResult =
-  | PlaybackSessionInternalResolutionSuccess
-  | PlaybackSessionResolutionFailure;
+  PlaybackSessionInternalResolutionSuccess | PlaybackSessionResolutionFailure;
 
 type SessionResolutionAction = "play" | "download" | "cast";
 

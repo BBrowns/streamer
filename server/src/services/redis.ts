@@ -3,9 +3,7 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 
 export type RedisReadinessStatus =
-  | "connected"
-  | "unavailable"
-  | "not_configured";
+  "connected" | "unavailable" | "not_configured";
 
 export const redis = env.redisUrl
   ? new Redis(env.redisUrl, {

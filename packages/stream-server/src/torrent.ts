@@ -231,9 +231,7 @@ function getRemuxReadyTimeoutMs() {
 }
 
 export type SeekableRemuxUnavailableReason =
-  | "insufficient_storage"
-  | "source_too_large"
-  | "no_download_progress";
+  "insufficient_storage" | "source_too_large" | "no_download_progress";
 
 export async function evaluateSeekableRemuxPreparation(
   torrent: any,

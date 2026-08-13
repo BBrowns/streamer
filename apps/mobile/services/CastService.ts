@@ -30,9 +30,7 @@ export interface CastPlaybackStatus {
   playerState: string;
 }
 export type CastContentType =
-  | "video/mp4"
-  | "application/vnd.apple.mpegurl"
-  | "application/x-mpegURL";
+  "video/mp4" | "application/vnd.apple.mpegurl" | "application/x-mpegURL";
 
 export type CastServiceErrorCode =
   | "CAST_DEVICES_UNREACHABLE"

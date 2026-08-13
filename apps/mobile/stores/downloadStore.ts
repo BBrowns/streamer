@@ -39,17 +39,10 @@ export type DownloadStatus =
   | "Paused";
 
 export type DownloadVerificationState =
-  | "pending"
-  | "checking"
-  | "verified"
-  | "incomplete"
-  | "failed";
+  "pending" | "checking" | "verified" | "incomplete" | "failed";
 
 export type DownloadPlayableState =
-  | "unknown"
-  | "checking"
-  | "playable"
-  | "unplayable";
+  "unknown" | "checking" | "playable" | "unplayable";
 
 export const MIN_OFFLINE_MEDIA_BYTES = 1024 * 1024;
 

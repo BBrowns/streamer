@@ -73,8 +73,7 @@ class RequestBuilder implements PromiseLike<TestResponse> {
 
   then<TResult1 = TestResponse, TResult2 = never>(
     onfulfilled?:
-      | ((value: TestResponse) => TResult1 | PromiseLike<TResult1>)
-      | null,
+      ((value: TestResponse) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2> {
     return this.execute().then(onfulfilled, onrejected);

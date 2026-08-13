@@ -21,12 +21,7 @@ export interface NormalizedMediaTrack {
 }
 
 export type SubtitleCandidateFormat =
-  | "srt"
-  | "vtt"
-  | "ass"
-  | "ssa"
-  | "cue-json"
-  | "unknown";
+  "srt" | "vtt" | "ass" | "ssa" | "cue-json" | "unknown";
 
 /**
  * Runtime-only subtitle descriptor. `fetchIdentity` is opaque to clients and

@@ -13,8 +13,7 @@ import i18n from "../../lib/i18n";
 
 export type PlaybackReadinessTone = "info" | "warning" | "error";
 export type PlaybackReadinessActionTarget =
-  | "sourcesDevices"
-  | "playbackSettings";
+  "sourcesDevices" | "playbackSettings";
 
 export interface PlaybackReadinessNoticeCopy {
   title: string;

@@ -63,8 +63,7 @@ export interface PlaybackOrchestratorFailure {
 }
 
 export type PlaybackOrchestratorResult =
-  | PlaybackOrchestratorSuccess
-  | PlaybackOrchestratorFailure;
+  PlaybackOrchestratorSuccess | PlaybackOrchestratorFailure;
 
 export interface DownloadOrchestratorSuccess {
   ok: true;
@@ -82,8 +81,7 @@ export interface DownloadOrchestratorSuccess {
 }
 
 export type DownloadOrchestratorResult =
-  | DownloadOrchestratorSuccess
-  | PlaybackOrchestratorFailure;
+  DownloadOrchestratorSuccess | PlaybackOrchestratorFailure;
 
 export interface CastOrchestratorSuccess {
   ok: true;
@@ -101,8 +99,7 @@ export interface CastOrchestratorSuccess {
 }
 
 export type CastOrchestratorResult =
-  | CastOrchestratorSuccess
-  | PlaybackOrchestratorFailure;
+  CastOrchestratorSuccess | PlaybackOrchestratorFailure;
 
 export interface PrepareCastOptions {
   deviceProfile?: DeviceProfile;

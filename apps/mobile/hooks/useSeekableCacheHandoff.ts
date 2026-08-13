@@ -16,11 +16,7 @@ import type { PlaybackRuntimeViewEvent } from "../services/playback/PlaybackRunt
 const SEEKABLE_CACHE_POLL_INTERVAL_MS = 2_000;
 
 export type SeekableCacheStatus =
-  | "not_started"
-  | "evaluating"
-  | "preparing"
-  | "ready"
-  | "unavailable";
+  "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
 
 type SeekableCacheEngine = {
   getSeekablePlaybackHandoff?: (options?: {

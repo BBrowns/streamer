@@ -18,11 +18,7 @@ export type PlaybackPlanState =
   | "notFound";
 
 export type PlaybackPlanMode =
-  | "direct"
-  | "hls"
-  | "bridge"
-  | "remux"
-  | "transcode";
+  "direct" | "hls" | "bridge" | "remux" | "transcode";
 
 export type PlaybackRuntimeState =
   | "idle"
@@ -70,12 +66,7 @@ export interface PlaybackRuntimeError {
 }
 
 export type DevicePlatform =
-  | "ios"
-  | "android"
-  | "web"
-  | "electron"
-  | "chromecast"
-  | "unknown";
+  "ios" | "android" | "web" | "electron" | "chromecast" | "unknown";
 
 export type BridgeStatus =
   | "available"

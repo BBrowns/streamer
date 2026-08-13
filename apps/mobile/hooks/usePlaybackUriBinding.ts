@@ -12,10 +12,7 @@ import { resolvePlaybackSession } from "../services/playback/PlaybackSessionPlay
 import type { PlaybackSessionBinding } from "./usePlaybackSessionBinding";
 
 export type PlaybackUriMessage =
-  | "unsupportedCodec"
-  | "bridgeUnavailable"
-  | "noStream"
-  | "playbackFailed";
+  "unsupportedCodec" | "bridgeUnavailable" | "noStream" | "playbackFailed";
 
 type SetSessionStream = (
   stream: Stream,

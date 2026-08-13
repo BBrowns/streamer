@@ -14,11 +14,7 @@ import type {
  * resolved media locations remain runtime-local to the selected executor.
  */
 export type PlaybackExecutionTarget =
-  | "on-device"
-  | "local-sidecar"
-  | "paired-bridge"
-  | "debrid"
-  | "remote-bridge";
+  "on-device" | "local-sidecar" | "paired-bridge" | "debrid" | "remote-bridge";
 
 export type PlaybackDelivery =
   | "direct"
@@ -84,8 +80,7 @@ export type PlaybackRouteRejectReason =
   | "protocol_unsupported";
 
 export type PlaybackRejectReasonV3 =
-  | PlaybackRejectReason
-  | PlaybackRouteRejectReason;
+  PlaybackRejectReason | PlaybackRouteRejectReason;
 
 export interface PlaybackActionEligibilityV3 extends Omit<
   PlaybackActionEligibility,
@@ -140,8 +135,6 @@ export interface PlaybackPlanV3 extends Omit<
 
 export type PlaybackPlanResponse = PlaybackPlan | PlaybackPlanV3;
 export type PlaybackPlanCandidate =
-  | PlannedMediaCandidate
-  | PlannedMediaCandidateV3;
+  PlannedMediaCandidate | PlannedMediaCandidateV3;
 export type PlaybackPlanRejectedCandidate =
-  | RejectedCandidate
-  | RejectedCandidateV3;
+  RejectedCandidate | RejectedCandidateV3;

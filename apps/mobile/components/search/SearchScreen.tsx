@@ -64,8 +64,7 @@ import { SearchSuggestions } from "./SearchSuggestions";
 type YearFilter = "all" | string;
 type FacetFilter = "all" | string;
 type SearchScreenResultState =
-  | SearchInteractionState
-  | "filter-pagination-limit";
+  SearchInteractionState | "filter-pagination-limit";
 
 function preserveCurrentWebSearchHistoryEntry() {
   if (Platform.OS !== "web") return false;
