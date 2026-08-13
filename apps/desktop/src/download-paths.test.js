@@ -52,3 +52,13 @@ test("rejects malformed and decorated local URIs", () => {
     null,
   );
 });
+
+test("rejects a streamer URI with an untrusted authority", () => {
+  assert.equal(
+    resolveManagedDownloadPath(
+      downloadsPath,
+      "streamer://untrusted-host/offline_media/movie.mp4",
+    ),
+    null,
+  );
+});

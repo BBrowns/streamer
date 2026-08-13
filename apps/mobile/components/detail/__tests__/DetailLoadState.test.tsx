@@ -1,6 +1,20 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import { DetailLoadState } from "../DetailLoadState";
 
+jest.mock("../../ui/PageLayout", () => {
+  const { View } = require("react-native");
+  return {
+    PageLayout: ({ children, testID, boundary, scroll }: any) => (
+      <View
+        testID={testID}
+        accessibilityLabel={`boundary:${String(boundary)} scroll:${String(scroll)}`}
+      >
+        {children}
+      </View>
+    ),
+  };
+});
+
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
@@ -57,6 +71,16 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("DetailLoadState", () => {
+  it("uses the non-scrolling detail boundary for load and recovery states", () => {
+    const screen = render(
+      <DetailLoadState kind="loading" onBack={jest.fn()} />,
+    );
+
+    expect(
+      screen.getByTestId("detail-load-state-loading").props.accessibilityLabel,
+    ).toBe("boundary:detail scroll:undefined");
+  });
+
   it("shows a calm loading state with an immediately available Back action", () => {
     const onBack = jest.fn();
     const screen = render(<DetailLoadState kind="loading" onBack={onBack} />);

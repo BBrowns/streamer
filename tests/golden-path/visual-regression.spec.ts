@@ -1,25 +1,25 @@
 import { existsSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { FIXTURE_MOVIE_ID, type GoldenPathScenario } from "./fixtures";
 import {
-  FIXTURE_MOVIE_ID,
-  installGoldenPathRoutes,
-  type GoldenPathScenario,
-} from "./fixtures";
+  deterministicScreenshotOptions,
+  loginToFixtureShell,
+  settleVisualFrame,
+} from "./ui-test-helpers";
 
 const visualProjects = new Set(["phone-web", "desktop-renderer"]);
 const visualBaselineUpdateEnabled =
   process.env.STREAMER_VISUAL_BASELINES === "1";
 
-const screenshotOptions = {
-  animations: "disabled" as const,
-  caret: "hide" as const,
-  fullPage: true,
-  scale: "css" as const,
-};
-
 function snapshotNames(scheme: "dark" | "light", projectName: string) {
   const names = [
+    `addons-install-success-${scheme}-${projectName}.png`,
+    `detail-actions-${scheme}-${projectName}.png`,
+    `downloads-mixed-${scheme}-${projectName}.png`,
     `home-${scheme}-${projectName}.png`,
+    `login-${scheme}-${projectName}.png`,
+    `notifications-populated-${scheme}-${projectName}.png`,
+    `onboarding-setup-${scheme}-${projectName}.png`,
     `settings-overview-${scheme}-${projectName}.png`,
     `search-results-${scheme}-${projectName}.png`,
   ];
@@ -40,6 +40,15 @@ function snapshotNames(scheme: "dark" | "light", projectName: string) {
     );
   }
   return names;
+}
+
+function requireLinuxBaselines(testInfo: TestInfo, scheme: "dark" | "light") {
+  if (!visualBaselineUpdateEnabled && process.platform === "linux") {
+    expect(
+      hasApprovedPlatformBaselines(testInfo, scheme),
+      "Every Linux visual baseline must be reviewed and committed before CI can pass.",
+    ).toBe(true);
+  }
 }
 
 function hasApprovedPlatformBaselines(
@@ -65,43 +74,11 @@ function skipUnsupportedVisualEnvironment(
   );
 }
 
-async function settleVisualFrame(page: Page) {
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    await Promise.all(
-      Array.from(document.images, (image) =>
-        image.decode().catch(() => undefined),
-      ),
-    );
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-  });
-}
-
-async function loginToFixtureShell(
-  page: Page,
-  scheme: "dark" | "light",
-  scenario: GoldenPathScenario = "direct",
-) {
-  await installGoldenPathRoutes(page, scenario);
-  await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
-  await page.addInitScript(() => {
-    window.localStorage.setItem("HAS_SEEN_ONBOARDING", "true");
-  });
-  await page.goto("/login");
-  await page.getByPlaceholder("Email").fill("qa@example.test");
-  await page.getByPlaceholder("Password").fill("fixture-password");
-  await page.getByTestId("login-submit").click();
-  await expect(page.getByTestId("home-screen")).toBeVisible();
-  await settleVisualFrame(page);
-}
-
 async function openFixturePlayer(
   page: Page,
   scenario: GoldenPathScenario = "direct-visual",
 ) {
-  await loginToFixtureShell(page, "dark", scenario);
+  await loginToFixtureShell(page, { colorScheme: "dark", scenario });
   await page
     .getByTestId("home-hero")
     .getByRole("button", { name: "View details" })
@@ -119,22 +96,14 @@ for (const scheme of ["dark", "light"] as const) {
   }, testInfo) => {
     skipUnsupportedVisualEnvironment(testInfo, scheme);
 
-    // Linux is the CI evidence platform. Once the bootstrap artifact has been
-    // reviewed and committed, its baseline must stay complete; a missing image
-    // is a failure rather than a silently skipped visual check.
-    if (!visualBaselineUpdateEnabled && process.platform === "linux") {
-      expect(
-        hasApprovedPlatformBaselines(testInfo, scheme),
-        "Every Linux visual baseline must be reviewed and committed before CI can pass.",
-      ).toBe(true);
-    }
+    requireLinuxBaselines(testInfo, scheme);
 
-    await loginToFixtureShell(page, scheme);
+    await loginToFixtureShell(page, { colorScheme: scheme });
 
     await expect(page.getByTestId("home-hero")).toBeVisible();
     await expect(page).toHaveScreenshot(
       `home-${scheme}-${testInfo.project.name}.png`,
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
 
     await page.goto("/settings");
@@ -142,7 +111,7 @@ for (const scheme of ["dark", "light"] as const) {
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(
       `settings-overview-${scheme}-${testInfo.project.name}.png`,
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
 
     await page.goto("/search?q=Golden");
@@ -150,7 +119,109 @@ for (const scheme of ["dark", "light"] as const) {
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(
       `search-results-${scheme}-${testInfo.project.name}.png`,
-      screenshotOptions,
+      deterministicScreenshotOptions,
+    );
+  });
+
+  test(`matches the ${scheme} Login and onboarding visual baselines`, async ({
+    page,
+  }, testInfo) => {
+    skipUnsupportedVisualEnvironment(testInfo, scheme);
+    requireLinuxBaselines(testInfo, scheme);
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    await page.goto("/login");
+    await expect(page.getByText("Welcome Back", { exact: true })).toBeVisible();
+    await settleVisualFrame(page);
+    await expect(page).toHaveScreenshot(
+      `login-${scheme}-${testInfo.project.name}.png`,
+      deterministicScreenshotOptions,
+    );
+    await page.goto("/onboarding/setup");
+    await expect(page.getByText("Personalize", { exact: true })).toBeVisible();
+    await settleVisualFrame(page);
+    await expect(page).toHaveScreenshot(
+      `onboarding-setup-${scheme}-${testInfo.project.name}.png`,
+      deterministicScreenshotOptions,
+    );
+  });
+
+  test(`matches the ${scheme} populated Notifications, installed Add-ons, and Detail actions`, async ({
+    page,
+  }, testInfo) => {
+    skipUnsupportedVisualEnvironment(testInfo, scheme);
+    requireLinuxBaselines(testInfo, scheme);
+    await loginToFixtureShell(page, {
+      colorScheme: scheme,
+      fixture: { addonInstall: "succeeds", notifications: "populated" },
+      fixedTime: "2026-07-18T15:00:00.000Z",
+    });
+    await page.goto("/notifications");
+    await expect(page.getByTestId("notifications-list")).toBeVisible();
+    await settleVisualFrame(page);
+    await expect(page).toHaveScreenshot(
+      `notifications-populated-${scheme}-${testInfo.project.name}.png`,
+      deterministicScreenshotOptions,
+    );
+    await page.goto("/addons");
+    await expect(page.getByTestId("addons-screen")).toBeVisible();
+    await page
+      .getByLabel("Manifest URL")
+      .fill("https://fixture.example.test/recommendations.json");
+    await page.getByRole("button", { name: "Install" }).click();
+    await expect(
+      page.getByText("New content will appear on Discover.", { exact: true }),
+    ).toBeVisible();
+    await settleVisualFrame(page);
+    await expect(page).toHaveScreenshot(
+      `addons-install-success-${scheme}-${testInfo.project.name}.png`,
+      deterministicScreenshotOptions,
+    );
+    await page.goto("/");
+    await expect(page.getByTestId("home-hero")).toBeVisible();
+    await page
+      .getByTestId("home-hero")
+      .getByRole("button", { name: "View details" })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
+    );
+    for (const label of [
+      "Play",
+      "Download",
+      "Cast to device",
+      "Add to Library",
+    ]) {
+      await expect(
+        page.getByRole("button", { name: label, exact: true }),
+      ).toBeVisible();
+    }
+    await settleVisualFrame(page);
+    await expect(page).toHaveScreenshot(
+      `detail-actions-${scheme}-${testInfo.project.name}.png`,
+      deterministicScreenshotOptions,
+    );
+  });
+
+  test(`matches the ${scheme} mixed Downloads visual baseline`, async ({
+    page,
+  }, testInfo) => {
+    skipUnsupportedVisualEnvironment(testInfo, scheme);
+    requireLinuxBaselines(testInfo, scheme);
+    await loginToFixtureShell(page, {
+      colorScheme: scheme,
+      downloads: "mixed",
+    });
+    await page.goto("/downloads");
+    await expect(
+      page.getByText("Fixture in progress", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Fixture ready offline", { exact: true }),
+    ).toBeVisible();
+    await settleVisualFrame(page);
+    await expect(page).toHaveScreenshot(
+      `downloads-mixed-${scheme}-${testInfo.project.name}.png`,
+      deterministicScreenshotOptions,
     );
   });
 }
@@ -159,12 +230,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   page,
 }, testInfo) => {
   skipUnsupportedVisualEnvironment(testInfo, "dark");
-  if (!visualBaselineUpdateEnabled && process.platform === "linux") {
-    expect(
-      hasApprovedPlatformBaselines(testInfo, "dark"),
-      "Every Linux player baseline must be reviewed and committed before CI can pass.",
-    ).toBe(true);
-  }
+  requireLinuxBaselines(testInfo, "dark");
 
   await openFixturePlayer(page);
   await expect(page.getByTestId("player-screen")).toBeVisible();
@@ -220,7 +286,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   await settleUnfocusedPlayerFrame();
   await expect(page).toHaveScreenshot(
     `player-dark-${testInfo.project.name}.png`,
-    screenshotOptions,
+    deterministicScreenshotOptions,
   );
 
   const timelineBox = await timeline.boundingBox();
@@ -238,7 +304,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   // This frame is already settled above. Comparing the direct buffer avoids
   // toHaveScreenshot's stabilization loop reintroducing the prior button
   // focus style while it takes repeated captures.
-  expect(await page.screenshot(screenshotOptions)).toMatchSnapshot(
+  expect(await page.screenshot(deterministicScreenshotOptions)).toMatchSnapshot(
     previewSnapshotName,
     {
       maxDiffPixels: 500,
@@ -258,7 +324,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     testInfo.project.name === "phone-web"
       ? "player-subtitle-sheet-dark-phone-web.png"
       : "player-inspect-sheet-dark-desktop-renderer.png",
-    screenshotOptions,
+    deterministicScreenshotOptions,
   );
 });
 
@@ -266,12 +332,7 @@ test("matches the dark player recovery and non-seekable baselines", async ({
   page,
 }, testInfo) => {
   skipUnsupportedVisualEnvironment(testInfo, "dark");
-  if (!visualBaselineUpdateEnabled && process.platform === "linux") {
-    expect(
-      hasApprovedPlatformBaselines(testInfo, "dark"),
-      "Every Linux player state baseline must be reviewed and committed before CI can pass.",
-    ).toBe(true);
-  }
+  requireLinuxBaselines(testInfo, "dark");
 
   if (testInfo.project.name === "phone-web") {
     await openFixturePlayer(page, "no-peers");
@@ -282,7 +343,7 @@ test("matches the dark player recovery and non-seekable baselines", async ({
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(
       "player-actionable-fallback-dark-phone-web.png",
-      screenshotOptions,
+      deterministicScreenshotOptions,
     );
     return;
   }
@@ -302,6 +363,6 @@ test("matches the dark player recovery and non-seekable baselines", async ({
   await settleVisualFrame(page);
   await expect(page).toHaveScreenshot(
     "player-progressive-nonseekable-dark-desktop-renderer.png",
-    screenshotOptions,
+    deterministicScreenshotOptions,
   );
 });

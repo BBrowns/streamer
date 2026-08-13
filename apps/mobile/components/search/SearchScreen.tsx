@@ -53,6 +53,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { ContentBoundary } from "../ui/ContentBoundary";
 import { ContentTabs } from "../ui/ContentTabs";
 import { getWebFocusStyle } from "../ui/designSystem";
+import { PageHeader } from "../ui/PageHeader";
 import { PageLayout } from "../ui/PageLayout";
 import { SearchField } from "../ui/SearchField";
 import { FilterSheet, FilterSidebar } from "./SearchFilters";
@@ -594,22 +595,24 @@ export function SearchScreen() {
   }
 
   return (
-    <PageLayout testID="search-screen" contained={false}>
+    <PageLayout testID="search-screen" boundary={false}>
       <View
         style={[styles.stickyHeader, { backgroundColor: colors.background }]}
       >
-        <ContentBoundary padded={false} style={styles.stickyHeaderContent}>
+        <ContentBoundary
+          size="content"
+          padded={false}
+          style={styles.stickyHeaderContent}
+        >
           <View style={styles.heading}>
-            {!isCompact ? (
-              <View style={styles.headingCopy}>
-                <Text style={[styles.eyebrow, { color: colors.tint }]}>
-                  {t("search.eyebrow")}
-                </Text>
-                <Text style={[styles.pageTitle, { color: colors.text }]}>
-                  {t("search.title")}
-                </Text>
-              </View>
-            ) : null}
+            <PageHeader
+              testID="search-page-header"
+              eyebrow={isCompact ? undefined : t("search.eyebrow")}
+              title={t("search.title")}
+              compact={isCompact}
+              titleVisibility={isCompact ? "navigation-owned" : "visible"}
+              style={styles.searchPageHeader}
+            />
 
             <View
               ref={searchAreaRef}
@@ -668,7 +671,7 @@ export function SearchScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <ContentBoundary padded={false}>
+        <ContentBoundary size="content" padded={false}>
           {!submittedQuery ? (
             <SearchDiscovery
               recentSearches={searchController.recentSearches}
@@ -1040,20 +1043,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   heading: { alignItems: "flex-start", gap: 18 },
-  headingCopy: { gap: 2 },
-  eyebrow: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.1,
-  },
-  pageTitle: {
-    fontSize: 30,
-    lineHeight: 35,
-    fontWeight: "800",
-    letterSpacing: -0.7,
-  },
+  searchPageHeader: { marginBottom: 0 },
   searchArea: { position: "relative", width: "100%", maxWidth: 760 },
   searchAreaCompact: {
     width: "100%",

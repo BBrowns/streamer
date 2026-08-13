@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, master]
+    branches: [main, master, codex/smart-downloads]
   push:
-    branches: [main, master]
+    branches: [main, master, codex/smart-downloads]
   merge_group:
     types: [checks_requested]
 
@@ -302,7 +302,10 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run deterministic product flows
-        run: npm run test:golden-path -- --global-timeout=2700000
+        run: >-
+          npm run test:golden-path --
+          --global-timeout=2700000
+          tests/golden-path/golden-path.spec.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -321,8 +324,8 @@ jobs:
           # Golden Path Browser Tests
 
           - Status: ${{ job.status }}
-          - Command: `npm run test:golden-path -- --global-timeout=2700000`
-          - Scope: deterministic phone-web and desktop-renderer Play Best, fallback, no-peers, bridge, download, and cast product flows.
+          - Command: `npm run test:golden-path -- --global-timeout=2700000 tests/golden-path/golden-path.spec.ts`
+          - Scope: deterministic Play Best, fallback, no-peers, bridge, download, and cast flows across phone, tablet portrait, tablet landscape, and desktop renderers.
           - Evidence boundary: automated renderer regression coverage, not real-device QA.
           EOF
       - name: Upload CI summary
@@ -331,6 +334,48 @@ jobs:
         with:
           name: ci-summary-golden-path-tests
           path: artifacts/ci-summaries/golden-path-tests.md
+          retention-days: 14
+
+  visual-regression:
+    name: Visual Regression (Committed Linux Baselines)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: [lint-and-typecheck, format-check]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Restore Playwright browser cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Validate committed Linux baseline manifest
+        run: npm run visual:baseline:manifest -- --platform linux
+      - name: Compare committed Linux baselines
+        run: >-
+          npx playwright test --config=playwright.config.ts
+          --project=phone-web
+          --project=desktop-renderer
+          --global-timeout=2700000
+          --update-snapshots=none
+          tests/golden-path/visual-regression.spec.ts
+      - name: Upload visual comparison evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: visual-regression-linux-report
+          path: |
+            artifacts/playwright-report/
+            artifacts/playwright-results/
+          if-no-files-found: warn
           retention-days: 14
 
   visual-baseline-candidate:
@@ -506,6 +551,7 @@ jobs:
       - test-stream-server
       - test-mobile
       - test-golden-path
+      - visual-regression
       - build-check
       - server-container
       - desktop-package
