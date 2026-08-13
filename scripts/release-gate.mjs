@@ -62,8 +62,19 @@ function requirePattern(relativePath, pattern, label) {
 function checkCiWorkflow() {
   const workflow = ".github/workflows/ci.yml";
   requireFile(workflow);
+  requireFile("scripts/ci-affected.mjs");
+  requireFile("scripts/ci-affected.test.mjs");
+  requireFile("scripts/ci-needs-check.mjs");
+  requireFile("scripts/ci-needs-check.test.mjs");
 
   const requiredSnippets = [
+    ["ci_scope:", "fail-closed CI scope detector"],
+    ["CI_BASE_SHA", "pull-request base SHA for affected CI"],
+    ["fetch-depth: 0", "complete history for affected CI"],
+    [
+      'git show "${CI_BASE_SHA}:scripts/ci-affected.mjs"',
+      "trusted base-version scope detector",
+    ],
     ["npm run format:check", "format check"],
     ["npm run typecheck:all", "all-workspace typecheck"],
     [
@@ -82,7 +93,20 @@ function checkCiWorkflow() {
       "npm run test --workspace=apps/mobile -- --runInBand",
       "mobile Jest tests",
     ],
-    ["npm run test:golden-path", "deterministic browser golden paths"],
+    [
+      "npm run test:golden-path:project",
+      "deterministic browser golden paths per project",
+    ],
+    [
+      "golden-path-browser-report-${{ matrix.project }}",
+      "per-project browser evidence artifact",
+    ],
+    ["golden_path_gate:", "stable browser required-check aggregator"],
+    ["visual-regression:", "committed Linux visual regression gate"],
+    [
+      "visual-regression-linux-report",
+      "committed visual comparison evidence artifact",
+    ],
     ["npm run package:check --workspace=@streamer/desktop", "desktop smoke"],
     [
       "npm run release:check --workspace=@streamer/desktop",
@@ -101,6 +125,14 @@ function checkCiWorkflow() {
     ["npm run maintenance:report:test", "maintenance report classifier tests"],
     ["actionlint@v1.7.12", "pinned GitHub Actions lint"],
     ["npm run workflows:check", "full GitHub Actions SHA policy"],
+    [
+      "node --test scripts/ci-affected.test.mjs",
+      "affected CI scope detector tests",
+    ],
+    [
+      "node --test scripts/ci-needs-check.test.mjs",
+      "release gate skip policy tests",
+    ],
     ["merge_group:", "merge queue CI trigger"],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
@@ -153,7 +185,7 @@ function checkCiWorkflow() {
     );
   }
   requireText(
-    workflow,
+    ".github/workflows/ci.yml",
     "Verify required CI jobs succeeded",
     "release gate upstream result verification",
   );
@@ -267,6 +299,26 @@ function checkDocs() {
     "package.json",
     '"visual:baseline:manifest": "node scripts/visual-baseline-manifest.mjs"',
     "visual baseline manifest command",
+  );
+  requireText(
+    "package.json",
+    '"test:golden-path:project": "playwright test --config=playwright.config.ts"',
+    "per-project golden-path command",
+  );
+  requireText(
+    "package.json",
+    '"test:golden-path": "playwright test --config=playwright.config.ts --project=phone-web --project=tablet-portrait-web --project=tablet-landscape-web --project=desktop-renderer"',
+    "full local golden-path command",
+  );
+  requireText(
+    "scripts/ci-affected.mjs",
+    "missing-pr-base-or-head",
+    "fail-closed affected CI fallback",
+  );
+  requireText(
+    ".github/workflows/ci.yml",
+    'git show "${CI_BASE_SHA}:scripts/ci-needs-check.mjs"',
+    "trusted release gate selected-job verification",
   );
   requireText(
     "docs/AUTOMATED_GOLDEN_PATHS.md",

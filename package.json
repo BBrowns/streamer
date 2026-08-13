@@ -58,6 +58,7 @@
     "security:audit": "node scripts/security-audit.mjs",
     "security:install-scripts": "node scripts/check-install-script-policy.mjs",
     "test:golden-path": "playwright test --config=playwright.config.ts --project=phone-web --project=tablet-portrait-web --project=tablet-landscape-web --project=desktop-renderer",
+    "test:golden-path:project": "playwright test --config=playwright.config.ts",
     "test:visual": "STREAMER_VISUAL_BASELINES=1 playwright test --config=playwright.config.ts --project=phone-web --project=desktop-renderer tests/golden-path/visual-regression.spec.ts",
     "test:electron-smoke": "playwright test --config=playwright.config.ts --project=electron-smoke",
     "postinstall": "patch-package",

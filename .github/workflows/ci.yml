@@ -22,6 +22,65 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci_scope:
+    name: Determine CI Scope
+    runs-on: ubuntu-latest
+    outputs:
+      full_ci: ${{ steps.scope.outputs.full_ci }}
+      run_lint: ${{ steps.scope.outputs.run_lint }}
+      run_format: ${{ steps.scope.outputs.run_format }}
+      run_security: ${{ steps.scope.outputs.run_security }}
+      run_shared: ${{ steps.scope.outputs.run_shared }}
+      run_server: ${{ steps.scope.outputs.run_server }}
+      run_stream_server: ${{ steps.scope.outputs.run_stream_server }}
+      run_mobile: ${{ steps.scope.outputs.run_mobile }}
+      run_golden_path: ${{ steps.scope.outputs.run_golden_path }}
+      run_visual: ${{ steps.scope.outputs.run_visual }}
+      run_build: ${{ steps.scope.outputs.run_build }}
+      run_server_container: ${{ steps.scope.outputs.run_server_container }}
+      run_desktop_package: ${{ steps.scope.outputs.run_desktop_package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Determine affected CI jobs
+        id: scope
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "${CI_EVENT_NAME}" != "pull_request" ]]; then
+            echo "full_ci=true" >> "${GITHUB_OUTPUT}"
+            for output in run_lint run_format run_security run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
+              echo "${output}=true" >> "${GITHUB_OUTPUT}"
+            done
+            echo "scope_reason=event:${CI_EVENT_NAME}" >> "${GITHUB_OUTPUT}"
+            echo "changed_file_count=0" >> "${GITHUB_OUTPUT}"
+            {
+              echo "## CI scope"
+              echo ""
+              echo "- Mode: full CI"
+              echo "- Reason: event:${CI_EVENT_NAME}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          elif git cat-file -e "${CI_BASE_SHA}:scripts/ci-affected.mjs" 2>/dev/null; then
+            git show "${CI_BASE_SHA}:scripts/ci-affected.mjs" > "${RUNNER_TEMP}/ci-affected.mjs"
+            node "${RUNNER_TEMP}/ci-affected.mjs"
+          else
+            echo "full_ci=true" >> "${GITHUB_OUTPUT}"
+            for output in run_lint run_format run_security run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
+              echo "${output}=true" >> "${GITHUB_OUTPUT}"
+            done
+            echo "scope_reason=detector-not-present-at-base" >> "${GITHUB_OUTPUT}"
+            echo "changed_file_count=0" >> "${GITHUB_OUTPUT}"
+            {
+              echo "## CI scope"
+              echo ""
+              echo "- Mode: full CI"
+              echo "- Reason: detector-not-present-at-base"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
   workflow-lint:
     name: GitHub Actions Lint
     runs-on: ubuntu-latest
@@ -39,10 +98,20 @@ jobs:
           "${actionlint_path}"
       - name: Check full commit pin policy
         run: npm run workflows:check
+      - name: Test affected CI scope detector
+        run: node --test scripts/ci-affected.test.mjs
+      - name: Test release gate skip policy
+        run: node --test scripts/ci-needs-check.test.mjs
 
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_lint == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -76,6 +145,12 @@ jobs:
   format-check:
     name: Format Check
     runs-on: ubuntu-latest
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_format == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -89,6 +164,12 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_security == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -104,7 +185,12 @@ jobs:
   test-shared:
     name: Shared Tests
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_shared == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -136,7 +222,12 @@ jobs:
   test-server:
     name: Server Tests
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, format-check]
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_server == 'true')
     services:
       postgres:
         image: postgres:17-alpine
@@ -211,7 +302,12 @@ jobs:
   test-stream-server:
     name: Stream Server Tests
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_stream_server == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -221,8 +317,6 @@ jobs:
       - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Validate Dev Runtime Selection
         run: npm run dev:runtime:test
-      - name: Type Check Stream Server
-        run: npx tsc --noEmit --project packages/stream-server/tsconfig.json
       - name: Run Stream Server Tests
         run: npm run test --workspace=@streamer/stream-server
       - name: Write CI summary
@@ -233,7 +327,7 @@ jobs:
           # Stream Server Tests
 
           - Status: ${{ job.status }}
-          - Commands: `npm run dev:runtime:test`, `npx tsc --noEmit --project packages/stream-server/tsconfig.json`, `npm run test --workspace=@streamer/stream-server`
+          - Commands: `npm run dev:runtime:test`, `npm run test --workspace=@streamer/stream-server`
           - Scope: dev runtime selection, shared ESM imports, bridge health, gateway, range/seek, torrent engine diagnostics, security, Sentry, and subtitle handling.
           EOF
       - name: Upload CI summary
@@ -247,7 +341,12 @@ jobs:
   test-mobile:
     name: Mobile Tests
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_mobile == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -257,8 +356,6 @@ jobs:
       - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
-      - name: Type Check Mobile
-        run: npx tsc --noEmit --project apps/mobile/tsconfig.json
       - name: Run Mobile Jest Tests
         run: npm run test --workspace=apps/mobile -- --runInBand
       - name: Write CI summary
@@ -269,7 +366,7 @@ jobs:
           # Mobile Tests
 
           - Status: ${{ job.status }}
-          - Commands: `npx tsc --noEmit --project apps/mobile/tsconfig.json`, `npm run test --workspace=apps/mobile -- --runInBand`
+          - Command: `npm run test --workspace=apps/mobile -- --runInBand`
           - Scope: Play Best sessions, downloads, cast, bridge diagnostics, UI units, stores, and redaction.
           EOF
       - name: Upload CI summary
@@ -281,10 +378,23 @@ jobs:
           retention-days: 14
 
   test-golden-path:
-    name: Golden Path Browser Tests
+    name: Golden Path Browser Matrix (${{ matrix.project }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: [lint-and-typecheck, format-check]
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_golden_path == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - phone-web
+          - tablet-portrait-web
+          - tablet-landscape-web
+          - desktop-renderer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -303,14 +413,15 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run deterministic product flows
         run: >-
-          npm run test:golden-path --
+          npm run test:golden-path:project --
+          --project=${{ matrix.project }}
           --global-timeout=2700000
           tests/golden-path/golden-path.spec.ts
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: golden-path-browser-report
+          name: golden-path-browser-report-${{ matrix.project }}
           path: |
             artifacts/playwright-report/
             artifacts/playwright-results/
@@ -324,15 +435,16 @@ jobs:
           # Golden Path Browser Tests
 
           - Status: ${{ job.status }}
-          - Command: `npm run test:golden-path -- --global-timeout=2700000 tests/golden-path/golden-path.spec.ts`
-          - Scope: deterministic Play Best, fallback, no-peers, bridge, download, and cast flows across phone, tablet portrait, tablet landscape, and desktop renderers.
+          - Command: `npm run test:golden-path:project -- --project=${{ matrix.project }} --global-timeout=2700000 tests/golden-path/golden-path.spec.ts`
+          - Project: `${{ matrix.project }}`
+          - Scope: deterministic Play Best, fallback, no-peers, bridge, download, and cast flows.
           - Evidence boundary: automated renderer regression coverage, not real-device QA.
           EOF
       - name: Upload CI summary
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ci-summary-golden-path-tests
+          name: ci-summary-golden-path-${{ matrix.project }}
           path: artifacts/ci-summaries/golden-path-tests.md
           retention-days: 14
 
@@ -340,7 +452,12 @@ jobs:
     name: Visual Regression (Committed Linux Baselines)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: [lint-and-typecheck, format-check]
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_visual == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -378,14 +495,42 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  golden_path_gate:
+    name: Golden Path Browser Tests
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [ci_scope, test-golden-path]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify golden path matrix succeeded
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+        run: |
+          if [[ "${CI_EVENT_NAME}" == "pull_request" ]] && git cat-file -e "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" 2>/dev/null; then
+            git show "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" > "${RUNNER_TEMP}/ci-needs-check.mjs"
+            node "${RUNNER_TEMP}/ci-needs-check.mjs"
+          else
+            node --input-type=module -e 'const needs = JSON.parse(process.env.CI_NEEDS); const failures = Object.entries(needs).filter(([, value]) => value.result !== "success").map(([name, value]) => name + ":" + value.result); if (failures.length > 0) { console.error("Required CI jobs did not succeed: " + failures.join(", ")); process.exit(1); } console.log("All golden path matrix jobs succeeded; no trusted scope verifier was available.");'
+          fi
+
   visual-baseline-candidate:
     name: Visual Baseline Candidate (Linux)
     # This artifact-only job lets an unmerged PR bootstrap Linux snapshots.
     # The manual refresh workflow is deliberately available after its first
     # merge to the default branch; GitHub cannot dispatch it from a new PR.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_visual == 'true')
     runs-on: ubuntu-24.04
-    needs: [lint-and-typecheck, format-check]
+    needs: ci_scope
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -423,7 +568,12 @@ jobs:
   build-check:
     name: Build Check
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_build == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -489,7 +639,12 @@ jobs:
   server-container:
     name: Server Production Container
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, format-check]
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_server_container == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build and start production server container
@@ -498,7 +653,12 @@ jobs:
   desktop-package:
     name: Desktop Package Artifact
     runs-on: macos-latest
-    needs: build-check
+    needs: ci_scope
+    if: >-
+      always() &&
+      (needs.ci_scope.result != 'success' ||
+      needs.ci_scope.outputs.full_ci == 'true' ||
+      needs.ci_scope.outputs.run_desktop_package == 'true')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -542,6 +702,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - ci_scope
       - workflow-lint
       - lint-and-typecheck
       - format-check
@@ -550,28 +711,27 @@ jobs:
       - test-server
       - test-stream-server
       - test-mobile
-      - test-golden-path
       - visual-regression
+      - golden_path_gate
       - build-check
       - server-container
       - desktop-package
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Verify required CI jobs succeeded
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: |
-          node --input-type=module <<'NODE'
-          const needs = JSON.parse(process.env.CI_NEEDS);
-          const failures = Object.entries(needs)
-            .filter(([, value]) => value.result !== "success")
-            .map(([name, value]) => `${name}:${value.result}`);
-          if (failures.length > 0) {
-            console.error(`Required CI jobs did not succeed: ${failures.join(", ")}`);
-            process.exit(1);
-          }
-          console.log("All required CI jobs succeeded.");
-          NODE
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          if [[ "${CI_EVENT_NAME}" == "pull_request" ]] && git cat-file -e "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" 2>/dev/null; then
+            git show "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" > "${RUNNER_TEMP}/ci-needs-check.mjs"
+            node "${RUNNER_TEMP}/ci-needs-check.mjs"
+          else
+            node --input-type=module -e 'const needs = JSON.parse(process.env.CI_NEEDS); const failures = Object.entries(needs).filter(([, value]) => value.result !== "success").map(([name, value]) => name + ":" + value.result); if (failures.length > 0) { console.error("Required CI jobs did not succeed: " + failures.join(", ")); process.exit(1); } console.log("All CI jobs succeeded; no trusted scope verifier was available.");'
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
