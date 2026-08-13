@@ -25,7 +25,7 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "npm run db:generate --workspace=server && turbo run typecheck",
-    "verify:quick": "npm run format:check && npm run lint && npm run architecture:check && npm run typecheck:all && npm run dev:db:test && npm run native:evidence:preflight:test && npm run visual:baseline:manifest:test && npm run release:sbom:test && npm run test --workspace=@streamer/shared",
+    "verify:quick": "npm run format:check && npm run lint && npm run architecture:check && npm run typecheck:all && npm run dev:db:test && npm run native:evidence:preflight:test && npm run visual:baseline:manifest:test && npm run release:sbom:test && npm run dependency:compatibility:test && npm run test --workspace=@streamer/shared",
     "verify:full": "npm run verify:quick && npm run test:all && npm run build && npm run mobile:config:check && npm run test:golden-path && npm run test:electron-smoke && npm run security:install-scripts && npm run security:audit && npm run release:gate",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
@@ -54,6 +54,7 @@
     "release:sbom:test": "node --test scripts/release-sbom.test.mjs",
     "rc:evidence": "node scripts/rc-evidence.mjs",
     "rc:evidence:test": "node --test scripts/rc-evidence.test.mjs",
+    "dependency:compatibility:test": "node --test scripts/dependency-compatibility.test.mjs",
     "sentry:release": "node scripts/sentry-release.mjs",
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
     "security:audit": "node scripts/security-audit.mjs",
@@ -77,7 +78,8 @@
     "prettier": "3.9.6",
     "react-test-renderer": "19.2.8",
     "turbo": "^2.4.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "uuid": "11.1.1"
   },
   "engines": {
     "node": ">=26.7.0 <27",
@@ -103,6 +105,9 @@
     "react-native-screens": "4.27.0",
     "react-native-worklets": "0.11.3",
     "ip": "^2.0.1",
+    "xcode@3.0.1": {
+      "uuid": "$uuid"
+    },
     "vite": "^7.3.4",
     "webtorrent": "^3.0.21",
     "castv2-client": "^1.2.0",
