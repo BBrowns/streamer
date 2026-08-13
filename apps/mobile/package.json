@@ -23,7 +23,7 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@sentry/react-native": "~8.22.0",
-    "@shopify/flash-list": "2.0.2",
+    "@shopify/flash-list": "2.3.2",
     "@streamer/shared": "*",
     "@tanstack/react-query": "^5.90.0",
     "axios": "^1.7.9",
