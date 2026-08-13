@@ -33,7 +33,7 @@ permissions:
   artifact-metadata: write
 
 env:
-  NPM_VERSION: "11.18.0"
+  NPM_VERSION: "12.0.2"
 
 jobs:
   macos-release:

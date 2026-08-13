@@ -33,8 +33,8 @@ streamer/
 
 ## Prerequisites
 
-- **Node.js 24.18 LTS** (see `.nvmrc`; Node 25 is not supported)
-- **npm 11.18**
+- **Node.js 26.7.0** (see `.nvmrc`; use the repository runtime guard)
+- **npm 12.0.2**
 - **Docker Desktop** (recommended for local PostgreSQL). The repository's
   Compose configuration owns the development database; start only that service
   with `npm run dev:db`.
@@ -49,7 +49,7 @@ streamer/
 ```bash
 nvm install
 nvm use
-npm install --global npm@11.18.0
+npm install --global npm@12.0.2
 npm ci
 ```
 
@@ -125,7 +125,7 @@ npm run dev:desktop-all     # Desktop-oriented dev flow: API + Expo web + Electr
 ```
 
 Root development commands check the installed native dependencies and
-automatically select a matching Node 24 runtime (including `.nvm` and the
+automatically select a matching Node 26 runtime (including `.nvm` and the
 desktop vendor runtime on macOS). This applies to the API, Expo, Expo web,
 desktop prebuild, and stream-server entrypoints. If dependencies were installed
 under Rosetta or another CPU architecture, repair them with:
@@ -136,8 +136,9 @@ npm run dev:repair-native
 
 The launcher refuses mixed `esbuild`/`node-datachannel` architectures instead
 of starting a bridge whose torrent engine cannot load. Set `STREAMER_DEV_NODE`
-only when an explicit supported Node 24 binary is required. Workspace commands
-run through Corepack so the root `packageManager` npm version is used.
+only when an explicit supported Node 26 binary is required. Workspace commands
+use the selected runtime's explicit npm 12 runner and a versioned local cache;
+Node 26 no longer relies on Corepack being bundled.
 
 The API server does not start the bridge by default. Desktop starts and owns its
 own bridge sidecar so it can choose the correct Node/native-module

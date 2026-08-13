@@ -32,6 +32,18 @@ jest.mock("expo-crypto", () => ({
   randomUUID: jest.fn(),
 }));
 
+jest.mock("expo-file-system/legacy", () => {
+  const actual = jest.requireActual<typeof import("expo-file-system/legacy")>(
+    "expo-file-system/legacy",
+  );
+
+  return {
+    __esModule: true,
+    ...actual,
+    getInfoAsync: jest.fn(actual.getInfoAsync),
+  };
+});
+
 function setPlatform(os: typeof Platform.OS) {
   Object.defineProperty(Platform, "OS", {
     configurable: true,
@@ -512,7 +524,8 @@ describe("DownloadService session completion", () => {
         "Completed",
         "file:///downloads/native-inspection.mp4",
       );
-    const getInfo = jest.spyOn(FileSystem, "getInfoAsync").mockResolvedValue({
+    const getInfo = jest.mocked(FileSystem.getInfoAsync);
+    getInfo.mockResolvedValue({
       exists: true,
       isDirectory: false,
       uri: "file:///downloads/native-inspection.mp4",
@@ -537,7 +550,7 @@ describe("DownloadService session completion", () => {
       playableState: "unplayable",
       offlineVerifiedAt: undefined,
     });
-    getInfo.mockRestore();
+    getInfo.mockReset();
   });
 
   it("rejects a 206 KB desktop response instead of exposing it offline", async () => {

@@ -27,7 +27,7 @@ explicit migration decision.
 | `preview`     | Internal            | `preview`       | `preview`      | Tester and release-candidate builds   |
 | `production`  | Store               | `production`    | `production`   | App Store / Play submission candidate |
 
-All profiles use Node `24.18.0`. EAS owns native build numbers through
+All profiles use Node `26.7.0`. EAS owns native build numbers through
 `cli.appVersionSource: remote`; preview and production builds auto-increment
 their developer-facing build number. The update runtime follows the public app
 version (`runtimeVersion.policy: appVersion`). Bump the app version for native

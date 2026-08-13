@@ -9,12 +9,13 @@ import {
   writeGitHubOutputs,
 } from "./ci-affected.mjs";
 
-const pr = (changedFiles) =>
+const pr = (changedFiles, options = {}) =>
   analyzeChanges({
     eventName: "pull_request",
     baseSha: "base",
     headSha: "head",
     changedFiles,
+    ...options,
   });
 
 test("runs full CI for non-pull-request events", () => {
@@ -64,6 +65,31 @@ test("uses full CI for shared package changes", () => {
 
   assert.equal(result.full_ci, true);
   assert.match(result.scope_reason, /full-ci-path/);
+});
+
+test("uses draft fast CI until a pull request is ready for review", () => {
+  const result = pr(["package-lock.json", "apps/mobile/app.json"], {
+    isDraft: true,
+  });
+
+  assert.equal(result.full_ci, false);
+  assert.equal(result.scope_reason, "draft-pull-request");
+  assert.equal(result.run_lint, true);
+  assert.equal(result.run_format, true);
+  assert.equal(result.run_security, true);
+  for (const job of [
+    "shared",
+    "server",
+    "stream_server",
+    "mobile",
+    "golden_path",
+    "visual",
+    "build",
+    "server_container",
+    "desktop_package",
+  ]) {
+    assert.equal(result[`run_${job}`], false, job);
+  }
 });
 
 test("uses full CI for workflow and lockfile changes", () => {

@@ -21,6 +21,16 @@ export const ciJobNames = Object.freeze([
 const allJobs = () =>
   Object.fromEntries(ciJobNames.map((name) => [`run_${name}`, true]));
 
+const draftJobs = () => {
+  const jobs = Object.fromEntries(
+    ciJobNames.map((name) => [`run_${name}`, false]),
+  );
+  jobs.run_lint = true;
+  jobs.run_format = true;
+  jobs.run_security = true;
+  return jobs;
+};
+
 const fullCiPathPatterns = [
   /^\.github\//,
   /^\.nvmrc$/,
@@ -151,7 +161,13 @@ function createScopedJobs(paths) {
   return jobs;
 }
 
-export function analyzeChanges({ eventName, baseSha, headSha, changedFiles }) {
+export function analyzeChanges({
+  eventName,
+  baseSha,
+  headSha,
+  changedFiles,
+  isDraft = false,
+}) {
   if (eventName !== "pull_request") {
     return {
       full_ci: true,
@@ -177,6 +193,15 @@ export function analyzeChanges({ eventName, baseSha, headSha, changedFiles }) {
       scope_reason: "no-changed-files",
       changed_file_count: 0,
       ...allJobs(),
+    };
+  }
+
+  if (isDraft) {
+    return {
+      full_ci: false,
+      scope_reason: "draft-pull-request",
+      changed_file_count: paths.length,
+      ...draftJobs(),
     };
   }
 
@@ -233,7 +258,7 @@ function writeSummary(outputs, summaryPath) {
     [
       "## CI scope",
       "",
-      `- Mode: ${outputs.full_ci ? "full CI" : "affected CI"}`,
+      `- Mode: ${outputs.scope_reason === "draft-pull-request" ? "draft fast CI" : outputs.full_ci ? "full CI" : "affected CI"}`,
       `- Reason: \`${outputs.scope_reason}\``,
       `- Changed files considered: ${outputs.changed_file_count}`,
       "- Selected jobs: " +
@@ -250,6 +275,7 @@ function main() {
   const eventName = process.env.CI_EVENT_NAME ?? process.env.GITHUB_EVENT_NAME;
   const baseSha = process.env.CI_BASE_SHA;
   const headSha = process.env.CI_HEAD_SHA ?? process.env.GITHUB_SHA;
+  const isDraft = process.env.CI_IS_DRAFT === "true";
   const changedFiles =
     eventName === "pull_request" && baseSha && headSha
       ? readChangedFiles(baseSha, headSha)
@@ -259,6 +285,7 @@ function main() {
     baseSha,
     headSha,
     changedFiles,
+    isDraft,
   });
 
   writeGitHubOutputs(outputs, process.env.GITHUB_OUTPUT);

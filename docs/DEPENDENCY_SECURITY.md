@@ -1,12 +1,12 @@
 # Dependency Security Baseline
 
-Streamer pins its development toolchain to **Node.js 24.18 LTS** and
-**npm 11.18**. Use the repository `.nvmrc` before installing dependencies:
+Streamer pins its development toolchain to **Node.js 26.7.0** and
+**npm 12.0.2**. Use the repository `.nvmrc` before installing dependencies:
 
 ```bash
 nvm install
 nvm use
-npm install --global npm@11.18.0
+npm install --global npm@12.0.2
 npm ci
 ```
 
@@ -14,14 +14,14 @@ The root `dev:stream-server` launcher also checks CPU architecture before
 starting the P2P daemon. This matters on Apple Silicon when `/usr/local/bin/node`
 runs under Rosetta while native dependencies were installed as arm64. Use
 `npm run dev:repair-native` to rebuild `esbuild` and `node-datachannel` with the
-host's supported Node 24 runtime; do not copy `node_modules` between CPU
+host's supported Node 26 runtime; do not copy `node_modules` between CPU
 architectures.
 
 Server development, typecheck, build, and test commands generate Prisma Client
 before execution. This keeps a clean checkout reproducible without relying on a
 previous `node_modules/.prisma` directory.
 
-Node 25 is not supported. It is a non-LTS release and installing native
+Node 26 is deliberately pinned for this upgrade. Installing native
 dependencies with a different Node/Electron architecture can leave the desktop
 bridge unable to load `node-datachannel`.
 

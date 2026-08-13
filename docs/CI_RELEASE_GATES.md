@@ -45,6 +45,13 @@ detector itself and rejects a detector failure or an unexpected skipped job.
 The detector writes its mode, reason, changed-file count, and selected jobs to
 the CI job summary.
 
+Draft pull requests use an explicit fast lane: workflow linting, lint/typecheck,
+formatting, and the dependency security checks still run, while the expensive
+mobile, browser, server, container, build, and desktop jobs remain skipped.
+Marking the pull request ready for review emits a `ready_for_review` event and
+restores the full dependency/native/release-sensitive matrix. This keeps draft
+iteration responsive without weakening the checks required for review or merge.
+
 ## Dependency Cache Policy
 
 CI keeps the existing `setup-node` npm cache, keyed by the lockfile. It does

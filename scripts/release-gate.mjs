@@ -444,15 +444,15 @@ function checkDependencySecurity() {
   requireFile(".nvmrc");
   requireFile("patches/castv2+0.1.10.patch");
   requireFile("scripts/check-install-script-policy.mjs");
-  requireText(".nvmrc", "24.18.0", "supported Node LTS version");
+  requireText(".nvmrc", "26.7.0", "supported Node.js version");
   requireText(
     "package.json",
-    '"node": ">=24.18.0 <25"',
-    "Node 24 LTS engine boundary",
+    '"node": ">=26.7.0 <27"',
+    "Node 26 engine boundary",
   );
   requireText(
     "package.json",
-    '"packageManager": "npm@11.18.0"',
+    '"packageManager": "npm@12.0.2"',
     "pinned npm version",
   );
   requireText(
