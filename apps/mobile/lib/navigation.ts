@@ -1,4 +1,6 @@
-import type { Href, Router } from "expo-router";
+import type { Href, useRouter } from "expo-router";
+
+export type Router = ReturnType<typeof useRouter>;
 
 export function goBackOrReplace(router: Router, fallback: Href = "/") {
   try {

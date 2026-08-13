@@ -24,7 +24,7 @@
     "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10",
-    "webtorrent": "^2.8.5"
+    "webtorrent": "^3.0.21"
   },
   "dependencies": {
     "@sentry/node": "^10.65.0",
