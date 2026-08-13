@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     opacity: 0.18,
   },
   ambientOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   desktopPosterPanel: {
     width: 360,

@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     minHeight: 560,
   },
   previewImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: "100%",
     height: "100%",
     resizeMode: "cover",

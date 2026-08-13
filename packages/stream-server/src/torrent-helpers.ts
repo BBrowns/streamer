@@ -169,7 +169,7 @@ export function parseByteRange(
 /**
  * Wait for a torrent to be ready (files populated).
  *
- * webtorrent v2 fires `ready` once all metadata is received and
+ * webtorrent v3 fires `ready` once all metadata is received and
  * `torrent.files` is populated. The Torrent class extends EventEmitter.
  *
  * Times out after `timeoutMs` (default 120 s) to avoid infinite hangs.

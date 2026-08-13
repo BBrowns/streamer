@@ -139,7 +139,7 @@ export function NextEpisodeOverlay({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "flex-end",
     alignItems: "center",
     paddingBottom: 80,
