@@ -234,7 +234,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-shared-tests
           path: artifacts/ci-summaries/shared-tests.md
@@ -287,7 +287,7 @@ jobs:
         env:
           LOG_LEVEL: silent
       - name: Upload coverage
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: server-coverage
@@ -314,7 +314,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-server-tests
           path: artifacts/ci-summaries/server-tests.md
@@ -353,7 +353,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-stream-server-tests
           path: artifacts/ci-summaries/stream-server-tests.md
@@ -392,7 +392,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-mobile-tests
           path: artifacts/ci-summaries/mobile-tests.md
@@ -440,7 +440,7 @@ jobs:
           tests/golden-path/golden-path.spec.ts
       - name: Upload browser evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: golden-path-browser-report-${{ matrix.project }}
           path: |
@@ -463,7 +463,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-golden-path-${{ matrix.project }}
           path: artifacts/ci-summaries/golden-path-tests.md
@@ -507,7 +507,7 @@ jobs:
           tests/golden-path/visual-regression.spec.ts
       - name: Upload visual comparison evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: visual-regression-linux-report
           path: |
@@ -577,7 +577,7 @@ jobs:
           --source-commit ${{ github.sha }}
           --output artifacts/visual-baselines/linux-manifest.json
       - name: Upload Linux baseline candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: visual-baseline-candidate-linux
           path: |
@@ -651,7 +651,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-build-check
           path: artifacts/ci-summaries/build-check.md
@@ -692,7 +692,7 @@ jobs:
       - name: Validate packaged inputs
         run: npm run package:check --workspace=@streamer/desktop
       - name: Upload desktop package artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-macos-package-dir
           path: apps/desktop/release/**
@@ -712,7 +712,7 @@ jobs:
           EOF
       - name: Upload CI summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-desktop-package
           path: artifacts/ci-summaries/desktop-package.md
@@ -767,14 +767,14 @@ jobs:
           STREAMER_BUILD_ENVIRONMENT: test
       - name: Upload release gate summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ci-summary-release-gate
           path: artifacts/ci-summaries/release-gate.md
           retention-days: 14
       - name: Upload RC evidence bundle
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rc-evidence-bundle
           path: artifacts/rc-evidence/rc-evidence.md
