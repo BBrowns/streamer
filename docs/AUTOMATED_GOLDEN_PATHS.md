@@ -49,31 +49,32 @@ They cover:
 ## Versioned Visual Baselines
 
 The focused `visual-regression.spec.ts` suite makes Home, Settings overview,
-and submitted Search results into source-controlled pixel baselines. It covers
-dark and light mode at the compact phone and large desktop window classes.
+submitted Search results, Login, onboarding setup, populated Notifications,
+installed Add-ons, mixed Downloads, and Detail actions into source-controlled
+pixel baselines. It covers dark and light mode at the compact phone and large
+desktop window classes.
 The fixture data, loaded font, images, motion, caret, scale, and screenshot
 path are deterministic. Baselines are stored per OS, so Linux CI never compares
 its Chromium output against a macOS image. A comparison permits at most 500
 changed pixels at a 0.1 color threshold; it is intentionally tight enough to
 catch material composition changes.
 
-Linux CI requires the full reviewed baseline set and fails early if an image is
-missing. The reviewed twelve-image Linux set is committed alongside the
-separate Darwin set. On a same-repository PR, the parallel **Visual Baseline
-Candidate (Linux)** job produces a replacement artifact with hashes and its
-source commit; **Refresh Visual Baselines** offers the same flow behind an
-explicit `refresh` confirmation after this workflow reaches the default branch.
-Neither job can push or alter a branch. On macOS, `test:visual` uses the
-separate Darwin baseline. Do not accept `--update-snapshots` output without a
-visual review.
+Linux CI requires the full reviewed 44-image baseline set (36 route/theme/window
+captures and eight dark player captures) and fails early if an image is missing.
+On a same-repository PR, the parallel **Visual Baseline Candidate (Linux)** job
+produces a replacement artifact with hashes and its source commit;
+**Refresh Visual Baselines** offers the same flow behind an explicit `refresh`
+confirmation after this workflow reaches the default branch. Neither job can
+push or alter a branch. On macOS, `test:visual` uses the separate Darwin
+baseline. Do not accept `--update-snapshots` output without a visual review.
 
 The broader semantic suite separately exercises Settings detail and the Search
 idle/recents/suggestions/results/filters/no-results/no-provider/partial states.
 Intermediate pane and overflow behavior is asserted directly at 768 x 1024 and
 1024 x 768. Project-aware semantic skips remain explicit in the test output.
-The focused visual suite has four theme/window test cases with three screenshot
-assertions each, for twelve platform-specific pixel comparisons; macOS runs
-them only through `npm run test:visual`.
+The focused visual suite has 10 route/theme test cases plus eight player-state
+captures, for 44 platform-specific pixel comparisons; macOS runs them only
+through `npm run test:visual`.
 
 ## Real Electron Smoke
 
@@ -128,6 +129,9 @@ Browser projects prove responsive renderer behavior, not native iOS or Android
 layout or playback. `npm run native:evidence:preflight` can tell whether the
 local Detox target, SDK, runtime, and AVD prerequisites are present, but it is
 strictly read-only and is not a simulator, emulator, or physical-device pass.
+The mixed Downloads fixture models only the Electron `inspect-file` answer for
+a hostless managed URI so a persisted offline-ready card can be rendered; it
+is not browser local-file or media-decode evidence.
 The Electron smoke proves the development main/preload IPC composition, version
 labels, managed-file inspection, and zoom behavior; it does not prove a
 packaged sidecar, torrent engine, real download decode, or release signing.

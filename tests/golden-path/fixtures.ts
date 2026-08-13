@@ -4,6 +4,8 @@ import type { Page, Route } from "@playwright/test";
 import {
   playbackPlanRequestSchema,
   playbackPlanSchema,
+  type InAppNotification,
+  type InstalledAddon,
   type PlaybackAction,
   type PlaybackPlan,
   type PlaybackPlanRequest,
@@ -36,6 +38,12 @@ const MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.mp4");
 const VISUAL_MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.webm");
 const GATEWAY_JOB_ID = "00000000-0000-4000-8000-000000000099";
 const FIXTURE_DISPLAY_ID = "00000000-0000-4000-8000-000000000010";
+export const FIXTURE_USER_ID = "00000000-0000-4000-8000-000000000001";
+
+export type GoldenPathFixtureOptions = {
+  notifications?: "empty" | "populated" | "mark-read-fails-once";
+  addonInstall?: "succeeds" | "fail-once";
+};
 
 const timeoutBudget = {
   totalMs: 120_000,
@@ -113,7 +121,7 @@ const searchPreviews = [
 
 const libraryItems = Array.from({ length: 9 }, (_, index) => ({
   id: `fixture-library-${index + 1}`,
-  userId: "fixture-user",
+  userId: FIXTURE_USER_ID,
   type: index % 3 === 2 ? ("series" as const) : ("movie" as const),
   itemId: `fixture-library-title-${index + 1}`,
   title: `Library Fixture ${index + 1}`,
@@ -123,6 +131,7 @@ const libraryItems = Array.from({ length: 9 }, (_, index) => ({
 
 const catalogAddon = {
   id: "fixture-addon",
+  userId: FIXTURE_USER_ID,
   transportUrl: "https://fixture.example.test/manifest.json",
   installedAt: "2026-01-01T00:00:00.000Z",
   manifest: {
@@ -138,6 +147,37 @@ const catalogAddon = {
     ],
   },
 };
+
+const installedFixtureAddon: InstalledAddon = {
+  ...catalogAddon,
+};
+
+const populatedNotifications: InAppNotification[] = [
+  {
+    id: "00000000-0000-4000-8000-000000000101",
+    userId: FIXTURE_USER_ID,
+    title: "New episode available",
+    message: "Golden Path Adventure is ready to watch.",
+    read: false,
+    createdAt: "2026-07-18T14:30:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000102",
+    userId: FIXTURE_USER_ID,
+    title: "Download finished",
+    message: "Fixture Series is available offline.",
+    read: false,
+    createdAt: "2026-07-15T10:15:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000103",
+    userId: FIXTURE_USER_ID,
+    title: "Welcome to Streamer",
+    message: "Your catalog is ready to explore.",
+    read: true,
+    createdAt: "2026-06-20T09:00:00.000Z",
+  },
+];
 
 function candidate(
   action: PlaybackAction,
@@ -316,16 +356,25 @@ export interface GoldenPathControls {
   bridgeProbes: () => number;
   gatewayJobsCreated: () => number;
   gatewayJobsCancelled: () => number;
+  addonInstallAttempts: () => number;
 }
 
 export async function installGoldenPathRoutes(
   page: Page,
   scenario: GoldenPathScenario,
+  options: GoldenPathFixtureOptions = {},
 ): Promise<GoldenPathControls> {
   const plannerRequests: PlaybackPlanRequest[] = [];
   let bridgeProbeCount = 0;
   let gatewayJobs = 0;
   let cancelledGatewayJobs = 0;
+  let addonInstallAttempts = 0;
+  let markReadAttempts = 0;
+  const notifications =
+    options.notifications === "populated" ||
+    options.notifications === "mark-read-fails-once"
+      ? populatedNotifications.map((notification) => ({ ...notification }))
+      : [];
   const media = readFileSync(MEDIA_FIXTURE);
   const visualMedia = readFileSync(VISUAL_MEDIA_FIXTURE);
 
@@ -380,7 +429,7 @@ export async function installGoldenPathRoutes(
       if (url.pathname === "/api/auth/login") {
         await json(route, {
           user: {
-            id: "fixture-user",
+            id: FIXTURE_USER_ID,
             email: "qa@example.test",
             displayName: "QA Viewer",
             createdAt: "2026-01-01T00:00:00.000Z",
@@ -515,8 +564,33 @@ export async function installGoldenPathRoutes(
         await json(route, { resolved: null });
         return;
       }
-      if (url.pathname === "/api/addons") {
-        await json(route, { addons: [catalogAddon] });
+      if (url.pathname === "/api/addons" && request.method() === "GET") {
+        await json(route, {
+          addons: options.addonInstall === "succeeds" ? [] : [catalogAddon],
+        });
+        return;
+      }
+      if (url.pathname === "/api/addons" && request.method() === "POST") {
+        addonInstallAttempts += 1;
+        if (
+          options.addonInstall === "fail-once" &&
+          addonInstallAttempts === 1
+        ) {
+          await json(
+            route,
+            { error: "Fixture installation failed once." },
+            500,
+          );
+          return;
+        }
+        await json(route, installedFixtureAddon, 201);
+        return;
+      }
+      if (
+        url.pathname.startsWith("/api/addons/") &&
+        request.method() === "DELETE"
+      ) {
+        await route.fulfill({ status: 204, headers: corsHeaders });
         return;
       }
       if (
@@ -558,7 +632,43 @@ export async function installGoldenPathRoutes(
         return;
       }
       if (url.pathname === "/api/notifications") {
-        await json(route, { notifications: [] });
+        await json(route, { notifications });
+        return;
+      }
+      if (
+        url.pathname === "/api/notifications/read-all" &&
+        request.method() === "PATCH"
+      ) {
+        notifications.forEach((notification) => {
+          notification.read = true;
+        });
+        await json(route, {
+          status: "success",
+          updatedCount: notifications.length,
+        });
+        return;
+      }
+      const markReadMatch = url.pathname.match(
+        /^\/api\/notifications\/([^/]+)\/read$/,
+      );
+      if (markReadMatch && request.method() === "PATCH") {
+        markReadAttempts += 1;
+        if (
+          options.notifications === "mark-read-fails-once" &&
+          markReadAttempts === 1
+        ) {
+          await json(route, { error: "Fixture mark-read failed once." }, 503);
+          return;
+        }
+        const notification = notifications.find(
+          (candidate) => candidate.id === markReadMatch[1],
+        );
+        if (!notification) {
+          await json(route, { error: "Notification not found" }, 404);
+          return;
+        }
+        notification.read = true;
+        await json(route, { status: "success", notification });
         return;
       }
       if (url.pathname === "/api/sessions") {
@@ -774,5 +884,6 @@ export async function installGoldenPathRoutes(
     bridgeProbes: () => bridgeProbeCount,
     gatewayJobsCreated: () => gatewayJobs,
     gatewayJobsCancelled: () => cancelledGatewayJobs,
+    addonInstallAttempts: () => addonInstallAttempts,
   };
 }
