@@ -3,6 +3,12 @@ import * as FileSystem from "expo-file-system";
 import { DownloadService } from "../DownloadService";
 import { useDownloadStore } from "../../stores/downloadStore";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import { prepareDownload } from "../playback/PlaybackOrchestrator";
+
+jest.mock("../playback/PlaybackOrchestrator", () => ({
+  ...jest.requireActual("../playback/PlaybackOrchestrator"),
+  prepareDownload: jest.fn(),
+}));
 
 jest.mock("../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
@@ -27,6 +33,27 @@ function setPlatform(os: "ios" | "android" | "web") {
   Platform.OS = os;
   // @ts-ignore
   Platform.select = (objs: any) => objs[os] || objs.default;
+}
+
+function preparedDownload(url: string, mediaInfo: Record<string, unknown>) {
+  return {
+    ok: true as const,
+    stream: { url },
+    resolvedUrl: url,
+    mediaInfo,
+    eligibility: {
+      mode: "direct-file" as const,
+      canDownload: true,
+      offlinePlayable: true,
+    },
+    sessionId: "00000000-0000-4000-8000-000000000301",
+    candidateId: "00000000-0000-4000-8000-000000000302",
+    attemptId: "00000000-0000-4000-8000-000000000303",
+    runtimeState: "selecting_source" as const,
+    plan: { selectedCandidate: { sizeBytes: 100 } },
+    attemptedStreams: 1,
+    resolveErrors: [],
+  } as any;
 }
 
 describe("DownloadService - Replan & Diagnostics", () => {
@@ -75,6 +102,9 @@ describe("DownloadService - Replan & Diagnostics", () => {
     jest
       .mocked(streamEngineManager.getPlaybackUri)
       .mockResolvedValue("http://fresh.test");
+    jest
+      .mocked(prepareDownload)
+      .mockResolvedValue(preparedDownload("http://fresh.test", mediaInfo));
 
     const startDownloadSpy = jest
       .spyOn(service, "startDownload")
@@ -83,9 +113,11 @@ describe("DownloadService - Replan & Diagnostics", () => {
     const result = await service.resumeDownload(id);
 
     expect(result.ok).toBe(true);
-    expect(streamEngineManager.getPlaybackUri).toHaveBeenCalledWith(
-      originalStream,
-    );
+    expect(prepareDownload).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt1",
+      title: "Test",
+    });
     expect(startDownloadSpy).toHaveBeenCalledWith(
       { ...originalStream, infoHash: undefined, url: "http://fresh.test" },
       mediaInfo,
@@ -136,14 +168,19 @@ describe("DownloadService - Replan & Diagnostics", () => {
     jest
       .mocked(streamEngineManager.getPlaybackUri)
       .mockResolvedValue("http://fresh.test");
+    jest
+      .mocked(prepareDownload)
+      .mockResolvedValue(preparedDownload("http://fresh.test", mediaInfo));
 
     const service = new DownloadService();
     const result = await service.resumeDownload(id);
 
     expect(result.ok).toBe(true);
-    expect(streamEngineManager.getPlaybackUri).toHaveBeenCalledWith(
-      originalStream,
-    );
+    expect(prepareDownload).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt1",
+      title: "Test",
+    });
     expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
       id,
       "http://fresh.test",
@@ -191,16 +228,69 @@ describe("DownloadService - Replan & Diagnostics", () => {
     jest
       .mocked(streamEngineManager.getPlaybackUri)
       .mockResolvedValue("http://fresh-restored.test");
+    jest
+      .mocked(prepareDownload)
+      .mockResolvedValue(
+        preparedDownload("http://fresh-restored.test", mediaInfo),
+      );
 
     const service = new DownloadService();
     await expect(service.resumeDownload(id)).resolves.toEqual({ ok: true });
 
-    expect(streamEngineManager.getPlaybackUri).toHaveBeenCalledWith(
-      originalStream,
-    );
+    expect(prepareDownload).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt-restored",
+      title: "Restored",
+    });
     expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
       id,
       "http://fresh-restored.test",
+      expect.any(String),
+    );
+  });
+
+  it("uses content replan when desktop has no active job or persisted URL", async () => {
+    setPlatform("web");
+    const id = "task-no-url";
+    const mediaInfo = {
+      type: "movie",
+      itemId: "tt-no-url",
+      title: "No URL",
+      sourceId: id,
+    } as any;
+
+    useDownloadStore
+      .getState()
+      .addTask(id, mediaInfo, undefined, { infoHash: "hash-no-url" });
+    useDownloadStore.getState().setStatus(id, "Paused");
+
+    window.desktopBridge = {
+      resumeDownloadJob: jest.fn().mockResolvedValue(null),
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id,
+        status: "Downloading",
+        downloadUrl: "http://fresh-no-url.test",
+        filename: "no-url.mp4",
+        totalBytesWritten: 0,
+        totalBytesExpectedToWrite: 100,
+      }),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+    jest
+      .mocked(prepareDownload)
+      .mockResolvedValue(
+        preparedDownload("http://fresh-no-url.test", mediaInfo),
+      );
+
+    const service = new DownloadService();
+    const result = await service.resumeDownload(id);
+
+    expect(result).toEqual({ ok: true });
+    expect(streamEngineManager.getPlaybackUri).not.toHaveBeenCalled();
+    expect(prepareDownload).toHaveBeenCalledTimes(1);
+    expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
+      id,
+      "http://fresh-no-url.test",
       expect.any(String),
     );
   });
@@ -242,6 +332,11 @@ describe("DownloadService - Replan & Diagnostics", () => {
     jest
       .mocked(streamEngineManager.getPlaybackUri)
       .mockResolvedValue("http://fresh-after-restart.test");
+    jest
+      .mocked(prepareDownload)
+      .mockResolvedValue(
+        preparedDownload("http://fresh-after-restart.test", mediaInfo),
+      );
 
     const service = new DownloadService();
     const startDownloadSpy = jest
@@ -251,9 +346,11 @@ describe("DownloadService - Replan & Diagnostics", () => {
     const result = await service.resumeDownload(id);
 
     expect(result.ok).toBe(true);
-    expect(streamEngineManager.getPlaybackUri).toHaveBeenCalledWith(
-      originalStream,
-    );
+    expect(prepareDownload).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt-restart",
+      title: "Restart Test",
+    });
     expect(startDownloadSpy).toHaveBeenCalledWith(
       {
         ...originalStream,

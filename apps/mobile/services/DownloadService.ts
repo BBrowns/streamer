@@ -421,55 +421,61 @@ export class DownloadService {
     const task = tasks[id];
     if (!task) return undefined;
 
-    if (task.originalStream) {
-      const resolvedUrl = await streamEngineManager.getPlaybackUri(
-        task.originalStream,
-      );
-      if (!resolvedUrl) return undefined;
-      const resolvedStream = task.originalStream.infoHash
-        ? ({
-            ...task.originalStream,
-            infoHash: undefined,
-            url: resolvedUrl,
-          } as Stream)
-        : task.originalStream;
-      setDownloadUrl(id, resolvedUrl);
+    const replanContext: DownloadReplanContext | undefined =
+      task.replanContext || buildDownloadReplanContext(task.mediaInfo);
+    if (replanContext) {
+      const result = await prepareDownload(replanContext);
+      if (!result.ok) {
+        const message = toSafeDownloadErrorMessage(
+          result.error.message,
+          "Download needs to be prepared again.",
+        );
+        this.markTaskFailed(id, result.error, message, task.playbackSession);
+        return undefined;
+      }
+
+      const playbackSession = {
+        sessionId: result.sessionId,
+        candidateId: result.candidateId,
+        attemptId: result.attemptId,
+      };
+      setPlaybackSession(id, playbackSession);
+      setDownloadUrl(id, result.resolvedUrl);
       return {
-        stream: resolvedStream,
-        mediaInfo: { ...task.mediaInfo, sourceId: id } as DownloadMediaItem,
-        resolvedUrl,
-        playbackSession: task.playbackSession,
+        stream: result.stream,
+        mediaInfo: { ...result.mediaInfo, sourceId: id } as DownloadMediaItem,
+        resolvedUrl: result.resolvedUrl,
+        eligibility: result.eligibility,
+        playbackSession,
+        expectedMediaBytes: task.expectedMediaBytes,
+        metadataBytes:
+          task.metadataBytes || result.plan.selectedCandidate?.sizeBytes,
       };
     }
 
-    const replanContext: DownloadReplanContext | undefined =
-      task.replanContext || buildDownloadReplanContext(task.mediaInfo);
-    if (!replanContext) return undefined;
+    if (!task.originalStream) return undefined;
 
-    const result = await prepareDownload(replanContext);
-    if (!result.ok) {
-      const message = toSafeDownloadErrorMessage(
-        result.error.message,
-        "Download needs to be prepared again.",
-      );
-      this.markTaskFailed(id, result.error, message, task.playbackSession);
-      return undefined;
-    }
-
-    const playbackSession = {
-      sessionId: result.sessionId,
-      candidateId: result.candidateId,
-      attemptId: result.attemptId,
-    };
-    setPlaybackSession(id, playbackSession);
-    setDownloadUrl(id, result.resolvedUrl);
+    // Legacy in-memory tasks may predate URL-free replan metadata. Keep their
+    // runtime-only fallback, but never prefer it over a content replan.
+    const resolvedUrl = await streamEngineManager.getPlaybackUri(
+      task.originalStream,
+    );
+    if (!resolvedUrl) return undefined;
+    const resolvedStream = task.originalStream.infoHash
+      ? ({
+          ...task.originalStream,
+          infoHash: undefined,
+          url: resolvedUrl,
+        } as Stream)
+      : task.originalStream;
+    setDownloadUrl(id, resolvedUrl);
     return {
-      stream: result.stream,
-      mediaInfo: { ...result.mediaInfo, sourceId: id } as DownloadMediaItem,
-      resolvedUrl: result.resolvedUrl,
-      eligibility: result.eligibility,
-      playbackSession,
-      metadataBytes: result.plan.selectedCandidate?.sizeBytes,
+      stream: resolvedStream,
+      mediaInfo: { ...task.mediaInfo, sourceId: id } as DownloadMediaItem,
+      resolvedUrl,
+      playbackSession: task.playbackSession,
+      expectedMediaBytes: task.expectedMediaBytes,
+      metadataBytes: task.metadataBytes,
     };
   }
 
@@ -1073,7 +1079,7 @@ export class DownloadService {
    * Reconciles persisted queue state with local files and managed desktop jobs.
    */
   async refreshQueue() {
-    const { tasks, setStatus } = useDownloadStore.getState();
+    const { tasks, setStatus, markForReplan } = useDownloadStore.getState();
     const completedTasks = Object.values(tasks).filter(
       (task) => task.status === "Completed" || task.status === "Verifying",
     );
@@ -1110,6 +1116,7 @@ export class DownloadService {
         if (task.status === "Downloading" || task.status === "Preparing") {
           setStatus(task.id, "Paused");
         }
+        markForReplan(task.id);
       }
 
       return;
@@ -1120,6 +1127,7 @@ export class DownloadService {
       if (task.status === "Downloading" || task.status === "Preparing") {
         setStatus(task.id, "Paused");
       }
+      markForReplan(task.id);
 
       // Verification of local file existence
       if (task.localUri) {
@@ -1180,6 +1188,7 @@ export class DownloadService {
           // The queue remains recoverable even if Electron restarted and lost
           // the active request object.
           setStatus(id, "Paused");
+          useDownloadStore.getState().markForReplan(id);
         }
         return { ok: true };
       } catch (error) {
@@ -1217,6 +1226,7 @@ export class DownloadService {
     // After an app restart there is no in-memory resumable object yet. Keep
     // the task paused so Resume can rehydrate or restart it.
     setStatus(id, "Paused");
+    useDownloadStore.getState().markForReplan(id);
     return { ok: true };
   }
 
@@ -1250,30 +1260,20 @@ export class DownloadService {
         return { ok: false, error };
       }
 
-      let desktopDownloadUrl: string | undefined = task.mediaInfo.downloadUrl;
-      if (!desktopDownloadUrl && task.originalStream) {
-        desktopDownloadUrl = await this.replanDownloadUrl(id);
-      }
-
-      if (!desktopDownloadUrl) {
+      if (!task.mediaInfo.downloadUrl) {
         return this.restartDownloadFromPlan(id);
       }
 
       try {
         this.ensureDesktopDownloadSubscription();
-        const existingJob = desktopBridge.resumeDownloadJob
-          ? await desktopBridge.resumeDownloadJob(id)
-          : null;
+        const existingJob = await desktopBridge.resumeDownloadJob(id);
+        if (!existingJob) {
+          return this.restartDownloadFromPlan(id);
+        }
         if (existingJob?.requiresReplan) {
           return this.restartDownloadFromPlan(id);
         }
-        const job =
-          existingJob ||
-          (await desktopBridge.startDownloadJob(
-            id,
-            desktopDownloadUrl,
-            this.getDownloadFilename(id),
-          ));
+        const job = existingJob;
         this.applyDesktopJobSnapshot(job);
         if (job.status === "Error" || job.status === "Canceled") {
           const rawMessage =
@@ -1500,38 +1500,6 @@ export class DownloadService {
     }
 
     return { deleted, failed };
-  }
-
-  /**
-   * Re-resolves the download URL if it's expired or missing.
-   */
-  private async replanDownloadUrl(id: string): Promise<string | undefined> {
-    const { tasks, setDownloadUrl } = useDownloadStore.getState();
-    const task = tasks[id];
-    if (!task) return undefined;
-
-    const stream = task.originalStream;
-    if (!stream) {
-      if (__DEV__)
-        console.warn(
-          "[DownloadService] Cannot replan: originalStream missing",
-          id,
-        );
-      return undefined;
-    }
-
-    try {
-      if (__DEV__)
-        console.log("[DownloadService] Replanning download URL for", id);
-      const downloadUrl = await streamEngineManager.getPlaybackUri(stream);
-      if (downloadUrl) {
-        setDownloadUrl(id, downloadUrl);
-        return downloadUrl;
-      }
-    } catch (e) {
-      if (__DEV__) console.error("[DownloadService] Replan failed", e);
-    }
-    return undefined;
   }
 
   /**

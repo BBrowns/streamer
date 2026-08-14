@@ -1,6 +1,6 @@
 # Streamer Roadmap
 
-Last updated: 2026-08-11.
+Last updated: 2026-08-14.
 
 This is the current source of truth for work after PR #186. The architecture
 does not need another control-plane rewrite. The next phase is to reduce
@@ -36,7 +36,7 @@ playback-session architecture, or a full UI-framework migration.
 
 ## Current State
 
-Implemented through PR #160:
+Implemented through PR #186, with subsequent dependency-security maintenance:
 
 - PlaybackSession, Planner v2, Play Best, downloads, and cast share the
   session-first control plane.
@@ -79,8 +79,9 @@ Implemented through PR #160:
   explicit unsupported fallback, attempt-bound `SourcePreparer` leases, and a
   typed Bridge v1 client/runtime now share one session-owned control plane.
 - Bridge v1 access sessions, job/cast-play idempotency, bounded in-memory state,
-  and normal/pairing route rate limits are shipped. Session revoke, renewal,
-  reconnect recovery, and operational counters are post-v3 hardening work.
+  normal/pairing route rate limits, session revoke/renewal, reconnect recovery,
+  and operational counters are shipped. Keep the v2 compatibility adapter
+  until the documented no-fallback window is met.
 - PR #152 introduces the adaptive UX foundation: semantic state tokens,
   compact/medium/expanded/large window classes, four primary destinations,
   deduplicated Home composition, canonical Search state, recoverable
@@ -93,6 +94,15 @@ Implemented through PR #160:
   player chrome, personal watch history, and a notification inbox. These are
   application changes, not evidence that playback, touch, or video behaviour
   has been proven on native devices.
+- URL-free download recovery marks missing process-local bridge jobs and
+  interrupted native tasks for a fresh content replan. Planner context takes
+  precedence over legacy runtime-only streams, and a vanished Bridge v1 job is
+  surfaced as a retryable source failure rather than a permanent protocol
+  error.
+- The supported development baseline is Node 26.7.0 with npm 12.0.2. Recent
+  maintenance includes the dependency-security remediation through PR #220;
+  current dependency work remains split between recovery behavior and the
+  native/tooling migration.
 
 Not yet proven:
 

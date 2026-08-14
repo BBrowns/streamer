@@ -51,7 +51,6 @@ const NON_FALLBACKABLE_BRIDGE_ERROR_CODES = new Set<BridgeClientErrorCode>([
   "IDEMPOTENCY_CONFLICT",
   "DELIVERY_UNSUPPORTED",
   "BRIDGE_RESPONSE_INVALID",
-  "JOB_NOT_FOUND",
 ]);
 
 type BridgeExecutionTarget = Extract<
@@ -154,6 +153,14 @@ function progressFromJob(job: BridgeJobV1): GatewayJobProgress {
   };
 }
 
+function bridgeJobUnavailableError(cause?: unknown) {
+  return new SourcePreparationError(
+    "SOURCE_UNAVAILABLE",
+    "The bridge job disappeared before the source was ready.",
+    { retryable: true, shouldFallback: true, cause },
+  );
+}
+
 function terminalJobError(job: BridgeJobV1): SourcePreparationError | null {
   switch (job.state) {
     case "preparing":
@@ -179,6 +186,9 @@ function terminalJobError(job: BridgeJobV1): SourcePreparationError | null {
         "The bridge job expired before the source was ready.",
       );
     case "error":
+      if (job.failure?.code === "JOB_NOT_FOUND") {
+        return bridgeJobUnavailableError();
+      }
       if (
         (job.failure?.code &&
           NON_FALLBACKABLE_BRIDGE_ERROR_CODES.has(job.failure.code)) ||
@@ -268,6 +278,9 @@ function mapBridgeClientError(error: unknown, signal?: AbortSignal) {
       "The bridge stalled while preparing this source.",
       { retryable: error.retryable, shouldFallback: true, cause: error },
     );
+  }
+  if (error.code === "JOB_NOT_FOUND") {
+    return bridgeJobUnavailableError(error);
   }
   if (NON_FALLBACKABLE_BRIDGE_ERROR_CODES.has(error.code)) {
     return bridgeContractError(

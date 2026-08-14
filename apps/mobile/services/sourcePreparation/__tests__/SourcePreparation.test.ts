@@ -729,7 +729,6 @@ describe("BridgeV1SourceAdapter", () => {
     "IDEMPOTENCY_CONFLICT",
     "DELIVERY_UNSUPPORTED",
     "BRIDGE_RESPONSE_INVALID",
-    "JOB_NOT_FOUND",
   ] as const)(
     "maps protocol or identity error %s without fallback",
     async (code) => {
@@ -759,6 +758,43 @@ describe("BridgeV1SourceAdapter", () => {
       });
     },
   );
+
+  it("maps a disappeared bridge job to one retryable source recovery", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(jobResponse({ delivery: "range-http" }));
+    client.getJob.mockRejectedValue(
+      new BridgeClientError("JOB_NOT_FOUND", "The bridge job was not found.", {
+        status: 404,
+      }),
+    );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+      pollIntervalMs: 0,
+      sleep: jest.fn().mockResolvedValue(undefined),
+    });
+    const selectedRoute = route("range-http", "local-sidecar");
+
+    await expect(
+      adapter.prepare({
+        action: "download",
+        attemptId: "attempt-missing-job",
+        requestId: REQUEST_ID,
+        candidate: candidateFor(selectedRoute, {
+          actionEligibility: { action: "download", eligible: true },
+        }),
+        route: selectedRoute,
+      }),
+    ).rejects.toMatchObject({
+      code: "SOURCE_UNAVAILABLE",
+      retryable: true,
+      shouldFallback: true,
+    });
+    expect(client.getJob).toHaveBeenCalledTimes(1);
+    expect(client.cancelJob).toHaveBeenCalledTimes(1);
+    expect(client.cancelJob).toHaveBeenCalledWith(JOB_ID);
+  });
 
   it("maps a terminal protocol failure without fallback", async () => {
     const client = bridgeClient();
