@@ -73,7 +73,7 @@ describe("usePlaybackUriBinding", () => {
 
   it("resolves a legacy stream through the engine adapter", async () => {
     const options = createOptions();
-    renderHook(() => usePlaybackUriBinding(options));
+    await renderHook(() => usePlaybackUriBinding(options));
 
     await waitFor(() =>
       expect(options.setPlaybackUri).toHaveBeenCalledWith("opaque://source"),
@@ -97,7 +97,7 @@ describe("usePlaybackUriBinding", () => {
       playbackCandidateId: "candidate-1",
       playbackAttemptId: "attempt-1",
     });
-    renderHook(() => usePlaybackUriBinding(options));
+    await renderHook(() => usePlaybackUriBinding(options));
 
     await waitFor(() =>
       expect(options.setPlaybackUri).toHaveBeenCalledWith("resolved-source"),
@@ -117,7 +117,7 @@ describe("usePlaybackUriBinding", () => {
     const options = createOptions();
     const tryAdvanceToFallback = jest.fn(() => Promise.resolve(true));
     options.tryAdvanceToFallback = tryAdvanceToFallback;
-    renderHook(() => usePlaybackUriBinding(options));
+    await renderHook(() => usePlaybackUriBinding(options));
 
     await waitFor(() => expect(tryAdvanceToFallback).toHaveBeenCalled());
     expect(tryAdvanceToFallback).toHaveBeenCalledWith(
@@ -132,7 +132,7 @@ describe("usePlaybackUriBinding", () => {
       () => "unsupported" as any,
     );
     const options = createOptions();
-    renderHook(() => usePlaybackUriBinding(options));
+    await renderHook(() => usePlaybackUriBinding(options));
 
     await waitFor(() =>
       expect(options.setRuntimeFailure).toHaveBeenCalledWith(

@@ -62,8 +62,8 @@ jest.mock("../TechnicalSourceDisclosure", () => ({
 }));
 
 describe("MoreSourcesPanel", () => {
-  it("plans lazily, then shows the eligible source count once", () => {
-    const screen = render(
+  it("plans lazily, then shows the eligible source count once", async () => {
+    const screen = await render(
       <MoreSourcesPanel
         contentId="tt123"
         title="Example"
@@ -76,7 +76,7 @@ describe("MoreSourcesPanel", () => {
     expect(screen.queryByText("Consumer source choices")).toBeNull();
     expect(screen.queryByText("Technical disclosure")).toBeNull();
 
-    fireEvent.press(screen.getByLabelText("Show more sources"));
+    await fireEvent.press(screen.getByLabelText("Show more sources"));
 
     expect(mockUseSourceChoicePlan).toHaveBeenCalledTimes(1);
     expect(screen.getAllByText("3 available")).toHaveLength(1);

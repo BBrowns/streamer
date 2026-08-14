@@ -71,8 +71,8 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("DetailLoadState", () => {
-  it("uses the non-scrolling detail boundary for load and recovery states", () => {
-    const screen = render(
+  it("uses the non-scrolling detail boundary for load and recovery states", async () => {
+    const screen = await render(
       <DetailLoadState kind="loading" onBack={jest.fn()} />,
     );
 
@@ -81,9 +81,11 @@ describe("DetailLoadState", () => {
     ).toBe("boundary:detail scroll:undefined");
   });
 
-  it("shows a calm loading state with an immediately available Back action", () => {
+  it("shows a calm loading state with an immediately available Back action", async () => {
     const onBack = jest.fn();
-    const screen = render(<DetailLoadState kind="loading" onBack={onBack} />);
+    const screen = await render(
+      <DetailLoadState kind="loading" onBack={onBack} />,
+    );
 
     expect(screen.getByTestId("detail-load-spinner")).toBeTruthy();
     expect(screen.getByRole("header").props.children).toBe(
@@ -91,14 +93,14 @@ describe("DetailLoadState", () => {
     );
     expect(screen.queryByTestId("detail-load-retry")).toBeNull();
 
-    fireEvent.press(screen.getByTestId("detail-load-back"));
+    await fireEvent.press(screen.getByTestId("detail-load-back"));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("directs a confirmed missing title to add-ons and still allows retry", () => {
+  it("directs a confirmed missing title to add-ons and still allows retry", async () => {
     const onRetry = jest.fn();
     const onSupport = jest.fn();
-    const screen = render(
+    const screen = await render(
       <DetailLoadState
         kind="notFound"
         onBack={jest.fn()}
@@ -112,17 +114,17 @@ describe("DetailLoadState", () => {
     );
     expect(screen.getByText("Review add-ons")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("detail-load-retry"));
-    fireEvent.press(screen.getByTestId("detail-load-support"));
+    await fireEvent.press(screen.getByTestId("detail-load-retry"));
+    await fireEvent.press(screen.getByTestId("detail-load-support"));
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onSupport).toHaveBeenCalledTimes(1);
   });
 
   it.each(["network", "temporary"] as const)(
     "offers Sources & Devices recovery for a %s failure",
-    (kind) => {
+    async (kind) => {
       const onSupport = jest.fn();
-      const screen = render(
+      const screen = await render(
         <DetailLoadState
           kind={kind}
           onBack={jest.fn()}
@@ -132,14 +134,14 @@ describe("DetailLoadState", () => {
       );
 
       expect(screen.getByText("Sources & Devices")).toBeTruthy();
-      fireEvent.press(screen.getByTestId("detail-load-support"));
+      await fireEvent.press(screen.getByTestId("detail-load-support"));
       expect(onSupport).toHaveBeenCalledTimes(1);
     },
   );
 
-  it("announces an active manual retry and prevents duplicate presses", () => {
+  it("announces an active manual retry and prevents duplicate presses", async () => {
     const onRetry = jest.fn();
-    const screen = render(
+    const screen = await render(
       <DetailLoadState
         kind="temporary"
         retrying
@@ -152,7 +154,7 @@ describe("DetailLoadState", () => {
     expect(
       screen.getByTestId("detail-load-retry").props.accessibilityState,
     ).toEqual(expect.objectContaining({ busy: true, disabled: true }));
-    fireEvent.press(screen.getByTestId("detail-load-retry"));
+    await fireEvent.press(screen.getByTestId("detail-load-retry"));
     expect(onRetry).not.toHaveBeenCalled();
   });
 });

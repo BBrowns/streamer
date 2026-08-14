@@ -101,8 +101,10 @@ Implemented through PR #186, with subsequent dependency-security maintenance:
   error.
 - The supported development baseline is Node 26.7.0 with npm 12.0.2. Recent
   maintenance includes the dependency-security remediation through PR #220;
-  current dependency work remains split between recovery behavior and the
-  native/tooling migration.
+  URL-free recovery and the native/tooling migration are now implemented as
+  two review units. The Expo SDK 57 contract remains React 19.2.8 / React
+  Native 0.86.2; Jest 30, React Native 0.87, Tailwind 4, and physical QA stay
+  explicitly deferred.
 
 Not yet proven:
 

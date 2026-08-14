@@ -51,7 +51,7 @@ describe("Add-ons removal", () => {
         mutations: { retry: false },
       },
     });
-    const screen = render(
+    const screen = await render(
       <QueryClientProvider client={queryClient}>
         <AddonsScreen />
       </QueryClientProvider>,
@@ -60,7 +60,9 @@ describe("Add-ons removal", () => {
     await waitFor(() =>
       expect(screen.getByText("Example Provider")).toBeTruthy(),
     );
-    fireEvent.press(screen.getByLabelText("addons.installed.confirmRemove"));
+    await fireEvent.press(
+      screen.getByLabelText("addons.installed.confirmRemove"),
+    );
     const confirmationButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
     confirmationButtons[1].onPress();
 
@@ -69,9 +71,9 @@ describe("Add-ons removal", () => {
       expect(screen.getByText("Example Provider")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("common.retry"));
+    await fireEvent.press(screen.getByText("common.retry"));
     await waitFor(() => expect(api.delete).toHaveBeenCalledTimes(2));
-    screen.unmount();
+    await screen.unmount();
     queryClient.clear();
   });
 
@@ -86,7 +88,7 @@ describe("Add-ons removal", () => {
     const invalidateQueries = jest
       .spyOn(queryClient, "invalidateQueries")
       .mockResolvedValue(undefined);
-    const screen = render(
+    const screen = await render(
       <QueryClientProvider client={queryClient}>
         <AddonsScreen />
       </QueryClientProvider>,
@@ -95,11 +97,11 @@ describe("Add-ons removal", () => {
     await waitFor(() =>
       expect(screen.getByText("Example Provider")).toBeTruthy(),
     );
-    fireEvent.changeText(
+    await fireEvent.changeText(
       screen.getByLabelText("Manifest URL"),
       "https://new-addon.test/manifest.json",
     );
-    fireEvent.press(screen.getByLabelText("addons.install.button"));
+    await fireEvent.press(screen.getByLabelText("addons.install.button"));
 
     await waitFor(() =>
       expect(invalidateQueries).toHaveBeenCalledWith({
@@ -109,7 +111,7 @@ describe("Add-ons removal", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["streams"],
     });
-    screen.unmount();
+    await screen.unmount();
     queryClient.clear();
   });
 
@@ -124,7 +126,7 @@ describe("Add-ons removal", () => {
     const invalidateQueries = jest
       .spyOn(queryClient, "invalidateQueries")
       .mockResolvedValue(undefined);
-    const screen = render(
+    const screen = await render(
       <QueryClientProvider client={queryClient}>
         <AddonsScreen />
       </QueryClientProvider>,
@@ -133,7 +135,9 @@ describe("Add-ons removal", () => {
     await waitFor(() =>
       expect(screen.getByText("Example Provider")).toBeTruthy(),
     );
-    fireEvent.press(screen.getByLabelText("addons.installed.confirmRemove"));
+    await fireEvent.press(
+      screen.getByLabelText("addons.installed.confirmRemove"),
+    );
     const confirmationButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
     confirmationButtons[1].onPress();
 
@@ -145,7 +149,7 @@ describe("Add-ons removal", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["streams"],
     });
-    screen.unmount();
+    await screen.unmount();
     queryClient.clear();
   });
 
@@ -169,7 +173,7 @@ describe("Add-ons removal", () => {
         mutations: { retry: false },
       },
     });
-    const screen = render(
+    const screen = await render(
       <QueryClientProvider client={queryClient}>
         <AddonsScreen />
       </QueryClientProvider>,
@@ -181,7 +185,7 @@ describe("Add-ons removal", () => {
       ).toBeTruthy(),
     );
 
-    screen.unmount();
+    await screen.unmount();
     queryClient.clear();
   });
 });

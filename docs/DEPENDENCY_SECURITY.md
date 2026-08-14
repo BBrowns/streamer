@@ -89,7 +89,7 @@ first. Owners: platform maintainers.
 
 | Dependency path                                                  | Scope                                                                          | Current decision                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prisma tooling -> `@hono/node-server@1.19.11`                    | Development/build tooling; moderate finding                                    | Keep Prisma current and remove the exception when its toolchain updates. Runtime Hono and the direct Node adapter use patched 1.x releases compatible with `@hono/node-ws`.                                                                                                                                                                                                                                                                                           |
+| `@hono/node-ws@1.3.1` -> `@hono/node-server@1.19.17`             | Server runtime nested compatibility; moderate finding                          | `@hono/node-server@2.1.1` is now the direct server adapter. `@hono/node-ws@1.3.1` still brings a nested 1.19.17 adapter for its compatibility contract; remove this exception when the WebSocket adapter moves to the 2.x line.                                                                                                                                                                                                                                       |
 | Expo/xcode tooling -> older `uuid`                               | Mobile development tooling; moderate finding                                   | Track Expo updates; do not force an incompatible nested major.                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Vite/tsx -> `esbuild@0.27.x`                                     | Local development server only                                                  | Direct stream-server builds use patched `esbuild@0.28.x`. Keep dev servers bound to trusted local interfaces and update with the upstream toolchain.                                                                                                                                                                                                                                                                                                                  |
 | Testcontainers/node-gyp -> `undici`                              | Test/build tooling only                                                        | Track Testcontainers and node-gyp updates; it is not shipped in the application runtime.                                                                                                                                                                                                                                                                                                                                                                              |
@@ -131,8 +131,27 @@ React Native `4.5.x` native-module line ahead of Expo SDK 57's bundled patch
 versions. The corresponding `expo.install.exclude` entries are reviewed
 exceptions, not permission to skip native validation; revisit them with the
 next Expo SDK upgrade and rebuild native projects after changing these modules.
+AsyncStorage `3.1.1` is also intentionally excluded because Expo SDK 57 still
+advertises the 2.x line; its new Jest entrypoint and the repository's full
+mobile suite are covered, while native-device validation remains deferred.
 `@shopify/flash-list` is also an existing intentional exception because the
 repository tracks its tested release above the SDK 57 bundled version.
+
+The current native/tooling migration keeps the Expo SDK 57 contract on React
+`19.2.8` and React Native `0.86.2`. React Native Testing Library `14.0.1`
+therefore uses `test-renderer@1.2.0`, the React 19-compatible replacement for
+the deprecated direct `react-test-renderer` dependency. `jest-expo@57` may
+still retain a nested React test renderer internally; that does not justify a
+Jest 30 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
+`@react-native-async-storage/async-storage/jest`. The tested native upgrades
+are safe-area-context `5.9.0`, worklets `0.11.4`, and Sentry React Native
+`8.23.x`; keep them aligned with Expo before changing the SDK major.
+
+The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
+retains its nested adapter until an upstream compatible release exists. The
+desktop app uses Electron `43.4.0` and direct `@electron/notarize` `3.1.1`;
+electron-builder may retain its own nested notarize 2.x contract. These nested
+paths are compatibility boundaries, not reasons to force global overrides.
 
 ## Upgrade Routine
 

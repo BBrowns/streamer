@@ -22,9 +22,9 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("InlineNotice", () => {
-  it("exposes errors as alerts and keeps recovery actions reachable", () => {
+  it("exposes errors as alerts and keeps recovery actions reachable", async () => {
     const onAction = jest.fn();
-    const screen = render(
+    const screen = await render(
       <InlineNotice
         testID="addon-feedback"
         tone="error"
@@ -38,12 +38,12 @@ describe("InlineNotice", () => {
       "alert",
     );
     expect(screen.getByText("The add-on could not be removed.")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
     expect(onAction).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a polite status for non-error feedback", () => {
-    const screen = render(
+  it("uses a polite status for non-error feedback", async () => {
+    const screen = await render(
       <InlineNotice tone="success" message="Add-on installed." />,
     );
 

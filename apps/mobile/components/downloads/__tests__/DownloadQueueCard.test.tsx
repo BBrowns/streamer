@@ -55,7 +55,7 @@ function makeTask(
   };
 }
 
-function renderCard(task: DownloadTask) {
+async function renderCard(task: DownloadTask) {
   const callbacks = {
     onOpen: jest.fn(),
     onPause: jest.fn(),
@@ -67,14 +67,14 @@ function renderCard(task: DownloadTask) {
     onDelete: jest.fn(),
   };
   return {
-    ...render(<DownloadQueueCard task={task} {...callbacks} />),
+    ...(await render(<DownloadQueueCard task={task} {...callbacks} />)),
     callbacks,
   };
 }
 
 describe("DownloadQueueCard", () => {
-  it("shows direct pause and delete controls for an active download", () => {
-    const { getByLabelText, getByText, callbacks } = renderCard(
+  it("shows direct pause and delete controls for an active download", async () => {
+    const { getByLabelText, getByText, callbacks } = await renderCard(
       makeTask("downloading", {
         status: "Downloading",
         progress: 0.25,
@@ -84,15 +84,15 @@ describe("DownloadQueueCard", () => {
     expect(getByText("Downloading")).toBeTruthy();
     expect(getByText("25%")).toBeTruthy();
 
-    fireEvent.press(getByLabelText("Pause"));
-    fireEvent.press(getByLabelText("Delete download"));
+    await fireEvent.press(getByLabelText("Pause"));
+    await fireEvent.press(getByLabelText("Delete download"));
 
     expect(callbacks.onPause).toHaveBeenCalledTimes(1);
     expect(callbacks.onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("shows retry and the persisted error for a failed download", () => {
-    const { getByLabelText, getByText, callbacks } = renderCard(
+  it("shows retry and the persisted error for a failed download", async () => {
+    const { getByLabelText, getByText, callbacks } = await renderCard(
       makeTask("failed", {
         status: "Error",
         error: "Connection was interrupted.",
@@ -106,13 +106,13 @@ describe("DownloadQueueCard", () => {
       ),
     ).toBeTruthy();
 
-    fireEvent.press(getByLabelText("Resume"));
+    await fireEvent.press(getByLabelText("Resume"));
 
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("only offers play for a verified offline file", () => {
-    const { getByLabelText, getByText, callbacks } = renderCard(
+  it("only offers play for a verified offline file", async () => {
+    const { getByLabelText, getByText, callbacks } = await renderCard(
       makeTask("ready", {
         status: "Completed",
         localUri: "file:///downloads/ready.mp4",
@@ -127,13 +127,13 @@ describe("DownloadQueueCard", () => {
 
     expect(getByText("Ready offline")).toBeTruthy();
 
-    fireEvent.press(getByLabelText("Play"));
+    await fireEvent.press(getByLabelText("Play"));
 
     expect(callbacks.onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("offers verification for a completed file that is not offline-verified yet", () => {
-    const { getByLabelText, getByText, callbacks } = renderCard(
+  it("offers verification for a completed file that is not offline-verified yet", async () => {
+    const { getByLabelText, getByText, callbacks } = await renderCard(
       makeTask("unverified", {
         status: "Completed",
         localUri: "file:///downloads/unverified.mp4",
@@ -142,14 +142,14 @@ describe("DownloadQueueCard", () => {
 
     expect(getByText("Needs verification")).toBeTruthy();
 
-    fireEvent.press(getByLabelText("Verify file"));
+    await fireEvent.press(getByLabelText("Verify file"));
 
     expect(callbacks.onVerify).toHaveBeenCalledTimes(1);
     expect(callbacks.onOpen).not.toHaveBeenCalled();
   });
 
-  it("routes bridge failures to the bridge repair action", () => {
-    const { getByLabelText, getByText, callbacks } = renderCard(
+  it("routes bridge failures to the bridge repair action", async () => {
+    const { getByLabelText, getByText, callbacks } = await renderCard(
       makeTask("bridge", {
         status: "Error",
         error: "Desktop bridge unavailable.",
@@ -162,13 +162,13 @@ describe("DownloadQueueCard", () => {
         "Open Sources & Devices and review this device before retrying the download.",
       ),
     ).toBeTruthy();
-    fireEvent.press(getByLabelText("Review setup"));
+    await fireEvent.press(getByLabelText("Review setup"));
     expect(callbacks.onRepairBridge).toHaveBeenCalledTimes(1);
     expect(callbacks.onRetry).not.toHaveBeenCalled();
   });
 
-  it("routes storage pressure to managed storage", () => {
-    const { getByLabelText, callbacks } = renderCard(
+  it("routes storage pressure to managed storage", async () => {
+    const { getByLabelText, callbacks } = await renderCard(
       makeTask("storage", {
         status: "Error",
         error: "ENOSPC",
@@ -176,11 +176,11 @@ describe("DownloadQueueCard", () => {
       }),
     );
 
-    fireEvent.press(getByLabelText("Manage storage"));
+    await fireEvent.press(getByLabelText("Manage storage"));
     expect(callbacks.onManageStorage).toHaveBeenCalledTimes(1);
   });
 
-  it("turns the card into a checkbox and hides row actions in selection mode", () => {
+  it("turns the card into a checkbox and hides row actions in selection mode", async () => {
     const onToggleSelect = jest.fn();
     const task = makeTask("selectable", { status: "Downloading" });
     const callbacks = {
@@ -193,7 +193,7 @@ describe("DownloadQueueCard", () => {
       onManageStorage: jest.fn(),
       onDelete: jest.fn(),
     };
-    const { getByRole, queryByLabelText } = render(
+    const { getByRole, queryByLabelText } = await render(
       <DownloadQueueCard
         task={task}
         {...callbacks}
@@ -208,7 +208,7 @@ describe("DownloadQueueCard", () => {
     expect(queryByLabelText("Pause")).toBeNull();
     expect(queryByLabelText("Delete download")).toBeNull();
 
-    fireEvent.press(checkbox);
+    await fireEvent.press(checkbox);
     expect(onToggleSelect).toHaveBeenCalledTimes(1);
     expect(callbacks.onOpen).not.toHaveBeenCalled();
   });

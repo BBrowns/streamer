@@ -17,8 +17,8 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("EmptyState", () => {
-  it("can render without filling its parent when followed by more content", () => {
-    const screen = render(
+  it("can render without filling its parent when followed by more content", async () => {
+    const screen = await render(
       <EmptyState
         testID="downloads-empty-state"
         fill={false}

@@ -32,9 +32,9 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("RecentSearches", () => {
-  it("renders a restrained page list with a four-item limit", () => {
+  it("renders a restrained page list with a four-item limit", async () => {
     const onSelect = jest.fn();
-    const screen = render(
+    const screen = await render(
       <RecentSearches
         items={["Arrival", "Dune", "Severance", "Andor", "Silo"]}
         onSelect={onSelect}
@@ -44,14 +44,16 @@ describe("RecentSearches", () => {
 
     expect(screen.getByText("Recent searches")).toBeTruthy();
     expect(screen.queryByText("Silo")).toBeNull();
-    fireEvent.press(screen.getByRole("button", { name: "Search for Dune" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Search for Dune" }),
+    );
     expect(onSelect).toHaveBeenCalledWith("Dune");
   });
 
-  it("supports clear, per-row removal, and the compact empty state", () => {
+  it("supports clear, per-row removal, and the compact empty state", async () => {
     const onClear = jest.fn();
     const onRemove = jest.fn();
-    const screen = render(
+    const screen = await render(
       <RecentSearches
         items={["Arrival"]}
         onSelect={jest.fn()}
@@ -60,12 +62,14 @@ describe("RecentSearches", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Clear" }));
-    fireEvent.press(screen.getByRole("button", { name: "Remove Arrival" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Clear" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Remove Arrival" }),
+    );
     expect(onClear).toHaveBeenCalledTimes(1);
     expect(onRemove).toHaveBeenCalledWith("Arrival");
 
-    screen.rerender(
+    await screen.rerender(
       <RecentSearches
         variant="compact"
         items={[]}

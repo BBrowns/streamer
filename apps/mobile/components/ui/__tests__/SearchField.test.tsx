@@ -23,8 +23,8 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("SearchField", () => {
-  it("keeps the shortcut inside an empty search field", () => {
-    const screen = render(
+  it("keeps the shortcut inside an empty search field", async () => {
+    const screen = await render(
       <SearchField
         value=""
         onChangeText={jest.fn()}
@@ -39,9 +39,9 @@ describe("SearchField", () => {
     expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
   });
 
-  it("offers one accessible clear action when a query is present", () => {
+  it("offers one accessible clear action when a query is present", async () => {
     const onClear = jest.fn();
-    const screen = render(
+    const screen = await render(
       <SearchField
         value="Arrival"
         onChangeText={jest.fn()}
@@ -53,12 +53,12 @@ describe("SearchField", () => {
     );
 
     expect(screen.queryByText("⌘K")).toBeNull();
-    fireEvent.press(screen.getByRole("button", { name: "Clear search" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Clear search" }));
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
-  it("offers a compact shared surface treatment", () => {
-    const screen = render(
+  it("offers a compact shared surface treatment", async () => {
+    const screen = await render(
       <SearchField
         testID="catalog-search"
         variant="surface"

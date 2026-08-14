@@ -32,20 +32,20 @@ describe("partial stream discovery refresh", () => {
     ["episode", () => useEpisodeStreams("tt-partial", 1, 2)],
   ])(
     "rechecks one partial %s response after the server cache can complete",
-    (_name, hook) => {
-      const { unmount } = renderHook(hook);
+    async (_name, hook) => {
+      const { unmount } = await renderHook(hook);
       const refetch = mockUseQuery.mock.results[0].value.refetch as jest.Mock;
 
-      act(() => {
+      await act(() => {
         jest.advanceTimersByTime(5_999);
       });
       expect(refetch).not.toHaveBeenCalled();
 
-      act(() => {
+      await act(() => {
         jest.advanceTimersByTime(1);
       });
       expect(refetch).toHaveBeenCalledTimes(1);
-      unmount();
+      await unmount();
     },
   );
 });

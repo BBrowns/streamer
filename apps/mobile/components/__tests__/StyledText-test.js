@@ -1,15 +1,18 @@
 import * as React from "react";
-import renderer, { act } from "react-test-renderer";
+import { act } from "react";
+import { createRoot } from "test-renderer";
 
 import { MonoText } from "../StyledText";
 
 it(`renders correctly`, async () => {
-  let component;
+  const component = createRoot({
+    textComponentTypes: ["Text"],
+  });
   await act(async () => {
-    component = renderer.create(<MonoText>Snapshot test!</MonoText>);
+    component.render(<MonoText>Snapshot test!</MonoText>);
   });
 
-  expect(component.toJSON()).toMatchSnapshot();
+  expect(component.container.children[0].toJSON()).toMatchSnapshot();
 
   await act(async () => {
     component.unmount();

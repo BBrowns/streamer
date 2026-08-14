@@ -24,7 +24,7 @@ describe("usePlayerHotkeys", () => {
     });
   });
 
-  it("routes Escape to the provided cancellation callback", () => {
+  it("routes Escape to the provided cancellation callback", async () => {
     const onEscape = jest.fn(() => true);
     const preventDefault = jest.fn();
     const addListener = jest.fn();
@@ -40,7 +40,7 @@ describe("usePlayerHotkeys", () => {
       value: removeListener,
     });
 
-    const { unmount } = renderHook(() =>
+    const { unmount } = await renderHook(() =>
       usePlayerHotkeys({
         player: null,
         showControls: jest.fn(),
@@ -54,13 +54,13 @@ describe("usePlayerHotkeys", () => {
     const keydown = addListener.mock.calls.find(
       ([eventName]) => eventName === "keydown",
     )?.[1] as EventListener;
-    act(() => {
+    await act(() => {
       keydown({ key: "Escape", preventDefault } as unknown as Event);
     });
 
     expect(onEscape).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
-    unmount();
+    await unmount();
     Object.defineProperty(window, "addEventListener", {
       configurable: true,
       value: originalAddEventListener,
@@ -131,7 +131,7 @@ describe("usePlayerHotkeys", () => {
     });
   });
 
-  it("yields conflicting shortcuts to focused interactive controls", () => {
+  it("yields conflicting shortcuts to focused interactive controls", async () => {
     const player = {
       playing: false,
       play: jest.fn(),
@@ -158,7 +158,7 @@ describe("usePlayerHotkeys", () => {
       configurable: true,
       value: removeListener,
     });
-    const { unmount } = renderHook(() =>
+    const { unmount } = await renderHook(() =>
       usePlayerHotkeys({
         player,
         showControls,
@@ -189,7 +189,7 @@ describe("usePlayerHotkeys", () => {
         preventDefault: jest.fn(),
       }) as unknown as Event;
 
-    act(() => {
+    await act(() => {
       keydown(keyboardEvent(" ", interactiveTarget));
       keydown(keyboardEvent("ArrowRight", interactiveTarget));
       keydown(keyboardEvent("m", interactiveTarget));
@@ -200,13 +200,13 @@ describe("usePlayerHotkeys", () => {
     expect(onToggleMute).not.toHaveBeenCalled();
     expect(showControls).not.toHaveBeenCalled();
 
-    act(() => {
+    await act(() => {
       keydown(keyboardEvent("ArrowRight", passiveTarget));
     });
     expect(onSeekBy).toHaveBeenCalledWith(10);
 
     if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
-    unmount();
+    await unmount();
     Object.defineProperty(window, "addEventListener", {
       configurable: true,
       value: originalAddEventListener,

@@ -50,7 +50,7 @@ describe("useAuth pending add-ons", () => {
     const wrapper = ({ children }: React.PropsWithChildren) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
-    const { result, unmount } = renderHook(() => useAuth(), { wrapper });
+    const { result, unmount } = await renderHook(() => useAuth(), { wrapper });
 
     await act(async () => {
       await result.current.login({
@@ -68,7 +68,7 @@ describe("useAuth pending add-ons", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["catalog"] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["search"] });
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 });

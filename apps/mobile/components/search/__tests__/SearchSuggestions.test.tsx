@@ -52,10 +52,10 @@ const ITEMS = [
 ];
 
 describe("SearchSuggestions", () => {
-  it("renders shared suggestions and the final all-results row", () => {
+  it("renders shared suggestions and the final all-results row", async () => {
     const onSelect = jest.fn();
     const onShowAll = jest.fn();
-    const screen = render(
+    const screen = await render(
       <SearchSuggestions
         testID="suggestion-list"
         variant="palette"
@@ -70,8 +70,8 @@ describe("SearchSuggestions", () => {
       />,
     );
 
-    fireEvent.press(screen.getByTestId("suggestion-dune-2"));
-    fireEvent.press(
+    await fireEvent.press(screen.getByTestId("suggestion-dune-2"));
+    await fireEvent.press(
       screen.getByRole("button", { name: "search.suggestions.showAll" }),
     );
     expect(onSelect).toHaveBeenCalledWith(ITEMS[1]);
@@ -92,8 +92,8 @@ describe("SearchSuggestions", () => {
     ).toMatchObject({ maxHeight: 400 });
   });
 
-  it("visibly selects and announces the all-results row", () => {
-    const screen = render(
+  it("visibly selects and announces the all-results row", async () => {
+    const screen = await render(
       <SearchSuggestions
         query="Dune"
         items={ITEMS}
@@ -115,9 +115,9 @@ describe("SearchSuggestions", () => {
     ).toBe("search.suggestions.showAll");
   });
 
-  it("offers add-on management for the no-searchable-provider state", () => {
+  it("offers add-on management for the no-searchable-provider state", async () => {
     const onManageAddons = jest.fn();
-    const screen = render(
+    const screen = await render(
       <SearchSuggestions
         query="Dune"
         items={[]}
@@ -129,15 +129,15 @@ describe("SearchSuggestions", () => {
       />,
     );
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByRole("button", { name: "search.discovery.manageAddons" }),
     );
     expect(onManageAddons).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps a zero-item partial response explicit and retryable", () => {
+  it("keeps a zero-item partial response explicit and retryable", async () => {
     const onRetry = jest.fn();
-    const screen = render(
+    const screen = await render(
       <SearchSuggestions
         query="Dune"
         items={[]}
@@ -150,12 +150,12 @@ describe("SearchSuggestions", () => {
     );
 
     expect(screen.getByText("search.states.partialCompact")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "common.retry" }));
+    await fireEvent.press(screen.getByRole("button", { name: "common.retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("uses neutral bounded-result copy when no provider failed", () => {
-    const screen = render(
+  it("uses neutral bounded-result copy when no provider failed", async () => {
+    const screen = await render(
       <SearchSuggestions
         query="Dune"
         items={ITEMS}

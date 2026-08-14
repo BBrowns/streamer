@@ -80,9 +80,12 @@ describe("CommandPalette", () => {
 
   it("opens all results on Enter before deliberate arrow navigation", async () => {
     (useSearchController as jest.Mock).mockReturnValue(controller());
-    const screen = render(<CommandPalette visible onClose={jest.fn()} />);
+    const screen = await render(<CommandPalette visible onClose={jest.fn()} />);
 
-    fireEvent(screen.getByTestId("command-search-field"), "submitEditing");
+    await fireEvent(
+      screen.getByTestId("command-search-field"),
+      "submitEditing",
+    );
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith({
         pathname: "/search",
@@ -95,9 +98,12 @@ describe("CommandPalette", () => {
     (useSearchController as jest.Mock).mockReturnValue(
       controller({ selectedIndex: 0, deliberatelyNavigated: true }),
     );
-    const screen = render(<CommandPalette visible onClose={jest.fn()} />);
+    const screen = await render(<CommandPalette visible onClose={jest.fn()} />);
 
-    fireEvent(screen.getByTestId("command-search-field"), "submitEditing");
+    await fireEvent(
+      screen.getByTestId("command-search-field"),
+      "submitEditing",
+    );
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith("/detail/movie/dune"),
     );
@@ -106,14 +112,14 @@ describe("CommandPalette", () => {
   it.each([
     ["ArrowDown", "next"],
     ["ArrowUp", "previous"],
-  ])("moves the shared selection on %s", (key, direction) => {
+  ])("moves the shared selection on %s", async (key, direction) => {
     const moveSelection = jest.fn();
     (useSearchController as jest.Mock).mockReturnValue(
       controller({ moveSelection }),
     );
-    const screen = render(<CommandPalette visible onClose={jest.fn()} />);
+    const screen = await render(<CommandPalette visible onClose={jest.fn()} />);
 
-    fireEvent(screen.getByTestId("command-search-field"), "keyPress", {
+    await fireEvent(screen.getByTestId("command-search-field"), "keyPress", {
       nativeEvent: { key },
       preventDefault: jest.fn(),
     });
@@ -121,7 +127,7 @@ describe("CommandPalette", () => {
     expect(moveSelection).toHaveBeenCalledWith(direction);
   });
 
-  it("closes and navigates before recent-search persistence finishes", () => {
+  it("closes and navigates before recent-search persistence finishes", async () => {
     let resolvePersistence!: (value: boolean) => void;
     const rememberSearch = jest.fn(
       () =>
@@ -133,9 +139,12 @@ describe("CommandPalette", () => {
     (useSearchController as jest.Mock).mockReturnValue(
       controller({ rememberSearch }),
     );
-    const screen = render(<CommandPalette visible onClose={onClose} />);
+    const screen = await render(<CommandPalette visible onClose={onClose} />);
 
-    fireEvent(screen.getByTestId("command-search-field"), "submitEditing");
+    await fireEvent(
+      screen.getByTestId("command-search-field"),
+      "submitEditing",
+    );
 
     expect(rememberSearch).toHaveBeenCalledWith("Dune");
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -146,15 +155,15 @@ describe("CommandPalette", () => {
     resolvePersistence(true);
   });
 
-  it("does not treat clicks inside the palette as backdrop dismissal", () => {
+  it("does not treat clicks inside the palette as backdrop dismissal", async () => {
     const onClose = jest.fn();
     (useSearchController as jest.Mock).mockReturnValue(controller());
-    const screen = render(<CommandPalette visible onClose={onClose} />);
+    const screen = await render(<CommandPalette visible onClose={onClose} />);
 
-    fireEvent.press(screen.getByTestId("command-search-field"));
+    await fireEvent.press(screen.getByTestId("command-search-field"));
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByTestId("command-palette-backdrop", {
         includeHiddenElements: true,
       }),

@@ -151,6 +151,12 @@ The root `dev:stream-server` command validates native dependency architecture
 and selects a matching Node 26 runtime. If a checkout has mixed Rosetta/arm64
 artifacts, use `npm run dev:repair-native`; do not work around the guard by
 running a bridge with an unavailable torrent engine.
+The current dependency migration keeps the Expo SDK 57 contract on React
+19.2.8 and React Native 0.86.2, moves React Native Testing Library to 14.0.1
+with `test-renderer` 1.2.0, updates the tested native module lines, and moves
+the server and Electron adapters to their compatible current releases. Jest
+30, React Native 0.87, Tailwind 4, and physical QA remain separate follow-up
+work rather than implicit consequences of this migration.
 Deterministic renderer regression coverage is documented in
 [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up

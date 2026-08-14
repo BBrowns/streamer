@@ -5,9 +5,9 @@ import { ResumePrompt } from "../ResumePrompt";
 import { playerChrome } from "../playerChrome";
 
 describe("ResumePrompt", () => {
-  it("shows the formatted resume position when provided", () => {
+  it("shows the formatted resume position when provided", async () => {
     const onResponse = jest.fn();
-    const screen = render(
+    const screen = await render(
       <ResumePrompt
         onResponse={onResponse}
         title="Example Episode"
@@ -18,7 +18,7 @@ describe("ResumePrompt", () => {
     expect(screen.getByText("Resume from 12:34?")).toBeTruthy();
     expect(screen.getByText("Example Episode")).toBeTruthy();
 
-    fireEvent.press(screen.getByText("Resume"));
+    await fireEvent.press(screen.getByText("Resume"));
     expect(onResponse).toHaveBeenCalledWith(true);
 
     const promptStyle = StyleSheet.flatten(

@@ -130,7 +130,7 @@ describe("ContinueWatchingRow", () => {
       ],
     });
 
-    const screen = render(<ContinueWatchingRow showEmptyState />);
+    const screen = await render(<ContinueWatchingRow showEmptyState />);
 
     expect(screen.getByText("Continue Watching")).toBeTruthy();
     expect(screen.getByText("Example Episode")).toBeTruthy();
@@ -153,7 +153,7 @@ describe("ContinueWatchingRow", () => {
       candidateId: "candidate-1",
     });
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByLabelText("Resume Example Episode, 40 minutes remaining"),
     );
 
@@ -178,13 +178,13 @@ describe("ContinueWatchingRow", () => {
     );
     expect(mockPush).toHaveBeenCalledWith("/player");
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getAllByLabelText("View Details: Example Episode")[0],
     );
     expect(mockPush).toHaveBeenCalledWith("/detail/series/tt0903747");
   });
 
-  it("removes an item from continue watching", () => {
+  it("removes an item from continue watching", async () => {
     hooks.useContinueWatching.mockReturnValue({
       isLoading: false,
       data: [
@@ -205,9 +205,9 @@ describe("ContinueWatchingRow", () => {
       ],
     });
 
-    const screen = render(<ContinueWatchingRow />);
+    const screen = await render(<ContinueWatchingRow />);
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByLabelText("Remove Example Movie from Continue Watching"),
     );
 
@@ -249,8 +249,8 @@ describe("ContinueWatchingRow", () => {
       candidateId: "candidate-movie",
     });
 
-    const screen = render(<ContinueWatchingRow />);
-    fireEvent.press(
+    const screen = await render(<ContinueWatchingRow />);
+    await fireEvent.press(
       screen.getByLabelText("Resume Example Movie, 110 minutes remaining"),
     );
     await Promise.resolve();
@@ -266,7 +266,7 @@ describe("ContinueWatchingRow", () => {
     });
   });
 
-  it("hides misleading percentages for legacy progress", () => {
+  it("hides misleading percentages for legacy progress", async () => {
     hooks.useContinueWatching.mockReturnValue({
       isLoading: false,
       data: [
@@ -287,18 +287,18 @@ describe("ContinueWatchingRow", () => {
       ],
     });
 
-    const screen = render(<ContinueWatchingRow />);
+    const screen = await render(<ContinueWatchingRow />);
     expect(screen.getByText("4m watched")).toBeTruthy();
     expect(screen.queryByText("1m left · 80%")).toBeNull();
   });
 
-  it("can show a useful empty state on Home", () => {
+  it("can show a useful empty state on Home", async () => {
     hooks.useContinueWatching.mockReturnValue({
       isLoading: false,
       data: [],
     });
 
-    const screen = render(<ContinueWatchingRow showEmptyState />);
+    const screen = await render(<ContinueWatchingRow showEmptyState />);
 
     expect(screen.getByText("Nothing in progress")).toBeTruthy();
     expect(

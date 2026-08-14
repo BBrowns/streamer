@@ -34,9 +34,9 @@ describe("SmartDownloadsStatus", () => {
     useSmartDownloadStore.getState().resetSmartDownloads();
   });
 
-  it("uses one compact navigation row without inline preference switches", () => {
+  it("uses one compact navigation row without inline preference switches", async () => {
     const onPress = jest.fn();
-    const { getByLabelText, getByText, queryByRole } = render(
+    const { getByLabelText, getByText, queryByRole } = await render(
       <SmartDownloadsStatusRow onPress={onPress} />,
     );
 
@@ -44,11 +44,11 @@ describe("SmartDownloadsStatus", () => {
     expect(getByText("Off")).toBeTruthy();
     expect(queryByRole("switch")).toBeNull();
 
-    fireEvent.press(getByLabelText("Manage Smart Downloads settings"));
+    await fireEvent.press(getByLabelText("Manage Smart Downloads settings"));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it("renders planned episodes as read-only queue information", () => {
+  it("renders planned episodes as read-only queue information", async () => {
     useSmartDownloadStore.setState({
       preferences: {
         ...useSmartDownloadStore.getState().preferences,
@@ -68,7 +68,7 @@ describe("SmartDownloadsStatus", () => {
       },
     });
 
-    const { getByText, queryByRole } = render(<SmartDownloadPlans />);
+    const { getByText, queryByRole } = await render(<SmartDownloadPlans />);
 
     expect(getByText("Planned next episodes")).toBeTruthy();
     expect(getByText("Example Series")).toBeTruthy();
@@ -77,7 +77,7 @@ describe("SmartDownloadsStatus", () => {
     expect(queryByRole("switch")).toBeNull();
   });
 
-  it("explains why a planned episode is blocked", () => {
+  it("explains why a planned episode is blocked", async () => {
     useSmartDownloadStore.setState({
       preferences: {
         ...useSmartDownloadStore.getState().preferences,
@@ -97,7 +97,7 @@ describe("SmartDownloadsStatus", () => {
       },
     });
 
-    const { getByText } = render(<SmartDownloadPlans />);
+    const { getByText } = await render(<SmartDownloadPlans />);
 
     expect(getByText("S2 E4 · 480p")).toBeTruthy();
     expect(getByText("Waiting for Wi-Fi")).toBeTruthy();

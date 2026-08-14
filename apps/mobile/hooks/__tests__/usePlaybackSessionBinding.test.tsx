@@ -114,7 +114,9 @@ describe("usePlaybackSessionBinding", () => {
     } as any);
 
     const options = createOptions();
-    const { result } = renderHook(() => usePlaybackSessionBinding(options));
+    const { result } = await renderHook(() =>
+      usePlaybackSessionBinding(options),
+    );
 
     await act(async () => {
       await expect(
@@ -148,13 +150,13 @@ describe("usePlaybackSessionBinding", () => {
     );
   });
 
-  it("cancels and removes a provisional session through one route-exit binding", () => {
-    const { result } = renderHook(() =>
+  it("cancels and removes a provisional session through one route-exit binding", async () => {
+    const { result } = await renderHook(() =>
       usePlaybackSessionBinding(createOptions()),
     );
     result.current.launchOwnedSessionIdRef.current = "session-1";
 
-    act(() => {
+    await act(() => {
       result.current.cancelOwnedPlayback("User left the player.", {
         removeSession: true,
       });
@@ -184,7 +186,9 @@ describe("usePlaybackSessionBinding", () => {
       playbackAttemptId: "attempt-1",
       playbackUri: "primary-source",
     });
-    const { result } = renderHook(() => usePlaybackSessionBinding(options));
+    const { result } = await renderHook(() =>
+      usePlaybackSessionBinding(options),
+    );
 
     await act(async () => {
       await expect(
@@ -218,7 +222,9 @@ describe("usePlaybackSessionBinding", () => {
 
   it("reports an expired planning launch without creating a second session", async () => {
     const options = createOptions({ planningLaunchId: "expired-launch" });
-    const { unmount } = renderHook(() => usePlaybackSessionBinding(options));
+    const { unmount } = await renderHook(() =>
+      usePlaybackSessionBinding(options),
+    );
 
     await waitFor(() =>
       expect(options.setPlaybackPlanningFailure).toHaveBeenCalledWith(
@@ -227,6 +233,6 @@ describe("usePlaybackSessionBinding", () => {
       ),
     );
     expect(mockedPlayBest).not.toHaveBeenCalled();
-    unmount();
+    await unmount();
   });
 });

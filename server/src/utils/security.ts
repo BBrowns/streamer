@@ -138,7 +138,9 @@ export async function validateSafeUrl(
       });
       addresses.push(...lookups.map((lookup) => lookup.address));
     } catch (err) {
-      throw new Error(`DNS resolution failed for hostname: ${hostname}`);
+      throw new Error(`DNS resolution failed for hostname: ${hostname}`, {
+        cause: err,
+      });
     }
   }
 

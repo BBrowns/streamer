@@ -57,12 +57,12 @@ describe("useNotifications", () => {
         }),
     );
     const { wrapper, queryClient } = createWrapper();
-    const { result, unmount } = renderHook(() => useNotifications(), {
+    const { result, unmount } = await renderHook(() => useNotifications(), {
       wrapper,
     });
 
     await waitFor(() => expect(result.current.unreadCount).toBe(1));
-    act(() => result.current.markAllAsRead.mutate());
+    await act(() => result.current.markAllAsRead.mutate());
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith("/api/notifications/read-all"),
@@ -75,7 +75,7 @@ describe("useNotifications", () => {
       expect(result.current.markAllAsRead.isPending).toBe(false),
     );
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 
@@ -84,12 +84,12 @@ describe("useNotifications", () => {
       new Error("Network unavailable"),
     );
     const { wrapper, queryClient } = createWrapper();
-    const { result, unmount } = renderHook(() => useNotifications(), {
+    const { result, unmount } = await renderHook(() => useNotifications(), {
       wrapper,
     });
 
     await waitFor(() => expect(result.current.unreadCount).toBe(1));
-    act(() => result.current.markAsRead.mutate(notifications[0].id));
+    await act(() => result.current.markAsRead.mutate(notifications[0].id));
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
@@ -98,7 +98,7 @@ describe("useNotifications", () => {
     );
     await waitFor(() => expect(result.current.unreadCount).toBe(1));
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 });

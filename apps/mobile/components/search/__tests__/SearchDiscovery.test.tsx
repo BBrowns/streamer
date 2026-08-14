@@ -160,8 +160,8 @@ describe("SearchDiscovery", () => {
     ).toEqual(["drama-series"]);
   });
 
-  it("shows real catalog rows and keeps recent searches secondary", () => {
-    const screen = render(
+  it("shows real catalog rows and keeps recent searches secondary", async () => {
+    const screen = await render(
       <SearchDiscovery
         recentSearches={["Dune"]}
         onSelectRecentSearch={jest.fn()}
@@ -176,8 +176,8 @@ describe("SearchDiscovery", () => {
     expect(screen.getByTestId("mock-recent-searches")).toBeTruthy();
   });
 
-  it("filters the visible catalog rows through the compact type tabs", () => {
-    const screen = render(
+  it("filters the visible catalog rows through the compact type tabs", async () => {
+    const screen = await render(
       <SearchDiscovery
         recentSearches={[]}
         onSelectRecentSearch={jest.fn()}
@@ -187,14 +187,14 @@ describe("SearchDiscovery", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("tab", { name: "Movies" }));
+    await fireEvent.press(screen.getByRole("tab", { name: "Movies" }));
 
     expect(screen.getByTestId("catalog-row-editorial-movies")).toBeTruthy();
     expect(screen.queryByTestId("catalog-row-drama-series")).toBeNull();
     expect(screen.queryByTestId("mock-recent-searches")).toBeNull();
   });
 
-  it("offers add-on management when no browseable catalog is installed", () => {
+  it("offers add-on management when no browseable catalog is installed", async () => {
     const onManageAddons = jest.fn();
     mockAddonsResult = {
       data: [],
@@ -202,7 +202,7 @@ describe("SearchDiscovery", () => {
       isError: false,
       refetch: mockRefetch,
     };
-    const screen = render(
+    const screen = await render(
       <SearchDiscovery
         recentSearches={[]}
         onSelectRecentSearch={jest.fn()}
@@ -212,7 +212,9 @@ describe("SearchDiscovery", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Manage add-ons" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Manage add-ons" }),
+    );
     expect(onManageAddons).toHaveBeenCalledTimes(1);
   });
 });

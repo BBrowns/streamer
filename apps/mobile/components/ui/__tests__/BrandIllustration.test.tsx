@@ -3,8 +3,8 @@ import { render } from "@testing-library/react-native";
 import { BrandIllustration } from "../BrandIllustration";
 
 describe("BrandIllustration", () => {
-  it("keeps bundled brand artwork behind one accessible visual contract", () => {
-    const screen = render(
+  it("keeps bundled brand artwork behind one accessible visual contract", async () => {
+    const screen = await render(
       <BrandIllustration
         testID="brand-art"
         source={{ uri: "bundled-artwork" }}

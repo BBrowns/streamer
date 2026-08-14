@@ -189,7 +189,7 @@ describe("PlaybackReadinessNotice", () => {
     });
   });
 
-  it("keeps the quality recovery target on the runtime error path", () => {
+  it("keeps the quality recovery target on the runtime error path", async () => {
     const plan = makePlaybackPlan({
       state: "unsupported",
       userMessage: "No source matches the selected video qualities.",
@@ -203,7 +203,7 @@ describe("PlaybackReadinessNotice", () => {
     );
     const notice = getPlaybackReadinessCopyFromError(failure.error, "play");
     const onPrimaryAction = jest.fn();
-    const { getByText } = render(
+    const { getByText } = await render(
       <PlaybackReadinessNotice
         notice={notice}
         onDismiss={jest.fn()}
@@ -211,7 +211,7 @@ describe("PlaybackReadinessNotice", () => {
       />,
     );
 
-    fireEvent.press(getByText("Playback settings"));
+    await fireEvent.press(getByText("Playback settings"));
 
     expect(onPrimaryAction).toHaveBeenCalledWith("playbackSettings");
   });

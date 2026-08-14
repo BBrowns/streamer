@@ -1,5 +1,4 @@
 import { render } from "@testing-library/react-native";
-import { ScrollView } from "react-native";
 import { SettingsExperience } from "../SettingsExperience";
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }) }));
@@ -138,8 +137,8 @@ jest.mock("../SettingsRows", () => {
 });
 
 describe("SettingsExperience boundary contract", () => {
-  it("keeps compact overview titles navigation-owned in one reading-boundary scroller", () => {
-    const screen = render(<SettingsExperience />);
+  it("keeps compact overview titles navigation-owned in one reading-boundary scroller", async () => {
+    const screen = await render(<SettingsExperience />);
 
     expect(screen.getByTestId("settings-screen").props.accessibilityLabel).toBe(
       "scroll:undefined",
@@ -148,6 +147,8 @@ describe("SettingsExperience boundary contract", () => {
     expect(
       screen.getByTestId("settings-page-header").props.accessibilityLabel,
     ).toBe("navigation-owned");
-    expect(screen.UNSAFE_getAllByType(ScrollView)).toHaveLength(1);
+    expect(
+      screen.root?.queryAll((node) => node.type === "RCTScrollView"),
+    ).toHaveLength(1);
   });
 });

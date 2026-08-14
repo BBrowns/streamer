@@ -65,7 +65,7 @@ describe("useRemoteControl", () => {
 
   it("does not poll or post session state before authentication is ready", async () => {
     const { queryClient, wrapper } = createWrapper();
-    const { result, unmount } = renderHook(() => useRemoteControl(), {
+    const { result, unmount } = await renderHook(() => useRemoteControl(), {
       wrapper,
     });
 
@@ -74,7 +74,7 @@ describe("useRemoteControl", () => {
     });
     expect(api.get).not.toHaveBeenCalled();
 
-    act(() => {
+    await act(() => {
       useAuthStore.setState({
         isAuthenticated: true,
         isHydrated: false,
@@ -95,18 +95,18 @@ describe("useRemoteControl", () => {
     expect(api.get).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 
   it("starts authenticated polling and clears user-specific sessions on logout", async () => {
     (api.get as jest.Mock).mockResolvedValue({ data: { sessions: [session] } });
     const { queryClient, wrapper } = createWrapper();
-    const { result, unmount } = renderHook(() => useRemoteControl(), {
+    const { result, unmount } = await renderHook(() => useRemoteControl(), {
       wrapper,
     });
 
-    act(() => {
+    await act(() => {
       setAuthenticatedAuth();
     });
 
@@ -138,14 +138,14 @@ describe("useRemoteControl", () => {
       data: undefined,
     });
 
-    act(() => {
+    await act(() => {
       setAnonymousAuth();
     });
 
     await waitFor(() => expect(result.current.sessions).toEqual([]));
     expect(queryClient.getQueryData(playbackSessionsQueryKey)).toBeUndefined();
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 });

@@ -37,8 +37,8 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("SearchResultCard accessibility", () => {
-  it("announces enough metadata to distinguish similarly named releases", () => {
-    const screen = render(
+  it("announces enough metadata to distinguish similarly named releases", async () => {
+    const screen = await render(
       <SearchResultCard
         item={{
           id: "dune-2021",

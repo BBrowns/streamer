@@ -21,10 +21,10 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("SourceChoiceList", () => {
-  it("announces quality, size, language and compatibility for each choice", () => {
+  it("announces quality, size, language and compatibility for each choice", async () => {
     const plan = { action: "play" } as PlaybackPlan;
     const onSelect = jest.fn();
-    const screen = render(
+    const screen = await render(
       <SourceChoiceList
         state={{
           plan,
@@ -45,7 +45,7 @@ describe("SourceChoiceList", () => {
       />,
     );
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByLabelText("1080P, 2 MB, EN, Ready on this device"),
     );
 

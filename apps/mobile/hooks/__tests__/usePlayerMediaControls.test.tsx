@@ -30,7 +30,7 @@ function makeMediaAdapter() {
   };
 }
 
-function setup(overrides: Record<string, unknown> = {}) {
+async function setup(overrides: Record<string, unknown> = {}) {
   const mediaAdapter = makeMediaAdapter();
   const player = {
     currentTime: 30,
@@ -52,15 +52,15 @@ function setup(overrides: Record<string, unknown> = {}) {
     dispatchRuntimeViewEvent: jest.fn(),
     ...overrides,
   };
-  const screen = renderHook(() => usePlayerMediaControls(options as any));
+  const screen = await renderHook(() => usePlayerMediaControls(options as any));
   return { ...screen, mediaAdapter, options, player };
 }
 
 describe("usePlayerMediaControls", () => {
-  it("records one accepted relative seek and hides the next-episode overlay", () => {
-    const { result, mediaAdapter, options } = setup();
+  it("records one accepted relative seek and hides the next-episode overlay", async () => {
+    const { result, mediaAdapter, options } = await setup();
 
-    act(() => result.current.handleSeekBy(-10));
+    await act(() => result.current.handleSeekBy(-10));
 
     expect(options.setShowNextEpisodeOverlay).toHaveBeenCalledWith(false);
     expect(options.markIntentionalSeek).toHaveBeenCalledTimes(1);
@@ -72,17 +72,17 @@ describe("usePlayerMediaControls", () => {
     ]);
   });
 
-  it("keeps scrubbing state transitions and adapter lifecycle together", () => {
-    const { result, mediaAdapter, options } = setup();
+  it("keeps scrubbing state transitions and adapter lifecycle together", async () => {
+    const { result, mediaAdapter, options } = await setup();
 
-    act(() =>
+    await act(() =>
       result.current.handleScrubbingChange({
         state: "started",
         shouldResume: true,
       }),
     );
-    act(() => result.current.handlePreviewSeek(42));
-    act(() =>
+    await act(() => result.current.handlePreviewSeek(42));
+    await act(() =>
       result.current.handleScrubbingChange({
         state: "committed",
         shouldResume: true,
@@ -101,17 +101,17 @@ describe("usePlayerMediaControls", () => {
     ]);
   });
 
-  it("reports responder cancellation separately from a committed scrub", () => {
-    const { result, mediaAdapter, options } = setup();
+  it("reports responder cancellation separately from a committed scrub", async () => {
+    const { result, mediaAdapter, options } = await setup();
 
-    act(() =>
+    await act(() =>
       result.current.handleScrubbingChange({
         state: "started",
         shouldResume: true,
       }),
     );
-    act(() => result.current.handlePreviewSeek(42));
-    act(() =>
+    await act(() => result.current.handlePreviewSeek(42));
+    await act(() =>
       result.current.handleScrubbingChange({
         state: "cancelled",
         shouldResume: true,
@@ -131,7 +131,7 @@ describe("usePlayerMediaControls", () => {
   it("uses the active engine only when native thumbnail generation has no result", async () => {
     const engineThumbnail = { uri: "data:image/jpeg;base64,/9j/2Q==" };
     const getThumbnail = jest.fn(async () => engineThumbnail);
-    const { result, mediaAdapter } = setup({
+    const { result, mediaAdapter } = await setup({
       engine: { getThumbnail },
     });
 
@@ -145,11 +145,11 @@ describe("usePlayerMediaControls", () => {
     expect(getThumbnail).toHaveBeenCalledWith(20);
   });
 
-  it("clamps volume and unmutes through the same player mutation boundary", () => {
-    const { result, player } = setup();
+  it("clamps volume and unmutes through the same player mutation boundary", async () => {
+    const { result, player } = await setup();
     player.muted = true;
 
-    act(() => result.current.handleVolumeChange(2));
+    await act(() => result.current.handleVolumeChange(2));
 
     expect(player.volume).toBe(1);
     expect(player.muted).toBe(false);

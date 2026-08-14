@@ -12,8 +12,8 @@ describe("DownloadsSettingsSection", () => {
     useSmartDownloadStore.getState().resetSmartDownloads();
   });
 
-  it("owns the editable Smart Downloads preferences", () => {
-    const screen = render(<DownloadsSettingsSection />);
+  it("owns the editable Smart Downloads preferences", async () => {
+    const screen = await render(<DownloadsSettingsSection />);
 
     const enable = screen.getByLabelText(
       "settings.downloadPreferences.smartDownloads",
@@ -26,7 +26,7 @@ describe("DownloadsSettingsSection", () => {
       screen.getByText("settings.downloadPreferences.storageLimit"),
     ).toBeTruthy();
 
-    fireEvent(enable, "valueChange", true);
+    await fireEvent(enable, "valueChange", true);
 
     expect(useSmartDownloadStore.getState().preferences.enabled).toBe(true);
   });

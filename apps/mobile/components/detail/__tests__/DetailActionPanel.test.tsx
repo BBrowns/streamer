@@ -53,7 +53,7 @@ jest.mock("../../../hooks/useTheme", () => ({
   }),
 }));
 
-function renderPanel(overrides = {}) {
+async function renderPanel(overrides = {}) {
   const callbacks = {
     onPlayBest: jest.fn(),
     onDownload: jest.fn(),
@@ -63,7 +63,7 @@ function renderPanel(overrides = {}) {
   };
 
   return {
-    ...render(
+    ...(await render(
       <DetailActionPanel
         castType="movie"
         sourceCount={12}
@@ -72,19 +72,19 @@ function renderPanel(overrides = {}) {
         {...callbacks}
         {...overrides}
       />,
-    ),
+    )),
     callbacks,
   };
 }
 
 describe("DetailActionPanel", () => {
-  it("uses consumer actions and leaves the source count to More Sources", () => {
-    const { getByText, queryByText, callbacks } = renderPanel();
+  it("uses consumer actions and leaves the source count to More Sources", async () => {
+    const { getByText, queryByText, callbacks } = await renderPanel();
 
-    fireEvent.press(getByText("Play"));
-    fireEvent.press(getByText("Download"));
-    fireEvent.press(getByText("Cast to device"));
-    fireEvent.press(getByText("Add to Library"));
+    await fireEvent.press(getByText("Play"));
+    await fireEvent.press(getByText("Download"));
+    await fireEvent.press(getByText("Cast to device"));
+    await fireEvent.press(getByText("Add to Library"));
 
     expect(queryByText("12 sources")).toBeNull();
     expect(callbacks.onPlayBest).toHaveBeenCalledTimes(1);
@@ -93,8 +93,8 @@ describe("DetailActionPanel", () => {
     expect(callbacks.onToggleLibrary).toHaveBeenCalledTimes(1);
   });
 
-  it("does not show top-level playback actions for series", () => {
-    const { queryByText, getByText, callbacks } = renderPanel({
+  it("does not show top-level playback actions for series", async () => {
+    const { queryByText, getByText, callbacks } = await renderPanel({
       castType: "series",
       sourceCount: 0,
       episodeCount: 8,
@@ -107,18 +107,18 @@ describe("DetailActionPanel", () => {
     expect(queryByText("Cast to device")).toBeNull();
     expect(queryByText("8 episodes")).toBeNull();
 
-    fireEvent.press(getByText("In Library"));
+    await fireEvent.press(getByText("In Library"));
 
     expect(callbacks.onToggleLibrary).toHaveBeenCalledTimes(1);
     expect(callbacks.onPlayBest).not.toHaveBeenCalled();
   });
 
-  it("only shows the trailer action when metadata provides a safe trailer", () => {
-    const { queryByText, rerender, callbacks, getByText } = renderPanel();
+  it("only shows the trailer action when metadata provides a safe trailer", async () => {
+    const { queryByText, rerender, callbacks, getByText } = await renderPanel();
 
     expect(queryByText("Watch trailer")).toBeNull();
 
-    rerender(
+    await rerender(
       <DetailActionPanel
         castType="movie"
         sourceCount={12}
@@ -129,18 +129,18 @@ describe("DetailActionPanel", () => {
       />,
     );
 
-    fireEvent.press(getByText("Watch trailer"));
+    await fireEvent.press(getByText("Watch trailer"));
     expect(callbacks.onWatchTrailer).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps planner actions available while the raw stream list is empty", () => {
-    const { getByText, queryByText, callbacks } = renderPanel({
+  it("keeps planner actions available while the raw stream list is empty", async () => {
+    const { getByText, queryByText, callbacks } = await renderPanel({
       sourceCount: 0,
       hasPlayableSources: false,
     });
 
-    fireEvent.press(getByText("Play"));
-    fireEvent.press(getByText("Download"));
+    await fireEvent.press(getByText("Play"));
+    await fireEvent.press(getByText("Download"));
 
     expect(queryByText("No sources")).toBeNull();
     expect(callbacks.onPlayBest).toHaveBeenCalledTimes(1);

@@ -3,11 +3,11 @@ import { fireEvent, render } from "@testing-library/react-native";
 import { PlayerTimeline } from "../PlayerTimeline";
 
 describe("PlayerTimeline", () => {
-  it("previews continuously while dragging and commits once on release", () => {
+  it("previews continuously while dragging and commits once on release", async () => {
     const onPreviewSeek = jest.fn();
     const onSeekTo = jest.fn();
     const onScrubbingChange = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerTimeline
         currentTime={20}
         duration={100}
@@ -21,14 +21,14 @@ describe("PlayerTimeline", () => {
     );
     const slider = screen.getByTestId("player-progress-slider");
 
-    fireEvent(slider, "layout", {
+    await fireEvent(slider, "layout", {
       nativeEvent: { layout: { width: 200, height: 24, x: 0, y: 0 } },
     });
-    fireEvent(slider, "responderGrant", {
+    await fireEvent(slider, "responderGrant", {
       nativeEvent: { locationX: 40 },
       persist: jest.fn(),
     });
-    fireEvent(slider, "responderMove", {
+    await fireEvent(slider, "responderMove", {
       nativeEvent: { locationX: 120 },
       persist: jest.fn(),
     });
@@ -41,7 +41,7 @@ describe("PlayerTimeline", () => {
       shouldResume: true,
     });
 
-    fireEvent(slider, "responderRelease", {
+    await fireEvent(slider, "responderRelease", {
       nativeEvent: { locationX: 120 },
       persist: jest.fn(),
     });
@@ -54,11 +54,11 @@ describe("PlayerTimeline", () => {
     });
   });
 
-  it("ends scrubbing without seeking when the responder is cancelled", () => {
+  it("ends scrubbing without seeking when the responder is cancelled", async () => {
     const onPreviewSeek = jest.fn();
     const onSeekTo = jest.fn();
     const onScrubbingChange = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerTimeline
         currentTime={20}
         duration={100}
@@ -72,18 +72,18 @@ describe("PlayerTimeline", () => {
     );
     const slider = screen.getByTestId("player-progress-slider");
 
-    fireEvent(slider, "layout", {
+    await fireEvent(slider, "layout", {
       nativeEvent: { layout: { width: 200, height: 24, x: 0, y: 0 } },
     });
-    fireEvent(slider, "responderGrant", {
+    await fireEvent(slider, "responderGrant", {
       nativeEvent: { locationX: 40 },
       persist: jest.fn(),
     });
-    fireEvent(slider, "responderMove", {
+    await fireEvent(slider, "responderMove", {
       nativeEvent: { locationX: 120 },
       persist: jest.fn(),
     });
-    fireEvent(slider, "responderTerminate", {
+    await fireEvent(slider, "responderTerminate", {
       nativeEvent: { locationX: 120 },
       persist: jest.fn(),
     });
@@ -101,8 +101,8 @@ describe("PlayerTimeline", () => {
     });
   });
 
-  it("shows watched and buffered progress as separate layers", () => {
-    const screen = render(
+  it("shows watched and buffered progress as separate layers", async () => {
+    const screen = await render(
       <PlayerTimeline
         currentTime={25}
         duration={100}
@@ -121,10 +121,10 @@ describe("PlayerTimeline", () => {
     });
   });
 
-  it("supports keyboard and accessibility seeking", () => {
+  it("supports keyboard and accessibility seeking", async () => {
     const onSeekBy = jest.fn();
     const onSeekTo = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerTimeline
         currentTime={20}
         duration={100}
@@ -139,12 +139,12 @@ describe("PlayerTimeline", () => {
     const preventDefault = jest.fn();
     const stopPropagation = jest.fn();
 
-    fireEvent(slider, "keyDown", {
+    await fireEvent(slider, "keyDown", {
       key: "End",
       preventDefault,
       stopPropagation,
     });
-    fireEvent(slider, "accessibilityAction", {
+    await fireEvent(slider, "accessibilityAction", {
       nativeEvent: { actionName: "decrement" },
     });
 
@@ -152,9 +152,9 @@ describe("PlayerTimeline", () => {
     expect(onSeekBy).toHaveBeenCalledWith(-10);
   });
 
-  it("keeps unavailable timelines honest and non-interactive", () => {
+  it("keeps unavailable timelines honest and non-interactive", async () => {
     const onSeekTo = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerTimeline
         currentTime={20}
         duration={100}

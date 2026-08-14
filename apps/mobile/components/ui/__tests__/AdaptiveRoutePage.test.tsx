@@ -30,8 +30,8 @@ describe("AdaptiveRoutePage", () => {
     });
   });
 
-  it("renders the editorial title on large windows", () => {
-    const screen = render(
+  it("renders the editorial title on large windows", async () => {
+    const screen = await render(
       <AdaptiveRoutePage title="Notifications" boundary="reading">
         <React.Fragment />
       </AdaptiveRoutePage>,
@@ -41,7 +41,7 @@ describe("AdaptiveRoutePage", () => {
     expect(screen.getByTestId("adaptive-route-page-header")).toBeTruthy();
   });
 
-  it("keeps supporting copy and actions while navigation owns the title", () => {
+  it("keeps supporting copy and actions while navigation owns the title", async () => {
     mockUseWindowClass.mockReturnValue({
       windowClass: "medium",
       isCompact: false,
@@ -50,7 +50,7 @@ describe("AdaptiveRoutePage", () => {
       isLarge: false,
     });
 
-    const screen = render(
+    const screen = await render(
       <AdaptiveRoutePage
         title="Notifications"
         description="1 unread notification"

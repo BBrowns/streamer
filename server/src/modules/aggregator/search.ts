@@ -262,7 +262,7 @@ export function scoreSearchResult(meta: MetaPreview, query: string): number {
   const title = normalizeSearchText(meta.name);
   const alternatives = getAlternativeTitles(meta).map(normalizeSearchText);
 
-  let score = 0;
+  let score: number;
   if (needle && title === needle) {
     score = 6_000;
   } else if (needle && alternatives.includes(needle)) {
