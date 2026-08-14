@@ -25,7 +25,7 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "npm run db:generate --workspace=server && turbo run typecheck",
-    "verify:quick": "npm run format:check && npm run lint && npm run architecture:check && npm run typecheck:all && npm run dev:db:test && npm run native:evidence:preflight:test && npm run visual:baseline:manifest:test && npm run release:sbom:test && npm run dependency:compatibility:test && npm run test --workspace=@streamer/shared",
+    "verify:quick": "npm run format:check && npm run lint && npm run architecture:check && npm run typecheck:all && npm run dev:db:test && npm run native:evidence:preflight:test && npm run visual:baseline:manifest:test && npm run release:sbom:test && npm run dependency:compatibility:test && npm run test --workspace=@streamer/shared && npm run test:dependency-remediation",
     "verify:full": "npm run verify:quick && npm run test:all && npm run build && npm run mobile:config:check && npm run test:golden-path && npm run test:electron-smoke && npm run security:install-scripts && npm run security:audit && npm run release:gate",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
@@ -59,6 +59,7 @@
     "sentry:release:dry-run": "node scripts/sentry-release.mjs --dry-run",
     "security:audit": "node scripts/security-audit.mjs",
     "security:install-scripts": "node scripts/check-install-script-policy.mjs",
+    "test:dependency-remediation": "node --test scripts/dependency-remediation.test.mjs",
     "test:golden-path": "playwright test --config=playwright.config.ts --project=phone-web --project=tablet-portrait-web --project=tablet-landscape-web --project=desktop-renderer",
     "test:golden-path:project": "playwright test --config=playwright.config.ts",
     "test:visual": "STREAMER_VISUAL_BASELINES=1 playwright test --config=playwright.config.ts --project=phone-web --project=desktop-renderer tests/golden-path/visual-regression.spec.ts",
@@ -104,7 +105,6 @@
     "react-native-safe-area-context": "5.8.1",
     "react-native-screens": "4.27.0",
     "react-native-worklets": "0.11.3",
-    "ip": "^2.0.1",
     "xcode@3.0.1": {
       "uuid": "$uuid"
     },
@@ -138,7 +138,6 @@
       "ws": "^8.21.0"
     },
     "bittorrent-tracker": {
-      "ip": "^2.0.1",
       "ws": "^8.21.0"
     },
     "detox": {
@@ -155,9 +154,6 @@
     },
     "react-native": {
       "ws": "7.5.11"
-    },
-    "ip-set": {
-      "ip": "^2.0.1"
     },
     "http-proxy-agent": {
       "@tootallnate/once": "3.0.1"
