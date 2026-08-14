@@ -112,6 +112,15 @@ The `ws` overrides preserve the major line expected by each consumer while
 raising each line to a patched release. Avoid a global `ws` major override,
 which would make Expo/React Native tooling invalid.
 
+The Expo config-plugin chain still depends on `xcode@3.0.1`, whose UUID helper
+range is stuck on the vulnerable `uuid@7` line. The root development pin and
+scoped `xcode` override resolve `uuid@11.1.1`, whose CommonJS API still exposes
+the `uuid.v4()` call that `xcode` uses, without forcing the newer UUID major
+onto the server workspace. `npm run dependency:compatibility:test` exercises
+that exact integration. Remove the pin and override when the Expo toolchain
+ships an `xcode` release with a patched UUID range, and retain the lockfile/API
+smoke check when doing so.
+
 The root Hono override is pinned to `4.13.2`, and the server/mobile direct
 dependencies resolve that same tested line. Keep the override and direct
 specifications aligned when upgrading Hono so the Hono adapters and shared
