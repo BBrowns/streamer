@@ -17,26 +17,26 @@ describe("PersonalizationSection", () => {
     });
   });
 
-  it("updates local playback preferences without requiring an account profile", () => {
-    const screen = render(<PersonalizationSection />);
+  it("updates local playback preferences without requiring an account profile", async () => {
+    const screen = await render(<PersonalizationSection />);
 
     expect(
       screen.getByText("settings.playbackPreferences.quality"),
     ).toBeTruthy();
     expect(screen.getByText("settings.playbackPreferences.audio")).toBeTruthy();
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByLabelText("settings.playbackPreferences.qualityOptions.720"),
     );
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByLabelText("settings.playbackPreferences.qualityOptions.480"),
     );
-    fireEvent.press(
+    await fireEvent.press(
       screen.getAllByLabelText(
         "settings.playbackPreferences.languages.dutch",
       )[1],
     );
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByLabelText("settings.playbackPreferences.autoplay"),
     );
 
@@ -47,9 +47,9 @@ describe("PersonalizationSection", () => {
     });
   });
 
-  it("keeps at least one playback quality selected", () => {
+  it("keeps at least one playback quality selected", async () => {
     usePlayerStore.setState({ preferredQualities: ["1080p"] });
-    const screen = render(<PersonalizationSection />);
+    const screen = await render(<PersonalizationSection />);
     const onlyQuality = screen.getByLabelText(
       "settings.playbackPreferences.qualityOptions.1080",
     );
@@ -58,7 +58,7 @@ describe("PersonalizationSection", () => {
       checked: true,
       disabled: true,
     });
-    fireEvent.press(onlyQuality);
+    await fireEvent.press(onlyQuality);
 
     expect(usePlayerStore.getState().preferredQualities).toEqual(["1080p"]);
   });

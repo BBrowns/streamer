@@ -1,6 +1,5 @@
 import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { ScrollView } from "react-native";
 import { SearchScreen } from "../SearchScreen";
 
 const mockPush = jest.fn();
@@ -191,8 +190,8 @@ describe("SearchScreen keyboard behavior", () => {
     };
   });
 
-  it("lets the compact tab header own the page title", () => {
-    const screen = render(<SearchScreen />);
+  it("lets the compact tab header own the page title", async () => {
+    const screen = await render(<SearchScreen />);
 
     expect(screen.queryByText("search.title")).toBeNull();
     expect(
@@ -201,26 +200,28 @@ describe("SearchScreen keyboard behavior", () => {
     expect(screen.getByTestId("search-field")).toBeTruthy();
   });
 
-  it("keeps a single results scroller inside explicit content boundaries", () => {
-    const screen = render(<SearchScreen />);
+  it("keeps a single results scroller inside explicit content boundaries", async () => {
+    const screen = await render(<SearchScreen />);
 
     expect(screen.getByTestId("search-screen").props.accessibilityLabel).toBe(
       "scroll:undefined boundary:false contained:undefined",
     );
     expect(screen.getAllByTestId("content-boundary-content")).toHaveLength(2);
-    expect(screen.UNSAFE_getAllByType(ScrollView)).toHaveLength(1);
+    expect(
+      screen.root?.queryAll((node) => node.type === "RCTScrollView"),
+    ).toHaveLength(1);
   });
 
-  it("moves shared suggestion selection with arrows and exposes the index", () => {
-    const screen = render(<SearchScreen />);
+  it("moves shared suggestion selection with arrows and exposes the index", async () => {
+    const screen = await render(<SearchScreen />);
 
-    fireEvent(screen.getByTestId("search-field"), "focus");
+    await fireEvent(screen.getByTestId("search-field"), "focus");
 
-    fireEvent(screen.getByTestId("search-field"), "keyPress", {
+    await fireEvent(screen.getByTestId("search-field"), "keyPress", {
       nativeEvent: { key: "ArrowDown" },
       preventDefault: jest.fn(),
     });
-    fireEvent(screen.getByTestId("search-field"), "keyPress", {
+    await fireEvent(screen.getByTestId("search-field"), "keyPress", {
       nativeEvent: { key: "ArrowUp" },
       preventDefault: jest.fn(),
     });
@@ -232,10 +233,10 @@ describe("SearchScreen keyboard behavior", () => {
     );
   });
 
-  it("always opens all results on Enter even with a selected suggestion", () => {
-    const screen = render(<SearchScreen />);
+  it("always opens all results on Enter even with a selected suggestion", async () => {
+    const screen = await render(<SearchScreen />);
 
-    fireEvent(screen.getByTestId("search-field"), "submitEditing");
+    await fireEvent(screen.getByTestId("search-field"), "submitEditing");
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: "/search",
@@ -252,16 +253,16 @@ describe("SearchScreen keyboard behavior", () => {
     expect(mockPush).not.toHaveBeenCalledWith("/detail/movie/dune");
   });
 
-  it("navigates before recent-search persistence finishes", () => {
+  it("navigates before recent-search persistence finishes", async () => {
     let resolvePersistence!: (value: boolean) => void;
     mockRememberSearch.mockReturnValueOnce(
       new Promise<boolean>((resolve) => {
         resolvePersistence = resolve;
       }),
     );
-    const screen = render(<SearchScreen />);
+    const screen = await render(<SearchScreen />);
 
-    fireEvent(screen.getByTestId("search-field"), "submitEditing");
+    await fireEvent(screen.getByTestId("search-field"), "submitEditing");
 
     expect(mockRememberSearch).toHaveBeenCalledWith("Dune");
     expect(mockPush).toHaveBeenCalledWith(
@@ -270,13 +271,13 @@ describe("SearchScreen keyboard behavior", () => {
     resolvePersistence(true);
   });
 
-  it("dismisses full-page suggestions on Escape", () => {
-    const screen = render(<SearchScreen />);
+  it("dismisses full-page suggestions on Escape", async () => {
+    const screen = await render(<SearchScreen />);
     const field = screen.getByTestId("search-field");
-    fireEvent(field, "focus");
+    await fireEvent(field, "focus");
     expect(screen.getByTestId("search-suggestions")).toBeTruthy();
 
-    fireEvent(field, "keyPress", {
+    await fireEvent(field, "keyPress", {
       nativeEvent: { key: "Escape" },
       preventDefault: jest.fn(),
     });
@@ -284,39 +285,39 @@ describe("SearchScreen keyboard behavior", () => {
     expect(screen.queryByTestId("search-suggestions")).toBeNull();
     expect(mockResetSelection).toHaveBeenCalled();
 
-    fireEvent.changeText(field, "Dune again");
+    await fireEvent.changeText(field, "Dune again");
     expect(screen.getByTestId("search-suggestions")).toBeTruthy();
   });
 
-  it("keeps suggestions actionable during the delayed blur dismissal", () => {
+  it("keeps suggestions actionable during the delayed blur dismissal", async () => {
     jest.useFakeTimers();
-    const screen = render(<SearchScreen />);
+    const screen = await render(<SearchScreen />);
     const field = screen.getByTestId("search-field");
-    fireEvent(field, "focus");
-    fireEvent(field, "blur");
+    await fireEvent(field, "focus");
+    await fireEvent(field, "blur");
 
-    fireEvent.press(screen.getByTestId("mock-search-suggestion"));
+    await fireEvent.press(screen.getByTestId("mock-search-suggestion"));
 
     expect(mockPush).toHaveBeenCalledWith("/detail/movie/dune");
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
   });
 
-  it("keeps cached results visible while a background refetch fails", () => {
+  it("keeps cached results visible while a background refetch fails", async () => {
     mockRouteParams = { q: "Dune" };
     mockInfiniteSearchResult = searchResultState({
       isFetching: true,
       isError: true,
     });
 
-    const screen = render(<SearchScreen />);
+    const screen = await render(<SearchScreen />);
 
     expect(screen.getByTestId("search-results-grid")).toBeTruthy();
     expect(screen.getByTestId("result-movie-dune")).toBeTruthy();
     expect(screen.queryByText("search.states.errorTitle")).toBeNull();
   });
 
-  it("shows a transport error when only an empty cached response remains", () => {
+  it("shows a transport error when only an empty cached response remains", async () => {
     mockRouteParams = { q: "Dune" };
     mockInfiniteSearchResult = searchResultState({
       data: {
@@ -328,13 +329,13 @@ describe("SearchScreen keyboard behavior", () => {
       isError: true,
     });
 
-    const screen = render(<SearchScreen />);
+    const screen = await render(<SearchScreen />);
 
     expect(screen.getByText("search.states.errorTitle")).toBeTruthy();
     expect(screen.queryByTestId("search-results-grid")).toBeNull();
   });
 
-  it("keeps page-one results and exposes inline retry after page-two failure", () => {
+  it("keeps page-one results and exposes inline retry after page-two failure", async () => {
     mockRouteParams = { q: "Dune" };
     const fetchNextPage = jest.fn();
     mockInfiniteSearchResult = searchResultState({
@@ -344,12 +345,12 @@ describe("SearchScreen keyboard behavior", () => {
       fetchNextPage,
     });
 
-    const screen = render(<SearchScreen />);
+    const screen = await render(<SearchScreen />);
 
     expect(screen.getByTestId("search-results-grid")).toBeTruthy();
     const retry = screen.getByTestId("search-load-more");
     expect(retry.props.accessibilityLabel).toBe("common.retry");
-    fireEvent.press(retry);
+    await fireEvent.press(retry);
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 });

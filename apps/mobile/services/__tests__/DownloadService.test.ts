@@ -15,7 +15,13 @@ import {
   mapDesktopDownloadStatus,
   toSafeDownloadErrorMessage,
 } from "../DownloadService";
+import { prepareDownload } from "../playback/PlaybackOrchestrator";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+
+jest.mock("../playback/PlaybackOrchestrator", () => ({
+  ...jest.requireActual("../playback/PlaybackOrchestrator"),
+  prepareDownload: jest.fn(),
+}));
 
 jest.mock("../offlineVerification", () => ({
   ...jest.requireActual("../offlineVerification"),
@@ -263,6 +269,7 @@ describe("DownloadService session completion", () => {
   beforeEach(() => {
     installUuidMock();
     jest.clearAllMocks();
+    jest.mocked(prepareDownload).mockReset();
     installUuidMock();
     useDownloadStore.getState().clearAll();
     usePlaybackSessionStore.getState().clearAllSessions();
@@ -879,26 +886,71 @@ describe("DownloadService session completion", () => {
     expect(useDownloadStore.getState().isDownloaded("source-1")).toBe(true);
   });
 
-  it("restarts a missing desktop job from persisted queue metadata", async () => {
+  it("replans once when a desktop job disappears instead of reusing its URL", async () => {
+    jest.mocked(prepareDownload).mockResolvedValue({
+      ok: true,
+      stream: { url: "https://bridge.example.test/replanned.mp4" },
+      resolvedUrl: "https://bridge.example.test/replanned.mp4",
+      mediaInfo: {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+      },
+      eligibility: {
+        mode: "direct-file",
+        canDownload: true,
+        offlinePlayable: true,
+      },
+      sessionId: "00000000-0000-4000-8000-000000000301",
+      candidateId: "00000000-0000-4000-8000-000000000302",
+      attemptId: "00000000-0000-4000-8000-000000000303",
+      runtimeState: "selecting_source",
+      plan: makePlaybackPlan({
+        action: "download",
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: makePlannedMediaCandidate({
+            id: "00000000-0000-4000-8000-000000000302",
+            kind: "direct",
+            sizeBytes: 1_000,
+            stream: { url: "https://bridge.example.test/replanned.mp4" },
+            actionEligibility: { action: "download", eligible: true },
+          }),
+        },
+      }),
+      attemptedStreams: 1,
+      resolveErrors: [],
+    });
     window.desktopBridge = {
       resumeDownloadJob: jest.fn().mockResolvedValue(null),
       startDownloadJob: jest.fn().mockResolvedValue({
         id: "source-1",
         status: "Downloading",
-        downloadUrl: "https://cdn.example.test/movie.mp4",
+        downloadUrl: "https://bridge.example.test/replanned.mp4",
         filename: "source_1.mp4",
         totalBytesWritten: 250,
         totalBytesExpectedToWrite: 1000,
       }),
       onDownloadProgress: jest.fn(() => () => {}),
     } as any;
-    useDownloadStore.getState().addTask("source-1", {
-      type: "movie",
-      itemId: "tt123",
-      title: "Example Movie",
-      sourceId: "source-1",
-      downloadUrl: "https://cdn.example.test/movie.mp4",
-    });
+    useDownloadStore.getState().addTask(
+      "source-1",
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        sourceId: "source-1",
+        downloadUrl: "https://stale.example.test/movie.mp4",
+      },
+      undefined,
+      { infoHash: "0123456789abcdef0123456789abcdef01234567" },
+      {
+        type: "movie",
+        id: "tt123",
+        title: "Example Movie",
+      },
+    );
     useDownloadStore.getState().setStatus("source-1", "Paused");
     const service = new DownloadService();
 
@@ -906,15 +958,25 @@ describe("DownloadService session completion", () => {
       ok: true,
     });
 
+    expect(prepareDownload).toHaveBeenCalledTimes(1);
+    expect(prepareDownload).toHaveBeenCalledWith({
+      type: "movie",
+      id: "tt123",
+      title: "Example Movie",
+    });
     expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
       "source-1",
-      "https://cdn.example.test/movie.mp4",
+      "https://bridge.example.test/replanned.mp4",
       "source_1.mp4",
     );
     expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
       status: "Downloading",
       progress: 0.25,
+      expectedMediaBytes: 1000,
     });
+    expect(
+      JSON.stringify(useDownloadStore.getState().tasks["source-1"]),
+    ).not.toContain("stale.example.test");
   });
 
   it("reports an immediate desktop resume error instead of returning success", async () => {
@@ -974,6 +1036,7 @@ describe("DownloadService session completion", () => {
 
     expect(useDownloadStore.getState().tasks["source-1"]).toMatchObject({
       status: "Paused",
+      needsReplan: true,
     });
   });
 

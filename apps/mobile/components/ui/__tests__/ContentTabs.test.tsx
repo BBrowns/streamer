@@ -33,9 +33,9 @@ describe("ContentTabs", () => {
     jest.clearAllMocks();
   });
 
-  it("exposes the selected tab and changes peer content views", () => {
+  it("exposes the selected tab and changes peer content views", async () => {
     const onChange = jest.fn();
-    const screen = render(
+    const screen = await render(
       <ContentTabs
         accessibilityLabel="Catalog type"
         options={[
@@ -59,14 +59,14 @@ describe("ContentTabs", () => {
     ).toEqual({ selected: false });
     expect(screen.getByTestId("content-tab-indicator-all")).toBeTruthy();
 
-    fireEvent.press(screen.getByRole("tab", { name: "Movies" }));
+    await fireEvent.press(screen.getByRole("tab", { name: "Movies" }));
 
     expect(onChange).toHaveBeenCalledWith("movie");
     expect(mockHapticSelection).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the same accessible tabs as a compact segmented selector", () => {
-    const screen = render(
+  it("renders the same accessible tabs as a compact segmented selector", async () => {
+    const screen = await render(
       <ContentTabs
         testID="catalog-type-tabs"
         variant="segmented"
@@ -94,14 +94,14 @@ describe("ContentTabs", () => {
     expect(screen.queryByTestId("content-tab-indicator-movie")).toBeNull();
   });
 
-  it("uses roving tab stops and activates the next tab with arrow keys on web", () => {
+  it("uses roving tab stops and activates the next tab with arrow keys on web", async () => {
     const originalOS = Platform.OS;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "web",
     });
     const onChange = jest.fn();
-    const screen = render(
+    const screen = await render(
       <ContentTabs
         accessibilityLabel="Content type"
         options={[
@@ -116,14 +116,14 @@ describe("ContentTabs", () => {
 
     expect(screen.getByRole("tab", { name: "All" }).props.tabIndex).toBe(-1);
     expect(screen.getByRole("tab", { name: "Movies" }).props.tabIndex).toBe(0);
-    fireEvent(screen.getByRole("tab", { name: "Movies" }), "keyDown", {
+    await fireEvent(screen.getByRole("tab", { name: "Movies" }), "keyDown", {
       key: "ArrowRight",
       preventDefault: jest.fn(),
       stopPropagation: jest.fn(),
     });
     expect(onChange).toHaveBeenCalledWith("series");
 
-    screen.unmount();
+    await screen.unmount();
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: originalOS,

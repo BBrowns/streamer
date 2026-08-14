@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-08-10.
+> Last updated: 2026-08-14.
 > Audience: future human or AI agents continuing the playback, bridge, downloads, casting, and UI/UX work.
 
 This document records the current product direction, what has already been implemented, and the next work needed to move Streamer toward a production-ready streaming app.
@@ -17,10 +17,10 @@ Current phase:
   includes Planner v3 routes and schemas, Bridge protocol v1, `SourcePreparer`
   leases, an attempt-bound bridge runtime and platform media adapters while
   retaining Planner v2 as an isolated compatibility path.
-- Bridge v1 now has bounded request/idempotency state and route-level rate
-  limiting. Session expiry and explicit revocation, client renewal policy,
-  privacy-safe operational counters and reconnect recovery remain the next
-  hardening slice.
+- Bridge v1 now has bounded request/idempotency state, route-level rate
+  limiting, access-session expiry/revocation, client renewal, reconnect
+  recovery, and privacy-safe operational counters. Keep the Planner v2
+  compatibility adapter until the documented 30-day no-fallback window is met.
 
 - Architecture complete enough: `PlaybackSession`, Planner v2/v3,
   session-driven
@@ -99,14 +99,20 @@ Current phase:
   uncaught streamx error: full and ranged direct streams stop cleanly when a
   consumer closes, while genuine source errors still close the response and
   use redacted diagnostics.
+- URL-free download recovery now treats a disappeared process-local bridge job
+  as a retryable `SOURCE_UNAVAILABLE` candidate failure. Missing desktop jobs,
+  interrupted native tasks, and lost resumables are marked for one explicit
+  content replan; planner metadata takes precedence over legacy runtime-only
+  stream state.
 
 The merged implementation roadmap is complete through **PR #186** in
 [ROADMAP.md](./ROADMAP.md). The next phase is post-v3 hardening and
 productization. Bridge operations, Planner v3 rollout evidence, player
 lifecycle decomposition, URL-free download recovery, HLS/cast/discovery
-hardening, and desktop release evidence are all shipped in master through PR
-#186. Real-target QA and RC evidence remain intentionally deferred until the
-required targets and release credentials are available.
+hardening, and desktop release evidence are shipped. Subsequent master
+maintenance commits include the dependency-security remediation through PR
+#220 and advisory patches. Real-target QA and RC evidence remain intentionally
+deferred until the required targets and release credentials are available.
 
 For historical release-gate compatibility checks, earlier handoffs referenced
 PRs #159 and #160. PR #186 is the current shipped baseline for the completed
@@ -114,9 +120,10 @@ implementation slices; only evidence-gated target validation remains open.
 
 ## Next Engineering Phase
 
-The implementation phase is complete through PR #186. Preserve the existing
-`PlaybackSession`/planner/source ownership while the remaining evidence lane is
-executed:
+The implementation phase is complete through PR #186, with dependency and
+recovery maintenance continuing independently. Preserve the existing
+`PlaybackSession`/planner/source ownership while the remaining evidence lane
+is executed:
 
 1. Keep Bridge v1 and Planner v3 telemetry bounded and privacy-safe. Do not add
    a second control plane or remove the v2 compatibility adapter before the
@@ -136,14 +143,20 @@ Known physical-device and packaged-release gaps stay recorded in
 `docs/RC_CHECKLIST.md`; browser and CI evidence must not be promoted to native
 support claims.
 
-PR #143 establishes the dependency-security baseline: Node 24.18 LTS and npm
-11.18 are the supported toolchain, production high/critical audit findings
+PR #143 established the dependency-security baseline. The supported toolchain
+is now Node 26.7.0 and npm 12.0.2; production high/critical audit findings
 block CI, and every dependency install script must be explicitly reviewed and
 version-pinned. See [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md).
 The root `dev:stream-server` command validates native dependency architecture
-and selects a matching Node 24 runtime. If a checkout has mixed Rosetta/arm64
+and selects a matching Node 26 runtime. If a checkout has mixed Rosetta/arm64
 artifacts, use `npm run dev:repair-native`; do not work around the guard by
 running a bridge with an unavailable torrent engine.
+The current dependency migration keeps the Expo SDK 57 contract on React
+19.2.8 and React Native 0.86.2, moves React Native Testing Library to 14.0.1
+with `test-renderer` 1.2.0, updates the tested native module lines, and moves
+the server and Electron adapters to their compatible current releases. Jest
+30, React Native 0.87, Tailwind 4, and physical QA remain separate follow-up
+work rather than implicit consequences of this migration.
 Deterministic renderer regression coverage is documented in
 [docs/AUTOMATED_GOLDEN_PATHS.md](./docs/AUTOMATED_GOLDEN_PATHS.md).
 The numbered roadmap items through **PR #124** are implemented, and follow-up
@@ -537,6 +550,10 @@ The stream-server gateway has moved closer to production behavior:
   bounded ten-second bucket index. It reads the exact retained cache owned by
   that job, uses single-flight FFmpeg generation with concurrency/time/output
   limits and returns no source identity or cache path.
+- Gateway jobs remain process-local by design. A missing in-memory job is
+  recovered through URL-free content metadata and a fresh planner run; never
+  persist a gateway magnet, info hash, runtime URL, abort handle, or cache
+  path merely to make the process-local job recoverable.
 - WebTorrent now uses an explicit Streamer-owned cache root instead of the
   library default temp path. Default macOS/dev location is
   `~/Library/Caches/Streamer/webtorrent`; fallback is
@@ -648,6 +665,10 @@ The main download queue and persistence pass is complete:
 - Failed and paused queue items now derive one context-specific recovery action
   from a persisted non-sensitive failure reason: resume, replan, verify, free
   storage, repair the bridge, or remove an unsupported item.
+- Mobile torrent downloads use the planner's `BridgeV1SourceAdapter` route when
+  a bridge is required. The legacy in-memory stream fallback is retained only
+  for tasks that predate URL-free replan metadata and is never preferred over
+  a content replan.
 
 Still open:
 
@@ -657,8 +678,6 @@ Still open:
   VOD media playlists only. Master/live/DRM/byte-range/auxiliary playlists are
   rejected, and browser/iOS/Android remain unsupported pending native-target
   evidence and a platform-appropriate packager.
-- Torrent downloads on mobile should use the desktop bridge/gateway as
-  resolver/downloader where needed.
 - Validate safe replan-on-resume with real large files after app restart on
   desktop, iPhone, and Android.
 
@@ -706,7 +725,9 @@ Gateway lifecycle exists now, but these are still open:
   suffix requests, clamps ranges to file boundaries, and rejects
   unsatisfiable requests with `416`. Validate this under real video player
   seeking.
-- Consider persistent gateway/download metadata for recoverability.
+- Do not persist process-local gateway job payloads for recoverability. Keep
+  gateway jobs bounded and ephemeral; use URL-free download replan metadata and
+  managed-file validators for restart recovery.
 - Unused ready jobs are now pruned periodically, while jobs with active stream
   consumers are protected from cleanup.
 - Primary Play can stream a fragmented MP4 from FFmpeg as torrent data arrives,

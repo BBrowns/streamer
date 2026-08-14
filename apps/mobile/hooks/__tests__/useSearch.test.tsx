@@ -31,7 +31,7 @@ describe("useSearch", () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    const { rerender, unmount } = renderHook(
+    const { rerender, unmount } = await renderHook(
       ({ query }: { query: string }) => useSearch(query),
       {
         initialProps: { query: "Dune" },
@@ -40,11 +40,11 @@ describe("useSearch", () => {
     );
     await waitFor(() => expect(signals).toHaveLength(1));
 
-    rerender({ query: "Alien" });
+    await rerender({ query: "Alien" });
     await waitFor(() => expect(signals).toHaveLength(2));
     expect(signals[0].aborted).toBe(true);
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 
@@ -75,7 +75,7 @@ describe("useSearch", () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () =>
         useSearch("  Dune  ", {
           mode: "suggestions",
@@ -126,7 +126,7 @@ describe("useSearch", () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () =>
         useInfiniteSearch("Dune", {
           mode: "results",

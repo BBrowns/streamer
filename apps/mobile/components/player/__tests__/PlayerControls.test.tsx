@@ -42,8 +42,8 @@ describe("PlayerControls", () => {
       volume: 0.8,
     }) as any;
 
-  it("does not render while hidden", () => {
-    const screen = render(
+  it("does not render while hidden", async () => {
+    const screen = await render(
       <PlayerControls
         player={createPlayer()}
         currentTime={60}
@@ -57,10 +57,10 @@ describe("PlayerControls", () => {
     expect(screen.queryByLabelText("Play playback")).toBeNull();
   });
 
-  it("exposes play/pause and skip controls", () => {
+  it("exposes play/pause and skip controls", async () => {
     const player = createPlayer();
     const onPlayPause = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={player}
         currentTime={60}
@@ -71,18 +71,18 @@ describe("PlayerControls", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("Play playback"));
-    fireEvent.press(screen.getByLabelText("Seek back 10 seconds"));
-    fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
+    await fireEvent.press(screen.getByLabelText("Play playback"));
+    await fireEvent.press(screen.getByLabelText("Seek back 10 seconds"));
+    await fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
 
     expect(onPlayPause).toHaveBeenCalledTimes(1);
     expect(player.seekBy).toHaveBeenCalledWith(-10);
     expect(player.seekBy).toHaveBeenCalledWith(10);
   });
 
-  it("supports accessibility seek actions on the progress control", () => {
+  it("supports accessibility seek actions on the progress control", async () => {
     const player = createPlayer();
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -95,10 +95,10 @@ describe("PlayerControls", () => {
 
     const progress = screen.getByLabelText("Playback progress");
 
-    fireEvent(progress, "accessibilityAction", {
+    await fireEvent(progress, "accessibilityAction", {
       nativeEvent: { actionName: "increment" },
     });
-    fireEvent(progress, "accessibilityAction", {
+    await fireEvent(progress, "accessibilityAction", {
       nativeEvent: { actionName: "decrement" },
     });
 
@@ -106,7 +106,7 @@ describe("PlayerControls", () => {
     expect(player.seekBy).toHaveBeenCalledWith(-10);
   });
 
-  it("supports web keyboard controls on the progress slider", () => {
+  it("supports web keyboard controls on the progress slider", async () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
@@ -118,7 +118,7 @@ describe("PlayerControls", () => {
     const stopPropagation = jest.fn();
 
     try {
-      const screen = render(
+      const screen = await render(
         <PlayerControls
           player={createPlayer()}
           currentTime={30}
@@ -133,17 +133,17 @@ describe("PlayerControls", () => {
       );
       const progress = screen.getByTestId("player-progress-slider");
 
-      fireEvent(progress, "keyDown", {
+      await fireEvent(progress, "keyDown", {
         key: "ArrowRight",
         preventDefault,
         stopPropagation,
       });
-      fireEvent(progress, "keyDown", {
+      await fireEvent(progress, "keyDown", {
         key: "Home",
         preventDefault,
         stopPropagation,
       });
-      fireEvent(progress, "keyDown", {
+      await fireEvent(progress, "keyDown", {
         key: "End",
         preventDefault,
         stopPropagation,
@@ -174,7 +174,7 @@ describe("PlayerControls", () => {
     expect(getVolumeFromKeyboard(1, "ArrowUp")).toBe(1);
   });
 
-  it("handles volume slider keys locally and stops them from bubbling", () => {
+  it("handles volume slider keys locally and stops them from bubbling", async () => {
     const originalPlatform = Platform.OS;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
@@ -185,7 +185,7 @@ describe("PlayerControls", () => {
     const stopPropagation = jest.fn();
 
     try {
-      const screen = render(
+      const screen = await render(
         <PlayerControls
           player={createPlayer()}
           currentTime={30}
@@ -208,13 +208,13 @@ describe("PlayerControls", () => {
         "Home",
         "End",
       ]) {
-        fireEvent(volume, "keyDown", {
+        await fireEvent(volume, "keyDown", {
           key,
           preventDefault,
           stopPropagation,
         });
       }
-      fireEvent(volume, "keyDown", {
+      await fireEvent(volume, "keyDown", {
         key: "k",
         preventDefault,
         stopPropagation,
@@ -233,10 +233,10 @@ describe("PlayerControls", () => {
     }
   });
 
-  it("truthfully explains seek availability for progressive fMP4 streams", () => {
+  it("truthfully explains seek availability for progressive fMP4 streams", async () => {
     const player = createPlayer();
     const onSeekBy = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -256,9 +256,9 @@ describe("PlayerControls", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("Seek back unavailable"));
-    fireEvent.press(screen.getByLabelText("Seek forward unavailable"));
-    fireEvent(
+    await fireEvent.press(screen.getByLabelText("Seek back unavailable"));
+    await fireEvent.press(screen.getByLabelText("Seek forward unavailable"));
+    await fireEvent(
       screen.getByLabelText("Playback progress unavailable"),
       "accessibilityAction",
       {
@@ -274,9 +274,9 @@ describe("PlayerControls", () => {
     ).toBeTruthy();
   });
 
-  it("reports background seek preparation and enables controls after handoff", () => {
+  it("reports background seek preparation and enables controls after handoff", async () => {
     const player = createPlayer();
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -300,7 +300,7 @@ describe("PlayerControls", () => {
       ),
     ).toBeTruthy();
 
-    screen.rerender(
+    await screen.rerender(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -312,15 +312,15 @@ describe("PlayerControls", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
+    await fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
     expect(player.seekBy).toHaveBeenCalledWith(10);
     expect(screen.queryByText("Preparing compatible stream")).toBeNull();
   });
 
-  it("routes seek controls through the provided guarded seek callback", () => {
+  it("routes seek controls through the provided guarded seek callback", async () => {
     const player = createPlayer();
     const onSeekBy = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -333,15 +333,15 @@ describe("PlayerControls", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("Seek back 10 seconds"));
-    fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
+    await fireEvent.press(screen.getByLabelText("Seek back 10 seconds"));
+    await fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
 
     expect(onSeekBy).toHaveBeenCalledWith(-10);
     expect(onSeekBy).toHaveBeenCalledWith(10);
     expect(player.seekBy).not.toHaveBeenCalled();
   });
 
-  it("renders desktop playback actions when callbacks are available", () => {
+  it("renders desktop playback actions when callbacks are available", async () => {
     const player = createPlayer();
     const onToggleMute = jest.fn();
     const onToggleFullscreen = jest.fn();
@@ -349,7 +349,7 @@ describe("PlayerControls", () => {
     const onOpenCast = jest.fn();
     const onRetry = jest.fn();
 
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -381,11 +381,13 @@ describe("PlayerControls", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("Mute"));
-    fireEvent.press(screen.getByLabelText("Fullscreen"));
-    fireEvent.press(screen.getByLabelText("Audio, subtitles, and source"));
-    fireEvent.press(screen.getByLabelText("Cast"));
-    fireEvent.press(screen.getByLabelText("Retry source"));
+    await fireEvent.press(screen.getByLabelText("Mute"));
+    await fireEvent.press(screen.getByLabelText("Fullscreen"));
+    await fireEvent.press(
+      screen.getByLabelText("Audio, subtitles, and source"),
+    );
+    await fireEvent.press(screen.getByLabelText("Cast"));
+    await fireEvent.press(screen.getByLabelText("Retry source"));
 
     expect(screen.getByText("1080p MP4")).toBeTruthy();
     expect(screen.getByText("Ready offline")).toBeTruthy();
@@ -397,8 +399,8 @@ describe("PlayerControls", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps secondary player controls cinema-dark independently of app theme", () => {
-    const screen = render(
+  it("keeps secondary player controls cinema-dark independently of app theme", async () => {
+    const screen = await render(
       <PlayerControls
         player={createPlayer()}
         currentTime={30}
@@ -419,9 +421,9 @@ describe("PlayerControls", () => {
     expect(style.borderColor).toBe(playerChrome.border);
   });
 
-  it("shows segment skipping only when verified segment evidence is active", () => {
+  it("shows segment skipping only when verified segment evidence is active", async () => {
     const onSkipSegment = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerControls
         player={createPlayer()}
         currentTime={30}
@@ -435,10 +437,10 @@ describe("PlayerControls", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("Skip intro"));
+    await fireEvent.press(screen.getByLabelText("Skip intro"));
     expect(onSkipSegment).toHaveBeenCalledWith(84);
 
-    screen.rerender(
+    await screen.rerender(
       <PlayerControls
         player={createPlayer()}
         currentTime={90}

@@ -17,7 +17,7 @@ const staleResult = {
 };
 
 describe("useSearchController", () => {
-  it("does not expose or announce results from a superseded query", () => {
+  it("does not expose or announce results from a superseded query", async () => {
     (useGlobalSearch as jest.Mock).mockReturnValue({
       data: { metas: [staleResult] },
       debouncedQuery: "Dune",
@@ -27,7 +27,7 @@ describe("useSearchController", () => {
       isError: false,
     });
 
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       useSearchController({ initialQuery: "Alien" }),
     );
 
@@ -35,7 +35,7 @@ describe("useSearchController", () => {
     expect(result.current.suggestions).toEqual([]);
   });
 
-  it("suppresses duplicate suggestion work for the submitted query", () => {
+  it("suppresses duplicate suggestion work for the submitted query", async () => {
     (useGlobalSearch as jest.Mock).mockReturnValue({
       data: undefined,
       debouncedQuery: "",
@@ -45,7 +45,7 @@ describe("useSearchController", () => {
       isError: false,
     });
 
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       useSearchController({
         initialQuery: "Dune",
         suppressedSuggestionQuery: "Dune",
@@ -59,7 +59,7 @@ describe("useSearchController", () => {
     expect(result.current.suggestions).toEqual([]);
   });
 
-  it("classifies bounded results without provider failures as truncated, not partial", () => {
+  it("classifies bounded results without provider failures as truncated, not partial", async () => {
     (useGlobalSearch as jest.Mock).mockReturnValue({
       data: {
         metas: [staleResult],
@@ -76,14 +76,14 @@ describe("useSearchController", () => {
       isError: false,
     });
 
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       useSearchController({ initialQuery: "Dune" }),
     );
 
     expect(result.current.state).toBe("truncated-results");
   });
 
-  it("uses partial provider copy only when provider failures are present", () => {
+  it("uses partial provider copy only when provider failures are present", async () => {
     (useGlobalSearch as jest.Mock).mockReturnValue({
       data: {
         metas: [staleResult],
@@ -100,14 +100,14 @@ describe("useSearchController", () => {
       isError: false,
     });
 
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       useSearchController({ initialQuery: "Dune" }),
     );
 
     expect(result.current.state).toBe("partial-results");
   });
 
-  it("exposes keyboard selection synchronously for a rapid Enter press", () => {
+  it("exposes keyboard selection synchronously for a rapid Enter press", async () => {
     (useGlobalSearch as jest.Mock).mockReturnValue({
       data: {
         metas: [staleResult],
@@ -124,11 +124,11 @@ describe("useSearchController", () => {
       isError: false,
     });
 
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       useSearchController({ initialQuery: "Dune" }),
     );
 
-    act(() => {
+    await act(() => {
       result.current.moveSelection("next");
     });
 
@@ -138,7 +138,7 @@ describe("useSearchController", () => {
     });
   });
 
-  it("preserves keyboard selection when navigation races the suggestion reset effect", () => {
+  it("preserves keyboard selection when navigation races the suggestion reset effect", async () => {
     (useGlobalSearch as jest.Mock).mockReturnValue({
       data: {
         metas: [staleResult],
@@ -155,7 +155,7 @@ describe("useSearchController", () => {
       isError: false,
     });
 
-    const { result } = renderHook(() => {
+    const { result } = await renderHook(() => {
       const controller = useSearchController({ initialQuery: "Dune" });
 
       // Browser input can arrive after the suggestions commit but before the

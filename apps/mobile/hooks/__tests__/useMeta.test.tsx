@@ -53,15 +53,18 @@ describe("useMeta", () => {
     (api.get as jest.Mock).mockRejectedValue({ response: { status: 404 } });
     const { wrapper, queryClient } = createWrapper();
 
-    const { result, unmount } = renderHook(() => useMeta("movie", "missing"), {
-      wrapper,
-    });
+    const { result, unmount } = await renderHook(
+      () => useMeta("movie", "missing"),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(getMetaLoadFailureKind(result.current.error)).toBe("notFound");
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 
@@ -69,15 +72,18 @@ describe("useMeta", () => {
     (api.get as jest.Mock).mockResolvedValue({ data: {} });
     const { wrapper, queryClient } = createWrapper();
 
-    const { result, unmount } = renderHook(() => useMeta("movie", "empty"), {
-      wrapper,
-    });
+    const { result, unmount } = await renderHook(
+      () => useMeta("movie", "empty"),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(getMetaLoadFailureKind(result.current.error)).toBe("notFound");
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 
@@ -95,15 +101,18 @@ describe("useMeta", () => {
       updatedAt: Date.now() - 11 * 60 * 1000,
     });
 
-    const { result, unmount } = renderHook(() => useMeta("movie", "cached"), {
-      wrapper,
-    });
+    const { result, unmount } = await renderHook(
+      () => useMeta("movie", "cached"),
+      {
+        wrapper,
+      },
+    );
 
     await waitFor(() => expect(api.get).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.data).toEqual(cachedMeta);
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 });

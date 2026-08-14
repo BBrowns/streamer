@@ -21,7 +21,7 @@ jest.mock("../ui/AppButton", () => {
       mockReact.createElement(
         "AppButton",
         { onPress, accessibilityLabel: label },
-        label,
+        mockReact.createElement("Text", null, label),
       ),
   };
 });
@@ -106,7 +106,7 @@ describe("DesktopCastModal", () => {
   it("prepares a cast session before enabling device selection", async () => {
     const onCastStart = jest.fn();
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         playbackUri="http://bridge.test/api/gateway/jobs/current/stream"
@@ -138,7 +138,7 @@ describe("DesktopCastModal", () => {
       expect(screen.getByText("Source ready. Choose a display.")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("Living Room"));
+    await fireEvent.press(screen.getByText("Living Room"));
 
     await waitFor(() => {
       expect(start).toHaveBeenCalledWith(
@@ -181,7 +181,7 @@ describe("DesktopCastModal", () => {
       resolveErrors: [],
     });
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -206,14 +206,14 @@ describe("DesktopCastModal", () => {
     expect(screen.queryByText("Living Room")).toBeNull();
     expect(start).not.toHaveBeenCalled();
 
-    fireEvent.press(screen.getByLabelText("Sources & Devices"));
+    await fireEvent.press(screen.getByLabelText("Sources & Devices"));
     expect(onOpenSourcesDevices).toHaveBeenCalledTimes(1);
   });
 
   it("shows unexpected preparation errors inline", async () => {
     prepare.mockRejectedValueOnce(new Error("Playback planner unavailable"));
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -266,7 +266,7 @@ describe("DesktopCastModal", () => {
       })
       .mockResolvedValueOnce(preparedCast);
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -287,8 +287,8 @@ describe("DesktopCastModal", () => {
       ).toBeTruthy();
     });
     expect(screen.queryByText("Living Room")).toBeNull();
-    fireEvent.press(screen.getByLabelText("Choose another device"));
-    fireEvent.press(screen.getByText("Living Room"));
+    await fireEvent.press(screen.getByLabelText("Choose another device"));
+    await fireEvent.press(screen.getByText("Living Room"));
 
     await waitFor(() => {
       expect(prepare).toHaveBeenNthCalledWith(
@@ -309,7 +309,7 @@ describe("DesktopCastModal", () => {
   });
 
   it("keeps manual advanced-source casting available without creating a session", async () => {
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         playbackUri="https://cdn.example.test/manual.mp4"
@@ -321,7 +321,7 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
-    fireEvent.press(screen.getByText("Living Room"));
+    await fireEvent.press(screen.getByText("Living Room"));
 
     await waitFor(() => {
       expect(play).toHaveBeenCalledWith(
@@ -349,7 +349,7 @@ describe("DesktopCastModal", () => {
       },
     ]);
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         playbackUri="https://cdn.example.test/manual.mp4"
@@ -367,7 +367,7 @@ describe("DesktopCastModal", () => {
   it("offers refresh only when discovery finds no devices", async () => {
     getDevices.mockResolvedValueOnce([]);
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         playbackUri="https://cdn.example.test/manual.mp4"
@@ -385,7 +385,7 @@ describe("DesktopCastModal", () => {
     expect(screen.queryByText("Living Room")).toBeNull();
     expect(screen.queryByLabelText("Try again")).toBeNull();
 
-    fireEvent.press(screen.getByLabelText("Refresh displays"));
+    await fireEvent.press(screen.getByLabelText("Refresh displays"));
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
@@ -396,7 +396,7 @@ describe("DesktopCastModal", () => {
       new Error("Could not search for displays on the configured bridge."),
     );
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         playbackUri="https://cdn.example.test/manual.mp4"
@@ -413,7 +413,7 @@ describe("DesktopCastModal", () => {
     });
     expect(screen.queryByText("Source ready. Choose a display.")).toBeNull();
 
-    fireEvent.press(screen.getByLabelText("Search again"));
+    await fireEvent.press(screen.getByLabelText("Search again"));
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
@@ -441,7 +441,7 @@ describe("DesktopCastModal", () => {
         uri: preparedCast.resolvedUrl,
       });
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -458,12 +458,12 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
-    fireEvent.press(screen.getByText("Living Room"));
+    await fireEvent.press(screen.getByText("Living Room"));
     await waitFor(() => {
       expect(screen.getByLabelText("Try again")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByLabelText("Try again"));
+    await fireEvent.press(screen.getByLabelText("Try again"));
     await waitFor(() => {
       expect(start).toHaveBeenCalledTimes(2);
       expect(onCastStart).toHaveBeenCalledTimes(1);
@@ -493,7 +493,7 @@ describe("DesktopCastModal", () => {
       },
     });
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -510,12 +510,12 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
-    fireEvent.press(screen.getByText("Living Room"));
+    await fireEvent.press(screen.getByText("Living Room"));
     await waitFor(() => {
       expect(screen.getByLabelText("Try again")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByLabelText("Try again"));
+    await fireEvent.press(screen.getByLabelText("Try again"));
     await waitFor(() => {
       expect(getDevices).toHaveBeenLastCalledWith({ forceRefresh: true });
       expect(screen.getAllByText("Living Room")).toHaveLength(2);
@@ -555,7 +555,7 @@ describe("DesktopCastModal", () => {
         uri: preparedCast.resolvedUrl,
       });
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -571,13 +571,13 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
-    fireEvent.press(screen.getByText("Living Room"));
+    await fireEvent.press(screen.getByText("Living Room"));
     await waitFor(() => {
       expect(screen.getByLabelText("Try again")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByLabelText("Try again"));
-    fireEvent.press(screen.getByLabelText("Try again"));
+    await fireEvent.press(screen.getByLabelText("Try again"));
+    await fireEvent.press(screen.getByLabelText("Try again"));
     expect(getDevices).toHaveBeenCalledTimes(2);
 
     await act(async () => {
@@ -602,7 +602,7 @@ describe("DesktopCastModal", () => {
     });
     const onCastStart = jest.fn();
 
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -619,7 +619,7 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Living Room")).toBeTruthy();
     });
-    fireEvent.press(screen.getByText("Living Room"));
+    const castPromise = fireEvent.press(screen.getByText("Living Room"));
     await waitFor(() => {
       expect(
         screen.getByText("Trying another compatible source..."),
@@ -638,6 +638,7 @@ describe("DesktopCastModal", () => {
         uri: "https://cdn.example.test/fallback.mp4",
       });
     });
+    await castPromise;
     await waitFor(() => {
       expect(screen.getAllByText(/Connected to/).length).toBeGreaterThan(0);
       expect(onCastStart).toHaveBeenCalledTimes(1);
@@ -645,7 +646,7 @@ describe("DesktopCastModal", () => {
   });
 
   it("cancels a prepared session when the dialog closes before casting starts", async () => {
-    const screen = render(
+    const screen = await render(
       <DesktopCastModal
         visible
         title="Example Movie"
@@ -661,7 +662,7 @@ describe("DesktopCastModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Source ready. Choose a display.")).toBeTruthy();
     });
-    screen.unmount();
+    await screen.unmount();
 
     expect(cancelPlaybackSession).toHaveBeenCalledWith(
       "session-1",

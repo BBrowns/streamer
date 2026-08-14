@@ -29,8 +29,8 @@ describe("useTrakt", () => {
     (Linking.createURL as jest.Mock).mockReturnValue("mobile://trakt-callback");
   });
 
-  it("should return initial connection status", () => {
-    const { result } = renderHook(() => useTrakt());
+  it("should return initial connection status", async () => {
+    const { result } = await renderHook(() => useTrakt());
     expect(result.current.connected).toBe(false);
   });
 
@@ -43,7 +43,7 @@ describe("useTrakt", () => {
       queryParams: { code: "test-code" },
     });
 
-    const { result } = renderHook(() => useTrakt());
+    const { result } = await renderHook(() => useTrakt());
 
     await act(async () => {
       await result.current.connect();
@@ -63,7 +63,7 @@ describe("useTrakt", () => {
       type: "cancel",
     });
 
-    const { result } = renderHook(() => useTrakt());
+    const { result } = await renderHook(() => useTrakt());
 
     await act(async () => {
       await result.current.connect();

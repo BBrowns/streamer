@@ -111,7 +111,7 @@ export class TraktClient implements ITraktClient {
         { error: err.response?.data || err.message },
         "Failed to sync history to Trakt",
       );
-      throw new Error("Trakt sync failed");
+      throw new Error("Trakt sync failed", { cause: err });
     }
   }
 

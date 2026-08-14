@@ -126,14 +126,14 @@ describe("NotificationsScreen", () => {
     jest.useRealTimers();
   });
 
-  it("groups the inbox and exposes only real read actions", () => {
-    const screen = render(<NotificationsScreen />);
+  it("groups the inbox and exposes only real read actions", async () => {
+    const screen = await render(<NotificationsScreen />);
 
     expect(screen.getByText("Today")).toBeTruthy();
     expect(screen.getByText("Earlier")).toBeTruthy();
     expect(screen.getByTestId("notifications-mark-all-read")).toBeTruthy();
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByTestId(`notification-${unreadNotification.id}`),
     );
     expect(markAsRead.mutate).toHaveBeenCalledWith(
@@ -141,32 +141,32 @@ describe("NotificationsScreen", () => {
       expect.objectContaining({ onError: expect.any(Function) }),
     );
 
-    fireEvent.press(screen.getByTestId("notifications-mark-all-read"));
+    await fireEvent.press(screen.getByTestId("notifications-mark-all-read"));
     expect(markAllAsRead.mutate).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a clear, non-interactive empty state", () => {
+  it("uses a clear, non-interactive empty state", async () => {
     mockNotificationState = {
       ...mockNotificationState,
       notifications: [],
       unreadCount: 0,
     };
-    const screen = render(<NotificationsScreen />);
+    const screen = await render(<NotificationsScreen />);
 
     expect(screen.getByTestId("notifications-empty-state")).toBeTruthy();
     expect(screen.queryByTestId("notifications-mark-all-read")).toBeNull();
   });
 
-  it("offers a working retry when loading the inbox fails", () => {
+  it("offers a working retry when loading the inbox fails", async () => {
     mockNotificationState = {
       ...mockNotificationState,
       notifications: [],
       unreadCount: 0,
       isError: true,
     };
-    const screen = render(<NotificationsScreen />);
+    const screen = await render(<NotificationsScreen />);
 
-    fireEvent.press(screen.getByText("Retry"));
+    await fireEvent.press(screen.getByText("Retry"));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 });

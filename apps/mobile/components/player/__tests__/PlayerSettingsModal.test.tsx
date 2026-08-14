@@ -13,7 +13,7 @@ jest.mock("../../../hooks/useReducedMotion", () => ({
 }));
 
 describe("PlayerSettingsModal", () => {
-  it("uses the cinema-dark sheet regardless of the surrounding application theme", () => {
+  it("uses the cinema-dark sheet regardless of the surrounding application theme", async () => {
     const onSelectPlaybackRate = jest.fn();
     const onSelectSubtitleMode = jest.fn();
     const onSelectSubtitleTextSize = jest.fn();
@@ -22,7 +22,7 @@ describe("PlayerSettingsModal", () => {
     const onSelectSubtitleVerticalPosition = jest.fn();
     const onSelectSubtitleFontFamily = jest.fn();
     const onResetSubtitleStyle = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerSettingsModal
         visible
         onClose={jest.fn()}
@@ -59,15 +59,15 @@ describe("PlayerSettingsModal", () => {
     expect(sheetStyle.backgroundColor).toBe(playerChrome.surfaceStrong);
     expect(sheetStyle.borderColor).toBe(playerChrome.border);
 
-    fireEvent.press(screen.getByLabelText("player.settings.speed: 1.5x"));
+    await fireEvent.press(screen.getByLabelText("player.settings.speed: 1.5x"));
     expect(onSelectPlaybackRate).toHaveBeenCalledWith(1.5);
-    fireEvent.press(screen.getByLabelText("Automatic behavior: Always"));
-    fireEvent.press(screen.getByLabelText("Text size: L"));
-    fireEvent.press(screen.getByLabelText("Background opacity: 50%"));
-    fireEvent.press(screen.getByLabelText("Vertical position: High"));
-    fireEvent.press(screen.getByLabelText("Font: Serif"));
-    fireEvent.press(screen.getByLabelText("Subtitle sync: +0.5s"));
-    fireEvent.press(screen.getByLabelText("Reset subtitle style"));
+    await fireEvent.press(screen.getByLabelText("Automatic behavior: Always"));
+    await fireEvent.press(screen.getByLabelText("Text size: L"));
+    await fireEvent.press(screen.getByLabelText("Background opacity: 50%"));
+    await fireEvent.press(screen.getByLabelText("Vertical position: High"));
+    await fireEvent.press(screen.getByLabelText("Font: Serif"));
+    await fireEvent.press(screen.getByLabelText("Subtitle sync: +0.5s"));
+    await fireEvent.press(screen.getByLabelText("Reset subtitle style"));
     expect(onSelectSubtitleMode).toHaveBeenCalledWith("always");
     expect(onSelectSubtitleTextSize).toHaveBeenCalledWith("large");
     expect(onSelectSubtitleBackgroundOpacity).toHaveBeenCalledWith(0.5);

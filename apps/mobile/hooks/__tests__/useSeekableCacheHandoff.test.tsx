@@ -123,7 +123,9 @@ describe("useSeekableCacheHandoff", () => {
         uri: "seekable-runtime-source",
       });
 
-    const { unmount } = renderHook(() => useSeekableCacheHandoff(options));
+    const { unmount } = await renderHook(() =>
+      useSeekableCacheHandoff(options),
+    );
     await act(async () => {
       await Promise.resolve();
     });
@@ -181,7 +183,7 @@ describe("useSeekableCacheHandoff", () => {
     expect(options.pausedAfterHandoffRef.current).toBe(false);
 
     const signal = getSeekablePlaybackHandoff.mock.calls[0][0]?.signal;
-    unmount();
+    await unmount();
     expect(signal?.aborted).toBe(true);
     expect(options.controllerRef.current).toBeNull();
   });
@@ -196,7 +198,7 @@ describe("useSeekableCacheHandoff", () => {
       uri: "seekable-runtime-source",
     });
 
-    renderHook(() => useSeekableCacheHandoff(options));
+    await renderHook(() => useSeekableCacheHandoff(options));
 
     await waitFor(() =>
       expect(options.recordDiagnostic).toHaveBeenLastCalledWith({
@@ -264,7 +266,7 @@ describe("useSeekableCacheHandoff", () => {
         }),
       );
 
-      renderHook(() => useSeekableCacheHandoff(options));
+      await renderHook(() => useSeekableCacheHandoff(options));
       await waitFor(() =>
         expect(getSeekablePlaybackHandoff).toHaveBeenCalled(),
       );
@@ -293,7 +295,7 @@ describe("useSeekableCacheHandoff", () => {
       uri: "seekable-runtime-source",
     });
 
-    renderHook(() => useSeekableCacheHandoff(options));
+    await renderHook(() => useSeekableCacheHandoff(options));
     await waitFor(() => expect(getSeekablePlaybackHandoff).toHaveBeenCalled());
     await act(async () => {
       await Promise.resolve();
@@ -318,10 +320,12 @@ describe("useSeekableCacheHandoff", () => {
       });
     });
 
-    const { unmount } = renderHook(() => useSeekableCacheHandoff(options));
+    const { unmount } = await renderHook(() =>
+      useSeekableCacheHandoff(options),
+    );
     await waitFor(() => expect(observedSignal).toBeDefined());
 
-    unmount();
+    await unmount();
 
     expect(observedSignal?.aborted).toBe(true);
     expect(options.controllerRef.current).toBeNull();

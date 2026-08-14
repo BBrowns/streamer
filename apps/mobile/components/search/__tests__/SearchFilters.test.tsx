@@ -29,8 +29,8 @@ jest.mock("../../../hooks/useWebPressableActivation", () => ({
 }));
 
 describe("Search filters accessibility", () => {
-  it("exposes radio choices through checked state", () => {
-    const screen = render(
+  it("exposes radio choices through checked state", async () => {
+    const screen = await render(
       <FilterSidebar
         years={[
           { label: "Any year", value: "all" },
@@ -68,10 +68,10 @@ describe("Search filters accessibility", () => {
     expect(getRadioNavigationIndex(1, 3, "End")).toBe(2);
   });
 
-  it("shows metadata facets only when providers supply options", () => {
+  it("shows metadata facets only when providers supply options", async () => {
     const onGenreChange = jest.fn();
     const onLanguageChange = jest.fn();
-    const screen = render(
+    const screen = await render(
       <FilterSidebar
         years={[{ label: "Any year", value: "all" }]}
         providers={[{ label: "All sources", value: "all" }]}
@@ -97,15 +97,15 @@ describe("Search filters accessibility", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("radio", { name: "Drama" }));
-    fireEvent.press(screen.getByRole("radio", { name: "English" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Drama" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "English" }));
     expect(onGenreChange).toHaveBeenCalledWith("drama");
     expect(onLanguageChange).toHaveBeenCalledWith("en");
   });
 
-  it("keeps the filter panel separate from its dismissible scrim", () => {
+  it("keeps the filter panel separate from its dismissible scrim", async () => {
     const onClose = jest.fn();
-    const screen = render(
+    const screen = await render(
       <FilterSheet
         visible
         onClose={onClose}
@@ -127,9 +127,11 @@ describe("Search filters accessibility", () => {
       />,
     );
 
-    fireEvent.press(screen.getByRole("radio", { name: "search.sort.default" }));
+    await fireEvent.press(
+      screen.getByRole("radio", { name: "search.sort.default" }),
+    );
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByTestId("search-filter-scrim", {
         includeHiddenElements: true,
       }),

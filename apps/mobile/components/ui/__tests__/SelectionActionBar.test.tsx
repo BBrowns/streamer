@@ -17,8 +17,8 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("SelectionActionBar", () => {
-  it("stays hidden until at least one item is selected", () => {
-    const { queryByText } = render(
+  it("stays hidden until at least one item is selected", async () => {
+    const { queryByText } = await render(
       <SelectionActionBar
         selectedCount={0}
         selectedLabel="0 selected"
@@ -31,9 +31,9 @@ describe("SelectionActionBar", () => {
     expect(queryByText("Delete")).toBeNull();
   });
 
-  it("shows the shared count and destructive action for a selection", () => {
+  it("shows the shared count and destructive action for a selection", async () => {
     const onAction = jest.fn();
-    const { getByText, getByLabelText } = render(
+    const { getByText, getByLabelText } = await render(
       <SelectionActionBar
         selectedCount={2}
         selectedLabel="2 selected"
@@ -44,7 +44,7 @@ describe("SelectionActionBar", () => {
     );
 
     expect(getByText("2 selected")).toBeTruthy();
-    fireEvent.press(getByLabelText("Delete selected downloads"));
+    await fireEvent.press(getByLabelText("Delete selected downloads"));
     expect(onAction).toHaveBeenCalledTimes(1);
   });
 });

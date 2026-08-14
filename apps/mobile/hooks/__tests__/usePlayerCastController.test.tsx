@@ -50,8 +50,8 @@ describe("usePlayerCastController", () => {
     jest.restoreAllMocks();
   });
 
-  it("owns modal visibility and closes it when casting starts", () => {
-    const { result } = renderHook(() =>
+  it("owns modal visibility and closes it when casting starts", async () => {
+    const { result } = await renderHook(() =>
       usePlayerCastController({ router, currentStream: stream }),
     );
 
@@ -59,21 +59,21 @@ describe("usePlayerCastController", () => {
     expect(result.current.canOpenCastModal).toBe(true);
     expect(result.current.shouldClosePlayerAfterStop).toBe(false);
 
-    act(() => result.current.openCastModal());
+    await act(() => result.current.openCastModal());
     expect(result.current.castModalOpen).toBe(true);
 
-    act(() => result.current.handleCastStarted(activeCast));
+    await act(() => result.current.handleCastStarted(activeCast));
     expect(result.current.activeCast).toEqual(activeCast);
     expect(result.current.castModalOpen).toBe(false);
     expect(result.current.canOpenCastModal).toBe(false);
 
-    act(() => result.current.openCastModal());
+    await act(() => result.current.openCastModal());
     expect(result.current.castModalOpen).toBe(false);
   });
 
   it("stops and clears a cast without closing a local player", async () => {
     useCastStore.setState({ activeCast });
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       usePlayerCastController({ router, currentStream: stream }),
     );
 
@@ -96,7 +96,7 @@ describe("usePlayerCastController", () => {
       .mockImplementation(() => undefined);
     mockedStopCastSession.mockRejectedValueOnce(error);
     useCastStore.setState({ activeCast });
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       usePlayerCastController({ router, currentStream: null }),
     );
 
@@ -110,13 +110,13 @@ describe("usePlayerCastController", () => {
     expect(mockedGoBackOrReplace).toHaveBeenCalledWith(router);
   });
 
-  it("starts stop cleanup and clears cast state immediately on player close", () => {
+  it("starts stop cleanup and clears cast state immediately on player close", async () => {
     useCastStore.setState({ activeCast });
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       usePlayerCastController({ router, currentStream: stream }),
     );
 
-    act(() => result.current.stopCastingOnPlayerClose());
+    await act(() => result.current.stopCastingOnPlayerClose());
 
     expect(mockedStopCastSession).toHaveBeenCalledWith(
       "living-room",

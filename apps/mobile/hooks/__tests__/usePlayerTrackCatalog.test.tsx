@@ -117,7 +117,7 @@ describe("usePlayerTrackCatalog", () => {
 
   it("coordinates engine, native, and add-on tracks into one catalog", async () => {
     const { options } = createOptions();
-    const { result } = renderHook(() => usePlayerTrackCatalog(options));
+    const { result } = await renderHook(() => usePlayerTrackCatalog(options));
 
     await waitFor(() =>
       expect(result.current.subtitles).toEqual([
@@ -138,7 +138,7 @@ describe("usePlayerTrackCatalog", () => {
 
   it("refreshes the catalog when either runtime source reports new tracks", async () => {
     const { options, engineTrackListener, adapterListener } = createOptions();
-    const { result } = renderHook(() => usePlayerTrackCatalog(options));
+    const { result } = await renderHook(() => usePlayerTrackCatalog(options));
     await waitFor(() =>
       expect(options.mediaAdapter.subscribe).toHaveBeenCalled(),
     );

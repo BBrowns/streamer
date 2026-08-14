@@ -18,8 +18,8 @@ jest.mock("../../../hooks/useWindowClass", () => ({
 }));
 
 describe("LegalDocumentScreen", () => {
-  it("renders a readable document with one content title", () => {
-    const screen = render(
+  it("renders a readable document with one content title", async () => {
+    const screen = await render(
       <LegalDocumentScreen
         testID="legal-document"
         title="Privacy policy"

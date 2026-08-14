@@ -132,6 +132,7 @@ export interface DownloadState {
     error: string,
     reason: DownloadFailureReason,
   ) => void;
+  markForReplan: (id: string) => void;
   markTasksForRecovery: () => void;
 }
 
@@ -674,6 +675,23 @@ export const useDownloadStore = create<DownloadState>()(
                 verificationState: "failed",
                 playableState: "unplayable",
                 verificationError: error,
+                needsReplan: true,
+                updatedAt: nowIso(),
+              },
+            },
+          };
+        }),
+      markForReplan: (id) =>
+        set((state) => {
+          const task = state.tasks[id];
+          if (!task || task.status === "Completed" || task.needsReplan) {
+            return state;
+          }
+          return {
+            tasks: {
+              ...state.tasks,
+              [id]: {
+                ...task,
                 needsReplan: true,
                 updatedAt: nowIso(),
               },

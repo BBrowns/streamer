@@ -127,7 +127,7 @@ describe("usePlayerController playback launch intent", () => {
     });
   });
 
-  it("adopts the session-owned prepared runtime without legacy resolution or cleanup", () => {
+  it("adopts the session-owned prepared runtime without legacy resolution or cleanup", async () => {
     const player = createMockPlayer();
     mockActivePlaybackSourceRuntime = {
       route: {
@@ -141,7 +141,7 @@ describe("usePlayerController playback launch intent", () => {
     };
     startSession({ type: "play" });
 
-    const screen = renderHook(() =>
+    const screen = await renderHook(() =>
       usePlayerController({
         player,
         playbackUri: "https://cdn.example.test/resolved.mp4",
@@ -160,15 +160,15 @@ describe("usePlayerController playback launch intent", () => {
       "attempt-launch",
     );
     expect(mockResolveEngine).not.toHaveBeenCalled();
-    screen.unmount();
+    await screen.unmount();
     expect(mockPreparedEngine.stop).not.toHaveBeenCalled();
   });
 
-  it("does not resolve a second engine while a session-owned source is pending", () => {
+  it("does not resolve a second engine while a session-owned source is pending", async () => {
     const player = createMockPlayer();
     startSession({ type: "play" });
 
-    const screen = renderHook(() =>
+    const screen = await renderHook(() =>
       usePlayerController({
         player,
         playbackUri: null,
@@ -179,10 +179,10 @@ describe("usePlayerController playback launch intent", () => {
 
     expect(screen.result.current.engine).toBeNull();
     expect(mockResolveEngine).not.toHaveBeenCalled();
-    screen.unmount();
+    await screen.unmount();
   });
 
-  it("does not open legacy info-hash metrics for a session-owned source", () => {
+  it("does not open legacy info-hash metrics for a session-owned source", async () => {
     const player = createMockPlayer();
     usePlayerStore.getState().setSessionStream(
       {
@@ -199,7 +199,7 @@ describe("usePlayerController playback launch intent", () => {
       "attempt-launch",
     );
 
-    const screen = renderHook(() =>
+    const screen = await renderHook(() =>
       usePlayerController({
         player,
         playbackUri:
@@ -210,7 +210,7 @@ describe("usePlayerController playback launch intent", () => {
     );
 
     expect(mockSubscribeToStreamMetrics).not.toHaveBeenCalled();
-    screen.unmount();
+    await screen.unmount();
   });
 
   afterEach(() => {
@@ -223,7 +223,7 @@ describe("usePlayerController playback launch intent", () => {
   it("waits for the resolved source ready event before consuming Resume", async () => {
     const player = createMockPlayer();
     startSession({ type: "resume", positionSeconds: 93 });
-    const screen = renderHook(
+    const screen = await renderHook(
       ({ playbackUri }: { playbackUri: string | null }) =>
         usePlayerController({
           player,
@@ -240,13 +240,13 @@ describe("usePlayerController playback launch intent", () => {
     });
     expect(player.play).not.toHaveBeenCalled();
 
-    screen.rerender({
+    await screen.rerender({
       playbackUri: "https://cdn.example.test/resolved.mp4",
     });
     expect(usePlayerStore.getState().playbackLaunchIntent).not.toBeNull();
     expect(player.currentTime).toBe(0);
 
-    act(() => {
+    await act(() => {
       // Expo Video web emits the payload before player.status is updated.
       player.emit("statusChange", { status: "readyToPlay" });
     });
@@ -257,7 +257,7 @@ describe("usePlayerController playback launch intent", () => {
       expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
     });
     expect(screen.result.current.showResumePrompt).toBe(false);
-    screen.unmount();
+    await screen.unmount();
   });
 
   it("lets explicit Play suppress an existing resume prompt", async () => {
@@ -274,7 +274,7 @@ describe("usePlayerController playback launch intent", () => {
     player.duration = 300;
     startSession({ type: "play" });
 
-    const screen = renderHook(() =>
+    const screen = await renderHook(() =>
       usePlayerController({
         player,
         playbackUri: "https://cdn.example.test/resolved.mp4",
@@ -290,14 +290,14 @@ describe("usePlayerController playback launch intent", () => {
     expect(player.currentTime).toBe(0);
     expect(player.pause).not.toHaveBeenCalled();
     expect(screen.result.current.showResumePrompt).toBe(false);
-    screen.unmount();
+    await screen.unmount();
   });
 
-  it("reports the native playback completion event", () => {
+  it("reports the native playback completion event", async () => {
     const player = createMockPlayer();
     const onCompleted = jest.fn();
     startSession({ type: "play" });
-    const screen = renderHook(() =>
+    const screen = await renderHook(() =>
       usePlayerController({
         player,
         playbackUri: "https://cdn.example.test/resolved.mp4",
@@ -307,9 +307,9 @@ describe("usePlayerController playback launch intent", () => {
       }),
     );
 
-    act(() => player.emit("playToEnd", {}));
+    await act(() => player.emit("playToEnd", {}));
 
     expect(onCompleted).toHaveBeenCalledTimes(1);
-    screen.unmount();
+    await screen.unmount();
   });
 });

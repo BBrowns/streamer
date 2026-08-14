@@ -233,32 +233,32 @@ describe("DownloadsScreen selection", () => {
   });
 
   it("hides the action bar at zero and clears selection on Cancel and filters", async () => {
-    const screen = render(<DownloadsScreen />);
+    const screen = await render(<DownloadsScreen />);
     await waitFor(() =>
       expect(mockDownloadService.refreshQueue).toHaveBeenCalled(),
     );
 
     expect(screen.queryByText("0 selected")).toBeNull();
-    fireEvent.press(screen.getByText("Select"));
-    fireEvent.press(screen.getByLabelText("card-download-episode-1"));
+    await fireEvent.press(screen.getByText("Select"));
+    await fireEvent.press(screen.getByLabelText("card-download-episode-1"));
     expect(screen.getByText("1 selected")).toBeTruthy();
 
-    fireEvent.press(screen.getByText("Cancel"));
+    await fireEvent.press(screen.getByText("Cancel"));
     expect(screen.queryByText("1 selected")).toBeNull();
 
-    fireEvent.press(screen.getByText("Select"));
-    fireEvent.press(screen.getByLabelText("card-download-episode-1"));
-    fireEvent.press(screen.getByLabelText("filter-ready"));
+    await fireEvent.press(screen.getByText("Select"));
+    await fireEvent.press(screen.getByLabelText("card-download-episode-1"));
+    await fireEvent.press(screen.getByLabelText("filter-ready"));
     await waitFor(() => expect(screen.queryByText("1 selected")).toBeNull());
     expect(screen.getByText("Select")).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText("filter-attention"));
+    await fireEvent.press(screen.getByLabelText("filter-attention"));
     await waitFor(() => expect(screen.queryByText("Select")).toBeNull());
   });
 
   it("lets the compact tab header own the Downloads title", async () => {
     mockIsCompact = true;
-    const screen = render(<DownloadsScreen />);
+    const screen = await render(<DownloadsScreen />);
 
     await waitFor(() =>
       expect(mockDownloadService.refreshQueue).toHaveBeenCalled(),
@@ -272,14 +272,14 @@ describe("DownloadsScreen selection", () => {
 
   it("defers bulk deletion for exactly seven seconds", async () => {
     jest.useFakeTimers();
-    const screen = render(<DownloadsScreen />);
+    const screen = await render(<DownloadsScreen />);
 
-    fireEvent.press(screen.getByText("Select"));
-    fireEvent.press(screen.getByLabelText("card-download-episode-1"));
-    fireEvent.press(screen.getByLabelText("Delete selected downloads"));
+    await fireEvent.press(screen.getByText("Select"));
+    await fireEvent.press(screen.getByLabelText("card-download-episode-1"));
+    await fireEvent.press(screen.getByLabelText("Delete selected downloads"));
 
     expect(mockDownloadService.deleteDownload).not.toHaveBeenCalled();
-    act(() => jest.advanceTimersByTime(6_999));
+    await act(() => jest.advanceTimersByTime(6_999));
     expect(mockDownloadService.deleteDownload).not.toHaveBeenCalled();
     await act(async () => {
       jest.advanceTimersByTime(1);

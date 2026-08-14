@@ -34,8 +34,8 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("PlayerOverlay", () => {
-  it("renders optional stream info as a top panel instead of a bottom bar", () => {
-    const screen = render(
+  it("renders optional stream info as a top panel instead of a bottom bar", async () => {
+    const screen = await render(
       <PlayerOverlay
         currentStream={{ title: "Example stream" } as any}
         engineType="hls"
@@ -52,9 +52,9 @@ describe("PlayerOverlay", () => {
     );
   });
 
-  it("uses a compact close control without duplicating playback settings", () => {
+  it("uses a compact close control without duplicating playback settings", async () => {
     const onClose = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerOverlay
         currentStream={{ title: "Example stream" } as any}
         engineType="hls"
@@ -64,14 +64,14 @@ describe("PlayerOverlay", () => {
       />,
     );
 
-    fireEvent.press(screen.getByTestId("player-close-button"));
+    await fireEvent.press(screen.getByTestId("player-close-button"));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByLabelText("Playback settings")).toBeNull();
   });
 
-  it("keeps top chrome cinema-dark when app theme values would be light", () => {
-    const screen = render(
+  it("keeps top chrome cinema-dark when app theme values would be light", async () => {
+    const screen = await render(
       <PlayerOverlay
         currentStream={{ title: "Example stream" } as any}
         engineType="hls"

@@ -20,12 +20,12 @@ describe("useGlobalSearch", () => {
   });
   afterEach(() => jest.useRealTimers());
 
-  it("does not debounce or request suggestions while explicitly disabled", () => {
-    const { result } = renderHook(() =>
+  it("does not debounce or request suggestions while explicitly disabled", async () => {
+    const { result } = await renderHook(() =>
       useGlobalSearch("Dune", { enabled: false }),
     );
 
-    act(() => jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    await act(() => jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
     expect(result.current.isDebouncing).toBe(false);
     expect(useSearch).toHaveBeenLastCalledWith("", {
       minimumLength: 2,
@@ -36,10 +36,12 @@ describe("useGlobalSearch", () => {
     });
   });
 
-  it("uses normalized query identity for debounce state", () => {
-    const { result } = renderHook(() => useGlobalSearch("Dune   Part Two"));
+  it("uses normalized query identity for debounce state", async () => {
+    const { result } = await renderHook(() =>
+      useGlobalSearch("Dune   Part Two"),
+    );
 
-    act(() => jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    await act(() => jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
 
     expect(useSearch).toHaveBeenLastCalledWith("Dune Part Two", {
       minimumLength: 2,
@@ -51,15 +53,15 @@ describe("useGlobalSearch", () => {
     expect(result.current.isDebouncing).toBe(false);
   });
 
-  it("cancels the superseded request before the replacement debounce elapses", () => {
-    const { rerender } = renderHook(
+  it("cancels the superseded request before the replacement debounce elapses", async () => {
+    const { rerender } = await renderHook(
       ({ query }: { query: string }) => useGlobalSearch(query),
       { initialProps: { query: "Dune" } },
     );
-    act(() => jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
+    await act(() => jest.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
     mockCancelQueries.mockClear();
 
-    rerender({ query: "Alien" });
+    await rerender({ query: "Alien" });
 
     expect(mockCancelQueries).toHaveBeenCalledWith({
       queryKey: ["search", "Dune", "suggestions", "all"],

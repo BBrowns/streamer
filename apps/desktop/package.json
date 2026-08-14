@@ -22,8 +22,8 @@
     "test": "node --test src/*.test.js"
   },
   "devDependencies": {
-    "@electron/notarize": "^2.5.0",
-    "electron": "43.3.0",
+    "@electron/notarize": "^3.1.1",
+    "electron": "43.4.0",
     "electron-builder": "^26.8.1"
   },
   "dependencies": {

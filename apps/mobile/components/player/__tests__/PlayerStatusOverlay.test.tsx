@@ -55,8 +55,8 @@ describe("PlayerStatusOverlay", () => {
     updatedAt: "2026-06-04T10:00:00.000Z",
   };
 
-  it("shows fallback reason while trying another planned source", () => {
-    const screen = render(
+  it("shows fallback reason while trying another planned source", async () => {
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="trying_fallback"
@@ -74,9 +74,9 @@ describe("PlayerStatusOverlay", () => {
     ).toBeTruthy();
   });
 
-  it("lets the viewer cancel source preparation immediately", () => {
+  it("lets the viewer cancel source preparation immediately", async () => {
     const onCancelPreparation = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="preparing_metadata"
@@ -88,14 +88,16 @@ describe("PlayerStatusOverlay", () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText("player.status.cancelPreparation"));
+    await fireEvent.press(
+      screen.getByLabelText("player.status.cancelPreparation"),
+    );
 
     expect(onCancelPreparation).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps a partial-discovery recovery in its cancellable loading state", () => {
+  it("keeps a partial-discovery recovery in its cancellable loading state", async () => {
     const onCancelPreparation = jest.fn();
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="planning"
@@ -108,18 +110,20 @@ describe("PlayerStatusOverlay", () => {
     );
 
     expect(screen.getByText("player.status.searchingSource")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("player.status.cancelPreparation"));
+    await fireEvent.press(
+      screen.getByLabelText("player.status.cancelPreparation"),
+    );
     expect(onCancelPreparation).toHaveBeenCalledTimes(1);
   });
 
-  it("offers retry and Sources & Devices actions on playback errors", () => {
+  it("offers retry and Sources & Devices actions on playback errors", async () => {
     const onRetry = jest.fn();
     const onChooseSource = jest.fn();
     const onPreviewPlayer = jest.fn();
     const onOpenSourcesDevices = jest.fn();
     const onBack = jest.fn();
 
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="error"
         streamMetrics={null}
@@ -133,11 +137,11 @@ describe("PlayerStatusOverlay", () => {
       />,
     );
 
-    fireEvent.press(screen.getByText("common.retry"));
-    fireEvent.press(screen.getByText("player.errors.chooseSource"));
-    fireEvent.press(screen.getByText("player.errors.previewPlayer"));
-    fireEvent.press(screen.getByText("player.errors.openSourcesDevices"));
-    fireEvent.press(screen.getByText("player.errors.goBack"));
+    await fireEvent.press(screen.getByText("common.retry"));
+    await fireEvent.press(screen.getByText("player.errors.chooseSource"));
+    await fireEvent.press(screen.getByText("player.errors.previewPlayer"));
+    await fireEvent.press(screen.getByText("player.errors.openSourcesDevices"));
+    await fireEvent.press(screen.getByText("player.errors.goBack"));
 
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onChooseSource).toHaveBeenCalledTimes(1);
@@ -146,8 +150,8 @@ describe("PlayerStatusOverlay", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("uses runtime error titles and hides retry when retry is not useful", () => {
-    const screen = render(
+  it("uses runtime error titles and hides retry when retry is not useful", async () => {
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="error"
         streamMetrics={null}
@@ -168,7 +172,7 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.queryByText("common.retry")).toBeNull();
   });
 
-  it("uses peer and phase copy instead of a synthetic gateway percentage", () => {
+  it("uses peer and phase copy instead of a synthetic gateway percentage", async () => {
     const session: PlaybackSession = {
       ...sessionBase,
       gatewayJobId: "gateway-job-1",
@@ -185,7 +189,7 @@ describe("PlayerStatusOverlay", () => {
         },
       ],
     };
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="buffering"
@@ -202,7 +206,7 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.queryByText(/25%/)).toBeNull();
   });
 
-  it("explains when peer discovery has not found a peer yet", () => {
+  it("explains when peer discovery has not found a peer yet", async () => {
     const session: PlaybackSession = {
       ...sessionBase,
       gatewayJobId: "gateway-job-1",
@@ -220,7 +224,7 @@ describe("PlayerStatusOverlay", () => {
       ],
     };
 
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="buffering"
@@ -236,7 +240,7 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.queryByText(/25%/)).toBeNull();
   });
 
-  it("does not present a terminal no-peers result as an active search", () => {
+  it("does not present a terminal no-peers result as an active search", async () => {
     const session: PlaybackSession = {
       ...sessionBase,
       gatewayJobId: "gateway-job-1",
@@ -253,7 +257,7 @@ describe("PlayerStatusOverlay", () => {
       ],
     };
 
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="buffering"
@@ -269,7 +273,7 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.queryByText("player.status.noPeersYet")).toBeNull();
   });
 
-  it("does not carry a previous candidate's no-peer status into the next source", () => {
+  it("does not carry a previous candidate's no-peer status into the next source", async () => {
     const session: PlaybackSession = {
       ...sessionBase,
       gatewayJobId: "gateway-job-2",
@@ -304,7 +308,7 @@ describe("PlayerStatusOverlay", () => {
       ],
     };
 
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         runtimeState="finding_peers"
@@ -323,7 +327,7 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.queryByText("player.status.noPeersYet")).toBeNull();
   });
 
-  it("uses a terminal session error instead of a generic player error", () => {
+  it("uses a terminal session error instead of a generic player error", async () => {
     const session: PlaybackSession = {
       ...sessionBase,
       status: "failed",
@@ -334,7 +338,7 @@ describe("PlayerStatusOverlay", () => {
         shouldFallback: false,
       },
     };
-    const screen = render(
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="loading_metrics"
         streamMetrics={null}
@@ -349,8 +353,8 @@ describe("PlayerStatusOverlay", () => {
     expect(screen.getByText("No peers were available.")).toBeTruthy();
   });
 
-  it("uses the no-sources title when every planned candidate failed", () => {
-    const screen = render(
+  it("uses the no-sources title when every planned candidate failed", async () => {
+    const screen = await render(
       <PlayerStatusOverlay
         streamState="error"
         streamMetrics={null}

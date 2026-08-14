@@ -5,6 +5,9 @@ import type { MetaPreview } from "@streamer/shared";
 
 const ExpoImageHost = "ExpoImage" as any;
 
+const getExpoImages = (screen: Awaited<ReturnType<typeof render>>) =>
+  screen.root?.queryAll((node) => node.type === ExpoImageHost) ?? [];
+
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
@@ -52,28 +55,30 @@ const createItem = (overrides: Partial<MetaPreview> = {}): MetaPreview => ({
 });
 
 describe("CatalogItemCard", () => {
-  it("passes poster URLs to the image component as uri sources", () => {
+  it("passes poster URLs to the image component as uri sources", async () => {
     const poster = "https://images.example.test/poster.jpg";
-    const screen = render(<CatalogItemCard item={createItem({ poster })} />);
+    const screen = await render(
+      <CatalogItemCard item={createItem({ poster })} />,
+    );
 
-    expect(screen.UNSAFE_getByType(ExpoImageHost).props.source).toEqual({
+    expect(getExpoImages(screen)[0]?.props.source).toEqual({
       uri: poster,
     });
   });
 
   it("recovers from a cached empty poster when the catalog refetch supplies one", async () => {
     const poster = "https://images.example.test/refetched-poster.jpg";
-    const screen = render(
+    const screen = await render(
       <CatalogItemCard item={createItem({ poster: "" })} />,
     );
 
-    expect(screen.UNSAFE_queryByType(ExpoImageHost)).toBeNull();
+    expect(getExpoImages(screen)).toHaveLength(0);
     expect(screen.getAllByText("Example Movie").length).toBeGreaterThan(0);
 
-    screen.rerender(<CatalogItemCard item={createItem({ poster })} />);
+    await screen.rerender(<CatalogItemCard item={createItem({ poster })} />);
 
     await waitFor(() => {
-      expect(screen.UNSAFE_getByType(ExpoImageHost).props.source).toEqual({
+      expect(getExpoImages(screen)[0]?.props.source).toEqual({
         uri: poster,
       });
     });

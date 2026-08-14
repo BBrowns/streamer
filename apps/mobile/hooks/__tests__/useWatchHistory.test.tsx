@@ -55,7 +55,7 @@ describe("useWatchHistory", () => {
       return Promise.resolve({ data: page });
     });
     const { queryClient, wrapper } = createWrapper();
-    const { result, unmount } = renderHook(() => useWatchHistory(), {
+    const { result, unmount } = await renderHook(() => useWatchHistory(), {
       wrapper,
     });
 
@@ -79,7 +79,7 @@ describe("useWatchHistory", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 
@@ -94,7 +94,7 @@ describe("useWatchHistory", () => {
       pages: [initial],
       pageParams: [""],
     });
-    const { result, unmount } = renderHook(
+    const { result, unmount } = await renderHook(
       () => ({
         remove: useRemoveWatchHistoryEntry(),
         clear: useClearWatchHistory(),
@@ -122,7 +122,7 @@ describe("useWatchHistory", () => {
       )?.pages[0].items,
     ).toEqual([]);
 
-    unmount();
+    await unmount();
     queryClient.clear();
   });
 });

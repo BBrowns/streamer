@@ -22,14 +22,14 @@ jest.mock("../SourceInspectorPanel", () => ({
 }));
 
 describe("TechnicalSourceDisclosure", () => {
-  it("does not mount technical diagnostics until the viewer opens them", () => {
-    const screen = render(
+  it("does not mount technical diagnostics until the viewer opens them", async () => {
+    const screen = await render(
       <TechnicalSourceDisclosure contentType="movie" contentId="tt123" />,
     );
 
     expect(screen.queryByText("Rank and codec diagnostics")).toBeNull();
 
-    fireEvent.press(screen.getByLabelText("Show technical details"));
+    await fireEvent.press(screen.getByLabelText("Show technical details"));
 
     expect(screen.getByText("Rank and codec diagnostics")).toBeTruthy();
     expect(screen.getByLabelText("Hide technical details")).toBeTruthy();

@@ -31,8 +31,8 @@ describe("StreamItem", () => {
     useDownloadStore.getState().clearAll();
   });
 
-  it("does not resolve playback URLs while rendering stream metadata", () => {
-    render(
+  it("does not resolve playback URLs while rendering stream metadata", async () => {
+    await render(
       <StreamItem
         stream={{ infoHash: "abc123", title: "Torrent source" }}
         index={0}
@@ -44,7 +44,7 @@ describe("StreamItem", () => {
     expect(streamEngineManager.getPlaybackUri).not.toHaveBeenCalled();
   });
 
-  it("shows preparing state for downloads before progress starts", () => {
+  it("shows preparing state for downloads before progress starts", async () => {
     useDownloadStore.getState().addTask("abc123", {
       type: "movie",
       itemId: "tt123",
@@ -54,7 +54,7 @@ describe("StreamItem", () => {
     });
     useDownloadStore.getState().setStatus("abc123", "Preparing");
 
-    const { getByText } = render(
+    const { getByText } = await render(
       <StreamItem
         stream={{ infoHash: "abc123", title: "Torrent source" }}
         index={0}
@@ -66,7 +66,7 @@ describe("StreamItem", () => {
     expect(getByText("Prep")).toBeTruthy();
   });
 
-  it("shows offline only after the local file has been verified", () => {
+  it("shows offline only after the local file has been verified", async () => {
     useDownloadStore.getState().addTask("abc123", {
       type: "movie",
       itemId: "tt123",
@@ -78,7 +78,7 @@ describe("StreamItem", () => {
       .getState()
       .setStatus("abc123", "Completed", "file:///downloads/movie.mp4");
 
-    const unverified = render(
+    const unverified = await render(
       <StreamItem
         stream={{ infoHash: "abc123", title: "Torrent source" }}
         index={0}
@@ -88,13 +88,13 @@ describe("StreamItem", () => {
     );
 
     expect(unverified.queryByText("Offline")).toBeNull();
-    unverified.unmount();
+    await unverified.unmount();
 
     useDownloadStore
       .getState()
       .markVerified("abc123", "file:///downloads/movie.mp4", 2 * 1024 ** 2);
 
-    const verified = render(
+    const verified = await render(
       <StreamItem
         stream={{ infoHash: "abc123", title: "Torrent source" }}
         index={0}

@@ -81,9 +81,9 @@ describe("Sources and Advanced ownership", () => {
     } as any;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.restoreAllMocks();
-    act(() => {
+    await act(() => {
       useAuthStore.setState({ streamServerToken: null });
     });
     global.fetch = undefined as any;
@@ -95,7 +95,7 @@ describe("Sources and Advanced ownership", () => {
   });
 
   it("keeps consumer readiness, add-ons and device capabilities in Sources", async () => {
-    const screen = render(<SourcesSection />);
+    const screen = await render(<SourcesSection />);
 
     await waitFor(() => {
       expect(screen.getByText("Content Add-ons")).toBeTruthy();
@@ -107,7 +107,7 @@ describe("Sources and Advanced ownership", () => {
   });
 
   it("keeps connection, maintenance and collapsed diagnostics in Advanced", async () => {
-    const screen = render(<AdvancedSourcesSection />);
+    const screen = await render(<AdvancedSourcesSection />);
 
     await waitFor(() => {
       expect(screen.getByText("Backend API URL")).toBeTruthy();
@@ -120,7 +120,7 @@ describe("Sources and Advanced ownership", () => {
     expect(screen.queryByText("Real-Debrid")).toBeNull();
     expect(screen.queryByText("FFmpeg: Unavailable")).toBeNull();
 
-    fireEvent.press(screen.getByText("Runtime and build details"));
+    await fireEvent.press(screen.getByText("Runtime and build details"));
 
     await waitFor(() => {
       expect(screen.getByText("FFmpeg: Unavailable")).toBeTruthy();
@@ -134,12 +134,12 @@ describe("Sources and Advanced ownership", () => {
   });
 
   it("cleans inactive playback cache through the configured service", async () => {
-    const screen = render(<AdvancedSourcesSection />);
+    const screen = await render(<AdvancedSourcesSection />);
 
     await waitFor(() => {
       expect(screen.getByText("Clean playback cache")).toBeTruthy();
     });
-    fireEvent.press(screen.getByText("Clean playback cache"));
+    await fireEvent.press(screen.getByText("Clean playback cache"));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
@@ -172,7 +172,7 @@ describe("Sources and Advanced ownership", () => {
       .spyOn(streamEngineManager, "getBridgeUrl")
       .mockReturnValue("http://localhost:11470");
 
-    const screen = render(<AdvancedSourcesSection />);
+    const screen = await render(<AdvancedSourcesSection />);
 
     await waitFor(() => {
       expect(

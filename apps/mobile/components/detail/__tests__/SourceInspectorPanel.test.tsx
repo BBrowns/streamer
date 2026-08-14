@@ -89,7 +89,7 @@ describe("SourceInspectorPanel", () => {
       }),
     );
 
-    const screen = render(
+    const screen = await render(
       <SourceInspectorPanel
         contentType="movie"
         contentId="tt123"

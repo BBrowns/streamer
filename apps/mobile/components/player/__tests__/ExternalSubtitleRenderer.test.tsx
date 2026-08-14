@@ -13,8 +13,8 @@ const cues = [
 ];
 
 describe("ExternalSubtitleRenderer", () => {
-  it("renders overlapping cues from the accepted playback time", () => {
-    const screen = render(
+  it("renders overlapping cues from the accepted playback time", async () => {
+    const screen = await render(
       <ExternalSubtitleRenderer
         cues={cues}
         currentTime={2.5}
@@ -33,8 +33,8 @@ describe("ExternalSubtitleRenderer", () => {
     expect(screen.getAllByTestId("external-subtitle-cue")).toHaveLength(2);
   });
 
-  it("applies sync offset and avoids rendering outside cue windows", () => {
-    const screen = render(
+  it("applies sync offset and avoids rendering outside cue windows", async () => {
+    const screen = await render(
       <ExternalSubtitleRenderer
         cues={cues}
         currentTime={3.5}

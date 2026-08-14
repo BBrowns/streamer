@@ -262,36 +262,36 @@ describe("LibraryScreen selection", () => {
   });
 
   it("clears selection on Cancel and filter changes and disables selection offline", async () => {
-    const screen = render(<LibraryScreen />);
+    const screen = await render(<LibraryScreen />);
 
     expect(screen.queryByText("0 selected")).toBeNull();
     expect(screen.queryByText("Delete")).toBeNull();
 
-    fireEvent.press(screen.getByText("Select"));
-    fireEvent.press(screen.getByLabelText("card-library:library-movie"));
+    await fireEvent.press(screen.getByText("Select"));
+    await fireEvent.press(screen.getByLabelText("card-library:library-movie"));
     expect(screen.getByText("1 selected")).toBeTruthy();
 
-    fireEvent.press(screen.getByText("Cancel"));
+    await fireEvent.press(screen.getByText("Cancel"));
     expect(screen.queryByText("1 selected")).toBeNull();
 
-    fireEvent.press(screen.getByText("Select"));
-    fireEvent.press(screen.getByLabelText("card-library:library-series"));
+    await fireEvent.press(screen.getByText("Select"));
+    await fireEvent.press(screen.getByLabelText("card-library:library-series"));
     expect(screen.getByText("1 selected")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("filter-movie"));
+    await fireEvent.press(screen.getByLabelText("filter-movie"));
 
     await waitFor(() => expect(screen.queryByText("1 selected")).toBeNull());
     expect(screen.getByText("Select")).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText("filter-offline"));
+    await fireEvent.press(screen.getByLabelText("filter-offline"));
     await waitFor(() => expect(screen.queryByText("Select")).toBeNull());
     expect(screen.getByText("Manage downloads")).toBeTruthy();
   });
 
   it("keeps a separately paginated watch history accessible and confirms clearing it", async () => {
     const alertSpy = jest.spyOn(Alert, "alert");
-    const screen = render(<LibraryScreen />);
+    const screen = await render(<LibraryScreen />);
 
-    fireEvent.press(screen.getByLabelText("filter-history"));
+    await fireEvent.press(screen.getByLabelText("filter-history"));
 
     await waitFor(() => {
       expect(screen.getByText("Watched Episode")).toBeTruthy();
@@ -299,7 +299,7 @@ describe("LibraryScreen selection", () => {
       expect(screen.queryByText("Select")).toBeNull();
     });
 
-    fireEvent.press(screen.getByText("Clear history"));
+    await fireEvent.press(screen.getByText("Clear history"));
     expect(alertSpy).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(String),

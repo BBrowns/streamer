@@ -6,6 +6,10 @@ import { LanguageSection, normalizeSettingsLanguage } from "../LanguageSection";
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 
 describe("settings language selection", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("normalizes regional and underscore locale variants", () => {
     expect(normalizeSettingsLanguage("en-US")).toBe("en");
     expect(normalizeSettingsLanguage("nl_NL")).toBe("nl");
@@ -18,15 +22,16 @@ describe("settings language selection", () => {
   });
 
   it("renders scalable radio rows and persists the selected base locale", async () => {
-    const screen = render(<LanguageSection />);
+    const setItem = jest.spyOn(AsyncStorage, "setItem");
+    const screen = await render(<LanguageSection />);
 
     expect(
       screen.getByTestId("settings-language-en").props.accessibilityState,
     ).toMatchObject({ checked: true });
 
-    fireEvent.press(screen.getByTestId("settings-language-es"));
+    await fireEvent.press(screen.getByTestId("settings-language-es"));
     await waitFor(() => {
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith("user-language", "es");
+      expect(setItem).toHaveBeenCalledWith("user-language", "es");
     });
   });
 });
