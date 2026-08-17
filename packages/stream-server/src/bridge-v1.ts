@@ -638,10 +638,7 @@ bridgeV1Router.get(
   "/jobs/:jobId/subtitles/:documentId",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
-  async (
-    req: Request<{ jobId: string; documentId: string }>,
-    res,
-  ) => {
+  async (req: Request<{ jobId: string; documentId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) {
       return sendBridgeV1Error(
