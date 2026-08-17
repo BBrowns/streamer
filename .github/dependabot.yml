@@ -15,7 +15,7 @@ updates:
       - dependency-name: react-native
         versions:
           - ">=0.87.0"
-      # The root uuid 11.x pin preserves xcode's CommonJS integration.
+      # Keep the root uuid dependency on 11.x; Xcode's CommonJS integration does not support 12+.
       - dependency-name: uuid
         versions:
           - ">=12.0.0"
