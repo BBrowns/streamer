@@ -1111,12 +1111,16 @@ gatewayRouter.post("/jobs", requireBridgeAuth, async (req, res) => {
   }
 });
 
-gatewayRouter.get("/jobs/:id", requireBridgeAuth, (req, res) => {
-  pruneJobs();
-  const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: "Gateway job not found" });
-  return res.json(serializeJob(job));
-});
+gatewayRouter.get(
+  "/jobs/:id",
+  requireBridgeAuth,
+  (req: Request<{ id: string }>, res) => {
+    pruneJobs();
+    const job = jobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: "Gateway job not found" });
+    return res.json(serializeJob(job));
+  },
+);
 
 function subtitleFormatFromCodec(codec: string) {
   if (codec === "subrip" || codec === "srt") return "srt" as const;
@@ -1203,23 +1207,27 @@ export async function buildGatewayTrackCatalog(job: GatewayJob) {
   });
 }
 
-gatewayRouter.get("/jobs/:id/tracks", requireBridgeAuth, async (req, res) => {
-  pruneJobs();
-  const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: "Gateway job not found" });
+gatewayRouter.get(
+  "/jobs/:id/tracks",
+  requireBridgeAuth,
+  async (req: Request<{ id: string }>, res) => {
+    pruneJobs();
+    const job = jobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: "Gateway job not found" });
 
-  try {
-    return res.json(await buildGatewayTrackCatalog(job));
-  } catch (error) {
-    if (isGatewayJobCancelled(job)) {
-      return res.status(410).json({ error: "Gateway job cancelled" });
+    try {
+      return res.json(await buildGatewayTrackCatalog(job));
+    } catch (error) {
+      if (isGatewayJobCancelled(job)) {
+        return res.status(410).json({ error: "Gateway job cancelled" });
+      }
+      return res.status(503).json({
+        error: "Media tracks are temporarily unavailable",
+        retryable: true,
+      });
     }
-    return res.status(503).json({
-      error: "Media tracks are temporarily unavailable",
-      retryable: true,
-    });
-  }
-});
+  },
+);
 
 export function gatewayJobOwnsSeekableCache(job: GatewayJob): boolean {
   return (
@@ -1257,7 +1265,7 @@ export async function getGatewayThumbnail(
 gatewayRouter.get(
   "/jobs/:id/thumbnails/:bucket",
   requireBridgeAuth,
-  async (req, res) => {
+  async (req: Request<{ id: string; bucket: string }>, res) => {
     pruneJobs();
     const job = jobs.get(req.params.id);
     if (!job) return res.status(404).json({ error: "Gateway job not found" });
@@ -1404,7 +1412,7 @@ export async function getGatewaySubtitleDocument(
 gatewayRouter.get(
   "/jobs/:id/subtitles/:identity",
   requireBridgeAuth,
-  async (req, res) => {
+  async (req: Request<{ id: string; identity: string }>, res) => {
     pruneJobs();
     const job = jobs.get(req.params.id);
     if (!job) return res.status(404).json({ error: "Gateway job not found" });
@@ -1445,16 +1453,23 @@ gatewayRouter.get(
   },
 );
 
-gatewayRouter.delete("/jobs/:id", requireBridgeAuth, (req, res) => {
-  pruneJobs();
-  const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: "Gateway job not found" });
+gatewayRouter.delete(
+  "/jobs/:id",
+  requireBridgeAuth,
+  (req: Request<{ id: string }>, res) => {
+    pruneJobs();
+    const job = jobs.get(req.params.id);
+    if (!job) return res.status(404).json({ error: "Gateway job not found" });
 
-  cancelGatewayJob(job);
-  return res.status(202).json(serializeJob(job));
-});
+    cancelGatewayJob(job);
+    return res.status(202).json(serializeJob(job));
+  },
+);
 
-export async function serveGatewayJobStream(req: Request, res: Response) {
+export async function serveGatewayJobStream(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
   pruneJobs();
   const job = jobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: "Gateway job not found" });
