@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "crypto";
 import rateLimit, { MemoryStore } from "express-rate-limit";
-import { Router, type Response } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   bridgeCapabilitiesV1Schema,
   bridgeAccessSessionIdSchema,
@@ -434,7 +434,7 @@ bridgeV1Router.delete(
   "/access-sessions/:sessionId",
   bridgeV1PairingRateLimiter,
   requireBridgeV1MasterAuth,
-  (req, res) => {
+  (req: Request<{ sessionId: string }>, res) => {
     const parsedSessionId = bridgeAccessSessionIdSchema.safeParse(
       req.params.sessionId,
     );
@@ -530,7 +530,7 @@ bridgeV1Router.get(
   "/jobs/:jobId",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
-  (req, res) => {
+  (req: Request<{ jobId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) {
       return sendBridgeV1Error(
@@ -548,7 +548,7 @@ bridgeV1Router.get(
   "/jobs/:jobId/metrics",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
-  (req, res) => {
+  (req: Request<{ jobId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) {
       return sendBridgeV1Error(
@@ -592,7 +592,7 @@ bridgeV1Router.get(
   "/jobs/:jobId/tracks",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
-  async (req, res) => {
+  async (req: Request<{ jobId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) {
       return sendBridgeV1Error(
@@ -638,7 +638,7 @@ bridgeV1Router.get(
   "/jobs/:jobId/subtitles/:documentId",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
-  async (req, res) => {
+  async (req: Request<{ jobId: string; documentId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) {
       return sendBridgeV1Error(
@@ -719,7 +719,7 @@ bridgeV1Router.get(
   "/jobs/:jobId/thumbnails/:bucket",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:read"),
-  async (req, res) => {
+  async (req: Request<{ jobId: string; bucket: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) {
       return sendBridgeV1Error(
@@ -832,7 +832,7 @@ bridgeV1Router.delete(
   "/jobs/:jobId",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:write"),
-  (req, res) => {
+  (req: Request<{ jobId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) return res.status(204).send();
     if (job.state !== "cancelled") cancelGatewayJob(job);
@@ -1009,7 +1009,7 @@ bridgeV1Router.get(
   "/cast/status/:deviceId",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("cast:read"),
-  async (req, res) => {
+  async (req: Request<{ deviceId: string }>, res) => {
     const result = await getBridgeCastStatus(req.params.deviceId);
     if (!result.ok) return castFailure(res, result.reason);
     return res.json(

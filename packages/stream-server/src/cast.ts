@@ -370,26 +370,29 @@ router.post("/control", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/status/:deviceId", async (req: Request, res: Response) => {
-  const device = devices.find(
-    (candidate) => candidate.id === req.params.deviceId,
-  );
-  if (!device) return res.status(404).json({ error: "Device not found" });
+router.get(
+  "/status/:deviceId",
+  async (req: Request<{ deviceId: string }>, res: Response) => {
+    const device = devices.find(
+      (candidate) => candidate.id === req.params.deviceId,
+    );
+    if (!device) return res.status(404).json({ error: "Device not found" });
 
-  try {
-    const status = await statusForCastDevice(device);
-    if (!status) {
-      return res.status(404).json({ error: "No active session" });
+    try {
+      const status = await statusForCastDevice(device);
+      if (!status) {
+        return res.status(404).json({ error: "No active session" });
+      }
+      return res.json(status);
+    } catch (error) {
+      return res.status(500).json({
+        error: redactSensitiveText(
+          String((error as Error | undefined)?.message ?? "Status failed"),
+        ),
+      });
     }
-    return res.json(status);
-  } catch (error) {
-    return res.status(500).json({
-      error: redactSensitiveText(
-        String((error as Error | undefined)?.message ?? "Status failed"),
-      ),
-    });
-  }
-});
+  },
+);
 
 export function __setCastDevicesForTests(
   values: Array<{
