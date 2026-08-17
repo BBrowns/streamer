@@ -31,7 +31,10 @@ export function getTorrentMetricsSnapshot(
   };
 }
 
-export function metricsHandler(req: Request, res: Response): void {
+export function metricsHandler(
+  req: Request<{ infoHash: string }>,
+  res: Response,
+): void {
   const { infoHash } = req.params;
 
   if (!infoHash || typeof infoHash !== "string") {
