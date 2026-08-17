@@ -10,6 +10,15 @@ updates:
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
     versioning-strategy: increase-if-necessary
+    ignore:
+      # Expo SDK 57 remains pinned to the validated React Native 0.86.2 line.
+      - dependency-name: react-native
+        versions:
+          - ">=0.87.0"
+      # xcode's CommonJS UUID integration is covered by the repository's 11.x pin.
+      - dependency-name: uuid
+        versions:
+          - ">=12.0.0"
     groups:
       npm-security-runtime:
         applies-to: security-updates
