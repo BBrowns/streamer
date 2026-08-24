@@ -79,7 +79,7 @@
     "prettier": "3.9.6",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0",
-    "uuid": "11.1.1"
+    "uuid": "14.0.1"
   },
   "engines": {
     "node": ">=26.7.0 <27",
@@ -90,6 +90,7 @@
     "@opentelemetry/core": "^2.8.0",
     "@opentelemetry/resources": "^2.8.0",
     "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "deepmerge-ts": "^8.0.0",
     "form-data": "^4.0.6",
     "hono": "~4.13.2",
     "js-yaml": "4.3.1",

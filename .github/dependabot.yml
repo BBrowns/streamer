@@ -15,6 +15,10 @@ updates:
       - dependency-name: typescript
         versions:
           - ">=6.0.0"
+      # Expo SDK 57 remains pinned to the validated React Native 0.86.2 line.
+      - dependency-name: react-native
+        versions:
+          - ">=0.87.0"
     groups:
       npm-security-runtime:
         applies-to: security-updates
