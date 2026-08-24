@@ -79,7 +79,7 @@
     "prettier": "3.9.6",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0",
-    "uuid": "14.0.1"
+    "uuid": "14.0.2"
   },
   "engines": {
     "node": ">=26.7.0 <27",
