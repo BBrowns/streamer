@@ -34,7 +34,7 @@
     "@streamer/shared": "*",
     "axios": "^1.7.9",
     "bcryptjs": "^3.0.2",
-    "cockatiel": "^3.2.1",
+    "cockatiel": "^4.0.0",
     "express-rate-limit": "^8.2.1",
     "hono": "^4.13.2",
     "ioredis": "^6.0.0",
