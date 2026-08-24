@@ -11,10 +11,11 @@ updates:
     open-pull-requests-limit: 5
     versioning-strategy: increase-if-necessary
     ignore:
-      # typescript-eslint does not support TypeScript 7 yet.
+      # typescript-eslint does not support TypeScript 7 yet; keep TypeScript 6
+      # maintenance updates flowing automatically.
       - dependency-name: typescript
         versions:
-          - ">=6.0.0"
+          - ">=7.0.0"
       # Expo SDK 57 remains pinned to the validated React Native 0.86.2 line.
       - dependency-name: react-native
         versions:
