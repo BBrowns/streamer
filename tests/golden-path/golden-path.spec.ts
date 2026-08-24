@@ -34,7 +34,7 @@ async function settleVisualTheme(
 ) {
   await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
   const expectedBackground =
-    scheme === "dark" ? "rgb(8,9,12)" : "rgb(243,242,239)";
+    scheme === "dark" ? "rgb(8,9,11)" : "rgb(243,242,239)";
 
   await expect
     .poll(() =>
@@ -137,6 +137,155 @@ test("onboarding setup remains shell-free and responsive", async ({
   });
 });
 
+test("Home prefers a landscape backdrop and contains a poster-only fallback", async ({
+  page,
+}) => {
+  await loginToFixtureShell(page);
+  await expect(page.getByTestId("home-hero-backdrop")).toBeVisible();
+  await expect(page.getByTestId("home-hero-contained-poster")).toHaveCount(0);
+
+  const fallbackPage = await page.context().newPage();
+  try {
+    await loginToFixtureShell(fallbackPage, { scenario: "poster-only" });
+    await expect(
+      fallbackPage.getByTestId("home-hero-contained-poster"),
+    ).toBeVisible();
+    await expect(fallbackPage.getByTestId("home-hero-backdrop")).toHaveCount(0);
+  } finally {
+    await fallbackPage.close();
+  }
+});
+
+test("Continue Watching keeps cinematic landscape geometry and a contained legacy fallback", async ({
+  page,
+}, testInfo) => {
+  const progressResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/library/progress" &&
+      response.request().method() === "GET",
+  );
+  await loginToFixtureShell(page, {
+    fixture: { progress: "cinematic" },
+  });
+  const progressPayload = (await (await progressResponse).json()) as {
+    items?: unknown[];
+  };
+  expect(progressPayload.items).toHaveLength(3);
+  const cards = page.getByTestId("continue-watching-card");
+  const artwork = page.getByTestId("continue-watching-artwork");
+
+  await expect(cards).toHaveCount(3);
+  await expect(page.getByTestId("continue-watching-backdrop")).toHaveCount(2);
+  await expect(
+    page.getByTestId("continue-watching-contained-poster"),
+  ).toHaveCount(1);
+  const fallbackFrameBox = await artwork.nth(2).boundingBox();
+  const fallbackPosterBox = await page
+    .getByTestId("continue-watching-contained-poster-artwork")
+    .boundingBox();
+  expect(fallbackFrameBox).not.toBeNull();
+  expect(fallbackPosterBox).not.toBeNull();
+  expect(fallbackPosterBox!.x + fallbackPosterBox!.width / 2).toBeGreaterThan(
+    fallbackFrameBox!.x + fallbackFrameBox!.width * 0.62,
+  );
+
+  const artworkBox = await artwork.first().boundingBox();
+  expect(artworkBox).not.toBeNull();
+  expect(artworkBox!.width / artworkBox!.height).toBeCloseTo(16 / 9, 1);
+
+  if (testInfo.project.name === "desktop-renderer") {
+    const cardBox = await cards.first().boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(cardBox!.width).toBeCloseTo(400, 0);
+
+    const quickActions = cards
+      .first()
+      .getByTestId("continue-watching-quick-actions");
+    await expect
+      .poll(() =>
+        quickActions.evaluate(
+          (element) => getComputedStyle(element).pointerEvents,
+        ),
+      )
+      .toBe("none");
+    await cards.first().hover();
+    await expect
+      .poll(() =>
+        quickActions.evaluate(
+          (element) => getComputedStyle(element).pointerEvents,
+        ),
+      )
+      .toBe("auto");
+    await cards
+      .first()
+      .getByRole("button", { name: "Resume Foundation" })
+      .hover();
+    await expect
+      .poll(() =>
+        quickActions.evaluate(
+          (element) => getComputedStyle(element).pointerEvents,
+        ),
+      )
+      .toBe("auto");
+  }
+});
+
+test("desktop cinematic navigation strengthens without leaving the viewport", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "The compact shell uses native-style tab navigation.",
+  );
+  await loginToFixtureShell(page);
+  const topbar = page.getByTestId("cinematic-topbar");
+  await expect(topbar).toBeVisible();
+  const initialBackground = await topbar.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+
+  await page.getByTestId("home-screen").evaluate((element) => {
+    element.scrollTop = 420;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  await expect
+    .poll(() =>
+      topbar.evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .not.toBe(initialBackground);
+  const topbarBox = await topbar.boundingBox();
+  expect(topbarBox).not.toBeNull();
+  expect(topbarBox!.y).toBe(0);
+});
+
+test("desktop notification bell opens a compact popover and restores focus", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-renderer",
+    "Compact notifications use their routed mobile presentation.",
+  );
+  await loginToFixtureShell(page, {
+    fixture: { notifications: "populated" },
+  });
+  const trigger = page.getByRole("button", {
+    name: "Notifications, 2 unread",
+  });
+  await trigger.click();
+
+  const popover = page.getByTestId("desktop-notifications-menu");
+  await expect(popover).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  const popoverBox = await popover.boundingBox();
+  expect(popoverBox).not.toBeNull();
+  expect(popoverBox!.width).toBeLessThanOrEqual(380);
+
+  await page.keyboard.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 test("browse to detail and Play reaches a direct player", async ({ page }) => {
   const controls = await loginAndOpenFixture(page, "direct");
   await page.getByRole("button", { name: "Play" }).click();
@@ -196,26 +345,25 @@ test("no peers is recoverable through advanced source selection", async ({
   ).toBeVisible();
 });
 
-test("development player preview exposes the real control chrome", async ({
+test("player launch exposes the real control chrome", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await loginAndOpenFixture(page, "no-peers");
+  await loginAndOpenFixture(page, "direct");
   await page.getByRole("button", { name: "Play" }).click();
 
-  await page.getByRole("button", { name: "Preview player" }).click();
   await expect(page.getByTestId("player-screen")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Play playback" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Audio, subtitles, and source" }),
+    page.getByRole("button", { name: "Playback settings" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Audio, subtitles, and source" }),
+    page.getByRole("button", { name: "Playback settings" }),
   ).toHaveCount(1);
   await expect(
-    page.getByRole("button", { name: "Playback settings" }),
+    page.getByRole("button", { name: "Audio, subtitles, and source" }),
   ).toHaveCount(0);
   await expect(page.getByText(/empty string/i)).toHaveCount(0);
 
@@ -252,13 +400,13 @@ test("development player preview exposes the real control chrome", async ({
     const play = page.getByRole("button", { name: "Play playback" });
     const close = page.getByRole("button", { name: "Close" });
     const seekBack = page.getByRole("button", {
-      name: "Seek back unavailable",
+      name: /Seek back/,
     });
     const settings = page.getByRole("button", {
-      name: "Audio, subtitles, and source",
+      name: "Playback settings",
     });
     const progress = page.getByRole("slider", {
-      name: "Playback progress unavailable",
+      name: /Playback progress/,
     });
     const [playBox, closeBox, seekBackBox, settingsBox, progressBox] =
       await Promise.all([
@@ -284,8 +432,7 @@ test("development player preview exposes the real control chrome", async ({
     expect(seekBackBox!.width).toBeLessThanOrEqual(52);
     expect(seekBackBox!.height).toBeLessThanOrEqual(52);
     expect(progressBox!.y).toBeGreaterThan(800);
-    expect(settingsBox!.y + settingsBox!.height).toBeGreaterThan(900);
-    expect(settingsBox!.y + settingsBox!.height).toBeLessThanOrEqual(992);
+    expect(settingsBox!.y).toBeLessThanOrEqual(72);
   }
 
   await page.screenshot({
@@ -294,7 +441,7 @@ test("development player preview exposes the real control chrome", async ({
   });
 });
 
-test("player timeline preview and inspect sheet remain usable", async ({
+test("player timeline preview and adaptive settings remain usable", async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -307,6 +454,9 @@ test("player timeline preview and inspect sheet remain usable", async ({
 
   await expect(page).toHaveURL(/\/player$/);
   const timeline = page.getByTestId("player-progress-slider");
+  if (!(await timeline.isVisible())) {
+    await page.getByTestId("player-hit-zone-center").click();
+  }
   await expect(timeline).toBeVisible();
   await expect(timeline).toHaveAttribute("aria-label", "Playback progress");
   const timelineBox = await timeline.boundingBox();
@@ -323,17 +473,24 @@ test("player timeline preview and inspect sheet remain usable", async ({
     animations: "disabled",
   });
 
-  await page
-    .getByRole("button", { name: "Audio, subtitles, and source" })
-    .click();
+  await page.getByRole("button", { name: "Playback settings" }).click();
   await expect(page.getByTestId("player-settings-sheet")).toBeVisible();
+  if (testInfo.project.name === "desktop-renderer") {
+    await page.getByRole("button", { name: "Playback diagnostics" }).click();
+    const diagnosticsBack = page.getByRole("button", {
+      name: "Back to playback settings",
+    });
+    await expect(diagnosticsBack).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(diagnosticsBack).toBeFocused();
+    await diagnosticsBack.click();
+  }
+  await page.getByRole("tab", { name: "Subtitles" }).click();
   await expect(
     page.getByRole("button", { name: "Reset subtitle style" }),
   ).toBeVisible();
   await page.screenshot({
-    path: testInfo.outputPath(
-      `player-inspect-sheet-${testInfo.project.name}.png`,
-    ),
+    path: testInfo.outputPath(`player-settings-${testInfo.project.name}.png`),
     animations: "disabled",
   });
 });
@@ -351,12 +508,16 @@ test("player volume owns its browser keyboard controls", async ({
 
   await expect(page).toHaveURL(/\/player$/);
   await expect(page.getByTestId("player-screen")).toBeVisible();
-  const play = page.getByRole("button", { name: "Play playback" });
+  const pause = page.getByRole("button", { name: "Pause playback" });
   const volume = page.getByRole("slider", { name: "Volume" });
-  await expect(play).toBeVisible();
+  // The player starts playback asynchronously. Wait for that stable state so
+  // this test measures keyboard ownership instead of racing the initial
+  // Play -> Pause label transition.
+  await expect(pause).toBeVisible();
   await expect(volume).toBeVisible();
 
   await focusWithKeyboard(page, volume);
+  await expect(volume).toBeFocused();
   const focusOutline = await volume.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
@@ -383,7 +544,8 @@ test("player volume owns its browser keyboard controls", async ({
   // Space belongs to the focused adjustable control and must not bubble into
   // the global play/pause shortcut.
   await page.keyboard.press("Space");
-  await expect(play).toBeVisible();
+  await expect(volume).toBeFocused();
+  await expect(pause).toBeVisible();
 });
 
 test("Escape cancels source preparation through the active session", async ({
@@ -433,6 +595,7 @@ test("bridge unavailable produces a recoverable player state", async ({
 
   await expect(page).toHaveURL(/\/player$/);
   await expect(page.getByText("Bridge Not Ready")).toBeVisible();
+  await page.getByRole("button", { name: "More options" }).click();
   const sourcesDevices = page.getByRole("button", {
     name: "Sources & Devices",
   });
@@ -542,22 +705,26 @@ test("pointer focus stays quiet while keyboard focus remains explicit", async ({
   page,
 }, testInfo) => {
   await loginToFixtureShell(page);
-  const searchNavigation = page.getByRole(
-    testInfo.project.name === "phone-web" ? "tab" : "link",
-    { name: "Search" },
-  );
+  const isCompact = testInfo.project.name === "phone-web";
+  const searchNavigation = page.getByRole(isCompact ? "tab" : "button", {
+    name: "Search",
+  });
 
-  if (testInfo.project.name === "phone-web") {
+  if (isCompact) {
     // The mobile-web project has touch enabled, so a tap is not treated as a
     // pointer-focus assertion. Pointer modality is covered by the other three
     // window projects.
     await searchNavigation.tap();
+    await expect(page).toHaveURL(/\/search$/);
+    await page.keyboard.press("Tab");
   } else {
     await expectPointerFocusWithoutKeyboardRing(searchNavigation);
+    await expect(page.getByTestId("command-palette")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("command-palette")).toHaveCount(0);
+    await focusWithKeyboard(page, searchNavigation);
   }
-  await expect(page).toHaveURL(/\/search$/);
 
-  await page.keyboard.press("Tab");
   const focused = page.locator(":focus");
   await expect(focused).toBeVisible();
   await expect
@@ -571,6 +738,11 @@ test("pointer focus stays quiet while keyboard focus remains explicit", async ({
       }),
     )
     .toBe(true);
+
+  if (!isCompact) {
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("command-palette")).toBeVisible();
+  }
 });
 
 test("Library grid uses bounded fixed cards at every window class", async ({
@@ -657,7 +829,7 @@ test("desktop media rails bound navigation and reveal the final caption", async 
   );
 });
 
-test("Obsidian Settings uses a calm overview and focused detail panes", async ({
+test("Living Cinema Settings uses an adaptive dashboard and focused detail panes", async ({
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
@@ -669,6 +841,8 @@ test("Obsidian Settings uses a calm overview and focused detail panes", async ({
   await expectNoHorizontalPageOverflow(page);
   if (testInfo.project.name === "phone-web") {
     await expect(page.getByTestId("settings-overview")).toBeVisible();
+  } else {
+    await expect(page.getByTestId("settings-dashboard")).toBeVisible();
   }
   await page.screenshot({
     path: testInfo.outputPath(
@@ -694,7 +868,11 @@ test("Obsidian Settings uses a calm overview and focused detail panes", async ({
   await page.reload();
   await settleVisualTheme(page, "dark", "settings-screen");
 
-  await page.getByTestId("settings-category-playback").click();
+  if (testInfo.project.name === "phone-web") {
+    await page.getByTestId("settings-category-playback").click();
+  } else {
+    await page.goto("/settings/playback");
+  }
   await expect(page).toHaveURL(/\/settings\/playback$/);
   await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
   await expectNoHorizontalPageOverflow(page);
@@ -778,6 +956,8 @@ test("key non-media UI states meet WCAG A/AA accessibility rules", async ({
     "Search results",
   );
 
+  if (testInfo.project.name === "phone-web") return;
+
   await page.keyboard.press("Meta+k");
   const commandPalette = page.getByTestId("command-palette");
   await expect(commandPalette).toBeVisible();
@@ -832,7 +1012,7 @@ test("Search keeps active retrieval focused and results media-first", async ({
   await searchField.fill("Golden");
   await expect(page.getByTestId("search-suggestions")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Show all results for “Golden”" }),
+    page.getByRole("button", { name: "View all 6 results" }),
   ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath(
@@ -1060,7 +1240,7 @@ test("Search distinguishes unavailable providers from missing capability", async
   ).toHaveCount(0);
 });
 
-test("Settings and Search adapt without overflow at intermediate widths", async ({
+test("Detail, Settings, and Search adapt without overflow at intermediate widths", async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -1077,7 +1257,8 @@ test("Settings and Search adapt without overflow at intermediate widths", async 
     await page.setViewportSize(viewport);
     await page.goto("/settings");
     await expect(page.getByTestId("settings-screen")).toBeVisible();
-    await expect(page.getByTestId("settings-overview")).toBeVisible();
+    await expect(page.getByTestId("settings-dashboard")).toBeVisible();
+    await expect(page.getByTestId("settings-overview")).toHaveCount(0);
     await expect(page.getByTestId("settings-detail-account")).toHaveCount(0);
     await expectNoHorizontalPageOverflow(page);
     await page.goto("/settings/playback");
@@ -1093,6 +1274,29 @@ test("Settings and Search adapt without overflow at intermediate widths", async 
     await page.getByTestId("search-filter-toggle").click();
     await expect(page.getByTestId("search-filter-panel")).toBeVisible();
     await page.getByRole("button", { name: "Close filters" }).last().click();
+
+    await page.goto(`/detail/movie/${FIXTURE_MOVIE_ID}`);
+    const topbar = page.getByTestId("cinematic-topbar");
+    const back = page.getByRole("button", {
+      name: "Back to previous screen",
+    });
+    await expect(topbar).toBeVisible();
+    await expect(back).toBeVisible();
+    const [topbarBox, backBox] = await Promise.all([
+      topbar.boundingBox(),
+      back.boundingBox(),
+    ]);
+    expect(topbarBox).not.toBeNull();
+    expect(backBox).not.toBeNull();
+    expect(backBox!.y).toBeGreaterThanOrEqual(topbarBox!.y + topbarBox!.height);
+    await expect
+      .poll(() =>
+        topbar.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      )
+      .toBe(true);
+    await expectNoHorizontalPageOverflow(page);
   }
 });
 
@@ -1122,7 +1326,11 @@ test("legacy Settings and Search URLs redirect to canonical routes", async ({
 
 test("Command Palette distinguishes submit from deliberate title navigation", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "phone-web",
+    "Compact uses the canonical fullscreen Search tab.",
+  );
   await loginToFixtureShell(page);
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-palette")).toBeVisible();
@@ -1168,7 +1376,11 @@ test("Command Palette distinguishes submit from deliberate title navigation", as
 
 test("Command Palette keeps the all-results row keyboard reachable", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "phone-web",
+    "Compact uses the canonical fullscreen Search tab.",
+  );
   await loginToFixtureShell(page);
   await page.keyboard.press("Meta+k");
   const field = page.getByTestId("command-search-field");
@@ -1181,7 +1393,7 @@ test("Command Palette keeps the all-results row keyboard reachable", async ({
   await field.press("ArrowUp");
   await expect(
     page.getByTestId("search-suggestion-announcement"),
-  ).toContainText("Show all results");
+  ).toContainText("View all 6 results");
   await field.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=Golden/);
 });
@@ -1298,13 +1510,15 @@ test("resetting Search filters clears provider and URL state", async ({
 }, testInfo) => {
   test.skip(
     testInfo.project.name !== "desktop-renderer",
-    "The persistent large-screen filter sidebar makes URL assertions stable.",
+    "The large-screen filter popover keeps this URL assertion deterministic.",
   );
   await loginToFixtureShell(page);
   await page.goto(
     "/search?q=Golden&type=movie&year=2026&provider=fixture-addon&sort=year",
   );
   await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  await page.getByRole("button", { name: "Open search filters" }).click();
+  await expect(page.getByTestId("search-filter-overlay")).toBeVisible();
   await page.getByRole("button", { name: "Reset filters" }).click();
 
   await expect

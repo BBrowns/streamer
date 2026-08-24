@@ -10,6 +10,7 @@ import {
   type PlaybackPlan,
   type PlaybackPlanRequest,
   type PlannedMediaCandidate,
+  type WatchProgress,
 } from "@streamer/shared";
 
 export type GoldenPathScenario =
@@ -22,6 +23,7 @@ export type GoldenPathScenario =
   | "bridge-unavailable"
   | "download-unsupported"
   | "cast-ready"
+  | "poster-only"
   | "search-partial"
   | "search-empty"
   | "search-no-provider"
@@ -34,6 +36,7 @@ const BRIDGE_HOSTS = new Set(["127.0.0.1:11470", "localhost:11470"]);
 const MEDIA_URL = "https://media.example.test/golden-path.mp4";
 const VISUAL_MEDIA_URL = "https://media.example.test/golden-path.webm";
 const POSTER_URL = "https://assets.example.test/golden-path-poster.svg";
+const BACKDROP_URL = "https://assets.example.test/golden-path-backdrop.svg";
 const MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.mp4");
 const VISUAL_MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.webm");
 const GATEWAY_JOB_ID = "00000000-0000-4000-8000-000000000099";
@@ -43,6 +46,7 @@ export const FIXTURE_USER_ID = "00000000-0000-4000-8000-000000000001";
 export type GoldenPathFixtureOptions = {
   notifications?: "empty" | "populated" | "mark-read-fails-once";
   addonInstall?: "succeeds" | "fail-once";
+  progress?: "cinematic";
 };
 
 const timeoutBudget = {
@@ -69,7 +73,7 @@ const moviePreview = {
   type: "movie",
   name: "Golden Path Adventure",
   poster: POSTER_URL,
-  background: POSTER_URL,
+  background: BACKDROP_URL,
   description: "A deterministic, public-domain test fixture.",
   releaseInfo: "2026",
   imdbRating: "8.8",
@@ -80,7 +84,7 @@ const seriesPreview = {
   type: "series",
   name: "Fixture Series",
   poster: POSTER_URL,
-  background: POSTER_URL,
+  background: BACKDROP_URL,
   description: "A deterministic series fixture.",
   releaseInfo: "2026",
   imdbRating: "8.4",
@@ -128,6 +132,54 @@ const libraryItems = Array.from({ length: 9 }, (_, index) => ({
   poster: POSTER_URL,
   addedAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
 }));
+
+const cinematicProgressItems = [
+  {
+    id: "00000000-0000-4000-8000-000000000201",
+    userId: FIXTURE_USER_ID,
+    type: "series",
+    itemId: "continue-foundation",
+    season: 2,
+    episode: 4,
+    currentTime: 1_920,
+    duration: 3_600,
+    durationSource: "media",
+    title: "Foundation",
+    poster: POSTER_URL,
+    background: BACKDROP_URL,
+    lastWatched: "2026-07-18T14:45:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000202",
+    userId: FIXTURE_USER_ID,
+    type: "series",
+    itemId: "continue-severance",
+    season: 1,
+    episode: 7,
+    currentTime: 1_380,
+    duration: 3_180,
+    durationSource: "metadata",
+    title: "Severance",
+    poster: POSTER_URL,
+    background: BACKDROP_URL,
+    lastWatched: "2026-07-18T13:30:00.000Z",
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000203",
+    userId: FIXTURE_USER_ID,
+    type: "movie",
+    itemId: "continue-legacy-poster",
+    season: null,
+    episode: null,
+    currentTime: 2_700,
+    duration: 7_200,
+    durationSource: "media",
+    title: "Legacy Poster Entry",
+    poster: POSTER_URL,
+    background: null,
+    lastWatched: "2026-07-17T21:15:00.000Z",
+  },
+] satisfies WatchProgress[];
 
 const catalogAddon = {
   id: "fixture-addon",
@@ -351,6 +403,10 @@ function posterSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900"><rect width="600" height="900" fill="#c4b5fd"/><circle cx="420" cy="230" r="150" fill="#a7f3d0"/><rect x="65" y="540" width="470" height="210" rx="24" fill="#fff" fill-opacity=".72"/><text x="100" y="635" font-family="sans-serif" font-size="46" font-weight="700" fill="#2c1738">Golden Path</text><text x="100" y="700" font-family="sans-serif" font-size="28" fill="#55435f">Deterministic fixture</text></svg>`;
 }
 
+function backdropSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900"><defs><linearGradient id="sky" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#17131f"/><stop offset=".48" stop-color="#5e3f35"/><stop offset="1" stop-color="#dca56f"/></linearGradient><linearGradient id="haze" x1="0" x2="1"><stop stop-color="#08090b" stop-opacity=".78"/><stop offset=".42" stop-color="#08090b" stop-opacity=".08"/><stop offset="1" stop-color="#fff0"/></linearGradient></defs><rect width="1600" height="900" fill="url(#sky)"/><circle cx="1250" cy="265" r="235" fill="#f2c887" fill-opacity=".72"/><path d="M0 670 300 470l170 90 245-225 255 210 245-300 385 425v230H0z" fill="#17151b"/><path d="M0 730 390 555l230 160 285-220 320 235 375-165v335H0z" fill="#090a0d" fill-opacity=".8"/><rect width="1600" height="900" fill="url(#haze)"/></svg>`;
+}
+
 export interface GoldenPathControls {
   plannerRequests: PlaybackPlanRequest[];
   bridgeProbes: () => number;
@@ -377,6 +433,13 @@ export async function installGoldenPathRoutes(
       : [];
   const media = readFileSync(MEDIA_FIXTURE);
   const visualMedia = readFileSync(VISUAL_MEDIA_FIXTURE);
+  const activeMoviePreview =
+    scenario === "poster-only"
+      ? (() => {
+          const { background: _background, ...preview } = moviePreview;
+          return preview;
+        })()
+      : moviePreview;
 
   await page.routeWebSocket(/\/api\/sync\/events$/, (socket) => {
     socket.onMessage(() => {});
@@ -390,7 +453,10 @@ export async function installGoldenPathRoutes(
       await route.fulfill({
         status: 200,
         contentType: "image/svg+xml",
-        body: posterSvg(),
+        body:
+          url.pathname === "/golden-path-backdrop.svg"
+            ? backdropSvg()
+            : posterSvg(),
       });
       return;
     }
@@ -446,14 +512,14 @@ export async function installGoldenPathRoutes(
       if (url.pathname === "/api/catalog/movie") {
         await json(route, {
           metas: [
-            moviePreview,
+            activeMoviePreview,
             {
-              ...moviePreview,
+              ...activeMoviePreview,
               id: "fixture-movie-two",
               name: "Second Fixture",
             },
             {
-              ...moviePreview,
+              ...activeMoviePreview,
               id: "fixture-movie-three",
               name: "Third Fixture",
             },
@@ -520,7 +586,7 @@ export async function installGoldenPathRoutes(
       if (url.pathname === `/api/meta/movie/${FIXTURE_MOVIE_ID}`) {
         await json(route, {
           meta: {
-            ...moviePreview,
+            ...activeMoviePreview,
             genres: ["Adventure", "Drama"],
             runtime: "1h 30m",
             cast: ["Fixture Performer"],
@@ -612,7 +678,9 @@ export async function installGoldenPathRoutes(
         return;
       }
       if (url.pathname === "/api/library/progress") {
-        await json(route, { items: [] });
+        await json(route, {
+          items: options.progress === "cinematic" ? cinematicProgressItems : [],
+        });
         return;
       }
       if (url.pathname === "/api/library/history") {

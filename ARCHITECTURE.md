@@ -55,7 +55,7 @@ streamer/
 
 **Build system:** [Turborepo](https://turbo.build/) orchestrates all tasks. It caches outputs and understands the dependency graph (`^build` means "build dependencies first"). This means `turbo run build` always builds `packages/shared` before `server` or `mobile`.
 
-**Package manager:** npm workspaces, pinned to npm 11.18 on Node 24.18 LTS. The `overrides` block in the root `package.json` enforces unified versions of `react`, `react-dom`, and `zod` across all workspaces to avoid duplicate installs.
+**Package manager:** npm workspaces, pinned to npm 12.0.2 on Node 26.7.0. The `overrides` block in the root `package.json` enforces unified versions of `react`, `react-dom`, and `zod` across all workspaces to avoid duplicate installs.
 
 ---
 
@@ -244,19 +244,19 @@ explicit `ADDON_ALLOW_PRIVATE_NETWORKS=true` opt-in for development or tests.
 
 **Key models:**
 
-| Model                    | Purpose                                                        |
-| ------------------------ | -------------------------------------------------------------- |
-| `User`                   | Core user identity                                             |
-| `RefreshToken`           | Hashed refresh tokens with expiry                              |
-| `EmailVerificationToken` | Single-use email verification links                            |
-| `PasswordResetToken`     | Single-use password reset links                                |
-| `ActiveSession`          | Per-device session tracking                                    |
-| `InstalledAddon`         | User → add-on mapping; manifest stored as JSON blob            |
-| `LibraryItem`            | User's saved movies/series                                     |
-| `WatchProgress`          | Per-user, per-item playback position (supports season/episode) |
-| `TraktToken`             | Trakt.tv OAuth access + refresh tokens per user                |
-| `TraktSyncQueue`         | Outbound Trakt scrobbles queued for retry on failure           |
-| `Notification`           | In-app notifications                                           |
+| Model                    | Purpose                                                                     |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `User`                   | Core user identity                                                          |
+| `RefreshToken`           | Hashed refresh tokens with expiry                                           |
+| `EmailVerificationToken` | Single-use email verification links                                         |
+| `PasswordResetToken`     | Single-use password reset links                                             |
+| `ActiveSession`          | Per-device session tracking                                                 |
+| `InstalledAddon`         | User → add-on mapping; manifest stored as JSON blob                         |
+| `LibraryItem`            | User's saved movies/series                                                  |
+| `WatchProgress`          | Per-user position plus nullable landscape artwork (supports season/episode) |
+| `TraktToken`             | Trakt.tv OAuth access + refresh tokens per user                             |
+| `TraktSyncQueue`         | Outbound Trakt scrobbles queued for retry on failure                        |
+| `Notification`           | In-app notifications                                                        |
 
 ### 4.6 Real-Debrid Integration
 
@@ -329,20 +329,20 @@ need QA evidence.
 
 ### 6.1 Tech Stack
 
-| Concern          | Solution                                                                         |
-| ---------------- | -------------------------------------------------------------------------------- |
-| Framework        | Expo SDK 55 / React Native 0.83                                                  |
-| Routing          | Expo Router (file-based, similar to Next.js App Router)                          |
-| Data fetching    | TanStack Query (React Query) v5                                                  |
-| State management | Zustand v5 (multiple atomic stores)                                              |
-| Styling          | NativeWind v4 (Tailwind for React Native) + inline StyleSheet for dynamic styles |
-| Video player     | `expo-video` (`useVideoPlayer` hook + `VideoView` component)                     |
-| I18n             | i18next + react-i18next (locale files in `locales/`)                             |
-| Error tracking   | Sentry (`@sentry/react-native`)                                                  |
-| Auth storage     | `expo-secure-store` (keychain-backed, not AsyncStorage)                          |
-| Biometrics       | `expo-local-authentication`                                                      |
-| E2E testing      | Detox (iOS simulator)                                                            |
-| Unit testing     | Jest + `jest-expo` + `@testing-library/react-native`                             |
+| Concern          | Solution                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| Framework        | Expo SDK 55 / React Native 0.83                                                            |
+| Routing          | Expo Router (file-based, similar to Next.js App Router)                                    |
+| Data fetching    | TanStack Query (React Query) v5                                                            |
+| State management | Zustand v5 (multiple atomic stores)                                                        |
+| Styling          | Shared semantic tokens + `StyleSheet`; NativeWind remains a minority compatibility pattern |
+| Video player     | `expo-video` (`useVideoPlayer` hook + `VideoView` component)                               |
+| I18n             | i18next + react-i18next (locale files in `locales/`)                                       |
+| Error tracking   | Sentry (`@sentry/react-native`)                                                            |
+| Auth storage     | `expo-secure-store` (keychain-backed, not AsyncStorage)                                    |
+| Biometrics       | `expo-local-authentication`                                                                |
+| E2E testing      | Detox (iOS simulator)                                                                      |
+| Unit testing     | Jest + `jest-expo` + `@testing-library/react-native`                                       |
 
 Native application identity and release configuration are resolved by
 `apps/mobile/app.config.js`. It validates environment-specific API, Sentry,
@@ -373,11 +373,72 @@ app/
 └── (tabs)/
     ├── _layout.tsx          # Bottom tab navigator
     ├── index.tsx            # Home — catalog grid
-    ├── discover.tsx         # Trending / curated discover
+    ├── discover.tsx         # Compatibility redirect to Search
+    ├── search.tsx           # Canonical full Search route
     ├── library.tsx          # User's saved library
     ├── downloads.tsx        # Offline downloads management
-    └── settings.tsx         # App settings, profile, Trakt OAuth
+    └── settings.tsx         # Adaptive settings dashboard/overview
 ```
+
+### 6.2.1 Living Cinema Presentation Ownership
+
+The Expo renderer owns one adaptive presentation system across native, browser,
+and Electron:
+
+- `DesktopLayout` owns medium-through-large global navigation and renders
+  `CinematicTopBar`; compact alone owns the four bottom tabs. It also owns the
+  routed scroll context that strengthens an overlay topbar after scrolling;
+  route content does not position itself above or inside global navigation.
+- `AdaptiveOverlay` owns temporary presentation shape and accessibility:
+  expanded/large popover, medium floating sheet, and compact bottom sheet.
+  Feature components retain their content/handler contracts instead of
+  creating route-specific modal shells. Form content requests a centered,
+  width-constrained presentation; profile and notification utilities request a
+  deliberately soft backdrop. Its web trap resolves focusable descendants at
+  key-event time rather than caching a render's controls.
+- `ThemeProvider` owns durable dark/light interface colours.
+  `CinematicThemeProvider` is an optional, non-blocking ambience layer used by
+  Home and Detail. Search, Settings, Library, Downloads, and other utility
+  routes remain neutral; Player consumes only derived progress/focus/selection
+  colour. Mounted screens publish an ambience source only while their route is
+  focused, because retained tab mounts are not presentation ownership.
+- `CinematicPaletteExtractor` is an app-owned adapter around
+  `react-native-image-colors`. Extraction uses only artwork URLs already being
+  rendered, falls back without an error state, and stores only algorithm
+  version, content identity, and a URI hash in its bounded cache.
+- `MediaCard` owns poster/landscape visual states. Existing catalog, Library,
+  and Continue Watching components remain data/router adapters around it.
+- `ContentBoundary` owns semantic page geometry (`cinematic`, `catalog`,
+  `utilityWide`, and `utilityNarrow`); routes select a role instead of defining
+  local max-width contracts.
+
+Interface typography uses the native/system stack. Instrument Serif is loaded
+only for large Home and Detail titles. This presentation layer must not change
+provider semantics, routing ownership, Play Best, source resolution, downloads,
+casting, or persistence of sensitive runtime media data.
+
+### 6.2.2 Additive Background Artwork Flow
+
+Landscape artwork is optional across every boundary:
+
+```text
+MetaPreview.background
+  -> Home/Detail
+  -> PlaybackOrchestratorInput.background
+  -> runtime MediaInfo.background
+  -> UpdateProgressRequest.background
+  -> WatchProgress.background
+  -> Continue Watching landscape presentation
+```
+
+`MetaPreview.background` and `UpdateProgressRequest.background` are optional;
+`WatchProgress.background` is nullable in the shared contract and Prisma.
+Clients may omit the field and existing database rows remain valid as `NULL`.
+The progress repository updates artwork only when the caller supplies it, so an
+older client cannot erase a known backdrop. No bulk backfill or per-row metadata
+fetch is permitted: a legacy item acquires a backdrop naturally after playback
+starts from metadata that has one. Artwork URLs may be persisted as product
+metadata but must never be logged; cinematic cache keys hash the URL.
 
 ### 6.3 Stream Engine (Strategy Pattern)
 
@@ -638,12 +699,22 @@ shared/src/
 
 **Why this matters:** The server uses Zod schemas at runtime (to validate inbound add-on manifests and API request bodies via `@hono/zod-validator`). The mobile app imports the same TypeScript types for full end-to-end type safety. Changes to a shared type cause compile errors in both workspaces simultaneously.
 
+The Living Cinema artwork extension is expand-only. Old and new
+`MetaPreview`, `WatchProgress`, and progress-update payloads parse concurrently;
+the server must not require `background` until every compatibility client has
+migrated.
+
 ---
 
 ## 8. The Desktop App (`apps/desktop/`)
 
 An Electron shell that loads the Expo web build on `localhost:8081` in
 development. It adds:
+
+- On macOS only, `titleBarStyle: "hiddenInset"` keeps real system traffic
+  lights inside the Living Cinema topbar. Only the empty titlebar region is
+  draggable and renderer controls opt out with `no-drag`. Browser never renders
+  imitation controls; Windows/Linux keep their normal system frame.
 
 - **`desktopBridge`** — a context-bridged IPC object injected into `window` that the mobile web app detects to unlock desktop-specific features:
   - `downloadMedia(id, url, filename)` — native file download with progress events

@@ -139,6 +139,16 @@ function persistedDownloads(downloads: FixtureShellOptions["downloads"]) {
  */
 export async function settleVisualFrame(page: Page) {
   await page.evaluate(async () => {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    if (document.documentElement.dataset.cinematicThemeReady === "false") {
+      await new Promise<void>((resolve) => {
+        window.addEventListener("cinematic-theme-ready", () => resolve(), {
+          once: true,
+        });
+      });
+    }
     await document.fonts.ready;
     await Promise.all(
       Array.from(document.images, (image) =>

@@ -16,6 +16,16 @@ The player/runtime boundaries, exact Play-to-first-frame sequence, track
 catalog, subtitle fetch paths and lifecycle cleanup are documented in
 [docs/PLAYER_ARCHITECTURE.md](./docs/PLAYER_ARCHITECTURE.md).
 
+## Deferred Quality Preference Semantics
+
+Player Settings edits the existing persisted exact quality allowlist. `Auto`
+selects every supported value; 4K/1080p/720p/480p toggle those same values and
+at least one must remain selected. A preference change is an input to the next
+planner request or playback launch only. It must never replace, restart, or
+re-resolve the currently active stream. The active `PlaybackSession`, prepared
+source lease, fallback list, and media URL remain unchanged until a new normal
+planning action begins.
+
 ## Runtime Plans Versus Persisted Sessions
 
 `PlaybackPlan` and `MediaCandidate` are runtime planning contracts. A
