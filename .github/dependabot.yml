@@ -10,6 +10,11 @@ updates:
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
     versioning-strategy: increase-if-necessary
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet.
+      - dependency-name: typescript
+        versions:
+          - ">=6.0.0"
     groups:
       npm-security-runtime:
         applies-to: security-updates
