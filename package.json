@@ -80,7 +80,7 @@
     "expo-constants": "~57.0.14",
     "expo-router": "~57.0.16",
     "husky": "^9.1.7",
-    "lint-staged": "^16.3.2",
+    "lint-staged": "^17.3.0",
     "patch-package": "^8.0.1",
     "prettier": "3.9.6",
     "turbo": "^2.4.0",
