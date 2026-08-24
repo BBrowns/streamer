@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Verification"
+  short_description: "Verify exact Streamer changes"
+  default_prompt: "Use $streamer-verification to select and run evidence-backed checks for the exact task-owned Streamer files."

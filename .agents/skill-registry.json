@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "reviewedAt": "2026-08-20",
+  "skills": {
+    "streamer-change-design": {
+      "owner": "Architecture maintainers",
+      "purpose": "Decision-complete framing for material ownership and boundary changes.",
+      "evidence": "The former architecture and feature-framing skills overlapped on broad refactors.",
+      "evalCases": ["broad-playback-refactor-handoff", "readme-typo"],
+      "removalCriteria": "Remove when durable design rules move to an enforced architecture tool with equivalent decision records."
+    },
+    "streamer-contract-change": {
+      "owner": "Shared-contract maintainers",
+      "purpose": "Compatibility-safe evolution of shared and persisted contracts.",
+      "evidence": "Capable generic agents miss old consumers, absent values, and persisted compatibility cases.",
+      "evalCases": ["shared-playback-contract", "local-type-rename"],
+      "removalCriteria": "Remove when repository tooling can discover every producer, consumer, and migration obligation automatically."
+    },
+    "streamer-delivery": {
+      "owner": "Release maintainers",
+      "purpose": "Authorization-aware Git, PR, CI, handoff, and release preparation.",
+      "evidence": "Delivery actions have external-state boundaries that verification alone does not express.",
+      "evalCases": ["broad-playback-refactor-handoff", "explicit-change-verification"],
+      "removalCriteria": "Remove when the delivery platform enforces authorization and evidence binding without agent instructions."
+    },
+    "streamer-dependency-change": {
+      "owner": "Platform maintainers",
+      "purpose": "Safe npm, native, provenance, audit, and lockfile changes.",
+      "evidence": "Streamer has pinned runtime, native compatibility, patch, and install-script constraints.",
+      "evalCases": ["native-dependency-upgrade"],
+      "removalCriteria": "Remove when dependency automation enforces the complete runtime and native matrix."
+    },
+    "streamer-incident-response": {
+      "owner": "On-call maintainers",
+      "purpose": "Privacy-safe containment and root-cause work for production and release-candidate incidents.",
+      "evidence": "Incident, performance, and telemetry workflows previously activated independently for one investigation.",
+      "evalCases": ["production-startup-regression"],
+      "removalCriteria": "Remove when incident tooling supplies equivalent severity, evidence, containment, and recovery gates."
+    },
+    "streamer-reliability-change": {
+      "owner": "Runtime maintainers",
+      "purpose": "Bounded failure and recovery semantics across independently failing boundaries.",
+      "evidence": "Generic implementations often omit retry ownership, cancellation, degraded states, and sensitive-data limits.",
+      "evalCases": ["bridge-retry-policy"],
+      "removalCriteria": "Remove when boundary contracts mechanically enforce timeout, retry, cancellation, recovery, and telemetry policy."
+    },
+    "streamer-security-boundaries": {
+      "owner": "Security maintainers",
+      "purpose": "Trust-boundary review for untrusted data, privileges, IPC, files, networking, and sensitive state.",
+      "evidence": "Streamer handles add-on URLs, native bridges, media identifiers, and constrained telemetry.",
+      "evalCases": ["security-boundary"],
+      "removalCriteria": "Remove only when automated policy covers all listed trust boundaries and privacy constraints."
+    },
+    "streamer-ui-change": {
+      "owner": "Client maintainers",
+      "purpose": "Adaptive and accessible Expo and Electron UI changes using shared tokens.",
+      "evidence": "Streamer requires phone and desktop behavior and visual evidence beyond generic component implementation.",
+      "evalCases": ["adaptive-player-redesign"],
+      "removalCriteria": "Remove when the shared design system and visual gates fully encode adaptive and accessibility expectations."
+    },
+    "streamer-verification": {
+      "owner": "Repository maintainers",
+      "purpose": "Changed-file verification plans and receipts bound to final content.",
+      "evidence": "Completion claims previously depended on manually selected and sometimes stale checks.",
+      "evalCases": ["explicit-change-verification", "readme-typo"],
+      "removalCriteria": "Remove when CI and local tooling automatically select all focused checks and bind results to exact task files."
+    }
+  }
+}

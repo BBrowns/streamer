@@ -3,6 +3,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name("runtime_policy.py")
@@ -13,8 +14,8 @@ SPEC.loader.exec_module(runtime_policy)
 
 def status(*issues):
     return {
-        "node": "v24.18.0",
-        "npm": "11.18.0",
+        "node": "v26.7.0",
+        "npm": "12.0.2",
         "host_arch": "arm64",
         "node_arch": "arm64",
         "issues": list(issues),
@@ -22,6 +23,21 @@ def status(*issues):
 
 
 class RuntimePolicyTest(unittest.TestCase):
+    def test_loads_toolchain_policy_from_package_json(self):
+        policy = runtime_policy.load_toolchain_policy()
+
+        self.assertEqual(policy["node_min"], (26, 7, 0))
+        self.assertEqual(policy["node_max_major"], 27)
+        self.assertEqual(policy["npm_min"], (12, 0, 2))
+        self.assertEqual(policy["npm_max_major"], 13)
+        self.assertEqual(policy["expected_npm"], "12.0.2")
+
+    def test_warning_reports_the_repository_policy(self):
+        warning = runtime_policy.runtime_warning(status("node", "npm"))
+
+        self.assertIn("Node >=26.7.0 <27", warning)
+        self.assertIn("npm >=12.0.2 <13", warning)
+
     def test_allows_normal_commands_without_runtime_checks(self):
         self.assertIsNone(runtime_policy.blocking_reason("npm test", status("npm")))
 
@@ -34,6 +50,16 @@ class RuntimePolicyTest(unittest.TestCase):
         for command in commands:
             with self.subTest(command=command):
                 self.assertIn("Blocked", runtime_policy.blocking_reason(command, status()))
+
+    def test_destructive_policy_does_not_depend_on_a_valid_package_manifest(self):
+        with mock.patch.object(
+            runtime_policy,
+            "load_toolchain_policy",
+            side_effect=ValueError("malformed package.json"),
+        ):
+            reason = runtime_policy.blocking_reason("git reset --hard HEAD~1")
+
+        self.assertIn("Blocked git reset --hard", reason)
 
     def test_blocks_destructive_git_commands_inside_shell_wrappers(self):
         commands = (
@@ -54,17 +80,23 @@ class RuntimePolicyTest(unittest.TestCase):
         self.assertIn("runtime mismatch", reason)
 
     def test_allows_explicitly_pinned_npm_when_only_npm_is_wrong(self):
-        command = "npx --yes npm@11.18.0 ci --no-audit --no-fund"
+        command = "npx --yes npm@12.0.2 ci --no-audit --no-fund"
         self.assertIsNone(runtime_policy.blocking_reason(command, status("npm")))
 
     def test_pinned_npm_does_not_bypass_node_or_arch_checks(self):
-        command = "npx --yes npm@11.18.0 install"
+        command = "npx --yes npm@12.0.2 install"
         reason = runtime_policy.blocking_reason(command, status("node", "npm", "arch"))
         self.assertIn("runtime mismatch", reason)
 
     def test_pinned_npm_text_does_not_bypass_an_unpinned_install(self):
-        command = "npm install; echo npm@11.18.0"
+        command = "npm install; echo npm@12.0.2"
         reason = runtime_policy.blocking_reason(command, status("npm"))
+        self.assertIn("runtime mismatch", reason)
+
+    def test_old_pinned_npm_does_not_bypass_current_policy(self):
+        command = "npx --yes npm@11.18.0 ci --no-audit --no-fund"
+        reason = runtime_policy.blocking_reason(command, status("npm"))
+
         self.assertIn("runtime mismatch", reason)
 
     def test_blocks_native_runtime_with_wrong_architecture(self):

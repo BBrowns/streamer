@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Reliability Change"
+  short_description: "Design bounded failure and recovery"
+  default_prompt: "Use $streamer-reliability-change to define bounded failure, cancellation, recovery, and evidence for this Streamer runtime change."

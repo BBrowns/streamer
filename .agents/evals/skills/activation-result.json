@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "measuredAt": "2026-08-20",
+  "method": "independent-literal-classification",
+  "activationSurfaceFingerprint": "cf4691745e12db4fbfafc6a738dc1e9a658a672ef3cf4c71bf618da4a9bed562",
+  "baseline": {
+    "directEdges": 22,
+    "conditionalEdges": 15,
+    "totalEdges": 37,
+    "directSkills": 14,
+    "availableSkills": 16
+  },
+  "metrics": {
+    "directEdges": 11,
+    "conditionalEdges": 15,
+    "totalEdges": 26,
+    "distinctDirectSkills": 9
+  },
+  "cases": [
+    {
+      "id": "shared-playback-contract",
+      "activated": ["streamer-contract-change"],
+      "conditional": ["streamer-verification"]
+    },
+    {
+      "id": "bridge-retry-policy",
+      "activated": ["streamer-reliability-change"],
+      "conditional": ["streamer-verification"]
+    },
+    {
+      "id": "native-dependency-upgrade",
+      "activated": ["streamer-dependency-change"],
+      "conditional": [
+        "streamer-security-boundaries",
+        "streamer-verification"
+      ]
+    },
+    {
+      "id": "adaptive-player-redesign",
+      "activated": ["streamer-ui-change"],
+      "conditional": ["streamer-change-design", "streamer-verification"]
+    },
+    {
+      "id": "production-startup-regression",
+      "activated": ["streamer-incident-response"],
+      "conditional": [
+        "streamer-reliability-change",
+        "streamer-security-boundaries",
+        "streamer-verification"
+      ]
+    },
+    {
+      "id": "broad-playback-refactor-handoff",
+      "activated": [
+        "streamer-change-design",
+        "streamer-verification",
+        "streamer-delivery"
+      ],
+      "conditional": [
+        "streamer-contract-change",
+        "streamer-reliability-change",
+        "streamer-security-boundaries",
+        "streamer-ui-change"
+      ]
+    },
+    {
+      "id": "security-boundary",
+      "activated": [
+        "streamer-contract-change",
+        "streamer-security-boundaries"
+      ],
+      "conditional": [
+        "streamer-reliability-change",
+        "streamer-verification"
+      ]
+    },
+    {
+      "id": "explicit-change-verification",
+      "activated": ["streamer-verification"],
+      "conditional": []
+    },
+    {
+      "id": "readme-typo",
+      "activated": [],
+      "conditional": []
+    },
+    {
+      "id": "codebase-explanation",
+      "activated": [],
+      "conditional": []
+    },
+    {
+      "id": "local-type-rename",
+      "activated": [],
+      "conditional": []
+    }
+  ]
+}
