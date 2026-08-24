@@ -2,7 +2,6 @@ import {
   View,
   Text,
   Pressable,
-  Modal,
   ActivityIndicator,
   Platform,
   StyleSheet,
@@ -11,8 +10,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { getWebFocusStyle } from "../ui/designSystem";
+import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 
 interface SessionItem {
   id: string;
@@ -41,149 +40,137 @@ export function ActiveSessionsModal({
   revokeSession,
   inline,
 }: ActiveSessionsModalProps) {
-  const reducedMotion = useReducedMotion();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const content = (
     <View
       style={[
-        inline ? styles.inlineContent : styles.modalBg,
-        !inline && { backgroundColor: colors.scrim },
+        inline ? styles.inlineCard : styles.modalContent,
+        { maxHeight: inline ? "100%" : 620 },
       ]}
     >
-      <View
-        style={[
-          inline ? styles.inlineCard : styles.modalContent,
-          {
-            maxHeight: inline ? "100%" : "82%",
-            backgroundColor: inline ? "transparent" : colors.surfaceElevated,
-            borderTopColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.modalHeader}>
-          <View style={styles.modalTitleRow}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={20}
-              color={colors.success}
-            />
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {t("settings.accountModals.sessions.title")}
-            </Text>
-          </View>
-          {!inline && (
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel={t("settings.accountModals.sessions.done")}
-              style={({ focused, pressed }: any) => [
-                styles.headerAction,
-                pressed && styles.pressed,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-            >
-              <Text style={[styles.modalCancel, { color: colors.tint }]}>
-                {t("settings.accountModals.sessions.done")}
-              </Text>
-            </Pressable>
-          )}
+      <View style={styles.modalHeader}>
+        <View style={styles.modalTitleRow}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={20}
+            color={colors.success}
+          />
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            {t("settings.accountModals.sessions.title")}
+          </Text>
         </View>
-        {isSessionsLoading ? (
-          <ActivityIndicator color={colors.tint} style={{ marginTop: 24 }} />
-        ) : (
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {sessions.map((session) => {
-              const isCurrentDevice = session.deviceId === deviceId;
-              const lastSeen = new Date(session.lastActivity);
-              const diffMs = Date.now() - lastSeen.getTime();
-              const diffMin = Math.floor(diffMs / 60_000);
-              const lastSeenLabel =
-                diffMin < 1
-                  ? t("settings.accountModals.sessions.justNow")
-                  : diffMin < 60
-                    ? t("settings.accountModals.sessions.minutesAgo", {
-                        count: diffMin,
-                      })
-                    : t("settings.accountModals.sessions.hoursAgo", {
-                        count: Math.floor(diffMin / 60),
-                      });
+        {!inline && (
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.accountModals.sessions.done")}
+            style={({ focused, pressed }: any) => [
+              styles.headerAction,
+              pressed && styles.pressed,
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+          >
+            <Text style={[styles.modalCancel, { color: colors.tint }]}>
+              {t("settings.accountModals.sessions.done")}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+      {isSessionsLoading ? (
+        <ActivityIndicator color={colors.tint} style={{ marginTop: 24 }} />
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {sessions.map((session) => {
+            const isCurrentDevice = session.deviceId === deviceId;
+            const lastSeen = new Date(session.lastActivity);
+            const diffMs = Date.now() - lastSeen.getTime();
+            const diffMin = Math.floor(diffMs / 60_000);
+            const lastSeenLabel =
+              diffMin < 1
+                ? t("settings.accountModals.sessions.justNow")
+                : diffMin < 60
+                  ? t("settings.accountModals.sessions.minutesAgo", {
+                      count: diffMin,
+                    })
+                  : t("settings.accountModals.sessions.hoursAgo", {
+                      count: Math.floor(diffMin / 60),
+                    });
 
-              return (
+            return (
+              <View
+                key={session.id}
+                style={[
+                  styles.sessionRow,
+                  { borderBottomColor: colors.border },
+                ]}
+              >
                 <View
-                  key={session.id}
                   style={[
-                    styles.sessionRow,
-                    { borderBottomColor: colors.border },
+                    styles.sessionIconWrap,
+                    { backgroundColor: colors.success + "18" },
                   ]}
                 >
-                  <View
+                  <Ionicons
+                    name="phone-portrait-outline"
+                    size={20}
+                    color={
+                      isCurrentDevice ? colors.success : colors.textSecondary
+                    }
+                  />
+                </View>
+                <View style={styles.sessionInfo}>
+                  <Text
+                    style={[styles.sessionDevice, { color: colors.text }]}
+                    numberOfLines={2}
+                  >
+                    {isCurrentDevice
+                      ? t("settings.accountModals.sessions.thisDevice")
+                      : (session.userAgent?.slice(0, 40) ??
+                        t("settings.accountModals.sessions.unknownDevice"))}
+                  </Text>
+                  <Text
                     style={[
-                      styles.sessionIconWrap,
-                      { backgroundColor: colors.success + "18" },
+                      styles.sessionMeta,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {session.ipAddress ??
+                      t("settings.accountModals.sessions.unknownIp")}{" "}
+                    {" · "}
+                    {lastSeenLabel}
+                  </Text>
+                </View>
+                {!isCurrentDevice && (
+                  <Pressable
+                    onPress={() => revokeSession(session.id)}
+                    testID={`btn-revoke-session-${session.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={t(
+                      "settings.accountModals.sessions.revokeA11y",
+                    )}
+                    style={({ focused, pressed }: any) => [
+                      styles.iconButton,
+                      pressed && styles.pressed,
+                      Platform.OS === "web" &&
+                        focused &&
+                        getWebFocusStyle(colors.focus),
                     ]}
                   >
                     <Ionicons
-                      name="phone-portrait-outline"
-                      size={20}
-                      color={
-                        isCurrentDevice ? colors.success : colors.textSecondary
-                      }
+                      name="trash-outline"
+                      size={18}
+                      color={colors.error}
                     />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <Text
-                      style={[styles.sessionDevice, { color: colors.text }]}
-                      numberOfLines={2}
-                    >
-                      {isCurrentDevice
-                        ? t("settings.accountModals.sessions.thisDevice")
-                        : (session.userAgent?.slice(0, 40) ??
-                          t("settings.accountModals.sessions.unknownDevice"))}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.sessionMeta,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {session.ipAddress ??
-                        t("settings.accountModals.sessions.unknownIp")}{" "}
-                      {" · "}
-                      {lastSeenLabel}
-                    </Text>
-                  </View>
-                  {!isCurrentDevice && (
-                    <Pressable
-                      onPress={() => revokeSession(session.id)}
-                      testID={`btn-revoke-session-${session.id}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={t(
-                        "settings.accountModals.sessions.revokeA11y",
-                      )}
-                      style={({ focused, pressed }: any) => [
-                        styles.iconButton,
-                        pressed && styles.pressed,
-                        Platform.OS === "web" &&
-                          focused &&
-                          getWebFocusStyle(colors.focus),
-                      ]}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color={colors.error}
-                      />
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
     </View>
   );
 
@@ -193,31 +180,23 @@ export function ActiveSessionsModal({
   }
 
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      animationType={reducedMotion ? "none" : "slide"}
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      accessibilityLabel={t("settings.accountModals.sessions.title")}
+      testID="active-sessions-overlay"
+      size="form"
+      placement="center"
     >
       {content}
-    </Modal>
+    </AdaptiveOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBg: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 50,
-    borderTopWidth: 1,
-  },
-  inlineContent: {
-    flex: 1,
+    width: "100%",
   },
   inlineCard: {
     backgroundColor: "transparent",

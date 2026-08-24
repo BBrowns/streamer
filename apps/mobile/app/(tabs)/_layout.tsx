@@ -1,6 +1,7 @@
-import { Tabs, Link } from "expo-router";
+import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Platform, View, Text, Pressable } from "react-native";
+import { useState, type ComponentProps } from "react";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../stores/authStore";
 import { useRouter } from "expo-router";
@@ -8,68 +9,128 @@ import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
 import {
   getWebFocusStyle,
-  uiTouchTarget,
   uiTypography,
 } from "../../components/ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
-
-function NotificationBell() {
-  const { unreadCount } = useNotifications();
-  const { colors } = useTheme();
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-
-  if (!isAuthenticated) return null;
-
-  return (
-    <Link href={"/notifications" as any} asChild>
-      <Pressable
-        testID="btn-notifications"
-        accessibilityRole="button"
-        accessibilityLabel={`Notifications, ${unreadCount} unread`}
-        style={({ focused }: any) => [
-          styles.headerIconButton,
-          Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
-        ]}
-      >
-        <Ionicons name="notifications-outline" size={24} color={colors.text} />
-        {unreadCount > 0 && (
-          <View style={[styles.badge, { backgroundColor: colors.error }]}>
-            <Text style={styles.badgeText}>
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-    </Link>
-  );
-}
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AdaptiveOverlay } from "../../components/ui/AdaptiveOverlay";
 
 function HeaderRight() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { unreadCount } = useNotifications();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const initials = (user?.displayName || user?.email || "S")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+  const navigate = (href: string) => {
+    setMenuOpen(false);
+    router.push(href as never);
+  };
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 16,
-        marginRight: 16,
-      }}
-    >
-      <NotificationBell />
+    <>
       <Pressable
-        onPress={() => router.push("/settings")}
+        testID="mobile-profile-menu-trigger"
+        onPress={() => setMenuOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Profile and settings"
+        accessibilityLabel="Profile menu"
         style={({ focused }: any) => [
-          styles.headerIconButton,
+          styles.mobileAvatar,
+          {
+            backgroundColor: colors.surfaceOverlay,
+            borderColor: colors.borderStrong,
+          },
           Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         ]}
       >
-        <Ionicons name="person-circle-outline" size={28} color={colors.text} />
+        <Text style={[styles.mobileAvatarText, { color: colors.text }]}>
+          {initials}
+        </Text>
       </Pressable>
-    </View>
+      <AdaptiveOverlay
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        accessibilityLabel="Profile menu"
+        testID="mobile-profile-menu"
+        contentStyle={styles.profileMenu}
+      >
+        <View style={styles.profileHeader}>
+          <Text
+            numberOfLines={1}
+            style={[styles.profileName, { color: colors.text }]}
+          >
+            {user?.displayName || user?.email || "Profile"}
+          </Text>
+          <Text
+            style={[styles.profileCaption, { color: colors.textSecondary }]}
+          >
+            Personal profile
+          </Text>
+        </View>
+        <MobileMenuRow
+          icon="person-outline"
+          label="Profile"
+          onPress={() => navigate("/settings/account")}
+        />
+        <MobileMenuRow
+          icon="notifications-outline"
+          label={
+            unreadCount > 0
+              ? `Notifications (${unreadCount > 9 ? "9+" : unreadCount})`
+              : "Notifications"
+          }
+          onPress={() => navigate("/notifications")}
+        />
+        <MobileMenuRow
+          icon="settings-outline"
+          label="Settings"
+          onPress={() => navigate("/settings")}
+        />
+        <View
+          style={[styles.menuDivider, { backgroundColor: colors.border }]}
+        />
+        <MobileMenuRow
+          icon="log-out-outline"
+          label="Sign out"
+          destructive
+          onPress={() => {
+            setMenuOpen(false);
+            void logout().then(() => router.replace("/login" as never));
+          }}
+        />
+      </AdaptiveOverlay>
+    </>
+  );
+}
+
+function MobileMenuRow({
+  icon,
+  label,
+  onPress,
+  destructive = false,
+}: {
+  icon: ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
+  const { colors } = useTheme();
+  const color = destructive ? colors.error : colors.text;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.68 }]}
+    >
+      <Ionicons name={icon} size={20} color={color} />
+      <Text style={[styles.menuLabel, { color }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -77,6 +138,7 @@ export default function TabLayout() {
   const { isCompact } = useWindowClass();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const hasSideNavigation = !isCompact;
 
   const tabsContent = (
@@ -90,13 +152,15 @@ export default function TabLayout() {
         headerTitleStyle: {
           ...uiTypography.title,
         },
-        // Hide header on desktop — the DesktopLayout sidebar handles navigation
+        // DesktopLayout owns the horizontal topbar outside the compact shell.
         headerShown: isCompact,
         tabBarStyle: [
           styles.tabBar,
           {
             backgroundColor: colors.tabBar,
             borderTopColor: colors.border,
+            height: 64 + insets.bottom,
+            paddingBottom: Math.max(insets.bottom, 8),
           },
           hasSideNavigation && { display: "none" },
         ],
@@ -104,9 +168,8 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.disabled,
         tabBarLabelStyle: {
           fontFamily: uiTypography.sectionLabel.fontFamily,
-          fontSize: 10,
-          fontWeight: "700",
-          textTransform: "uppercase",
+          fontSize: 11,
+          fontWeight: "600",
         },
       }}
     >
@@ -115,6 +178,9 @@ export default function TabLayout() {
         options={{
           title: t("tabs.home"),
           headerRight: () => <HeaderRight />,
+          headerTitle: "",
+          headerTransparent: true,
+          headerShadowVisible: false,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "home" : "home-outline"}
@@ -213,62 +279,30 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    height: Platform.OS === "ios" ? 88 : 64,
     paddingTop: 8,
   },
-  headerIconButton: {
-    width: uiTouchTarget,
-    height: uiTouchTarget,
-    borderRadius: 22,
+  mobileAvatar: {
+    width: 38,
+    height: 38,
+    marginRight: 16,
+    borderRadius: 19,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  badge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  sidebar: {
-    width: 260,
-    borderRightWidth: 1,
-  },
-  sidebarHeader: {
-    padding: 24,
+  mobileAvatarText: { ...uiTypography.sectionLabel, fontSize: 11 },
+  profileMenu: { paddingHorizontal: 16, paddingBottom: 20 },
+  profileHeader: { paddingHorizontal: 8, paddingVertical: 18, gap: 3 },
+  profileName: { ...uiTypography.label, fontSize: 16 },
+  profileCaption: { ...uiTypography.caption },
+  menuRow: {
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
   },
-  sidebarTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: 0,
-  },
-  sidebarNav: {
-    paddingHorizontal: 16,
-    gap: 4,
-  },
-  sidebarItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    gap: 16,
-    // @ts-ignore Web-only cursor
-    cursor: "pointer",
-  },
-  sidebarItemText: {
-    fontSize: 16,
-  },
+  menuLabel: { ...uiTypography.label, fontSize: 15 },
+  menuDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
 });

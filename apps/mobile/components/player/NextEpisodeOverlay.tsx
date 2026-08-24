@@ -4,6 +4,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { getWebFocusStyle } from "../ui/designSystem";
 import { playerChrome } from "./playerChrome";
+import { useWindowClass, type WindowClass } from "../../hooks/useWindowClass";
+
+export function resolveNextEpisodeOverlayPlacement(windowClass: WindowClass) {
+  return windowClass === "compact" ? "bottom-card" : "bottom-right";
+}
 
 interface NextEpisodeOverlayProps {
   isVisible: boolean;
@@ -25,6 +30,8 @@ export function NextEpisodeOverlay({
   countdownSeconds = 10,
 }: NextEpisodeOverlayProps) {
   const { t } = useTranslation();
+  const { windowClass } = useWindowClass();
+  const placement = resolveNextEpisodeOverlayPlacement(windowClass);
   const [timeLeft, setTimeLeft] = useState(countdownSeconds);
 
   useEffect(() => {
@@ -49,12 +56,22 @@ export function NextEpisodeOverlay({
 
   return (
     <View
-      style={[styles.container, { backgroundColor: playerChrome.scrim }]}
+      style={[
+        styles.container,
+        placement === "bottom-card"
+          ? styles.compactContainer
+          : styles.desktopContainer,
+        {
+          backgroundColor:
+            placement === "bottom-card" ? playerChrome.scrim : "transparent",
+        },
+      ]}
       accessibilityLiveRegion="polite"
     >
       <View
         style={[
           styles.card,
+          placement === "bottom-card" && styles.compactCard,
           {
             backgroundColor: playerChrome.surfaceStrong,
             borderColor: playerChrome.border,
@@ -141,9 +158,18 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFill,
     justifyContent: "flex-end",
-    alignItems: "center",
-    paddingBottom: 80,
     zIndex: 100,
+  },
+  compactContainer: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  desktopContainer: {
+    alignItems: "flex-end",
+    paddingRight: 32,
+    paddingBottom: 32,
+    pointerEvents: "box-none",
   },
   card: {
     width: "90%",
@@ -152,6 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
+  compactCard: { width: "100%" },
   upNext: {
     fontSize: 12,
     fontWeight: "bold",

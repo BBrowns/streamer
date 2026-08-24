@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { View, Text, Animated, StyleSheet, Platform } from "react-native";
 import { useUiMotion } from "../../hooks/useUiMotion";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /**
  * Offline banner component.
@@ -14,6 +16,9 @@ export function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(false);
   const slideAnim = useRef(new Animated.Value(-50)).current;
   const { reducedMotion, duration } = useUiMotion();
+  const { isCompact } = useWindowClass();
+  const insets = useSafeAreaInsets();
+  const topOffset = isCompact ? insets.top + 48 : 72;
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -90,7 +95,10 @@ export function OfflineBanner() {
 
   return (
     <Animated.View
-      style={[styles.banner, { transform: [{ translateY: slideAnim }] }]}
+      style={[
+        styles.banner,
+        { top: topOffset, transform: [{ translateY: slideAnim }] },
+      ]}
       accessibilityRole="alert"
       accessibilityLabel="You are offline. Showing cached content."
       accessibilityLiveRegion="assertive"
@@ -104,7 +112,6 @@ export function OfflineBanner() {
 const styles = StyleSheet.create({
   banner: {
     position: "absolute",
-    top: 0,
     left: 0,
     right: 0,
     backgroundColor: "#f59e0b",

@@ -3,15 +3,19 @@ import { Platform } from "react-native";
 import {
   getWebAriaChecked,
   getWebFocusStyle,
+  getWebMediaFocusStyle,
   getSoftOverlayColor,
   getSurfaceColors,
   getToneColor,
+  getPosterCardWidth,
+  getWindowGutter,
   uiRadii,
   uiSpacing,
   uiTouchTarget,
   uiTypography,
   uiLayout,
   uiMotion,
+  uiFonts,
   resolveMotionDuration,
 } from "../designSystem";
 
@@ -42,12 +46,15 @@ describe("design system tokens", () => {
   it("keeps spacing, radii, and typography stable for UI primitives", () => {
     expect(uiSpacing).toMatchObject({ sm: 8, md: 12, lg: 16 });
     expect(uiRadii).toMatchObject({
+      xxs: 6,
       control: 8,
       card: 12,
       sheet: 20,
       pill: 999,
     });
-    expect(uiTouchTarget).toBe(44);
+    expect([44, 48]).toContain(uiTouchTarget);
+    expect(uiFonts.regular.toLowerCase()).toContain("system");
+    expect(uiFonts.cinematic).toBe("InstrumentSerif_400Regular");
     expect(uiTypography.control).toMatchObject({
       fontSize: 14,
       lineHeight: 20,
@@ -57,21 +64,57 @@ describe("design system tokens", () => {
 
   it("exposes semantic content widths and motion intents", () => {
     expect(uiLayout).toMatchObject({
-      contentMaxWidth: 1600,
-      detailMaxWidth: 1120,
+      contentMaxWidth: 1560,
+      detailMaxWidth: 1200,
+      settingsMaxWidth: 1120,
       readingMaxWidth: 760,
+      compactGutter: 20,
+      expandedGutter: 40,
+      largeGutter: 56,
+      pageWidths: {
+        cinematic: 1560,
+        catalog: 1560,
+        utilityWide: 1120,
+        utilityNarrow: 760,
+      },
     });
     expect(uiMotion).toMatchObject({
-      feedback: 120,
-      content: 180,
-      overlay: 280,
+      feedback: 90,
+      content: 140,
+      spatial: 200,
+      overlay: 240,
+      emphasis: 360,
       loadingLoop: 1500,
     });
   });
 
+  it("maps every window class to canonical gutters and poster widths", () => {
+    expect(
+      ["compact", "medium", "expanded", "large"].map((windowClass) =>
+        getWindowGutter(
+          windowClass as "compact" | "medium" | "expanded" | "large",
+        ),
+      ),
+    ).toEqual([20, 24, 40, 56]);
+    expect(
+      ["compact", "medium", "expanded", "large"].map((windowClass) =>
+        getPosterCardWidth(
+          windowClass as "compact" | "medium" | "expanded" | "large",
+        ),
+      ),
+    ).toEqual([132, 152, 168, 198]);
+
+    const designSystem = require("../designSystem");
+    expect(
+      ["compact", "medium", "expanded", "large"].map((windowClass) =>
+        designSystem.getHomeHeroOverlap?.(windowClass),
+      ),
+    ).toEqual([36, 48, 64, 88]);
+  });
+
   it("resolves motion to zero when reduced motion is requested", () => {
-    expect(resolveMotionDuration("feedback", false)).toBe(120);
-    expect(resolveMotionDuration("overlay", false)).toBe(280);
+    expect(resolveMotionDuration("feedback", false)).toBe(90);
+    expect(resolveMotionDuration("overlay", false)).toBe(240);
     expect(resolveMotionDuration("loadingLoop", true)).toBe(0);
   });
 
@@ -81,6 +124,15 @@ describe("design system tokens", () => {
       outlineWidth: 3,
       outlineColor: "#a78bfa",
       outlineOffset: 2,
+    });
+  });
+
+  it("keeps media hover quiet and gives keyboard focus its own compact ring", () => {
+    expect(getWebMediaFocusStyle("#365B78")).toEqual({
+      outlineStyle: "solid",
+      outlineWidth: 2,
+      outlineColor: "#365B78",
+      outlineOffset: 3,
     });
   });
 
@@ -111,24 +163,25 @@ describe("design system tokens", () => {
       borderColor: PALETTE.dark.error + "42",
     });
     expect(getToneColor(PALETTE.light, "success")).toBe(PALETTE.light.success);
-    expect(getSoftOverlayColor(true)).toBe("rgba(8,9,12,0.72)");
+    expect(getSoftOverlayColor(true)).toBe("rgba(8,9,11,0.72)");
   });
 
-  it("uses the Obsidian Editorial palette", () => {
+  it("uses the Living Cinema palette", () => {
     expect(PALETTE.dark).toMatchObject({
-      background: "#08090C",
+      background: "#08090B",
       card: "#111318",
-      surfaceElevated: "#181B21",
-      text: "#F4F5F7",
-      textSecondary: "#9DA3AE",
-      tint: "#6C79F5",
+      surfaceSubtle: "#0D0F12",
+      text: "#F4F2EE",
+      textSecondary: "#B8B5B0",
+      textTertiary: "#85848A",
+      tint: "#C89B6D",
     });
     expect(PALETTE.light).toMatchObject({
       background: "#F3F2EF",
       card: "#FFFFFF",
       text: "#101216",
       textSecondary: "#656B75",
-      tint: "#4F5FD1",
+      tint: "#8A5A35",
     });
   });
 

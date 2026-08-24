@@ -9,7 +9,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
   FlatList,
   ActivityIndicator,
@@ -43,7 +42,7 @@ import {
 import { AppButton } from "./ui/AppButton";
 import { getCastRecovery } from "../services/actionRecovery";
 import { useTheme } from "../hooks/useTheme";
-import { useReducedMotion } from "../hooks/useReducedMotion";
+import { AdaptiveOverlay } from "./ui/AdaptiveOverlay";
 import {
   castDialogReducer,
   hasUsableCastFallback,
@@ -75,7 +74,6 @@ export function DesktopCastModal({
   onCastStart,
 }: Props) {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
   const { t } = useTranslation();
   const [state, dispatch] = useReducer(
     castDialogReducer,
@@ -618,149 +616,195 @@ export function DesktopCastModal({
       (state.status === "unsupportedDevice" && state.showDevicePicker));
 
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      animationType={reducedMotion ? "none" : "fade"}
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      accessibilityLabel={t("player.controls.cast", {
+        defaultValue: "Cast",
+      })}
+      testID="cast-adaptive-overlay"
+      contentStyle={[styles.container, { backgroundColor: colors.card }]}
     >
-      <View style={[styles.overlay, { backgroundColor: colors.scrim }]}>
-        <View
-          accessibilityViewIsModal
-          accessibilityLabel={t("player.controls.cast", {
-            defaultValue: "Cast",
-          })}
-          style={[styles.container, { backgroundColor: colors.card }]}
-        >
-          <View style={styles.header}>
-            <View style={styles.headerTextContainer}>
-              <MaterialIcons
-                name="cast"
-                size={24}
-                color={colors.tint}
-                style={styles.headerIcon}
-              />
-              <View>
-                <Text style={[styles.title, { color: colors.text }]}>
-                  {t("player.controls.cast", { defaultValue: "Cast" })}
-                </Text>
-                <Text
-                  style={[styles.subtitle, { color: colors.textSecondary }]}
-                  numberOfLines={1}
-                >
-                  {title}
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={t("player.controls.close", {
-                defaultValue: "Close",
-              })}
-              style={({ pressed, focused }: any) => [
-                styles.closeBtnWrapper,
-                { backgroundColor: colors.surfaceElevated },
-                pressed && styles.pressed,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
+      <View style={styles.header}>
+        <View style={styles.headerTextContainer}>
+          <MaterialIcons
+            name="cast"
+            size={24}
+            color={colors.tint}
+            style={styles.headerIcon}
+          />
+          <View>
+            <Text style={[styles.title, { color: colors.text }]}>
+              {t("player.controls.cast", { defaultValue: "Cast" })}
+            </Text>
+            <Text
+              style={[styles.subtitle, { color: colors.textSecondary }]}
+              numberOfLines={1}
             >
-              <MaterialIcons
-                name="close"
-                size={22}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-          </View>
-
-          <View
-            accessibilityLiveRegion="polite"
-            style={[
-              styles.readiness,
-              {
-                backgroundColor: statusColor + "12",
-                borderColor: statusColor + "38",
-              },
-            ]}
-          >
-            {statusBusy ? (
-              <ActivityIndicator size="small" color={statusColor} />
-            ) : (
-              <MaterialIcons
-                name={
-                  state.status === "ready" || state.status === "connected"
-                    ? "check-circle"
-                    : state.status === "noDevices"
-                      ? "tv-off"
-                      : state.status === "unsupportedDevice" ||
-                          state.status === "preparationFailure" ||
-                          state.status === "connectionFailure"
-                        ? "error"
-                        : "cast"
-                }
-                size={18}
-                color={statusColor}
-              />
-            )}
-            <Text style={[styles.readinessText, { color: colors.text }]}>
-              {statusText}
+              {title}
             </Text>
           </View>
+        </View>
+        <Pressable
+          onPress={onClose}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t("player.controls.close", {
+            defaultValue: "Close",
+          })}
+          style={({ pressed, focused }: any) => [
+            styles.closeBtnWrapper,
+            { backgroundColor: colors.surfaceElevated },
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <MaterialIcons name="close" size={22} color={colors.textSecondary} />
+        </Pressable>
+      </View>
 
-          {recoveryLabel ? (
-            <AppButton
-              label={recoveryLabel}
-              icon={
-                (state.status === "preparationFailure" ||
-                  state.status === "connectionFailure") &&
-                state.recovery.action === "repair_bridge"
-                  ? "construct-outline"
-                  : state.status === "unsupportedDevice"
-                    ? "tv-outline"
-                    : "refresh"
-              }
-              variant="secondary"
-              size="small"
-              onPress={handleRecovery}
-              disabled={statusBusy || reconnectPending}
-              style={styles.recoveryButton}
-            />
-          ) : null}
+      <View
+        accessibilityLiveRegion="polite"
+        style={[
+          styles.readiness,
+          {
+            backgroundColor: statusColor + "12",
+            borderColor: statusColor + "38",
+          },
+        ]}
+      >
+        {statusBusy ? (
+          <ActivityIndicator size="small" color={statusColor} />
+        ) : (
+          <MaterialIcons
+            name={
+              state.status === "ready" || state.status === "connected"
+                ? "check-circle"
+                : state.status === "noDevices"
+                  ? "tv-off"
+                  : state.status === "unsupportedDevice" ||
+                      state.status === "preparationFailure" ||
+                      state.status === "connectionFailure"
+                    ? "error"
+                    : "cast"
+            }
+            size={18}
+            color={statusColor}
+          />
+        )}
+        <Text style={[styles.readinessText, { color: colors.text }]}>
+          {statusText}
+        </Text>
+      </View>
 
-          {showDeviceList ? (
-            <FlatList
-              data={state.devices.filter(
-                (device) =>
-                  state.status !== "unsupportedDevice" ||
-                  device.id !== state.rejectedDeviceId,
-              )}
-              keyExtractor={(device) => device.id}
-              contentContainerStyle={styles.deviceList}
-              renderItem={({ item }) => {
-                const isActiveDevice =
-                  (state.status === "casting" ||
-                    state.status === "connected") &&
-                  state.device.id === item.id;
-                const isCasting =
-                  state.status === "casting" && state.device.id === item.id;
-                const isConnected =
-                  state.status === "connected" && state.device.id === item.id;
-                const deviceDisabled =
-                  state.status !== "ready" &&
-                  !(
-                    state.status === "unsupportedDevice" &&
-                    state.showDevicePicker
-                  );
-                const iconName =
-                  item.type === "chromecast" ? "cast" : "airplay";
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.name}. ${
-                      isConnected
+      {recoveryLabel ? (
+        <AppButton
+          label={recoveryLabel}
+          icon={
+            (state.status === "preparationFailure" ||
+              state.status === "connectionFailure") &&
+            state.recovery.action === "repair_bridge"
+              ? "construct-outline"
+              : state.status === "unsupportedDevice"
+                ? "tv-outline"
+                : "refresh"
+          }
+          variant="secondary"
+          size="small"
+          onPress={handleRecovery}
+          disabled={statusBusy || reconnectPending}
+          style={styles.recoveryButton}
+        />
+      ) : null}
+
+      {showDeviceList ? (
+        <FlatList
+          data={state.devices.filter(
+            (device) =>
+              state.status !== "unsupportedDevice" ||
+              device.id !== state.rejectedDeviceId,
+          )}
+          keyExtractor={(device) => device.id}
+          contentContainerStyle={styles.deviceList}
+          renderItem={({ item }) => {
+            const isActiveDevice =
+              (state.status === "casting" || state.status === "connected") &&
+              state.device.id === item.id;
+            const isCasting =
+              state.status === "casting" && state.device.id === item.id;
+            const isConnected =
+              state.status === "connected" && state.device.id === item.id;
+            const deviceDisabled =
+              state.status !== "ready" &&
+              !(state.status === "unsupportedDevice" && state.showDevicePicker);
+            const iconName = item.type === "chromecast" ? "cast" : "airplay";
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}. ${
+                  isConnected
+                    ? statusText
+                    : isCasting
+                      ? t("player.cast.castingTo", {
+                          name: item.name,
+                          defaultValue: "Connecting to display...",
+                        })
+                      : t("player.cast.available", {
+                          defaultValue: "Available",
+                        })
+                }`}
+                accessibilityState={{
+                  disabled: deviceDisabled,
+                  busy: isCasting,
+                }}
+                style={({ hovered, pressed, focused }: any) => [
+                  styles.deviceItem,
+                  { backgroundColor: colors.surfaceElevated },
+                  hovered &&
+                    !deviceDisabled && {
+                      backgroundColor: colors.surfaceSubtle,
+                    },
+                  isActiveDevice && {
+                    backgroundColor: colors.tint,
+                    borderColor: colors.tint,
+                  },
+                  pressed && !deviceDisabled && styles.pressed,
+                  deviceDisabled && !isActiveDevice && styles.deviceDisabled,
+                  Platform.OS === "web" &&
+                    focused &&
+                    getWebFocusStyle(colors.focus),
+                ]}
+                onPress={() => handleCast(item)}
+                disabled={deviceDisabled}
+              >
+                <View style={styles.deviceInfoContainer}>
+                  <MaterialIcons
+                    name={iconName}
+                    size={26}
+                    color={isActiveDevice ? colors.onTint : colors.tint}
+                  />
+                  <View style={styles.deviceTextCol}>
+                    <Text
+                      style={[
+                        styles.deviceName,
+                        {
+                          color: isActiveDevice ? colors.onTint : colors.text,
+                        },
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.deviceType,
+                        {
+                          color: isActiveDevice
+                            ? colors.onTint
+                            : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {isConnected
                         ? statusText
                         : isCasting
                           ? t("player.cast.castingTo", {
@@ -769,114 +813,34 @@ export function DesktopCastModal({
                             })
                           : t("player.cast.available", {
                               defaultValue: "Available",
-                            })
-                    }`}
-                    accessibilityState={{
-                      disabled: deviceDisabled,
-                      busy: isCasting,
-                    }}
-                    style={({ hovered, pressed, focused }: any) => [
-                      styles.deviceItem,
-                      { backgroundColor: colors.surfaceElevated },
-                      hovered &&
-                        !deviceDisabled && {
-                          backgroundColor: colors.surfaceSubtle,
-                        },
-                      isActiveDevice && {
-                        backgroundColor: colors.tint,
-                        borderColor: colors.tint,
-                      },
-                      pressed && !deviceDisabled && styles.pressed,
-                      deviceDisabled &&
-                        !isActiveDevice &&
-                        styles.deviceDisabled,
-                      Platform.OS === "web" &&
-                        focused &&
-                        getWebFocusStyle(colors.focus),
-                    ]}
-                    onPress={() => handleCast(item)}
-                    disabled={deviceDisabled}
-                  >
-                    <View style={styles.deviceInfoContainer}>
-                      <MaterialIcons
-                        name={iconName}
-                        size={26}
-                        color={isActiveDevice ? colors.onTint : colors.tint}
-                      />
-                      <View style={styles.deviceTextCol}>
-                        <Text
-                          style={[
-                            styles.deviceName,
-                            {
-                              color: isActiveDevice
-                                ? colors.onTint
-                                : colors.text,
-                            },
-                          ]}
-                        >
-                          {item.name}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.deviceType,
-                            {
-                              color: isActiveDevice
-                                ? colors.onTint
-                                : colors.textSecondary,
-                            },
-                          ]}
-                        >
-                          {isConnected
-                            ? statusText
-                            : isCasting
-                              ? t("player.cast.castingTo", {
-                                  name: item.name,
-                                  defaultValue: "Connecting to display...",
-                                })
-                              : t("player.cast.available", {
-                                  defaultValue: "Available",
-                                })}
-                        </Text>
-                      </View>
-                    </View>
-                    {isCasting && !isConnected ? (
-                      <ActivityIndicator size="small" color={colors.onTint} />
-                    ) : isConnected ? (
-                      <MaterialIcons
-                        name="check"
-                        size={24}
-                        color={colors.onTint}
-                      />
-                    ) : (
-                      <MaterialIcons
-                        name="chevron-right"
-                        size={24}
-                        color={colors.textSecondary}
-                      />
-                    )}
-                  </Pressable>
-                );
-              }}
-            />
-          ) : null}
-        </View>
-      </View>
-    </Modal>
+                            })}
+                    </Text>
+                  </View>
+                </View>
+                {isCasting && !isConnected ? (
+                  <ActivityIndicator size="small" color={colors.onTint} />
+                ) : isConnected ? (
+                  <MaterialIcons name="check" size={24} color={colors.onTint} />
+                ) : (
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                )}
+              </Pressable>
+            );
+          }}
+        />
+      ) : null}
+    </AdaptiveOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: uiSpacing.xl,
-  },
   container: {
-    borderRadius: uiRadii.sheet,
     padding: uiSpacing.xxl,
     width: "100%",
-    maxWidth: 440,
     maxHeight: "80%",
   },
   header: {

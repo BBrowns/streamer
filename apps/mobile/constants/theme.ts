@@ -6,6 +6,7 @@ export type ThemeColors = {
   surfaceOverlay: string;
   text: string;
   textSecondary: string;
+  textTertiary: string;
   header: string;
   border: string;
   tint: string;
@@ -20,31 +21,48 @@ export type ThemeColors = {
   error: string;
   success: string;
   warning: string;
+  surfaceFloating: string;
+  borderStrong: string;
+  borderSubtle: string;
+  stateHover: string;
+  statePressed: string;
+  stateSelected: string;
+  scrimSoft: string;
+  scrimStrong: string;
 };
 
 export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
   dark: {
-    background: "#08090C",
+    background: "#08090B",
     card: "#111318",
     surfaceElevated: "#181B21",
-    surfaceSubtle: "#0D0F13",
+    surfaceSubtle: "#0D0F12",
     surfaceOverlay: "rgba(17,19,24,0.96)",
-    text: "#F4F5F7",
-    textSecondary: "#9DA3AE",
-    header: "#08090C",
+    text: "#F4F2EE",
+    textSecondary: "#B8B5B0",
+    textTertiary: "#85848A",
+    header: "#08090B",
     border: "rgba(244,245,247,0.09)",
-    tint: "#6C79F5",
-    onTint: "#08090C",
-    primary: "#F4F5F7",
-    onPrimary: "#08090C",
-    focus: "#8792FF",
+    tint: "#C89B6D",
+    onTint: "#08090B",
+    primary: "#F4F2EE",
+    onPrimary: "#08090B",
+    focus: "#D6AA7C",
     scrim: "rgba(0,0,0,0.76)",
     disabled: "#5E646E",
     opaqueGlassFallback: "#111318",
-    tabBar: "rgba(8,9,12,0.97)",
+    tabBar: "rgba(8,9,11,0.97)",
     error: "#FF7087",
     success: "#4EC98B",
     warning: "#E7B86A",
+    surfaceFloating: "rgba(17,19,24,0.94)",
+    borderStrong: "rgba(244,242,238,0.16)",
+    borderSubtle: "rgba(244,242,238,0.07)",
+    stateHover: "rgba(255,255,255,0.04)",
+    statePressed: "rgba(255,255,255,0.08)",
+    stateSelected: "rgba(200,155,109,0.10)",
+    scrimSoft: "rgba(8,9,11,0.56)",
+    scrimStrong: "rgba(8,9,11,0.84)",
   },
   light: {
     background: "#F3F2EF",
@@ -54,13 +72,14 @@ export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
     surfaceOverlay: "rgba(255,255,255,0.97)",
     text: "#101216",
     textSecondary: "#656B75",
+    textTertiary: "#85868B",
     header: "#F3F2EF",
     border: "rgba(16,18,22,0.09)",
-    tint: "#4F5FD1",
+    tint: "#8A5A35",
     onTint: "#FFFFFF",
     primary: "#101216",
     onPrimary: "#FFFFFF",
-    focus: "#4F5FD1",
+    focus: "#7A4C2E",
     scrim: "rgba(16,18,22,0.48)",
     disabled: "#9A9EA5",
     opaqueGlassFallback: "#FFFFFF",
@@ -68,5 +87,13 @@ export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
     error: "#B8324D",
     success: "#1F7A50",
     warning: "#8B5A13",
+    surfaceFloating: "rgba(255,255,255,0.96)",
+    borderStrong: "rgba(16,18,22,0.16)",
+    borderSubtle: "rgba(16,18,22,0.07)",
+    stateHover: "rgba(16,18,22,0.04)",
+    statePressed: "rgba(16,18,22,0.08)",
+    stateSelected: "rgba(138,90,53,0.08)",
+    scrimSoft: "rgba(243,242,239,0.58)",
+    scrimStrong: "rgba(243,242,239,0.88)",
   },
 };

@@ -4,14 +4,14 @@
 
 :root {
   color-scheme: dark light;
-  --streamer-canvas: #08090c;
-  --streamer-focus: #6c79f5;
+  --streamer-canvas: #08090b;
+  --streamer-focus: #c89b6d;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
     --streamer-canvas: #f3f2ef;
-    --streamer-focus: #4f5fd1;
+    --streamer-focus: #8a5a35;
   }
 }
 
@@ -20,12 +20,10 @@ body,
 #root {
   background: var(--streamer-canvas);
   font-family:
-    "Inter Variable",
-    Inter_400Regular,
-    system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
+    system-ui,
     sans-serif;
 }
 
@@ -77,6 +75,22 @@ body,
 [data-catalog-card]:hover [data-hover-overlay] {
   opacity: 1 !important;
   pointer-events: auto !important;
+}
+
+[data-continue-card] [data-card-quick-actions] {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-continue-card] [data-card-quick-actions] {
+    opacity: 0;
+    transition: opacity 90ms ease;
+  }
+
+  [data-continue-card]:hover [data-card-quick-actions],
+  [data-continue-card]:focus-within [data-card-quick-actions] {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

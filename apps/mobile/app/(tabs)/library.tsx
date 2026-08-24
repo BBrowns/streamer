@@ -398,7 +398,7 @@ export default function LibraryScreen() {
         }}
         contentContainerStyle={[
           styles.listContent,
-          { maxWidth: uiLayout.contentMaxWidth },
+          { maxWidth: uiLayout.pageWidths.catalog },
         ]}
         ListHeaderComponent={
           <>

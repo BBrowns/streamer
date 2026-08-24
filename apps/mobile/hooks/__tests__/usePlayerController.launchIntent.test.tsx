@@ -4,6 +4,7 @@ import { usePlayerStore } from "../../stores/playerStore";
 import { usePlayerController } from "../usePlayerController";
 
 let mockContinueWatchingItems: Array<Record<string, unknown>> = [];
+const mockUpdateProgress = jest.fn();
 const originalSubscribeToStreamMetrics =
   usePlayerStore.getState().subscribeToStreamMetrics;
 const mockSubscribeToStreamMetrics = jest.fn();
@@ -57,7 +58,7 @@ jest.mock("../useTraktScrobbler", () => ({
 }));
 
 jest.mock("../useContinueWatching", () => ({
-  useUpdateProgress: () => ({ mutate: jest.fn() }),
+  useUpdateProgress: () => ({ mutate: mockUpdateProgress }),
   useContinueWatching: () => ({ data: mockContinueWatchingItems }),
 }));
 
@@ -100,6 +101,7 @@ function createMockPlayer() {
 
 function startSession(
   intent: { type: "play" } | { type: "resume"; positionSeconds: number },
+  mediaOverrides: { background?: string } = {},
 ) {
   usePlayerStore.getState().setSessionStream(
     { url: "https://cdn.example.test/planned.mp4" } as Stream,
@@ -107,6 +109,8 @@ function startSession(
       type: "movie",
       itemId: "tt-launch",
       title: "Launch Movie",
+      background: "https://images.example.test/launch-backdrop.jpg",
+      ...mediaOverrides,
     },
     "session-launch",
     "candidate-launch",
@@ -310,6 +314,64 @@ describe("usePlayerController playback launch intent", () => {
     await act(() => player.emit("playToEnd", {}));
 
     expect(onCompleted).toHaveBeenCalledTimes(1);
+    await screen.unmount();
+  });
+
+  it("reports the current landscape background with watch progress", async () => {
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    player.duration = 300;
+    startSession({ type: "play" });
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    await act(() => {
+      player.currentTime = 5;
+      player.emit("timeUpdate", { currentTime: 5 });
+      player.emit("playingChange", { isPlaying: false });
+    });
+
+    expect(mockUpdateProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "tt-launch",
+        background: "https://images.example.test/launch-backdrop.jpg",
+      }),
+    );
+    await screen.unmount();
+  });
+
+  it("omits malformed optional artwork instead of rejecting watch progress", async () => {
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    player.duration = 300;
+    startSession({ type: "play" }, { background: "relative/backdrop.jpg" });
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    await act(() => {
+      player.currentTime = 5;
+      player.emit("timeUpdate", { currentTime: 5 });
+      player.emit("playingChange", { isPlaying: false });
+    });
+
+    expect(mockUpdateProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "tt-launch",
+        background: undefined,
+      }),
+    );
     await screen.unmount();
   });
 });

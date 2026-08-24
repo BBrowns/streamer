@@ -208,13 +208,13 @@ function ChoiceRow({
         .join(", ")}
       style={({ pressed, hovered, focused }: any) => [
         styles.choice,
-        { backgroundColor: colors.surfaceElevated },
-        hovered && { backgroundColor: colors.card },
+        { borderBottomColor: colors.borderSubtle ?? colors.border },
+        hovered && { backgroundColor: colors.stateHover },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}
     >
-      <View style={[styles.quality, { backgroundColor: colors.tint + "18" }]}>
+      <View style={styles.quality}>
         <Text style={[styles.qualityText, { color: colors.tint }]}>
           {quality}
         </Text>
@@ -233,10 +233,10 @@ function ChoiceRow({
 }
 
 const styles = StyleSheet.create({
-  list: { gap: uiSpacing.sm },
+  list: { gap: 0 },
   choice: {
-    minHeight: 64,
-    borderRadius: uiRadii.card,
+    minHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: uiSpacing.md,
     flexDirection: "row",
     alignItems: "center",
@@ -244,8 +244,7 @@ const styles = StyleSheet.create({
   },
   quality: {
     minWidth: 48,
-    minHeight: 36,
-    borderRadius: uiRadii.control,
+    minHeight: 32,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: uiSpacing.sm,

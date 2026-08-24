@@ -18,7 +18,6 @@ import {
 import { AppButton } from "../ui/AppButton";
 import { MediaArtwork } from "../ui/MediaArtwork";
 import { StatusPill } from "../ui/StatusPill";
-import { Surface } from "../ui/Surface";
 import {
   getWebFocusStyle,
   uiRadii,
@@ -165,8 +164,7 @@ export function DownloadQueueCard({
   });
 
   return (
-    <Surface
-      padded={false}
+    <View
       style={[
         styles.card,
         compact && styles.cardCompact,
@@ -175,7 +173,7 @@ export function DownloadQueueCard({
             ? colors.tint
             : isError
               ? colors.error + "50"
-              : "transparent",
+              : colors.border,
         },
       ]}
     >
@@ -194,10 +192,11 @@ export function DownloadQueueCard({
       >
         <View>
           <MediaArtwork
-            uri={task.mediaInfo.poster}
+            uri={task.mediaInfo.background || task.mediaInfo.poster}
             title={task.mediaInfo.title}
-            variant="poster"
+            variant={task.mediaInfo.background ? "backdrop" : "poster"}
             accessible={false}
+            contentFit={task.mediaInfo.background ? "cover" : "contain"}
             style={[styles.poster, compact && styles.posterCompact]}
           />
           {isSelectionMode ? (
@@ -336,33 +335,36 @@ export function DownloadQueueCard({
           ) : null}
         </View>
       ) : null}
-    </Surface>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   contentPressed: { opacity: 0.76 },
   card: {
-    borderWidth: 1,
-    borderRadius: uiRadii.card,
-    overflow: "hidden",
-    minHeight: 162,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: 0,
+    minHeight: 116,
   },
   cardCompact: {
-    minHeight: 132,
+    minHeight: 104,
   },
   contentPressable: {
     flexDirection: "row",
     minWidth: 0,
+    paddingVertical: uiSpacing.md,
   },
   poster: {
-    width: 108,
-    height: 162,
+    width: 160,
+    height: 90,
+    marginLeft: uiSpacing.md,
+    borderRadius: uiRadii.card,
+    overflow: "hidden",
     backgroundColor: "rgba(127,127,127,0.12)",
   },
   posterCompact: {
-    width: 82,
-    height: 123,
+    width: 112,
+    height: 72,
   },
   selectionBadge: {
     position: "absolute",
@@ -432,10 +434,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   actions: {
-    minHeight: 52,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    minHeight: 48,
+    borderTopWidth: 0,
     paddingHorizontal: uiSpacing.md,
-    paddingVertical: uiSpacing.sm,
+    paddingBottom: uiSpacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

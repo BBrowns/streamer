@@ -1,18 +1,13 @@
-import { Stack, ErrorBoundaryProps, usePathname } from "expo-router";
+import { Stack, ErrorBoundaryProps, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-  Inter_900Black,
+  InstrumentSerif_400Regular,
   useFonts,
-} from "@expo-google-fonts/inter";
+} from "@expo-google-fonts/instrument-serif";
 import {
   View,
   Text,
@@ -58,6 +53,9 @@ import {
 } from "../components/ui/designSystem";
 import { useTranslation } from "react-i18next";
 import { setDesktopBridgeAccessSession } from "../services/bridgeAuth";
+import { CinematicThemeProvider } from "../contexts/CinematicThemeContext";
+import { useWindowClass } from "../hooks/useWindowClass";
+import { isEditableSearchShortcutTarget } from "../services/searchController";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -91,20 +89,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-const productFonts =
-  Platform.OS === "web"
-    ? {
-        "Inter Variable": require("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2"),
-      }
-    : {
-        Inter_400Regular,
-        Inter_500Medium,
-        Inter_600SemiBold,
-        Inter_700Bold,
-        Inter_800ExtraBold,
-        Inter_900Black,
-      };
 
 async function hydrateDesktopBridgeSettings() {
   if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) return;
@@ -170,6 +154,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 function RootLayoutNav() {
   const appState = useRef(AppState.currentState);
   const pathname = usePathname();
+  const router = useRouter();
+  const { isCompact } = useWindowClass();
   const { isDark, colors: themeColors } = useTheme();
   const deviceId = useAuthStore((s) => s.deviceId);
   const setDeviceId = useAuthStore((s) => s.setDeviceId);
@@ -258,16 +244,26 @@ function RootLayoutNav() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      const commandSearch =
+        (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+      const slashSearch =
+        e.key === "/" &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !isEditableSearchShortcutTarget(e.target);
+      if (commandSearch || slashSearch) {
         e.preventDefault();
-        setSearchOpen((v) => !v);
+        if (isCompact) router.push("/search" as never);
+        else setSearchOpen(true);
       }
       if (e.key === "Escape") setSearchOpen(false);
     };
 
     const { DeviceEventEmitter } = require("react-native");
     const sub = DeviceEventEmitter.addListener("SHOW_SEARCH", () => {
-      setSearchOpen(true);
+      if (isCompact) router.push("/search" as never);
+      else setSearchOpen(true);
     });
 
     window.addEventListener("keydown", handler);
@@ -275,7 +271,7 @@ function RootLayoutNav() {
       window.removeEventListener("keydown", handler);
       sub.remove();
     };
-  }, []);
+  }, [isCompact, router]);
 
   return (
     <RootLayoutNavInner>
@@ -377,13 +373,15 @@ function RootLayoutNavInner({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts(productFonts);
+  const [fontsLoaded, fontError] = useFonts({ InstrumentSerif_400Regular });
 
   if (!fontsLoaded && !fontError) return null;
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RootLayoutNav />
+      <CinematicThemeProvider>
+        <RootLayoutNav />
+      </CinematicThemeProvider>
     </QueryClientProvider>
   );
 }

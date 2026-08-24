@@ -55,6 +55,7 @@ interface PlayerControlsProps {
   onPlayPause: () => void;
   isPlaying: boolean;
   capabilities?: PlayerControlCapabilities;
+  title?: string;
   sourceLabel?: string;
   castStatus?: string | null;
   downloadStatus?: string | null;
@@ -75,10 +76,12 @@ interface PlayerControlsProps {
   onToggleMute?: () => void;
   onVolumeChange?: (volume: number) => void;
   onToggleFullscreen?: () => void;
-  onOpenSettings?: () => void;
   onOpenCast?: () => void;
   onRetry?: () => void;
   onSkipSegment?: (endSeconds: number) => void;
+  accent?: string;
+  focusColor?: string;
+  onControlFocusChange?: (focused: boolean) => void;
 }
 
 const SEEK_STEP_SECONDS = 10;
@@ -137,10 +140,13 @@ export function PlayerControls({
   onPlayPause,
   isPlaying,
   capabilities,
+  title,
   sourceLabel,
   castStatus,
   downloadStatus,
   fallbackReason,
+  audioStatus,
+  subtitleStatus,
   activeSegment,
   muted = false,
   volume = 1,
@@ -152,10 +158,12 @@ export function PlayerControls({
   onToggleMute,
   onVolumeChange,
   onToggleFullscreen,
-  onOpenSettings,
   onOpenCast,
   onRetry,
   onSkipSegment,
+  accent = playerChrome.accent,
+  focusColor = playerChrome.focus,
+  onControlFocusChange,
 }: PlayerControlsProps) {
   const { t } = useTranslation();
   const { isCompact } = useWindowClass();
@@ -308,6 +316,16 @@ export function PlayerControls({
         Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
       ]}
       testID="player-controls-cinematic"
+      {...((Platform.OS === "web"
+        ? {
+            onFocusCapture: () => onControlFocusChange?.(true),
+            onBlurCapture: (event: any) => {
+              if (!event.currentTarget?.contains?.(event.relatedTarget)) {
+                onControlFocusChange?.(false);
+              }
+            },
+          }
+        : {}) as any)}
     >
       <View
         style={[
@@ -322,6 +340,7 @@ export function PlayerControls({
           onPress={() => seekBy(-SEEK_STEP_SECONDS)}
           reducedMotion={reducedMotion}
           disabled={!hasTimeline}
+          focusColor={focusColor}
         />
         <Pressable
           style={({ pressed, hovered, focused }: any) => [
@@ -336,9 +355,7 @@ export function PlayerControls({
               (reducedMotion
                 ? styles.playHoveredButtonReducedMotion
                 : styles.playHoveredButton),
-            Platform.OS === "web" &&
-              focused &&
-              getWebFocusStyle(playerChrome.focus),
+            Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
           ]}
           onPress={onPlayPause}
           accessibilityRole="button"
@@ -357,6 +374,7 @@ export function PlayerControls({
           onPress={() => seekBy(SEEK_STEP_SECONDS)}
           reducedMotion={reducedMotion}
           disabled={!hasTimeline}
+          focusColor={focusColor}
         />
       </View>
 
@@ -398,6 +416,8 @@ export function PlayerControls({
             }}
             onScrubbingChange={onScrubbingChange}
             getThumbnail={getThumbnail}
+            accent={accent}
+            focusColor={focusColor}
           />
 
           <View
@@ -415,7 +435,22 @@ export function PlayerControls({
               ]}
               accessibilityLiveRegion="polite"
             >
-              {sourceLabel ? (
+              {title ? (
+                <View style={styles.mediaIdentity}>
+                  <Text numberOfLines={1} style={styles.mediaTitle}>
+                    {title}
+                  </Text>
+                  {[sourceLabel, audioStatus, subtitleStatus].filter(Boolean)
+                    .length > 0 ? (
+                    <Text numberOfLines={1} style={styles.mediaMetadata}>
+                      {[sourceLabel, audioStatus, subtitleStatus]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+              {!title && sourceLabel ? (
                 <StatusPill
                   icon="information-circle-outline"
                   label={sourceLabel}
@@ -453,6 +488,7 @@ export function PlayerControls({
                   label={skipSegmentLabel}
                   onPress={() => onSkipSegment(activeSegment.endSeconds)}
                   reducedMotion={reducedMotion}
+                  focusColor={focusColor}
                 />
               ) : null}
               {capabilities?.canUseVolume && onToggleMute ? (
@@ -465,6 +501,7 @@ export function PlayerControls({
                   label={volumeLabel}
                   onPress={onToggleMute}
                   reducedMotion={reducedMotion}
+                  focusColor={focusColor}
                 />
               ) : null}
               {capabilities?.canUseVolume && onVolumeChange ? (
@@ -474,7 +511,7 @@ export function PlayerControls({
                     styles.volumeSlider,
                     Platform.OS === "web" &&
                       focused &&
-                      getWebFocusStyle(playerChrome.focus),
+                      getWebFocusStyle(focusColor),
                   ]}
                   onLayout={(event) =>
                     setVolumeTrackWidth(event.nativeEvent.layout.width)
@@ -523,22 +560,13 @@ export function PlayerControls({
                   </View>
                 </Pressable>
               ) : null}
-              {onOpenSettings ? (
-                <ActionButton
-                  icon={capabilities?.hasCaptions ? "text" : "options"}
-                  label={t("player.controls.settings", {
-                    defaultValue: "Audio, subtitles, and source",
-                  })}
-                  onPress={onOpenSettings}
-                  reducedMotion={reducedMotion}
-                />
-              ) : null}
               {capabilities?.canCast && onOpenCast ? (
                 <ActionButton
                   icon="tv"
                   label={t("player.controls.cast", { defaultValue: "Cast" })}
                   onPress={onOpenCast}
                   reducedMotion={reducedMotion}
+                  focusColor={focusColor}
                 />
               ) : null}
               {capabilities?.canRetry && onRetry ? (
@@ -549,6 +577,7 @@ export function PlayerControls({
                   })}
                   onPress={onRetry}
                   reducedMotion={reducedMotion}
+                  focusColor={focusColor}
                 />
               ) : null}
               {capabilities?.canUseFullscreen && onToggleFullscreen ? (
@@ -559,6 +588,7 @@ export function PlayerControls({
                   })}
                   onPress={onToggleFullscreen}
                   reducedMotion={reducedMotion}
+                  focusColor={focusColor}
                 />
               ) : null}
             </View>
@@ -573,10 +603,12 @@ function SegmentSkipButton({
   label,
   onPress,
   reducedMotion,
+  focusColor = playerChrome.focus,
 }: {
   label: string;
   onPress: () => void;
   reducedMotion: boolean;
+  focusColor?: string;
 }) {
   return (
     <Pressable
@@ -591,9 +623,7 @@ function SegmentSkipButton({
           (reducedMotion
             ? styles.hoveredButtonReducedMotion
             : styles.hoveredButton),
-        Platform.OS === "web" &&
-          focused &&
-          getWebFocusStyle(playerChrome.focus),
+        Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
       ]}
       onPress={onPress}
       accessibilityRole="button"
@@ -611,12 +641,14 @@ function ControlButton({
   onPress,
   reducedMotion,
   disabled = false,
+  focusColor = playerChrome.focus,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   reducedMotion: boolean;
   disabled?: boolean;
+  focusColor?: string;
 }) {
   return (
     <Pressable
@@ -633,9 +665,7 @@ function ControlButton({
           (reducedMotion
             ? styles.hoveredButtonReducedMotion
             : styles.hoveredButton),
-        Platform.OS === "web" &&
-          focused &&
-          getWebFocusStyle(playerChrome.focus),
+        Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
       ]}
       onPress={onPress}
       disabled={disabled}
@@ -657,12 +687,14 @@ function ActionButton({
   onPress,
   reducedMotion,
   compact = false,
+  focusColor = playerChrome.focus,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   reducedMotion: boolean;
   compact?: boolean;
+  focusColor?: string;
 }) {
   return (
     <Pressable
@@ -677,9 +709,7 @@ function ActionButton({
           (reducedMotion
             ? styles.hoveredButtonReducedMotion
             : styles.hoveredButton),
-        Platform.OS === "web" &&
-          focused &&
-          getWebFocusStyle(playerChrome.focus),
+        Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
       ]}
       onPress={onPress}
       hitSlop={compact ? 6 : undefined}
@@ -739,10 +769,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     flexDirection: "row",
-    gap: uiSpacing.lg,
+    gap: uiSpacing.md,
   },
   centerControlsCompact: {
-    gap: uiSpacing.md,
+    gap: uiSpacing.sm,
   },
   playPauseBtn: {
     width: 64,
@@ -826,6 +856,20 @@ const styles = StyleSheet.create({
   statusRowCompact: {
     flex: 0,
     width: "100%",
+  },
+  mediaIdentity: {
+    minWidth: 160,
+    maxWidth: 360,
+    gap: 1,
+    marginRight: uiSpacing.xs,
+  },
+  mediaTitle: {
+    ...uiTypography.label,
+    color: playerChrome.text,
+  },
+  mediaMetadata: {
+    ...uiTypography.caption,
+    color: playerChrome.textMuted,
   },
   statusPill: {
     minHeight: 28,

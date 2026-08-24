@@ -1,6 +1,6 @@
 import React from "react";
 import { render, waitFor } from "@testing-library/react-native";
-import { CatalogItemCard } from "../CatalogItemCard";
+import { CatalogItemCard, getCatalogCardPalette } from "../CatalogItemCard";
 import type { MetaPreview } from "@streamer/shared";
 
 const ExpoImageHost = "ExpoImage" as any;
@@ -25,6 +25,19 @@ jest.mock("../../../hooks/useTheme", () => ({
       text: "#ffffff",
       textSecondary: "#c7bfd5",
       border: "rgba(255,255,255,0.18)",
+      focus: "#8792FF",
+      surfaceElevated: "#181B21",
+    },
+  }),
+}));
+
+jest.mock("../../../contexts/CinematicThemeContext", () => ({
+  useCinematicTheme: () => ({
+    theme: {
+      accent: "#365B78",
+      accentSoft: "rgba(54,91,120,0.16)",
+      focus: "#6EA5CC",
+      progress: "#507DA0",
     },
   }),
 }));
@@ -82,5 +95,29 @@ describe("CatalogItemCard", () => {
         uri: poster,
       });
     });
+  });
+
+  it("uses the active artwork focus colour only when rendered in a cinematic rail", async () => {
+    expect(
+      getCatalogCardPalette(true, {
+        accent: "#365B78",
+        accentSoft: "rgba(54,91,120,0.16)",
+        focus: "#6EA5CC",
+        progress: "#507DA0",
+      }),
+    ).toEqual({
+      accentColor: "#365B78",
+      selectedColor: "rgba(54,91,120,0.16)",
+      focusColor: "#6EA5CC",
+      progressColor: "#507DA0",
+    });
+    expect(
+      getCatalogCardPalette(false, {
+        accent: "#365B78",
+        accentSoft: "rgba(54,91,120,0.16)",
+        focus: "#6EA5CC",
+        progress: "#507DA0",
+      }),
+    ).toEqual({});
   });
 });

@@ -345,7 +345,6 @@ describe("PlayerControls", () => {
     const player = createPlayer();
     const onToggleMute = jest.fn();
     const onToggleFullscreen = jest.fn();
-    const onOpenSettings = jest.fn();
     const onOpenCast = jest.fn();
     const onRetry = jest.fn();
 
@@ -359,7 +358,6 @@ describe("PlayerControls", () => {
         onPlayPause={jest.fn()}
         onToggleMute={onToggleMute}
         onToggleFullscreen={onToggleFullscreen}
-        onOpenSettings={onOpenSettings}
         onOpenCast={onOpenCast}
         onRetry={onRetry}
         volume={0.6}
@@ -383,9 +381,6 @@ describe("PlayerControls", () => {
 
     await fireEvent.press(screen.getByLabelText("Mute"));
     await fireEvent.press(screen.getByLabelText("Fullscreen"));
-    await fireEvent.press(
-      screen.getByLabelText("Audio, subtitles, and source"),
-    );
     await fireEvent.press(screen.getByLabelText("Cast"));
     await fireEvent.press(screen.getByLabelText("Retry source"));
 
@@ -394,7 +389,6 @@ describe("PlayerControls", () => {
     expect(screen.getByText("Living Room")).toBeTruthy();
     expect(onToggleMute).toHaveBeenCalledTimes(1);
     expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
     expect(onOpenCast).toHaveBeenCalledTimes(1);
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -408,14 +402,13 @@ describe("PlayerControls", () => {
         isVisible
         isPlaying
         onPlayPause={jest.fn()}
-        onOpenSettings={jest.fn()}
         capabilities={{ canSeek: true, hasCaptions: true }}
       />,
     );
 
     expect(screen.getByTestId("player-controls-cinematic")).toBeTruthy();
-    const settings = screen.getByLabelText("Audio, subtitles, and source");
-    const style = StyleSheet.flatten(settings.props.style);
+    const seek = screen.getByLabelText("Seek back 10 seconds");
+    const style = StyleSheet.flatten(seek.props.style);
 
     expect(style.backgroundColor).toBe(playerChrome.surface);
     expect(style.borderColor).toBe(playerChrome.border);

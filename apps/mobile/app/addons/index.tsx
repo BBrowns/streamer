@@ -58,7 +58,7 @@ export default function AddonsScreen() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isCompact, isLarge } = useWindowClass();
+  const { isCompact } = useWindowClass();
   const [addonUrl, setAddonUrl] = useState("");
   const [installFeedback, setInstallFeedback] = useState<Feedback | null>(null);
   const [removalError, setRemovalError] = useState<{
@@ -152,7 +152,7 @@ export default function AddonsScreen() {
       <Stack.Screen
         options={{
           title: t("addons.title"),
-          headerShown: !isLarge,
+          headerShown: isCompact,
           headerBackTitle: t("navigation.back"),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,

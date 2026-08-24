@@ -47,8 +47,8 @@ describe("Add-ons removal", () => {
       .mockResolvedValueOnce({});
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: Infinity },
       },
     });
     const screen = await render(
@@ -81,8 +81,8 @@ describe("Add-ons removal", () => {
     (api.post as jest.Mock).mockResolvedValue({ data: installedAddon });
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: Infinity },
       },
     });
     const invalidateQueries = jest
@@ -119,8 +119,8 @@ describe("Add-ons removal", () => {
     (api.delete as jest.Mock).mockResolvedValue({});
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: Infinity },
       },
     });
     const invalidateQueries = jest
@@ -169,8 +169,8 @@ describe("Add-ons removal", () => {
     });
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: Infinity },
       },
     });
     const screen = await render(

@@ -2,7 +2,6 @@ import {
   View,
   Text,
   Pressable,
-  Modal,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -17,8 +16,8 @@ import { api } from "../../services/api";
 import { AxiosError } from "axios";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { getWebFocusStyle } from "../ui/designSystem";
+import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 
 interface EditProfileModalProps {
   visible: boolean;
@@ -33,7 +32,6 @@ export function EditProfileModal({
 }: EditProfileModalProps) {
   const { user, setAuth } = useAuthStore();
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
   const { t } = useTranslation();
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [profileLoading, setProfileLoading] = useState(false);
@@ -80,90 +78,73 @@ export function EditProfileModal({
   };
 
   const content = (
-    <View
-      style={[
-        inline ? styles.inlineContent : styles.modalBg,
-        !inline && { backgroundColor: colors.scrim },
-      ]}
-    >
-      <View
+    <View style={inline ? styles.inlineCard : styles.modalContent}>
+      <View style={styles.modalHeader}>
+        <View style={styles.modalTitleRow}>
+          <Ionicons name="pencil-outline" size={20} color={colors.tint} />
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            {t("settings.accountModals.profile.title")}
+          </Text>
+        </View>
+        {!inline && (
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.accountModals.common.cancel")}
+            style={({ focused, pressed }: any) => [
+              styles.headerAction,
+              pressed && styles.pressed,
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+          >
+            <Text style={[styles.modalCancel, { color: colors.textSecondary }]}>
+              {t("settings.accountModals.common.cancel")}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+      <TextInput
         style={[
-          inline ? styles.inlineCard : styles.modalContent,
-          !inline && {
-            backgroundColor: colors.surfaceOverlay,
-            borderTopColor: colors.border,
+          styles.modalInput,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: inputFocused ? colors.focus : colors.border,
+            color: colors.text,
           },
         ]}
+        placeholder={t("settings.accountModals.profile.displayName")}
+        placeholderTextColor={colors.textSecondary}
+        value={displayName}
+        onChangeText={setDisplayName}
+        onFocus={() => setInputFocused(true)}
+        onBlur={() => setInputFocused(false)}
+        accessibilityLabel={t("settings.accountModals.profile.displayName")}
+        autoComplete="name"
+      />
+      <Pressable
+        style={({ focused, pressed }: any) => [
+          styles.modalButton,
+          { backgroundColor: colors.tint },
+          profileLoading && styles.opacity50,
+          pressed && styles.pressed,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        ]}
+        onPress={handleUpdateProfile}
+        disabled={profileLoading}
+        accessibilityRole="button"
+        accessibilityLabel={t("settings.accountModals.profile.saveA11y")}
+        accessibilityState={{ disabled: profileLoading }}
       >
-        <View style={styles.modalHeader}>
-          <View style={styles.modalTitleRow}>
-            <Ionicons name="pencil-outline" size={20} color={colors.tint} />
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {t("settings.accountModals.profile.title")}
-            </Text>
-          </View>
-          {!inline && (
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel={t("settings.accountModals.common.cancel")}
-              style={({ focused, pressed }: any) => [
-                styles.headerAction,
-                pressed && styles.pressed,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-            >
-              <Text
-                style={[styles.modalCancel, { color: colors.textSecondary }]}
-              >
-                {t("settings.accountModals.common.cancel")}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        <TextInput
-          style={[
-            styles.modalInput,
-            {
-              backgroundColor: colors.surfaceElevated,
-              borderColor: inputFocused ? colors.focus : colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder={t("settings.accountModals.profile.displayName")}
-          placeholderTextColor={colors.textSecondary}
-          value={displayName}
-          onChangeText={setDisplayName}
-          onFocus={() => setInputFocused(true)}
-          onBlur={() => setInputFocused(false)}
-          accessibilityLabel={t("settings.accountModals.profile.displayName")}
-          autoComplete="name"
-        />
-        <Pressable
-          style={({ focused, pressed }: any) => [
-            styles.modalButton,
-            { backgroundColor: colors.tint },
-            profileLoading && styles.opacity50,
-            pressed && styles.pressed,
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-          ]}
-          onPress={handleUpdateProfile}
-          disabled={profileLoading}
-          accessibilityRole="button"
-          accessibilityLabel={t("settings.accountModals.profile.saveA11y")}
-          accessibilityState={{ disabled: profileLoading }}
-        >
-          {profileLoading ? (
-            <ActivityIndicator color={colors.onTint} />
-          ) : (
-            <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
-              {t("settings.accountModals.profile.save")}
-            </Text>
-          )}
-        </Pressable>
-      </View>
+        {profileLoading ? (
+          <ActivityIndicator color={colors.onTint} />
+        ) : (
+          <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
+            {t("settings.accountModals.profile.save")}
+          </Text>
+        )}
+      </Pressable>
     </View>
   );
 
@@ -173,38 +154,30 @@ export function EditProfileModal({
   }
 
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      animationType={reducedMotion ? "none" : "slide"}
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      accessibilityLabel={t("settings.accountModals.profile.title")}
+      testID="edit-profile-overlay"
+      size="form"
+      placement="center"
     >
       <KeyboardAvoidingView
-        style={styles.keyboardAvoider}
+        style={styles.overlayContent}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {content}
       </KeyboardAvoidingView>
-    </Modal>
+    </AdaptiveOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBg: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 50,
-    borderTopWidth: 1,
+    width: "100%",
   },
-  keyboardAvoider: { flex: 1 },
-  inlineContent: {
-    flex: 1,
-  },
+  overlayContent: { width: "100%" },
   inlineCard: {
     backgroundColor: "transparent",
     padding: 0,

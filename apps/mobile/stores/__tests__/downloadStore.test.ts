@@ -334,6 +334,7 @@ describe("downloadStore", () => {
         itemId: "tt123",
         title: "Example Movie",
         poster: "https://image.example.test/poster.jpg",
+        background: "https://image.example.test/backdrop.jpg",
         downloadUrl: "https://signed.example.test/movie.mp4?token=secret",
         externalUrl: "https://signed.example.test/external.mp4",
       } as any,
@@ -354,6 +355,7 @@ describe("downloadStore", () => {
       itemId: "tt123",
       title: "Example Movie",
       poster: "https://image.example.test/poster.jpg",
+      background: "https://image.example.test/backdrop.jpg",
       sourceId: "download-pp2stt",
       downloadUrl: "",
     });

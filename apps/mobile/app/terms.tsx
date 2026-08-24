@@ -7,14 +7,14 @@ import { useWindowClass } from "../hooks/useWindowClass";
 export default function TermsScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isLarge } = useWindowClass();
+  const { isCompact } = useWindowClass();
 
   return (
     <>
       <Stack.Screen
         options={{
           title: t("legal.termsTitle"),
-          headerShown: !isLarge,
+          headerShown: isCompact,
           headerBackTitle: t("navigation.back"),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,

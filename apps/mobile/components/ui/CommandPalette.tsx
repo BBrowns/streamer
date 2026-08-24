@@ -32,6 +32,7 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
   const inputRef = useRef<TextInput>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const scale = useRef(new Animated.Value(0.98)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const router = useRouter();
@@ -56,6 +57,9 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
 
   useEffect(() => {
     if (!visible) return;
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
+    }
     clearQuery();
     const focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
     if (reducedMotion) {
@@ -76,7 +80,11 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
         }),
       ]).start();
     }
-    return () => clearTimeout(focusTimer);
+    return () => {
+      clearTimeout(focusTimer);
+      previousFocusRef.current?.focus?.();
+      previousFocusRef.current = null;
+    };
   }, [clearQuery, opacity, reducedMotion, scale, visible]);
 
   useEffect(() => {
@@ -169,9 +177,10 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
           styles.backdrop,
           {
             backgroundColor: isDark
-              ? "rgba(0,0,0,0.72)"
-              : "rgba(20,22,28,0.42)",
+              ? "rgba(0,0,0,0.68)"
+              : "rgba(20,22,28,0.36)",
           },
+          Platform.OS === "web" && styles.webBackdrop,
         ]}
       >
         <Pressable
@@ -190,7 +199,8 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
             {
               transform: [{ scale }],
               opacity,
-              backgroundColor: colors.surfaceElevated,
+              backgroundColor: colors.surfaceFloating,
+              borderColor: colors.borderStrong,
             },
           ]}
         >
@@ -229,6 +239,7 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
               variant="palette"
               query={query.trim()}
               items={suggestions}
+              resultCount={suggestionSearch.data?.total}
               state={state}
               selectedIndex={selectedIndex}
               onSelect={(item) => void openItem(item)}
@@ -260,18 +271,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "flex-start",
-    paddingTop: 72,
+    paddingTop: Platform.OS === "web" ? ("15vh" as any) : 72,
     paddingHorizontal: 16,
   },
   palette: {
     width: "100%",
-    maxWidth: 620,
-    maxHeight: 570,
-    borderRadius: 20,
+    maxWidth: 720,
+    maxHeight: 600,
+    borderRadius: 16,
+    borderWidth: 1,
     overflow: "hidden",
     ...(Platform.OS === "web"
       ? { boxShadow: "0 26px 70px rgba(0,0,0,0.46)" }
       : { elevation: 24 }),
+  } as any,
+  webBackdrop: {
+    backdropFilter: "blur(8px)",
   } as any,
   commandInput: {
     fontSize: 17,

@@ -12,9 +12,11 @@ import { useTheme } from "../../hooks/useTheme";
  */
 export function WatchProgressBar({
   itemId,
+  progressColor,
   style,
 }: {
   itemId: string;
+  progressColor?: string;
   style?: object;
 }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -52,7 +54,7 @@ export function WatchProgressBar({
           styles.fill,
           {
             width: `${Math.round(progress * 100)}%`,
-            backgroundColor: colors.tint,
+            backgroundColor: progressColor ?? colors.tint,
           },
         ]}
       />

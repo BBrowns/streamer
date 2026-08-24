@@ -1,20 +1,31 @@
+import { useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  Platform,
   Pressable,
-  Modal,
   ScrollView,
   StyleSheet,
-  Platform,
+  Text,
+  View,
 } from "react-native";
-import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import type { PlaybackQuality } from "@streamer/shared";
 import type {
   AudioTrack,
   SubtitleTrack,
 } from "../../services/streamEngine/IStreamEngine";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import type { PlaybackDiagnosticRow } from "../../services/playback/PlaybackDiagnostics";
+import {
+  PLAYBACK_QUALITY_OPTIONS,
+  togglePreferredQuality,
+  type SubtitleAccessibilityPreference,
+  type SubtitleBackground,
+  type SubtitleFontFamily,
+  type SubtitleMode,
+  type SubtitleTextSize,
+  type SubtitleVerticalPosition,
+} from "../../stores/playerStore";
+import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 import {
   getWebFocusStyle,
   uiRadii,
@@ -22,20 +33,9 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "../ui/designSystem";
-import {
-  isFocusVisibleEvent,
-  setWebInputModality,
-} from "../../hooks/useWebPressableActivation";
 import { playerChrome } from "./playerChrome";
-import type {
-  SubtitleAccessibilityPreference,
-  SubtitleBackground,
-  SubtitleFontFamily,
-  SubtitleMode,
-  SubtitleTextSize,
-  SubtitleVerticalPosition,
-} from "../../stores/playerStore";
-import type { PlaybackDiagnosticRow } from "../../services/playback/PlaybackDiagnostics";
+
+type SettingsTab = "playback" | "audio" | "subtitles";
 
 interface PlayerSettingsModalProps {
   visible: boolean;
@@ -46,6 +46,8 @@ interface PlayerSettingsModalProps {
   onSelectSubtitle: (id: string | null) => void;
   playbackRate: number;
   onSelectPlaybackRate: (rate: number) => void;
+  preferredQualities: PlaybackQuality[];
+  onSelectPreferredQualities: (qualities: PlaybackQuality[]) => void;
   subtitleMode: SubtitleMode;
   onSelectSubtitleMode: (mode: SubtitleMode) => void;
   subtitleAccessibility: SubtitleAccessibilityPreference;
@@ -68,52 +70,68 @@ interface PlayerSettingsModalProps {
   onSelectSubtitleSyncOffset: (offset: number) => void;
   onResetSubtitleStyle: () => void;
   diagnostics: PlaybackDiagnosticRow[];
+  accent?: string;
+  focusColor?: string;
 }
 
-function PreferenceChoiceRow({
+interface Choice {
+  value: string;
+  label: string;
+  accessibilityLabel?: string;
+}
+
+function ChoiceGrid({
   label,
   selected,
   values,
   onSelect,
+  accent,
+  focusColor,
+  multiple = false,
+  selectedValues = [],
 }: {
   label: string;
-  selected: string;
-  values: Array<{ value: string; label: string }>;
+  selected?: string;
+  values: Choice[];
   onSelect: (value: string) => void;
+  accent: string;
+  focusColor: string;
+  multiple?: boolean;
+  selectedValues?: string[];
 }) {
   return (
     <View style={styles.preferenceGroup}>
-      <Text style={[styles.preferenceLabel, { color: playerChrome.textMuted }]}>
-        {label}
-      </Text>
-      <View style={styles.preferenceChoices} accessibilityRole="radiogroup">
+      <Text style={styles.preferenceLabel}>{label}</Text>
+      <View
+        style={styles.choiceGrid}
+        accessibilityRole={multiple ? undefined : "radiogroup"}
+      >
         {values.map((choice) => {
-          const active = choice.value === selected;
+          const active = multiple
+            ? selectedValues.includes(choice.value)
+            : choice.value === selected;
           return (
             <Pressable
               key={choice.value}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: active }}
-              accessibilityLabel={`${label}: ${choice.label}`}
+              accessibilityRole={multiple ? "checkbox" : "radio"}
+              accessibilityState={
+                multiple ? { checked: active } : { checked: active }
+              }
+              accessibilityLabel={`${label}: ${choice.accessibilityLabel ?? choice.label}`}
               onPress={() => onSelect(choice.value)}
-              style={({ pressed }) => [
-                styles.preferenceChoice,
-                {
-                  backgroundColor: active
-                    ? playerChrome.accent + "33"
-                    : playerChrome.surfaceRaised,
+              style={({ pressed, focused }: any) => [
+                styles.choice,
+                active && {
+                  backgroundColor: `${accent}18`,
+                  borderColor: `${accent}99`,
                 },
-                pressed && { opacity: 0.78 },
+                pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(focusColor),
               ]}
             >
-              <Text
-                style={[
-                  styles.preferenceChoiceText,
-                  {
-                    color: active ? playerChrome.text : playerChrome.textMuted,
-                  },
-                ]}
-              >
+              <Text style={[styles.choiceText, active && styles.activeText]}>
                 {choice.label}
               </Text>
             </Pressable>
@@ -121,6 +139,60 @@ function PreferenceChoiceRow({
         })}
       </View>
     </View>
+  );
+}
+
+function SectionTitle({
+  icon,
+  children,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  children: string;
+}) {
+  return (
+    <View style={styles.sectionTitleRow}>
+      <Ionicons name={icon} size={17} color={playerChrome.textMuted} />
+      <Text style={styles.sectionTitle}>{children}</Text>
+    </View>
+  );
+}
+
+function TrackRow({
+  label,
+  metadata,
+  active,
+  accessibilityLabel,
+  onPress,
+  accent,
+  focusColor,
+}: {
+  label: string;
+  metadata?: string;
+  active: boolean;
+  accessibilityLabel: string;
+  onPress: () => void;
+  accent: string;
+  focusColor: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: active }}
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed, focused }: any) => [
+        styles.trackRow,
+        active && { backgroundColor: `${accent}16` },
+        pressed && styles.pressed,
+        Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
+      ]}
+    >
+      <View style={styles.trackCopy}>
+        <Text style={styles.trackLabel}>{label}</Text>
+        {metadata ? <Text style={styles.trackMetadata}>{metadata}</Text> : null}
+      </View>
+      {active ? <Ionicons name="checkmark" size={18} color={accent} /> : null}
+    </Pressable>
   );
 }
 
@@ -133,6 +205,8 @@ export function PlayerSettingsModal({
   onSelectSubtitle,
   playbackRate,
   onSelectPlaybackRate,
+  preferredQualities,
+  onSelectPreferredQualities,
   subtitleMode,
   onSelectSubtitleMode,
   subtitleAccessibility,
@@ -151,62 +225,153 @@ export function PlayerSettingsModal({
   onSelectSubtitleSyncOffset,
   onResetSubtitleStyle,
   diagnostics,
+  accent = playerChrome.accent,
+  focusColor = playerChrome.focus,
 }: PlayerSettingsModalProps) {
   const { t } = useTranslation();
-  const reducedMotion = useReducedMotion();
-  const [focusedControl, setFocusedControl] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("playback");
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  const webFocusProps = (control: string) =>
-    Platform.OS === "web"
-      ? {
-          onPointerDown: () => {
-            setWebInputModality("pointer");
-            setFocusedControl(null);
-          },
-          onFocus: (event: unknown) =>
-            setFocusedControl(isFocusVisibleEvent(event) ? control : null),
-          onBlur: () => setFocusedControl(null),
-        }
-      : {};
+  useEffect(() => {
+    if (!visible) {
+      setActiveTab("playback");
+      setShowDiagnostics(false);
+    }
+  }, [visible]);
+
+  const allQualitiesSelected =
+    preferredQualities.length === PLAYBACK_QUALITY_OPTIONS.length;
 
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      animationType={reducedMotion ? "none" : "slide"}
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      accessibilityLabel={t("player.settings.title", {
+        defaultValue: "Playback settings",
+      })}
+      testID="player-settings-sheet"
+      contentStyle={[
+        styles.sheet,
+        {
+          backgroundColor: playerChrome.surfaceStrong,
+          borderColor: playerChrome.border,
+        },
+      ]}
     >
-      <View style={[styles.modalBg, { backgroundColor: playerChrome.scrim }]}>
-        <View
-          testID="player-settings-sheet"
-          style={[
-            styles.sheetContent,
-            {
-              backgroundColor: playerChrome.surfaceStrong,
-              borderColor: playerChrome.border,
-            },
-          ]}
-        >
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: playerChrome.text }]}>
-              {t("player.settings.title")}
-            </Text>
+      <View style={styles.header}>
+        <View style={styles.headerTitleRow}>
+          {showDiagnostics ? (
             <Pressable
-              {...webFocusProps("done")}
-              onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel={t("player.settings.done")}
-              style={({ pressed }) => [
-                styles.doneButton,
-                pressed && { backgroundColor: playerChrome.surfacePressed },
-                focusedControl === "done" &&
-                  getWebFocusStyle(playerChrome.focus),
+              accessibilityLabel={t("player.settings.backToSettings", {
+                defaultValue: "Back to playback settings",
+              })}
+              onPress={() => setShowDiagnostics(false)}
+              style={({ pressed, focused }: any) => [
+                styles.headerIconButton,
+                pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(focusColor),
               ]}
             >
-              <Text style={[styles.doneText, { color: playerChrome.text }]}>
-                {t("player.settings.done")}
-              </Text>
+              <Ionicons
+                name="chevron-back"
+                size={20}
+                color={playerChrome.text}
+              />
             </Pressable>
+          ) : null}
+          <Text style={styles.title}>
+            {showDiagnostics
+              ? t("player.settings.diagnostics", {
+                  defaultValue: "Playback diagnostics",
+                })
+              : t("player.settings.title")}
+          </Text>
+        </View>
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t("player.settings.done")}
+          style={({ pressed, focused }: any) => [
+            styles.doneButton,
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
+          ]}
+        >
+          <Text style={styles.doneText}>{t("player.settings.done")}</Text>
+        </Pressable>
+      </View>
+
+      {showDiagnostics ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.utilityDescription}>
+            {t("player.settings.diagnosticsDescription", {
+              defaultValue:
+                "Technical information for troubleshooting this playback session.",
+            })}
+          </Text>
+          <View style={styles.diagnosticsCard}>
+            {diagnostics.length > 0 ? (
+              diagnostics.map((row) => (
+                <View key={row.label} style={styles.diagnosticRow}>
+                  <Text style={styles.diagnosticLabel}>{row.label}</Text>
+                  <Text style={styles.diagnosticValue}>{row.value}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>
+                {t("player.settings.noDiagnostics", {
+                  defaultValue: "No diagnostics available.",
+                })}
+              </Text>
+            )}
+          </View>
+        </ScrollView>
+      ) : (
+        <>
+          <View style={styles.tabs} accessibilityRole="tablist">
+            {(
+              [
+                [
+                  "playback",
+                  t("player.settings.playback", { defaultValue: "Playback" }),
+                ],
+                [
+                  "audio",
+                  t("player.settings.audioTab", { defaultValue: "Audio" }),
+                ],
+                ["subtitles", t("player.settings.subtitles")],
+              ] as [SettingsTab, string][]
+            ).map(([tab, label]) => {
+              const selected = activeTab === tab;
+              return (
+                <Pressable
+                  key={tab}
+                  accessibilityRole="tab"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected }}
+                  onPress={() => setActiveTab(tab)}
+                  style={({ pressed, focused }: any) => [
+                    styles.tab,
+                    selected && { borderBottomColor: accent },
+                    pressed && styles.pressed,
+                    Platform.OS === "web" &&
+                      focused &&
+                      getWebFocusStyle(focusColor),
+                  ]}
+                >
+                  <Text style={[styles.tabText, selected && styles.activeText]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           <ScrollView
@@ -215,712 +380,645 @@ export function PlayerSettingsModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Playback Speed */}
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="speedometer-outline"
-                size={18}
-                color={playerChrome.textMuted}
-              />
-              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
-                {t("player.settings.speed")}
-              </Text>
-            </View>
-            <View style={styles.speedRow}>
-              {[0.5, 1, 1.25, 1.5, 2].map((rate) => {
-                const control = `speed-${rate}`;
-                const selected = playbackRate === rate;
-                return (
-                  <Pressable
-                    {...webFocusProps(control)}
-                    key={rate}
-                    style={({ pressed }) => [
-                      styles.speedBtn,
-                      {
-                        backgroundColor: selected
-                          ? playerChrome.accent + "33"
-                          : playerChrome.surfaceRaised,
-                      },
-                      pressed && { opacity: 0.78 },
-                      focusedControl === control &&
-                        getWebFocusStyle(playerChrome.focus),
-                    ]}
-                    onPress={() => onSelectPlaybackRate(rate)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`${t("player.settings.speed")}: ${rate}x`}
-                  >
-                    <Text
-                      style={[
-                        styles.speedBtnText,
-                        {
-                          color: selected
-                            ? playerChrome.text
-                            : playerChrome.textMuted,
-                        },
-                      ]}
-                    >
-                      {rate}x
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {activeTab === "playback" ? (
+              <>
+                <SectionTitle icon="speedometer-outline">
+                  {t("player.settings.speed")}
+                </SectionTitle>
+                <ChoiceGrid
+                  label={t("player.settings.speed")}
+                  selected={String(playbackRate)}
+                  values={[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => ({
+                    value: String(rate),
+                    label: `${rate}x`,
+                  }))}
+                  onSelect={(value) => onSelectPlaybackRate(Number(value))}
+                  accent={accent}
+                  focusColor={focusColor}
+                />
 
-            {/* Audio Tracks */}
-            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
-              <Ionicons
-                name="volume-high-outline"
-                size={18}
-                color={playerChrome.textMuted}
-              />
-              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
-                {t("player.settings.audio")}
-              </Text>
-            </View>
-            {audioTracks.length === 0 ? (
-              <Text
-                style={[styles.emptyText, { color: playerChrome.textMuted }]}
-              >
-                {t("player.settings.noAudio")}
-              </Text>
-            ) : (
-              <View accessibilityRole="radiogroup">
-                {audioTracks.map((item) => {
-                  const control = `audio-${item.id}`;
-                  return (
+                <SectionTitle icon="sparkles-outline">
+                  {t("player.settings.quality", { defaultValue: "Quality" })}
+                </SectionTitle>
+                <View style={styles.preferenceGroup}>
+                  <View style={styles.choiceGrid}>
                     <Pressable
-                      {...webFocusProps(control)}
-                      key={item.id}
-                      style={({ pressed }) => [
-                        styles.trackRow,
-                        {
-                          backgroundColor: item.active
-                            ? playerChrome.accent + "2B"
-                            : "transparent",
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: allQualitiesSelected }}
+                      accessibilityLabel={`${t("player.settings.quality", {
+                        defaultValue: "Quality",
+                      })}: ${t("player.settings.auto")}`}
+                      onPress={() =>
+                        onSelectPreferredQualities([
+                          ...PLAYBACK_QUALITY_OPTIONS,
+                        ])
+                      }
+                      style={({ pressed, focused }: any) => [
+                        styles.choice,
+                        allQualitiesSelected && {
+                          backgroundColor: `${accent}18`,
+                          borderColor: `${accent}99`,
                         },
-                        pressed && {
-                          backgroundColor: playerChrome.surfacePressed,
-                        },
-                        focusedControl === control &&
-                          getWebFocusStyle(playerChrome.focus),
+                        pressed && styles.pressed,
+                        Platform.OS === "web" &&
+                          focused &&
+                          getWebFocusStyle(focusColor),
                       ]}
-                      onPress={() => onSelectAudio(item.id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: !!item.active }}
-                      accessibilityLabel={`${t("player.settings.audio")}: ${item.label}`}
                     >
                       <Text
                         style={[
-                          styles.trackLabel,
-                          { color: playerChrome.text },
+                          styles.choiceText,
+                          allQualitiesSelected && styles.activeText,
                         ]}
                       >
-                        {item.label}
+                        {t("player.settings.auto")}
                       </Text>
-                      <Text
-                        style={[
-                          styles.trackLang,
-                          { color: playerChrome.textMuted },
-                        ]}
-                      >
-                        {[
-                          item.language,
-                          item.channelLayout ||
-                            (item.channelCount
-                              ? `${item.channelCount}ch`
+                    </Pressable>
+                    {PLAYBACK_QUALITY_OPTIONS.map((quality) => {
+                      const selected = preferredQualities.includes(quality);
+                      const label = quality === "2160p" ? "4K" : quality;
+                      return (
+                        <Pressable
+                          key={quality}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: selected }}
+                          accessibilityLabel={`${t("player.settings.quality", {
+                            defaultValue: "Quality",
+                          })}: ${label}`}
+                          onPress={() =>
+                            onSelectPreferredQualities(
+                              togglePreferredQuality(
+                                preferredQualities,
+                                quality,
+                              ),
+                            )
+                          }
+                          style={({ pressed, focused }: any) => [
+                            styles.choice,
+                            selected && {
+                              backgroundColor: `${accent}18`,
+                              borderColor: `${accent}99`,
+                            },
+                            pressed && styles.pressed,
+                            Platform.OS === "web" &&
+                              focused &&
+                              getWebFocusStyle(focusColor),
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.choiceText,
+                              selected && styles.activeText,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+                <Text style={styles.helpText}>
+                  {t("player.settings.qualityNextPlayback", {
+                    defaultValue:
+                      "Quality changes apply to the next playback plan, not the active stream.",
+                  })}
+                </Text>
+              </>
+            ) : null}
+
+            {activeTab === "audio" ? (
+              <>
+                <SectionTitle icon="volume-high-outline">
+                  {t("player.settings.audio")}
+                </SectionTitle>
+                {audioTracks.length > 0 ? (
+                  <View accessibilityRole="radiogroup">
+                    {audioTracks.map((track) => (
+                      <TrackRow
+                        key={track.id}
+                        label={track.label}
+                        metadata={[
+                          track.language,
+                          track.channelLayout ||
+                            (track.channelCount
+                              ? `${track.channelCount}ch`
                               : undefined),
-                          item.codec?.toUpperCase(),
-                          item.audioDescription
-                            ? t("player.settings.audioDescription", {
-                                defaultValue: "Audio description",
-                              })
-                            : item.commentary
-                              ? t("player.settings.commentary", {
-                                  defaultValue: "Commentary",
-                                })
+                          track.codec?.toUpperCase(),
+                          track.audioDescription
+                            ? t("player.settings.audioDescription")
+                            : track.commentary
+                              ? t("player.settings.commentary")
                               : undefined,
                         ]
                           .filter(Boolean)
                           .join(" · ")}
-                      </Text>
-                      {item.active && (
-                        <Text
-                          style={[
-                            styles.checkIcon,
-                            { color: playerChrome.accent },
+                        active={Boolean(track.active)}
+                        accessibilityLabel={`${t("player.settings.audio")}: ${track.label}`}
+                        onPress={() => onSelectAudio(track.id)}
+                        accent={accent}
+                        focusColor={focusColor}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.emptyText}>
+                    {t("player.settings.noAudio")}
+                  </Text>
+                )}
+              </>
+            ) : null}
+
+            {activeTab === "subtitles" ? (
+              <>
+                <SectionTitle icon="text-outline">
+                  {t("player.settings.subtitles")}
+                </SectionTitle>
+                <View accessibilityRole="radiogroup">
+                  <TrackRow
+                    label={t("player.settings.off")}
+                    active={subtitles.every((subtitle) => !subtitle.active)}
+                    accessibilityLabel={t("player.settings.off")}
+                    onPress={() => onSelectSubtitle(null)}
+                    accent={accent}
+                    focusColor={focusColor}
+                  />
+                  {subtitles.map((track) => (
+                    <TrackRow
+                      key={track.id}
+                      label={track.label}
+                      metadata={[
+                        track.language,
+                        track.source === "torrent-file"
+                          ? t("player.settings.sourceFile")
+                          : track.source === "embedded"
+                            ? t("player.settings.sourceEmbedded")
+                            : track.source === "addon"
+                              ? t("player.settings.sourceAddon")
+                              : undefined,
+                        track.forced ? t("player.settings.forced") : undefined,
+                        track.hearingImpaired ? "SDH" : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      active={Boolean(track.active)}
+                      accessibilityLabel={`${t("player.settings.subtitles")}: ${track.label}`}
+                      onPress={() => onSelectSubtitle(track.id)}
+                      accent={accent}
+                      focusColor={focusColor}
+                    />
+                  ))}
+                </View>
+
+                <SectionTitle icon="options-outline">
+                  {t("player.settings.subtitlePreferences", {
+                    defaultValue: "Subtitle preferences",
+                  })}
+                </SectionTitle>
+                <ChoiceGrid
+                  label={t("player.settings.subtitleMode", {
+                    defaultValue: "Automatic behavior",
+                  })}
+                  selected={subtitleMode}
+                  values={[
+                    { value: "auto", label: t("player.settings.auto") },
+                    { value: "always", label: t("player.settings.always") },
+                    { value: "off", label: t("player.settings.off") },
+                  ]}
+                  onSelect={(value) =>
+                    onSelectSubtitleMode(value as SubtitleMode)
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+                <ChoiceGrid
+                  label={t("player.settings.accessibility", {
+                    defaultValue: "SDH / accessibility",
+                  })}
+                  selected={subtitleAccessibility}
+                  values={[
+                    { value: "neutral", label: t("player.settings.neutral") },
+                    { value: "prefer", label: t("player.settings.prefer") },
+                    { value: "avoid", label: t("player.settings.avoid") },
+                  ]}
+                  onSelect={(value) =>
+                    onSelectSubtitleAccessibility(
+                      value as SubtitleAccessibilityPreference,
+                    )
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+                <ChoiceGrid
+                  label={t("player.settings.textSize", {
+                    defaultValue: "Text size",
+                  })}
+                  selected={subtitleTextSize}
+                  values={[
+                    {
+                      value: "small",
+                      label: "S",
+                      accessibilityLabel: t("player.settings.small"),
+                    },
+                    {
+                      value: "medium",
+                      label: "M",
+                      accessibilityLabel: t("player.settings.medium"),
+                    },
+                    {
+                      value: "large",
+                      label: "L",
+                      accessibilityLabel: t("player.settings.large"),
+                    },
+                  ]}
+                  onSelect={(value) =>
+                    onSelectSubtitleTextSize(value as SubtitleTextSize)
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+                <ChoiceGrid
+                  label={t("player.settings.background", {
+                    defaultValue: "Background",
+                  })}
+                  selected={subtitleBackground}
+                  values={[
+                    { value: "shadow", label: t("player.settings.shadow") },
+                    { value: "box", label: t("player.settings.box") },
+                    { value: "none", label: t("player.settings.none") },
+                  ]}
+                  onSelect={(value) =>
+                    onSelectSubtitleBackground(value as SubtitleBackground)
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+                <ChoiceGrid
+                  label={t("player.settings.backgroundOpacity", {
+                    defaultValue: "Background opacity",
+                  })}
+                  selected={String(Math.round(subtitleBackgroundOpacity * 100))}
+                  values={[0, 50, 78, 100].map((opacity) => ({
+                    value: String(opacity),
+                    label: `${opacity}%`,
+                  }))}
+                  onSelect={(value) =>
+                    onSelectSubtitleBackgroundOpacity(Number(value) / 100)
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+                <ChoiceGrid
+                  label={t("player.settings.verticalPosition", {
+                    defaultValue: "Vertical position",
+                  })}
+                  selected={subtitleVerticalPosition}
+                  values={[
+                    {
+                      value: "low",
+                      label: t("player.settings.positionLow"),
+                    },
+                    {
+                      value: "middle",
+                      label: t("player.settings.positionMiddle"),
+                    },
+                    {
+                      value: "high",
+                      label: t("player.settings.positionHigh"),
+                    },
+                  ]}
+                  onSelect={(value) =>
+                    onSelectSubtitleVerticalPosition(
+                      value as SubtitleVerticalPosition,
+                    )
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+                <ChoiceGrid
+                  label={t("player.settings.font", { defaultValue: "Font" })}
+                  selected={subtitleFontFamily}
+                  values={[
+                    {
+                      value: "system",
+                      label: t("player.settings.fontSystem"),
+                    },
+                    {
+                      value: "serif",
+                      label: t("player.settings.fontSerif"),
+                    },
+                    {
+                      value: "monospace",
+                      label: t("player.settings.fontMonospace"),
+                    },
+                  ]}
+                  onSelect={(value) =>
+                    onSelectSubtitleFontFamily(value as SubtitleFontFamily)
+                  }
+                  accent={accent}
+                  focusColor={focusColor}
+                />
+
+                <View style={styles.preferenceGroup}>
+                  <Text style={styles.preferenceLabel}>
+                    {t("player.settings.sync", {
+                      defaultValue: "Subtitle sync",
+                    })}
+                  </Text>
+                  <View style={styles.choiceGrid}>
+                    {[-0.5, 0, 0.5].map((delta) => {
+                      const label =
+                        delta === 0
+                          ? `${subtitleSyncOffsetSeconds.toFixed(1)}s`
+                          : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}s`;
+                      return (
+                        <Pressable
+                          key={delta}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t("player.settings.sync", {
+                            defaultValue: "Subtitle sync",
+                          })}: ${label}`}
+                          onPress={() =>
+                            onSelectSubtitleSyncOffset(
+                              delta === 0
+                                ? 0
+                                : subtitleSyncOffsetSeconds + delta,
+                            )
+                          }
+                          style={({ pressed, focused }: any) => [
+                            styles.choice,
+                            pressed && styles.pressed,
+                            Platform.OS === "web" &&
+                              focused &&
+                              getWebFocusStyle(focusColor),
                           ]}
                         >
-                          ✓
-                        </Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* Subtitles */}
-            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
-              <Ionicons
-                name="text-outline"
-                size={18}
-                color={playerChrome.textMuted}
-              />
-              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
-                {t("player.settings.subtitles")}
-              </Text>
-            </View>
-            {subtitles.length === 0 ? (
-              <Text
-                style={[styles.emptyText, { color: playerChrome.textMuted }]}
-              >
-                {t("player.settings.noSubtitles")}
-              </Text>
-            ) : (
-              <>
+                          <Text style={styles.choiceText}>{label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
                 <Pressable
-                  {...webFocusProps("subtitle-off")}
-                  style={({ pressed }) => [
-                    styles.trackRow,
-                    subtitles.every((s) => !s.active) && {
-                      backgroundColor: playerChrome.accent + "2B",
-                    },
-                    pressed && { backgroundColor: playerChrome.surfacePressed },
-                    focusedControl === "subtitle-off" &&
-                      getWebFocusStyle(playerChrome.focus),
+                  accessibilityRole="button"
+                  accessibilityLabel={t("player.settings.resetSubtitleStyle", {
+                    defaultValue: "Reset subtitle style",
+                  })}
+                  onPress={onResetSubtitleStyle}
+                  style={({ pressed, focused }: any) => [
+                    styles.utilityButton,
+                    pressed && styles.pressed,
+                    Platform.OS === "web" &&
+                      focused &&
+                      getWebFocusStyle(focusColor),
                   ]}
-                  onPress={() => onSelectSubtitle(null)}
-                  accessibilityRole="radio"
-                  accessibilityState={{
-                    checked: subtitles.every((subtitle) => !subtitle.active),
-                  }}
-                  accessibilityLabel={t("player.settings.off")}
                 >
-                  <Text
-                    style={[styles.trackLabel, { color: playerChrome.text }]}
-                  >
-                    {t("player.settings.off")}
+                  <Ionicons
+                    name="refresh-outline"
+                    size={17}
+                    color={playerChrome.text}
+                  />
+                  <Text style={styles.utilityButtonText}>
+                    {t("player.settings.resetSubtitleStyle", {
+                      defaultValue: "Reset subtitle style",
+                    })}
                   </Text>
                 </Pressable>
-                <View accessibilityRole="radiogroup">
-                  {subtitles.map((item) => {
-                    const control = `subtitle-${item.id}`;
-                    return (
-                      <Pressable
-                        {...webFocusProps(control)}
-                        key={item.id}
-                        style={({ pressed }) => [
-                          styles.trackRow,
-                          {
-                            backgroundColor: item.active
-                              ? playerChrome.accent + "2B"
-                              : "transparent",
-                          },
-                          pressed && {
-                            backgroundColor: playerChrome.surfacePressed,
-                          },
-                          focusedControl === control &&
-                            getWebFocusStyle(playerChrome.focus),
-                        ]}
-                        onPress={() => onSelectSubtitle(item.id)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ checked: !!item.active }}
-                        accessibilityLabel={`${t("player.settings.subtitles")}: ${item.label}`}
-                      >
-                        <Text
-                          style={[
-                            styles.trackLabel,
-                            { color: playerChrome.text },
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.trackLang,
-                            { color: playerChrome.textMuted },
-                          ]}
-                        >
-                          {[
-                            item.language,
-                            item.source === "torrent-file"
-                              ? t("player.settings.sourceFile", {
-                                  defaultValue: "File",
-                                })
-                              : item.source === "embedded"
-                                ? t("player.settings.sourceEmbedded", {
-                                    defaultValue: "Embedded",
-                                  })
-                                : item.source === "addon"
-                                  ? t("player.settings.sourceAddon", {
-                                      defaultValue: "Add-on",
-                                    })
-                                  : undefined,
-                            item.forced
-                              ? t("player.settings.forced", {
-                                  defaultValue: "Forced",
-                                })
-                              : undefined,
-                            item.hearingImpaired ? "SDH" : undefined,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </Text>
-                        {item.active && (
-                          <Text
-                            style={[
-                              styles.checkIcon,
-                              { color: playerChrome.accent },
-                            ]}
-                          >
-                            ✓
-                          </Text>
-                        )}
-                      </Pressable>
-                    );
-                  })}
-                </View>
               </>
-            )}
+            ) : null}
 
-            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
-              <Ionicons
-                name="options-outline"
-                size={18}
-                color={playerChrome.textMuted}
-              />
-              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
-                {t("player.settings.subtitlePreferences", {
-                  defaultValue: "Subtitle preferences",
-                })}
-              </Text>
-            </View>
-
-            <PreferenceChoiceRow
-              label={t("player.settings.subtitleMode", {
-                defaultValue: "Automatic behavior",
-              })}
-              selected={subtitleMode}
-              values={[
-                {
-                  value: "auto",
-                  label: t("player.settings.auto", { defaultValue: "Auto" }),
-                },
-                {
-                  value: "always",
-                  label: t("player.settings.always", {
-                    defaultValue: "Always",
-                  }),
-                },
-                {
-                  value: "off",
-                  label: t("player.settings.off", { defaultValue: "Off" }),
-                },
-              ]}
-              onSelect={(value) => onSelectSubtitleMode(value as SubtitleMode)}
-            />
-            <PreferenceChoiceRow
-              label={t("player.settings.accessibility", {
-                defaultValue: "SDH / accessibility",
-              })}
-              selected={subtitleAccessibility}
-              values={[
-                {
-                  value: "neutral",
-                  label: t("player.settings.neutral", {
-                    defaultValue: "Neutral",
-                  }),
-                },
-                {
-                  value: "prefer",
-                  label: t("player.settings.prefer", {
-                    defaultValue: "Prefer",
-                  }),
-                },
-                {
-                  value: "avoid",
-                  label: t("player.settings.avoid", {
-                    defaultValue: "Avoid",
-                  }),
-                },
-              ]}
-              onSelect={(value) =>
-                onSelectSubtitleAccessibility(
-                  value as SubtitleAccessibilityPreference,
-                )
-              }
-            />
-            <PreferenceChoiceRow
-              label={t("player.settings.textSize", {
-                defaultValue: "Text size",
-              })}
-              selected={subtitleTextSize}
-              values={[
-                {
-                  value: "small",
-                  label: t("player.settings.small", { defaultValue: "S" }),
-                },
-                {
-                  value: "medium",
-                  label: t("player.settings.medium", { defaultValue: "M" }),
-                },
-                {
-                  value: "large",
-                  label: t("player.settings.large", { defaultValue: "L" }),
-                },
-              ]}
-              onSelect={(value) =>
-                onSelectSubtitleTextSize(value as SubtitleTextSize)
-              }
-            />
-            <PreferenceChoiceRow
-              label={t("player.settings.background", {
-                defaultValue: "Background",
-              })}
-              selected={subtitleBackground}
-              values={[
-                {
-                  value: "shadow",
-                  label: t("player.settings.shadow", {
-                    defaultValue: "Shadow",
-                  }),
-                },
-                {
-                  value: "box",
-                  label: t("player.settings.box", { defaultValue: "Box" }),
-                },
-                {
-                  value: "none",
-                  label: t("player.settings.none", { defaultValue: "None" }),
-                },
-              ]}
-              onSelect={(value) =>
-                onSelectSubtitleBackground(value as SubtitleBackground)
-              }
-            />
-            <PreferenceChoiceRow
-              label={t("player.settings.backgroundOpacity", {
-                defaultValue: "Background opacity",
-              })}
-              selected={String(Math.round(subtitleBackgroundOpacity * 100))}
-              values={[0, 50, 78, 100].map((opacity) => ({
-                value: String(opacity),
-                label: `${opacity}%`,
-              }))}
-              onSelect={(value) =>
-                onSelectSubtitleBackgroundOpacity(Number(value) / 100)
-              }
-            />
-            <PreferenceChoiceRow
-              label={t("player.settings.verticalPosition", {
-                defaultValue: "Vertical position",
-              })}
-              selected={subtitleVerticalPosition}
-              values={[
-                {
-                  value: "low",
-                  label: t("player.settings.positionLow", {
-                    defaultValue: "Low",
-                  }),
-                },
-                {
-                  value: "middle",
-                  label: t("player.settings.positionMiddle", {
-                    defaultValue: "Middle",
-                  }),
-                },
-                {
-                  value: "high",
-                  label: t("player.settings.positionHigh", {
-                    defaultValue: "High",
-                  }),
-                },
-              ]}
-              onSelect={(value) =>
-                onSelectSubtitleVerticalPosition(
-                  value as SubtitleVerticalPosition,
-                )
-              }
-            />
-            <PreferenceChoiceRow
-              label={t("player.settings.font", {
-                defaultValue: "Font",
-              })}
-              selected={subtitleFontFamily}
-              values={[
-                {
-                  value: "system",
-                  label: t("player.settings.fontSystem", {
-                    defaultValue: "System",
-                  }),
-                },
-                {
-                  value: "serif",
-                  label: t("player.settings.fontSerif", {
-                    defaultValue: "Serif",
-                  }),
-                },
-                {
-                  value: "monospace",
-                  label: t("player.settings.fontMonospace", {
-                    defaultValue: "Monospace",
-                  }),
-                },
-              ]}
-              onSelect={(value) =>
-                onSelectSubtitleFontFamily(value as SubtitleFontFamily)
-              }
-            />
-
-            <View style={styles.preferenceGroup}>
-              <Text
-                style={[
-                  styles.preferenceLabel,
-                  { color: playerChrome.textMuted },
-                ]}
-              >
-                {t("player.settings.sync", { defaultValue: "Subtitle sync" })}
-              </Text>
-              <View style={styles.preferenceChoices}>
-                {[-0.5, 0, 0.5].map((delta) => {
-                  const label =
-                    delta === 0
-                      ? `${subtitleSyncOffsetSeconds.toFixed(1)}s`
-                      : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}s`;
-                  return (
-                    <Pressable
-                      key={delta}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${t("player.settings.sync", {
-                        defaultValue: "Subtitle sync",
-                      })}: ${label}`}
-                      onPress={() =>
-                        onSelectSubtitleSyncOffset(
-                          delta === 0 ? 0 : subtitleSyncOffsetSeconds + delta,
-                        )
-                      }
-                      style={({ pressed }) => [
-                        styles.preferenceChoice,
-                        { backgroundColor: playerChrome.surfaceRaised },
-                        pressed && { opacity: 0.78 },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.preferenceChoiceText,
-                          { color: playerChrome.text },
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t("player.settings.resetSubtitleStyle", {
-                defaultValue: "Reset subtitle style",
+              accessibilityLabel={t("player.settings.diagnostics", {
+                defaultValue: "Playback diagnostics",
               })}
-              onPress={onResetSubtitleStyle}
-              style={({ pressed }) => [
-                styles.resetButton,
-                {
-                  borderColor: playerChrome.border,
-                  backgroundColor: playerChrome.surfaceRaised,
-                },
-                pressed && { opacity: 0.78 },
+              onPress={() => setShowDiagnostics(true)}
+              style={({ pressed, focused }: any) => [
+                styles.diagnosticsLink,
+                pressed && styles.pressed,
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(focusColor),
               ]}
             >
               <Ionicons
-                name="refresh-outline"
-                size={16}
-                color={playerChrome.text}
-              />
-              <Text style={[styles.resetText, { color: playerChrome.text }]}>
-                {t("player.settings.resetSubtitleStyle", {
-                  defaultValue: "Reset subtitle style",
-                })}
-              </Text>
-            </Pressable>
-
-            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
-              <Ionicons
                 name="pulse-outline"
-                size={18}
+                size={17}
                 color={playerChrome.textMuted}
               />
-              <Text style={[styles.sectionTitle, { color: playerChrome.text }]}>
+              <Text style={styles.diagnosticsLinkText}>
                 {t("player.settings.diagnostics", {
                   defaultValue: "Playback diagnostics",
                 })}
               </Text>
-            </View>
-            <View style={styles.diagnosticsCard}>
-              {diagnostics.map((row) => (
-                <View key={row.label} style={styles.diagnosticRow}>
-                  <Text
-                    style={[
-                      styles.diagnosticLabel,
-                      { color: playerChrome.textMuted },
-                    ]}
-                  >
-                    {row.label}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.diagnosticValue,
-                      { color: playerChrome.text },
-                    ]}
-                  >
-                    {row.value}
-                  </Text>
-                </View>
-              ))}
-            </View>
+              <Ionicons
+                name="chevron-forward"
+                size={17}
+                color={playerChrome.textDimmed}
+              />
+            </Pressable>
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+        </>
+      )}
+    </AdaptiveOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBg: {
-    flex: 1,
-    justifyContent: "flex-end",
-    zIndex: 50,
-  },
-  sheetContent: {
+  sheet: {
     width: "100%",
-    maxWidth: 680,
-    alignSelf: "center",
-    borderTopLeftRadius: uiRadii.sheet,
-    borderTopRightRadius: uiRadii.sheet,
-    padding: uiSpacing.xl,
-    maxHeight: "80%",
+    maxWidth: 380,
     borderWidth: 1,
+    overflow: "hidden",
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: uiSpacing.xl,
-  },
-  scroll: { flexShrink: 1 },
-  scrollContent: { paddingBottom: uiSpacing.huge },
-  title: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
-  doneButton: {
-    minWidth: uiTouchTarget,
-    minHeight: uiTouchTarget,
-    paddingHorizontal: uiSpacing.md,
-    borderRadius: uiRadii.control,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  doneText: { ...uiTypography.control },
-  sectionHeader: {
-    minHeight: 28,
+    minHeight: 56,
+    paddingHorizontal: uiSpacing.lg,
     flexDirection: "row",
     alignItems: "center",
-    gap: uiSpacing.sm,
-    marginBottom: uiSpacing.sm,
-  },
-  sectionSpacing: { marginTop: uiSpacing.xl },
-  sectionTitle: {
-    ...uiTypography.label,
-    fontSize: 14,
-  },
-  emptyText: { ...uiTypography.caption, paddingVertical: uiSpacing.sm },
-  trackRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: uiSpacing.sm,
-    paddingHorizontal: uiSpacing.md,
-    borderRadius: uiRadii.control,
-    marginBottom: uiSpacing.xs,
-    minHeight: uiTouchTarget,
-  },
-  trackLabel: { ...uiTypography.body, fontSize: 14, flex: 1 },
-  trackLang: { ...uiTypography.caption, marginRight: uiSpacing.sm },
-  checkIcon: { ...uiTypography.control, fontSize: 16 },
-  speedRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: uiSpacing.sm,
-    marginBottom: uiSpacing.xs,
-  },
-  speedBtn: {
-    minWidth: 54,
-    minHeight: uiTouchTarget,
-    paddingHorizontal: uiSpacing.md,
-    borderRadius: uiRadii.control,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  speedBtnText: {
-    ...uiTypography.control,
-  },
-  preferenceGroup: {
-    marginTop: uiSpacing.md,
-    gap: uiSpacing.xs,
-  },
-  preferenceLabel: {
-    ...uiTypography.caption,
-    fontWeight: "600",
-  },
-  preferenceChoices: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: uiSpacing.xs,
-  },
-  preferenceChoice: {
-    minHeight: uiTouchTarget,
-    minWidth: 68,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: uiSpacing.sm,
-    borderRadius: uiRadii.control,
-  },
-  preferenceChoiceText: {
-    ...uiTypography.caption,
-    fontWeight: "700",
-  },
-  diagnosticsCard: {
-    padding: uiSpacing.md,
-    borderRadius: uiRadii.control,
-    backgroundColor: playerChrome.surfaceRaised,
-    gap: uiSpacing.xs,
-  },
-  resetButton: {
-    minHeight: uiTouchTarget,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: uiSpacing.xs,
-    borderWidth: 1,
-    borderRadius: uiRadii.md,
-    paddingHorizontal: uiSpacing.md,
-    marginTop: uiSpacing.xs,
-  },
-  resetText: {
-    ...uiTypography.body,
-    fontWeight: "700",
-  },
-  diagnosticRow: {
-    flexDirection: "row",
     justifyContent: "space-between",
     gap: uiSpacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: playerChrome.border,
+  },
+  headerTitleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.xs,
+  },
+  headerIconButton: {
+    width: uiTouchTarget,
+    height: uiTouchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: uiRadii.pill,
+  },
+  title: {
+    ...uiTypography.label,
+    color: playerChrome.text,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  doneButton: {
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.sm,
+    justifyContent: "center",
+    borderRadius: uiRadii.control,
+  },
+  doneText: {
+    ...uiTypography.control,
+    color: playerChrome.text,
+  },
+  tabs: {
+    minHeight: 46,
+    flexDirection: "row",
+    paddingHorizontal: uiSpacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: playerChrome.border,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabText: {
+    ...uiTypography.caption,
+    color: playerChrome.textMuted,
+  },
+  activeText: { color: playerChrome.text },
+  scroll: { maxHeight: 540 },
+  scrollContent: {
+    padding: uiSpacing.lg,
+    paddingBottom: uiSpacing.xxl,
+    gap: uiSpacing.lg,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.sm,
+    marginTop: uiSpacing.xs,
+  },
+  sectionTitle: {
+    ...uiTypography.label,
+    color: playerChrome.text,
+  },
+  preferenceGroup: { gap: uiSpacing.sm },
+  preferenceLabel: {
+    ...uiTypography.caption,
+    color: playerChrome.textMuted,
+  },
+  choiceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: uiSpacing.sm,
+  },
+  choice: {
+    minWidth: 58,
+    minHeight: uiTouchTarget,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.control,
+    borderWidth: 1,
+    borderColor: playerChrome.border,
+    backgroundColor: playerChrome.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choiceText: {
+    ...uiTypography.caption,
+    color: playerChrome.textMuted,
+  },
+  pressed: { opacity: 0.76 },
+  helpText: {
+    ...uiTypography.caption,
+    color: playerChrome.textDimmed,
+  },
+  trackRow: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm,
+    borderRadius: uiRadii.control,
+    gap: uiSpacing.md,
+  },
+  trackCopy: { flex: 1, gap: uiSpacing.xs },
+  trackLabel: {
+    ...uiTypography.label,
+    color: playerChrome.text,
+  },
+  trackMetadata: {
+    ...uiTypography.caption,
+    color: playerChrome.textMuted,
+  },
+  emptyText: {
+    ...uiTypography.body,
+    color: playerChrome.textMuted,
+    paddingVertical: uiSpacing.lg,
+  },
+  utilityButton: {
+    minHeight: uiTouchTarget,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: uiSpacing.sm,
+    paddingHorizontal: uiSpacing.md,
+    borderRadius: uiRadii.control,
+    borderWidth: 1,
+    borderColor: playerChrome.border,
+    backgroundColor: playerChrome.surfaceRaised,
+  },
+  utilityButtonText: {
+    ...uiTypography.control,
+    color: playerChrome.text,
+  },
+  diagnosticsLink: {
+    minHeight: uiTouchTarget,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: uiSpacing.sm,
+    marginTop: uiSpacing.sm,
+    paddingTop: uiSpacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: playerChrome.border,
+  },
+  diagnosticsLinkText: {
+    ...uiTypography.label,
+    color: playerChrome.textMuted,
+    flex: 1,
+  },
+  utilityDescription: {
+    ...uiTypography.body,
+    color: playerChrome.textMuted,
+  },
+  diagnosticsCard: {
+    borderRadius: uiRadii.control,
+    borderWidth: 1,
+    borderColor: playerChrome.border,
+    overflow: "hidden",
+  },
+  diagnosticRow: {
+    minHeight: uiTouchTarget,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: uiSpacing.lg,
+    paddingHorizontal: uiSpacing.md,
+    paddingVertical: uiSpacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: playerChrome.border,
   },
   diagnosticLabel: {
     ...uiTypography.caption,
+    color: playerChrome.textMuted,
   },
   diagnosticValue: {
     ...uiTypography.caption,
-    flexShrink: 1,
+    color: playerChrome.text,
     textAlign: "right",
+    flexShrink: 1,
   },
 });

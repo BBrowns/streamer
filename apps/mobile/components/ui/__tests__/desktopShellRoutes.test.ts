@@ -11,7 +11,6 @@ describe("isFullScreenRoute", () => {
     "/terms",
     "/onboarding",
     "/onboarding/setup",
-    "/detail/movie/42",
     "/player",
   ])("uses the full viewport for %s", (pathname) => {
     expect(isFullScreenRoute(pathname)).toBe(true);
@@ -23,6 +22,7 @@ describe("isFullScreenRoute", () => {
     "/downloads",
     "/settings",
     "/search/results",
+    "/detail/movie/42",
     "/player-settings",
   ])("keeps app navigation for %s", (pathname) => {
     expect(isFullScreenRoute(pathname)).toBe(false);

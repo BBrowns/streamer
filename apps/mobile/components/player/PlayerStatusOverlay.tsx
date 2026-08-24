@@ -24,6 +24,7 @@ import {
   uiTypography,
 } from "../ui/designSystem";
 import { playerChrome } from "./playerChrome";
+import { useEffect, useState } from "react";
 
 interface PlayerStatusOverlayProps {
   streamState: StreamLoadState;
@@ -59,12 +60,18 @@ export function PlayerStatusOverlay({
   onCancelPreparation,
 }: PlayerStatusOverlayProps) {
   const { t } = useTranslation();
+  const [showMoreErrorActions, setShowMoreErrorActions] = useState(false);
   const sessionError = session?.terminalError
     ? { ...session.terminalError }
     : null;
   const effectiveRuntimeError = sessionError || runtimeError;
   const effectiveStreamState =
     session?.status === "failed" ? "error" : streamState;
+  const errorIdentity = `${effectiveRuntimeError?.code ?? "none"}:${
+    effectiveRuntimeError?.message ?? errorMessage ?? "none"
+  }`;
+
+  useEffect(() => setShowMoreErrorActions(false), [errorIdentity]);
   const isTryingFallback =
     runtimeState === "trying_fallback" || session?.status === "trying_fallback";
   const latestFallback = session
@@ -167,6 +174,28 @@ export function PlayerStatusOverlay({
   if (effectiveStreamState === "error") {
     const canRetry = !!onRetry && effectiveRuntimeError?.retryable !== false;
     const errorTitle = getErrorTitle(effectiveRuntimeError, t);
+    const technicalActions = [
+      ...(onPreviewPlayer
+        ? [
+            {
+              label: t("player.errors.previewPlayer"),
+              onPress: onPreviewPlayer,
+              variant: "ghost" as const,
+              icon: "eye-outline" as const,
+            },
+          ]
+        : []),
+      ...(onOpenSourcesDevices
+        ? [
+            {
+              label: t("player.errors.openSourcesDevices"),
+              onPress: onOpenSourcesDevices,
+              variant: "ghost" as const,
+              icon: "radio-outline" as const,
+            },
+          ]
+        : []),
+    ];
     const actions = [
       ...(canRetry
         ? [
@@ -188,30 +217,27 @@ export function PlayerStatusOverlay({
             },
           ]
         : []),
-      ...(onPreviewPlayer
+      ...(technicalActions.length > 0
         ? [
             {
-              label: t("player.errors.previewPlayer"),
-              onPress: onPreviewPlayer,
-              variant: "secondary" as const,
-              icon: "eye-outline" as const,
+              label: showMoreErrorActions
+                ? t("player.errors.fewerOptions", {
+                    defaultValue: "Fewer options",
+                  })
+                : t("player.errors.moreOptions", {
+                    defaultValue: "More options",
+                  }),
+              onPress: () => setShowMoreErrorActions((value) => !value),
+              variant: "ghost" as const,
+              icon: "ellipsis-horizontal" as const,
             },
           ]
         : []),
-      ...(onOpenSourcesDevices
-        ? [
-            {
-              label: t("player.errors.openSourcesDevices"),
-              onPress: onOpenSourcesDevices,
-              variant: "secondary" as const,
-              icon: "radio-outline" as const,
-            },
-          ]
-        : []),
+      ...(showMoreErrorActions ? technicalActions : []),
       {
         label: t("player.errors.goBack"),
         onPress: onBack,
-        variant: "secondary" as const,
+        variant: "ghost" as const,
         icon: "chevron-back" as const,
       },
     ];

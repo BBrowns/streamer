@@ -232,6 +232,7 @@ export function usePlaybackSessionBinding({
               id: mediaInfo.itemId,
               title: mediaInfo.title,
               poster: mediaInfo.poster,
+              background: mediaInfo.background,
               season: mediaInfo.season,
               episode: mediaInfo.episode,
             },

@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -11,21 +11,12 @@ import {
 } from "../../hooks/useContinueWatching";
 import { useToastStore } from "../../stores/toastStore";
 import { useTheme } from "../../hooks/useTheme";
-import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { Surface } from "../ui/Surface";
-import { AppButton } from "../ui/AppButton";
 import { SkeletonRow } from "../ui/SkeletonLoader";
-import {
-  getWebFocusStyle,
-  getSoftOverlayColor,
-  uiRadii,
-  uiSpacing,
-  uiTouchTarget,
-  uiTypography,
-} from "../ui/designSystem";
+import { getWindowGutter, uiSpacing, uiTypography } from "../ui/designSystem";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { MediaRail } from "../ui/MediaRail";
-import { MediaArtwork } from "../ui/MediaArtwork";
+import { ContinueWatchingCard as ContinueWatchingMediaCard } from "../ui/ContinueWatchingCard";
 import { playBest } from "../../services/playback/PlaybackOrchestrator";
 import { usePlayerStore } from "../../stores/playerStore";
 import { extractErrorMessage } from "../../utils/error";
@@ -35,11 +26,6 @@ type ContinueWatchingRowProps = {
   excludeContentKey?: string | null;
 };
 
-function formatRemainingMinutes(item: WatchProgress) {
-  const remainingSeconds = Math.max(0, item.duration - item.currentTime);
-  return Math.max(1, Math.ceil(remainingSeconds / 60));
-}
-
 function hasTrustedDuration(item: WatchProgress) {
   return (
     item.duration > 0 &&
@@ -47,19 +33,8 @@ function hasTrustedDuration(item: WatchProgress) {
   );
 }
 
-function formatWatchedMinutes(item: WatchProgress) {
-  return Math.max(1, Math.floor(item.currentTime / 60));
-}
-
 function episodeLabel(item: WatchProgress) {
-  if (
-    item.season == null ||
-    item.season <= 0 ||
-    item.episode == null ||
-    item.episode <= 0
-  ) {
-    return null;
-  }
+  if (!item.season || !item.episode) return null;
   return `S${item.season} E${item.episode}`;
 }
 
@@ -69,27 +44,13 @@ function playbackCoordinate(value: number | null | undefined) {
     : undefined;
 }
 
-function ProgressBar({ current, total }: { current: number; total: number }) {
-  const pct = total > 0 ? Math.min((current / total) * 100, 100) : 0;
-  const { colors } = useTheme();
-
-  return (
-    <View
-      style={[
-        styles.progressTrack,
-        {
-          backgroundColor: colors.disabled,
-        },
-      ]}
-    >
-      <View
-        style={[
-          styles.progressFill,
-          { width: `${pct}%`, backgroundColor: colors.tint },
-        ]}
-      />
-    </View>
-  );
+export function getContinueWatchingCardWidth(
+  windowClass: "compact" | "medium" | "expanded" | "large",
+) {
+  if (windowClass === "compact") return 270;
+  if (windowClass === "medium") return 300;
+  if (windowClass === "expanded") return 344;
+  return 400;
 }
 
 function ContinueWatchingCard({
@@ -103,27 +64,17 @@ function ContinueWatchingCard({
 }) {
   const router = useRouter();
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
   const setSessionStream = usePlayerStore((state) => state.setSessionStream);
   const [isResuming, setIsResuming] = useState(false);
-  const { isExpanded, isLarge } = useWindowClass();
-  const isDesktop = isExpanded || isLarge;
-  const cardWidth = isDesktop ? 360 : 286;
-  const posterWidth = isDesktop ? 142 : 112;
-  const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
   const durationIsTrusted = hasTrustedDuration(item);
   const remainingMinutes = durationIsTrusted
-    ? formatRemainingMinutes(item)
+    ? Math.max(1, Math.ceil(Math.max(0, item.duration - item.currentTime) / 60))
     : null;
-  const watchedMinutes = formatWatchedMinutes(item);
-  const progressPercent = durationIsTrusted
+  const watchedMinutes = Math.max(1, Math.floor(item.currentTime / 60));
+  const progress = durationIsTrusted
     ? Math.min(Math.round((item.currentTime / item.duration) * 100), 100)
-    : 0;
-  const episode = episodeLabel(item);
+    : undefined;
 
-  const handleOpenDetails = () => {
-    router.push(`/detail/${item.type}/${item.itemId}`);
-  };
   const handleResume = useCallback(async () => {
     if (isResuming) return;
     setIsResuming(true);
@@ -133,15 +84,14 @@ function ContinueWatchingCard({
         id: item.itemId,
         title: item.title,
         poster: item.poster ?? undefined,
+        ...(item.background ? { background: item.background } : {}),
         season: playbackCoordinate(item.season),
         episode: playbackCoordinate(item.episode),
       });
-
       if (!result.ok) {
         useToastStore.getState().show(result.error.message, "error");
         return;
       }
-
       setSessionStream(
         result.stream,
         result.mediaInfo,
@@ -152,7 +102,7 @@ function ContinueWatchingCard({
         { type: "resume", positionSeconds: item.currentTime },
       );
       router.push("/player");
-    } catch (error: any) {
+    } catch (error: unknown) {
       useToastStore.getState().show(
         extractErrorMessage(error) ||
           t("detail.errors.notPlayable", {
@@ -164,152 +114,43 @@ function ContinueWatchingCard({
       setIsResuming(false);
     }
   }, [isResuming, item, router, setSessionStream, t]);
-  const { isKeyboardFocused, webPressableProps } =
-    useWebPressableActivation(handleOpenDetails);
-  const detailsLabel = t("library.actions.viewDetails", {
-    defaultValue: "View Details",
-  });
-  const resumeLabel = t("common.actions.resume", { defaultValue: "Resume" });
-  const detailsAccessibilityLabel = `${detailsLabel}: ${item.title}`;
 
   return (
-    <Surface
-      padded={false}
-      style={[
-        styles.card,
-        { width: cardWidth },
-        Platform.OS === "web" && isKeyboardFocused && styles.cardFocused,
-        Platform.OS === "web" &&
-          isKeyboardFocused && { outlineColor: colors.focus },
-      ]}
-    >
-      <Pressable
-        {...webPressableProps}
-        onPress={handleOpenDetails}
-        accessibilityRole="button"
-        accessibilityLabel={detailsAccessibilityLabel}
-        accessibilityHint={t("search.a11y.openDetails")}
-        style={({ pressed, hovered }: any) => [
-          styles.resumeArea,
-          pressed && styles.pressed,
-          Platform.OS === "web" &&
-            hovered && {
-              backgroundColor: getSoftOverlayColor(isDark),
-            },
-        ]}
-      >
-        <View
-          style={[
-            styles.posterFrame,
-            {
-              width: posterWidth,
-              backgroundColor: colors.tint + "18",
-            },
-          ]}
-        >
-          <MediaArtwork
-            uri={posterUri}
-            title={item.title}
-            variant="poster"
-            accessible={false}
-            style={styles.poster}
-          />
-          {durationIsTrusted && (
-            <ProgressBar current={item.currentTime} total={item.duration} />
-          )}
-        </View>
-
-        <View style={styles.copy}>
-          <View>
-            <Text style={[styles.kicker, { color: colors.tint }]}>
-              {episode ?? t(`home.continueWatching.${item.type}`)}
-            </Text>
-            <Text
-              style={[styles.title, { color: colors.text }]}
-              numberOfLines={2}
-            >
-              {item.title}
-            </Text>
-          </View>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {durationIsTrusted
-              ? t("home.continueWatching.remaining", {
-                  minutes: remainingMinutes,
-                  progress: progressPercent,
-                })
-              : t("home.continueWatching.watched", {
-                  minutes: watchedMinutes,
-                  defaultValue: "{{minutes}}m watched",
-                })}
-          </Text>
-        </View>
-      </Pressable>
-      <View style={styles.actionRow}>
-        <AppButton
-          label={resumeLabel}
-          accessibilityLabel={
-            durationIsTrusted
-              ? t("home.continueWatching.resumeA11y", {
-                  title: item.title,
-                  minutes: remainingMinutes,
-                })
-              : t("home.continueWatching.resumeWatchedA11y", {
-                  title: item.title,
-                  minutes: watchedMinutes,
-                  defaultValue: "Resume {{title}}, {{minutes}} minutes watched",
-                })
-          }
-          icon="play"
-          size="small"
-          variant="primary"
-          loading={isResuming}
-          disabled={isResuming}
-          onPress={() => void handleResume()}
-        />
-        <Pressable
-          onPress={handleOpenDetails}
-          accessibilityRole="button"
-          accessibilityLabel={detailsAccessibilityLabel}
-          style={({ pressed, hovered, focused }: any) => [
-            styles.detailsButton,
-            {
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              opacity: pressed ? 0.72 : 1,
-            },
-            Platform.OS === "web" && hovered && { borderColor: colors.tint },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-          ]}
-        >
-          <Ionicons
-            name="information-circle-outline"
-            size={18}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-        <Pressable
-          onPress={() => onRemove(item.itemId)}
-          disabled={isRemoving}
-          accessibilityRole="button"
-          accessibilityLabel={t("home.continueWatching.removeA11y", {
-            title: item.title,
-            defaultValue: `Remove ${item.title} from Continue Watching`,
-          })}
-          style={({ pressed, hovered, focused }: any) => [
-            styles.iconButton,
-            {
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              opacity: isRemoving ? 0.5 : pressed ? 0.72 : 1,
-            },
-            Platform.OS === "web" && hovered && { borderColor: colors.tint },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-          ]}
-        >
-          <Ionicons name="close" size={16} color={colors.textSecondary} />
-        </Pressable>
-      </View>
-    </Surface>
+    <ContinueWatchingMediaCard
+      title={item.title}
+      background={item.background}
+      poster={item.poster}
+      kicker={episodeLabel(item) ?? t(`home.continueWatching.${item.type}`)}
+      metadata={
+        durationIsTrusted
+          ? t("home.continueWatching.remaining", {
+              minutes: remainingMinutes,
+              progress,
+            })
+          : t("home.continueWatching.watched", {
+              minutes: watchedMinutes,
+              defaultValue: "{{minutes}}m watched",
+            })
+      }
+      progress={progress}
+      resumeAccessibilityLabel={
+        durationIsTrusted
+          ? t("home.continueWatching.resumeA11y", {
+              title: item.title,
+              minutes: remainingMinutes,
+            })
+          : t("home.continueWatching.resumeWatchedA11y", {
+              title: item.title,
+              minutes: watchedMinutes,
+              defaultValue: "Resume {{title}}, {{minutes}} minutes watched",
+            })
+      }
+      resuming={isResuming}
+      removing={isRemoving}
+      onOpen={() => router.push(`/detail/${item.type}/${item.itemId}`)}
+      onResume={() => void handleResume()}
+      onRemove={() => onRemove(item.itemId)}
+    />
   );
 }
 
@@ -324,8 +165,9 @@ export function ContinueWatchingRow({
   const updateProgress = useUpdateProgress();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isExpanded, isLarge } = useWindowClass();
-  const cardWidth = isExpanded || isLarge ? 360 : 286;
+  const { windowClass } = useWindowClass();
+  const cardWidth = getContinueWatchingCardWidth(windowClass);
+  const contentPadding = getWindowGutter(windowClass);
   const visibleItems = useMemo(
     () =>
       (items ?? []).filter(
@@ -337,7 +179,9 @@ export function ContinueWatchingRow({
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <View style={styles.headerRow}>
+        <View
+          style={[styles.loadingHeader, { paddingHorizontal: contentPadding }]}
+        >
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {t("home.continueWatching.title")}
           </Text>
@@ -351,8 +195,15 @@ export function ContinueWatchingRow({
     if (!showEmptyState) return null;
     return (
       <View style={styles.container}>
-        <Surface variant="accent" style={styles.emptySurface}>
-          <Ionicons name="time-outline" size={22} color={colors.tint} />
+        <Surface
+          variant="plain"
+          style={[styles.emptySurface, { marginHorizontal: contentPadding }]}
+        >
+          <Ionicons
+            name="time-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
           <View style={styles.emptyCopy}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
               {t("home.continueWatching.emptyTitle")}
@@ -373,6 +224,7 @@ export function ContinueWatchingRow({
       title={t("home.continueWatching.title")}
       data={visibleItems}
       cardWidth={cardWidth}
+      contentPadding={contentPadding}
       keyExtractor={(item) =>
         `cw-${item.itemId}-${item.season ?? 0}-${item.episode ?? 0}`
       }
@@ -401,6 +253,7 @@ export function ContinueWatchingRow({
                         durationSource: removedItem.durationSource,
                         title: removedItem.title,
                         poster: removedItem.poster ?? undefined,
+                        background: removedItem.background ?? undefined,
                       }),
                   });
               },
@@ -414,119 +267,15 @@ export function ContinueWatchingRow({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: uiSpacing.xxl,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: uiSpacing.lg,
-    marginBottom: uiSpacing.md,
-  },
-  titleWithIcon: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: uiSpacing.md,
-  },
-  sectionTitle: {
-    ...uiTypography.title,
-  },
-  card: {
-    overflow: "hidden",
-  },
-  cardFocused: {
-    // @ts-ignore web-only
-    outlineStyle: "solid",
-    outlineWidth: 2,
-    outlineOffset: 3,
-  } as any,
-  resumeArea: {
-    minHeight: 154,
-    flexDirection: "row",
-  },
-  pressed: {
-    opacity: 0.88,
-  },
-  posterFrame: {
-    aspectRatio: 2 / 3,
-    overflow: "hidden",
-  },
-  poster: {
-    width: "100%",
-    height: "100%",
-  },
-  progressTrack: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 4,
-  },
-  progressFill: {
-    height: 4,
-    borderTopRightRadius: uiRadii.xs,
-    borderBottomRightRadius: uiRadii.xs,
-  },
-  copy: {
-    flex: 1,
-    padding: uiSpacing.md,
-    justifyContent: "center",
-    gap: uiSpacing.sm,
-  },
-  kicker: {
-    ...uiTypography.sectionLabel,
-    fontSize: 10,
-    textTransform: "uppercase",
-  },
-  title: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "900",
-    letterSpacing: 0,
-    marginTop: 2,
-  },
-  meta: {
-    ...uiTypography.caption,
-  },
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: uiSpacing.sm,
-    paddingHorizontal: uiSpacing.md,
-    paddingBottom: uiSpacing.md,
-  },
-  iconButton: {
-    width: uiTouchTarget,
-    height: uiTouchTarget,
-    borderWidth: 1,
-    borderRadius: uiRadii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  detailsButton: {
-    width: uiTouchTarget,
-    height: uiTouchTarget,
-    borderWidth: 1,
-    borderRadius: uiRadii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  container: { marginBottom: uiSpacing.xxxl },
+  loadingHeader: { marginBottom: uiSpacing.md },
+  sectionTitle: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
   emptySurface: {
-    marginHorizontal: uiSpacing.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: uiSpacing.md,
   },
-  emptyCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  emptyTitle: {
-    ...uiTypography.control,
-  },
-  emptyText: {
-    ...uiTypography.caption,
-  },
+  emptyCopy: { flex: 1, gap: 2 },
+  emptyTitle: { ...uiTypography.control },
+  emptyText: { ...uiTypography.caption },
 });

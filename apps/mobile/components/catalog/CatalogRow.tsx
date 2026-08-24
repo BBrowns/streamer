@@ -6,20 +6,25 @@ import { useAddonCatalog } from "../../hooks/useAddonCatalog";
 import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass } from "../../hooks/useWindowClass";
 import { MediaRail } from "../ui/MediaRail";
-import { getWebFocusStyle, uiSpacing, uiTypography } from "../ui/designSystem";
+import {
+  getPosterCardWidth,
+  getWebFocusStyle,
+  getWindowGutter,
+  uiSpacing,
+  uiTypography,
+} from "../ui/designSystem";
 import { CatalogItemCard } from "./CatalogItemCard";
-
-const CARD_WIDTH_MOBILE = 140;
-const CARD_WIDTH_DESKTOP = 200;
 
 function CatalogRowInner({
   catalog,
   addon,
   excludeContentKeys,
+  cinematic = false,
 }: {
   catalog: CatalogDefinition;
   addon: InstalledAddon;
   excludeContentKeys?: ReadonlySet<string>;
+  cinematic?: boolean;
 }) {
   const {
     data,
@@ -32,9 +37,9 @@ function CatalogRowInner({
   } = useAddonCatalog(addon.id, catalog);
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { isExpanded, isLarge } = useWindowClass();
-  const cardWidth =
-    isExpanded || isLarge ? CARD_WIDTH_DESKTOP : CARD_WIDTH_MOBILE;
+  const { windowClass } = useWindowClass();
+  const cardWidth = getPosterCardWidth(windowClass);
+  const contentPadding = getWindowGutter(windowClass);
 
   const flattenedData = (data?.pages.flat() || []).filter(
     (item, index, items) => {
@@ -91,10 +96,13 @@ function CatalogRowInner({
       data={flattenedData}
       loading={isLoading}
       cardWidth={cardWidth}
+      contentPadding={contentPadding}
       keyExtractor={(item) =>
         `${addon.id}-${catalog.type}-${catalog.id}-${item.type}:${item.id}`
       }
-      renderItem={(item) => <CatalogItemCard item={item} />}
+      renderItem={(item) => (
+        <CatalogItemCard item={item} cinematic={cinematic} />
+      )}
       onEndReached={() => {
         if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
       }}

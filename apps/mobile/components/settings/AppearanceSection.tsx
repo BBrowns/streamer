@@ -5,9 +5,17 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { SettingsRowGroup, SettingsToggleRow } from "./SettingsRows";
 
 export function AppearanceSection() {
-  const { theme, setTheme } = useAuthStore();
+  const {
+    theme,
+    setTheme,
+    dynamicArtworkColor,
+    setDynamicArtworkColor,
+    forceReducedMotion,
+    setForceReducedMotion,
+  } = useAuthStore();
   const { colors } = useTheme();
   const { t } = useTranslation();
 
@@ -43,6 +51,32 @@ export function AppearanceSection() {
           />
         )}
       />
+      <SettingsRowGroup>
+        <SettingsToggleRow
+          icon="color-palette-outline"
+          title={t("settings.appearance.dynamicArtworkColor", {
+            defaultValue: "Dynamic artwork colour",
+          })}
+          subtitle={t("settings.appearance.dynamicArtworkColorDescription", {
+            defaultValue:
+              "Subtly adapt ambience and focus colour to the current artwork.",
+          })}
+          value={dynamicArtworkColor}
+          onValueChange={setDynamicArtworkColor}
+        />
+        <SettingsToggleRow
+          icon="accessibility-outline"
+          title={t("settings.appearance.forceReducedMotion", {
+            defaultValue: "Always reduce motion",
+          })}
+          subtitle={t("settings.appearance.forceReducedMotionDescription", {
+            defaultValue:
+              "Replace spatial motion with immediate or short opacity feedback.",
+          })}
+          value={forceReducedMotion}
+          onValueChange={setForceReducedMotion}
+        />
+      </SettingsRowGroup>
     </View>
   );
 }
@@ -50,5 +84,6 @@ export function AppearanceSection() {
 const styles = StyleSheet.create({
   section: {
     marginBottom: 8,
+    gap: 16,
   },
 });

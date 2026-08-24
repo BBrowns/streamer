@@ -2113,6 +2113,7 @@ function createWindow() {
     width: 1280,
     height: 720,
     title: "Streamer",
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" } : {}),
     webPreferences: {
       nodeIntegration: false,
       nodeIntegrationInWorker: false,

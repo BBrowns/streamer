@@ -22,6 +22,7 @@ interface SearchSuggestionsProps {
   items: SearchMetaPreview[];
   state: SearchInteractionState;
   selectedIndex?: number;
+  resultCount?: number;
   onSelect: (item: SearchMetaPreview) => void;
   onShowAll: () => void;
   onRetry: () => void;
@@ -36,6 +37,7 @@ export function SearchSuggestions({
   items,
   state,
   selectedIndex = -1,
+  resultCount,
   onSelect,
   onShowAll,
   onRetry,
@@ -60,11 +62,15 @@ export function SearchSuggestions({
   }, [selectedIndex]);
 
   const showItems = items.length > 0;
+  const showAllLabel =
+    typeof resultCount === "number" && resultCount > 0
+      ? t("search.suggestions.viewAllCount", { count: resultCount })
+      : t("search.suggestions.showAll", { query });
   const selectedAnnouncement =
     selectedIndex >= 0
       ? selectedIndex < items.length
         ? items[selectedIndex]?.name
-        : t("search.suggestions.showAll", { query })
+        : showAllLabel
       : undefined;
 
   return (
@@ -200,7 +206,7 @@ export function SearchSuggestions({
         onPress={onShowAll}
         accessibilityRole="button"
         accessibilityState={{ selected: selectedIndex === items.length }}
-        accessibilityLabel={t("search.suggestions.showAll", { query })}
+        accessibilityLabel={showAllLabel}
         style={({ pressed }: any) => [
           styles.showAll,
           { borderTopColor: colors.border },
@@ -216,7 +222,7 @@ export function SearchSuggestions({
         <View style={styles.showAllCopy}>
           <Ionicons name="search" size={17} color={colors.tint} />
           <Text style={[styles.showAllText, { color: colors.tint }]}>
-            {t("search.suggestions.showAll", { query })}
+            {showAllLabel}
           </Text>
         </View>
         <Ionicons name="arrow-forward" size={17} color={colors.tint} />

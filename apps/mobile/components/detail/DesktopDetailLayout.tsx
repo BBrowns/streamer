@@ -1,21 +1,56 @@
 import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
   Platform,
+  Pressable,
   ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import type { DetailLayoutProps } from "./types";
 import { EpisodeSelector } from "../catalog/EpisodeSelector";
 import { useTheme } from "../../hooks/useTheme";
+import { useWindowClass } from "../../hooks/useWindowClass";
+import {
+  useCinematicTheme,
+  useCinematicThemeSource,
+} from "../../contexts/CinematicThemeContext";
 import { PlaybackReadinessNotice } from "./PlaybackReadinessNotice";
 import { DetailActionPanel } from "./DetailActionPanel";
-import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
+import {
+  getWebFocusStyle,
+  getWindowGutter,
+  uiLayout,
+  uiRadii,
+  uiSpacing,
+  uiTypography,
+} from "../ui/designSystem";
 import { useTranslation } from "react-i18next";
 import { MoreSourcesPanel } from "./MoreSourcesPanel";
 import { MediaArtwork } from "../ui/MediaArtwork";
+import { useDesktopTopBarScroll } from "../ui/DesktopLayout";
+
+function MetadataItem({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  const { colors } = useTheme();
+  if (!value) return null;
+  return (
+    <View style={styles.metadataItem}>
+      <Text style={[styles.metadataLabel, { color: colors.textTertiary }]}>
+        {label}
+      </Text>
+      <Text style={[styles.metadataValue, { color: colors.textSecondary }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
 export function DesktopDetailLayout({
   id,
@@ -23,6 +58,7 @@ export function DesktopDetailLayout({
   meta,
   streams,
   streamsLoading,
+  availableResolutions,
   initiallyOpenSources,
   inLibrary,
   handleToggleLibrary,
@@ -39,478 +75,388 @@ export function DesktopDetailLayout({
   onPlaybackNoticeAction,
   onBack,
 }: DetailLayoutProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
+  const { theme: cinematicTheme } = useCinematicTheme();
   const { t } = useTranslation();
-  const hasMovieSources = castType !== "series" && (streams?.length ?? 0) > 0;
+  const { height, windowClass } = useWindowClass();
+  const reportTopBarScroll = useDesktopTopBarScroll();
+  const gutter = getWindowGutter(windowClass);
+  const heroHeight = Math.max(540, Math.min(760, height * 0.64));
+  const hasMovieSources = castType === "movie" && (streams?.length ?? 0) > 0;
   const sourceCount =
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
-  const surfaceColor = colors.card;
-  const softSurfaceColor = colors.surfaceElevated;
+  const hasBackdrop = Boolean(meta.background?.trim());
 
-  const renderHeader = () => (
-    <View style={styles.headerShell}>
-      <View style={styles.eyebrowRow}>
-        <View style={styles.eyebrowPill}>
-          <Ionicons
-            name={castType === "series" ? "albums-outline" : "film-outline"}
-            size={15}
-            color={colors.tint}
-          />
-          <Text style={[styles.eyebrowText, { color: colors.tint }]}>
-            {t(
-              castType === "series"
-                ? "common.media.series"
-                : "common.media.movie",
-            )}
-          </Text>
-        </View>
-      </View>
-
-      <Text style={[styles.desktopTitle, { color: colors.text }]}>
-        {meta.name}
-      </Text>
-
-      <View style={styles.metaRow}>
-        {!!meta.releaseInfo && (
-          <Text
-            style={[
-              styles.metaTag,
-              {
-                color: colors.textSecondary,
-                backgroundColor: "transparent",
-              },
-            ]}
-          >
-            {meta.releaseInfo}
-          </Text>
-        )}
-        {!!meta.runtime && (
-          <Text
-            style={[
-              styles.metaTag,
-              {
-                color: colors.textSecondary,
-                backgroundColor: "transparent",
-              },
-            ]}
-          >
-            {meta.runtime}
-          </Text>
-        )}
-        {!!meta.imdbRating && (
-          <Text
-            style={[
-              styles.ratingTag,
-              {
-                color: colors.warning,
-                backgroundColor: "transparent",
-              },
-            ]}
-          >
-            ⭐ {meta.imdbRating}
-          </Text>
-        )}
-      </View>
-
-      {!!meta.genres && meta.genres.length > 0 && (
-        <View style={styles.genreRow}>
-          {meta.genres.map((g: string, idx: number) => (
-            <View
-              key={`${g}-${idx}`}
-              style={[
-                styles.genrePill,
-                {
-                  backgroundColor: softSurfaceColor,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.genreText, { color: colors.textSecondary }]}>
-                {g}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {!!meta.description && (
-        <Text style={[styles.description, { color: colors.textSecondary }]}>
-          {meta.description}
-        </Text>
-      )}
-
-      <DetailActionPanel
-        castType={castType}
-        sourceCount={sourceCount}
-        episodeCount={meta.videos?.length || 0}
-        streamsLoading={streamsLoading}
-        hasPlayableSources={hasMovieSources}
-        inLibrary={!!inLibrary}
-        hasTrailer={!!trailerUrl}
-        planningAction={planningAction}
-        onPlayBest={() => handlePlayStream()}
-        onPlayIntent={onPlayIntent}
-        onDownload={() => handleDownloadStream()}
-        onCast={handleCastStream ? () => handleCastStream() : undefined}
-        onToggleLibrary={handleToggleLibrary}
-        onWatchTrailer={onWatchTrailer}
-        style={styles.detailActionPanel}
-      />
-
-      {!!playbackNotice && !!onDismissPlaybackNotice && (
-        <PlaybackReadinessNotice
-          notice={playbackNotice}
-          onDismiss={onDismissPlaybackNotice}
-          onPrimaryAction={onPlaybackNoticeAction}
-        />
-      )}
-
-      {!!meta.cast && meta.cast.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            {t("common.castAndCrew", { defaultValue: "Cast & crew" })}
-          </Text>
-          <Text
-            style={[styles.sectionContent, { color: colors.textSecondary }]}
-          >
-            {meta.cast.join(", ")}
-          </Text>
-        </View>
-      )}
-
-      <View
-        style={[
-          styles.sectionSurface,
-          { backgroundColor: surfaceColor, borderColor: "transparent" },
-        ]}
-      >
-        {castType === "series" ? (
-          <>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="list" size={18} color={colors.tint} />
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                {t("detail.sources.episodes")}
-              </Text>
-            </View>
-            <EpisodeSelector
-              seriesId={id}
-              videos={meta.videos || []}
-              onPlayStream={handlePlayStream}
-              onPlayIntent={onPlayIntent}
-              onPlayCandidate={handlePlayCandidate}
-              onDownloadStream={handleDownloadStream}
-            />
-          </>
-        ) : (
-          <MoreSourcesPanel
-            contentId={id}
-            title={meta.name}
-            initiallyOpen={initiallyOpenSources}
-            onSelect={(plan, candidateId) =>
-              handlePlayCandidate(plan, candidateId)
-            }
-          />
-        )}
-      </View>
-    </View>
-  );
+  useCinematicThemeSource({
+    contentKey: `${castType}:${id}`,
+    backgroundUri: meta.background,
+    posterUri: meta.poster,
+  });
 
   return (
-    <View
-      style={[styles.containerDesktop, { backgroundColor: colors.background }]}
-    >
-      {!!meta.background && (
-        <MediaArtwork
-          uri={meta.background}
-          variant="backdrop"
-          accessible={false}
-          style={styles.ambientBackdrop}
-        />
-      )}
-      <View
-        style={[
-          styles.ambientOverlay,
-          {
-            backgroundColor: colors.background + (isDark ? "D6" : "E0"),
-          },
-        ]}
-      />
-
-      <View
-        style={[
-          styles.desktopPosterPanel,
-          { backgroundColor: "transparent", borderRightColor: "transparent" },
-        ]}
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        onScroll={(event) =>
+          reportTopBarScroll(event.nativeEvent.contentOffset.y)
+        }
+        scrollEventThrottle={16}
       >
-        <Pressable
-          style={({ focused }: any) => [
-            styles.desktopBackBtn,
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-          ]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Back to previous screen"
-        >
-          <Ionicons
-            name="chevron-back"
-            size={20}
-            color={colors.textSecondary}
-          />
-          <Text
-            style={[styles.desktopBackText, { color: colors.textSecondary }]}
-          >
-            Back
-          </Text>
-        </Pressable>
         <View
           style={[
-            styles.posterFrame,
-            {
-              borderColor: "transparent",
-              backgroundColor: colors.surfaceElevated,
-            },
+            styles.hero,
+            { height: heroHeight, backgroundColor: cinematicTheme.ambient },
           ]}
         >
-          <MediaArtwork
-            uri={meta.poster}
-            title={meta.name}
-            variant="poster"
-            accessibilityLabel={`${meta.name} poster`}
-            style={styles.desktopPoster}
+          <LinearGradient
+            colors={[
+              cinematicTheme.ambient,
+              cinematicTheme.ambientMuted,
+              colors.background,
+            ]}
+            style={styles.fill}
           />
-        </View>
-      </View>
+          {hasBackdrop ? (
+            <MediaArtwork
+              uri={meta.background}
+              title={meta.name}
+              variant="backdrop"
+              accessible={false}
+              style={styles.fill}
+            />
+          ) : null}
+          <LinearGradient
+            colors={[
+              "rgba(8,9,11,0.56)",
+              "rgba(8,9,11,0.18)",
+              "rgba(8,9,11,0)",
+            ]}
+            locations={[0, 0.16, 0.34]}
+            style={styles.fill}
+          />
+          <LinearGradient
+            colors={[
+              "rgba(8,9,11,0.84)",
+              "rgba(8,9,11,0.34)",
+              "rgba(8,9,11,0.08)",
+            ]}
+            locations={[0, 0.52, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.fill}
+          />
+          <LinearGradient
+            colors={["rgba(8,9,11,0)", "rgba(8,9,11,0.22)", colors.background]}
+            locations={[0, 0.62, 1]}
+            style={styles.fill}
+          />
 
-      <View style={styles.desktopInfoPanel}>
-        <ScrollView
-          contentContainerStyle={styles.desktopScrollContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("detail.backAccessibility")}
+            onPress={onBack}
+            style={({ pressed, focused }: any) => [
+              styles.backButton,
+              {
+                backgroundColor: colors.surfaceFloating,
+                borderColor: colors.borderStrong,
+              },
+              pressed && { opacity: 0.68 },
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+          >
+            <Ionicons name="chevron-back" size={20} color={colors.text} />
+            <Text style={[styles.backText, { color: colors.text }]}>
+              {t("detail.back")}
+            </Text>
+          </Pressable>
+
+          <View
+            style={[
+              styles.heroBoundary,
+              {
+                maxWidth: uiLayout.pageWidths.cinematic,
+                paddingHorizontal: gutter,
+              },
+            ]}
+          >
+            <View style={styles.heroInner}>
+              <View style={styles.posterFrame}>
+                <MediaArtwork
+                  uri={meta.poster}
+                  title={meta.name}
+                  variant="poster"
+                  accessibilityLabel={`${meta.name} poster`}
+                  contentFit="cover"
+                  style={styles.poster}
+                />
+              </View>
+              <View style={styles.heroCopy}>
+                <Text style={styles.eyebrow}>
+                  {t(
+                    castType === "series"
+                      ? "common.media.series"
+                      : "common.media.movie",
+                  )}
+                </Text>
+                <Text numberOfLines={3} style={styles.title}>
+                  {meta.name}
+                </Text>
+                <View style={styles.metaRow}>
+                  {meta.releaseInfo ? (
+                    <Text style={styles.heroMeta}>{meta.releaseInfo}</Text>
+                  ) : null}
+                  {meta.runtime ? (
+                    <Text style={styles.heroMeta}>{meta.runtime}</Text>
+                  ) : null}
+                  {meta.imdbRating ? (
+                    <View style={styles.rating}>
+                      <Ionicons name="star" size={13} color="#E7B86A" />
+                      <Text style={styles.heroMeta}>{meta.imdbRating}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {meta.genres?.length ? (
+                  <Text style={styles.genres} numberOfLines={1}>
+                    {meta.genres.join(" · ")}
+                  </Text>
+                ) : null}
+                {meta.description ? (
+                  <Text numberOfLines={4} style={styles.synopsis}>
+                    {meta.description}
+                  </Text>
+                ) : null}
+                <DetailActionPanel
+                  castType={castType}
+                  sourceCount={sourceCount}
+                  episodeCount={meta.videos?.length || 0}
+                  streamsLoading={streamsLoading}
+                  hasPlayableSources={hasMovieSources}
+                  inLibrary={Boolean(inLibrary)}
+                  focusColor={cinematicTheme.focus}
+                  hasTrailer={Boolean(trailerUrl)}
+                  planningAction={planningAction}
+                  onPlayBest={() => handlePlayStream()}
+                  onPlayIntent={onPlayIntent}
+                  onDownload={() => handleDownloadStream()}
+                  onCast={
+                    handleCastStream ? () => handleCastStream() : undefined
+                  }
+                  onToggleLibrary={handleToggleLibrary}
+                  onWatchTrailer={onWatchTrailer}
+                  style={styles.actions}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.bodyBoundary,
+            { maxWidth: uiLayout.detailMaxWidth, paddingHorizontal: gutter },
+          ]}
         >
-          {renderHeader()}
-        </ScrollView>
-      </View>
+          {playbackNotice && onDismissPlaybackNotice ? (
+            <PlaybackReadinessNotice
+              notice={playbackNotice}
+              onDismiss={onDismissPlaybackNotice}
+              onPrimaryAction={onPlaybackNoticeAction}
+            />
+          ) : null}
+
+          <View style={styles.bodyColumns}>
+            <View style={styles.mainColumn}>
+              {castType === "series" ? (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    {t("detail.sources.episodes")}
+                  </Text>
+                  <EpisodeSelector
+                    seriesId={id}
+                    videos={meta.videos || []}
+                    onPlayStream={handlePlayStream}
+                    onPlayIntent={onPlayIntent}
+                    onPlayCandidate={handlePlayCandidate}
+                    onDownloadStream={handleDownloadStream}
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    {t("detail.story")}
+                  </Text>
+                  {meta.description ? (
+                    <Text
+                      style={[styles.story, { color: colors.textSecondary }]}
+                    >
+                      {meta.description}
+                    </Text>
+                  ) : null}
+                  <View style={styles.sourcesSection}>
+                    <MoreSourcesPanel
+                      contentId={id}
+                      title={meta.name}
+                      sourceCount={sourceCount}
+                      initiallyOpen={initiallyOpenSources}
+                      onSelect={(plan, candidateId) =>
+                        handlePlayCandidate(plan, candidateId)
+                      }
+                    />
+                  </View>
+                </>
+              )}
+            </View>
+
+            <View
+              style={[
+                styles.metadataColumn,
+                { borderLeftColor: colors.borderSubtle },
+              ]}
+            >
+              <Text style={[styles.metadataHeading, { color: colors.text }]}>
+                {t("detail.mediaInformation")}
+              </Text>
+              <MetadataItem
+                label={t("detail.metadata.director")}
+                value={meta.director?.join(", ")}
+              />
+              <MetadataItem
+                label={t("detail.metadata.cast")}
+                value={meta.cast?.slice(0, 6).join(", ")}
+              />
+              <MetadataItem
+                label={t("detail.metadata.language")}
+                value={meta.originalLanguage}
+              />
+              <MetadataItem
+                label={t("detail.metadata.runtime")}
+                value={meta.runtime}
+              />
+              <MetadataItem
+                label={t("detail.metadata.quality")}
+                value={availableResolutions.join(" · ")}
+              />
+              <MetadataItem
+                label={t("detail.metadata.sources")}
+                value={sourceCount ? String(sourceCount) : undefined}
+              />
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  containerDesktop: {
-    flex: 1,
-    flexDirection: "row",
-    overflow: "hidden",
-    position: "relative",
-  },
-  ambientBackdrop: {
+  root: { flex: 1 },
+  hero: { width: "100%", position: "relative", overflow: "hidden" },
+  fill: { ...StyleSheet.absoluteFill },
+  backButton: {
     position: "absolute",
-    top: -90,
-    right: -80,
-    width: "72%",
-    height: "78%",
-    opacity: 0.18,
-  },
-  ambientOverlay: {
-    ...StyleSheet.absoluteFill,
-  },
-  desktopPosterPanel: {
-    width: 360,
-    borderRightWidth: 0,
-    padding: 32,
-    paddingTop: 24,
-    zIndex: 2,
-  },
-  desktopBackBtn: {
+    top: 88,
+    left: 24,
+    zIndex: 8,
     minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: uiRadii.pill,
+    borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 28,
-    alignSelf: "flex-start",
-    borderRadius: uiRadii.control,
-    paddingHorizontal: 6,
+    gap: 5,
   },
-  desktopBackText: {
-    fontSize: 14,
-    fontWeight: "800",
+  backText: { ...uiTypography.label },
+  heroBoundary: {
+    width: "100%",
+    alignSelf: "center",
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  heroInner: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 36,
+    paddingBottom: 52,
   },
   posterFrame: {
-    width: "100%",
+    width: 220,
     aspectRatio: 2 / 3,
     borderRadius: uiRadii.card,
-    borderWidth: 0,
     overflow: "hidden",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 20px 28px rgba(0, 0, 0, 0.32)" }
-      : {
-          shadowColor: "#000",
-          shadowOpacity: 0.32,
-          shadowRadius: 28,
-          shadowOffset: { width: 0, height: 20 },
-        }),
-  } as any,
-  desktopPoster: {
-    width: "100%",
-    height: "100%",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.42,
+    shadowRadius: 30,
+    elevation: 16,
   },
-  desktopInfoPanel: {
-    flex: 1,
-    backgroundColor: "transparent",
-    zIndex: 1,
-  },
-  desktopScrollContent: {
-    paddingHorizontal: 44,
-    paddingTop: 48,
-    paddingBottom: 72,
-  },
-  headerShell: {
-    maxWidth: 1140,
-    alignSelf: "stretch",
-    paddingBottom: 8,
-  },
-  eyebrowRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16,
-    flexWrap: "wrap",
-  },
-  eyebrowPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    alignSelf: "flex-start",
-    paddingVertical: 4,
-  },
-  eyebrowText: {
+  poster: { width: "100%", height: "100%" },
+  heroCopy: { flex: 1, maxWidth: 700, paddingBottom: 2 },
+  eyebrow: {
     ...uiTypography.sectionLabel,
+    color: "rgba(244,242,238,0.68)",
+    textTransform: "uppercase",
+    marginBottom: 10,
   },
-  sourceCountText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  desktopTitle: {
-    ...uiTypography.display,
-    marginBottom: 14,
-    maxWidth: 1050,
+  title: {
+    ...uiTypography.cinematicDisplay,
+    color: "#F4F2EE",
+    fontSize: 64,
+    lineHeight: 64,
+    letterSpacing: -1.4,
   },
   metaRow: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
+    alignItems: "center",
     flexWrap: "wrap",
+    gap: 14,
+    marginTop: 14,
   },
-  metaTag: {
-    ...uiTypography.label,
-    paddingHorizontal: 0,
-    paddingVertical: 4,
-    borderRadius: 8,
+  heroMeta: { ...uiTypography.label, color: "rgba(244,242,238,0.78)" },
+  rating: { flexDirection: "row", alignItems: "center", gap: 4 },
+  genres: {
+    ...uiTypography.caption,
+    color: "rgba(244,242,238,0.62)",
+    marginTop: 10,
   },
-  ratingTag: {
-    ...uiTypography.label,
-    paddingHorizontal: 0,
-    paddingVertical: 4,
-    borderRadius: 8,
+  synopsis: {
+    ...uiTypography.body,
+    color: "rgba(244,242,238,0.76)",
+    maxWidth: 640,
+    marginTop: 14,
   },
-  detailActionPanel: {
-    maxWidth: 820,
-    marginBottom: 28,
+  actions: { marginTop: 22, marginBottom: 0, maxWidth: 680 },
+  bodyBoundary: {
+    width: "100%",
+    alignSelf: "center",
+    paddingTop: 44,
+    paddingBottom: 80,
   },
-  genreRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 20,
-  },
-  genrePill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  genreText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  description: {
-    fontSize: 15,
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionSurface: {
-    borderWidth: 0,
-    borderRadius: uiRadii.sheet,
-    padding: 22,
-    marginBottom: 32,
+  bodyColumns: { flexDirection: "row", alignItems: "flex-start", gap: 44 },
+  mainColumn: { flex: 2, minWidth: 0 },
+  metadataColumn: {
+    flex: 1,
+    minWidth: 240,
+    borderLeftWidth: 1,
+    paddingLeft: 32,
   },
   sectionTitle: {
     ...uiTypography.title,
-    fontSize: 20,
-    lineHeight: 26,
-    marginBottom: 20,
-    letterSpacing: 0,
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    fontSize: 22,
+    lineHeight: 28,
     marginBottom: 20,
   },
-  sourceDisclosureHeader: {
-    minHeight: 54,
-    borderRadius: uiRadii.control,
-    paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
+  story: { ...uiTypography.body, fontSize: 16, lineHeight: 25, maxWidth: 680 },
+  sourcesSection: { marginTop: 40 },
+  metadataHeading: { ...uiTypography.control, marginBottom: 22 },
+  metadataItem: { marginBottom: 20, gap: 5 },
+  metadataLabel: {
+    ...uiTypography.sectionLabel,
+    textTransform: "uppercase",
+    fontSize: 10,
   },
-  sectionTitleRowCompact: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  sectionTitleCompact: {
-    marginBottom: 2,
-  },
-  sourceDisclosureMeta: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  sectionContent: {
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  resContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 16,
-    marginBottom: 20,
-  },
-  resBubble: {
-    minHeight: 44,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    borderWidth: 1,
-    justifyContent: "center",
-  },
-  resText: {
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  streamListWrapper: {
-    maxWidth: 1140,
-    paddingBottom: 12,
-  },
-  emptyText: {
-    fontSize: 14,
-    textAlign: "center",
-    paddingVertical: 40,
-  },
+  metadataValue: { ...uiTypography.body, fontSize: 14, lineHeight: 21 },
 });

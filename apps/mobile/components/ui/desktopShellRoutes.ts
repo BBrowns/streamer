@@ -8,7 +8,7 @@ const FULL_SCREEN_ROUTES = new Set([
   "/terms",
 ]);
 
-const FULL_SCREEN_ROUTE_PREFIXES = ["/onboarding", "/detail", "/player"];
+const FULL_SCREEN_ROUTE_PREFIXES = ["/onboarding", "/player"];
 
 /** Routes that should own the full viewport instead of appearing inside app navigation. */
 export function isFullScreenRoute(pathname: string): boolean {

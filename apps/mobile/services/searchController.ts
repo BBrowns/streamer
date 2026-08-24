@@ -68,6 +68,18 @@ export function getSearchShortcutLabel(platform: string | undefined) {
   return /Mac|iPhone|iPad|iPod/i.test(platform ?? "") ? "⌘K" : "Ctrl K";
 }
 
+export function isEditableSearchShortcutTarget(target: unknown) {
+  if (!target || typeof target !== "object") return false;
+  const element = target as { tagName?: string; isContentEditable?: boolean };
+  const tagName = element.tagName?.toUpperCase();
+  return (
+    element.isContentEditable === true ||
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT"
+  );
+}
+
 export function resolveCommandPaletteAction(input: {
   deliberatelyNavigated: boolean;
   selectedIndex: number;

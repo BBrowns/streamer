@@ -31,6 +31,12 @@ test("BrowserWindow opts into hardened renderer preferences", () => {
   }
 });
 
+test("macOS uses the native hidden-inset title bar without custom window controls", () => {
+  assert.match(mainSource, /titleBarStyle: "hiddenInset"/);
+  assert.doesNotMatch(mainSource, /trafficLightPosition/);
+  assert.doesNotMatch(mainSource, /titleBarOverlay/);
+});
+
 test("main process registers security hooks for renderer boundaries", () => {
   for (const requiredSnippet of [
     "setPermissionRequestHandler",

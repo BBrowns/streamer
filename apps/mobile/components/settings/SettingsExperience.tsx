@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
-import { useWindowClass } from "../../hooks/useWindowClass";
+import { useWindowClass, type WindowClass } from "../../hooks/useWindowClass";
 import { useTrakt } from "../../hooks/useTrakt";
 import { useSessions } from "../../hooks/useSessions";
 import { useAccount } from "../../hooks/useAccount";
@@ -54,6 +54,20 @@ import {
   type SettingsSectionId,
 } from "./settingsSections";
 import { resolveAboutBuildInfo } from "./aboutBuildInfo";
+
+export type SettingsPresentation =
+  "overview" | "detail" | "dashboard-one-column" | "dashboard-two-column";
+
+export function resolveSettingsPresentation(
+  windowClass: WindowClass,
+  hasSection: boolean,
+): SettingsPresentation {
+  if (hasSection) return "detail";
+  if (windowClass === "compact") return "overview";
+  return windowClass === "large"
+    ? "dashboard-two-column"
+    : "dashboard-one-column";
+}
 
 function formatUpdateStatus(
   state: DesktopUpdateState | null,
@@ -138,7 +152,7 @@ function SettingsOverview({
       showsVerticalScrollIndicator={false}
     >
       <ContentBoundary
-        size="reading"
+        size="utilityNarrow"
         maxWidth={720}
         style={styles.overviewContent}
       >
@@ -237,33 +251,33 @@ type DetailActions = {
   handleCheckForUpdates: () => Promise<void>;
 };
 
-function SettingsDetail({
+type SettingsAccountState = {
+  connected: boolean;
+  isTraktLoading: boolean;
+  connect: () => void;
+  disconnect: () => void;
+  sessionsCount: number;
+  isSessionsLoading: boolean;
+  biometricEnabled: boolean;
+  biometrySupported: boolean;
+  hasCheckedBiometry: boolean;
+  exportPending: boolean;
+  exportData: () => void;
+  deletePending: boolean;
+  desktopUpdateState: DesktopUpdateState | null;
+  checkingUpdates: boolean;
+  canCheckUpdates: boolean;
+  desktopBridgeInfo: DesktopBridgeInfo | null;
+};
+
+function SettingsSectionContent({
   section,
   actions,
   account,
-  showTitle = true,
 }: {
   section: SettingsSectionId;
   actions: DetailActions;
-  showTitle?: boolean;
-  account: {
-    connected: boolean;
-    isTraktLoading: boolean;
-    connect: () => void;
-    disconnect: () => void;
-    sessionsCount: number;
-    isSessionsLoading: boolean;
-    biometricEnabled: boolean;
-    biometrySupported: boolean;
-    hasCheckedBiometry: boolean;
-    exportPending: boolean;
-    exportData: () => void;
-    deletePending: boolean;
-    desktopUpdateState: DesktopUpdateState | null;
-    checkingUpdates: boolean;
-    canCheckUpdates: boolean;
-    desktopBridgeInfo: DesktopBridgeInfo | null;
-  };
+  account: SettingsAccountState;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -538,15 +552,144 @@ function SettingsDetail({
     }
   })();
 
+  return content;
+}
+
+function SettingsDetail({
+  section,
+  actions,
+  account,
+  showTitle = true,
+}: {
+  section: SettingsSectionId;
+  actions: DetailActions;
+  showTitle?: boolean;
+  account: SettingsAccountState;
+}) {
   return (
     <ScrollView
       testID={`settings-detail-${section}`}
       style={styles.scroll}
       showsVerticalScrollIndicator={false}
     >
-      <ContentBoundary size="reading" style={styles.detailContent}>
+      <ContentBoundary size="utilityNarrow" style={styles.detailContent}>
         <SectionHeading section={section} showTitle={showTitle} />
-        {content}
+        <SettingsSectionContent
+          section={section}
+          actions={actions}
+          account={account}
+        />
+      </ContentBoundary>
+    </ScrollView>
+  );
+}
+
+function SettingsDashboard({
+  actions,
+  account,
+  onSelect,
+  twoColumns,
+}: {
+  actions: DetailActions;
+  account: SettingsAccountState;
+  onSelect: (section: SettingsSectionId) => void;
+  twoColumns: boolean;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const primarySections: Array<{
+    id: "appearance" | "playback" | "downloads" | "account";
+    title: string;
+  }> = [
+    {
+      id: "appearance",
+      title: t("settings.navigation.appearance.title", {
+        defaultValue: "Appearance",
+      }),
+    },
+    {
+      id: "playback",
+      title: t("settings.navigation.playback.title", {
+        defaultValue: "Playback",
+      }),
+    },
+    {
+      id: "downloads",
+      title: t("settings.navigation.downloads.title", {
+        defaultValue: "Downloads",
+      }),
+    },
+    {
+      id: "account",
+      title: t("settings.dashboard.accountSources", {
+        defaultValue: "Account & Sources",
+      }),
+    },
+  ];
+
+  return (
+    <ScrollView
+      testID="settings-dashboard"
+      style={styles.scroll}
+      showsVerticalScrollIndicator={false}
+    >
+      <ContentBoundary size="utilityWide" style={styles.dashboardContent}>
+        <PageHeader
+          title={t("settings.overview.title")}
+          description={t("settings.overview.subtitle")}
+          titleVisibility="visible"
+          style={styles.pageHeader}
+        />
+        <View style={styles.dashboardGrid}>
+          {primarySections.map(({ id, title }) => (
+            <View
+              key={id}
+              testID={`settings-dashboard-${id}`}
+              style={[
+                styles.dashboardSection,
+                { width: twoColumns ? "48.5%" : "100%" },
+              ]}
+            >
+              <Text style={[styles.dashboardTitle, { color: colors.text }]}>
+                {title}
+              </Text>
+              <SettingsSectionContent
+                section={id}
+                actions={actions}
+                account={account}
+              />
+              {id === "account" ? (
+                <SettingsRowGroup>
+                  <SettingsActionRow
+                    icon="extension-puzzle-outline"
+                    title={t("settings.navigation.sources.title")}
+                    subtitle={t("settings.navigation.sources.description")}
+                    onPress={() => onSelect("sources")}
+                  />
+                </SettingsRowGroup>
+              ) : null}
+            </View>
+          ))}
+        </View>
+        <View style={styles.secondarySettings}>
+          <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>
+            {t("settings.dashboard.more", { defaultValue: "More" })}
+          </Text>
+          <SettingsRowGroup>
+            {(["privacy", "about", "advanced"] as const).map((id) => {
+              const definition = getSettingsSection(id);
+              return (
+                <SettingsNavRow
+                  key={id}
+                  section={definition}
+                  title={t(definition.titleKey)}
+                  subtitle={t(definition.descriptionKey)}
+                  onPress={() => onSelect(id)}
+                />
+              );
+            })}
+          </SettingsRowGroup>
+        </View>
       </ContentBoundary>
     </ScrollView>
   );
@@ -559,10 +702,9 @@ function SettingsExperienceContent({
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isLarge } = useWindowClass();
+  const { isCompact, windowClass } = useWindowClass();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
   const biometricEnabled = useAuthStore((state) => state.biometricEnabled);
@@ -574,6 +716,10 @@ function SettingsExperienceContent({
   const sessionData = useSessions();
   const account = useAccount();
   const activeSection = section ?? "account";
+  const presentation = resolveSettingsPresentation(
+    windowClass,
+    Boolean(section),
+  );
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [pwModalOpen, setPwModalOpen] = useState(false);
   const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
@@ -664,8 +810,7 @@ function SettingsExperienceContent({
 
   const selectSection = (id: SettingsSectionId) => {
     hapticSelection();
-    if (isLarge) router.replace(`/settings/${id}` as never);
-    else router.push(`/settings/${id}` as never);
+    router.push(`/settings/${id}` as never);
   };
 
   const handleDisconnectTrakt = () => {
@@ -771,46 +916,16 @@ function SettingsExperienceContent({
 
   return (
     <PageLayout testID="settings-screen" boundary={false} style={styles.screen}>
-      {isLarge ? (
-        <ContentBoundary size="detail" style={styles.largeBoundary}>
-          <View style={styles.largeLayout}>
-            <View
-              style={[
-                styles.largeNavigation,
-                { borderRightColor: colors.border },
-              ]}
-            >
-              <View style={styles.largeNavigationHeading}>
-                <Text style={[styles.navTitle, { color: colors.text }]}>
-                  {t("settings.overview.title")}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.navAccount, { color: colors.textSecondary }]}
-                >
-                  {user?.displayName || user?.email}
-                </Text>
-              </View>
-              <ScrollView contentContainerStyle={styles.largeNavigationList}>
-                {SETTINGS_SECTIONS.map((definition) => (
-                  <SettingsNavRow
-                    key={definition.id}
-                    section={definition}
-                    title={t(definition.titleKey)}
-                    selected={definition.id === activeSection}
-                    compact
-                    onPress={() => selectSection(definition.id)}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-            <View style={styles.largeDetail}>
-              <SettingsDetail {...detailProps} showTitle />
-            </View>
-          </View>
-        </ContentBoundary>
-      ) : section ? (
-        <SettingsDetail {...detailProps} showTitle={false} />
+      {presentation === "detail" ? (
+        <SettingsDetail {...detailProps} showTitle={!isCompact} />
+      ) : presentation === "dashboard-one-column" ||
+        presentation === "dashboard-two-column" ? (
+        <SettingsDashboard
+          actions={detailProps.actions}
+          account={detailProps.account}
+          onSelect={selectSection}
+          twoColumns={presentation === "dashboard-two-column"}
+        />
       ) : (
         <SettingsOverview onSelect={selectSection} />
       )}
@@ -856,6 +971,27 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   pageHeader: { marginBottom: 0 },
+  dashboardContent: {
+    paddingTop: 40,
+    paddingBottom: 72,
+    gap: 40,
+  },
+  dashboardGrid: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    rowGap: 40,
+  },
+  dashboardSection: { minWidth: 0, gap: 16 },
+  dashboardTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "700",
+    letterSpacing: -0.25,
+  },
+  secondarySettings: { gap: 12 },
   profileSummary: {
     minHeight: 80,
     borderRadius: 12,
@@ -900,28 +1036,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
-  largeLayout: {
-    flex: 1,
-    flexDirection: "row",
-    width: "100%",
-  },
-  largeBoundary: { flex: 1 },
-  largeNavigation: {
-    width: 256,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    paddingTop: 36,
-    paddingHorizontal: 12,
-  },
-  largeNavigationHeading: { paddingHorizontal: 12, gap: 4, marginBottom: 20 },
-  navTitle: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-  },
-  navAccount: { fontSize: 13, lineHeight: 18 },
-  largeNavigationList: { gap: 4, paddingBottom: 32 },
-  largeDetail: { flex: 1 },
   detailContent: {
     paddingTop: 40,
     paddingBottom: 64,

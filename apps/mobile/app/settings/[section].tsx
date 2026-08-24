@@ -12,7 +12,7 @@ export default function SettingsSectionScreen() {
   const params = useLocalSearchParams<{ section?: string | string[] }>();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isLarge } = useWindowClass();
+  const { isCompact } = useWindowClass();
 
   if (!isSettingsSectionId(params.section)) {
     return <Redirect href={"/settings" as never} />;
@@ -25,7 +25,7 @@ export default function SettingsSectionScreen() {
       <Stack.Screen
         options={{
           title: t(definition.titleKey),
-          headerShown: !isLarge,
+          headerShown: isCompact,
           headerBackTitle: t("library.header.back"),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,

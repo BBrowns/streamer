@@ -2,7 +2,6 @@ import {
   View,
   Text,
   Pressable,
-  Modal,
   TextInput,
   ActivityIndicator,
   Alert,
@@ -16,8 +15,8 @@ import { useTranslation } from "react-i18next";
 import { api } from "../../services/api";
 import { AxiosError } from "axios";
 import { useTheme } from "../../hooks/useTheme";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { getWebFocusStyle } from "../ui/designSystem";
+import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 
 interface ChangePasswordModalProps {
   visible: boolean;
@@ -30,7 +29,6 @@ export function ChangePasswordModal({
   onClose,
   inline,
 }: ChangePasswordModalProps) {
-  const reducedMotion = useReducedMotion();
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
@@ -83,116 +81,94 @@ export function ChangePasswordModal({
   };
 
   const content = (
-    <View
-      style={[
-        inline ? styles.inlineContent : styles.modalBg,
-        !inline && { backgroundColor: colors.scrim },
-      ]}
-    >
-      <View
+    <View style={inline ? styles.inlineCard : styles.modalContent}>
+      <View style={styles.modalHeader}>
+        <View style={styles.modalTitleRow}>
+          <Ionicons name="lock-closed-outline" size={20} color={colors.tint} />
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            {t("settings.accountModals.password.title")}
+          </Text>
+        </View>
+        {!inline && (
+          <Pressable
+            onPress={handleClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.accountModals.common.cancel")}
+            style={({ focused, pressed }: any) => [
+              styles.headerAction,
+              pressed && styles.pressed,
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+          >
+            <Text style={[styles.modalCancel, { color: colors.textSecondary }]}>
+              {t("settings.accountModals.common.cancel")}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+      <TextInput
         style={[
-          inline ? styles.inlineCard : styles.modalContent,
-          !inline && {
-            backgroundColor: colors.surfaceOverlay,
-            borderTopColor: colors.border,
+          styles.modalInput,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor:
+              focusedField === "current" ? colors.focus : colors.border,
+            color: colors.text,
           },
         ]}
+        placeholder={t("settings.accountModals.password.current")}
+        placeholderTextColor={colors.textSecondary}
+        value={currentPw}
+        onChangeText={setCurrentPw}
+        onFocus={() => setFocusedField("current")}
+        onBlur={() => setFocusedField(null)}
+        secureTextEntry
+        accessibilityLabel={t("settings.accountModals.password.current")}
+        autoComplete="current-password"
+      />
+      <TextInput
+        style={[
+          styles.modalInput,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: focusedField === "new" ? colors.focus : colors.border,
+            color: colors.text,
+          },
+        ]}
+        placeholder={t("settings.accountModals.password.new")}
+        placeholderTextColor={colors.textSecondary}
+        value={newPw}
+        onChangeText={setNewPw}
+        onFocus={() => setFocusedField("new")}
+        onBlur={() => setFocusedField(null)}
+        secureTextEntry
+        accessibilityLabel={t("settings.accountModals.password.newA11y")}
+        autoComplete="new-password"
+      />
+      <Pressable
+        style={({ focused, pressed }: any) => [
+          styles.modalButton,
+          { backgroundColor: colors.tint },
+          pwLoading && styles.opacity50,
+          pressed && styles.pressed,
+          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        ]}
+        onPress={handleChangePassword}
+        disabled={pwLoading}
+        accessibilityRole="button"
+        accessibilityLabel={t("settings.accountModals.password.updateA11y")}
+        accessibilityState={{ disabled: pwLoading }}
       >
-        <View style={styles.modalHeader}>
-          <View style={styles.modalTitleRow}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={20}
-              color={colors.tint}
-            />
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {t("settings.accountModals.password.title")}
-            </Text>
-          </View>
-          {!inline && (
-            <Pressable
-              onPress={handleClose}
-              accessibilityRole="button"
-              accessibilityLabel={t("settings.accountModals.common.cancel")}
-              style={({ focused, pressed }: any) => [
-                styles.headerAction,
-                pressed && styles.pressed,
-                Platform.OS === "web" &&
-                  focused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-            >
-              <Text
-                style={[styles.modalCancel, { color: colors.textSecondary }]}
-              >
-                {t("settings.accountModals.common.cancel")}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        <TextInput
-          style={[
-            styles.modalInput,
-            {
-              backgroundColor: colors.surfaceElevated,
-              borderColor:
-                focusedField === "current" ? colors.focus : colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder={t("settings.accountModals.password.current")}
-          placeholderTextColor={colors.textSecondary}
-          value={currentPw}
-          onChangeText={setCurrentPw}
-          onFocus={() => setFocusedField("current")}
-          onBlur={() => setFocusedField(null)}
-          secureTextEntry
-          accessibilityLabel={t("settings.accountModals.password.current")}
-          autoComplete="current-password"
-        />
-        <TextInput
-          style={[
-            styles.modalInput,
-            {
-              backgroundColor: colors.surfaceElevated,
-              borderColor:
-                focusedField === "new" ? colors.focus : colors.border,
-              color: colors.text,
-            },
-          ]}
-          placeholder={t("settings.accountModals.password.new")}
-          placeholderTextColor={colors.textSecondary}
-          value={newPw}
-          onChangeText={setNewPw}
-          onFocus={() => setFocusedField("new")}
-          onBlur={() => setFocusedField(null)}
-          secureTextEntry
-          accessibilityLabel={t("settings.accountModals.password.newA11y")}
-          autoComplete="new-password"
-        />
-        <Pressable
-          style={({ focused, pressed }: any) => [
-            styles.modalButton,
-            { backgroundColor: colors.tint },
-            pwLoading && styles.opacity50,
-            pressed && styles.pressed,
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-          ]}
-          onPress={handleChangePassword}
-          disabled={pwLoading}
-          accessibilityRole="button"
-          accessibilityLabel={t("settings.accountModals.password.updateA11y")}
-          accessibilityState={{ disabled: pwLoading }}
-        >
-          {pwLoading ? (
-            <ActivityIndicator color={colors.onTint} />
-          ) : (
-            <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
-              {t("settings.accountModals.password.update")}
-            </Text>
-          )}
-        </Pressable>
-      </View>
+        {pwLoading ? (
+          <ActivityIndicator color={colors.onTint} />
+        ) : (
+          <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
+            {t("settings.accountModals.password.update")}
+          </Text>
+        )}
+      </Pressable>
     </View>
   );
 
@@ -202,38 +178,30 @@ export function ChangePasswordModal({
   }
 
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      animationType={reducedMotion ? "none" : "slide"}
-      transparent
-      onRequestClose={handleClose}
+      onClose={handleClose}
+      accessibilityLabel={t("settings.accountModals.password.title")}
+      testID="change-password-overlay"
+      size="form"
+      placement="center"
     >
       <KeyboardAvoidingView
-        style={styles.keyboardAvoider}
+        style={styles.overlayContent}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {content}
       </KeyboardAvoidingView>
-    </Modal>
+    </AdaptiveOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBg: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 50,
-    borderTopWidth: 1,
+    width: "100%",
   },
-  keyboardAvoider: { flex: 1 },
-  inlineContent: {
-    flex: 1,
-  },
+  overlayContent: { width: "100%" },
   inlineCard: {
     backgroundColor: "transparent",
     padding: 0,

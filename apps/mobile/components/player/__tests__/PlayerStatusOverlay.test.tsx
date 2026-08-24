@@ -116,7 +116,7 @@ describe("PlayerStatusOverlay", () => {
     expect(onCancelPreparation).toHaveBeenCalledTimes(1);
   });
 
-  it("offers retry and Sources & Devices actions on playback errors", async () => {
+  it("keeps technical playback recovery behind More options", async () => {
     const onRetry = jest.fn();
     const onChooseSource = jest.fn();
     const onPreviewPlayer = jest.fn();
@@ -139,6 +139,10 @@ describe("PlayerStatusOverlay", () => {
 
     await fireEvent.press(screen.getByText("common.retry"));
     await fireEvent.press(screen.getByText("player.errors.chooseSource"));
+    expect(screen.queryByText("player.errors.previewPlayer")).toBeNull();
+    expect(screen.queryByText("player.errors.openSourcesDevices")).toBeNull();
+
+    await fireEvent.press(screen.getByText("More options"));
     await fireEvent.press(screen.getByText("player.errors.previewPlayer"));
     await fireEvent.press(screen.getByText("player.errors.openSourcesDevices"));
     await fireEvent.press(screen.getByText("player.errors.goBack"));

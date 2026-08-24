@@ -7,14 +7,14 @@ import { useWindowClass } from "../hooks/useWindowClass";
 export default function PrivacyScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isLarge } = useWindowClass();
+  const { isCompact } = useWindowClass();
 
   return (
     <>
       <Stack.Screen
         options={{
           title: t("legal.privacyTitle"),
-          headerShown: !isLarge,
+          headerShown: isCompact,
           headerBackTitle: t("navigation.back"),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,

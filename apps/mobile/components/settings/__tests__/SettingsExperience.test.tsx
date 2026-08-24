@@ -1,5 +1,8 @@
 import { render } from "@testing-library/react-native";
-import { SettingsExperience } from "../SettingsExperience";
+import {
+  resolveSettingsPresentation,
+  SettingsExperience,
+} from "../SettingsExperience";
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock("react-i18next", () => ({
@@ -27,7 +30,11 @@ jest.mock("../../../hooks/useTheme", () => ({
   }),
 }));
 jest.mock("../../../hooks/useWindowClass", () => ({
-  useWindowClass: () => ({ isCompact: true, isLarge: false }),
+  useWindowClass: () => ({
+    isCompact: true,
+    isLarge: false,
+    windowClass: "compact",
+  }),
 }));
 jest.mock("../../../hooks/useTrakt", () => ({ useTrakt: () => ({}) }));
 jest.mock("../../../hooks/useSessions", () => ({
@@ -137,13 +144,30 @@ jest.mock("../SettingsRows", () => {
 });
 
 describe("SettingsExperience boundary contract", () => {
-  it("keeps compact overview titles navigation-owned in one reading-boundary scroller", async () => {
+  it("uses overview/detail on compact and one/two-column dashboards on desktop", () => {
+    expect(resolveSettingsPresentation("compact", false)).toBe("overview");
+    expect(resolveSettingsPresentation("compact", true)).toBe("detail");
+    expect(resolveSettingsPresentation("medium", false)).toBe(
+      "dashboard-one-column",
+    );
+    expect(resolveSettingsPresentation("expanded", false)).toBe(
+      "dashboard-one-column",
+    );
+    expect(resolveSettingsPresentation("large", false)).toBe(
+      "dashboard-two-column",
+    );
+    expect(resolveSettingsPresentation("large", true)).toBe("detail");
+  });
+
+  it("keeps compact overview titles navigation-owned in one utility-narrow scroller", async () => {
     const screen = await render(<SettingsExperience />);
 
     expect(screen.getByTestId("settings-screen").props.accessibilityLabel).toBe(
       "scroll:undefined",
     );
-    expect(screen.getByTestId("content-boundary-reading-720")).toBeTruthy();
+    expect(
+      screen.getByTestId("content-boundary-utilityNarrow-720"),
+    ).toBeTruthy();
     expect(
       screen.getByTestId("settings-page-header").props.accessibilityLabel,
     ).toBe("navigation-owned");

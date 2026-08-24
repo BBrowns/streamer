@@ -1,12 +1,13 @@
 import { memo } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import type { MetaPreview, WatchProgress } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { AmbientHero } from "../ui/AmbientHero";
 import { AppButton } from "../ui/AppButton";
-import { MediaArtwork } from "../ui/MediaArtwork";
-import { uiRadii, uiSpacing, uiTypography } from "../ui/designSystem";
+import { uiSpacing, uiTypography } from "../ui/designSystem";
+import { useCinematicTheme } from "../../contexts/CinematicThemeContext";
 
 type HomeHeroBannerProps = {
   item: MetaPreview;
@@ -24,212 +25,139 @@ function HomeHeroBannerInner({
   onViewDetails,
 }: HomeHeroBannerProps) {
   const { t } = useTranslation();
-  const { isCompact, isLarge, windowClass } = useWindowClass();
-  const showPoster = windowClass === "expanded" || isLarge;
-  const heroHeight = isCompact ? 400 : isLarge ? 480 : 440;
+  const { isCompact, isLarge } = useWindowClass();
+  const { theme: cinematicTheme } = useCinematicTheme();
   const shouldResume = (progress?.currentTime ?? 0) >= 15;
 
   return (
-    <View
+    <AmbientHero
+      source={{
+        contentKey: `${item.type}:${item.id}`,
+        backgroundUri: item.background,
+        posterUri: item.poster,
+      }}
+      title={t("home.hero.a11y", { title: item.name })}
       testID="home-hero"
-      style={[styles.hero, { height: heroHeight }]}
-      accessibilityLabel={t("home.hero.a11y", { title: item.name })}
     >
-      <MediaArtwork
-        uri={item.poster}
-        variant="backdrop"
-        blurRadius={10}
-        accessible={false}
-        style={styles.heroBackdrop}
-      />
-
-      {Platform.OS === "web" ? (
-        <View
+      <View style={[styles.copy, isCompact && styles.copyCompact]}>
+        <Text style={styles.eyebrow}>
+          {t("home.hero.eyebrow", {
+            type: t(
+              item.type === "movie"
+                ? "common.media.movie"
+                : "common.media.series",
+            ),
+          })}
+        </Text>
+        <Text
           style={[
-            styles.heroOverlay,
-            {
-              background:
-                "linear-gradient(90deg, rgba(8,9,12,0.98) 0%, rgba(8,9,12,0.87) 48%, rgba(8,9,12,0.35) 100%)",
-            },
+            styles.title,
+            isCompact
+              ? styles.titleCompact
+              : isLarge
+                ? styles.titleLarge
+                : styles.titleMedium,
           ]}
-        />
-      ) : (
-        <View
-          style={[styles.heroOverlay, { backgroundColor: "rgba(8,9,12,0.76)" }]}
-        />
-      )}
-
-      <View
-        style={[styles.heroContent, showPoster && styles.heroContentDesktop]}
-      >
-        <View style={styles.heroCopy}>
-          <Text style={styles.heroEyebrow}>
-            {t("home.hero.eyebrow", {
-              type: t(
-                item.type === "movie"
-                  ? "common.media.movie"
-                  : "common.media.series",
-              ),
-            })}
-          </Text>
-
-          <Text
-            style={[
-              styles.heroTitle,
-              isLarge ? styles.heroTitleLarge : styles.heroTitleCompact,
-            ]}
-            numberOfLines={3}
-          >
-            {item.name}
-          </Text>
-
-          <View style={styles.heroMetaRow}>
-            {item.releaseInfo ? (
-              <Text style={styles.heroMeta}>{item.releaseInfo}</Text>
-            ) : null}
-            {item.imdbRating ? (
-              <View style={styles.ratingRow}>
-                <Ionicons name="star" size={13} color="#E7B86A" />
-                <Text style={styles.heroMeta}>{item.imdbRating}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {item.description ? (
-            <Text
-              style={styles.heroDescription}
-              numberOfLines={showPoster ? 3 : 2}
-            >
-              {item.description}
-            </Text>
+          numberOfLines={3}
+        >
+          {item.name}
+        </Text>
+        <View style={styles.metaRow}>
+          {item.releaseInfo ? (
+            <Text style={styles.meta}>{item.releaseInfo}</Text>
           ) : null}
-
-          <View style={styles.actionRow}>
-            <AppButton
-              testID="home-hero-primary-action"
-              label={
-                launching
-                  ? t("detail.actionPanel.preparing", {
-                      defaultValue: "Preparing…",
-                    })
-                  : shouldResume
-                    ? t("common.actions.resume", { defaultValue: "Resume" })
-                    : t("common.actions.play", { defaultValue: "Play" })
-              }
-              icon="play"
-              variant="primary"
-              size="large"
-              loading={launching}
-              disabled={launching}
-              onPress={onPrimaryAction}
-            />
-            <AppButton
-              label={t("common.actions.viewDetails")}
-              icon="information-circle-outline"
-              variant="secondary"
-              size="large"
-              disabled={launching}
-              onPress={onViewDetails}
-            />
-          </View>
+          {item.imdbRating ? (
+            <View style={styles.rating}>
+              <Ionicons name="star" size={13} color="#E7B86A" />
+              <Text style={styles.meta}>{item.imdbRating}</Text>
+            </View>
+          ) : null}
         </View>
-
-        {showPoster ? (
-          <View style={styles.posterShell}>
-            <MediaArtwork
-              uri={item.poster}
-              variant="poster"
-              accessible={false}
-              style={styles.heroPoster}
-            />
-          </View>
+        {item.description ? (
+          <Text style={styles.description} numberOfLines={isCompact ? 2 : 3}>
+            {item.description}
+          </Text>
         ) : null}
+        <View style={styles.actions}>
+          <AppButton
+            testID="home-hero-primary-action"
+            label={
+              launching
+                ? t("detail.actionPanel.preparing", {
+                    defaultValue: "Preparing…",
+                  })
+                : shouldResume
+                  ? t("common.actions.resume", { defaultValue: "Resume" })
+                  : t("common.actions.play", { defaultValue: "Play" })
+            }
+            icon="play"
+            variant="primary"
+            tone="onArtwork"
+            focusColor={cinematicTheme.focus}
+            size="large"
+            loading={launching}
+            disabled={launching}
+            onPress={onPrimaryAction}
+          />
+          <AppButton
+            label={t("common.actions.viewDetails")}
+            icon="information-circle-outline"
+            variant="ghost"
+            tone="onArtwork"
+            focusColor={cinematicTheme.focus}
+            size="large"
+            disabled={launching}
+            onPress={onViewDetails}
+            style={styles.detailsButton}
+          />
+        </View>
       </View>
-    </View>
+    </AmbientHero>
   );
 }
 
 export const HomeHeroBanner = memo(HomeHeroBannerInner);
 
 const styles = StyleSheet.create({
-  hero: {
-    marginHorizontal: uiSpacing.lg,
-    marginTop: uiSpacing.md,
-    marginBottom: uiSpacing.xxxl,
-    borderRadius: uiRadii.hero,
-    position: "relative",
-    overflow: "hidden",
-  },
-  heroBackdrop: {
-    ...StyleSheet.absoluteFill,
-    width: "108%",
-    height: "108%",
-    left: -12,
-    top: -12,
-  },
-  heroOverlay: { ...StyleSheet.absoluteFill } as any,
-  heroContent: {
-    ...StyleSheet.absoluteFill,
-    padding: uiSpacing.xxl,
-    justifyContent: "flex-end",
-  },
-  heroContentDesktop: {
-    padding: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 44,
-  },
-  heroCopy: { flex: 1, maxWidth: 680 },
-  heroEyebrow: {
+  copy: { width: "100%", maxWidth: 610 },
+  copyCompact: { maxWidth: 390 },
+  eyebrow: {
     ...uiTypography.sectionLabel,
-    color: "#B7BEFF",
+    color: "rgba(244,242,238,0.74)",
     marginBottom: uiSpacing.md,
     textTransform: "uppercase",
   },
-  heroTitle: {
-    fontFamily: uiTypography.display.fontFamily,
-    color: "#F4F5F7",
-    fontWeight: "800",
-    letterSpacing: -1,
-    marginBottom: uiSpacing.md,
+  title: {
+    ...uiTypography.cinematicDisplay,
+    color: "#F4F2EE",
+    textShadowColor: "rgba(0,0,0,0.34)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 16,
   },
-  heroTitleLarge: { fontSize: 48, lineHeight: 52 },
-  heroTitleCompact: { fontSize: 34, lineHeight: 39 },
-  heroMetaRow: {
+  titleCompact: { fontSize: 42, lineHeight: 44, letterSpacing: -0.7 },
+  titleMedium: { fontSize: 56, lineHeight: 58 },
+  titleLarge: { fontSize: 68, lineHeight: 68, letterSpacing: -1.5 },
+  metaRow: {
     minHeight: 20,
     flexDirection: "row",
     alignItems: "center",
     gap: uiSpacing.lg,
-    marginBottom: uiSpacing.md,
+    marginTop: uiSpacing.lg,
   },
-  heroMeta: { ...uiTypography.label, color: "#C5C9D0" },
-  ratingRow: { flexDirection: "row", alignItems: "center", gap: uiSpacing.xs },
-  heroDescription: {
+  meta: { ...uiTypography.label, color: "rgba(244,242,238,0.78)" },
+  rating: { flexDirection: "row", alignItems: "center", gap: uiSpacing.xs },
+  description: {
     ...uiTypography.body,
-    color: "#C5C9D0",
+    color: "rgba(244,242,238,0.76)",
     maxWidth: 560,
-    marginBottom: uiSpacing.xl,
+    marginTop: uiSpacing.md,
   },
-  actionRow: {
+  actions: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: uiSpacing.md,
+    gap: uiSpacing.sm,
+    marginTop: uiSpacing.xl,
   },
-  posterShell: {
-    width: 198,
-    aspectRatio: 2 / 3,
-    borderRadius: uiRadii.card,
-    overflow: "hidden",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 24px 56px rgba(0,0,0,0.42)" }
-      : {
-          shadowColor: "#000000",
-          shadowOffset: { width: 0, height: 20 },
-          shadowOpacity: 0.38,
-          shadowRadius: 28,
-        }),
-  } as any,
-  heroPoster: { width: "100%", height: "100%" },
+  detailsButton: { backgroundColor: "rgba(8,9,11,0.22)" },
 });

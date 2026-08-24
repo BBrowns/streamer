@@ -30,6 +30,8 @@ interface AuthState {
   backendUrl: string | null;
   streamServerUrl: string | null;
   theme: "light" | "dark" | "system";
+  dynamicArtworkColor: boolean;
+  forceReducedMotion: boolean;
   pendingAddonUrls: string[]; // Add-ons selected during onboarding but not yet installed
   lastActiveAt: number | null;
 
@@ -62,6 +64,8 @@ interface AuthState {
   ) => void;
   setStreamServerToken: (token: string | null) => Promise<void>;
   setTheme: (theme: "light" | "dark" | "system") => void;
+  setDynamicArtworkColor: (enabled: boolean) => void;
+  setForceReducedMotion: (enabled: boolean) => void;
   setPendingAddons: (urls: string[]) => void;
   resetPendingAddons: () => void;
   logout: () => Promise<void>;
@@ -83,6 +87,8 @@ export const useAuthStore = create<AuthState>()(
       backendUrl: null,
       streamServerUrl: null,
       theme: "system",
+      dynamicArtworkColor: true,
+      forceReducedMotion: false,
       pendingAddonUrls: [],
       accessToken: null,
       refreshToken: null,
@@ -182,6 +188,11 @@ export const useAuthStore = create<AuthState>()(
       // ── setTheme ─────────────────────────────────────────────────────────
       setTheme: (theme) => set({ theme }),
 
+      // ── Cinematic appearance ─────────────────────────────────────────────
+      setDynamicArtworkColor: (enabled) =>
+        set({ dynamicArtworkColor: enabled }),
+      setForceReducedMotion: (enabled) => set({ forceReducedMotion: enabled }),
+
       // ── setPendingAddons ─────────────────────────────────────────────────
       setPendingAddons: (urls) => set({ pendingAddonUrls: urls }),
 
@@ -227,6 +238,8 @@ export const useAuthStore = create<AuthState>()(
         backendUrl: state.backendUrl,
         streamServerUrl: state.streamServerUrl,
         theme: state.theme,
+        dynamicArtworkColor: state.dynamicArtworkColor,
+        forceReducedMotion: state.forceReducedMotion,
         pendingAddonUrls: state.pendingAddonUrls,
         lastActiveAt: state.lastActiveAt,
       }),

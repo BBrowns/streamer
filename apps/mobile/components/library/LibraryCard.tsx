@@ -20,7 +20,7 @@ import {
   useDownloadStore,
 } from "../../stores/downloadStore";
 import { useTheme } from "../../hooks/useTheme";
-import { PosterCard } from "../ui/PosterCard";
+import { MediaCard } from "../ui/MediaCard";
 import {
   getWebFocusStyle,
   uiRadii,
@@ -159,7 +159,7 @@ export function LibraryCard({
 
   return (
     <View style={[styles.container, style]}>
-      <PosterCard
+      <MediaCard
         title={item.title}
         poster={item.poster}
         eyebrow={t(`search.types.${item.type}`)}

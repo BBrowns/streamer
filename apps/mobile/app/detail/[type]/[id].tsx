@@ -284,6 +284,7 @@ export default function DetailScreen() {
         episode,
         title: meta?.name,
         poster: meta?.poster,
+        background: meta?.background,
         episodeTitle,
       });
       setPlaybackPlanning(
@@ -294,6 +295,7 @@ export default function DetailScreen() {
             ? `${meta?.name} - ${episodeTitle}`
             : (meta?.name ?? "Unknown"),
           poster: meta?.poster,
+          background: meta?.background,
           season,
           episode,
         },
@@ -382,6 +384,7 @@ export default function DetailScreen() {
           id: id || "unknown",
           title: meta.name,
           poster: meta.poster,
+          background: meta.background,
           episodeTitle,
           season,
           episode,
@@ -443,6 +446,7 @@ export default function DetailScreen() {
             episode,
             title: meta.name,
             poster: meta.poster,
+            background: meta.background,
             episodeTitle,
           });
           if (!result.ok) {
@@ -486,6 +490,7 @@ export default function DetailScreen() {
         type: castType,
         title: displayTitle,
         poster: meta.poster,
+        background: meta.background,
         season,
         episode,
       });
@@ -552,6 +557,7 @@ export default function DetailScreen() {
             id: id || "unknown",
             title: meta.name,
             poster: meta.poster,
+            background: meta.background,
           }}
           title={meta.name}
           onClose={() => setCastModalOpen(false)}
@@ -568,6 +574,7 @@ export default function DetailScreen() {
                 itemId: id || "unknown",
                 title: meta.name,
                 poster: meta.poster,
+                background: meta.background,
               },
               sessionId: details.sessionId,
             });
