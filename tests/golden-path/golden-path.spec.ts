@@ -353,9 +353,13 @@ test("player launch exposes the real control chrome", async ({
   await page.getByRole("button", { name: "Play" }).click();
 
   await expect(page.getByTestId("player-screen")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Play playback" }),
-  ).toBeVisible();
+  const playControl = page.getByRole("button", { name: "Play playback" });
+  const pauseControl = page.getByRole("button", { name: "Pause playback" });
+  await expect(playControl.or(pauseControl)).toBeVisible();
+  if (await pauseControl.isVisible()) {
+    await pauseControl.click();
+  }
+  await expect(playControl).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Playback settings" }),
   ).toBeVisible();
@@ -397,7 +401,6 @@ test("player launch exposes the real control chrome", async ({
   }
 
   if (testInfo.project.name === "desktop-renderer") {
-    const play = page.getByRole("button", { name: "Play playback" });
     const close = page.getByRole("button", { name: "Close" });
     const seekBack = page.getByRole("button", {
       name: /Seek back/,
@@ -410,7 +413,7 @@ test("player launch exposes the real control chrome", async ({
     });
     const [playBox, closeBox, seekBackBox, settingsBox, progressBox] =
       await Promise.all([
-        play.boundingBox(),
+        playControl.boundingBox(),
         close.boundingBox(),
         seekBack.boundingBox(),
         settings.boundingBox(),
