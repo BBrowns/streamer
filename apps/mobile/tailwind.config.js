@@ -6,14 +6,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#08090c",
+        background: "#08090b",
         surface: "#111318",
         "surface-bright": "#181b21",
-        primary: "#f4f5f7",
-        "primary-dim": "rgba(244, 245, 247, 0.12)",
-        accent: "#6c79f5",
-        textMain: "#f4f5f7",
-        textMuted: "#9da3ae",
+        primary: "#f4f2ee",
+        "primary-dim": "rgba(244, 242, 238, 0.12)",
+        accent: "#c89b6d",
+        textMain: "#f4f2ee",
+        textMuted: "#b8b5b0",
         error: "#ff7087",
         success: "#4ec98b",
         warning: "#e7b86a",
@@ -32,7 +32,7 @@ module.exports = {
         88: "22rem",
       },
       fontFamily: {
-        sans: ["Inter_400Regular", "system-ui", "sans-serif"],
+        sans: ["system-ui", "-apple-system", "Segoe UI", "sans-serif"],
       },
     },
   },

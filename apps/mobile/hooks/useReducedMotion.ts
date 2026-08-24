@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { AccessibilityInfo } from "react-native";
+import { useAuthStore } from "../stores/authStore";
 
 export function useReducedMotion() {
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [systemReducedMotion, setSystemReducedMotion] = useState(false);
+  const forceReducedMotion = useAuthStore((state) => state.forceReducedMotion);
 
   useEffect(() => {
     let mounted = true;
     void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (mounted) setReducedMotion(enabled);
+      if (mounted) setSystemReducedMotion(enabled);
     });
 
     const subscription = AccessibilityInfo.addEventListener(
       "reduceMotionChanged",
-      setReducedMotion,
+      setSystemReducedMotion,
     );
     return () => {
       mounted = false;
@@ -20,5 +22,5 @@ export function useReducedMotion() {
     };
   }, []);
 
-  return reducedMotion;
+  return systemReducedMotion || forceReducedMotion;
 }

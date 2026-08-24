@@ -16,6 +16,7 @@ export const uiSpacing = {
 };
 
 export const uiRadii = {
+  xxs: 6,
   xs: 8,
   sm: 12,
   md: 12,
@@ -28,19 +29,22 @@ export const uiRadii = {
   pill: 999,
 };
 
-export const uiTouchTarget = 44;
+export const uiTouchTarget = Platform.OS === "android" ? 48 : 44;
 
 export const uiMotion = {
-  fast: 120,
-  standard: 180,
-  slow: 280,
-  feedback: 120,
-  content: 180,
-  overlay: 280,
+  fast: 90,
+  standard: 140,
+  slow: 240,
+  feedback: 90,
+  content: 140,
+  spatial: 200,
+  overlay: 240,
+  emphasis: 360,
   loadingLoop: 1500,
 } as const;
 
-export type UiMotionIntent = "feedback" | "content" | "overlay" | "loadingLoop";
+export type UiMotionIntent =
+  "feedback" | "content" | "spatial" | "overlay" | "emphasis" | "loadingLoop";
 
 export function resolveMotionDuration(
   intent: UiMotionIntent,
@@ -50,32 +54,67 @@ export function resolveMotionDuration(
 }
 
 export const uiLayout = {
-  contentMaxWidth: 1600,
+  contentMaxWidth: 1560,
   readingMaxWidth: 760,
-  detailMaxWidth: 1120,
-  compactGutter: 16,
+  detailMaxWidth: 1200,
+  settingsMaxWidth: 1120,
+  compactGutter: 20,
   mediumGutter: 24,
+  expandedGutter: 40,
+  largeGutter: 56,
   desktopGutter: 40,
-  settingsRailWidth: 256,
   filterRailWidth: 240,
+  pageWidths: {
+    cinematic: 1560,
+    catalog: 1560,
+    utilityWide: 1120,
+    utilityNarrow: 760,
+  },
 } as const;
 
-const webInterFontStack =
-  '"Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+export function getWindowGutter(
+  windowClass: "compact" | "medium" | "expanded" | "large",
+) {
+  if (windowClass === "compact") return uiLayout.compactGutter;
+  if (windowClass === "medium") return uiLayout.mediumGutter;
+  if (windowClass === "expanded") return uiLayout.expandedGutter;
+  return uiLayout.largeGutter;
+}
+
+export function getPosterCardWidth(
+  windowClass: "compact" | "medium" | "expanded" | "large",
+) {
+  if (windowClass === "compact") return 132;
+  if (windowClass === "medium") return 152;
+  if (windowClass === "expanded") return 168;
+  return 198;
+}
+
+export function getHomeHeroOverlap(
+  windowClass: "compact" | "medium" | "expanded" | "large",
+) {
+  if (windowClass === "compact") return 36;
+  if (windowClass === "medium") return 48;
+  if (windowClass === "expanded") return 64;
+  return 88;
+}
+
+const systemFont = Platform.select({
+  ios: "System",
+  android: "sans-serif",
+  web: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  default: "System",
+}) as string;
 
 export const uiFonts = {
-  regular: Platform.OS === "web" ? webInterFontStack : "Inter_400Regular",
-  medium: Platform.OS === "web" ? webInterFontStack : "Inter_500Medium",
-  semibold: Platform.OS === "web" ? webInterFontStack : "Inter_600SemiBold",
-  bold: Platform.OS === "web" ? webInterFontStack : "Inter_700Bold",
-  extrabold: Platform.OS === "web" ? webInterFontStack : "Inter_800ExtraBold",
-  black: Platform.OS === "web" ? webInterFontStack : "Inter_900Black",
-  system: Platform.select({
-    ios: "System",
-    android: "sans-serif",
-    web: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    default: "System",
-  }),
+  regular: systemFont,
+  medium: systemFont,
+  semibold: systemFont,
+  bold: systemFont,
+  extrabold: systemFont,
+  black: systemFont,
+  system: systemFont,
+  cinematic: "InstrumentSerif_400Regular",
 } as const;
 
 export function getWebFocusStyle(color: string) {
@@ -84,6 +123,19 @@ export function getWebFocusStyle(color: string) {
     outlineWidth: 3,
     outlineColor: color,
     outlineOffset: 2,
+  } as const;
+}
+
+/**
+ * Media artwork gets a tighter ring than controls so pointer lift and keyboard
+ * focus remain visually distinct without adding permanent card chrome.
+ */
+export function getWebMediaFocusStyle(color: string) {
+  return {
+    outlineStyle: "solid",
+    outlineWidth: 2,
+    outlineColor: color,
+    outlineOffset: 3,
   } as const;
 }
 
@@ -106,6 +158,13 @@ export function getPrimaryForeground(colors: ThemeColors) {
 }
 
 export const uiTypography = {
+  cinematicDisplay: {
+    fontFamily: uiFonts.cinematic,
+    fontSize: 56,
+    lineHeight: 58,
+    fontWeight: "400" as const,
+    letterSpacing: -1.2,
+  },
   display: {
     fontFamily: uiFonts.extrabold,
     fontSize: 48,
@@ -143,8 +202,8 @@ export const uiTypography = {
   },
   body: {
     fontFamily: uiFonts.regular,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: Platform.OS === "ios" ? 17 : Platform.OS === "android" ? 16 : 15,
+    lineHeight: Platform.OS === "web" ? 22 : 24,
     fontWeight: "400" as const,
     letterSpacing: 0,
   },
@@ -212,5 +271,5 @@ export function getToneColor(colors: ThemeColors, tone: StatusTone) {
 }
 
 export function getSoftOverlayColor(isDark: boolean) {
-  return isDark ? "rgba(8,9,12,0.72)" : "rgba(243,242,239,0.82)";
+  return isDark ? "rgba(8,9,11,0.72)" : "rgba(243,242,239,0.82)";
 }

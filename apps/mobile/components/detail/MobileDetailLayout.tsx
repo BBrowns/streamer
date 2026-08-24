@@ -19,6 +19,10 @@ import { getWebFocusStyle, uiRadii, uiTypography } from "../ui/designSystem";
 import { useTranslation } from "react-i18next";
 import { MoreSourcesPanel } from "./MoreSourcesPanel";
 import { MediaArtwork } from "../ui/MediaArtwork";
+import {
+  useCinematicTheme,
+  useCinematicThemeSource,
+} from "../../contexts/CinematicThemeContext";
 
 export function MobileDetailLayout({
   id,
@@ -42,8 +46,9 @@ export function MobileDetailLayout({
   onBack,
 }: DetailLayoutProps) {
   const { colors, isDark } = useTheme();
+  const { theme: cinematicTheme } = useCinematicTheme();
   const { t } = useTranslation();
-  const { height, isCompact, isLarge } = useWindowClass();
+  const { height, isCompact, isMedium, isLarge } = useWindowClass();
   const backdropHeight = Math.min(
     height * (isCompact ? 0.46 : 0.52),
     isLarge ? 520 : 460,
@@ -53,19 +58,44 @@ export function MobileDetailLayout({
     castType === "series" ? meta.videos?.length || 0 : streams?.length || 0;
   const softSurfaceColor = colors.surfaceElevated;
   const heroGradientColors = isDark
-    ? (["transparent", "rgba(8,9,12,0.62)", colors.background] as const)
+    ? (["transparent", "rgba(8,9,11,0.62)", colors.background] as const)
     : (["transparent", "rgba(243,242,239,0.54)", colors.background] as const);
+
+  useCinematicThemeSource({
+    contentKey: `${castType}:${id}`,
+    backgroundUri: meta.background,
+    posterUri: meta.poster,
+  });
 
   const renderHeader = () => (
     <View>
       <View style={[styles.heroContainer, { height: backdropHeight }]}>
-        <MediaArtwork
-          uri={meta.background || meta.poster}
-          title={meta.name}
-          variant="backdrop"
-          accessible={false}
+        <LinearGradient
+          colors={[
+            cinematicTheme.ambient,
+            cinematicTheme.ambientMuted,
+            colors.background,
+          ]}
           style={styles.backdrop}
         />
+        {meta.background ? (
+          <MediaArtwork
+            uri={meta.background}
+            title={meta.name}
+            variant="backdrop"
+            accessible={false}
+            style={styles.backdrop}
+          />
+        ) : meta.poster ? (
+          <MediaArtwork
+            uri={meta.poster}
+            title={meta.name}
+            variant="poster"
+            accessible={false}
+            contentFit="contain"
+            style={styles.containedPoster}
+          />
+        ) : null}
 
         <LinearGradient
           colors={heroGradientColors}
@@ -126,6 +156,7 @@ export function MobileDetailLayout({
           streamsLoading={streamsLoading}
           hasPlayableSources={hasMovieSources}
           inLibrary={!!inLibrary}
+          focusColor={cinematicTheme.focus}
           hasTrailer={!!trailerUrl}
           planningAction={planningAction}
           onPlayBest={() => handlePlayStream()}
@@ -206,6 +237,7 @@ export function MobileDetailLayout({
             <MoreSourcesPanel
               contentId={id}
               title={meta.name}
+              sourceCount={sourceCount}
               initiallyOpen={initiallyOpenSources}
               onSelect={(plan, candidateId) =>
                 handlePlayCandidate(plan, candidateId)
@@ -224,6 +256,7 @@ export function MobileDetailLayout({
       <Pressable
         style={({ focused }: any) => [
           styles.floatingBack,
+          isMedium && styles.floatingBackBelowTopBar,
           {
             backgroundColor: colors.surfaceOverlay,
             borderColor: colors.border,
@@ -232,7 +265,7 @@ export function MobileDetailLayout({
         ]}
         onPress={onBack}
         accessibilityRole="button"
-        accessibilityLabel="Back to previous screen"
+        accessibilityLabel={t("detail.backAccessibility")}
       >
         <Ionicons name="chevron-back" size={28} color={colors.text} />
       </Pressable>
@@ -264,6 +297,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  floatingBackBelowTopBar: {
+    top: 84,
+  },
   heroContainer: {
     width: "100%",
   },
@@ -280,8 +316,20 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   title: {
-    ...uiTypography.headline,
+    ...uiTypography.cinematicDisplay,
+    fontSize: 42,
+    lineHeight: 44,
+    letterSpacing: -0.7,
     marginBottom: 12,
+  },
+  containedPoster: {
+    position: "absolute",
+    top: 36,
+    right: 20,
+    bottom: 56,
+    aspectRatio: 2 / 3,
+    borderRadius: uiRadii.card,
+    overflow: "hidden",
   },
   metaRow: {
     flexDirection: "row",

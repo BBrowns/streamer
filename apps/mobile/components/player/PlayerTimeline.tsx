@@ -45,6 +45,8 @@ export interface PlayerTimelineProps {
   onSeekTo: (position: number) => void;
   onScrubbingChange?: (change: TimelineScrubbingChange) => void;
   getThumbnail?: (position: number) => Promise<unknown | null>;
+  accent?: string;
+  focusColor?: string;
 }
 
 export function formatTimelineTime(seconds: number) {
@@ -73,6 +75,8 @@ export function PlayerTimeline({
   onSeekTo,
   onScrubbingChange,
   getThumbnail,
+  accent = playerChrome.accent,
+  focusColor = playerChrome.focus,
 }: PlayerTimelineProps) {
   const { t } = useTranslation();
   const [width, setWidth] = useState(0);
@@ -176,6 +180,7 @@ export function PlayerTimeline({
     : t("player.controls.progressUnavailable", {
         defaultValue: "Playback progress unavailable",
       });
+  const timelineActive = isScrubbing || isFocused || hoverPosition !== null;
 
   const begin = (event: TimelinePointerEvent) => {
     const offset = pointerOffset(event);
@@ -276,9 +281,7 @@ export function PlayerTimeline({
           testID="player-progress-slider"
           style={[
             styles.slider,
-            Platform.OS === "web" &&
-              isFocused &&
-              getWebFocusStyle(playerChrome.focus),
+            Platform.OS === "web" && isFocused && getWebFocusStyle(focusColor),
           ]}
           focusable={canSeek}
           accessibilityRole="adjustable"
@@ -329,19 +332,26 @@ export function PlayerTimeline({
             },
           } as any)}
         >
-          <View style={styles.track}>
+          <View style={[styles.track, timelineActive && styles.trackActive]}>
             <View
               testID="player-timeline-buffered"
               style={[styles.buffered, { width: `${bufferedPercent}%` }]}
             />
             <View
               testID="player-timeline-watched"
-              style={[styles.watched, { width: `${watchedPercent}%` }]}
+              style={[
+                styles.watched,
+                { width: `${watchedPercent}%`, backgroundColor: accent },
+              ]}
             />
             {canSeek ? (
               <View
                 testID="player-timeline-playhead"
-                style={[styles.playhead, { left: `${watchedPercent}%` }]}
+                style={[
+                  styles.playhead,
+                  timelineActive && styles.playheadActive,
+                  { left: `${watchedPercent}%` },
+                ]}
               />
             ) : null}
           </View>
@@ -375,16 +385,17 @@ const styles = StyleSheet.create({
   },
   slider: {
     flex: 1,
-    minHeight: 28,
+    minHeight: 34,
     justifyContent: "center",
     borderRadius: uiRadii.pill,
   },
   track: {
-    height: 5,
+    height: 4,
     borderRadius: uiRadii.pill,
     backgroundColor: playerChrome.track,
     overflow: "visible",
   },
+  trackActive: { height: 6 },
   buffered: {
     ...StyleSheet.absoluteFill,
     right: undefined,
@@ -399,20 +410,26 @@ const styles = StyleSheet.create({
   },
   playhead: {
     position: "absolute",
-    width: 14,
-    height: 14,
-    top: -4.5,
-    marginLeft: -7,
+    width: 12,
+    height: 12,
+    top: -4,
+    marginLeft: -6,
     borderRadius: uiRadii.pill,
     backgroundColor: playerChrome.text,
     borderWidth: 1,
     borderColor: "rgba(8,9,12,0.48)",
   },
+  playheadActive: {
+    width: 16,
+    height: 16,
+    top: -5,
+    marginLeft: -8,
+  },
   preview: {
     position: "absolute",
     bottom: 36,
-    width: 160,
-    marginLeft: -80,
+    width: 170,
+    marginLeft: -85,
     padding: 4,
     borderRadius: uiRadii.control,
     backgroundColor: playerChrome.surfaceStrong,
@@ -422,8 +439,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   previewImage: {
-    width: 150,
-    height: 84,
+    width: 160,
+    height: 90,
     borderRadius: Math.max(4, uiRadii.control - 3),
   },
   previewTime: {

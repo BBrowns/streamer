@@ -37,6 +37,7 @@ export const metaPreviewSchema = z.object({
     .string()
     .nullish()
     .transform((value) => value ?? ""),
+  background: optionalString,
   description: optionalString,
   releaseInfo: optionalStringFromPrimitive,
   released: optionalString,
@@ -77,7 +78,6 @@ export const mediaTrailerSchema = z.object({
 
 export const metaDetailSchema = metaPreviewSchema
   .extend({
-    background: z.string().optional(),
     logo: z.string().optional(),
     genres: optionalStringArray,
     cast: optionalStringArray,

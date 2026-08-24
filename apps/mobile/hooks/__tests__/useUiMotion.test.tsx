@@ -12,7 +12,7 @@ describe("useUiMotion", () => {
     const { result } = await renderHook(() => useUiMotion());
 
     expect(result.current.reducedMotion).toBe(false);
-    expect(result.current.duration("content")).toBe(180);
+    expect(result.current.duration("content")).toBe(140);
     expect(result.current.allowSpatialMotion).toBe(true);
     expect(result.current.allowContinuousMotion).toBe(true);
   });

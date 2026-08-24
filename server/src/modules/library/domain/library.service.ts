@@ -122,6 +122,7 @@ export class LibraryService {
       durationSource?: WatchProgressDurationSource;
       title: string;
       poster?: string;
+      background?: string;
     },
   ): Promise<WatchProgress> {
     const existing = await this.progressRepo.findByIdentity(
@@ -142,6 +143,7 @@ export class LibraryService {
       durationSource: normalized.durationSource,
       title: data.title,
       poster: data.poster ?? null,
+      background: data.background,
     });
 
     logger.debug({ userId, itemId: data.itemId }, "Watch progress updated");
@@ -274,6 +276,7 @@ export class LibraryService {
       durationSource: record.durationSource,
       title: record.title,
       poster: record.poster,
+      background: record.background,
       lastWatched: record.lastWatched.toISOString(),
     };
   }

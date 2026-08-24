@@ -34,6 +34,9 @@ jest.mock("../../../hooks/useTheme", () => ({
     },
   }),
 }));
+jest.mock("../../../contexts/CinematicThemeContext", () => ({
+  useCinematicTheme: () => ({ theme: { progress: "#d8b4fe" } }),
+}));
 
 jest.mock("../../../hooks/useWebPressableActivation", () => ({
   useWebPressableActivation: () => ({
@@ -109,6 +112,13 @@ describe("ContinueWatchingRow", () => {
     });
   });
 
+  it("uses three-up cinematic sizing on large desktop windows", () => {
+    const rowModule = require("../ContinueWatchingRow");
+
+    expect(rowModule.getContinueWatchingCardWidth?.("large")).toBe(400);
+    expect(rowModule.getContinueWatchingCardWidth?.("compact")).toBe(270);
+  });
+
   it("resumes directly through the planner and keeps details secondary", async () => {
     hooks.useContinueWatching.mockReturnValue({
       isLoading: false,
@@ -125,6 +135,7 @@ describe("ContinueWatchingRow", () => {
           durationSource: "media",
           title: "Example Episode",
           poster: "https://images.example.test/poster.jpg",
+          background: "https://images.example.test/backdrop.jpg",
           lastWatched: "2026-06-13T10:00:00.000Z",
         },
       ],
@@ -164,6 +175,7 @@ describe("ContinueWatchingRow", () => {
       id: "tt0903747",
       title: "Example Episode",
       poster: "https://images.example.test/poster.jpg",
+      background: "https://images.example.test/backdrop.jpg",
       season: 1,
       episode: 2,
     });
@@ -207,6 +219,9 @@ describe("ContinueWatchingRow", () => {
 
     const screen = await render(<ContinueWatchingRow />);
 
+    await fireEvent.press(
+      screen.getByLabelText("More actions for Example Movie"),
+    );
     await fireEvent.press(
       screen.getByLabelText("Remove Example Movie from Continue Watching"),
     );

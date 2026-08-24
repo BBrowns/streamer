@@ -40,8 +40,8 @@ describe("useAuth pending add-ons", () => {
     (api.post as jest.Mock).mockResolvedValue({ data: { id: "addon-a" } });
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false, gcTime: Infinity },
       },
     });
     const invalidateQueries = jest

@@ -20,6 +20,7 @@ type DetailActionPanelProps = {
   onCast?: () => void;
   onToggleLibrary: () => void;
   onWatchTrailer?: () => void;
+  focusColor?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -35,6 +36,7 @@ export function DetailActionPanel({
   onCast,
   onToggleLibrary,
   onWatchTrailer,
+  focusColor,
   style,
 }: DetailActionPanelProps) {
   const { t } = useTranslation();
@@ -44,87 +46,80 @@ export function DetailActionPanel({
 
   return (
     <Surface variant="plain" padded={false} style={[styles.panel, style]}>
-      <View style={[styles.actionRow, isCompact && styles.actionRowCompact]}>
-        {isMovie ? (
-          <>
-            <AppButton
-              label={
-                planningAction === "play"
-                  ? t("detail.actionPanel.findingBest")
-                  : t("common.actions.play", { defaultValue: "Play" })
-              }
-              icon="play"
-              variant="primary"
-              size="large"
-              // The planner is authoritative. A raw stream list can still be
-              // loading or contain only a fast partial response, so it must
-              // not disable Play before the planner has had a chance to find
-              // a playable source.
-              disabled={actionDisabled}
-              loading={planningAction === "play"}
-              onPress={onPlayBest}
-              onFocus={onPlayIntent}
-              onHoverIn={onPlayIntent}
-              style={[
-                styles.primaryButton,
-                isCompact && styles.primaryButtonCompact,
-              ]}
-            />
-            <AppButton
-              label={
-                planningAction === "download"
-                  ? t("detail.actionPanel.preparing")
-                  : t("detail.download")
-              }
-              icon="download-outline"
-              variant="secondary"
-              size="large"
-              disabled={actionDisabled}
-              loading={planningAction === "download"}
-              onPress={onDownload}
-              style={[
-                styles.secondaryButton,
-                isCompact && styles.secondaryButtonCompact,
-              ]}
-            />
-            {onCast ? (
-              <AppButton
-                label={
-                  planningAction === "cast"
-                    ? t("detail.actionPanel.preparing")
-                    : t("common.actions.castToDevice", {
-                        defaultValue: "Cast to device",
-                      })
-                }
-                icon="tv-outline"
-                variant="secondary"
-                size="large"
-                disabled={actionDisabled}
-                loading={planningAction === "cast"}
-                onPress={onCast}
-                style={[
-                  styles.secondaryButton,
-                  isCompact && styles.secondaryButtonCompact,
-                ]}
-              />
-            ) : null}
-          </>
-        ) : null}
+      {isMovie ? (
+        <View testID="detail-primary-actions" style={styles.primaryRow}>
+          <AppButton
+            label={
+              planningAction === "play"
+                ? t("detail.actionPanel.findingBest")
+                : t("common.actions.play", { defaultValue: "Play" })
+            }
+            icon="play"
+            variant="primary"
+            size="large"
+            disabled={actionDisabled}
+            loading={planningAction === "play"}
+            onPress={onPlayBest}
+            onFocus={onPlayIntent}
+            onHoverIn={onPlayIntent}
+            focusColor={focusColor}
+            fullWidth={isCompact}
+            style={styles.primaryButton}
+          />
+        </View>
+      ) : null}
 
+      <View
+        testID="detail-secondary-actions"
+        style={[styles.secondaryRow, isCompact && styles.secondaryRowCompact]}
+      >
+        {isMovie ? (
+          <AppButton
+            label={
+              planningAction === "download"
+                ? t("detail.actionPanel.preparing")
+                : t("detail.download")
+            }
+            icon="download-outline"
+            variant="secondary"
+            size="small"
+            disabled={actionDisabled}
+            loading={planningAction === "download"}
+            onPress={onDownload}
+            focusColor={focusColor}
+            style={styles.secondaryButton}
+          />
+        ) : null}
+        {isMovie && onCast ? (
+          <AppButton
+            label={
+              planningAction === "cast"
+                ? t("detail.actionPanel.preparing")
+                : t("common.actions.castToDevice", {
+                    defaultValue: "Cast to device",
+                  })
+            }
+            icon="tv-outline"
+            variant="secondary"
+            size="small"
+            disabled={actionDisabled}
+            loading={planningAction === "cast"}
+            onPress={onCast}
+            focusColor={focusColor}
+            style={styles.secondaryButton}
+          />
+        ) : null}
         {hasTrailer && onWatchTrailer ? (
           <AppButton
             label={t("detail.actionPanel.watchTrailer")}
             icon="play-circle-outline"
             variant="secondary"
-            size="large"
+            size="small"
             onPress={onWatchTrailer}
-            style={[
-              styles.secondaryButton,
-              isCompact && styles.secondaryButtonCompact,
-            ]}
+            focusColor={focusColor}
+            style={styles.secondaryButton}
           />
         ) : null}
-
         <AppButton
           label={
             inLibrary
@@ -135,12 +130,10 @@ export function DetailActionPanel({
           }
           icon={inLibrary ? "checkmark" : "add"}
           variant="secondary"
-          size="large"
+          size="small"
           onPress={onToggleLibrary}
-          style={[
-            styles.secondaryButton,
-            isCompact && styles.secondaryButtonCompact,
-          ]}
+          focusColor={focusColor}
+          style={styles.secondaryButton}
         />
       </View>
     </Surface>
@@ -149,29 +142,24 @@ export function DetailActionPanel({
 
 const styles = StyleSheet.create({
   panel: {
-    gap: 14,
+    gap: 10,
     marginBottom: 18,
   },
-  actionRow: {
+  primaryRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  actionRowCompact: {
-    gap: 8,
+    alignItems: "center",
   },
   primaryButton: {
-    flexGrow: 1,
-    flexBasis: 190,
+    minWidth: 190,
   },
-  primaryButtonCompact: {
-    flexBasis: "100%",
+  secondaryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
   },
+  secondaryRowCompact: { gap: 6 },
   secondaryButton: {
-    flexGrow: 1,
-    flexBasis: 124,
-  },
-  secondaryButtonCompact: {
-    flexBasis: 140,
+    flexGrow: 0,
   },
 });

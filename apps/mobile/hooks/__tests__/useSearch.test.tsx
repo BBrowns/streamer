@@ -25,7 +25,7 @@ describe("useSearch", () => {
       },
     );
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
     });
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -69,13 +69,13 @@ describe("useSearch", () => {
       },
     });
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
     });
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    const { result } = await renderHook(
+    const { result, unmount } = await renderHook(
       () =>
         useSearch("  Dune  ", {
           mode: "suggestions",
@@ -91,6 +91,7 @@ describe("useSearch", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.current.data?.metas).toHaveLength(7);
+    await unmount();
     queryClient.clear();
   });
 
@@ -120,13 +121,13 @@ describe("useSearch", () => {
       });
     });
     const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
     });
     const wrapper = ({ children }: PropsWithChildren) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    const { result } = await renderHook(
+    const { result, unmount } = await renderHook(
       () =>
         useInfiniteSearch("Dune", {
           mode: "results",
@@ -157,6 +158,7 @@ describe("useSearch", () => {
       "/api/search?q=Dune&mode=results&type=all&limit=2&cursor=2",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    await unmount();
     queryClient.clear();
   });
 });

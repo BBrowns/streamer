@@ -23,6 +23,7 @@ export interface MediaInfo {
   itemId: string;
   title: string;
   poster?: string;
+  background?: string;
   season?: number;
   episode?: number;
 }
@@ -90,6 +91,20 @@ export function normalizePreferredQualities(
   }
 
   return migrateLegacyPreferredQuality(legacyPreferredQuality);
+}
+
+export function togglePreferredQuality(
+  current: PlaybackQuality[],
+  quality: PlaybackQuality,
+): PlaybackQuality[] {
+  const normalized = normalizePreferredQualities(current);
+  const selected = normalized.includes(quality);
+  if (selected && normalized.length === 1) return normalized;
+
+  const next = selected
+    ? normalized.filter((value) => value !== quality)
+    : [...normalized, quality];
+  return normalizePreferredQualities(next);
 }
 
 export function normalizeSubtitleSyncOffset(value: unknown) {

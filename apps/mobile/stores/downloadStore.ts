@@ -18,6 +18,7 @@ export interface DownloadReplanContext {
   id: string;
   title?: string;
   poster?: string;
+  background?: string;
   season?: number;
   episode?: number;
   episodeTitle?: string;
@@ -158,6 +159,7 @@ export function buildDownloadReplanContext(
     id: mediaInfo.itemId,
     title: mediaInfo.title,
     poster: mediaInfo.poster,
+    background: mediaInfo.background,
     season: mediaInfo.season,
     episode: mediaInfo.episode,
   };
@@ -222,6 +224,9 @@ export function sanitizeDownloadTaskForPersistence(task: DownloadTask) {
     itemId: safeTask.mediaInfo.itemId,
     title: safeTask.mediaInfo.title,
     ...(safeTask.mediaInfo.poster ? { poster: safeTask.mediaInfo.poster } : {}),
+    ...(safeTask.mediaInfo.background
+      ? { background: safeTask.mediaInfo.background }
+      : {}),
     ...(safeTask.mediaInfo.season !== undefined
       ? { season: safeTask.mediaInfo.season }
       : {}),
@@ -246,6 +251,7 @@ export function sanitizeDownloadTaskForPersistence(task: DownloadTask) {
         id: context.id,
         ...(context.title ? { title: context.title } : {}),
         ...(context.poster ? { poster: context.poster } : {}),
+        ...(context.background ? { background: context.background } : {}),
         ...(context.season !== undefined ? { season: context.season } : {}),
         ...(context.episode !== undefined ? { episode: context.episode } : {}),
         ...(context.episodeTitle ? { episodeTitle: context.episodeTitle } : {}),

@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, within } from "@testing-library/react-native";
 import { DetailActionPanel } from "../DetailActionPanel";
 
 jest.mock("@expo/vector-icons", () => ({
@@ -91,6 +91,18 @@ describe("DetailActionPanel", () => {
     expect(callbacks.onDownload).toHaveBeenCalledTimes(1);
     expect(callbacks.onCast).toHaveBeenCalledTimes(1);
     expect(callbacks.onToggleLibrary).toHaveBeenCalledTimes(1);
+  });
+
+  it("separates the dominant Play action from compact secondary actions", async () => {
+    const { getByTestId, getByText } = await renderPanel({ hasTrailer: true });
+
+    const primary = getByTestId("detail-primary-actions");
+    const secondary = getByTestId("detail-secondary-actions");
+
+    expect(within(primary).getByLabelText("Play")).toBeTruthy();
+    expect(within(secondary).getByLabelText("Download")).toBeTruthy();
+    expect(within(secondary).getByLabelText("Add to Library")).toBeTruthy();
+    expect(getByText("Watch trailer")).toBeTruthy();
   });
 
   it("does not show top-level playback actions for series", async () => {

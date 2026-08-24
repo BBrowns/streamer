@@ -50,7 +50,8 @@
       "label": "Title suggestions",
       "loading": "Finding title suggestions…",
       "noMatch": "No title suggestions yet.",
-      "showAll": "Show all results for “{{query}}”"
+      "showAll": "Show all results for “{{query}}”",
+      "viewAllCount": "View all {{count}} results"
     },
     "command": {
       "label": "Quick search",
@@ -216,7 +217,7 @@
     },
     "empty": {
       "title": "No Items Yet",
-      "description": "Browse the Discover tab and add movies & shows to your library.",
+      "description": "Browse movies and series and add them to your library.",
       "noMovies": "No saved movies found.",
       "noSeries": "No saved series found."
     },
@@ -833,6 +834,17 @@
     }
   },
   "detail": {
+    "backAccessibility": "Back to previous screen",
+    "story": "Story",
+    "mediaInformation": "Media information",
+    "metadata": {
+      "director": "Director",
+      "cast": "Cast",
+      "language": "Language",
+      "runtime": "Runtime",
+      "quality": "Quality",
+      "sources": "Sources"
+    },
     "play": "Play",
     "download": "Download",
     "torrent": "Torrent",
@@ -872,6 +884,8 @@
     "sources": {
       "episodes": "Episodes",
       "more": "More Sources",
+      "playbackSource": "Playback source",
+      "bestAvailable": "Best available · {{count}} sources",
       "show": "Show more sources",
       "hide": "Hide more sources",
       "available": "{{count}} available",
@@ -1103,6 +1117,11 @@
     "settings": {
       "title": "Playback Settings",
       "done": "Done",
+      "playback": "Playback",
+      "audioTab": "Audio",
+      "quality": "Quality",
+      "qualityNextPlayback": "Quality changes apply to the next playback plan, not the active stream.",
+      "backToSettings": "Back to playback settings",
       "speed": "Playback Speed",
       "audio": "Audio Tracks",
       "audioDescription": "Audio description",
@@ -1144,7 +1163,9 @@
       "fontMonospace": "Monospace",
       "sync": "Subtitle sync",
       "resetSubtitleStyle": "Reset subtitle style",
-      "diagnostics": "Playback diagnostics"
+      "diagnostics": "Playback diagnostics",
+      "diagnosticsDescription": "Technical information for troubleshooting this playback session.",
+      "noDiagnostics": "No diagnostics available."
     },
     "remote": {
       "castingTo": "Casting to {{name}}",
@@ -1205,6 +1226,8 @@
       "openSourcesDevices": "Sources & Devices",
       "chooseSource": "Choose another source",
       "previewPlayer": "Preview player",
+      "moreOptions": "More options",
+      "fewerOptions": "Fewer options",
       "goBack": "Go Back"
     },
     "cast": {
@@ -1282,6 +1305,7 @@
     "unreadCount_one": "{{count}} unread notification",
     "unreadCount_other": "{{count}} unread notifications",
     "allCaughtUpDescription": "You're all caught up.",
+    "viewAll": "View all",
     "empty": "No notifications",
     "emptyTitle": "You're all caught up",
     "emptyDescription": "Downloads and account updates will appear here.",
@@ -1344,7 +1368,13 @@
       }
     }
   },
-  "navigation": { "menu": "Menu", "back": "Back" },
+  "navigation": {
+    "menu": "Menu",
+    "back": "Back",
+    "profile": "Profile",
+    "profileMenu": "Profile menu",
+    "personalProfile": "Personal profile"
+  },
   "catalog": {
     "openMovieDetails": "Open movie details",
     "openSeriesDetails": "Open series details",

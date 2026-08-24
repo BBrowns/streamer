@@ -52,11 +52,15 @@ import {
 import { EmptyState } from "../ui/EmptyState";
 import { ContentBoundary } from "../ui/ContentBoundary";
 import { ContentTabs } from "../ui/ContentTabs";
-import { getWebFocusStyle } from "../ui/designSystem";
+import {
+  getWebFocusStyle,
+  getWindowGutter,
+  uiLayout,
+} from "../ui/designSystem";
 import { PageHeader } from "../ui/PageHeader";
 import { PageLayout } from "../ui/PageLayout";
 import { SearchField } from "../ui/SearchField";
-import { FilterSheet, FilterSidebar } from "./SearchFilters";
+import { FilterSheet } from "./SearchFilters";
 import { SearchDiscovery } from "./SearchDiscovery";
 import { SearchResultCard } from "./SearchResultCard";
 import { SearchSuggestions } from "./SearchSuggestions";
@@ -108,7 +112,7 @@ export function SearchScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { width, isCompact, isLarge } = useWindowClass();
+  const { width, isCompact, windowClass } = useWindowClass();
   const [submittedQuery, setSubmittedQuery] = useState(routeSubmittedQuery);
   const [typeFilter, setTypeFilter] = useState<SearchTypeFilter>(
     routeState.type,
@@ -441,10 +445,9 @@ export function SearchScreen() {
     ) &&
     searchFieldFocused &&
     !suggestionsDismissed;
-  const columns = Math.max(
-    2,
-    Math.min(6, Math.floor((width - (isLarge ? 528 : 48)) / 150)),
-  );
+  const contentWidth = Math.min(width, uiLayout.contentMaxWidth);
+  const gridWidth = contentWidth - getWindowGutter(windowClass) * 2;
+  const columns = Math.max(2, Math.min(7, Math.floor(gridWidth / 184)));
   const sortLabel = t(`search.sort.${sort}`);
   const shortcutHint =
     Platform.OS === "web" && !isCompact
@@ -599,7 +602,7 @@ export function SearchScreen() {
         style={[styles.stickyHeader, { backgroundColor: colors.background }]}
       >
         <ContentBoundary
-          size="content"
+          size="catalog"
           padded={false}
           style={styles.stickyHeaderContent}
         >
@@ -651,6 +654,7 @@ export function SearchScreen() {
                   <SearchSuggestions
                     query={inputValue.trim()}
                     items={searchController.suggestions}
+                    resultCount={searchController.suggestionSearch.data?.total}
                     state={searchController.state}
                     selectedIndex={searchController.selectedIndex}
                     onSelect={(item) => void openSuggestion(item)}
@@ -670,7 +674,7 @@ export function SearchScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <ContentBoundary size="content" padded={false}>
+        <ContentBoundary size="catalog" padded={false}>
           {!submittedQuery ? (
             <SearchDiscovery
               recentSearches={searchController.recentSearches}
@@ -710,17 +714,6 @@ export function SearchScreen() {
                           query: submittedQuery,
                         })}
                 </Text>
-                {resultState !== "loading-results" &&
-                  resultState !== "filter-pagination-limit" && (
-                    <Text
-                      style={[
-                        styles.resultsSubtitle,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {t("search.results.detailHint")}
-                    </Text>
-                  )}
               </View>
 
               <View style={styles.toolbar}>
@@ -736,8 +729,7 @@ export function SearchScreen() {
                   style={styles.typeFilter}
                   accessibilityLabel={t("search.filters.type")}
                 />
-                {!isLarge &&
-                  resultState !== "loading-results" &&
+                {resultState !== "loading-results" &&
                   resultState !== "filter-pagination-limit" && (
                     <View style={styles.toolbarActions}>
                       <SearchToolbarButton
@@ -807,13 +799,6 @@ export function SearchScreen() {
                 )}
 
               <View style={styles.resultsLayout}>
-                {isLarge &&
-                  (resultState === "results" ||
-                    resultState === "partial-results" ||
-                    resultState === "truncated-results" ||
-                    outcome === "filter-empty") && (
-                    <FilterSidebar {...filterProps} />
-                  )}
                 <View style={styles.resultsMain}>
                   {resultState === "loading-results" && (
                     <View style={styles.loadingState}>
@@ -932,7 +917,6 @@ export function SearchScreen() {
       <FilterSheet
         visible={
           filtersOpen &&
-          !isLarge &&
           resultState !== "loading-results" &&
           resultState !== "filter-pagination-limit"
         }
@@ -1086,7 +1070,6 @@ const styles = StyleSheet.create({
   toolbarButtonText: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
   resultsHeading: { marginTop: 4, marginBottom: 14, gap: 3 },
   resultsTitle: { fontSize: 22, lineHeight: 27, fontWeight: "800" },
-  resultsSubtitle: { fontSize: 13, lineHeight: 18, fontWeight: "500" },
   partialBanner: {
     minHeight: 48,
     borderRadius: 10,

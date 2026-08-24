@@ -1,9 +1,16 @@
 import type { ReactNode } from "react";
 import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { useWindowClass } from "../../hooks/useWindowClass";
-import { uiLayout } from "./designSystem";
+import { getWindowGutter, uiLayout } from "./designSystem";
 
-export type ContentBoundarySize = "content" | "detail" | "reading";
+export type ContentBoundarySize =
+  | "cinematic"
+  | "catalog"
+  | "utilityWide"
+  | "utilityNarrow"
+  | "content"
+  | "detail"
+  | "reading";
 
 type ContentBoundaryProps = {
   children: ReactNode;
@@ -16,9 +23,13 @@ type ContentBoundaryProps = {
 export function getContentBoundaryMaxWidth(
   size: ContentBoundarySize = "content",
 ) {
-  if (size === "reading") return uiLayout.readingMaxWidth;
+  if (size === "cinematic") return uiLayout.pageWidths.cinematic;
+  if (size === "catalog") return uiLayout.pageWidths.catalog;
+  if (size === "utilityWide") return uiLayout.pageWidths.utilityWide;
+  if (size === "utilityNarrow") return uiLayout.pageWidths.utilityNarrow;
+  if (size === "reading") return uiLayout.pageWidths.utilityNarrow;
   if (size === "detail") return uiLayout.detailMaxWidth;
-  return uiLayout.contentMaxWidth;
+  return uiLayout.pageWidths.catalog;
 }
 
 export function ContentBoundary({
@@ -29,12 +40,7 @@ export function ContentBoundary({
   style,
 }: ContentBoundaryProps) {
   const { windowClass } = useWindowClass();
-  const horizontalPadding =
-    windowClass === "compact"
-      ? uiLayout.compactGutter
-      : windowClass === "medium"
-        ? uiLayout.mediumGutter
-        : uiLayout.desktopGutter;
+  const horizontalPadding = getWindowGutter(windowClass);
 
   return (
     <View

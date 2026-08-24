@@ -14,10 +14,13 @@ interface PlayerOverlayProps {
   engineType: string;
   stats: StreamStats;
   onClose: () => void;
+  onOpenSettings?: () => void;
   onWebCast?: () => void;
   onTogglePiP?: () => void;
   isPiPSupported?: boolean;
   showInfoBar?: boolean;
+  focusColor?: string;
+  onControlFocusChange?: (focused: boolean) => void;
 }
 
 export function PlayerOverlay({
@@ -25,17 +28,33 @@ export function PlayerOverlay({
   engineType: _engineType,
   stats,
   onClose,
+  onOpenSettings,
   onWebCast,
   onTogglePiP,
   isPiPSupported = false,
   showInfoBar = true,
+  focusColor = playerChrome.focus,
+  onControlFocusChange,
 }: PlayerOverlayProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
 
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
+    <View
+      style={styles.overlay}
+      pointerEvents="box-none"
+      {...((Platform.OS === "web"
+        ? {
+            onFocusCapture: () => onControlFocusChange?.(true),
+            onBlurCapture: (event: any) => {
+              if (!event.currentTarget?.contains?.(event.relatedTarget)) {
+                onControlFocusChange?.(false);
+              }
+            },
+          }
+        : {}) as any)}
+    >
       {/* Top Bar */}
       <View
         testID="player-top-chrome"
@@ -57,9 +76,7 @@ export function PlayerOverlay({
               (reducedMotion
                 ? styles.hoveredButtonReducedMotion
                 : styles.hoveredButton),
-            Platform.OS === "web" &&
-              focused &&
-              getWebFocusStyle(playerChrome.focus),
+            Platform.OS === "web" && focused && getWebFocusStyle(focusColor),
           ]}
           onPress={onClose}
           accessibilityRole="button"
@@ -68,6 +85,31 @@ export function PlayerOverlay({
           <Ionicons name="close" size={24} color={playerChrome.text} />
         </Pressable>
         <View style={styles.topControls}>
+          {onOpenSettings ? (
+            <Pressable
+              testID="player-settings-button"
+              style={({ pressed, hovered, focused }: any) => [
+                styles.iconButton,
+                { opacity: pressed ? 0.76 : 1 },
+                hovered &&
+                  (reducedMotion
+                    ? styles.hoveredButtonReducedMotion
+                    : styles.hoveredButton),
+                Platform.OS === "web" &&
+                  focused &&
+                  getWebFocusStyle(focusColor),
+              ]}
+              onPress={onOpenSettings}
+              accessibilityRole="button"
+              accessibilityLabel="Playback settings"
+            >
+              <Ionicons
+                name="settings-outline"
+                size={20}
+                color={playerChrome.text}
+              />
+            </Pressable>
+          ) : null}
           {CastButton && Platform.OS !== "web" && (
             <CastButton
               style={{ width: 44, height: 44, tintColor: playerChrome.text }}
@@ -87,7 +129,7 @@ export function PlayerOverlay({
                   (reducedMotion
                     ? styles.hoveredButtonReducedMotion
                     : styles.hoveredButton),
-                focused && getWebFocusStyle(playerChrome.focus),
+                focused && getWebFocusStyle(focusColor),
               ]}
               onPress={onWebCast}
               accessibilityRole="button"
@@ -109,7 +151,7 @@ export function PlayerOverlay({
                     : styles.hoveredButton),
                 Platform.OS === "web" &&
                   focused &&
-                  getWebFocusStyle(playerChrome.focus),
+                  getWebFocusStyle(focusColor),
               ]}
               onPress={onTogglePiP}
               accessibilityRole="button"

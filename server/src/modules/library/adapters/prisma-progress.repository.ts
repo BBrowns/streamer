@@ -19,6 +19,7 @@ function toRecord(record: any): WatchProgressRecord {
     durationSource: record.durationSource as WatchProgressDurationSource,
     title: record.title,
     poster: record.poster,
+    background: record.background,
     lastWatched: record.lastWatched,
   };
 }
@@ -89,6 +90,7 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
     durationSource: WatchProgressDurationSource;
     title: string;
     poster?: string | null;
+    background?: string | null;
   }): Promise<WatchProgressRecord> {
     const record = await prisma.watchProgress.upsert({
       where: {
@@ -110,6 +112,7 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
         durationSource: data.durationSource,
         title: data.title,
         poster: data.poster ?? null,
+        background: data.background ?? null,
       },
       update: {
         currentTime: data.currentTime,
@@ -117,6 +120,9 @@ export class PrismaWatchProgressRepository implements IWatchProgressRepository {
         durationSource: data.durationSource,
         title: data.title,
         poster: data.poster ?? null,
+        ...(data.background !== undefined
+          ? { background: data.background }
+          : {}),
         lastWatched: new Date(),
       },
     });

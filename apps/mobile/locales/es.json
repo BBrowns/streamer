@@ -50,7 +50,8 @@
       "label": "Sugerencias de títulos",
       "loading": "Buscando sugerencias de títulos…",
       "noMatch": "Todavía no hay sugerencias de títulos.",
-      "showAll": "Mostrar todos los resultados de «{{query}}»"
+      "showAll": "Mostrar todos los resultados de «{{query}}»",
+      "viewAllCount": "Ver los {{count}} resultados"
     },
     "command": {
       "label": "Búsqueda rápida",
@@ -216,7 +217,7 @@
     },
     "empty": {
       "title": "Aún no hay elementos",
-      "description": "Explora la pestaña Descubrir y añade películas y series a tu biblioteca.",
+      "description": "Explora películas y series y añádelas a tu biblioteca.",
       "noMovies": "No se encontraron películas guardadas.",
       "noSeries": "No se encontraron series guardadas."
     },
@@ -832,6 +833,17 @@
     }
   },
   "detail": {
+    "backAccessibility": "Volver a la pantalla anterior",
+    "story": "Historia",
+    "mediaInformation": "Información multimedia",
+    "metadata": {
+      "director": "Dirección",
+      "cast": "Reparto",
+      "language": "Idioma",
+      "runtime": "Duración",
+      "quality": "Calidad",
+      "sources": "Fuentes"
+    },
     "play": "Reproducir",
     "download": "Descargar",
     "torrent": "Torrent",
@@ -871,6 +883,8 @@
     "sources": {
       "episodes": "Episodios",
       "more": "Más fuentes",
+      "playbackSource": "Fuente de reproducción",
+      "bestAvailable": "Mejor disponible · {{count}} fuentes",
       "show": "Mostrar más fuentes",
       "hide": "Ocultar más fuentes",
       "available": "{{count}} disponibles",
@@ -1102,6 +1116,11 @@
     "settings": {
       "title": "Ajustes de reproducción",
       "done": "Listo",
+      "playback": "Reproducción",
+      "audioTab": "Audio",
+      "quality": "Calidad",
+      "qualityNextPlayback": "Los cambios de calidad se aplican al siguiente plan de reproducción, no al stream activo.",
+      "backToSettings": "Volver a los ajustes de reproducción",
       "speed": "Velocidad de reproducción",
       "audio": "Pistas de audio",
       "audioDescription": "Audiodescripción",
@@ -1143,7 +1162,9 @@
       "fontMonospace": "Monoespaciada",
       "sync": "Sincronización de subtítulos",
       "resetSubtitleStyle": "Restablecer estilo de subtítulos",
-      "diagnostics": "Diagnósticos de reproducción"
+      "diagnostics": "Diagnósticos de reproducción",
+      "diagnosticsDescription": "Información técnica para solucionar problemas de esta sesión de reproducción.",
+      "noDiagnostics": "No hay información de diagnóstico disponible."
     },
     "remote": {
       "castingTo": "Transmitiendo a {{name}}",
@@ -1204,6 +1225,8 @@
       "openSourcesDevices": "Fuentes y dispositivos",
       "chooseSource": "Elegir otra fuente",
       "previewPlayer": "Vista previa del reproductor",
+      "moreOptions": "Más opciones",
+      "fewerOptions": "Menos opciones",
       "goBack": "Volver"
     },
     "cast": {
@@ -1281,6 +1304,7 @@
     "unreadCount_one": "{{count}} notificación sin leer",
     "unreadCount_other": "{{count}} notificaciones sin leer",
     "allCaughtUpDescription": "Estás al día.",
+    "viewAll": "Ver todo",
     "empty": "No hay notificaciones",
     "emptyTitle": "Estás al día",
     "emptyDescription": "Las descargas y actualizaciones de la cuenta aparecerán aquí.",
@@ -1343,7 +1367,13 @@
       }
     }
   },
-  "navigation": { "menu": "Menú", "back": "Atrás" },
+  "navigation": {
+    "menu": "Menú",
+    "back": "Atrás",
+    "profile": "Perfil",
+    "profileMenu": "Menú de perfil",
+    "personalProfile": "Perfil personal"
+  },
   "catalog": {
     "openMovieDetails": "Abrir detalles de la película",
     "openSeriesDetails": "Abrir detalles de la serie",

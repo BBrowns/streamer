@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   collectVisualBaselineManifest,
+  defaultLinuxBaselineDirectory,
   visualBaselineFileNames,
 } from "./visual-baseline-manifest.mjs";
 
@@ -35,6 +36,14 @@ test("requires the exact non-empty visual baseline set and records provenance", 
     assert.equal(manifest.files.length, 44);
     assert.equal(manifest.files[0].sha256.length, 64);
   });
+});
+
+test("accepts the current versioned Linux visual baseline set", () => {
+  const manifest = collectVisualBaselineManifest(defaultLinuxBaselineDirectory, {
+    platform: "linux",
+  });
+
+  assert.equal(manifest.files.length, visualBaselineFileNames.length);
 });
 
 test("rejects an incomplete or unexpected visual baseline set", () => {

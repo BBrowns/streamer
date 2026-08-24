@@ -43,6 +43,7 @@ export interface IWatchProgressRepository {
     durationSource: WatchProgressDurationSource;
     title: string;
     poster?: string | null;
+    background?: string | null;
   }): Promise<WatchProgressRecord>;
   delete(userId: string, itemId: string): Promise<void>;
   deleteById(userId: string, historyId: string): Promise<boolean>;
@@ -73,5 +74,6 @@ export interface WatchProgressRecord {
   durationSource: WatchProgressDurationSource;
   title: string;
   poster: string | null;
+  background: string | null;
   lastWatched: Date;
 }

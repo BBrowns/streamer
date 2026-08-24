@@ -1,6 +1,5 @@
 import React, { useCallback, useRef } from "react";
 import {
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,10 +10,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import type { SearchSort } from "../../services/searchState";
 import { getWebAriaChecked, getWebFocusStyle } from "../ui/designSystem";
+import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 
 export interface SearchFilterOption<T extends string = string> {
   label: string;
@@ -302,63 +301,49 @@ export function FilterSheet({
 }: SearchFilterControlsProps & { visible: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
   const { isKeyboardFocused: isCloseFocused, webPressableProps: closeProps } =
     useWebPressableActivation(onClose);
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      transparent
-      animationType={reducedMotion ? "none" : "slide"}
-      onRequestClose={onClose}
-      statusBarTranslucent
+      onClose={onClose}
+      accessibilityLabel={t("search.filters.title")}
+      testID="search-filter-overlay"
+      size="form"
+      placement="center"
+      contentStyle={styles.sheet}
     >
-      <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
-        <Pressable
-          testID="search-filter-scrim"
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-          accessible={false}
-          focusable={false}
-          tabIndex={Platform.OS === "web" ? -1 : undefined}
-        />
-        <View
-          testID="search-filter-panel"
-          style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}
-          accessibilityViewIsModal
-          accessibilityLabel={t("search.filters.title")}
-        >
-          <View style={styles.sheetHeader}>
-            <View>
-              <Text style={[styles.title, { color: colors.text }]}>
-                {t("search.filters.title")}
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {t("search.filters.subtitle")}
-              </Text>
-            </View>
-            <Pressable
-              {...closeProps}
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel={t("search.filters.close")}
-              style={({ pressed }: any) => [
-                styles.close,
-                pressed && { opacity: 0.7 },
-                Platform.OS === "web" &&
-                  isCloseFocused &&
-                  getWebFocusStyle(colors.focus),
-              ]}
-            >
-              <Ionicons name="close" size={22} color={colors.text} />
-            </Pressable>
+      <View testID="search-filter-panel">
+        <View style={styles.sheetHeader}>
+          <View>
+            <Text style={[styles.title, { color: colors.text }]}>
+              {t("search.filters.title")}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              {t("search.filters.subtitle")}
+            </Text>
           </View>
-          <ScrollView contentContainerStyle={styles.sheetScroll}>
-            <SearchFilterControls {...props} />
-          </ScrollView>
+          <Pressable
+            {...closeProps}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("search.filters.close")}
+            style={({ pressed }: any) => [
+              styles.close,
+              pressed && { opacity: 0.7 },
+              Platform.OS === "web" &&
+                isCloseFocused &&
+                getWebFocusStyle(colors.focus),
+            ]}
+          >
+            <Ionicons name="close" size={22} color={colors.text} />
+          </Pressable>
         </View>
+        <ScrollView contentContainerStyle={styles.sheetScroll}>
+          <SearchFilterControls {...props} />
+        </ScrollView>
       </View>
-    </Modal>
+    </AdaptiveOverlay>
   );
 }
 
@@ -403,11 +388,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   resetLabel: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
-  scrim: { flex: 1, justifyContent: "flex-end" },
   sheet: {
-    maxHeight: "84%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    width: "100%",
+    maxHeight: "82%",
     paddingTop: 20,
   },
   sheetHeader: {

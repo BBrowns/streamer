@@ -27,6 +27,17 @@ jest.mock("../../../hooks/useWebPressableActivation", () => ({
     webPressableProps: {},
   }),
 }));
+jest.mock("../../ui/AdaptiveOverlay", () => ({
+  AdaptiveOverlay: ({ visible, children, testID, onClose }: any) => {
+    const { Pressable, View } = require("react-native");
+    return visible ? (
+      <View testID={testID}>
+        {children}
+        <Pressable testID={`${testID}-close`} onPress={onClose} />
+      </View>
+    ) : null;
+  },
+}));
 
 describe("Search filters accessibility", () => {
   it("exposes radio choices through checked state", async () => {
@@ -103,7 +114,7 @@ describe("Search filters accessibility", () => {
     expect(onLanguageChange).toHaveBeenCalledWith("en");
   });
 
-  it("keeps the filter panel separate from its dismissible scrim", async () => {
+  it("uses the shared adaptive overlay without dismissing from filter choices", async () => {
     const onClose = jest.fn();
     const screen = await render(
       <FilterSheet
@@ -131,11 +142,7 @@ describe("Search filters accessibility", () => {
       screen.getByRole("radio", { name: "search.sort.default" }),
     );
     expect(onClose).not.toHaveBeenCalled();
-    await fireEvent.press(
-      screen.getByTestId("search-filter-scrim", {
-        includeHiddenElements: true,
-      }),
-    );
+    await fireEvent.press(screen.getByTestId("search-filter-overlay-close"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

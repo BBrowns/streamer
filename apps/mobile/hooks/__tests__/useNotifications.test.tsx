@@ -30,8 +30,8 @@ const notifications = [
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false, gcTime: Infinity },
     },
   });
   const wrapper = ({ children }: PropsWithChildren) => (

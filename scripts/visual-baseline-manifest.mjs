@@ -48,7 +48,7 @@ export const visualBaselineFileNames = Object.freeze([
   "player-dark-desktop-renderer.png",
   "player-dark-phone-web.png",
   "player-hover-preview-dark-desktop-renderer.png",
-  "player-inspect-sheet-dark-desktop-renderer.png",
+  "player-settings-popover-dark-desktop-renderer.png",
   "player-progressive-nonseekable-dark-desktop-renderer.png",
   "player-scrubbing-preview-dark-phone-web.png",
   "player-subtitle-sheet-dark-phone-web.png",

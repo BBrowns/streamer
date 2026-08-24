@@ -139,6 +139,7 @@ model WatchProgress {
   durationSource String    @default("legacy") @map("duration_source")
   title       String
   poster      String?
+  background  String?
   lastWatched DateTime    @default(now()) @map("last_watched")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

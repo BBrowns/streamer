@@ -97,6 +97,7 @@ describe("PlaybackOrchestrator", () => {
       id: "tt123",
       title: "Example Movie",
       poster: "https://images.example.test/poster.jpg",
+      background: "https://images.example.test/backdrop.jpg",
     });
 
     expect(createPlan).toHaveBeenCalledWith({
@@ -117,6 +118,7 @@ describe("PlaybackOrchestrator", () => {
         itemId: "tt123",
         title: "Example Movie",
         poster: "https://images.example.test/poster.jpg",
+        background: "https://images.example.test/backdrop.jpg",
       },
       runtimeState: "selecting_source",
       attemptedStreams: 0,

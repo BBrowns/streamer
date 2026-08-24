@@ -2,9 +2,39 @@ import { describe, expect, it } from "vitest";
 import {
   catalogResponseSchema,
   metaDetailSchema,
+  metaPreviewSchema,
 } from "../schemas/meta.schema";
 
 describe("Stremio metadata schemas", () => {
+  it("keeps legacy previews valid when no landscape background is available", () => {
+    const result = metaPreviewSchema.parse({
+      id: "tt0133093",
+      type: "movie",
+      name: "The Matrix",
+      poster: "https://images.example.test/matrix-poster.jpg",
+    });
+
+    expect(result).toMatchObject({
+      id: "tt0133093",
+      poster: "https://images.example.test/matrix-poster.jpg",
+    });
+    expect(result.background).toBeUndefined();
+  });
+
+  it("preserves a provider landscape background in catalog previews", () => {
+    const result = metaPreviewSchema.parse({
+      id: "tt0133093",
+      type: "movie",
+      name: "The Matrix",
+      poster: "https://images.example.test/matrix-poster.jpg",
+      background: "https://images.example.test/matrix-backdrop.jpg",
+    });
+
+    expect(result.background).toBe(
+      "https://images.example.test/matrix-backdrop.jpg",
+    );
+  });
+
   it("normalizes nullable metadata and drops one malformed catalog entry", () => {
     const result = catalogResponseSchema.parse({
       metas: [
@@ -40,6 +70,7 @@ describe("Stremio metadata schemas", () => {
         imdbRating: undefined,
         aliases: undefined,
         alternativeTitles: undefined,
+        background: undefined,
         genres: undefined,
         originalLanguage: undefined,
       },

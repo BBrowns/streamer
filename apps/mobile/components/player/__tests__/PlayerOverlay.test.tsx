@@ -52,22 +52,26 @@ describe("PlayerOverlay", () => {
     );
   });
 
-  it("uses a compact close control without duplicating playback settings", async () => {
+  it("anchors playback settings in the top-right utility chrome", async () => {
     const onClose = jest.fn();
+    const onOpenSettings = jest.fn();
     const screen = await render(
       <PlayerOverlay
         currentStream={{ title: "Example stream" } as any}
         engineType="hls"
         stats={{ peers: 0, speed: 0, progress: 0 } as any}
         onClose={onClose}
+        onOpenSettings={onOpenSettings}
         showInfoBar={false}
       />,
     );
 
     await fireEvent.press(screen.getByTestId("player-close-button"));
+    await fireEvent.press(screen.getByTestId("player-settings-button"));
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByLabelText("Playback settings")).toBeNull();
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Playback settings")).toBeTruthy();
   });
 
   it("keeps top chrome cinema-dark when app theme values would be light", async () => {

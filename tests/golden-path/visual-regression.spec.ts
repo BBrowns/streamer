@@ -35,7 +35,7 @@ function snapshotNames(scheme: "dark" | "light", projectName: string) {
     names.push(
       "player-dark-desktop-renderer.png",
       "player-hover-preview-dark-desktop-renderer.png",
-      "player-inspect-sheet-dark-desktop-renderer.png",
+      "player-settings-popover-dark-desktop-renderer.png",
       "player-progressive-nonseekable-dark-desktop-renderer.png",
     );
   }
@@ -312,10 +312,9 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     },
   );
 
-  await page
-    .getByRole("button", { name: "Audio, subtitles, and source" })
-    .click();
+  await page.getByRole("button", { name: "Playback settings" }).click();
   await expect(page.getByTestId("player-settings-sheet")).toBeVisible();
+  await page.getByRole("tab", { name: "Subtitles" }).click();
   await expect(
     page.getByRole("button", { name: "Reset subtitle style" }),
   ).toBeVisible();
@@ -323,7 +322,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   await expect(page).toHaveScreenshot(
     testInfo.project.name === "phone-web"
       ? "player-subtitle-sheet-dark-phone-web.png"
-      : "player-inspect-sheet-dark-desktop-renderer.png",
+      : "player-settings-popover-dark-desktop-renderer.png",
     deterministicScreenshotOptions,
   );
 });

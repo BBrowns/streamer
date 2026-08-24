@@ -30,16 +30,24 @@ jest.mock("../../../hooks/useTheme", () => ({
   }),
 }));
 
+jest.mock("../../../contexts/CinematicThemeContext", () => ({
+  useCinematicTheme: () => ({ theme: { focus: "#C89B6D" } }),
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: { count?: number }) => {
       const labels: Record<string, string> = {
         "detail.sources.more": "More Sources",
+        "detail.sources.playbackSource": "Playback source",
         "detail.sources.show": "Show more sources",
         "detail.sources.hide": "Hide more sources",
       };
       if (key === "detail.sources.available") {
         return `${options?.count ?? 0} available`;
+      }
+      if (key === "detail.sources.bestAvailable") {
+        return `Best available · ${options?.count ?? 0} sources`;
       }
       return labels[key] ?? key;
     },
@@ -61,16 +69,23 @@ jest.mock("../TechnicalSourceDisclosure", () => ({
   },
 }));
 
+jest.mock("../../ui/AdaptiveOverlay", () => ({
+  AdaptiveOverlay: ({ visible, children }: any) => (visible ? children : null),
+}));
+
 describe("MoreSourcesPanel", () => {
   it("plans lazily, then shows the eligible source count once", async () => {
     const screen = await render(
       <MoreSourcesPanel
         contentId="tt123"
         title="Example"
+        sourceCount={77}
         onSelect={jest.fn()}
       />,
     );
 
+    expect(screen.getByText("Playback source")).toBeTruthy();
+    expect(screen.getByText("Best available · 77 sources")).toBeTruthy();
     expect(screen.queryByText("3 available")).toBeNull();
     expect(mockUseSourceChoicePlan).not.toHaveBeenCalled();
     expect(screen.queryByText("Consumer source choices")).toBeNull();

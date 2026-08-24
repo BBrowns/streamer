@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     width: "100%",
-    maxWidth: uiLayout.detailMaxWidth,
+    maxWidth: uiLayout.pageWidths.utilityWide,
     alignSelf: "center",
     paddingHorizontal: 18,
     paddingTop: 22,

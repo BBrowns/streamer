@@ -6,7 +6,14 @@ import React, {
   useMemo,
   useReducer,
 } from "react";
-import { AppState, View, Text, Pressable, Platform } from "react-native";
+import {
+  AccessibilityInfo,
+  AppState,
+  View,
+  Text,
+  Pressable,
+  Platform,
+} from "react-native";
 import { useRouter } from "expo-router";
 import {
   VideoView,
@@ -92,6 +99,15 @@ import {
 import { addMobileBreadcrumb } from "../services/sentryBreadcrumbs";
 import { getActivePlaybackSegment } from "../services/playback/PlaybackSegmentsProvider";
 import { createPlayerScreenStyles } from "../components/player/playerScreenStyles";
+import { useWindowClass } from "../hooks/useWindowClass";
+import {
+  useCinematicTheme,
+  useCinematicThemeSource,
+} from "../contexts/CinematicThemeContext";
+import {
+  getPlayerChromeAutoHideDelay,
+  shouldAutoHidePlayerChrome,
+} from "../components/player/playerChromePolicy";
 
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
@@ -119,9 +135,11 @@ export default function PlayerScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const { isCompact } = useWindowClass();
 
   const currentStream = usePlayerStore((s) => s.currentStream);
   const mediaInfo = usePlayerStore((s) => s.mediaInfo);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
   const streamState = usePlayerStore((s) => s.streamState);
   const streamMetrics = usePlayerStore((s) => s.streamMetrics);
@@ -135,6 +153,7 @@ export default function PlayerScreen() {
   const playbackLaunchIntent = usePlayerStore((s) => s.playbackLaunchIntent);
   const clearPlayer = usePlayerStore((s) => s.clearPlayer);
   const playbackRate = usePlayerStore((s) => s.playbackRate);
+  const preferredQualities = usePlayerStore((s) => s.preferredQualities);
   const acceptedCurrentTime = usePlayerStore((s) => s.currentTime);
   const preferredAudioLang = usePlayerStore((s) => s.preferredAudioLang);
   const preferredSubtitleLang = usePlayerStore((s) => s.preferredSubtitleLang);
@@ -153,6 +172,7 @@ export default function PlayerScreen() {
     (s) => s.subtitleSyncOffsetSeconds,
   );
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
+  const setPreferredQualities = usePlayerStore((s) => s.setPreferredQualities);
   const setSubtitleMode = usePlayerStore((s) => s.setSubtitleMode);
   const setSubtitleAccessibility = usePlayerStore(
     (s) => s.setSubtitleAccessibility,
@@ -181,6 +201,16 @@ export default function PlayerScreen() {
     (s) => s.setPlaybackPlanningFailure,
   );
   const advanceToNextFallback = usePlayerStore((s) => s.advanceToNextFallback);
+  useCinematicThemeSource(
+    mediaInfo
+      ? {
+          contentKey: `${mediaInfo.type}:${mediaInfo.itemId}`,
+          backgroundUri: mediaInfo.background,
+          posterUri: mediaInfo.poster,
+        }
+      : null,
+  );
+  const { theme: cinematicTheme } = useCinematicTheme();
   const activeSession = usePlaybackSessionStore((s) =>
     playbackSessionId ? s.sessions[playbackSessionId] || null : null,
   );
@@ -226,6 +256,8 @@ export default function PlayerScreen() {
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [controlsFocused, setControlsFocused] = useState(false);
+  const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const [previewControls, setPreviewControls] = useState(false);
   const [fallbackStatusMessage, setFallbackStatusMessage] = useState<
     string | null
@@ -240,6 +272,14 @@ export default function PlayerScreen() {
     initialPlaybackRuntimeViewState,
   );
   const visibleFallbackReason = fallbackReason || fallbackStatusMessage;
+  const controlsAutoHideAllowed = shouldAutoHidePlayerChrome({
+    isPlaying,
+    isScrubbing: runtimeViewState.kind === "scrubbing",
+    settingsOpen,
+    hasControlFocus: controlsFocused,
+    screenReaderEnabled,
+  });
+  const controlsAutoHideDelay = getPlayerChromeAutoHideDelay(isCompact);
 
   const [seekFeedback, setSeekFeedback] = useState<"left" | "right" | null>(
     null,
@@ -249,6 +289,8 @@ export default function PlayerScreen() {
   );
   const seekFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controlsAutoHideAllowedRef = useRef(controlsAutoHideAllowed);
+  controlsAutoHideAllowedRef.current = controlsAutoHideAllowed;
   const videoViewRef = useRef<any>(null);
   const appliedTrackPreferencesRef = useRef<string | null>(null);
   const activeCastRef = useRef(activeCast);
@@ -446,13 +488,43 @@ export default function PlayerScreen() {
     lastPlaybackProgressAtRef.current = now;
   }, []);
 
-  const showControls = useCallback(() => {
-    setControlsVisible(true);
+  const scheduleControlsHide = useCallback(() => {
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    if (!controlsAutoHideAllowedRef.current) return;
     controlsTimerRef.current = setTimeout(
       () => setControlsVisible(false),
-      4000,
+      controlsAutoHideDelay,
     );
+  }, [controlsAutoHideDelay]);
+
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    scheduleControlsHide();
+  }, [scheduleControlsHide]);
+
+  useEffect(() => {
+    if (!controlsAutoHideAllowed) {
+      if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+      setControlsVisible(true);
+      return;
+    }
+    if (controlsVisible) scheduleControlsHide();
+  }, [controlsAutoHideAllowed, controlsVisible, scheduleControlsHide]);
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+      if (mounted) setScreenReaderEnabled(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener(
+      "screenReaderChanged",
+      setScreenReaderEnabled,
+    );
+    return () => {
+      mounted = false;
+      subscription.remove();
+      if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    };
   }, []);
 
   const toggleControls = useCallback(() => {
@@ -554,6 +626,7 @@ export default function PlayerScreen() {
         id: mediaInfo.itemId,
         title: mediaInfo.title,
         poster: mediaInfo.poster,
+        background: mediaInfo.background,
         season: mediaInfo.season,
         episode: mediaInfo.episode,
       });
@@ -573,6 +646,7 @@ export default function PlayerScreen() {
           id: mediaInfo.itemId,
           title: mediaInfo.title,
           poster: mediaInfo.poster,
+          background: mediaInfo.background,
           season: mediaInfo.season,
           episode: mediaInfo.episode,
         },
@@ -1760,10 +1834,16 @@ export default function PlayerScreen() {
               engineType={engine?.getEngineType() ?? "Unknown"}
               stats={stats}
               onClose={handleClose}
+              onOpenSettings={() => {
+                setShowNextEpisodeOverlay(false);
+                setSettingsOpen(true);
+              }}
               onWebCast={openCastModal}
               onTogglePiP={handleTogglePiP}
               isPiPSupported={isPiPSupported}
               showInfoBar={false}
+              focusColor={cinematicTheme.focus}
+              onControlFocusChange={setControlsFocused}
             />
           )}
 
@@ -1776,12 +1856,13 @@ export default function PlayerScreen() {
               (controlsVisible || runtimeViewState.kind === "scrubbing") &&
               !activeCast
             }
-            isPlaying={player?.playing ?? false}
+            isPlaying={isPlaying}
             capabilities={
               previewControls
                 ? { ...playerCapabilities, canRetry: false, canCast: false }
                 : playerCapabilities
             }
+            title={mediaInfo?.title}
             sourceLabel={sourceLabel}
             castStatus={castStatus}
             downloadStatus={downloadStatus}
@@ -1816,13 +1897,12 @@ export default function PlayerScreen() {
             onToggleMute={handleToggleMute}
             onVolumeChange={handleVolumeChange}
             onToggleFullscreen={handleToggleFullscreen}
-            onOpenSettings={() => {
-              setShowNextEpisodeOverlay(false);
-              setSettingsOpen(true);
-            }}
             onOpenCast={openCastModal}
             onRetry={handleRetryPlayback}
             onSkipSegment={handleSeekTo}
+            accent={cinematicTheme.accent}
+            focusColor={cinematicTheme.focus}
+            onControlFocusChange={setControlsFocused}
             onPlayPause={() => {
               if (previewControls) return;
               if (player?.playing) player.pause();
@@ -1880,6 +1960,8 @@ export default function PlayerScreen() {
             }}
             playbackRate={playbackRate}
             onSelectPlaybackRate={setPlaybackRate}
+            preferredQualities={preferredQualities}
+            onSelectPreferredQualities={setPreferredQualities}
             subtitleMode={subtitleMode}
             onSelectSubtitleMode={(mode) => {
               appliedTrackPreferencesRef.current = null;
@@ -1907,6 +1989,8 @@ export default function PlayerScreen() {
             onSelectSubtitleSyncOffset={setSubtitleSyncOffsetSeconds}
             onResetSubtitleStyle={resetSubtitleStyle}
             diagnostics={playbackDiagnostics}
+            accent={cinematicTheme.accent}
+            focusColor={cinematicTheme.focus}
           />
         )}
 
@@ -1921,6 +2005,7 @@ export default function PlayerScreen() {
                     id: mediaInfo.itemId,
                     title: mediaInfo.title,
                     poster: mediaInfo.poster,
+                    background: mediaInfo.background,
                     season: mediaInfo.season,
                     episode: mediaInfo.episode,
                   }

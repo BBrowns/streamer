@@ -9,37 +9,44 @@
 
 ## 1. Design Philosophy
 
-The active product direction is **Obsidian Editorial**: dark cinematic first,
-with a fully supported warm-neutral light mode. Artwork and typography provide
-the visual energy; the application chrome stays quiet and predictable.
+The active product direction is **Living Cinema**: artwork-first, full-bleed
+media presentation with quiet utility chrome and a fully supported warm-neutral
+light mode. Artwork and whitespace structure the screen; colour is derived
+subtly from the current title instead of painted over every control.
 
-- **Obsidian canvas:** near-black neutral backgrounds, restrained cobalt for
-  selection/focus/status, and no decorative violet glow.
-- **Editorial hierarchy:** Inter Variable on web/Electron and bundled Inter
-  weights on Expo native, generous content rhythm, strong artwork crops, and
-  neutral high-contrast Play or Resume actions.
-- **Purposeful containment:** most content sits directly on the canvas. Borders,
-  elevated surfaces, pills, and coloured icon tiles are reserved for states that
-  genuinely need containment or emphasis.
-- **Functional light mode:** warm neutral backgrounds preserve the same hierarchy,
-  contrast, focus treatment, and media emphasis.
+- **Living canvas:** dark `#08090B` or warm-neutral light canvas, with neutral
+  Play/Resume actions and semantic accent only for focus, progress, selection,
+  and temporary ambience.
+- **Cinematic hierarchy:** platform system typography for interface roles and
+  Instrument Serif only for large Home and Detail titles. Do not use the serif
+  for settings, controls, metadata, or dense lists.
+- **Artwork is content:** Home and Detail use sharp landscape backdrops without
+  decorative blur or rounded hero cards. When no backdrop exists, render the
+  2:3 poster contained on an ambient canvas; never crop a portrait poster to
+  simulate landscape artwork.
+- **Purposeful containment:** most media sits directly on the canvas. Borders,
+  elevated surfaces, pills, and coloured icon tiles are reserved for state or
+  a genuine floating/contained interaction.
+- **Functional light mode:** dynamic ambience is clamped to 6% in light mode
+  and never changes normal theme text colours or contrast ownership.
 - **Consumer-streaming UX:** users should not have to understand torrents,
   codecs, peers, bridge URLs, or add-on internals to press Play.
 
 The long-term references are closer to Apple TV/Vision Pro-style media surfaces, StreamX-like Apple platform structure, Infuse, Plex, Netflix, Disney+, and Prime Video than to a technical source browser.
 
-Merged PR #152 contains the adaptive UX foundation and its stacked Obsidian
-screen pass: responsive shell, Home-owned discovery, playback recovery,
-accessibility contracts, and the visual/information architecture. Merged PR
-#154 adds the broader correctness pass; the current Search follow-up preserves
-the session-driven playback architecture.
+Living Cinema builds on the adaptive foundation from PR #152 and the
+correctness work from PR #154. It changes presentation and additive artwork
+metadata only; routing, provider semantics, source selection, downloads,
+casting, and the session-driven playback architecture keep their existing
+owners.
 
 Current UI phase (correctness and polish):
 
 - Keep the existing Expo/React Native stack.
 - Use the shared semantic palette and `useWindowClass()` for all new core UI.
-- Compact navigation exposes Home, Search, Library, and Downloads; medium,
-  expanded, and large windows adapt to a rail/sidebar.
+- Compact navigation exposes Home, Search, Library, and Downloads in bottom
+  tabs. Medium, expanded, and large windows use the shared horizontal topbar
+  with Home, Library, and Downloads; Search is an action and keyboard overlay.
 - Home uses one canonical `type:id` identity for hero and primary rails, with
   Continue Watching excluded from repeated recommendations. Provider rails
   also exclude content already claimed by those primary surfaces. Its existing
@@ -54,9 +61,11 @@ Current UI phase (correctness and polish):
   parameters. Search responses include provider provenance and partial
   provider-failure metadata.
 - Settings uses a compact category overview and `/settings/[section]` detail
-  routes. A true list-detail layout appears only in the large window class.
-- Home, Detail, Library, Downloads, auth/onboarding, player sheets, Search, and
-  Settings share the Obsidian palette, typography, radii, and layout contracts.
+  routes. Medium and expanded render a one-column dashboard; large renders a
+  two-column dashboard without a second settings navigation rail.
+- Home and Detail own cinematic ambience. Player only borrows its accent for
+  progress/focus/selected state. Search, Settings, Library, Downloads, auth,
+  and operational surfaces remain neutral.
 - Keep the Expo/React Native stack; do not start a parallel UI-framework migration.
 - Preserve the session-driven playback architecture and progressive disclosure
   of source/device complexity.
@@ -84,7 +93,7 @@ Tamagui is not currently a committed full-app migration. If introduced, treat
 it as a pilot for constrained primitives such as buttons, surfaces, sheets,
 status pills, and settings panels before replacing large screens.
 
-Core Obsidian primitives:
+Core Living Cinema primitives:
 
 - `AppButton`
 - `AppSwitch`
@@ -109,6 +118,14 @@ Core Obsidian primitives:
 - `EmptyState`
 - `ErrorState`
 - `ActionSheet`
+- `CinematicTopBar`
+- `AmbientHero`
+- `DynamicScrim`
+- `MediaCard`
+- `ContinueWatchingCard`
+- `FloatingSurface`
+- `AdaptiveOverlay`
+- `SectionHeader`
 
 Shared primitives in production code:
 
@@ -148,8 +165,8 @@ primary for movies, keep series playback on episode rows, and keep Download,
 **Cast to device**, **Watch trailer** (when safely declared by a provider), and
 **Add to Library** as secondary actions.
 
-The downloads queue now uses `AppButton`, `Surface`, `StatusPill`, and
-`SelectionActionBar` for queue cards, deferred bulk deletion, summary metrics,
+The downloads queue now uses `AppButton`, `StatusPill`, and
+`SelectionActionBar` for compact landscape rows, deferred bulk deletion, summary metrics,
 and verified-offline status. Smart Downloads preferences live only in Settings;
 Downloads shows one compact status row and its read-only planned queue. Each
 intent carries its requested quality, and Wi-Fi/storage policy blocks are
@@ -163,7 +180,8 @@ and lower styling drift, not a full visual migration.
 Do not do:
 
 - Do not reintroduce neon styling, dense glassmorphism, or a light-only identity.
-- Do not use cobalt, pills, borders, or elevation as decoration on every element.
+- Do not use a fixed brand accent, pills, borders, or elevation as decoration
+  on every element.
 - Do not expose raw source complexity as the primary detail-screen flow.
 - Do not add a marketing landing page instead of improving the actual app
   screens.
@@ -177,21 +195,23 @@ Do not do:
 
 The entire colour system is defined in a single `PALETTE` object with two variants:
 
-| Token                 | Dark                     | Light                    | Usage                              |
-| --------------------- | ------------------------ | ------------------------ | ---------------------------------- |
-| `background`          | `#08090c`                | `#f3f2ef`                | App canvas                         |
-| `card`                | `#111318`                | `#ffffff`                | Base surfaces                      |
-| `surfaceElevated`     | `#181b21`                | `#e9e8e4`                | Sheets and elevated controls       |
-| `surfaceOverlay`      | `rgba(17,19,24,0.96)`    | `rgba(255,255,255,0.97)` | Readable overlays                  |
-| `text`                | `#f4f5f7`                | `#101216`                | Primary text                       |
-| `textSecondary`       | `#9da3ae`                | `#656b75`                | Labels and supporting copy         |
-| `tint`                | `#6c79f5`                | `#4f5fd1`                | Selection, focus, and active state |
-| `onTint`              | `#08090c`                | `#ffffff`                | Content on accent surfaces         |
-| `primary`             | `#f4f5f7`                | `#101216`                | Neutral primary actions            |
-| `onPrimary`           | `#08090c`                | `#ffffff`                | Content on primary actions         |
-| `focus`               | `#8792ff`                | `#4f5fd1`                | Visible keyboard focus             |
-| `border`              | `rgba(244,245,247,0.09)` | `rgba(16,18,22,0.09)`    | Dividers and boundaries            |
-| `opaqueGlassFallback` | `#111318`                | `#ffffff`                | Reduced-transparency fallback      |
+| Token                 | Dark                     | Light                    | Usage                           |
+| --------------------- | ------------------------ | ------------------------ | ------------------------------- |
+| `background`          | `#08090B`                | `#F3F2EF`                | App canvas                      |
+| `surfaceSubtle`       | `#0D0F12`                | `#F8F7F4`                | Quiet raised region             |
+| `card`                | `#111318`                | `#FFFFFF`                | Contained surfaces              |
+| `surfaceElevated`     | `#181B21`                | `#E9E8E4`                | Sheets and elevated controls    |
+| `surfaceOverlay`      | `rgba(17,19,24,0.96)`    | `rgba(255,255,255,0.97)` | Readable overlays               |
+| `text`                | `#F4F2EE`                | `#101216`                | Primary text                    |
+| `textSecondary`       | `#B8B5B0`                | `#656B75`                | Labels and supporting copy      |
+| `textTertiary`        | `#85848A`                | `#85868B`                | Tertiary metadata               |
+| `tint`                | `#C89B6D`                | `#8A5A35`                | Warm fallback selection/accent  |
+| `onTint`              | `#08090B`                | `#FFFFFF`                | Content on accent surfaces      |
+| `primary`             | `#F4F2EE`                | `#101216`                | Neutral primary actions         |
+| `onPrimary`           | `#08090B`                | `#FFFFFF`                | Content on primary actions      |
+| `focus`               | `#D6AA7C`                | `#7A4C2E`                | Visible keyboard focus fallback |
+| `border`              | `rgba(244,245,247,0.09)` | `rgba(16,18,22,0.09)`    | Dividers and boundaries         |
+| `opaqueGlassFallback` | `#111318`                | `#FFFFFF`                | Reduced-transparency fallback   |
 
 Status, scrim, disabled, and overlay tokens are also semantic. New components
 must consume tokens instead of inferring foreground contrast from `isDark`.
@@ -212,6 +232,32 @@ Primary controls use `colors.onTint` through `getAccentForeground(colors)`.
 Do not derive primary-button text from dark/light mode; contrast belongs to the
 palette contract.
 
+### 2.4 Cinematic Theme Ownership
+
+`CinematicThemeProvider` layers optional artwork-derived ambience beside the
+normal `ThemeColors`; it never replaces the application theme. The source order
+is backdrop, poster, then the warm Streamer fallback. Extraction runs
+asynchronously behind `CinematicPaletteExtractor`, so the first render is
+always immediate and a failed/CORS-blocked image is never an error state.
+
+`CinematicThemeRepository` coalesces concurrent requests and keeps at most 128
+versioned entries in memory and AsyncStorage. Keys contain content identity and
+a URI hash, never the raw artwork URL. Extraction failures are cached for 24
+hours to prevent retry loops. The provider dispatches
+`cinematic-theme-ready` after fallback or extraction resolves so deterministic
+visual fixtures can wait without coupling to implementation timing.
+
+Home follows the active hero and lets ambience fade with scroll; Detail fixes
+the selected item's theme. Theme sources register only while their route is
+focused, so retained Expo Router tabs cannot leak Home or Detail ambience into
+neutral Library, Search, Settings, or Downloads presentations. Dynamic artwork colour is a persisted Appearance
+preference and defaults on. Text always uses `ThemeColors`; derived colour is
+limited to ambient, glow, progress, focus, and selected state. While a new
+artwork palette resolves, the provider retains the previous media palette
+instead of flashing through the fallback. Colour-bearing hero layers use the
+shared motion timing for a soft crossfade; Reduce Motion removes spatial
+movement without making extraction a rendering dependency.
+
 ---
 
 ## 3. Cross-Platform Layout Strategy
@@ -221,24 +267,43 @@ windows from one codebase. Layout decisions use window size, not device labels.
 
 ### 3.1 Navigation Shell
 
-| Window class | Width      | Navigation                     |
-| ------------ | ---------- | ------------------------------ |
-| `compact`    | `< 600`    | Four-item bottom tab bar       |
-| `medium`     | `600–839`  | 72-point icon rail             |
-| `expanded`   | `840–1199` | 88-point labelled/compact rail |
-| `large`      | `≥ 1200`   | 216-point persistent sidebar   |
+| Window class | Width      | Navigation                               |
+| ------------ | ---------- | ---------------------------------------- |
+| `compact`    | `< 600`    | Four-item bottom tab bar                 |
+| `medium`     | `600–839`  | 68–72 px horizontal topbar               |
+| `expanded`   | `840–1199` | Topbar with Streamer name                |
+| `large`      | `≥ 1200`   | Topbar plus visible Search shortcut hint |
 
 `useWindowClass()` is the shared classification contract. `DesktopLayout` and
-the tabs use the same result, keeping bottom navigation and rail/sidebar
+the tabs use the same result, keeping bottom navigation and the desktop topbar
 mutually exclusive during resizing, split screen, and foldable transitions.
 
-The sidebar includes:
+`CinematicTopBar` contains Streamer at the left, Home/Library/Downloads in the
+middle, and Search/Notifications/Profile at the right. Search opens the same
+controller from its icon, `Command/Ctrl+K`, or `/` when no editable element is
+active. Home and Detail start with an overlay topbar and gain a readable
+translucent surface plus a subtle divider while scrolling. `DesktopLayout`
+owns that scroll signal and keeps the topbar outside the route scroll viewport,
+so content can pass underneath without covering navigation. Medium density
+compresses the fixed brand/action zones; Mobile Detail's floating back action
+sits below the global topbar at that class. Utility routes
+start opaque. Player, auth, and
+onboarding remain immersive. Electron uses real macOS hidden-inset traffic
+lights and an explicit drag/no-drag region; browser never imitates window
+controls and Windows/Linux retain the system frame.
 
-- App logo mark (coloured square with a play icon + wordmark)
-- Primary nav items (Home, Search, Library, Downloads)
-- A spacer that pushes Settings to the bottom
-- A `⌘K` keyboard shortcut badge on the Search item (web-only, rendered conditionally)
-- Hover states using `onPointerEnter`/`onPointerLeave` — web APIs that are no-ops on native
+Content boundaries use semantic roles rather than route-local max widths:
+
+| Role            | Maximum | Intended surfaces                                |
+| --------------- | ------: | ------------------------------------------------ |
+| `cinematic`     | 1560 px | full-bleed Home and Detail composition           |
+| `catalog`       | 1560 px | Search and Library grids/rails                   |
+| `utilityWide`   | 1120 px | Settings and Downloads                           |
+| `utilityNarrow` |  760 px | Account, Notifications, forms, and reading flows |
+
+Window-class gutters remain shared: 20 compact, 24 medium, 40 expanded, and
+56 large. Routes must select a role through `ContentBoundary` or
+`AdaptiveRoutePage` instead of inventing another width and margin pair.
 
 ### 3.2 Responsive Grid (`useResponsiveColumns`)
 
@@ -259,11 +324,17 @@ selection.
 
 ### 3.3 Adaptive Hero And Home Feed
 
-`HomeHeroBanner` renders on compact through large windows with class-specific
-height and poster treatment: approximately 400 px compact, 440 px medium and
-expanded, and 480 px large. The most recent Continue Watching item owns the hero
+`HomeHeroBanner` renders on compact through large windows as a full-bleed,
+square-corner composition: roughly 420–520 px compact, 500 px medium,
+520–680 px expanded, and 60–68 viewport-height units (560–760 px clamped) on
+large windows. The most recent Continue Watching item owns the hero
 when it also exists in the active catalog; otherwise the normal featured choice
 is used. That hero item is removed from Continue Watching to avoid duplication.
+
+A valid landscape backdrop is sharp and dissolves into the canvas through
+left/bottom scrims. If no backdrop exists, a 2:3 poster is contained on the
+ambient canvas. If all artwork is absent, use the cinematic gradient fallback.
+Do not blur the primary artwork or crop a poster to 16:9.
 
 At 15 seconds or more saved progress the neutral primary action reads **Resume**
 and carries a runtime-only `PlaybackLaunchIntent` to seek directly without a
@@ -344,8 +415,9 @@ as navigation rather than a row of oversized buttons.
 
 Quiet navigation for peer content views. Every tab keeps a 44-pixel target and
 exposes the selected state to assistive technology. The underline variant uses
-a two-pixel cobalt indicator; the compact segmented variant groups short view
-choices inside one restrained surface. Search uses the segmented treatment for
+a two-pixel semantic accent indicator; the compact segmented variant groups
+short view choices inside one restrained surface. The accent is never
+hardcoded. Search uses the segmented treatment for
 All, Movies, and Series only after a query is submitted; Library keeps the
 editorial underline. Both share the same primitive and interaction contract.
 
@@ -376,7 +448,9 @@ or failed to load; it is not evidence that the title itself is unavailable.
 
 ### 4.7 `OfflineBanner`
 
-Polls `expo-network` for connectivity and shows a persistent top banner when offline. Displayed at the top of the `ListHeaderComponent` in the home screen's `FlatList`.
+Polls `expo-network` for connectivity and shows a persistent top banner when
+offline. The shell places it below the active topbar or compact safe-area
+header, so it does not cover navigation and does not block cached content.
 
 ### 4.8 `WatchProgressBar`
 
@@ -384,12 +458,16 @@ A thin horizontal progress bar rendered below catalog cards to indicate watch pr
 
 ### 4.9 `CommandPalette`
 
-A keyboard-driven search overlay (web/desktop), triggered by `⌘K` on macOS and
-`Ctrl+K` on Windows/Linux. It renders recent searches and at most six live,
+A keyboard-driven search overlay (web/desktop), triggered by its topbar icon,
+`⌘K` on macOS, `Ctrl+K` on Windows/Linux, or `/` outside an editable element.
+It renders recent searches and at most six live,
 keyboard-selectable suggestions using the same controller, endpoint mode,
 ranking, and persistence as `/search`. Enter opens a highlighted title only
 after deliberate arrow-key navigation; otherwise it opens the canonical
-`/search?q=...` results route.
+`/search?q=...` results route. The final row exposes the provider-reported
+result count when it is known, rather than presenting a second anonymous
+Search action. Escape closes the overlay and focus returns to the exact trigger
+that opened it.
 
 ### 4.9.1 Unified Search Screen
 
@@ -412,8 +490,9 @@ The screen provides:
 - shareable/restorable query, type, year, provider, and sort URL state
 - a compact segmented type selector (`All`, `Movies`, `Series`) shown only for
   submitted results
-- labelled year/provider/sort controls in a compact-through-expanded sheet
-- a fixed filter sidebar beside results only in the large window class
+- labelled year/provider/sort controls behind one compact **Filters** action;
+  `AdaptiveOverlay` presents them as a popover, floating sheet, or bottom sheet
+- no persistent filter sidebar; result artwork keeps the available catalog width
 - a responsive 2:3 poster grid for submitted results
 
 The empty-query browse landing reads add-on manifest catalog metadata locally;
@@ -433,7 +512,14 @@ as the primary search UX.
 
 ### 4.10 `DesktopLayout`
 
-See Section 3.1 above.
+See Section 3.1 above. It is the only owner of medium-through-large global
+navigation. Do not render a route-local sidebar beside it. `AdaptiveOverlay`
+is the shared presentation owner for temporary actions: large/expanded use an
+anchored popover, medium a floating sheet, and compact a bottom sheet. It owns
+Escape, outside press, focus trap/return, modal semantics, and reduced-motion
+presentation. The web focus trap queries the current overlay descendants on
+every Tab event, so content swaps such as Player Settings → Diagnostics cannot
+leave stale focus targets behind.
 
 ### 4.11 `BiometricLockOverlay`
 
@@ -445,7 +531,9 @@ An overlay that gates access to the app behind biometric authentication using `e
 
 ### 5.1 `CatalogItemCard`
 
-The primary content card. Renders a poster image (`Image` with `resizeMode="cover"`), a title, and optionally a `WatchProgressBar`. Wrapped in a `Pressable` with haptic feedback (`expo-haptics`) on iOS/Android.
+The data/router adapter around `MediaCard`. It renders the canonical poster
+presentation, title, and optional progress while preserving navigation and
+haptic behaviour.
 
 The card uses `aspectRatio: 2/3` (standard movie poster ratio) to ensure consistent sizing regardless of image dimensions.
 
@@ -461,9 +549,19 @@ poster URLs before changing the card UI.
 ### 5.2 `ContinueWatchingRow`
 
 A horizontal `FlatList` of in-progress content from `useContinueWatching`.
-Home can request a useful empty state; Discover and Library can keep the row
-hidden when there is no progress. Cards show poster/fallback artwork, episode
-label when available, a primary Resume action, and a separate remove action.
+Home can request a useful empty state; Search and Library can keep the row
+hidden when there is no progress. Cards prefer persisted 16:9 background
+artwork. Legacy entries without a background use a contained 2:3 poster on an
+ambient canvas rather than cropping it. The poster is anchored to an ambient
+edge instead of being centred inside an opaque landscape card. Episode metadata and a thin progress
+bar remain visible; Resume and More actions appear without a permanent button
+row and stay separate keyboard/screen-reader stops. Width targets are
+270/300/344/400 px across compact/medium/expanded/large, which yields roughly
+three large cards in the desktop content boundary. Desktop pointer hover uses
+a small 1.025 scale and reveals Resume/More; touch keeps the actions directly
+reachable, and keyboard focus reveals them with the explicit focus ring. Hover
+and focus ownership sit on the complete card boundary, so moving into those
+revealed actions cannot dismiss them.
 Trusted metadata/media durations show remaining time and percentage. Unknown
 or migrated legacy durations show only “X min watched”; they remain resumable
 but never imply completion. The remove action calls
@@ -516,7 +614,8 @@ PlayerScreen (app/player.tsx)
 ├── PlayerControls
 │   └── PlayerTimeline              — pointer/touch/keyboard scrub and preview
 ├── ExternalSubtitleRenderer        — accepted-clock external subtitle overlay
-├── PlayerSettingsModal             — tracks, subtitle style, speed, diagnostics
+├── PlayerSettingsModal             — adaptive Playback/Audio/Subtitles content
+├── Player diagnostics utility      — separate inspect surface
 ├── PlayerStatusOverlay             — typed readiness/error state
 ├── NextEpisodeOverlay              — "Up Next: Episode X" auto-play prompt
 ├── RemoteControlBar                — Chromecast / AirPlay remote UI (when casting)
@@ -533,11 +632,11 @@ spacing, and reduced-motion behaviour.
 
 ### 6.2 `PlayerOverlay`
 
-The visible top chrome uses one compact 44 px Close control plus only the
-platform actions that are available, such as Cast and Picture in Picture. It no
-longer repeats playback settings in the top-right corner. Optional stream
-information appears in a constrained top panel instead of competing with the
-timeline at the bottom.
+The visible top chrome uses one compact Close control plus only available
+platform actions. The settings action is anchored at the top-right and opens
+the same `PlayerSettingsModal` content as a 340–380 px desktop popover, medium
+floating sheet, or compact bottom sheet. Optional diagnostics are a separate
+inspect surface, not a fourth settings tab.
 
 `PlayerInteractionLayer` owns the passive left, centre, and right hit areas.
 Taps toggle controls and double-taps on the outer areas seek ±10 seconds. These
@@ -553,9 +652,10 @@ video dominant: the bottom treatment is a black readability gradient rather
 than a large floating card, and source/status information shares a compact
 toolbar with the available actions.
 
-- Center controls with one high-contrast Play/Pause action and restrained
-  Skip ±10s controls.
-- Bottom timeline with watched, buffered and playhead layers.
+- Center controls with a 60–68 px high-contrast Play/Pause action and nearby
+  42–48 px Skip ±10s controls.
+- Bottom timeline with watched, buffered and playhead layers; the track is 4 px
+  idle and 6 px while active, with at least a 32 px interaction zone.
 - Pointer hover, pointer/touch drag and timestamp preview. Native targets use
   `expo-video` thumbnails where supported; web may use the active gateway
   job's bounded seekable-cache thumbnail route.
@@ -570,6 +670,17 @@ toolbar with the available actions.
   unrelated video-surface interactions.
 - Evidence-gated Skip intro/recap/credits controls. No supplied segment means
   no control.
+
+Controls auto-hide after 2.5 seconds during active desktop playback (3 seconds
+compact). They remain visible while paused, scrubbing, settings are open,
+keyboard focus is inside the chrome, or a screen reader is active. Reduced
+Motion removes scale/spatial transitions without removing state feedback.
+
+Playback settings expose rates `0.5`, `0.75`, `1`, `1.25`, `1.5`, and `2` plus
+the existing exact quality allowlist. `Auto` selects all supported qualities;
+individual 4K/1080p/720p/480p tiles toggle the same persisted set and the final
+quality cannot be removed. A quality edit only affects the next planning or
+playback request and never swaps the active stream.
 
 PR #117 routes button, scrubber, accessibility, and desktop hotkey seeking
 through the same guarded callbacks. Keyboard shortcuts must not bypass
@@ -735,6 +846,15 @@ The detail screen fetches:
 
 For series, it additionally renders the `EpisodeSelector` component to let the user pick a season and episode, then fetches streams for that specific episode via `useEpisodeStreams`.
 
+Desktop Detail is one full-bleed scroll composition. A sharp backdrop occupies
+roughly 58–68% of the viewport with strong left and bottom scrims; title,
+metadata, synopsis, actions, and the optional 200–240 px poster sit lower-left.
+The body begins below the hero: series allocate roughly two thirds to episodes
+and one third to metadata, while films use the released episode space for story
+and details. Metadata never competes as a third top-level hero column. Compact
+keeps `MobileDetailLayout`, edge-to-edge artwork, and bottom-sheet source
+presentation.
+
 **Primary flow:** The visible action is **Play**. Detail starts a shared plan
 prefetch after 600 ms of idle time (and on desktop Play hover/focus), then
 creates a runtime-only planning intent and opens the player immediately. The
@@ -799,23 +919,28 @@ week, and Earlier; unread rows can be marked read individually, and the header
 can mark all unread rows read. Both actions optimistically update the local
 query cache, restore it after an error, and expose a retry state. Notifications
 currently have no trusted content target, so a row changes read state only; do
-not invent a deep link from its message text.
+not invent a deep link from its message text. On desktop the topbar bell first
+opens a compact, soft-backdrop popover containing the latest four items and a
+**View all** route action. Compact presentation continues to use the full
+Notifications route.
 
 ---
 
 ## 8. Settings Screen (`app/(tabs)/settings.tsx`)
 
-Settings is a routed information architecture, not one long form. Its public
+Settings is a routed information architecture with an adaptive dashboard. Its public
 section contract is `account`, `playback`, `downloads`, `sources`,
 `appearance`, `privacy`, `about`, and `advanced`.
 
 - `/settings` shows profile, one compact consumer readiness summary, and the
-  eight category rows on compact, medium, and expanded windows.
+  category overview on compact.
+- Medium and expanded render the same Appearance, Playback, Downloads, and
+  Account & Sources content in one centered column. Large renders those groups
+  in two columns within a 1120 px boundary. There is no settings sidebar.
 - `/settings/[section]` shows exactly one category. `/sources` redirects to
   `/settings/sources` so existing bookmarks and recovery actions stay valid.
-- Only the large window class (at least 1200 px) uses list-detail: a 256 px
-  category rail and one independently scrolling detail column capped at 800 px.
-  Account is the default selection.
+- Deep links and recovery routes remain valid on every class; medium-through-
+  large show one centered detail without a second navigation bar.
 - Account owns profile, Trakt, sessions, password, and sign-out. Playback owns
   quality, autoplay, audio, and subtitle preferences. Downloads owns Smart
   Downloads, network/quality/storage policy, cleanup, and the queue shortcut.
@@ -824,7 +949,8 @@ section contract is `account`, `playback`, `downloads`, `sources`,
   Advanced exclusively owns server/LAN/pairing values, re-check/restart/repair,
   cache cleanup, diagnostics export, and collapsed technical details. It does
   not duplicate the general Ready-to-play card.
-- Appearance owns theme and language. Privacy owns biometric unlock, export,
+- Appearance owns theme, dynamic artwork colour, forced Reduce Motion, and
+  language. Privacy owns biometric unlock, export,
   and a separate danger zone. About owns version, links, and the one desktop
   update control when available. Streamer app, Desktop shell, Electron runtime,
   Build SHA, and Channel are separate labeled rows; an unstamped local SHA reads
@@ -946,11 +1072,15 @@ The stream list on the detail screen renders inside a `ScrollView` (not a `FlatL
 
 Electron/web now has a baseline `useWebPressableActivation` helper for
 Tab-focusable Pressables, Enter/Space activation, and input-modality-aware
-focus. Pointer focus stays quiet, while `:focus-visible` receives a strong
-three-pixel ring; generated Expo Router anchors are styled on the actual outer
-focus node rather than only the inner Pressable.
+focus. Pointer focus stays quiet, while `:focus-visible` receives an explicit
+ring. Controls retain the strong three-pixel treatment; artwork cards use a
+tighter two-pixel, offset media ring so hover lift and keyboard focus are never
+confused. On Home and Detail that ring, selected media state, and progress use
+the active cinematic palette; neutral utility routes keep semantic theme focus.
+Generated Expo Router anchors are styled on the actual outer focus node rather
+than only the inner Pressable.
 It is applied to catalog cards, Continue Watching cards, library cards,
-episode row actions, stream source rows, and the desktop sidebar nav/search.
+episode row actions, stream source rows, and desktop topbar/search actions.
 Future passes should extend this to remaining settings/detail controls and
 validate full keyboard-only browse -> detail -> Play flows in Electron.
 
@@ -993,7 +1123,7 @@ that view recycling improves frame time or memory pressure.
 
 #### 13. i18n Completeness (Implemented for the Overhaul)
 
-User-facing copy touched by the Obsidian overhaul and its core recovery flows is
+User-facing copy touched by the adaptive/Living Cinema work and its core recovery flows is
 extracted in English, Dutch, and Spanish. A locale-parity test prevents missing
 or extra keys between those files. Future provider/runtime copy must be mapped
 to translation keys before it reaches a consumer surface; raw diagnostic data
@@ -1019,7 +1149,10 @@ Many features branch on `Platform.OS === "web"`. File downloads, the `CommandPal
 
 ### `onPointerEnter` / `onPointerLeave` on Native
 
-The `DesktopLayout` `NavLink` component uses `onPointerEnter` and `onPointerLeave` for hover effects. These are web-only pointer events that React Native (pre-0.74) ignores silently. With React Native 0.83 (current), these are now supported on iOS and iPadOS with a pointer device (trackpad, mouse). This is correct behaviour — hover effects will now also work on iPad with a connected mouse.
+`CinematicTopBar` and `MediaCard` use `onPointerEnter` and `onPointerLeave` for
+hover effects. React Native 0.83 also supports these on iOS/iPadOS with a
+pointer device. Touch presentation must not depend on hover: quick actions
+remain reachable through the explicit More/adaptive-overlay path.
 
 ### Reactive Window Classes
 

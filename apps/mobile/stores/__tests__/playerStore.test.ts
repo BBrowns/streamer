@@ -25,6 +25,7 @@ import {
   normalizeSubtitleBackgroundOpacity,
   normalizeSubtitleSyncOffset,
   normalizePreferredQualities,
+  togglePreferredQuality,
   usePlayerStore,
 } from "../playerStore";
 
@@ -102,6 +103,17 @@ describe("playerStore", () => {
       "1080p",
       "720p",
       "480p",
+    ]);
+  });
+
+  it("toggles the exact persisted quality allowlist without allowing an empty list", () => {
+    expect(togglePreferredQuality(["2160p", "1080p"], "2160p")).toEqual([
+      "1080p",
+    ]);
+    expect(togglePreferredQuality(["1080p"], "1080p")).toEqual(["1080p"]);
+    expect(togglePreferredQuality(["1080p"], "720p")).toEqual([
+      "1080p",
+      "720p",
     ]);
   });
 

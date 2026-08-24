@@ -42,7 +42,7 @@ const groupTranslationKeys = {
 export default function NotificationsScreen() {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
-  const { isLarge } = useWindowClass();
+  const { isCompact } = useWindowClass();
   const {
     notifications,
     unreadCount,
@@ -85,7 +85,7 @@ export default function NotificationsScreen() {
       <Stack.Screen
         options={{
           title: t("notifications.title"),
-          headerShown: !isLarge,
+          headerShown: isCompact,
           headerBackTitle: t("navigation.back"),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
@@ -95,7 +95,7 @@ export default function NotificationsScreen() {
         title={t("notifications.title")}
         eyebrow={t("notifications.eyebrow")}
         description={description}
-        boundary="reading"
+        boundary="utilityNarrow"
         testID="notifications-screen"
         boundaryStyle={styles.contentBoundary}
         actions={
@@ -236,7 +236,7 @@ function NotificationRow({
   onMarkAsRead: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const activate = useCallback(() => {
     if (!notification.read && !busy) onMarkAsRead(notification.id);
   }, [busy, notification.id, notification.read, onMarkAsRead]);
@@ -288,7 +288,7 @@ function NotificationRow({
     return (
       <View
         testID={`notification-${notification.id}`}
-        style={[styles.row, { backgroundColor: colors.card }]}
+        style={[styles.row, { borderBottomColor: colors.borderSubtle }]}
       >
         {body}
       </View>
@@ -310,14 +310,11 @@ function NotificationRow({
       style={({ hovered, pressed }: any) => [
         styles.row,
         {
-          backgroundColor: isDark ? colors.tint + "12" : colors.tint + "0C",
-          borderColor: colors.tint + "42",
+          borderBottomColor: colors.borderSubtle,
           opacity: busy ? 0.56 : pressed ? 0.76 : 1,
         },
         Platform.OS === "web" && hovered && !busy
-          ? {
-              backgroundColor: isDark ? colors.tint + "1C" : colors.tint + "16",
-            }
+          ? { backgroundColor: colors.stateHover }
           : null,
         Platform.OS === "web" && isKeyboardFocused
           ? getWebFocusStyle(colors.focus)
@@ -342,7 +339,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: uiSpacing.section,
-    gap: uiSpacing.sm,
   },
   list: { flex: 1 },
   sectionHeader: {
@@ -353,12 +349,11 @@ const styles = StyleSheet.create({
   },
   row: {
     minHeight: 88,
-    borderRadius: uiRadii.card,
-    borderWidth: 1,
-    borderColor: "transparent",
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     alignItems: "flex-start",
-    padding: uiSpacing.lg,
+    paddingVertical: uiSpacing.lg,
+    paddingHorizontal: uiSpacing.sm,
     gap: uiSpacing.md,
   },
   iconColumn: {

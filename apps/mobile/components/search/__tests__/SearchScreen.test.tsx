@@ -9,6 +9,12 @@ const mockResetSelection = jest.fn();
 const mockRememberSearch = jest.fn().mockResolvedValue(true);
 let mockRouteParams: Record<string, string> = {};
 let mockInfiniteSearchResult: any;
+let mockWindowClass = {
+  width: 390,
+  windowClass: "compact",
+  isCompact: true,
+  isLarge: false,
+};
 
 const suggestion = {
   id: "dune",
@@ -69,7 +75,7 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 jest.mock("../../../hooks/useWindowClass", () => ({
-  useWindowClass: () => ({ width: 390, isCompact: true, isLarge: false }),
+  useWindowClass: () => mockWindowClass,
 }));
 
 jest.mock("../../../hooks/useWebPressableActivation", () => ({
@@ -145,8 +151,14 @@ jest.mock("../../ui/SearchField", () => {
 
 jest.mock("../SearchDiscovery", () => ({ SearchDiscovery: () => null }));
 jest.mock("../SearchFilters", () => ({
-  FilterSheet: () => null,
-  FilterSidebar: () => null,
+  FilterSheet: ({ visible }: { visible: boolean }) => {
+    const { View } = require("react-native");
+    return visible ? <View testID="mock-filter-sheet" /> : null;
+  },
+  FilterSidebar: () => {
+    const { View } = require("react-native");
+    return <View testID="mock-filter-sidebar" />;
+  },
 }));
 jest.mock("../SearchResultCard", () => {
   const { Text } = require("react-native");
@@ -176,6 +188,12 @@ describe("SearchScreen keyboard behavior", () => {
     jest.clearAllMocks();
     mockRememberSearch.mockResolvedValue(true);
     mockRouteParams = {};
+    mockWindowClass = {
+      width: 390,
+      windowClass: "compact",
+      isCompact: true,
+      isLarge: false,
+    };
     mockInfiniteSearchResult = {
       data: undefined,
       pageCount: 0,
@@ -206,7 +224,7 @@ describe("SearchScreen keyboard behavior", () => {
     expect(screen.getByTestId("search-screen").props.accessibilityLabel).toBe(
       "scroll:undefined boundary:false contained:undefined",
     );
-    expect(screen.getAllByTestId("content-boundary-content")).toHaveLength(2);
+    expect(screen.getAllByTestId("content-boundary-catalog")).toHaveLength(2);
     expect(
       screen.root?.queryAll((node) => node.type === "RCTScrollView"),
     ).toHaveLength(1);
@@ -352,6 +370,23 @@ describe("SearchScreen keyboard behavior", () => {
     expect(retry.props.accessibilityLabel).toBe("common.retry");
     await fireEvent.press(retry);
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses compact filter controls instead of a persistent large-window sidebar", async () => {
+    mockRouteParams = { q: "Dune" };
+    mockWindowClass = {
+      width: 1440,
+      windowClass: "large",
+      isCompact: false,
+      isLarge: true,
+    };
+    mockInfiniteSearchResult = searchResultState();
+
+    const screen = await render(<SearchScreen />);
+
+    expect(screen.queryByTestId("mock-filter-sidebar")).toBeNull();
+    await fireEvent.press(screen.getByTestId("search-filter-toggle"));
+    expect(screen.getByTestId("mock-filter-sheet")).toBeTruthy();
   });
 });
 

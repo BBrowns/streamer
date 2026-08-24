@@ -35,6 +35,7 @@ export interface PlaybackOrchestratorInput {
   id: string;
   title?: string;
   poster?: string;
+  background?: string;
   season?: number;
   episode?: number;
   episodeTitle?: string;
@@ -527,6 +528,7 @@ function buildMediaInfo(
     itemId: input.id,
     title,
     poster: input.poster,
+    background: input.background,
     season: input.season,
     episode: input.episode,
   };

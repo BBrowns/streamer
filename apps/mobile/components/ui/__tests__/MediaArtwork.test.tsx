@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { MediaArtwork } from "../MediaArtwork";
+import { uiMotion } from "../designSystem";
 
 const ExpoImageHost = "ExpoImage" as any;
 
@@ -59,7 +60,7 @@ describe("MediaArtwork", () => {
     expect(image.props.recyclingKey).toBe(
       "poster:https://images.example.test/arrival.jpg",
     );
-    expect(image.props.transition).toBe(180);
+    expect(image.props.transition).toBe(uiMotion.content);
     expect(getNodesByTestId(screen, "arrival-artwork-skeleton")).toHaveLength(
       1,
     );

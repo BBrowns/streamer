@@ -44,6 +44,19 @@ interface UsePlayerControllerProps {
 
 const PROGRESS_REPORT_INTERVAL = 15_000;
 
+function getPersistableArtworkUri(uri?: string) {
+  const normalized = uri?.trim();
+  if (!normalized) return undefined;
+  try {
+    const parsed = new URL(normalized);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? normalized
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function usePlayerController({
   player,
   playbackUri,
@@ -317,7 +330,8 @@ export function usePlayerController({
         duration: snapshot.duration,
         durationSource: snapshot.durationSource,
         title: mediaInfo.title,
-        poster: mediaInfo.poster,
+        poster: getPersistableArtworkUri(mediaInfo.poster),
+        background: getPersistableArtworkUri(mediaInfo.background),
       });
       lastReportedProgressRef.current = {
         mediaKey,
@@ -469,6 +483,7 @@ export function usePlayerController({
                 episode: nextEpisode.episode,
                 title: mediaInfo.title,
                 poster: mediaInfo.poster,
+                background: mediaInfo.background,
                 episodeTitle: nextEpisode.title,
               },
               controller.signal,
@@ -648,6 +663,7 @@ export function usePlayerController({
         id: mediaInfo.itemId,
         title: mediaInfo.title,
         poster: mediaInfo.poster,
+        background: mediaInfo.background,
         season: nextEpisode.season,
         episode: nextEpisode.episode,
         episodeTitle: nextEpisode.title,

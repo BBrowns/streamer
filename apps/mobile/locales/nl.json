@@ -50,7 +50,8 @@
       "label": "Titelsuggesties",
       "loading": "Titelsuggesties zoeken…",
       "noMatch": "Nog geen titelsuggesties.",
-      "showAll": "Toon alle resultaten voor ‘{{query}}’"
+      "showAll": "Toon alle resultaten voor ‘{{query}}’",
+      "viewAllCount": "Bekijk alle {{count}} resultaten"
     },
     "command": {
       "label": "Snel zoeken",
@@ -216,7 +217,7 @@
     },
     "empty": {
       "title": "Nog geen items",
-      "description": "Blader door het tabblad Ontdekken en voeg films & series toe aan je bibliotheek.",
+      "description": "Blader door films en series en voeg ze toe aan je bibliotheek.",
       "noMovies": "Geen opgeslagen films gevonden.",
       "noSeries": "Geen opgeslagen series gevonden."
     },
@@ -829,6 +830,17 @@
     }
   },
   "detail": {
+    "backAccessibility": "Terug naar het vorige scherm",
+    "story": "Verhaal",
+    "mediaInformation": "Media-informatie",
+    "metadata": {
+      "director": "Regisseur",
+      "cast": "Cast",
+      "language": "Taal",
+      "runtime": "Speelduur",
+      "quality": "Kwaliteit",
+      "sources": "Bronnen"
+    },
     "play": "Afspelen",
     "download": "Downloaden",
     "torrent": "Torrent",
@@ -868,6 +880,8 @@
     "sources": {
       "episodes": "Afleveringen",
       "more": "Meer bronnen",
+      "playbackSource": "Afspeelbron",
+      "bestAvailable": "Beste beschikbaar · {{count}} bronnen",
       "show": "Meer bronnen tonen",
       "hide": "Meer bronnen verbergen",
       "available": "{{count}} beschikbaar",
@@ -1099,6 +1113,11 @@
     "settings": {
       "title": "Afspeelinstellingen",
       "done": "Gereed",
+      "playback": "Afspelen",
+      "audioTab": "Audio",
+      "quality": "Kwaliteit",
+      "qualityNextPlayback": "Kwaliteitswijzigingen gelden voor het volgende afspeelplan, niet voor de actieve stream.",
+      "backToSettings": "Terug naar afspeelinstellingen",
       "speed": "Afspeelsnelheid",
       "audio": "Audiofragmenten",
       "audioDescription": "Audiodescriptie",
@@ -1140,7 +1159,9 @@
       "fontMonospace": "Vaste breedte",
       "sync": "Ondertiteling synchroniseren",
       "resetSubtitleStyle": "Ondertitelstijl herstellen",
-      "diagnostics": "Afspeeldiagnostiek"
+      "diagnostics": "Afspeeldiagnostiek",
+      "diagnosticsDescription": "Technische informatie om problemen met deze afspeelsessie op te lossen.",
+      "noDiagnostics": "Geen diagnostische informatie beschikbaar."
     },
     "remote": {
       "castingTo": "Casten naar {{name}}",
@@ -1201,6 +1222,8 @@
       "openSourcesDevices": "Bronnen & apparaten",
       "chooseSource": "Kies een andere bron",
       "previewPlayer": "Voorbeeld van player",
+      "moreOptions": "Meer opties",
+      "fewerOptions": "Minder opties",
       "goBack": "Ga terug"
     },
     "cast": {
@@ -1278,6 +1301,7 @@
     "unreadCount_one": "{{count}} ongelezen notificatie",
     "unreadCount_other": "{{count}} ongelezen notificaties",
     "allCaughtUpDescription": "Je bent helemaal bij.",
+    "viewAll": "Alles bekijken",
     "empty": "Geen notificaties",
     "emptyTitle": "Je bent helemaal bij",
     "emptyDescription": "Downloads en accountupdates verschijnen hier.",
@@ -1340,7 +1364,13 @@
       }
     }
   },
-  "navigation": { "menu": "Menu", "back": "Terug" },
+  "navigation": {
+    "menu": "Menu",
+    "back": "Terug",
+    "profile": "Profiel",
+    "profileMenu": "Profielmenu",
+    "personalProfile": "Persoonlijk profiel"
+  },
   "catalog": {
     "openMovieDetails": "Filmdetails openen",
     "openSeriesDetails": "Seriedetails openen",

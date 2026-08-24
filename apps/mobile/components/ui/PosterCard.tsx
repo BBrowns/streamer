@@ -15,20 +15,25 @@ import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import {
-  getWebFocusStyle,
+  getWebMediaFocusStyle,
   uiRadii,
   uiSpacing,
   uiTypography,
 } from "./designSystem";
 import { MediaArtwork } from "./MediaArtwork";
 
-type PosterCardProps = {
+export type PosterCardProps = {
+  variant?: "poster" | "landscape";
   title: string;
   poster?: string | null;
   eyebrow?: string;
   metadata?: string;
   rating?: string | number | null;
   progress?: number;
+  progressColor?: string;
+  focusColor?: string;
+  accentColor?: string;
+  selectedColor?: string;
   mediaOverlay?: ReactNode;
   selected?: boolean;
   onPress: () => void;
@@ -43,12 +48,17 @@ type PosterCardProps = {
 };
 
 export function PosterCard({
+  variant = "poster",
   title,
   poster,
   eyebrow,
   metadata,
   rating,
   progress,
+  progressColor,
+  focusColor,
+  accentColor,
+  selectedColor,
   mediaOverlay,
   selected = false,
   onPress,
@@ -84,25 +94,31 @@ export function PosterCard({
       style={({ hovered, pressed, focused }: any) => [
         styles.card,
         !reducedMotion && styles.motion,
-        (hovered || isKeyboardFocused) && styles.cardRaised,
-        pressed && styles.cardPressed,
-        selected && { backgroundColor: colors.tint + "12" },
+        hovered && !reducedMotion && styles.cardRaised,
+        pressed &&
+          (reducedMotion
+            ? styles.cardPressedReducedMotion
+            : styles.cardPressed),
+        selected && {
+          backgroundColor: selectedColor ?? colors.tint + "12",
+        },
         Platform.OS === "web" &&
           (focused || isKeyboardFocused) &&
-          getWebFocusStyle(colors.focus),
+          getWebMediaFocusStyle(focusColor ?? colors.focus),
         style,
       ]}
     >
       <View
         style={[
           styles.posterFrame,
+          variant === "landscape" && styles.landscapeFrame,
           { backgroundColor: colors.surfaceElevated },
         ]}
       >
         <MediaArtwork
           uri={poster}
           title={title}
-          variant="poster"
+          variant={variant === "landscape" ? "backdrop" : "poster"}
           accessible={false}
           style={styles.poster}
         />
@@ -120,7 +136,7 @@ export function PosterCard({
               style={[
                 styles.progressFill,
                 {
-                  backgroundColor: colors.tint,
+                  backgroundColor: progressColor ?? colors.tint,
                   width: `${Math.min(100, Math.max(0, progress))}%`,
                 },
               ]}
@@ -130,7 +146,10 @@ export function PosterCard({
 
         {selected ? (
           <View
-            style={[styles.selectedBadge, { backgroundColor: colors.tint }]}
+            style={[
+              styles.selectedBadge,
+              { backgroundColor: accentColor ?? colors.tint },
+            ]}
           >
             <Ionicons name="checkmark" size={15} color={colors.onTint} />
           </View>
@@ -189,18 +208,20 @@ const styles = StyleSheet.create({
     transition: "transform 0.18s ease, opacity 0.12s ease",
   } as any,
   cardRaised: {
-    transform: [{ translateY: -3 }],
+    transform: [{ scale: 1.025 }],
   },
   cardPressed: {
     opacity: 0.82,
     transform: [{ scale: 0.985 }],
   },
+  cardPressedReducedMotion: { opacity: 0.82 },
   posterFrame: {
     width: "100%",
     aspectRatio: 2 / 3,
     borderRadius: uiRadii.card,
     overflow: "hidden",
   },
+  landscapeFrame: { aspectRatio: 16 / 9 },
   poster: {
     width: "100%",
     height: "100%",

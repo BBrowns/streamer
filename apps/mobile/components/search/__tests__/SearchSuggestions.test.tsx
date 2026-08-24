@@ -61,6 +61,7 @@ describe("SearchSuggestions", () => {
         variant="palette"
         query="Dune"
         items={ITEMS}
+        resultCount={24}
         state="suggestions"
         selectedIndex={1}
         onSelect={onSelect}
@@ -72,10 +73,11 @@ describe("SearchSuggestions", () => {
 
     await fireEvent.press(screen.getByTestId("suggestion-dune-2"));
     await fireEvent.press(
-      screen.getByRole("button", { name: "search.suggestions.showAll" }),
+      screen.getByRole("button", { name: "search.suggestions.viewAllCount" }),
     );
     expect(onSelect).toHaveBeenCalledWith(ITEMS[1]);
     expect(onShowAll).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("search.suggestions.viewAllCount")).toBeTruthy();
     expect(
       screen.getByTestId("search-suggestion-series-dune-2").props
         .accessibilityState,

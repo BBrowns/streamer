@@ -21,6 +21,7 @@ import {
 
 type AppButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type AppButtonSize = "small" | "medium" | "large";
+type AppButtonTone = "default" | "onArtwork";
 
 type AppButtonProps = {
   label: string;
@@ -30,14 +31,28 @@ type AppButtonProps = {
   icon?: keyof typeof Ionicons.glyphMap;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  focusColor?: string;
   testID?: string;
   variant?: AppButtonVariant;
+  tone?: AppButtonTone;
   size?: AppButtonSize;
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
 };
+
+export function resolveAppButtonFocusColor({
+  focusColor,
+  onArtwork,
+  themeFocus,
+}: {
+  focusColor?: string;
+  onArtwork: boolean;
+  themeFocus: string;
+}) {
+  return focusColor ?? (onArtwork ? "#F4F2EE" : themeFocus);
+}
 
 export function AppButton({
   label,
@@ -47,8 +62,10 @@ export function AppButton({
   icon,
   accessibilityLabel,
   accessibilityHint,
+  focusColor,
   testID,
   variant = "secondary",
+  tone = "default",
   size = "medium",
   disabled = false,
   loading = false,
@@ -59,11 +76,16 @@ export function AppButton({
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
   const isGhost = variant === "ghost";
-  const foreground = isPrimary
-    ? getPrimaryForeground(colors)
-    : isDanger
-      ? colors.error
-      : colors.text;
+  const onArtwork = tone === "onArtwork";
+  const foreground = isDanger
+    ? colors.error
+    : onArtwork
+      ? isPrimary
+        ? "#08090B"
+        : "#F4F2EE"
+      : isPrimary
+        ? getPrimaryForeground(colors)
+        : colors.text;
 
   return (
     <Pressable
@@ -82,12 +104,16 @@ export function AppButton({
         fullWidth && styles.fullWidth,
         {
           backgroundColor: isPrimary
-            ? colors.primary
+            ? onArtwork
+              ? "#F4F2EE"
+              : colors.primary
             : isGhost
               ? "transparent"
               : isDanger
                 ? colors.error + "14"
-                : colors.surfaceElevated,
+                : onArtwork
+                  ? "rgba(8,9,11,0.42)"
+                  : colors.surfaceElevated,
           borderColor: isPrimary
             ? "transparent"
             : isDanger
@@ -95,7 +121,15 @@ export function AppButton({
               : "transparent",
           opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
         },
-        Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+        Platform.OS === "web" &&
+          focused &&
+          getWebFocusStyle(
+            resolveAppButtonFocusColor({
+              focusColor,
+              onArtwork,
+              themeFocus: colors.focus,
+            }),
+          ),
         style,
       ]}
     >

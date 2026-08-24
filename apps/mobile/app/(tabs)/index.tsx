@@ -1,12 +1,4 @@
-import {
-  View,
-  Text,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Platform,
-} from "react-native";
+import { View, RefreshControl, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,7 +13,6 @@ import {
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorBoundary } from "../../components/ui/ErrorBoundary";
 import { OfflineBanner } from "../../components/ui/OfflineBanner";
-import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { useAddons } from "../../hooks/useAddons";
 import { HomeHeroBanner } from "../../components/catalog/HomeHeroBanner";
@@ -37,74 +28,22 @@ import { usePlayerStore } from "../../stores/playerStore";
 import { useToastStore } from "../../stores/toastStore";
 import { MediaRail } from "../../components/ui/MediaRail";
 import {
-  getWebFocusStyle,
+  getHomeHeroOverlap,
+  getPosterCardWidth,
+  getWindowGutter,
   uiLayout,
-  uiRadii,
   uiSpacing,
-  uiTouchTarget,
-  uiTypography,
 } from "../../components/ui/designSystem";
 import { rankProviderCatalogRows } from "../../services/homeDiscovery";
 import { buildCatalogDiscoveryRows } from "../../services/catalogDiscovery";
+import { SectionHeader } from "../../components/ui/SectionHeader";
+import { useDesktopTopBarScroll } from "../../components/ui/DesktopLayout";
 
 function flattenCatalogPages(data: any): MetaPreview[] {
   return (
     data?.pages.flatMap(
       (page: { metas?: MetaPreview[] }) => page.metas ?? [],
     ) ?? []
-  );
-}
-
-function SectionHeader({
-  eyebrow,
-  title,
-  actionLabel,
-  onAction,
-}: {
-  eyebrow?: string;
-  title: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <View style={styles.sectionHeader}>
-      <View style={styles.sectionTitleWrap}>
-        {!!eyebrow && (
-          <Text style={[styles.sectionEyebrow, { color: colors.tint }]}>
-            {eyebrow}
-          </Text>
-        )}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          {title}
-        </Text>
-      </View>
-      {!!actionLabel && !!onAction && (
-        <Pressable
-          style={({ pressed, focused }: any) => [
-            styles.sectionAction,
-            { backgroundColor: "transparent" },
-            pressed && { opacity: 0.78 },
-            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-          ]}
-          onPress={onAction}
-          accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-        >
-          <Text
-            style={[styles.sectionActionText, { color: colors.textSecondary }]}
-          >
-            {actionLabel}
-          </Text>
-          <Ionicons
-            name="chevron-forward"
-            size={15}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-      )}
-    </View>
   );
 }
 
@@ -121,9 +60,9 @@ function HomeRail({
   isLoading: boolean;
   testID: string;
 }) {
-  const { colors } = useTheme();
-  const { isLarge } = useWindowClass();
-  const cardWidth = isLarge ? 198 : 142;
+  const { windowClass } = useWindowClass();
+  const cardWidth = getPosterCardWidth(windowClass);
+  const contentPadding = getWindowGutter(windowClass);
 
   if (isLoading) {
     return (
@@ -133,8 +72,9 @@ function HomeRail({
         eyebrow={eyebrow}
         data={[] as MetaPreview[]}
         cardWidth={cardWidth}
+        contentPadding={contentPadding}
         keyExtractor={(item) => `${item.type}:${item.id}`}
-        renderItem={(item) => <CatalogItemCard item={item} />}
+        renderItem={(item) => <CatalogItemCard item={item} cinematic />}
         loading
         loadingContent={<SkeletonRow />}
       />
@@ -150,10 +90,10 @@ function HomeRail({
         eyebrow={eyebrow}
         data={items}
         cardWidth={cardWidth}
+        contentPadding={contentPadding}
         keyExtractor={(item) => `${testID}-${item.type}:${item.id}`}
-        renderItem={(item) => <CatalogItemCard item={item} />}
+        renderItem={(item) => <CatalogItemCard item={item} cinematic />}
       />
-      <View style={[styles.railDivider, { backgroundColor: colors.border }]} />
     </View>
   );
 }
@@ -170,6 +110,8 @@ function HomeProviderRails({
   const router = useRouter();
   const { t } = useTranslation();
   const { data: addons } = useAddons();
+  const { windowClass } = useWindowClass();
+  const contentPadding = getWindowGutter(windowClass);
 
   const catalogRows = useMemo(() => {
     const rows = buildCatalogDiscoveryRows(addons);
@@ -192,6 +134,7 @@ function HomeProviderRails({
         title={t("home.sections.fromProviders")}
         actionLabel={t("tabs.discover")}
         onAction={() => router.push("/search")}
+        style={{ paddingHorizontal: contentPadding }}
       />
       {catalogRows.map(({ catalog, addon }) => (
         <CatalogRow
@@ -199,6 +142,7 @@ function HomeProviderRails({
           catalog={catalog}
           addon={addon}
           excludeContentKeys={excludeContentKeys}
+          cinematic
         />
       ))}
     </View>
@@ -229,6 +173,8 @@ function HomeContent() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { windowClass } = useWindowClass();
+  const reportTopBarScroll = useDesktopTopBarScroll();
   const [refreshing, setRefreshing] = useState(false);
   const [heroLaunching, setHeroLaunching] = useState(false);
   const setSessionStream = usePlayerStore((state) => state.setSessionStream);
@@ -302,6 +248,7 @@ function HomeContent() {
         id: heroItem.id,
         title: heroItem.name,
         poster: heroItem.poster,
+        background: heroItem.background,
         season: heroProgress?.season ?? undefined,
         episode: heroProgress?.episode ?? undefined,
       });
@@ -367,6 +314,10 @@ function HomeContent() {
       testID="home-screen"
       style={[styles.scroll, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.scrollContent}
+      onScroll={(event) =>
+        reportTopBarScroll(event.nativeEvent.contentOffset.y)
+      }
+      scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -392,85 +343,95 @@ function HomeContent() {
         <HomeSkeleton />
       ) : null}
 
-      <ContinueWatchingRow
-        excludeContentKey={
-          heroItem ? `${heroItem.type}:${heroItem.id}` : undefined
-        }
-      />
+      <View
+        style={[
+          styles.bodyBoundary,
+          {
+            marginTop: -getHomeHeroOverlap(windowClass),
+            paddingTop: Math.round(getHomeHeroOverlap(windowClass) * 0.5),
+          },
+        ]}
+      >
+        <ContinueWatchingRow
+          excludeContentKey={
+            heroItem ? `${heroItem.type}:${heroItem.id}` : undefined
+          }
+        />
 
-      {hasLoadError && (
-        <View style={styles.stateWrap}>
-          <EmptyState
-            icon="cloud-offline-outline"
-            title={t("home.empty.retryTitle")}
-            description={t("home.empty.retryDescription")}
-            actionLabel={t("home.empty.retryAction")}
-            onAction={handleRefresh}
-          />
-        </View>
-      )}
+        {hasLoadError && (
+          <View style={styles.stateWrap}>
+            <EmptyState
+              icon="cloud-offline-outline"
+              title={t("home.empty.retryTitle")}
+              description={t("home.empty.retryDescription")}
+              actionLabel={t("home.empty.retryAction")}
+              onAction={handleRefresh}
+            />
+          </View>
+        )}
 
-      {!hasLoadError && !isLoading && !hasAnyItems && (
-        <View style={styles.stateWrap}>
-          <EmptyState
-            icon="cube-outline"
-            title={t(
-              addons.length === 0
-                ? "home.empty.title"
-                : hasBrowseableCatalog
-                  ? "home.empty.catalogUnavailableTitle"
-                  : "home.empty.streamOnlyTitle",
-            )}
-            description={t(
-              addons.length === 0
-                ? "home.empty.description"
-                : hasBrowseableCatalog
-                  ? "home.empty.catalogUnavailableDescription"
-                  : "home.empty.streamOnlyDescription",
-            )}
-            actionLabel={t(
-              hasBrowseableCatalog
-                ? "home.empty.retryAction"
-                : "home.empty.action",
-            )}
-            onAction={
-              hasBrowseableCatalog
-                ? handleRefresh
-                : () => router.push("/addons")
-            }
-          />
-        </View>
-      )}
+        {!hasLoadError && !isLoading && !hasAnyItems && (
+          <View style={styles.stateWrap}>
+            <EmptyState
+              icon="cube-outline"
+              title={t(
+                addons.length === 0
+                  ? "home.empty.title"
+                  : hasBrowseableCatalog
+                    ? "home.empty.catalogUnavailableTitle"
+                    : "home.empty.streamOnlyTitle",
+              )}
+              description={t(
+                addons.length === 0
+                  ? "home.empty.description"
+                  : hasBrowseableCatalog
+                    ? "home.empty.catalogUnavailableDescription"
+                    : "home.empty.streamOnlyDescription",
+              )}
+              actionLabel={t(
+                hasBrowseableCatalog
+                  ? "home.empty.retryAction"
+                  : "home.empty.action",
+              )}
+              onAction={
+                hasBrowseableCatalog
+                  ? handleRefresh
+                  : () => router.push("/addons")
+              }
+            />
+          </View>
+        )}
 
-      <HomeRail
-        testID="home-movies"
-        eyebrow={t("home.sections.catalogEyebrow")}
-        title={t("home.sections.movies")}
-        items={movies}
-        isLoading={movieCatalog.isLoading}
-      />
+        <HomeRail
+          testID="home-movies"
+          eyebrow={t("home.sections.catalogEyebrow")}
+          title={t("home.sections.movies")}
+          items={movies}
+          isLoading={movieCatalog.isLoading}
+        />
 
-      <HomeRail
-        testID="home-series"
-        eyebrow={t("home.sections.catalogEyebrow")}
-        title={t("home.sections.series")}
-        items={series}
-        isLoading={seriesCatalog.isLoading}
-      />
+        <HomeRail
+          testID="home-series"
+          eyebrow={t("home.sections.catalogEyebrow")}
+          title={t("home.sections.series")}
+          items={series}
+          isLoading={seriesCatalog.isLoading}
+        />
 
-      <HomeRail
-        testID="home-more-to-watch"
-        eyebrow={t("home.sections.exploreEyebrow")}
-        title={t("home.sections.moreToWatch")}
-        items={moreToWatch}
-        isLoading={isLoading}
-      />
+        <HomeRail
+          testID="home-more-to-watch"
+          eyebrow={t("home.sections.exploreEyebrow")}
+          title={t("home.sections.moreToWatch")}
+          items={moreToWatch}
+          isLoading={isLoading}
+        />
 
-      <HomeProviderRails
-        excludeContentKeys={claimedContentKeys}
-        library={libraryItems}
-        continueWatching={continueWatchingItems}
-      />
+        <HomeProviderRails
+          excludeContentKeys={claimedContentKeys}
+          library={libraryItems}
+          continueWatching={continueWatchingItems}
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -488,9 +449,14 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: {
     width: "100%",
-    maxWidth: uiLayout.contentMaxWidth,
-    alignSelf: "center",
     paddingBottom: 44,
+  },
+  bodyBoundary: {
+    width: "100%",
+    maxWidth: uiLayout.pageWidths.catalog,
+    alignSelf: "center",
+    position: "relative",
+    zIndex: 2,
   },
   loadingWrap: {
     paddingTop: 12,
@@ -503,46 +469,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 20,
   },
-  sectionHeader: {
-    paddingHorizontal: uiSpacing.lg,
-    marginBottom: uiSpacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  sectionTitleWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  sectionEyebrow: {
-    ...uiTypography.sectionLabel,
-    fontSize: 10,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-  sectionTitle: {
-    ...uiTypography.title,
-  },
-  sectionAction: {
-    minHeight: uiTouchTarget,
-    borderRadius: uiRadii.control,
-    paddingHorizontal: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  sectionActionText: {
-    ...uiTypography.label,
-  },
   railContainer: {
     marginBottom: uiSpacing.xxxl,
-  },
-  railDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
-    marginTop: 8,
-    opacity: 0.35,
   },
   providerRailSection: {
     marginTop: 2,
