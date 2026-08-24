@@ -121,10 +121,10 @@ that exact integration. Remove the pin and override when the Expo toolchain
 ships an `xcode` release with a patched UUID range, and retain the lockfile/API
 smoke check when doing so.
 
-The root Hono override is pinned to `4.13.2`, and the server/mobile direct
-dependencies resolve that same tested line. Keep the override and direct
-specifications aligned when upgrading Hono so the Hono adapters and shared
-client code are verified against one runtime contract.
+The root Hono override is constrained to the tested `4.13.x` line, and the
+server/mobile direct dependencies resolve one compatible version. Keep the
+override and direct specifications aligned when upgrading Hono so the Hono
+adapters and shared client code are verified against one runtime contract.
 
 The mobile app intentionally tracks React `19.2.8` and the compatible
 React Native `4.5.x` native-module line ahead of Expo SDK 57's bundled patch
