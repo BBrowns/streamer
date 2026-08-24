@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer UI Change"
+  short_description: "Build adaptive accessible Streamer UI"
+  default_prompt: "Use $streamer-ui-change to implement and verify this adaptive Streamer UI change across the relevant form factors."

@@ -11,11 +11,16 @@ const mobileRoot = join(repoRoot, "apps/mobile");
 const expoCli = join(repoRoot, "node_modules/expo/bin/cli");
 const appJson = require(join(mobileRoot, "app.json")).expo;
 const easConfig = require(join(mobileRoot, "eas.json"));
+const rootPackage = require(join(repoRoot, "package.json"));
 const { resolveMobileAppConfig } = require(
   join(mobileRoot, "config/mobileAppConfig.js"),
 );
 
 const projectId = "00000000-0000-4000-8000-000000000146";
+const supportedNodeVersion = /^>=(\d+\.\d+\.\d+)\s+</.exec(
+  rootPackage.engines?.node ?? "",
+)?.[1];
+assert.ok(supportedNodeVersion, "root Node engine must declare a minimum");
 const profileEnvironments = {
   development: {
     STREAMER_BUILD_ENVIRONMENT: "development",
@@ -101,7 +106,7 @@ for (const [profile, profileEnvironment] of Object.entries(
   assertStableIdentity(config, profile);
   assert.equal(profileConfig.environment, profile);
   assert.equal(profileConfig.channel, profile);
-  assert.equal(profileConfig.node, "26.7.0");
+  assert.equal(profileConfig.node, supportedNodeVersion);
   assert.equal(config.extra.streamer.buildEnvironment, profile);
   assert.equal(config.extra.streamer.buildChannel, profile);
   assert.equal(config.extra.streamer.updates.channel, profile);
