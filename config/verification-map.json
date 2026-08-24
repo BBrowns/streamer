@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "process",
+      "patterns": [
+        "^\\.agents/",
+        "^\\.codex/",
+        "^AGENTS\\.md$",
+        "^config/verification-map\\.json$",
+        "^scripts/(validate-process-assets|validate-skill-evals|evaluate-skill-outcomes|verify-change|maintenance-collect|maintenance-report|dev-runtime)"
+      ],
+      "focusedCommands": [
+        "npm run process:check",
+        "npm run process:check:test",
+        "npm run dev:runtime:test",
+        "npm run hooks:runtime:test"
+      ],
+      "finalCommands": []
+    },
+    {
+      "id": "workflow-policy",
+      "patterns": [
+        "^\\.github/workflows/",
+        "^scripts/(check-github-actions|ci-affected|ci-needs-check|change-scope-parity)"
+      ],
+      "focusedCommands": [
+        "npm run process:check",
+        "npm run workflows:check",
+        "npm run workflows:check:test",
+        "node --test scripts/ci-affected.test.mjs scripts/ci-needs-check.test.mjs"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "shared-contract",
+      "patterns": ["^packages/shared/"],
+      "focusedCommands": [
+        "npm run test --workspace=@streamer/shared",
+        "npm run typecheck:all"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "mobile-ui",
+      "patterns": ["^apps/mobile/.*\\.(tsx|jsx|css)$"],
+      "focusedCommands": [
+        "npm run test --workspace=apps/mobile",
+        "npm run typecheck --workspace=apps/mobile",
+        "npm run test:golden-path",
+        "npm run test:visual"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "mobile",
+      "patterns": ["^apps/mobile/"],
+      "focusedCommands": [
+        "npm run test --workspace=apps/mobile",
+        "npm run typecheck --workspace=apps/mobile"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "server",
+      "patterns": ["^server/"],
+      "focusedCommands": [
+        "npm run test --workspace=server",
+        "npm run typecheck --workspace=server"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "stream-server",
+      "patterns": ["^packages/stream-server/"],
+      "focusedCommands": [
+        "npm run test --workspace=@streamer/stream-server",
+        "npm run typecheck --workspace=@streamer/stream-server"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "desktop",
+      "patterns": ["^apps/desktop/"],
+      "focusedCommands": [
+        "npm run test --workspace=@streamer/desktop",
+        "npm run test:electron-smoke"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "release-tooling",
+      "patterns": ["^scripts/(release-gate|release-sbom|rc-evidence)"],
+      "focusedCommands": ["npm run release:gate"],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "dependency",
+      "patterns": [
+        "(^|/)package\\.json$",
+        "^package-lock\\.json$",
+        "^patches/",
+        "^scripts/(security-audit|check-install-script-policy|dependency-)"
+      ],
+      "focusedCommands": [
+        "npm run dependency:compatibility:test",
+        "npm run security:install-scripts",
+        "npm run security:audit"
+      ],
+      "finalCommands": ["npm run verify:quick"]
+    },
+    {
+      "id": "documentation",
+      "patterns": [
+        "^docs/",
+        "^(README|ARCHITECTURE|PLAYBACK|UI|AGENT_HANDOFF|ROADMAP)\\.md$"
+      ],
+      "focusedCommands": ["npm run format:check"],
+      "finalCommands": []
+    }
+  ],
+  "fallback": {
+    "id": "repository-code",
+    "focusedCommands": ["npm run verify:quick"],
+    "finalCommands": []
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Contract Change"
+  short_description: "Evolve shared contracts safely"
+  default_prompt: "Use $streamer-contract-change to evolve this shared Streamer contract without breaking consumers or persisted data."

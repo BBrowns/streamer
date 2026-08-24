@@ -1,4 +1,0 @@
-interface:
-  display_name: "Delivery Readiness"
-  short_description: "Prepare scoped, verified Git and release changes"
-  default_prompt: "Use $streamer-delivery-readiness to prepare this work with intentional Git scope, proportional verification, release evidence, and an evidence-backed delivery decision."

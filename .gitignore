@@ -105,6 +105,7 @@ apps/desktop/release/
 # Codex and locally installed agent context
 .agent-memory/
 graphify-out/
+.agents/evals/results/
 __pycache__/
 .agents/skills/frontend-design/
 .agents/skills/react-native-skills/
