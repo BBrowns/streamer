@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Delivery"
+  short_description: "Prepare verified Git and release work"
+  default_prompt: "Use $streamer-delivery to prepare this Streamer change for the requested Git, review, CI, or release action without exceeding authorization."

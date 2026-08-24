@@ -2,12 +2,16 @@
 
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 const {
   detectHostArch,
   determineTargetArch,
   findProcessGroupId,
   isSupportedNodeVersion,
+  loadToolchainPolicy,
   normalizeArch,
   parseNpmCommandArgs,
   parseProcessGroupId,
@@ -17,6 +21,29 @@ const {
   selectNodeRuntime,
   stopListeningProcesses,
 } = require("./dev-runtime.cjs");
+
+test("loads the native runtime policy from package.json", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "streamer-toolchain-"));
+  try {
+    fs.writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        engines: { node: ">=30.4.2 <31", npm: ">=14.1.3 <15" },
+        packageManager: "npm@14.1.3",
+      }),
+    );
+
+    assert.deepEqual(loadToolchainPolicy(root), {
+      nodeMinimum: [30, 4, 2],
+      nodeMaximumMajor: 31,
+      npmMinimum: [14, 1, 3],
+      npmMaximumMajor: 15,
+      npmVersion: "14.1.3",
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("normalizes common CPU architecture names", () => {
   assert.equal(normalizeArch("aarch64"), "arm64");

@@ -3,7 +3,7 @@
 The repository enforces a 900-line budget for production modules below
 `server/src/modules`. The budget is a review trigger, not a demand for
 mechanical splitting. A change that crosses ownership, lifecycle, trust, or
-dependency boundaries still requires the architecture guardrails workflow.
+dependency boundaries still requires the `streamer-change-design` workflow.
 
 `server/src/modules/aggregator/aggregator.service.ts` is the only current
 exception. It is a central legacy boundary with extensive characterization
