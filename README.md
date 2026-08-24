@@ -213,6 +213,35 @@ least one add-on.
 
 ## Testing
 
+For a change-scoped plan, use the repository verification map. It selects the
+focused checks from the supplied or detected changed files and avoids treating
+unrelated dirty-worktree files as task evidence:
+
+```bash
+npm run verify:change -- --plan --files packages/shared/src/example.ts
+npm run verify:change -- --focused --files packages/shared/src/example.ts
+npm run verify:change -- --final --files packages/shared/src/example.ts --output artifacts/verification/shared.json
+```
+
+`--final` reruns the focused checks, adds the mapped repository gate, and emits
+a versioned receipt with the revision, task and verification-map fingerprints,
+toolchain evidence, command durations, and final status. `--output` writes that
+JSON atomically, including for failed verification. Review the plan before
+running it when the worktree contains unrelated changes.
+
+Repository skills also have an optional outcome comparison. It runs four fixed
+fixtures in temporary workspaces with repository skills enabled and disabled,
+then records acceptance tests, scope violations, observed verification, model
+usage, and diffs in a gitignored result directory:
+
+```bash
+npm run skills:eval:ab
+npm run skills:eval:ab -- --model <model-id> --case shared-contract --runs 2
+```
+
+This invokes real Codex model runs and can consume account quota. It is an
+on-demand diagnostic, never a CI or release requirement.
+
 Use the quick command while iterating. It catches formatting, lint, type,
 native-preflight-contract, and shared-contract regressions without requiring
 Docker or a browser download:

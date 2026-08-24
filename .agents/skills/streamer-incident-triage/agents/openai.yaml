@@ -1,4 +1,0 @@
-interface:
-  display_name: "Incident Triage"
-  short_description: "Turn production evidence into verified corrections"
-  default_prompt: "Use $streamer-incident-triage to contain, reproduce, diagnose, correct, and learn from this production incident."

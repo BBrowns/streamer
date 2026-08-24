@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateAgentHandoff } from "./validate-process-assets.mjs";
 import { visualBaselineFileNames } from "./visual-baseline-manifest.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -262,34 +263,12 @@ function checkDocs() {
       `tests/golden-path/visual-regression.spec.ts-snapshots/linux/${baselineFile}`,
     );
   }
-  requireText(
-    "AGENT_HANDOFF.md",
-    "## Current Project Phase",
-    "current project phase",
-  );
-  requireText(
-    "AGENT_HANDOFF.md",
-    "Architecture complete enough",
-    "architecture-complete phase statement",
-  );
-  requireText(
-    "AGENT_HANDOFF.md",
-    "The merged implementation roadmap is complete through **PR #186**",
-    "merged implementation roadmap is complete through PR #186",
-  );
-  requireText("AGENT_HANDOFF.md", "ROADMAP.md", "active roadmap link");
-  requireText("AGENT_HANDOFF.md", "docs/QA_MATRIX.md", "QA matrix link");
-  requireText("AGENT_HANDOFF.md", "docs/RC_CHECKLIST.md", "RC checklist link");
-  requireText(
-    "AGENT_HANDOFF.md",
-    "docs/DEPENDENCY_SECURITY.md",
-    "dependency security baseline link",
-  );
-  requireText(
-    "AGENT_HANDOFF.md",
-    "docs/AUTOMATED_GOLDEN_PATHS.md",
-    "automated golden-path documentation link",
-  );
+  const handoffErrors = validateAgentHandoff(repoRoot);
+  if (handoffErrors.length === 0) {
+    pass("AGENT_HANDOFF.md meets the compact current-context contract");
+  } else {
+    for (const error of handoffErrors) fail(error);
+  }
   requireText(
     "package.json",
     '"native:evidence:preflight": "node scripts/native-evidence-preflight.mjs"',
@@ -444,17 +423,29 @@ function checkDependencySecurity() {
   requireFile(".nvmrc");
   requireFile("patches/castv2+0.1.10.patch");
   requireFile("scripts/check-install-script-policy.mjs");
-  requireText(".nvmrc", "26.7.0", "supported Node.js version");
-  requireText(
-    "package.json",
-    '"node": ">=26.7.0 <27"',
-    "Node 26 engine boundary",
-  );
-  requireText(
-    "package.json",
-    '"packageManager": "npm@12.0.2"',
-    "pinned npm version",
-  );
+  try {
+    const packageJson = JSON.parse(read("package.json"));
+    const nodeMatch = /^>=(\d+\.\d+\.\d+)\s+<(\d+)$/.exec(
+      packageJson.engines?.node ?? "",
+    );
+    const npmMatch = /^>=(\d+\.\d+\.\d+)\s+<(\d+)$/.exec(
+      packageJson.engines?.npm ?? "",
+    );
+    const managerMatch = /^npm@(\d+\.\d+\.\d+)$/.exec(
+      packageJson.packageManager ?? "",
+    );
+    if (!nodeMatch || !npmMatch || !managerMatch) {
+      fail("package.json must define bounded Node/npm engines and pinned npm");
+    } else if (npmMatch[1] !== managerMatch[1]) {
+      fail("packageManager must match the minimum npm engine version");
+    } else if (read(".nvmrc").trim() !== nodeMatch[1]) {
+      fail(".nvmrc must match the minimum Node engine version");
+    } else {
+      pass("package.json is the synchronized Node/npm policy source");
+    }
+  } catch (error) {
+    fail(`toolchain policy could not be parsed: ${error.message || error}`);
+  }
   requireText(
     "package.json",
     '"security:audit": "node scripts/security-audit.mjs"',
