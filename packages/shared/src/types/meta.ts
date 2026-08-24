@@ -4,6 +4,7 @@ export interface MetaPreview {
   type: "movie" | "series";
   name: string;
   poster: string;
+  background?: string;
   description?: string;
   releaseInfo?: string;
   released?: string;
@@ -36,7 +37,6 @@ export interface MediaTrailer {
 
 /** Full metadata for a single item */
 export interface MetaDetail extends MetaPreview {
-  background?: string;
   logo?: string;
   genres?: string[];
   cast?: string[];

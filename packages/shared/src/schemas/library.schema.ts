@@ -60,6 +60,7 @@ export const watchProgressSchema = z.object({
   durationSource: watchProgressDurationSourceSchema,
   title: z.string().min(1),
   poster: z.string().url().optional().nullable(),
+  background: z.string().url().optional().nullable(),
   lastWatched: z.string().datetime(),
 });
 
@@ -76,6 +77,7 @@ export const updateProgressSchema = z.object({
     .default("legacy"),
   title: z.string().min(1),
   poster: z.string().url().optional(),
+  background: z.string().url().optional(),
 });
 
 /** Inferred types */

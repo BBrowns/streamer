@@ -45,6 +45,8 @@ server/prisma/*.db
 server/prisma/migrations/*
 !server/prisma/migrations/20260727154500_add_watch_progress_duration_source/
 !server/prisma/migrations/20260727154500_add_watch_progress_duration_source/migration.sql
+!server/prisma/migrations/20260814213000_add_watch_progress_background/
+!server/prisma/migrations/20260814213000_add_watch_progress_background/migration.sql
 
 # Docker
 docker-data/

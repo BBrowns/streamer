@@ -230,6 +230,7 @@ describe("Integration: Watch Progress", () => {
         currentTime: 1000,
         duration: 8520,
         title: "Shawshank",
+        background: "https://images.example.test/shawshank-backdrop.jpg",
       });
 
     await request(app)
@@ -250,6 +251,38 @@ describe("Integration: Watch Progress", () => {
     // Should still only have 1 entry (upserted, not duplicated)
     expect(listRes.body.items).toHaveLength(1);
     expect(listRes.body.items[0].currentTime).toBe(5000);
+    expect(listRes.body.items[0].background).toBe(
+      "https://images.example.test/shawshank-backdrop.jpg",
+    );
+  });
+
+  it("stores and returns a nullable landscape background", async () => {
+    await request(app)
+      .post("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "movie",
+        itemId: "tt0133093",
+        currentTime: 120,
+        duration: 8160,
+        durationSource: "media",
+        title: "The Matrix",
+        poster: "https://images.example.test/matrix-poster.jpg",
+        background: "https://images.example.test/matrix-backdrop.jpg",
+      });
+
+    const listRes = await request(app)
+      .get("/api/library/progress")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          itemId: "tt0133093",
+          background: "https://images.example.test/matrix-backdrop.jpg",
+        }),
+      ]),
+    );
   });
 
   it("should filter out completed items from continue watching", async () => {

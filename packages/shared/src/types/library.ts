@@ -25,6 +25,7 @@ export interface WatchProgress {
   durationSource: WatchProgressDurationSource;
   title: string;
   poster?: string | null;
+  background?: string | null;
   lastWatched: string;
 }
 
@@ -58,4 +59,5 @@ export interface UpdateProgressRequest {
   durationSource?: WatchProgressDurationSource;
   title: string;
   poster?: string;
+  background?: string;
 }
