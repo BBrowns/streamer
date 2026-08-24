@@ -52,6 +52,30 @@ Marking the pull request ready for review emits a `ready_for_review` event and
 restores the full dependency/native/release-sensitive matrix. This keeps draft
 iteration responsive without weakening the checks required for review or merge.
 
+## Pull Request Readiness
+
+The repository distinguishes three states:
+
+- **Draft:** scope or implementation is still changing; only the draft fast lane
+  is expected.
+- **Ready for review:** the decision lock is complete, the change-scoped focused
+  and final verification ran, and the PR records its evidence boundary.
+- **Merge-ready:** the latest commit has all required checks passing and the
+  required reviews and branch-protection conditions are satisfied.
+
+The verification receipt must name the latest commit SHA. Checks from an earlier
+commit do not establish readiness for the current PR revision.
+
+For a failed run, inspect the first root job failure before interpreting a
+downstream or dependent failure. For visual failures, use the platform-matched
+comparison evidence and, when present, the **Visual Baseline Candidate** artifact
+before changing source-controlled snapshots.
+
+`Ready for review` is a review state, not a claim that the PR is already
+merge-ready. Required CI checks and approvals remain the merge authority. The
+evidence boundary must state explicitly when browser or Electron coverage does
+not prove physical-device behavior.
+
 ## Dependency Cache Policy
 
 CI keeps the existing `setup-node` npm cache, keyed by the lockfile. It does

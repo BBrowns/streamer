@@ -81,6 +81,55 @@ For each fixture in the [Playback QA Matrix](./QA_MATRIX.md):
 - **Expectation:** Library removal changes library membership only. Download
   deletion waits seven seconds and can be undone during that window.
 
+## Pre-Review UI Change Flow
+
+Use this flow for a material UI, responsive, visual, Electron, or cross-platform
+change before marking its pull request **Ready for review**.
+
+### Scope and decision lock
+
+1. Freeze the product, information-architecture, interaction, and visual
+   decisions that belong to the slice.
+2. Record the independent releasable slice, affected contracts and dependencies,
+   and explicit out-of-scope work in the pull request.
+3. Add characterization coverage before reshaping an existing interaction or
+   state contract. Keep the slice small enough to review and verify independently.
+
+### Verification receipt
+
+Use the change-scoped verifier as the canonical local entrypoint. Run the plan
+first, then run the focused and final modes against the final file set:
+
+```bash
+npm run verify:change -- --plan --files path/one,path/two
+npm run verify:change -- --focused --files path/one,path/two
+npm run verify:change -- --final --files path/one,path/two
+```
+
+Record the resulting receipt, runtime versions, final commit SHA, and any
+skipped command with its reason. Confirm the repository toolchain before running
+the receipt (`node --version`, `npm --version`, and the versions declared by the
+repository).
+
+### UI and visual evidence
+
+For a UI change, include the relevant browser golden paths, visual regression,
+and Electron smoke evidence. Keep browser, Electron, emulator, simulator, and
+physical-device evidence as separate claims.
+
+For visual baseline changes:
+
+1. Compare the actual output against the correct platform baseline.
+2. Classify the result as a product regression, stale baseline, or environment
+   difference before changing snapshots.
+3. Review the **Visual Baseline Candidate** artifact and its source commit,
+   manifest, hashes, and screenshots before accepting it.
+4. Never accept `--update-snapshots` output without visual review.
+
+When a browser test fails, inspect the first failing/root failure before its
+downstream gates. Normalize dynamic UI state with web-first assertions before
+adding retries. A test that only passes after a retry remains a flaky signal.
+
 ## Automated Correctness Pass
 
 Before recording a manual run, execute the deterministic renderer suite and the
