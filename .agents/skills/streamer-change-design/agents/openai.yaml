@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Change Design"
+  short_description: "Design consequential Streamer changes"
+  default_prompt: "Use $streamer-change-design to make this material Streamer change decision-complete before implementation."

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "change-design",
+      "fixture": "change-design",
+      "prompt": "Design a decision-complete ownership change for moving a playback queue across an API process, desktop bridge, and mobile client. Do not implement code. Create DECISION.md covering ownership, state lifecycle, data flow, failure modes, compatibility, and verification.",
+      "expectedSkill": "streamer-change-design",
+      "allowedChanges": ["DECISION.md"],
+      "verifyCommand": "node --test acceptance.test.mjs"
+    },
+    {
+      "id": "shared-contract",
+      "fixture": "shared-contract",
+      "prompt": "Add an optional playbackSessionId string to the playback event parser in src/playback-event.mjs. Existing producers that omit it must remain valid, the field must survive parsing when present, and malformed values must be rejected.",
+      "expectedSkill": "streamer-contract-change",
+      "allowedChanges": ["src/playback-event.mjs"],
+      "verifyCommand": "node --test acceptance.test.mjs"
+    },
+    {
+      "id": "reliability",
+      "fixture": "reliability",
+      "prompt": "Implement bounded retry and cancellation in src/retry.mjs. runWithRetries must attempt at most maxAttempts times, pass the one-based attempt to the operation, stop immediately after success, and never start work for an already-aborted signal.",
+      "expectedSkill": "streamer-reliability-change",
+      "allowedChanges": ["src/retry.mjs"],
+      "verifyCommand": "node --test acceptance.test.mjs"
+    },
+    {
+      "id": "adaptive-ui",
+      "fixture": "adaptive-ui",
+      "prompt": "Complete the adaptive player control view model in src/player-controls.mjs. Phone and desktop layouts must expose the documented controls and accessible labels, while reduced-motion users receive no animated transition.",
+      "expectedSkill": "streamer-ui-change",
+      "allowedChanges": ["src/player-controls.mjs"],
+      "verifyCommand": "node --test acceptance.test.mjs"
+    }
+  ]
+}

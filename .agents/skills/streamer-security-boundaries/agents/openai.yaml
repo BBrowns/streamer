@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Security Boundaries"
+  short_description: "Review sensitive Streamer boundaries"
+  default_prompt: "Use $streamer-security-boundaries to review this change against Streamer trust, privilege, privacy, and Electron boundaries."

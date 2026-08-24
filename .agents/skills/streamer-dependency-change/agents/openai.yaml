@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Dependency Change"
+  short_description: "Change dependencies with bounded risk"
+  default_prompt: "Use $streamer-dependency-change to make this package or toolchain change with compatibility, native, and security evidence."

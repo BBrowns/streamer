@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
-import { collectEvidence } from "../.agents/skills/streamer-maintenance-radar/scripts/collect.mjs";
+import { collectEvidence } from "./maintenance-collect.mjs";
 
 const PRIORITY_ORDER = Object.freeze({ Now: 0, Next: 1, Watch: 2 });
 const BLOCKING_SEVERITIES = new Set(["critical", "high"]);

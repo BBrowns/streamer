@@ -6,9 +6,48 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "..");
-const REQUIRED_NODE_MAJOR = 26;
-const REQUIRED_NODE_MINOR = 7;
-const PINNED_NPM_VERSION = "12.0.2";
+
+function parseEngineRange(value, label) {
+  const match = /^>=(\d+)\.(\d+)\.(\d+)\s+<(\d+)$/.exec(value || "");
+  if (!match) {
+    throw new Error(
+      `package.json engines.${label} must use the supported >=x.y.z <major form.`,
+    );
+  }
+  return {
+    minimum: match.slice(1, 4).map(Number),
+    maximumMajor: Number(match[4]),
+  };
+}
+
+function loadToolchainPolicy(repositoryRoot = REPOSITORY_ROOT) {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"),
+  );
+  const node = parseEngineRange(packageJson.engines?.node, "node");
+  const npm = parseEngineRange(packageJson.engines?.npm, "npm");
+  const npmMatch = /^npm@(\d+\.\d+\.\d+)$/.exec(
+    packageJson.packageManager || "",
+  );
+  if (!npmMatch) {
+    throw new Error("package.json packageManager must pin npm@x.y.z.");
+  }
+  if (npmMatch[1] !== npm.minimum.join(".")) {
+    throw new Error(
+      "package.json packageManager must match the engines.npm minimum.",
+    );
+  }
+  return {
+    nodeMinimum: node.minimum,
+    nodeMaximumMajor: node.maximumMajor,
+    npmMinimum: npm.minimum,
+    npmMaximumMajor: npm.maximumMajor,
+    npmVersion: npmMatch[1],
+  };
+}
+
+const TOOLCHAIN_POLICY = loadToolchainPolicy();
+const PINNED_NPM_VERSION = TOOLCHAIN_POLICY.npmVersion;
 const SUPPORTED_ARCHES = ["arm64", "x64"];
 
 function normalizeArch(value) {
@@ -38,11 +77,17 @@ function parseNodeVersion(value) {
 
 function isSupportedNodeVersion(value) {
   const version = parseNodeVersion(value);
-  return Boolean(
-    version &&
-    version.major === REQUIRED_NODE_MAJOR &&
-    version.minor >= REQUIRED_NODE_MINOR,
-  );
+  if (!version || version.major >= TOOLCHAIN_POLICY.nodeMaximumMajor) {
+    return false;
+  }
+  const actual = [version.major, version.minor, version.patch];
+  const minimum = TOOLCHAIN_POLICY.nodeMinimum;
+  for (let index = 0; index < actual.length; index += 1) {
+    if (actual[index] !== minimum[index]) {
+      return actual[index] > minimum[index];
+    }
+  }
+  return true;
 }
 
 function detectHostArch(options = {}) {
@@ -167,7 +212,7 @@ function resolveRuntimeCandidates(options = {}) {
         .readFileSync(path.join(repositoryRoot, ".nvmrc"), "utf8")
         .trim();
     } catch {
-      return `${REQUIRED_NODE_MAJOR}.${REQUIRED_NODE_MINOR}.0`;
+      return TOOLCHAIN_POLICY.nodeMinimum.join(".");
     }
   })();
   const pathCandidates = String(env.PATH || "")
@@ -239,7 +284,7 @@ function selectNodeRuntime(candidates, targetArch, options = {}) {
     ? inspected.map((item) => `${item.version}/${item.arch}`).join(", ")
     : "none";
   throw new Error(
-    `No supported Node.js runtime was found for ${targetArch}. Streamer requires Node ${REQUIRED_NODE_MAJOR}.${REQUIRED_NODE_MINOR} or newer within Node ${REQUIRED_NODE_MAJOR}. Found: ${found}. Run \`nvm install\` and \`nvm use\`, or set STREAMER_DEV_NODE.`,
+    `No supported Node.js runtime was found for ${targetArch}. Streamer requires Node >=${TOOLCHAIN_POLICY.nodeMinimum.join(".")} <${TOOLCHAIN_POLICY.nodeMaximumMajor}. Found: ${found}. Run \`nvm install\` and \`nvm use\`, or set STREAMER_DEV_NODE.`,
   );
 }
 
@@ -625,6 +670,7 @@ module.exports = {
   findProcessGroupId,
   inspectInstalledNativeArchitectures,
   isSupportedNodeVersion,
+  loadToolchainPolicy,
   normalizeArch,
   parseNpmCommandArgs,
   parseNodeVersion,

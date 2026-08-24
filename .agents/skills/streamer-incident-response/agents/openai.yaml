@@ -1,0 +1,4 @@
+interface:
+  display_name: "Streamer Incident Response"
+  short_description: "Contain and explain production failures"
+  default_prompt: "Use $streamer-incident-response to contain and diagnose this production or release-candidate issue; correct and verify it only when the user explicitly requests a fix."
