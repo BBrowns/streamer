@@ -89,27 +89,26 @@ diagnostics, selection context, and modal ownership remain contained.
 - `npm run security:install-scripts`: passed.
 - `npm run security:audit`: passed with the repository's two reviewed,
   time-bounded `image-size` advisory exceptions.
+- Server integration in serial mode against the ephemeral PostgreSQL
+  container: 5 test files passed, 32 tests passed, and 1 test was skipped. The
+  run used the explicit Prisma consent supplied for this task and a temporary
+  test-only JWT environment value; no value was persisted.
 - `npm run verify:quick`: passed.
 - `npm run build`: passed for desktop, server, shared, and stream-server.
 - `npm run release:gate`: passed with no failed checks.
 
 ### Checks not green or intentionally blocked
 
-- `npm run test:server:integration` was attempted with the repository's
-  ephemeral PostgreSQL setup. Five integration files were blocked because they
-  invoke the exact command `npx prisma db push --schema=./prisma/schema.prisma
---accept-data-loss`, which the Codex Prisma guard requires explicit user
-  consent to run. The ephemeral container was torn down. The guard was not
-  bypassed.
 - `npm run verify:full` did not complete because its parallel `test:all` stage
   hit an existing server-test environment race: suites mutate and restore
   `process.env`, causing `JWT_SECRET` to disappear during imports. A serial
-  diagnostic run passed 31 server test files (289 tests, 50 skipped) and left
-  only six integration files blocked by the same Prisma guard. Build, golden,
-  Electron, security, and release stages were run independently and passed.
-- A full `test:all` run therefore cannot be reported as green without either
-  fixing that unrelated test-isolation issue or granting the explicit Prisma
-  consent required by the repository safety guard.
+  diagnostic run passed 31 server test files (289 tests, 50 skipped), and the
+  separately authorized serial integration run passed all five integration
+  files. Build, golden, Electron, security, and release stages were run
+  independently and passed.
+- The standard parallel `test:all` invocation therefore remains red because of
+  the existing test-isolation race, even though the affected server files pass
+  when run serially with the test environment configured.
 
 ## Visual and accessibility evidence
 
@@ -166,9 +165,8 @@ baselines changed in this pass.
 
 ## Residual risks and follow-up
 
-- Obtain explicit user consent before attempting the repository's destructive
-  Prisma test command, or fix the test harness so the ephemeral database path
-  can be proven safe without bypassing the guard.
+- Fix the existing server test-isolation race or make the serial test mode the
+  supported CI invocation before claiming the aggregate `test:all` gate green.
 - Re-run the full repository gate under the required Node `26.7.x` / npm `12.x`
   runtime after resolving the server test-isolation issue.
 - Perform native Reduce Transparency and Reduce Motion checks on macOS/iOS,
