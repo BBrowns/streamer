@@ -169,7 +169,9 @@ for (const scheme of ["dark", "light"] as const) {
       .fill("https://fixture.example.test/recommendations.json");
     await page.getByRole("button", { name: "Install" }).click();
     await expect(
-      page.getByText("New content will appear on Discover.", { exact: true }),
+      page.getByText("You can now browse and search this content.", {
+        exact: true,
+      }),
     ).toBeVisible();
     await settleVisualFrame(page);
     await expect(page).toHaveScreenshot(

@@ -108,7 +108,6 @@ Core Living Cinema primitives:
 - `SettingsNavRow`
 - `SettingsToggleRow`
 - `SettingsChoiceRow`
-- `FilterSidebar`
 - `FilterSheet`
 - `ContentTabs`
 - `SearchField`
@@ -173,7 +172,7 @@ intent carries its requested quality, and Wi-Fi/storage policy blocks are
 shown inline without implying that a background download completed.
 
 PR #116 tightened the pilot by moving `Surface`, `AppButton`, `StatusPill`,
-`SettingsSection`, `PlaybackStatusPanel`, `DownloadQueueCard`, and the desktop
+settings grouping, `PlaybackStatusPanel`, `DownloadQueueCard`, and the desktop
 cast dialog toward shared spacing/radius/type tokens. The goal is consistency
 and lower styling drift, not a full visual migration.
 
