@@ -186,7 +186,7 @@ export function SourcesSection({
           Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
         ]}
       >
-        <Surface style={styles.navigationCard}>
+        <View style={styles.navigationCard}>
           <Ionicons
             name="extension-puzzle-outline"
             size={22}
@@ -205,7 +205,7 @@ export function SourcesSection({
             size={18}
             color={colors.textSecondary}
           />
-        </Surface>
+        </View>
       </Pressable>
 
       <SettingsSubheading
@@ -387,7 +387,7 @@ export function AdvancedSourcesSection({
             "Re-check, repair, clean cached files or export diagnostics.",
         })}
       />
-      <SettingsRowGroup>
+      <SettingsRowGroup contained>
         <SettingsActionRow
           icon="pulse-outline"
           title={t("settings.advancedSection.recheckRuntime", {
@@ -621,6 +621,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    paddingVertical: 12,
   },
   capabilityCard: {
     paddingVertical: 0,

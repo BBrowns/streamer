@@ -1,5 +1,6 @@
 import { render } from "@testing-library/react-native";
 import {
+  resolveSettingsColumnCount,
   resolveSettingsPresentation,
   SettingsExperience,
 } from "../SettingsExperience";
@@ -34,6 +35,7 @@ jest.mock("../../../hooks/useWindowClass", () => ({
     isCompact: true,
     isLarge: false,
     windowClass: "compact",
+    width: 390,
   }),
 }));
 jest.mock("../../../hooks/useTrakt", () => ({ useTrakt: () => ({}) }));
@@ -144,19 +146,27 @@ jest.mock("../SettingsRows", () => {
 });
 
 describe("SettingsExperience boundary contract", () => {
-  it("uses overview/detail on compact and one/two-column dashboards on desktop", () => {
+  it("uses overview/detail and resolves dashboard columns from content width", () => {
     expect(resolveSettingsPresentation("compact", false)).toBe("overview");
     expect(resolveSettingsPresentation("compact", true)).toBe("detail");
-    expect(resolveSettingsPresentation("medium", false)).toBe(
+    expect(resolveSettingsPresentation("medium", false, 720)).toBe(
       "dashboard-one-column",
     );
-    expect(resolveSettingsPresentation("expanded", false)).toBe(
-      "dashboard-one-column",
-    );
-    expect(resolveSettingsPresentation("large", false)).toBe(
+    expect(resolveSettingsPresentation("expanded", false, 944)).toBe(
       "dashboard-two-column",
     );
-    expect(resolveSettingsPresentation("large", true)).toBe("detail");
+    expect(resolveSettingsPresentation("large", false, 1120)).toBe(
+      "dashboard-two-column",
+    );
+    expect(resolveSettingsPresentation("expanded", false, 720)).toBe(
+      "dashboard-one-column",
+    );
+    expect(resolveSettingsPresentation("large", true, 1120)).toBe("detail");
+  });
+
+  it("keeps the two-column threshold pure and readable at its boundary", () => {
+    expect(resolveSettingsColumnCount(751)).toBe(1);
+    expect(resolveSettingsColumnCount(752)).toBe(2);
   });
 
   it("keeps compact overview titles navigation-owned in one utility-narrow scroller", async () => {

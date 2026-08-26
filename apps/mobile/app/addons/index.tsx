@@ -248,7 +248,7 @@ export default function AddonsScreen() {
 
                 return (
                   <View style={styles.addonItem}>
-                    <Surface style={styles.addonCard}>
+                    <View style={styles.addonCard}>
                       <View
                         style={[
                           styles.addonIcon,
@@ -355,7 +355,7 @@ export default function AddonsScreen() {
                           />
                         )}
                       </Pressable>
-                    </Surface>
+                    </View>
                     {removalError?.addonId === item.id && (
                       <InlineNotice
                         tone="error"
@@ -435,6 +435,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minHeight: 76,
     gap: uiSpacing.md,
+    paddingVertical: uiSpacing.sm,
   },
   addonIcon: {
     width: uiTouchTarget,

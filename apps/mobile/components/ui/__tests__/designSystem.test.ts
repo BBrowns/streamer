@@ -67,6 +67,8 @@ describe("design system tokens", () => {
       contentMaxWidth: 1560,
       detailMaxWidth: 1200,
       settingsMaxWidth: 1120,
+      settingsColumnMinWidth: 360,
+      settingsColumnGap: 32,
       readingMaxWidth: 760,
       compactGutter: 20,
       expandedGutter: 40,

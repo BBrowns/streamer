@@ -405,15 +405,25 @@ export function SettingsInfoRow({
   );
 }
 
-export function SettingsRowGroup({ children }: { children: ReactNode }) {
+export function SettingsRowGroup({
+  children,
+  contained = false,
+}: {
+  children: ReactNode;
+  /** Retain a surface only when it communicates meaningful ownership/status. */
+  contained?: boolean;
+}) {
   const { colors } = useTheme();
   const items = Children.toArray(children);
 
   return (
     <View
       style={[
-        styles.group,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        contained ? styles.group : styles.flatGroup,
+        contained && {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
       ]}
     >
       {items.map((child, index) => (
@@ -434,6 +444,9 @@ const styles = StyleSheet.create({
   group: {
     borderRadius: uiRadii.card,
     borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  flatGroup: {
     overflow: "hidden",
   },
   row: {
