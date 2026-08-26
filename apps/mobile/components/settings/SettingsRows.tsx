@@ -97,10 +97,13 @@ export function SettingsNavRow({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ focused, pressed }: any) => [
+      style={({ hovered, focused, pressed }: any) => [
         styles.row,
         compact ? styles.compactRow : styles.overviewRow,
+        Platform.OS === "web" &&
+          hovered && { backgroundColor: colors.stateHover },
         selected && { backgroundColor: colors.tint + "16" },
+        pressed && { backgroundColor: colors.statePressed },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}
@@ -139,10 +142,16 @@ export function SettingsActionRow({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ focused, pressed }: any) => [
+      style={({ hovered, focused, pressed }: any) => [
         styles.row,
         styles.actionRow,
+        Platform.OS === "web" &&
+          hovered &&
+          !disabled && {
+            backgroundColor: colors.stateHover,
+          },
         disabled && styles.disabled,
+        pressed && !disabled && { backgroundColor: colors.statePressed },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}
@@ -301,10 +310,18 @@ export function SettingsMultiSelectRow<T extends string>({
                 {...getWebAriaChecked(selected)}
                 disabled={option.disabled}
                 onPress={() => onToggle(option.value)}
-                style={({ focused, pressed }: any) => [
+                style={({ hovered, focused, pressed }: any) => [
                   styles.multiSelectOption,
+                  hovered &&
+                    !option.disabled && {
+                      backgroundColor: colors.stateHover,
+                    },
                   selected && { backgroundColor: colors.tint + "0D" },
                   option.disabled && styles.disabled,
+                  pressed &&
+                    !option.disabled && {
+                      backgroundColor: colors.statePressed,
+                    },
                   pressed && styles.pressed,
                   Platform.OS === "web" &&
                     focused &&
@@ -352,10 +369,12 @@ export function SettingsRadioRow({
       accessibilityState={{ checked: selected, selected }}
       {...getWebAriaChecked(selected)}
       onPress={onPress}
-      style={({ focused, pressed }: any) => [
+      style={({ hovered, focused, pressed }: any) => [
         styles.row,
         styles.radioRow,
+        hovered && !selected && { backgroundColor: colors.stateHover },
         selected && { backgroundColor: colors.tint + "12" },
+        pressed && { backgroundColor: colors.statePressed },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}

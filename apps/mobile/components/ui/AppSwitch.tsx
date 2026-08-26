@@ -38,9 +38,11 @@ export function AppSwitch({
       {...getWebAriaChecked(value)}
       disabled={disabled}
       onPress={() => onValueChange(!value)}
-      style={({ focused, pressed }: any) => [
+      style={({ focused, hovered, pressed }: any) => [
         styles.target,
         disabled && styles.disabled,
+        hovered && !disabled && { backgroundColor: colors.stateHover },
+        pressed && !disabled && { backgroundColor: colors.statePressed },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
       ]}

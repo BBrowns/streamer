@@ -16,6 +16,7 @@ import {
   uiRadii,
   uiSpacing,
   uiTouchTarget,
+  uiMotion,
   uiTypography,
 } from "./designSystem";
 
@@ -98,7 +99,7 @@ export function AppButton({
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
-      style={({ pressed, focused }: any) => [
+      style={({ hovered, pressed, focused }: any) => [
         styles.button,
         styles[size],
         fullWidth && styles.fullWidth,
@@ -121,6 +122,13 @@ export function AppButton({
               : "transparent",
           opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
         },
+        Platform.OS === "web" &&
+          hovered &&
+          !disabled &&
+          !loading &&
+          (isGhost
+            ? { backgroundColor: colors.stateHover }
+            : { opacity: pressed ? 0.78 : 0.92 }),
         Platform.OS === "web" &&
           focused &&
           getWebFocusStyle(
@@ -164,6 +172,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: uiSpacing.sm,
+    transition: `background-color ${uiMotion.feedback}ms ease, opacity ${uiMotion.feedback}ms ease`,
   },
   small: {
     minHeight: uiTouchTarget,

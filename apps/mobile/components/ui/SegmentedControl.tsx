@@ -60,14 +60,17 @@ export function SegmentedControl<T extends string>({
         return (
           <Pressable
             key={opt.value}
-            style={({ pressed, focused }: any) => [
+            style={({ hovered, pressed, focused }: any) => [
               styles.btn,
+              hovered && !isActive && { backgroundColor: colors.stateHover },
               isActive && {
                 backgroundColor: colors.tint + "20",
                 borderColor: colors.tint,
               },
               pressed && styles.pressed,
-              Platform.OS === "web" && focused && getWebFocusStyle(colors.tint),
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(colors.focus),
             ]}
             onPress={() => {
               onChange(opt.value);
@@ -117,6 +120,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
     gap: 4,
+    transition: "background-color 90ms ease, opacity 90ms ease",
   },
   label: {
     fontSize: 12,
