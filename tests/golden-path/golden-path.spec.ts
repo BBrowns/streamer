@@ -709,9 +709,11 @@ test("pointer focus stays quiet while keyboard focus remains explicit", async ({
 }, testInfo) => {
   await loginToFixtureShell(page);
   const isCompact = testInfo.project.name === "phone-web";
-  const searchNavigation = page.getByRole(isCompact ? "tab" : "button", {
-    name: "Search",
-  });
+  const searchNavigation = isCompact
+    ? page.getByRole("tab", { name: "Search" })
+    : page.getByTestId("cinematic-topbar").getByRole("button", {
+        name: "Search",
+      });
 
   if (isCompact) {
     // The mobile-web project has touch enabled, so a tap is not treated as a
@@ -1588,7 +1590,9 @@ test("Add-ons expose a recoverable install retry and successful state", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Install" }).click();
   await expect(
-    page.getByText("New content will appear on Discover.", { exact: true }),
+    page.getByText("You can now browse and search this content.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(controls.addonInstallAttempts()).toBe(2);
 });
