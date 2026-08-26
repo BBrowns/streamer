@@ -8,7 +8,7 @@
   for that experiment.
 - Execution branch: `codex/living-cinema-convergence`.
 - Baseline: current `origin/master` at `28a81dcd7c2ca6633d070195053461e6bca3249e`.
-- Final implementation head before this receipt: `63b60b8`.
+- Final implementation head before this receipt: `4294cce`.
 - A fresh isolated worktree was used at
   `/private/tmp/streamer-living-cinema-convergence`.
 - The existing dirty checkout at `/Users/julianbruinsma/Documents/Playground /streamer`
@@ -35,11 +35,13 @@
 | Utility-material boundary regression test                               | `5bd6796` | utility surfaces cannot consume cinematic ambience                 |
 | Ownership and QA documentation                                          | `c13c73f` | `UI.md`, `ARCHITECTURE.md`, handoff and golden-path docs           |
 | Reviewed Darwin baseline refresh                                        | `63b60b8` | eight Settings/Add-ons baselines only, after visual review         |
+| CI typecheck compatibility fix                                          | `18f183b` | preserve web-only transitions while satisfying RN style typing     |
+| Reviewed Linux baseline candidates                                      | `4294cce` | eight Settings/Add-ons baselines from the PR Linux candidate       |
 
 ## Design-convergence review before snapshot refresh
 
-The rendered review was completed before refreshing the eight approved Darwin
-baselines. The review used the browser renderer on the actual build and
+The rendered review was completed before refreshing the approved Darwin and
+Linux baselines. The review used the browser renderer on the actual build and
 inspected the following temporary captures; the captures were not added to the
 repository.
 
@@ -79,6 +81,7 @@ diagnostics, selection context, and modal ownership remain contained.
 - Visual regression: 20 passed, 0 failed, covering phone and desktop dark/light
   baselines.
 - `npm run typecheck:all`: passed.
+- Direct mobile typecheck after the CI fix: passed.
 - `npm run lint`: passed with 18 pre-existing warnings and 0 errors.
 - `npm run format:check`: passed.
 - `npm run mobile:config:check`: passed.
@@ -96,6 +99,22 @@ diagnostics, selection context, and modal ownership remain contained.
 - `npm run verify:quick`: passed.
 - `npm run build`: passed for desktop, server, shared, and stream-server.
 - `npm run release:gate`: passed with no failed checks.
+
+### CI failure diagnosis and resolution
+
+The first PR run (`32997140596`, head `a9663c6`) exposed two independent
+issues:
+
+- CI TypeScript rejected web-only `transition` properties in the typed
+  `StyleSheet.create` objects for `AppButton` and `SegmentedControl`. The
+  properties remain available to the web renderer and the style objects now
+  use the repository's existing explicit web-extension typing convention.
+- Linux visual regression failed only for the eight Settings/Add-ons images
+  changed by this pass. The PR's Linux candidate artifact was downloaded, its
+  eight changed images were inspected against the committed baselines, and
+  only those exact eight candidates were committed.
+
+The `Release Gate` failure was downstream of those two root failures.
 
 ### Checks not green or intentionally blocked
 
@@ -121,16 +140,21 @@ diagnostics, selection context, and modal ownership remain contained.
 | Expanded     | 1024×768  | Semantic layout, Settings column, and overflow assertions |
 | Large        | 1440×1000 | Pixel baselines plus semantic golden-path assertions      |
 
-Darwin browser output was rendered and inspected on this host. Linux visual
-baselines were not regenerated or bulk-accepted. Existing Home, Detail, and
-Player coverage was retained; only the reviewed Settings/Add-ons Darwin
-baselines changed in this pass.
+Darwin browser output was rendered and inspected on this host. The Linux
+candidate artifact produced by the PR's Ubuntu visual job was inspected for
+all eight changed Settings/Add-ons images; no unchanged Linux baseline was
+accepted. Existing Home, Detail, and Player coverage was retained. Exactly
+eight Darwin and eight Linux Settings/Add-ons baselines changed in this pass.
 
 ### Manual/runtime checks actually performed
 
 - Browser renderer: Playwright/Chromium on the Darwin host across all four
   window classes; dark/light visual coverage on compact and large target
   screens.
+- Linux CI candidate: the eight changed Settings/Add-ons candidate images were
+  inspected against their committed counterparts before the Linux baseline
+  refresh; the candidate manifest reported all 44 expected files and matched
+  the PR head used by the candidate job.
 - Rendered design review: Settings, Account, Add-ons, Sources, Downloads,
   Notifications, Command Search, Profile menu, and a form overlay.
 - Reduce Motion: browser `prefers-reduced-motion` emulation was exercised in
@@ -171,7 +195,8 @@ baselines changed in this pass.
   runtime after resolving the server test-isolation issue.
 - Perform native Reduce Transparency and Reduce Motion checks on macOS/iOS,
   plus TalkBack/VoiceOver and touch-target checks on Android/iOS targets.
-- Run packaged macOS window/titlebar QA and independent Linux visual review.
+- Run packaged macOS window/titlebar QA and a broader independent Linux visual
+  review when the required target environment is available.
 - Step 9 may only begin after this production convergence is reviewed and
   explicitly approved; it must use its own branch/worktree and cannot modify
   production Continue Watching geometry.
