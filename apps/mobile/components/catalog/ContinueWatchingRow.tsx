@@ -133,6 +133,7 @@ function ContinueWatchingCard({
             })
       }
       progress={progress}
+      resumeLabel={t("common.actions.resume", { defaultValue: "Resume" })}
       resumeAccessibilityLabel={
         durationIsTrusted
           ? t("home.continueWatching.resumeA11y", {
@@ -145,6 +146,19 @@ function ContinueWatchingCard({
               defaultValue: "Resume {{title}}, {{minutes}} minutes watched",
             })
       }
+      detailsLabel={t("library.actions.viewDetails", {
+        defaultValue: "View Details",
+      })}
+      detailsAccessibilityLabel={`${t("library.actions.viewDetails", {
+        defaultValue: "View Details",
+      })}: ${item.title}`}
+      moreActionsAccessibilityLabel={t("home.continueWatching.moreActions", {
+        title: item.title,
+        defaultValue: "More actions for {{title}}",
+      })}
+      removeLabel={t("home.continueWatching.removeA11y", {
+        title: item.title,
+      })}
       resuming={isResuming}
       removing={isRemoving}
       onOpen={() => router.push(`/detail/${item.type}/${item.itemId}`)}

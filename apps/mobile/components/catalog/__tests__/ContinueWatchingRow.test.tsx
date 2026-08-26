@@ -90,6 +90,9 @@ jest.mock("react-i18next", () => ({
       if (key === "home.continueWatching.resumeA11y") {
         return `Resume ${options?.title}, ${options?.minutes} minutes remaining`;
       }
+      if (key === "home.continueWatching.moreActions") {
+        return `More actions for ${options?.title}`;
+      }
       return values[key] ?? key;
     },
   }),
