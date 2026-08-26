@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import type { ThemeColors } from "../../constants/theme";
 import { useReducedTransparency } from "../../hooks/useReducedTransparency";
 import { useTheme } from "../../hooks/useTheme";
@@ -69,6 +75,7 @@ export function FloatingSurface({
     level,
     colors,
     reducedTransparency,
+    platform: Platform.OS,
   });
   const { backdropFilter, ...materialStyle } = material;
 
@@ -85,6 +92,12 @@ export function FloatingSurface({
             } as any)
           : null,
         style,
+        // A caller may customize a normal surface, but accessibility and
+        // platform fallbacks always win over a translucent override.
+        (reducedTransparency || Platform.OS === "android") && {
+          backgroundColor: material.backgroundColor,
+          borderColor: material.borderColor,
+        },
       ]}
     >
       {children}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, Platform } from "react-native";
 
 /**
  * Reduce Transparency is an OS accessibility preference on iOS. Other
@@ -12,6 +12,43 @@ export function useReducedTransparency() {
 
   useEffect(() => {
     let mounted = true;
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      let mediaQuery: MediaQueryList | undefined;
+      try {
+        mediaQuery = window.matchMedia?.(
+          "(prefers-reduced-transparency: reduce)",
+        );
+      } catch {
+        mediaQuery = undefined;
+      }
+
+      if (mediaQuery) {
+        setReducedTransparency(mediaQuery.matches);
+        const handleChange = (event: MediaQueryListEvent) => {
+          if (mounted) setReducedTransparency(event.matches);
+        };
+        if (mediaQuery.addEventListener) {
+          mediaQuery.addEventListener("change", handleChange);
+        } else {
+          mediaQuery.addListener?.(handleChange);
+        }
+
+        return () => {
+          mounted = false;
+          if (mediaQuery?.removeEventListener) {
+            mediaQuery.removeEventListener("change", handleChange);
+          } else {
+            mediaQuery?.removeListener?.(handleChange);
+          }
+        };
+      }
+
+      return () => {
+        mounted = false;
+      };
+    }
+
     const accessibilityInfo = AccessibilityInfo as typeof AccessibilityInfo & {
       isReduceTransparencyEnabled?: () => Promise<boolean>;
     };
@@ -27,14 +64,14 @@ export function useReducedTransparency() {
         });
     }
 
-    const subscription = AccessibilityInfo.addEventListener(
+    const subscription = AccessibilityInfo.addEventListener?.(
       "reduceTransparencyChanged",
       setReducedTransparency,
     );
 
     return () => {
       mounted = false;
-      subscription.remove();
+      subscription?.remove();
     };
   }, []);
 

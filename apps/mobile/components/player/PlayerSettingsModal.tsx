@@ -250,6 +250,7 @@ export function PlayerSettingsModal({
         defaultValue: "Playback settings",
       })}
       testID="player-settings-sheet"
+      materialLevel="media"
       contentStyle={[
         styles.sheet,
         {

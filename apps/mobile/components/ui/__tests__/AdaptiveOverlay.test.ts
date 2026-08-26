@@ -58,6 +58,18 @@ describe("AdaptiveOverlay", () => {
     });
   });
 
+  it("supports feature-owned top-center geometry for command search", () => {
+    const overlay = require("../AdaptiveOverlay");
+
+    expect(
+      overlay.resolveAdaptiveOverlayLayout?.("large", "wide", "top-center"),
+    ).toEqual({
+      presentation: "popover",
+      placement: "top-center",
+      maxWidth: 640,
+    });
+  });
+
   it("provides a deliberately light backdrop for anchored utility menus", () => {
     const overlay = require("../AdaptiveOverlay");
 

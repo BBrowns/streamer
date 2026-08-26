@@ -12,12 +12,12 @@ import { useWindowClass, type WindowClass } from "../../hooks/useWindowClass";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useTheme } from "../../hooks/useTheme";
 import { uiRadii, uiSpacing } from "./designSystem";
-import { FloatingSurface } from "./FloatingSurface";
+import { FloatingSurface, type FloatingSurfaceLevel } from "./FloatingSurface";
 
 export type AdaptiveOverlayPresentation =
   "popover" | "floating-sheet" | "bottom-sheet";
 export type AdaptiveOverlaySize = "menu" | "form" | "wide";
-export type AdaptiveOverlayPlacement = "top-right" | "center";
+export type AdaptiveOverlayPlacement = "top-right" | "top-center" | "center";
 export type AdaptiveOverlayBackdrop = "standard" | "soft" | "none";
 
 export function resolveAdaptiveOverlayPresentation(
@@ -89,20 +89,26 @@ export function AdaptiveOverlay({
   children,
   accessibilityLabel,
   testID,
+  backdropTestID,
   contentStyle,
   size = "menu",
   placement = "top-right",
   backdrop = "standard",
+  animationType,
+  materialLevel,
 }: {
   visible: boolean;
   onClose: () => void;
   children: ReactNode;
   accessibilityLabel: string;
   testID?: string;
+  backdropTestID?: string;
   contentStyle?: StyleProp<ViewStyle>;
   size?: AdaptiveOverlaySize;
   placement?: AdaptiveOverlayPlacement;
   backdrop?: AdaptiveOverlayBackdrop;
+  animationType?: "none" | "fade";
+  materialLevel?: FloatingSurfaceLevel;
 }) {
   const { windowClass } = useWindowClass();
   const { colors, isDark } = useTheme();
@@ -154,7 +160,7 @@ export function AdaptiveOverlay({
       visible={visible}
       transparent
       statusBarTranslucent
-      animationType={reducedMotion ? "none" : "fade"}
+      animationType={animationType ?? (reducedMotion ? "none" : "fade")}
       onRequestClose={onClose}
     >
       <View
@@ -162,10 +168,12 @@ export function AdaptiveOverlay({
           styles.viewport,
           presentation === "bottom-sheet" && styles.alignBottom,
           layout.placement === "center" && styles.alignCenter,
+          layout.placement === "top-center" && styles.alignTopCenter,
           layout.placement === "top-right" && styles.alignPopover,
         ]}
       >
         <Pressable
+          testID={backdropTestID}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
           onPress={onClose}
@@ -173,9 +181,11 @@ export function AdaptiveOverlay({
         />
         <FloatingSurface
           testID={testID}
+          level={
+            materialLevel ?? (presentation === "popover" ? "menu" : "sheet")
+          }
           style={[
             styles.surface,
-            contentStyle,
             presentation === "bottom-sheet" && styles.bottomSheet,
             presentation === "floating-sheet" && [
               styles.floatingSheet,
@@ -185,6 +195,9 @@ export function AdaptiveOverlay({
               styles.popover,
               { maxWidth: layout.maxWidth },
             ],
+            // Feature-specific geometry may refine the generic presentation;
+            // material and breakpoint ownership remain with this primitive.
+            contentStyle,
           ]}
         >
           <View
@@ -216,6 +229,12 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFill },
   alignBottom: { justifyContent: "flex-end" },
   alignCenter: { alignItems: "center", justifyContent: "center", padding: 24 },
+  alignTopCenter: {
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: Platform.OS === "web" ? ("15vh" as any) : 72,
+    paddingHorizontal: 16,
+  },
   alignPopover: {
     alignItems: "flex-end",
     justifyContent: "flex-start",
