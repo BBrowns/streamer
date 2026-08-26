@@ -730,9 +730,15 @@ function SettingsExperienceContent({
   const sessionData = useSessions();
   const account = useAccount();
   const activeSection = section ?? "account";
-  const availableSettingsWidth = Math.min(
+  const settingsBoundaryWidth = Math.min(
     Math.max(0, width - getWindowGutter(windowClass) * 2),
     uiLayout.settingsMaxWidth,
+  );
+  // ContentBoundary's maxWidth includes its horizontal padding. Resolve the
+  // column decision from the width the settings rows can actually occupy.
+  const availableSettingsWidth = Math.max(
+    0,
+    settingsBoundaryWidth - getWindowGutter(windowClass) * 2,
   );
   const presentation = resolveSettingsPresentation(
     windowClass,

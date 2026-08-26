@@ -149,19 +149,19 @@ describe("SettingsExperience boundary contract", () => {
   it("uses overview/detail and resolves dashboard columns from content width", () => {
     expect(resolveSettingsPresentation("compact", false)).toBe("overview");
     expect(resolveSettingsPresentation("compact", true)).toBe("detail");
-    expect(resolveSettingsPresentation("medium", false, 720)).toBe(
+    expect(resolveSettingsPresentation("medium", false, 672)).toBe(
       "dashboard-one-column",
     );
-    expect(resolveSettingsPresentation("expanded", false, 944)).toBe(
+    expect(resolveSettingsPresentation("expanded", false, 864)).toBe(
       "dashboard-two-column",
     );
-    expect(resolveSettingsPresentation("large", false, 1120)).toBe(
+    expect(resolveSettingsPresentation("large", false, 1008)).toBe(
       "dashboard-two-column",
     );
-    expect(resolveSettingsPresentation("expanded", false, 720)).toBe(
+    expect(resolveSettingsPresentation("expanded", false, 672)).toBe(
       "dashboard-one-column",
     );
-    expect(resolveSettingsPresentation("large", true, 1120)).toBe("detail");
+    expect(resolveSettingsPresentation("large", true, 1008)).toBe("detail");
   });
 
   it("keeps the two-column threshold pure and readable at its boundary", () => {
