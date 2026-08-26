@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     gap: 4,
     transition: "background-color 90ms ease, opacity 90ms ease",
-  },
+  } as any,
   label: {
     fontSize: 12,
     fontWeight: "600",

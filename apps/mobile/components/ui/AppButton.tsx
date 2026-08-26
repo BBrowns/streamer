@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: uiSpacing.sm,
     transition: `background-color ${uiMotion.feedback}ms ease, opacity ${uiMotion.feedback}ms ease`,
-  },
+  } as any,
   small: {
     minHeight: uiTouchTarget,
     paddingHorizontal: uiSpacing.md,
