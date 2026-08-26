@@ -277,23 +277,6 @@ function SearchFilterControls({
   );
 }
 
-export function FilterSidebar(props: SearchFilterControlsProps) {
-  const { t } = useTranslation();
-  const { colors } = useTheme();
-  return (
-    <View
-      testID="search-filter-panel"
-      accessibilityLabel={t("search.filters.title")}
-      style={[styles.sidebar, { backgroundColor: colors.card }]}
-    >
-      <Text style={[styles.title, { color: colors.text }]}>
-        {t("search.filters.title")}
-      </Text>
-      <SearchFilterControls {...props} />
-    </View>
-  );
-}
-
 export function FilterSheet({
   visible,
   onClose,
@@ -348,13 +331,6 @@ export function FilterSheet({
 }
 
 const styles = StyleSheet.create({
-  sidebar: {
-    width: 240,
-    alignSelf: "flex-start",
-    borderRadius: 12,
-    padding: 18,
-    gap: 20,
-  },
   title: { fontSize: 18, lineHeight: 23, fontWeight: "800" },
   subtitle: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: "500" },
   group: { gap: 8 },

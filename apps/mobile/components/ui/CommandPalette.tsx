@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
-  Modal,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -23,6 +21,7 @@ import {
 } from "../../services/searchController";
 import { RecentSearches } from "../search/RecentSearches";
 import { SearchSuggestions } from "../search/SearchSuggestions";
+import { AdaptiveOverlay } from "./AdaptiveOverlay";
 import { SearchField } from "./SearchField";
 
 interface CommandPaletteProps {
@@ -32,12 +31,11 @@ interface CommandPaletteProps {
 
 export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
   const inputRef = useRef<TextInput>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const scale = useRef(new Animated.Value(0.98)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const router = useRouter();
   const { t } = useTranslation();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { reducedMotion, duration } = useUiMotion();
   const searchController = useSearchController({ enabled: visible });
   const {
@@ -57,9 +55,6 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
 
   useEffect(() => {
     if (!visible) return;
-    if (Platform.OS === "web" && typeof document !== "undefined") {
-      previousFocusRef.current = document.activeElement as HTMLElement | null;
-    }
     clearQuery();
     const focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
     if (reducedMotion) {
@@ -82,8 +77,6 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
     }
     return () => {
       clearTimeout(focusTimer);
-      previousFocusRef.current?.focus?.();
-      previousFocusRef.current = null;
     };
   }, [clearQuery, opacity, reducedMotion, scale, visible]);
 
@@ -135,12 +128,9 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
       if (direction) {
         event.preventDefault?.();
         moveSelection(direction);
-      } else if (key === "Escape") {
-        event.preventDefault?.();
-        onClose();
       }
     },
-    [moveSelection, onClose],
+    [moveSelection],
   );
 
   useEffect(() => {
@@ -152,142 +142,109 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
       if (direction) {
         event.preventDefault();
         moveSelection(direction);
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
       }
     };
     document.addEventListener("keydown", handleWebKeyDown, true);
     return () =>
       document.removeEventListener("keydown", handleWebKeyDown, true);
-  }, [moveSelection, onClose, visible]);
+  }, [moveSelection, visible]);
 
   const isSearching = state === "loading-suggestions";
 
   return (
-    <Modal
+    <AdaptiveOverlay
       visible={visible}
-      transparent
+      onClose={onClose}
+      accessibilityLabel={t("search.command.label")}
+      testID="command-palette"
+      backdropTestID="command-palette-backdrop"
+      size="wide"
+      placement="top-center"
       animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
+      backdrop="standard"
+      contentStyle={styles.commandSurface}
     >
-      <View
+      <Animated.View
+        testID="command-palette-content"
         style={[
-          styles.backdrop,
+          styles.palette,
           {
-            backgroundColor: isDark
-              ? "rgba(0,0,0,0.68)"
-              : "rgba(20,22,28,0.36)",
+            transform: [{ scale }],
+            opacity,
           },
-          Platform.OS === "web" && styles.webBackdrop,
         ]}
       >
-        <Pressable
-          testID="command-palette-backdrop"
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel={t("search.command.close")}
+        <SearchField
+          ref={inputRef}
+          inset
+          testID="command-search-field"
+          value={query}
+          onChangeText={setQuery}
+          onClear={clearQuery}
+          clearAccessibilityLabel={t("search.actions.clearSearch")}
+          loading={isSearching}
+          placeholder={t("search.placeholder")}
+          onKeyPress={Platform.OS === "web" ? undefined : handleKeyPress}
+          onSubmitEditing={submit}
+          accessibilityLabel={t("search.a11y.field")}
+          inputStyle={styles.commandInput}
         />
-        <Animated.View
-          testID="command-palette"
-          accessibilityViewIsModal
-          accessibilityLabel={t("search.command.label")}
-          style={[
-            styles.palette,
-            {
-              transform: [{ scale }],
-              opacity,
-              backgroundColor: colors.surfaceFloating,
-              borderColor: colors.borderStrong,
-            },
-          ]}
-        >
-          <SearchField
-            ref={inputRef}
-            inset
-            testID="command-search-field"
-            value={query}
-            onChangeText={setQuery}
-            onClear={clearQuery}
-            clearAccessibilityLabel={t("search.actions.clearSearch")}
-            loading={isSearching}
-            placeholder={t("search.placeholder")}
-            onKeyPress={Platform.OS === "web" ? undefined : handleKeyPress}
-            onSubmitEditing={submit}
-            accessibilityLabel={t("search.a11y.field")}
-            inputStyle={styles.commandInput}
+
+        {!query ? (
+          <RecentSearches
+            variant="compact"
+            items={recentSearches}
+            onSelect={(value) => void openAllResults(value)}
+            onClear={() => void clearRecentSearches()}
           />
-
-          {!query ? (
-            <RecentSearches
-              variant="compact"
-              items={recentSearches}
-              onSelect={(value) => void openAllResults(value)}
-              onClear={() => void clearRecentSearches()}
-            />
-          ) : query.trim().length < 2 ? (
-            <View style={styles.hint}>
-              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
-                {t("search.command.minimum")}
-              </Text>
-            </View>
-          ) : (
-            <SearchSuggestions
-              testID="command-search-suggestions"
-              variant="palette"
-              query={query.trim()}
-              items={suggestions}
-              resultCount={suggestionSearch.data?.total}
-              state={state}
-              selectedIndex={selectedIndex}
-              onSelect={(item) => void openItem(item)}
-              onShowAll={() => void openAllResults(query)}
-              onRetry={() => suggestionSearch.refetch()}
-              onManageAddons={() => {
-                onClose();
-                router.push("/addons");
-              }}
-            />
-          )}
-
-          <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-              ↑↓ {t("search.command.navigate")}
-            </Text>
-            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-              ↵ {t("search.command.open")} · Esc {t("search.command.close")}
+        ) : query.trim().length < 2 ? (
+          <View style={styles.hint}>
+            <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+              {t("search.command.minimum")}
             </Text>
           </View>
-        </Animated.View>
-      </View>
-    </Modal>
+        ) : (
+          <SearchSuggestions
+            testID="command-search-suggestions"
+            variant="palette"
+            query={query.trim()}
+            items={suggestions}
+            resultCount={suggestionSearch.data?.total}
+            state={state}
+            selectedIndex={selectedIndex}
+            onSelect={(item) => void openItem(item)}
+            onShowAll={() => void openAllResults(query)}
+            onRetry={() => suggestionSearch.refetch()}
+            onManageAddons={() => {
+              onClose();
+              router.push("/addons");
+            }}
+          />
+        )}
+
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+            ↑↓ {t("search.command.navigate")}
+          </Text>
+          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+            ↵ {t("search.command.open")} · Esc {t("search.command.close")}
+          </Text>
+        </View>
+      </Animated.View>
+    </AdaptiveOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: Platform.OS === "web" ? ("15vh" as any) : 72,
-    paddingHorizontal: 16,
-  },
   palette: {
     width: "100%",
-    maxWidth: 720,
     maxHeight: 600,
-    borderRadius: 16,
-    borderWidth: 1,
     overflow: "hidden",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 26px 70px rgba(0,0,0,0.46)" }
-      : { elevation: 24 }),
-  } as any,
-  webBackdrop: {
-    backdropFilter: "blur(8px)",
-  } as any,
+  },
+  commandSurface: {
+    width: "100%",
+    maxWidth: 760,
+  },
   commandInput: {
     fontSize: 17,
     lineHeight: 22,

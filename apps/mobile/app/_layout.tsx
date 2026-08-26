@@ -55,7 +55,6 @@ import { useTranslation } from "react-i18next";
 import { setDesktopBridgeAccessSession } from "../services/bridgeAuth";
 import { CinematicThemeProvider } from "../contexts/CinematicThemeContext";
 import { useWindowClass } from "../hooks/useWindowClass";
-import { isEditableSearchShortcutTarget } from "../services/searchController";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -246,13 +245,7 @@ function RootLayoutNav() {
     const handler = (e: KeyboardEvent) => {
       const commandSearch =
         (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
-      const slashSearch =
-        e.key === "/" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !isEditableSearchShortcutTarget(e.target);
-      if (commandSearch || slashSearch) {
+      if (commandSearch) {
         e.preventDefault();
         if (isCompact) router.push("/search" as never);
         else setSearchOpen(true);

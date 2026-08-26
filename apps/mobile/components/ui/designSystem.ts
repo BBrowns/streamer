@@ -58,6 +58,10 @@ export const uiLayout = {
   readingMaxWidth: 760,
   detailMaxWidth: 1200,
   settingsMaxWidth: 1120,
+  // Two-column settings are only comfortable when each column can absorb
+  // the longest localized labels and their trailing controls.
+  settingsColumnMinWidth: 360,
+  settingsColumnGap: 32,
   compactGutter: 20,
   mediumGutter: 24,
   expandedGutter: 40,

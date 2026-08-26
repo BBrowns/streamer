@@ -152,6 +152,7 @@
       "emptyDescription": "Empieza una película o episodio y aparecerá aquí.",
       "resumeA11y": "Reanudar {{title}}, quedan {{minutes}} minutos",
       "resumeWatchedA11y": "Reanudar {{title}}, {{minutes}} minutos vistos",
+      "moreActions": "Más acciones para {{title}}",
       "removeA11y": "Quitar {{title}} de Continuar viendo"
     },
     "shortcuts": {
@@ -810,7 +811,7 @@
       "placeholder": "https://addon-url.com/manifest.json",
       "button": "Instalar",
       "success": "¡Complemento instalado!",
-      "successDetail": "El nuevo contenido aparecerá en Descubrir.",
+      "successDetail": "Ya puedes explorar y buscar este contenido.",
       "configurationRequiredDetail": "Esta fuente se añadió, pero necesita configuración antes de poder ofrecer contenido.",
       "error": "Error de instalación"
     },

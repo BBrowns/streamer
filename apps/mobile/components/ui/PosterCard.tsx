@@ -94,7 +94,7 @@ export function PosterCard({
       style={({ hovered, pressed, focused }: any) => [
         styles.card,
         !reducedMotion && styles.motion,
-        hovered && !reducedMotion && styles.cardRaised,
+        Platform.OS === "web" && hovered && !reducedMotion && styles.cardRaised,
         pressed &&
           (reducedMotion
             ? styles.cardPressedReducedMotion

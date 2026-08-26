@@ -1,10 +1,6 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
-import {
-  FilterSheet,
-  FilterSidebar,
-  getRadioNavigationIndex,
-} from "../SearchFilters";
+import { FilterSheet, getRadioNavigationIndex } from "../SearchFilters";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("../../../hooks/useTheme", () => ({
@@ -42,7 +38,9 @@ jest.mock("../../ui/AdaptiveOverlay", () => ({
 describe("Search filters accessibility", () => {
   it("exposes radio choices through checked state", async () => {
     const screen = await render(
-      <FilterSidebar
+      <FilterSheet
+        visible
+        onClose={jest.fn()}
         years={[
           { label: "Any year", value: "all" },
           { label: "2026", value: "2026" },
@@ -83,7 +81,9 @@ describe("Search filters accessibility", () => {
     const onGenreChange = jest.fn();
     const onLanguageChange = jest.fn();
     const screen = await render(
-      <FilterSidebar
+      <FilterSheet
+        visible
+        onClose={jest.fn()}
         years={[{ label: "Any year", value: "all" }]}
         providers={[{ label: "All sources", value: "all" }]}
         genres={[

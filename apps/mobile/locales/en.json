@@ -152,6 +152,7 @@
       "emptyDescription": "Start a movie or episode and it will appear here.",
       "resumeA11y": "Resume {{title}}, {{minutes}} minutes remaining",
       "resumeWatchedA11y": "Resume {{title}}, {{minutes}} minutes watched",
+      "moreActions": "More actions for {{title}}",
       "removeA11y": "Remove {{title}} from Continue Watching"
     },
     "shortcuts": {
@@ -811,7 +812,7 @@
       "placeholder": "https://addon-url.com/manifest.json",
       "button": "Install",
       "success": "Add-on installed!",
-      "successDetail": "New content will appear on Discover.",
+      "successDetail": "You can now browse and search this content.",
       "configurationRequiredDetail": "This source was added, but needs setup before it can provide content.",
       "error": "Installation Failed"
     },

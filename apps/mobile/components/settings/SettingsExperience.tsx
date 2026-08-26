@@ -54,6 +54,7 @@ import {
   type SettingsSectionId,
 } from "./settingsSections";
 import { resolveAboutBuildInfo } from "./aboutBuildInfo";
+import { getWindowGutter, uiLayout } from "../ui/designSystem";
 
 export type SettingsPresentation =
   "overview" | "detail" | "dashboard-one-column" | "dashboard-two-column";
@@ -61,12 +62,20 @@ export type SettingsPresentation =
 export function resolveSettingsPresentation(
   windowClass: WindowClass,
   hasSection: boolean,
+  availableContentWidth = 0,
 ): SettingsPresentation {
   if (hasSection) return "detail";
   if (windowClass === "compact") return "overview";
-  return windowClass === "large"
+  return resolveSettingsColumnCount(availableContentWidth) === 2
     ? "dashboard-two-column"
     : "dashboard-one-column";
+}
+
+export function resolveSettingsColumnCount(availableContentWidth: number) {
+  return availableContentWidth >=
+    2 * uiLayout.settingsColumnMinWidth + uiLayout.settingsColumnGap
+    ? 2
+    : 1;
 }
 
 function formatUpdateStatus(
@@ -314,7 +323,7 @@ function SettingsSectionContent({
                 </Text>
               </View>
             </View>
-            <SettingsRowGroup>
+            <SettingsRowGroup contained>
               <SettingsActionRow
                 icon="create-outline"
                 title={t("settings.detail.account.editProfile")}
@@ -353,7 +362,7 @@ function SettingsSectionContent({
                 onPress={actions.openPassword}
               />
             </SettingsRowGroup>
-            <SettingsRowGroup>
+            <SettingsRowGroup contained>
               <SettingsActionRow
                 icon="log-out-outline"
                 title={t("settings.auth.signOut")}
@@ -434,7 +443,7 @@ function SettingsSectionContent({
               <Text style={[styles.groupLabel, { color: colors.error }]}>
                 {t("settings.detail.privacy.dangerZone")}
               </Text>
-              <SettingsRowGroup>
+              <SettingsRowGroup contained>
                 <SettingsActionRow
                   icon="trash-outline"
                   title={t("settings.items.deleteAccount")}
@@ -589,11 +598,13 @@ function SettingsDashboard({
   account,
   onSelect,
   twoColumns,
+  availableContentWidth,
 }: {
   actions: DetailActions;
   account: SettingsAccountState;
   onSelect: (section: SettingsSectionId) => void;
   twoColumns: boolean;
+  availableContentWidth: number;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -626,6 +637,9 @@ function SettingsDashboard({
       }),
     },
   ];
+  const columnWidth = twoColumns
+    ? (availableContentWidth - uiLayout.settingsColumnGap) / 2
+    : undefined;
 
   return (
     <ScrollView
@@ -647,7 +661,7 @@ function SettingsDashboard({
               testID={`settings-dashboard-${id}`}
               style={[
                 styles.dashboardSection,
-                { width: twoColumns ? "48.5%" : "100%" },
+                { width: columnWidth ?? "100%" },
               ]}
             >
               <Text style={[styles.dashboardTitle, { color: colors.text }]}>
@@ -702,7 +716,7 @@ function SettingsExperienceContent({
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { isCompact, windowClass } = useWindowClass();
+  const { isCompact, windowClass, width } = useWindowClass();
   const router = useRouter();
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -716,9 +730,20 @@ function SettingsExperienceContent({
   const sessionData = useSessions();
   const account = useAccount();
   const activeSection = section ?? "account";
+  const settingsBoundaryWidth = Math.min(
+    Math.max(0, width - getWindowGutter(windowClass) * 2),
+    uiLayout.settingsMaxWidth,
+  );
+  // ContentBoundary's maxWidth includes its horizontal padding. Resolve the
+  // column decision from the width the settings rows can actually occupy.
+  const availableSettingsWidth = Math.max(
+    0,
+    settingsBoundaryWidth - getWindowGutter(windowClass) * 2,
+  );
   const presentation = resolveSettingsPresentation(
     windowClass,
     Boolean(section),
+    availableSettingsWidth,
   );
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [pwModalOpen, setPwModalOpen] = useState(false);
@@ -925,6 +950,7 @@ function SettingsExperienceContent({
           account={detailProps.account}
           onSelect={selectSection}
           twoColumns={presentation === "dashboard-two-column"}
+          availableContentWidth={availableSettingsWidth}
         />
       ) : (
         <SettingsOverview onSelect={selectSection} />

@@ -152,6 +152,7 @@
       "emptyDescription": "Start een film of aflevering en hij verschijnt hier.",
       "resumeA11y": "Hervat {{title}}, nog {{minutes}} minuten",
       "resumeWatchedA11y": "Hervat {{title}}, {{minutes}} minuten bekeken",
+      "moreActions": "Meer acties voor {{title}}",
       "removeA11y": "Verwijder {{title}} uit Verder kijken"
     },
     "shortcuts": {
@@ -807,7 +808,7 @@
       "placeholder": "https://addon-url.com/manifest.json",
       "button": "Installeren",
       "success": "Add-on geïnstalleerd!",
-      "successDetail": "Nieuwe inhoud verschijnt in Ontdekken.",
+      "successDetail": "Je kunt deze inhoud nu bekijken en doorzoeken.",
       "configurationRequiredDetail": "Deze bron is toegevoegd, maar moet nog worden ingesteld voordat er content beschikbaar is.",
       "error": "Installatie mislukt"
     },

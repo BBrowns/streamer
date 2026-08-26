@@ -1,12 +1,26 @@
 import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Pressable, View } from "react-native";
 import { CommandPalette } from "../CommandPalette";
 import { useSearchController } from "../../../hooks/useSearchController";
 
 const mockPush = jest.fn();
+const mockAdaptiveOverlay = jest.fn(
+  ({ visible, children, onClose, testID, backdropTestID }: any) =>
+    visible ? (
+      <View testID={testID}>
+        <Pressable testID={backdropTestID} onPress={onClose} />
+        {children}
+      </View>
+    ) : null,
+);
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush }),
+}));
+
+jest.mock("../AdaptiveOverlay", () => ({
+  AdaptiveOverlay: (props: any) => mockAdaptiveOverlay(props),
 }));
 
 jest.mock("../../../hooks/useReducedMotion", () => ({
@@ -76,6 +90,23 @@ function controller(overrides: Record<string, unknown> = {}) {
 describe("CommandPalette", () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockAdaptiveOverlay.mockClear();
+  });
+
+  it("keeps command geometry and animation in CommandPalette", async () => {
+    (useSearchController as jest.Mock).mockReturnValue(controller());
+    const screen = await render(<CommandPalette visible onClose={jest.fn()} />);
+
+    expect(mockAdaptiveOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        size: "wide",
+        placement: "top-center",
+        animationType: "none",
+        backdrop: "standard",
+        contentStyle: expect.any(Object),
+      }),
+    );
+    expect(screen.getByTestId("command-palette-content")).toBeTruthy();
   });
 
   it("opens all results on Enter before deliberate arrow navigation", async () => {

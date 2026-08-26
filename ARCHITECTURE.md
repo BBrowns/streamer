@@ -396,12 +396,25 @@ and Electron:
   width-constrained presentation; profile and notification utilities request a
   deliberately soft backdrop. Its web trap resolves focusable descendants at
   key-event time rather than caching a render's controls.
+- `FloatingSurface` owns exactly three semantic material levels: `menu`,
+  `sheet`, and `media`. It owns the background, border, radius, shadow,
+  supported translucency policy, and opaque fallback. Topbar/navigation uses a
+  separate functional material policy and is not forced through this primitive.
+  Sheets prioritize readability and may be opaque or near-opaque according to
+  platform support, content complexity, and accessibility preferences;
+  Reduce Transparency and Android fallback to opaque material.
+- `CommandPalette` remains the owner of command-search geometry, top-center
+  placement, autofocus, keyboard selection, result composition, recents, and
+  its single fast transition. `AdaptiveOverlay` supplies only generic overlay
+  infrastructure and must not introduce a second competing animation.
 - `ThemeProvider` owns durable dark/light interface colours.
   `CinematicThemeProvider` is an optional, non-blocking ambience layer used by
   Home and Detail. Search, Settings, Library, Downloads, and other utility
-  routes remain neutral; Player consumes only derived progress/focus/selection
-  colour. Mounted screens publish an ambience source only while their route is
-  focused, because retained tab mounts are not presentation ownership.
+  routes remain neutral; catalog media may use a restrained media-local
+  progress/focus/selection accent, while Player consumes only derived
+  progress/focus/selection colour. Mounted screens publish an ambience source
+  only while their route is focused, because retained tab mounts are not
+  presentation ownership.
 - `CinematicPaletteExtractor` is an app-owned adapter around
   `react-native-image-colors`. Extraction uses only artwork URLs already being
   rendered, falls back without an error state, and stores only algorithm
@@ -411,6 +424,10 @@ and Electron:
 - `ContentBoundary` owns semantic page geometry (`cinematic`, `catalog`,
   `utilityWide`, and `utilityNarrow`); routes select a role instead of defining
   local max-width contracts.
+- Settings dashboard columns are resolved from available inner content width
+  and the minimum readable column/gutter tokens, not from a hardcoded window
+  class. The compact overview and `/settings/[section]` deep-link contract stay
+  unchanged.
 
 Interface typography uses the native/system stack. Instrument Serif is loaded
 only for large Home and Detail titles. This presentation layer must not change

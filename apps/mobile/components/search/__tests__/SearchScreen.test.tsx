@@ -155,10 +155,6 @@ jest.mock("../SearchFilters", () => ({
     const { View } = require("react-native");
     return visible ? <View testID="mock-filter-sheet" /> : null;
   },
-  FilterSidebar: () => {
-    const { View } = require("react-native");
-    return <View testID="mock-filter-sidebar" />;
-  },
 }));
 jest.mock("../SearchResultCard", () => {
   const { Text } = require("react-native");

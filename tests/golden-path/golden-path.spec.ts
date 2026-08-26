@@ -280,7 +280,6 @@ test("desktop notification bell opens a compact popover and restores focus", asy
   const popoverBox = await popover.boundingBox();
   expect(popoverBox).not.toBeNull();
   expect(popoverBox!.width).toBeLessThanOrEqual(380);
-
   await page.keyboard.press("Escape");
   await expect(popover).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -709,9 +708,11 @@ test("pointer focus stays quiet while keyboard focus remains explicit", async ({
 }, testInfo) => {
   await loginToFixtureShell(page);
   const isCompact = testInfo.project.name === "phone-web";
-  const searchNavigation = page.getByRole(isCompact ? "tab" : "button", {
-    name: "Search",
-  });
+  const searchNavigation = isCompact
+    ? page.getByRole("tab", { name: "Search" })
+    : page.getByTestId("cinematic-topbar").getByRole("button", {
+        name: "Search",
+      });
 
   if (isCompact) {
     // The mobile-web project has touch enabled, so a tap is not treated as a
@@ -846,6 +847,15 @@ test("Living Cinema Settings uses an adaptive dashboard and focused detail panes
     await expect(page.getByTestId("settings-overview")).toBeVisible();
   } else {
     await expect(page.getByTestId("settings-dashboard")).toBeVisible();
+    if (testInfo.project.name === "desktop-renderer") {
+      const [appearanceBox, playbackBox] = await Promise.all([
+        page.getByTestId("settings-dashboard-appearance").boundingBox(),
+        page.getByTestId("settings-dashboard-playback").boundingBox(),
+      ]);
+      expect(appearanceBox).not.toBeNull();
+      expect(playbackBox).not.toBeNull();
+      expect(playbackBox!.x).toBeGreaterThan(appearanceBox!.x);
+    }
   }
   await page.screenshot({
     path: testInfo.outputPath(
@@ -1263,6 +1273,20 @@ test("Detail, Settings, and Search adapt without overflow at intermediate widths
     await expect(page.getByTestId("settings-dashboard")).toBeVisible();
     await expect(page.getByTestId("settings-overview")).toHaveCount(0);
     await expect(page.getByTestId("settings-detail-account")).toHaveCount(0);
+    const [appearanceBox, playbackBox] = await Promise.all([
+      page.getByTestId("settings-dashboard-appearance").boundingBox(),
+      page.getByTestId("settings-dashboard-playback").boundingBox(),
+    ]);
+    expect(appearanceBox).not.toBeNull();
+    expect(playbackBox).not.toBeNull();
+    if (viewport.width === 1024) {
+      expect(playbackBox!.x).toBeGreaterThan(appearanceBox!.x);
+    } else {
+      expect(Math.abs(playbackBox!.x - appearanceBox!.x)).toBeLessThanOrEqual(
+        1,
+      );
+      expect(playbackBox!.y).toBeGreaterThan(appearanceBox!.y);
+    }
     await expectNoHorizontalPageOverflow(page);
     await page.goto("/settings/playback");
     await expect(page.getByTestId("settings-detail-playback")).toBeVisible();
@@ -1335,9 +1359,12 @@ test("Command Palette distinguishes submit from deliberate title navigation", as
     "Compact uses the canonical fullscreen Search tab.",
   );
   await loginToFixtureShell(page);
+  await page.keyboard.press("/");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await page.keyboard.press("k");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-palette")).toBeVisible();
-
   const field = page.getByTestId("command-search-field");
   await field.fill("Golden");
   await expect(
@@ -1584,7 +1611,9 @@ test("Add-ons expose a recoverable install retry and successful state", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Install" }).click();
   await expect(
-    page.getByText("New content will appear on Discover.", { exact: true }),
+    page.getByText("You can now browse and search this content.", {
+      exact: true,
+    }),
   ).toBeVisible();
   expect(controls.addonInstallAttempts()).toBe(2);
 });

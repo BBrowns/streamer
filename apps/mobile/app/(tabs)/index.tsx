@@ -132,7 +132,7 @@ function HomeProviderRails({
       <SectionHeader
         eyebrow="PROVIDERS"
         title={t("home.sections.fromProviders")}
-        actionLabel={t("tabs.discover")}
+        actionLabel={t("tabs.search", { defaultValue: "Search" })}
         onAction={() => router.push("/search")}
         style={{ paddingHorizontal: contentPadding }}
       />

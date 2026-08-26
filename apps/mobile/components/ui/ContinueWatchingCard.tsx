@@ -51,6 +51,11 @@ export function ContinueWatchingCard({
   metadata,
   progress,
   resumeAccessibilityLabel,
+  resumeLabel = "Resume",
+  detailsAccessibilityLabel,
+  detailsLabel = "View Details",
+  moreActionsAccessibilityLabel,
+  removeLabel,
   resuming,
   removing,
   onOpen,
@@ -64,6 +69,11 @@ export function ContinueWatchingCard({
   metadata: string;
   progress?: number;
   resumeAccessibilityLabel?: string;
+  resumeLabel?: string;
+  detailsAccessibilityLabel?: string;
+  detailsLabel?: string;
+  moreActionsAccessibilityLabel?: string;
+  removeLabel?: string;
   resuming?: boolean;
   removing?: boolean;
   onOpen: () => void;
@@ -109,7 +119,9 @@ export function ContinueWatchingCard({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`View Details: ${title}`}
+        accessibilityLabel={
+          detailsAccessibilityLabel ?? `View Details: ${title}`
+        }
         onPress={onOpen}
         style={({ hovered, pressed, focused }: any) => [
           styles.openArea,
@@ -250,12 +262,14 @@ export function ContinueWatchingCard({
         >
           <Ionicons name="play" size={16} color={colors.onPrimary} />
           <Text style={[styles.quickLabel, { color: colors.onPrimary }]}>
-            Resume
+            {resumeLabel}
           </Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`More actions for ${title}`}
+          accessibilityLabel={
+            moreActionsAccessibilityLabel ?? `More actions for ${title}`
+          }
           onPress={() => setMenuOpen(true)}
           style={({ pressed, focused }: any) => [
             styles.moreButton,
@@ -276,7 +290,9 @@ export function ContinueWatchingCard({
       <AdaptiveOverlay
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
-        accessibilityLabel={`Actions for ${title}`}
+        accessibilityLabel={
+          moreActionsAccessibilityLabel ?? `Actions for ${title}`
+        }
         contentStyle={styles.menu}
       >
         <Text
@@ -287,7 +303,7 @@ export function ContinueWatchingCard({
         </Text>
         <MenuAction
           icon="information-circle-outline"
-          label="View Details"
+          label={detailsLabel}
           onPress={() => {
             setMenuOpen(false);
             onOpen();
@@ -295,7 +311,7 @@ export function ContinueWatchingCard({
         />
         <MenuAction
           icon="close-circle-outline"
-          label={`Remove ${title} from Continue Watching`}
+          label={removeLabel ?? `Remove ${title} from Continue Watching`}
           destructive
           disabled={removing}
           onPress={() => {
