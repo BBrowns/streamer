@@ -1335,6 +1335,10 @@ test("Command Palette distinguishes submit from deliberate title navigation", as
     "Compact uses the canonical fullscreen Search tab.",
   );
   await loginToFixtureShell(page);
+  await page.keyboard.press("/");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await page.keyboard.press("k");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-palette")).toBeVisible();
 

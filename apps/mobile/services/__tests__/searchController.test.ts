@@ -3,7 +3,6 @@ import {
   createSearchDebouncer,
   getSearchSelectionDirection,
   getSearchShortcutLabel,
-  isEditableSearchShortcutTarget,
   isCurrentSearchQuery,
   moveSearchSelection,
   normalizeSearchQueryInput,
@@ -72,16 +71,6 @@ describe("search debouncer", () => {
     expect(getSearchShortcutLabel("MacIntel")).toBe("⌘K");
     expect(getSearchShortcutLabel("Win32")).toBe("Ctrl K");
     expect(getSearchShortcutLabel("Linux x86_64")).toBe("Ctrl K");
-  });
-
-  it("does not consume slash while the user is editing text", () => {
-    expect(isEditableSearchShortcutTarget({ tagName: "INPUT" })).toBe(true);
-    expect(isEditableSearchShortcutTarget({ tagName: "TEXTAREA" })).toBe(true);
-    expect(isEditableSearchShortcutTarget({ isContentEditable: true })).toBe(
-      true,
-    );
-    expect(isEditableSearchShortcutTarget({ tagName: "BUTTON" })).toBe(false);
-    expect(isEditableSearchShortcutTarget(null)).toBe(false);
   });
 
   it("does not reopen suggestions for a spacing-only edit of the submitted query", () => {
