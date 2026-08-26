@@ -44,4 +44,18 @@ describe("FloatingSurface material policy", () => {
     expect(material.backgroundColor).toBe(PALETTE.dark.opaqueGlassFallback);
     expect(material.backdropFilter).toBeUndefined();
   });
+
+  it("keeps utility material owned by ThemeColors, not cinematic ambience", () => {
+    const material = resolveFloatingSurfaceMaterial({
+      level: "menu",
+      colors: PALETTE.dark,
+      reducedTransparency: false,
+      platform: "web",
+    });
+
+    expect(material.backgroundColor).toBe(PALETTE.dark.surfaceFloating);
+    expect(material.backgroundColor).not.toBe(PALETTE.dark.tint);
+    expect(material).not.toHaveProperty("ambient");
+    expect(material).not.toHaveProperty("glow");
+  });
 });
