@@ -94,7 +94,8 @@ that scope separate from the product diff.
 1. Finish and verify the process-skill redesign against explicit process-owned
    files without absorbing unrelated Living Cinema changes.
 2. Keep the exact-file Living Cinema verification receipt current with each
-   reviewed convergence commit and any remaining visual finding.
+   reviewed convergence commit and any remaining visual finding. The current
+   receipt is [2026-08-26 Living Cinema convergence](./docs/qa-runs/2026-08-26-living-cinema-convergence.md).
 3. Run the documented browser and simulator flows, preserving the distinction
    between automated evidence and real-target evidence.
 4. Execute the QA matrix on packaged macOS, browser, iPhone, and Android when
@@ -109,6 +110,8 @@ that scope separate from the product diff.
 - [PLAYBACK.md](./PLAYBACK.md) — playback session and stream contracts.
 - [UI.md](./UI.md) — adaptive UI and Living Cinema behavior.
 - [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) — target-by-target evidence status.
+- [docs/qa-runs/2026-08-26-living-cinema-convergence.md](./docs/qa-runs/2026-08-26-living-cinema-convergence.md)
+  — exact-scope convergence verification receipt.
 - [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) — release decision inputs.
 - [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md) — dependency and
   install-script policy.
