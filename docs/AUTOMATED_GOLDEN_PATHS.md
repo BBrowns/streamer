@@ -33,18 +33,19 @@ They cover:
   equal card width, 16 px gaps, and page overflow.
 - Shared `MediaRail` bounds, disabled end arrows, and proof that the final
   poster caption remains fully visible.
-- Obsidian Settings overview/detail routing, mutually exclusive Sources and
+- Living Cinema Settings overview/detail routing, mutually exclusive Sources and
   Advanced responsibilities, dark/light captures, and legacy `/sources`
   compatibility.
 - Active Search idle/recents, bounded suggestions, submitted poster-grid
-  results, compact filter sheet, large filter sidebar, no-match,
+  results, compact filter sheet, large filter popover, no-match,
   no-searchable-provider, provider-outage, and partial-provider states.
 - Search URL normalization, reset, clear/resubmit, browser back/forward state,
   and legacy `/search/results` compatibility.
 - Pointer focus without a persistent ring and a strong three-pixel keyboard
   `:focus-visible` treatment on the actual focused node.
 - Command Palette arrow-key selection and Enter activation against the same
-  Search model.
+  Search model. The topbar search button and `Meta/Ctrl+K` open it; `/` and
+  plain `K` are intentionally no-ops.
 
 ## Versioned Visual Baselines
 
@@ -66,12 +67,18 @@ produces a replacement artifact with hashes and its source commit;
 **Refresh Visual Baselines** offers the same flow behind an explicit `refresh`
 confirmation after this workflow reaches the default branch. Neither job can
 push or alter a branch. On macOS, `test:visual` uses the separate Darwin
-baseline. Do not accept `--update-snapshots` output without a visual review.
+baseline. Do not accept `--update-snapshots` output without a rendered
+design-convergence review first. That review covers Settings, Account,
+Add-ons, Sources, Downloads, Notifications, Command Search, profile menus,
+and at least one form overlay; meaningful containment must be justified before
+a baseline is refreshed.
 
 The broader semantic suite separately exercises Settings detail and the Search
 idle/recents/suggestions/results/filters/no-results/no-provider/partial states.
 Intermediate pane and overflow behavior is asserted directly at 768 x 1024 and
-1024 x 768. Project-aware semantic skips remain explicit in the test output.
+1024 x 768. Settings column choice is content-width-driven and is asserted as
+one column at 768 px and two readable columns at 1024 px and 1440 px. Project-
+aware semantic skips remain explicit in the test output.
 The focused visual suite has 10 route/theme test cases plus eight player-state
 captures, for 44 platform-specific pixel comparisons; macOS runs them only
 through `npm run test:visual`.

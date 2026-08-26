@@ -1,6 +1,6 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-08-20.
+> Last updated: 2026-08-26.
 > Audience: humans and agents continuing Streamer product, playback, release,
 > or process work.
 
@@ -26,12 +26,13 @@ the source of truth for projected runtime pins.
 
 ## Active Work
 
-The active branch is `codex/living-cinema`. Its product work replaces the
-sidebar-oriented presentation with the Living Cinema design while preserving
+The active production-convergence branch at this handoff is
+`codex/living-cinema-convergence`, based on the then-current `origin/master`.
+It contains the reviewed Living Cinema convergence slices and preserves
 existing ownership, routing, playback, provider, download, cast, source-safety,
-and offline contracts. The branch contains broad, uncommitted mobile, shared,
-server, desktop, documentation, and visual-baseline changes; treat all of them
-as user-owned and never discard or stage them indiscriminately.
+and offline contracts. The original dirty checkout and the earlier broad
+`codex/living-cinema` worktree remain separate; do not clean, reset, or stage
+either one indiscriminately.
 
 The current UI direction includes adaptive cinema surfaces, a horizontal
 desktop top bar, full-bleed Home and Detail layouts, responsive Search, Player,
@@ -61,6 +62,14 @@ poster to an ambient edge, and labels command Search's final row with the known
 result count. These are polish contracts, not a new navigation or component
 architecture.
 
+The contained convergence pass has completed its production slices: semantic
+FloatingSurface levels and AdaptiveOverlay infrastructure, command-search
+ownership, removal of the global `/` shortcut, selective utility flattening,
+shared interaction-state harmonisation, terminology cleanup, evidence-backed
+legacy presentation removal, and risk-based golden-path assertions. Step 9,
+the asymmetrical Continue Watching experiment, has intentionally not started
+and must remain a separate branch/worktree and approval.
+
 The same worktree also contains a compact repository-skill redesign. Its nine
 skills, registry, activation fixtures, process validators, maintenance scripts,
 runtime policy and changed-file verification are process infrastructure. Keep
@@ -84,14 +93,14 @@ that scope separate from the product diff.
 
 1. Finish and verify the process-skill redesign against explicit process-owned
    files without absorbing unrelated Living Cinema changes.
-2. Finish the exact-file Living Cinema verification receipt and resolve any
-   remaining type, interaction, accessibility, or visual-regression finding.
+2. Keep the exact-file Living Cinema verification receipt current with each
+   reviewed convergence commit and any remaining visual finding.
 3. Run the documented browser and simulator flows, preserving the distinction
    between automated evidence and real-target evidence.
 4. Execute the QA matrix on packaged macOS, browser, iPhone, and Android when
    the required hardware and credentials are available.
-5. Generate release-candidate evidence for the exact commit and artifacts, then
-   make the go/no-go decision from the RC checklist.
+5. Do not begin the separate Continue Watching experiment until production
+   convergence is reviewed and explicitly approved.
 
 ## Canonical Sources
 

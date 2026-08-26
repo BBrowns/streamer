@@ -14,6 +14,13 @@ media presentation with quiet utility chrome and a fully supported warm-neutral
 light mode. Artwork and whitespace structure the screen; colour is derived
 subtly from the current title instead of painted over every control.
 
+The goal of this convergence pass is **visual convergence, not maximal
+flattening**. A surface is justified when it communicates grouping, hierarchy,
+modality, status, or interaction ownership. Remove decorative containment, but
+preserve meaningful containment. This applies especially to Settings, Account,
+Sources, Add-ons, Downloads, Notifications, diagnostics, warnings, destructive
+actions, and overlays.
+
 - **Living canvas:** dark `#08090B` or warm-neutral light canvas, with neutral
   Play/Resume actions and semantic accent only for focus, progress, selection,
   and temporary ambience.
@@ -61,11 +68,15 @@ Current UI phase (correctness and polish):
   parameters. Search responses include provider provenance and partial
   provider-failure metadata.
 - Settings uses a compact category overview and `/settings/[section]` detail
-  routes. Medium and expanded render a one-column dashboard; large renders a
-  two-column dashboard without a second settings navigation rail.
-- Home and Detail own cinematic ambience. Player only borrows its accent for
-  progress/focus/selected state. Search, Settings, Library, Downloads, auth,
-  and operational surfaces remain neutral.
+  routes. The dashboard chooses one or two columns from available inner content
+  width, minimum readable column width, and gutter; window class is an input,
+  not a hardcoded one-/two-column rule. There is no second settings navigation
+  rail.
+- Home and Detail own cinematic page ambience. Catalog media may still use a
+  restrained media-local progress, focus, or selected accent. Player only
+  borrows its accent for progress/focus/selected state. Search, Settings,
+  Library, Downloads, auth, and operational surfaces remain neutral and never
+  consume artwork-driven page ambience.
 - Keep the Expo/React Native stack; do not start a parallel UI-framework migration.
 - Preserve the session-driven playback architecture and progressive disclosure
   of source/device complexity.
@@ -186,6 +197,14 @@ Do not do:
   screens.
 - Do not merge meaningful UI changes without desktop and phone screenshot QA.
 
+Visual QA is risk-based: use compact (390×844) and large (1440×1000) for
+reviewed pixel baselines, and medium (768×1024) plus expanded (1024×768) for
+semantic geometry, overflow, and breakpoint assertions. Review Settings,
+Account, Add-ons, Sources, Downloads, Notifications, Command Search, profile
+menus, and form overlays on rendered builds before refreshing any snapshot.
+Passing pixel comparisons is not a substitute for that design-convergence
+review. Keep Darwin and Linux baselines independent.
+
 ---
 
 ## 2. Theme System
@@ -249,10 +268,15 @@ visual fixtures can wait without coupling to implementation timing.
 Home follows the active hero and lets ambience fade with scroll; Detail fixes
 the selected item's theme. Theme sources register only while their route is
 focused, so retained Expo Router tabs cannot leak Home or Detail ambience into
-neutral Library, Search, Settings, or Downloads presentations. Dynamic artwork colour is a persisted Appearance
-preference and defaults on. Text always uses `ThemeColors`; derived colour is
-limited to ambient, glow, progress, focus, and selected state. While a new
-artwork palette resolves, the provider retains the previous media palette
+neutral Library, Search, Settings, or Downloads presentations. Cinematic page
+ambience is limited to Home and Detail: those routes may use `ambient`,
+`ambientMuted`, `glow`, artwork scrims, accent, focus, and progress. Catalog
+surfaces stay page-neutral, although an individual media item may use its own
+restrained progress, keyboard-focus, or selected-state accent. Player uses only
+media-local accent/progress/focus; utility surfaces stay fully neutral. Dynamic
+artwork colour is a persisted Appearance preference and defaults on. Text
+always uses `ThemeColors`; derived colour is limited to the roles above. While
+a new artwork palette resolves, the provider retains the previous media palette
 instead of flashing through the fallback. Colour-bearing hero layers use the
 shared motion timing for a soft crossfade; Reduce Motion removes spatial
 movement without making extraction a rendering dependency.
@@ -279,8 +303,8 @@ mutually exclusive during resizing, split screen, and foldable transitions.
 
 `CinematicTopBar` contains Streamer at the left, Home/Library/Downloads in the
 middle, and Search/Notifications/Profile at the right. Search opens the same
-controller from its icon, `Command/Ctrl+K`, or `/` when no editable element is
-active. Home and Detail start with an overlay topbar and gain a readable
+controller from its icon or `Command/Ctrl+K`; the former global `/` shortcut is
+intentionally removed. Home and Detail start with an overlay topbar and gain a readable
 translucent surface plus a subtle divider while scrolling. `DesktopLayout`
 owns that scroll signal and keeps the topbar outside the route scroll viewport,
 so content can pass underneath without covering navigation. Medium density
@@ -458,15 +482,15 @@ A thin horizontal progress bar rendered below catalog cards to indicate watch pr
 ### 4.9 `CommandPalette`
 
 A keyboard-driven search overlay (web/desktop), triggered by its topbar icon,
-`⌘K` on macOS, `Ctrl+K` on Windows/Linux, or `/` outside an editable element.
-It renders recent searches and at most six live,
-keyboard-selectable suggestions using the same controller, endpoint mode,
-ranking, and persistence as `/search`. Enter opens a highlighted title only
-after deliberate arrow-key navigation; otherwise it opens the canonical
-`/search?q=...` results route. The final row exposes the provider-reported
-result count when it is known, rather than presenting a second anonymous
-Search action. Escape closes the overlay and focus returns to the exact trigger
-that opened it.
+`⌘K` on macOS, or `Ctrl+K` on Windows/Linux. The former global `/` shortcut is
+intentionally a no-op; mobile uses the Search tab. It renders recent searches
+and at most six live, keyboard-selectable suggestions using the same controller,
+endpoint mode, ranking, and persistence as `/search`. Enter opens a highlighted
+title only after deliberate arrow-key navigation; otherwise it opens the
+canonical `/search?q=...` results route. The final row exposes the
+provider-reported result count when it is known, rather than presenting a second
+anonymous Search action. Escape closes the overlay and focus returns to the
+exact trigger that opened it.
 
 ### 4.9.1 Unified Search Screen
 
@@ -508,6 +532,31 @@ year/provider/sort remain secondary client refinements because add-on metadata
 is not uniform enough to make those reliable backend facets. Do not infer genre,
 language, or playback availability from labels, and do not expose source picking
 as the primary search UX.
+
+### 4.9.2 `FloatingSurface` and `AdaptiveOverlay`
+
+`FloatingSurface` owns semantic material levels exactly as `menu`, `sheet`, or
+`media`. It owns background, border, radius, shadow, supported translucency, and
+the opaque fallback. Topbar/navigation remains a separate functional material
+policy and is not forced through `FloatingSurface`.
+
+Sheets prioritize readability and may resolve to opaque or near-opaque depending
+on platform, available translucency support, content complexity, and
+accessibility preferences. Reduce Transparency always selects the opaque
+fallback; Android remains opaque when reliable native blur is unavailable. No
+route-local blur values or new blur dependency belong in feature components.
+
+`AdaptiveOverlay` owns the generic modal shell, backdrop, safe areas, focus trap
+and return, Escape, modal semantics, and breakpoint presentation. Large/expanded
+use popovers, medium floating sheets, and compact bottom sheets. Feature
+components retain their content and interaction contracts.
+
+`CommandPalette` is the deliberate exception to generic feature geometry:
+AdaptiveOverlay provides infrastructure, while CommandPalette owns its
+top-center placement, max width, fast transition, autofocus, arrow-key result
+selection, result composition, recents, loading/no-result states, and View all
+row. The two layers must produce one effective visible animation rather than
+compounding transforms or opacity.
 
 ### 4.10 `DesktopLayout`
 
@@ -933,9 +982,13 @@ section contract is `account`, `playback`, `downloads`, `sources`,
 
 - `/settings` shows profile, one compact consumer readiness summary, and the
   category overview on compact.
-- Medium and expanded render the same Appearance, Playback, Downloads, and
-  Account & Sources content in one centered column. Large renders those groups
-  in two columns within a 1120 px boundary. There is no settings sidebar.
+- Medium through large render the same Appearance, Playback, Downloads, and
+  Account & Sources content within a 1120 px boundary. The dashboard resolves
+  two columns only when the available inner width satisfies
+  `availableWidth >= 2 * settingsColumnMinWidth + settingsColumnGap`; otherwise
+  it uses one column. The current readability tokens are a 360 px minimum
+  column and 32 px gap, and the resolver is tested at 768, 1024, and 1440 px.
+  There is no settings sidebar.
 - `/settings/[section]` shows exactly one category. `/sources` redirects to
   `/settings/sources` so existing bookmarks and recovery actions stay valid.
 - Deep links and recovery routes remain valid on every class; medium-through-
@@ -993,6 +1046,23 @@ First-run onboarding now includes a setup checklist before theme/add-on
 selection. It explains sources/metadata, desktop bridge, downloads/cast, and
 privacy at a product level. Do not add Real-Debrid to onboarding; it remains an
 optional paid resolver configured later.
+
+### 8.1 Utility containment review
+
+Utility routes use a neutral Streamer theme, not artwork-driven page ambience.
+They should still retain meaningful visual differentiation for status, focus,
+selection, hierarchy, and interaction ownership. Every proposed flattening is
+reviewed with the same three questions:
+
+1. Is containment semantically necessary?
+2. Can spacing or separators establish the same hierarchy?
+3. Would removing the surface make interaction ownership less clear?
+
+Remove a surface only when it is decorative containment. Preserve surfaces for
+grouping, modality, status, selection context, destructive scope, diagnostics,
+installation/setup ownership, and error or warning recovery. In particular,
+Add-on setup, account security, download recovery, diagnostics, and warnings
+must not be flattened mechanically.
 
 ---
 
