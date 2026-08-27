@@ -24,7 +24,9 @@ The release gate expects the workflow to run:
 - desktop release signing/notarization config smoke:
   `npm run release:check --workspace=@streamer/desktop`
 - Sentry release dry-run: `npm run sentry:release:dry-run`
-- dependency install-script policy: `npm run security:install-scripts`
+- dependency install-script policy and reproducible install:
+  `npm run ci:install` (runs `security:install-scripts`, `npm ci --ignore-scripts`,
+  and the reviewed `postinstall` patch step)
 - production high/critical dependency audit: `npm run security:audit`
 - release gate: `npm run release:gate`
 
@@ -155,3 +157,9 @@ explicitly because a merge-group event has no pull-request base/head context.
 The gate is intentionally conservative. If a future PR makes the app genuinely
 release-ready, update the QA matrix and release gate together with the evidence
 that supports the new claim.
+
+Every workflow job has a finite `timeout-minutes` value. Server CI applies the
+committed Prisma migrations with `prisma migrate deploy`; `db push` remains a
+deliberate local-development command only. The CI install helper keeps
+lifecycle scripts disabled and rebuilds only the allow-listed
+`node-datachannel` native addon after patch application.

@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+function readLockfile() {
+  return JSON.parse(
+    readFileSync(resolve(repoRoot, "package-lock.json"), "utf8"),
+  );
+}
 
 test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
   const xcode = require("xcode");
@@ -16,31 +25,57 @@ test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
 
-test("Expo SDK 57 resolves one compatible Gesture Handler native module", () => {
-  const rootPackage = JSON.parse(
-    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+test("React Native resolves the supported Metro line without image-size", () => {
+  const lockfile = readLockfile();
+  const metroConfig =
+    lockfile.packages["node_modules/@react-native/metro-config"];
+  const metroNodes = Object.entries(lockfile.packages).filter(
+    ([path]) =>
+      path === "node_modules/metro" || path.endsWith("/node_modules/metro"),
   );
-  const mobilePackage = JSON.parse(
-    readFileSync(
-      new URL("../apps/mobile/package.json", import.meta.url),
-      "utf8",
-    ),
-  );
-  const lockfile = JSON.parse(
-    readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"),
+  const imageSizeNodes = Object.keys(lockfile.packages).filter(
+    (path) =>
+      path === "node_modules/image-size" ||
+      path.endsWith("/node_modules/image-size"),
   );
 
-  assert.equal(
-    mobilePackage.dependencies["react-native-gesture-handler"],
-    "~2.32.0",
+  assert.equal(metroConfig.version, "0.86.2");
+  assert.ok(metroNodes.length > 0);
+  assert.deepEqual(
+    [...new Set(metroNodes.map(([, packageInfo]) => packageInfo.version))],
+    ["0.84.5"],
   );
-  assert.equal(rootPackage.overrides["react-native-gesture-handler"], "2.32.0");
-  assert.equal(
-    lockfile.packages["node_modules/react-native-gesture-handler"].version,
-    "2.32.0",
+  assert.deepEqual(imageSizeNodes, []);
+});
+
+test("unused native adapters resolve without vulnerable parser packages", () => {
+  const lockfile = readLockfile();
+  const browserAdapter = lockfile.packages["node_modules/@vibrant/image-node"];
+  const ipAdapter =
+    lockfile.packages["node_modules/bittorrent-tracker/node_modules/ip"];
+  const ipNodes = Object.entries(lockfile.packages).filter(
+    ([path]) => path === "node_modules/ip" || path.endsWith("/node_modules/ip"),
   );
-  assert.equal(
-    lockfile.packages["apps/mobile/node_modules/react-native-gesture-handler"],
-    undefined,
+  const unresolvedIpNodes = ipNodes.filter(
+    ([, packageInfo]) => (packageInfo.name ?? "ip") === "ip",
   );
+  const fileTypeNodes = Object.keys(lockfile.packages).filter(
+    (path) =>
+      path === "node_modules/file-type" ||
+      path.endsWith("/node_modules/file-type"),
+  );
+
+  assert.equal(browserAdapter.name, "@vibrant/image-browser");
+  assert.equal(browserAdapter.version, "4.0.4");
+  assert.deepEqual(fileTypeNodes, []);
+  assert.deepEqual(unresolvedIpNodes, []);
+  assert.ok(ipNodes.length > 0);
+  assert.ok(
+    ipNodes.every(
+      ([, packageInfo]) =>
+        packageInfo.name === "ip-address" && packageInfo.version === "10.5.0",
+    ),
+  );
+  assert.equal(ipAdapter.name, "ip-address");
+  assert.equal(ipAdapter.version, "10.5.0");
 });

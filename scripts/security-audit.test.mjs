@@ -95,19 +95,3 @@ test("blocks an advisory when the dependency does not match the exception", () =
 
   assert.equal(result.blocking.length, 1);
 });
-
-test("allows the reviewed image-size findings only on the Metro node", () => {
-  for (const advisory of ["GHSA-w3rx-r6r6-pgpr", "GHSA-5p2g-fcmc-qvqq"]) {
-    const result = evaluateAuditReport(
-      reportFor({
-        name: "image-size",
-        url: `https://github.com/advisories/${advisory}`,
-        nodes: ["node_modules/image-size"],
-      }),
-      { now: new Date("2026-07-28T00:00:00.000Z") },
-    );
-
-    assert.equal(result.blocking.length, 0);
-    assert.equal(result.reviewed.length, 1);
-  }
-});

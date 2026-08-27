@@ -40,6 +40,7 @@ import {
 } from "./PlaybackErrors";
 import { toPlaybackSessionError } from "./PlaybackSessionReducer";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
+import { recordPlaybackDebugEvent } from "./playbackDebug";
 import {
   ActionPreflightError,
   buildActionBridgeHint,
@@ -876,12 +877,23 @@ async function attemptCandidate(
   try {
     const actionDeviceProfile =
       action === "cast" ? getDeviceProfile() : session.deviceProfile;
-    requireActionPreflight(
-      preflightStreamAction(action, stream, {
-        deviceProfile: actionDeviceProfile,
-        requiresRemux: candidate.requiresRemux,
-      }),
-    );
+    const preflight = preflightStreamAction(action, stream, {
+      deviceProfile: actionDeviceProfile,
+      requiresRemux: candidate.requiresRemux,
+    });
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "playback.action_preflight",
+      data: {
+        action,
+        candidateKind: candidate.kind,
+        ready: preflight.ready,
+        reason: preflight.reason,
+        requiresBridge: preflight.requiresBridge,
+        retryable: preflight.retryable,
+      },
+    });
+    requireActionPreflight(preflight);
     const currentSession = getSession(sessionId);
     if (!currentSession || isTerminal(currentSession)) {
       return {

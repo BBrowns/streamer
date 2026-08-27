@@ -254,6 +254,7 @@ export function MobileDetailLayout({
       <Stack.Screen options={{ headerShown: false }} />
 
       <Pressable
+        testID="detail-back-button"
         style={({ focused }: any) => [
           styles.floatingBack,
           isMedium && styles.floatingBackBelowTopBar,

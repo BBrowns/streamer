@@ -16,6 +16,7 @@ const entryFiles = [
   "hls-offline.js",
   "sentry.js",
   "bridge-runtime.js",
+  "desktop-bonjour.js",
 ];
 
 function build() {

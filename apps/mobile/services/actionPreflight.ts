@@ -12,6 +12,7 @@ import {
   validateActionBridgeUrl,
 } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
+import { getBridgeAuthHeaders } from "./bridgeAuth";
 import { getDeviceProfile } from "./playback/deviceProfile";
 import {
   streamEngineManager,
@@ -90,7 +91,11 @@ export function buildActionBridgeHint(
     auth: {
       required: diagnostics.auth?.required,
       bridgeConfigured: diagnostics.auth?.configured,
-      clientConfigured: Boolean(authState.streamServerToken?.trim()),
+      // Desktop uses a short-lived renderer access session instead of
+      // exposing the bridge pairing token to the renderer. Use the effective
+      // in-memory credential here so a healthy desktop bridge is not rejected
+      // by a stale persisted-token check.
+      clientConfigured: Boolean(getBridgeAuthHeaders().Authorization),
     },
     capabilities: diagnostics.capabilities,
   };

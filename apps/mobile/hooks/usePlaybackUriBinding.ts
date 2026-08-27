@@ -9,6 +9,7 @@ import {
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
 import { resolvePlaybackSession } from "../services/playback/PlaybackSessionPlaybackService";
+import { recordPlaybackDebugEvent } from "../services/playback/playbackDebug";
 import type { PlaybackSessionBinding } from "./usePlaybackSessionBinding";
 
 export type PlaybackUriMessage =
@@ -73,6 +74,21 @@ export function usePlaybackUriBinding({
         return;
       }
 
+      recordPlaybackDebugEvent({
+        category: "playback",
+        message: "playback.resolve_started",
+        data: {
+          hasSession: Boolean(playbackSessionId),
+          hasCandidate: Boolean(playbackCandidateId),
+          hasAttempt: Boolean(playbackAttemptId),
+          sourceKind: currentStream.infoHash
+            ? "torrent"
+            : currentStream.url
+              ? "url"
+              : "unknown",
+        },
+      });
+
       if (
         playbackSessionId &&
         playbackCandidateId &&
@@ -80,6 +96,15 @@ export function usePlaybackUriBinding({
         currentStream.url
       ) {
         setPlaybackUri(currentStream.url);
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "playback.resolve_ready",
+          data: {
+            path: "prepared",
+            candidateId: playbackCandidateId,
+            attemptId: playbackAttemptId,
+          },
+        });
         return;
       }
 
@@ -93,6 +118,16 @@ export function usePlaybackUriBinding({
         if (!isMounted) return;
 
         if (!result.ok) {
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "playback.resolve_failed",
+            level: "warning",
+            data: {
+              path: "session",
+              errorCode: result.error.code,
+              retryable: result.error.retryable,
+            },
+          });
           if (await tryReplanPartialPlayback(playbackSessionId)) return;
           setPlaybackUri(null);
           setRuntimeFailure(result.error);
@@ -108,6 +143,17 @@ export function usePlaybackUriBinding({
           result.fallbackReason,
         );
         setPlaybackUri(result.uri);
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "playback.resolve_ready",
+          data: {
+            path: "session",
+            candidateId: result.candidateId,
+            executionTarget: result.route?.executionTarget,
+            delivery: result.route?.delivery,
+            hasBridgeJob: Boolean(result.bridgeJobId),
+          },
+        });
         return;
       }
 
@@ -132,6 +178,16 @@ export function usePlaybackUriBinding({
 
         if (uri && uri.length > 0) {
           setPlaybackUri(uri);
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "playback.resolve_ready",
+            data: {
+              path: "legacy",
+              engine: streamEngineManager
+                .resolveEngine(currentStream)
+                ?.getEngineType(),
+            },
+          });
           return;
         }
 
@@ -147,6 +203,16 @@ export function usePlaybackUriBinding({
 
         setPlaybackUri(null);
         setRuntimeFailure(error);
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "playback.resolve_failed",
+          level: "warning",
+          data: {
+            path: "legacy",
+            errorCode: error.code,
+            retryable: error.retryable,
+          },
+        });
       } catch (error) {
         if (!isMounted) return;
         const message =
@@ -162,6 +228,16 @@ export function usePlaybackUriBinding({
 
         setPlaybackUri(null);
         setRuntimeFailure(runtimeFailure);
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "playback.resolve_failed",
+          level: "warning",
+          data: {
+            path: "legacy",
+            errorCode: runtimeFailure.code,
+            retryable: runtimeFailure.retryable,
+          },
+        });
       }
     };
 

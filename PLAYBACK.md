@@ -375,6 +375,11 @@ client uses the gateway's relative elapsed duration when it adopts an upgraded
 readiness budget, so a desktop bridge and a mobile/web renderer do not need
 synchronized wall clocks. Unknown-container torrent labels reserve the bounded
 remux allowance until metadata makes the container decision authoritative.
+When that inspection proves a requested `range-http` file requires an MKV
+remux, the bridge may narrow the job to `seekable-cache`. The client accepts and
+adopts only this exact delivery upgrade, including the bridge's authoritative
+seek capability. Any other delivery drift or downgrade remains a bridge
+contract failure.
 Remaining work is reliability and productization: real-device
 download/cast/gateway tests, release evidence, and a more polished player
 readiness UI.

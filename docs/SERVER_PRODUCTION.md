@@ -108,6 +108,25 @@ The process verifies PostgreSQL and, in multi-instance mode, Redis before it
 opens the listener. Do not run destructive development schema commands in a
 production release.
 
+The migration history starts with `20260101000000_init` and then applies the
+two additive watch-progress migrations. A database created before this history
+was introduced (for example with `prisma db push`) must be inspected and
+backed up once, then have only the baseline marked as applied before the first
+deployment:
+
+```bash
+npx prisma migrate resolve --applied 20260101000000_init \
+  --schema=server/prisma/schema.prisma
+npx prisma migrate deploy --schema=server/prisma/schema.prisma
+```
+
+Run `migrate resolve` only after confirming that the existing schema matches the
+baseline; never use it to conceal a failed migration. The two additive
+watch-progress migrations are intentionally strict: if either column already
+exists, stop and inspect the schema and `_prisma_migrations` history instead of
+silently masking drift. After verification, use `prisma migrate resolve` only
+for the specific legacy migration that is already represented in the schema.
+
 ## Email Delivery
 
 Development can use `EMAIL_DELIVERY_MODE=log`; messages are redacted and not

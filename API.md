@@ -82,12 +82,12 @@ Important plan states:
 
 ### 1.6 Trakt & Sync (`/api/trakt` & `/api/sync`)
 
-| Method | Route                     | Description                                                                                  |
-| ------ | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `POST` | `/trakt/connect`          | Completes OAuth flow. Body: `{ code, redirectUri }`.                                         |
-| `GET`  | `/trakt/status`           | `true` if connected and token is valid.                                                      |
-| `POST` | `/trakt/scrobble/:action` | `action` = `start` \| `pause` \| `stop`. Syncs to Trakt TV.                                  |
-| `GET`  | `/sync/events`            | **SSE Endpoint.** Yields realtime events across devices (e.g. session death, notifications). |
+| Method | Route                     | Description                                                                         |
+| ------ | ------------------------- | ----------------------------------------------------------------------------------- |
+| `POST` | `/trakt/connect`          | Completes OAuth flow. Body: `{ code, redirectUri }`.                                |
+| `GET`  | `/trakt/status`           | `true` if connected and token is valid.                                             |
+| `POST` | `/trakt/scrobble/:action` | `action` = `start` \| `pause` \| `stop`. Syncs to Trakt TV.                         |
+| `GET`  | `/sync/events`            | **WebSocket endpoint.** Authenticated bidirectional events across a user's devices. |
 
 ---
 
@@ -245,9 +245,16 @@ If `POST /refresh` fails (token revoked or expired > 7 days), the queue is rejec
 
 ## 5. API Intricacies
 
-### 5.1 SSE Connection Management
+### 5.1 WebSocket Authentication
 
-In Hono, Server-Sent Events (`streamSSE`) typically close as soon as the synchronous execution of the handler finishes. To prevent the `/api/sync/events` stream from dying, the server executes an infinite `while (true)` loop that yields a promise every 30 seconds to send a heartbeat (`"ping"` event). The loop is safely terminated when the client disconnects and triggers the `stream.onAbort` callback, which runs cleanup and breaks the reference holding the connection open.
+`/api/sync/events` accepts the normal bearer and `X-Device-Id` headers from
+React Native. Browser and Electron clients, whose WebSocket API cannot attach
+custom request headers, offer `streamer-sync-v1` first and use bounded
+`streamer-auth.<access-token>` and optional `streamer-device.<device-id>`
+subprotocol values. The server applies the same JWT verification and token-age
+rules to both paths. A credential is never accepted from a query parameter and
+must not be written to request logs. The server negotiates only the first,
+non-sensitive public protocol.
 
 ### 5.2 Axios 401 Interceptor Queue
 
@@ -275,9 +282,11 @@ The `window.desktopBridge` context bridge is invoked as `(window as any).desktop
 
 ### Medium Priority
 
-#### 3. Migrate from SSE to WebSockets for Sync
+#### 3. WebSocket Sync Recovery
 
-The `/api/sync/events` endpoint relies on Server-Sent Events, which are unidirectional (Server → Client). This requires the mobile app to hit standard REST endpoints (`/api/sessions/command`) for remote control orchestration (e.g., pausing an iPad from the iPhone). Upgrading this to a bidirectional WebSocket (`ws`) connection would allow lower-latency RPC commands between devices and reduce HTTP overhead.
+The sync transport is bidirectional WebSocket today. Future work should keep
+reconnect and access-token refresh bounded and coordinated so an expired token
+cannot produce a reconnect storm across retained browser tabs.
 
 #### 4. Add-on Payload Sanitation Validation
 

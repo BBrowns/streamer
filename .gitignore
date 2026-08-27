@@ -43,6 +43,9 @@ pnpm-debug.log*
 # Prisma
 server/prisma/*.db
 server/prisma/migrations/*
+!server/prisma/migrations/migration_lock.toml
+!server/prisma/migrations/20260101000000_init/
+!server/prisma/migrations/20260101000000_init/migration.sql
 !server/prisma/migrations/20260727154500_add_watch_progress_duration_source/
 !server/prisma/migrations/20260727154500_add_watch_progress_duration_source/migration.sql
 !server/prisma/migrations/20260814213000_add_watch_progress_background/

@@ -1,0 +1,87 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+# This workflow never checks out or executes pull-request code. It only reads
+# Dependabot metadata and asks GitHub to queue a merge after protected checks.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  queue-safe-update:
+    name: Queue safe Dependabot update
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.ref == 'master' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read Dependabot update metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@dbb049abf0d677abbd7f7eee0375145b417fdd34 # v2.2.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Evaluate conservative auto-merge policy
+        id: policy
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          HAS_DEPENDENCY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'dependencies') }}
+        run: |
+          set -euo pipefail
+          # Fail closed if metadata is missing or a later policy check fails.
+          echo "eligible=false" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${HAS_DEPENDENCY_LABEL}" != "true" ]]; then
+            echo "Skipping auto-merge because the dependencies label is absent."
+            exit 0
+          fi
+
+          case "${UPDATE_TYPE}" in
+            version-update:semver-patch|version-update:semver-minor)
+              ;;
+            *)
+              echo "eligible=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping auto-merge for update type: ${UPDATE_TYPE:-unknown}"
+              exit 0
+              ;;
+          esac
+
+          dependency_names="${DEPENDENCY_NAMES,,}"
+          for protected_pattern in \
+            "expo" "@expo/" "react" "react-native" "electron" \
+            "prisma" "typescript" "@typescript-eslint/" "@sentry/" \
+            "@hono/" "esbuild" "@rollup/" "sharp" "sqlite"; do
+            if [[ "${dependency_names}" == *"${protected_pattern}"* ]]; then
+              echo "eligible=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping auto-merge for protected dependency: ${protected_pattern}"
+              exit 0
+            fi
+          done
+
+          echo "eligible=true" >> "${GITHUB_OUTPUT}"
+          echo "Dependabot patch/minor update is eligible for protected auto-merge."
+
+      - name: Queue squash auto-merge
+        if: steps.policy.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr merge "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --auto --squash --delete-branch
+
+      - name: Disable stale auto-merge when policy is no longer eligible
+        if: always() && steps.policy.outputs.eligible != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr merge "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --disable-auto

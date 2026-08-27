@@ -22,6 +22,7 @@ import { getChromecastDeviceProfile, getDeviceProfile } from "./deviceProfile";
 import { buildActionBridgeHint } from "../actionPreflight";
 import { BridgeClientError, getBridgeClient } from "../bridge/BridgeClient";
 import { buildPlaybackExecutionNodes } from "./PlaybackExecutionInventory";
+import { recordPlaybackDebugEvent } from "./playbackDebug";
 
 /**
  * Planner responses contain transient source data. Keep them in memory only,
@@ -306,6 +307,17 @@ async function preparePlaybackPlanV3Request(
     (bridge.status === "available" || bridge.status === "no-peers")
   ) {
     try {
+      recordPlaybackDebugEvent({
+        category: "gateway",
+        message: "bridge.capability_probe_started",
+        data: {
+          status: bridge.status,
+          endpointReachable: bridge.endpoint.deviceReachable,
+          bridgeAuthRequired: bridge.auth?.required,
+          bridgeAuthConfigured: bridge.auth?.bridgeConfigured,
+          clientAuthConfigured: bridge.auth?.clientConfigured,
+        },
+      });
       const client = getBridgeClient(bridge.url);
       const selection = await client.negotiate(signal);
       if (signal?.aborted) throw createAbortError();
@@ -318,8 +330,31 @@ async function preparePlaybackPlanV3Request(
         .filter((delivery) => delivery.available)
         .map((delivery) => delivery.delivery);
       bridgeCastAvailable = capabilities.capabilities.cast.available;
+      recordPlaybackDebugEvent({
+        category: "gateway",
+        message: "bridge.capability_probe_succeeded",
+        data: {
+          protocol: capabilities.protocolVersion,
+          deliveryCount: bridgeDeliveries.length,
+          castAvailable: bridgeCastAvailable,
+          health: capabilities.health,
+        },
+      });
     } catch (error) {
       if (isAbortLike(error, signal)) throw error;
+      recordPlaybackDebugEvent({
+        category: "gateway",
+        message: "bridge.capability_probe_failed",
+        level: "warning",
+        data: {
+          errorCode:
+            error instanceof BridgeClientError ? error.code : "UNKNOWN",
+          httpStatus:
+            error instanceof BridgeClientError ? error.status : undefined,
+          retryable:
+            error instanceof BridgeClientError ? error.retryable : undefined,
+        },
+      });
       // Authentication, network and malformed responses never trigger a
       // silent protocol downgrade. The v3 request simply omits that executor
       // and therefore fails closed for bridge-only candidates.

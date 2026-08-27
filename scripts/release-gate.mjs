@@ -114,7 +114,16 @@ function checkCiWorkflow() {
       "desktop release config smoke",
     ],
     ["npm run sentry:release:dry-run", "Sentry release dry-run"],
+    [
+      "node scripts/ci-install.mjs",
+      "lifecycle-safe reproducible dependency install",
+    ],
     ["security:install-scripts", "dependency install-script policy"],
+    [
+      "npm run db:migrate:deploy",
+      "committed Prisma migration deployment",
+    ],
+    ["--schema=prisma/schema.prisma", "workspace-relative Prisma schema path"],
     ["security:audit", "production dependency audit"],
     ["npm run process:check", "agent process asset validation"],
     ["npm run process:check:test", "agent process validator tests"],
@@ -153,11 +162,28 @@ function checkCiWorkflow() {
   const releaseWorkflow = ".github/workflows/release-desktop.yml";
   requireFile(releaseWorkflow);
   for (const [needle, label] of [
+    ["validate-dispatch:", "unprivileged release dispatch preflight"],
+    ["needs: validate-dispatch", "release preflight dependency"],
+    [
+      "dispatch_sha: ${{ steps.validate.outputs.dispatch_sha }}",
+      "immutable release dispatch output",
+    ],
+    [
+      "ref: ${{ needs.validate-dispatch.outputs.dispatch_sha }}",
+      "immutable release source checkout",
+    ],
+    ["git rev-parse HEAD", "protected source revision stamp"],
     [
       "npm run package:mac:release --workspace=@streamer/desktop",
       "macOS release package command",
     ],
     ["STREAMER_NOTARIZE", "notarization gate"],
+    [
+      "Validate release ref, tag, and channel policy",
+      "release ref and channel policy",
+    ],
+    ["environment:", "release environment protection"],
+    ["timeout-minutes: 60", "release job timeout"],
     ["softprops/action-gh-release", "GitHub Release draft action"],
     ["actions/upload-artifact@", "release artifact upload"],
     ["actions/attest@", "release provenance attestation"],
@@ -193,6 +219,33 @@ function checkCiWorkflow() {
 
   const dependencyReviewWorkflow = ".github/workflows/dependency-review.yml";
   requireFile(dependencyReviewWorkflow);
+  const dependabotWorkflow = ".github/workflows/dependabot-auto-merge.yml";
+  requireFile(dependabotWorkflow);
+  requireText(
+    dependabotWorkflow,
+    "pull_request_target:",
+    "Dependabot metadata-only trigger",
+  );
+  requireText(
+    dependabotWorkflow,
+    "dependabot/fetch-metadata@",
+    "Dependabot metadata action",
+  );
+  requireText(
+    dependabotWorkflow,
+    "--auto --squash",
+    "protected auto-merge request",
+  );
+  requireText(
+    dependabotWorkflow,
+    "always() && steps.policy.outputs.eligible != 'true'",
+    "stale auto-merge fail-closed cleanup",
+  );
+  if (exists(dependabotWorkflow) && /continue-on-error:\s*true/.test(read(dependabotWorkflow))) {
+    fail(`${dependabotWorkflow} must not hide stale auto-merge cleanup failures`);
+  } else {
+    pass(`${dependabotWorkflow} surfaces stale auto-merge cleanup failures`);
+  }
   requireFile(".github/workflows/maintenance-radar.yml");
   requireText(
     dependencyReviewWorkflow,
@@ -421,6 +474,50 @@ function checkDesktopBuildMetadataValidation() {
 
 function checkDependencySecurity() {
   requireFile(".nvmrc");
+  requireFile(".github/CODEOWNERS");
+  requireFile("server/prisma/migrations/migration_lock.toml");
+  requireFile("server/prisma/migrations/20260101000000_init/migration.sql");
+  requireFile("server/prisma/migrations/20260727154500_add_watch_progress_duration_source/migration.sql");
+  requireFile("server/prisma/migrations/20260814213000_add_watch_progress_background/migration.sql");
+  requireText(
+    "server/package.json",
+    '"db:migrate:deploy": "prisma migrate deploy"',
+    "Prisma migration deployment command",
+  );
+  requireText(
+    "server/prisma/migrations/20260101000000_init/migration.sql",
+    'CREATE TABLE "users"',
+    "initial Prisma migration baseline",
+  );
+  requireText(
+    "server/prisma/migrations/20260727154500_add_watch_progress_duration_source/migration.sql",
+    'ADD COLUMN "duration_source"',
+    "strict duration-source migration",
+  );
+  requireText(
+    "server/prisma/migrations/20260814213000_add_watch_progress_background/migration.sql",
+    'ADD COLUMN "background"',
+    "strict background migration",
+  );
+  for (const testFile of [
+    "server/tests/aggregator-resilience.test.ts",
+    "server/tests/api.integration.test.ts",
+    "server/tests/e2e-golden-path.test.ts",
+    "server/tests/library.integration.test.ts",
+    "server/tests/search-addon.integration.test.ts",
+    "server/tests/trakt.integration.test.ts",
+  ]) {
+    if (exists(testFile) && /prisma\s+db\s+push/.test(read(testFile))) {
+      fail(`${testFile} must use committed migrations instead of prisma db push`);
+    } else {
+      pass(`${testFile} uses committed migrations for integration setup`);
+    }
+  }
+  requireText(
+    ".github/CODEOWNERS",
+    "package-lock.json",
+    "dependency lockfile ownership",
+  );
   requireFile("patches/castv2+0.1.10.patch");
   requireFile("scripts/check-install-script-policy.mjs");
   try {
@@ -476,6 +573,11 @@ function checkDependencySecurity() {
     "server/package.json",
     '"pretest": "prisma generate"',
     "Prisma generation before server tests",
+  );
+  requireText(
+    "server/package.json",
+    '"pretest:integration": "prisma generate"',
+    "Prisma generation before server integration tests",
   );
   requireText(
     "server/package.json",

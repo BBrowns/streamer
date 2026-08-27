@@ -321,6 +321,54 @@ describe("SourcePreparer route registry", () => {
 });
 
 describe("BridgeV1SourceAdapter", () => {
+  it("adopts a seekable-cache upgrade discovered from the selected torrent file", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(
+      jobResponse({
+        delivery: "range-http",
+        media: {
+          container: "unknown",
+          remuxed: false,
+          seek: "preparing",
+        },
+      }),
+    );
+    client.getJob.mockResolvedValue(
+      readyJobFor("seekable-cache", {
+        container: "mp4",
+        remuxed: true,
+        seek: "immediate",
+        seekableCache: { status: "ready" },
+      }),
+    );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+      pollIntervalMs: 0,
+      sleep: jest.fn().mockResolvedValue(undefined),
+    });
+    const selectedRoute = route("range-http", "local-sidecar");
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: "attempt-container-upgrade",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(selectedRoute),
+      route: selectedRoute,
+    });
+
+    expect(prepared.route).toEqual({
+      ...selectedRoute,
+      delivery: "seekable-cache",
+      capabilities: {
+        ...selectedRoute.capabilities,
+        seek: "immediate",
+      },
+    });
+    await prepared.release();
+  });
+
   it("creates, polls and releases an exactly bound seekable-cache job", async () => {
     const client = bridgeClient();
     client.createJob.mockResolvedValue(jobResponse());
