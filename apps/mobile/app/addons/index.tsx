@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -30,6 +29,7 @@ import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { AppButton } from "../../components/ui/AppButton";
 import { AdaptiveRoutePage } from "../../components/ui/AdaptiveRoutePage";
+import { AdaptiveOverlay } from "../../components/ui/AdaptiveOverlay";
 import { InlineNotice } from "../../components/ui/InlineNotice";
 import { Surface } from "../../components/ui/Surface";
 import { TextField } from "../../components/ui/TextField";
@@ -64,6 +64,10 @@ export default function AddonsScreen() {
   const [removalError, setRemovalError] = useState<{
     addonId: string;
     message: string;
+  } | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    id: string;
+    name: string;
   } | null>(null);
   const normalizedAddonUrl = addonUrl.trim();
 
@@ -127,8 +131,10 @@ export default function AddonsScreen() {
       void queryClient.invalidateQueries({ queryKey: ["search"] });
       void queryClient.invalidateQueries({ queryKey: ["streams"] });
       setRemovalError(null);
+      setPendingRemoval(null);
     },
     onError: (error: unknown, id: string) => {
+      setPendingRemoval(null);
       setRemovalError({
         addonId: id,
         message: getMutationError(
@@ -145,6 +151,11 @@ export default function AddonsScreen() {
     if (!normalizedAddonUrl || installMutation.isPending) return;
     hapticImpactLight();
     installMutation.mutate(normalizedAddonUrl);
+  };
+
+  const confirmRemoval = () => {
+    if (!pendingRemoval || uninstallMutation.isPending) return;
+    uninstallMutation.mutate(pendingRemoval.id);
   };
 
   return (
@@ -322,24 +333,10 @@ export default function AddonsScreen() {
                         ]}
                         onPress={() => {
                           hapticWarning();
-                          Alert.alert(
-                            t("addons.installed.uninstall"),
-                            t("addons.installed.confirmRemove", {
-                              name: item.manifest.name,
-                            }),
-                            [
-                              {
-                                text: t("addons.installed.cancel"),
-                                style: "cancel",
-                              },
-                              {
-                                text: t("addons.installed.remove"),
-                                style: "destructive",
-                                onPress: () =>
-                                  uninstallMutation.mutate(item.id),
-                              },
-                            ],
-                          );
+                          setPendingRemoval({
+                            id: item.id,
+                            name: item.manifest.name,
+                          });
                         }}
                       >
                         {isRemoving ? (
@@ -380,6 +377,45 @@ export default function AddonsScreen() {
           )}
         </View>
       </AdaptiveRoutePage>
+      <AdaptiveOverlay
+        visible={pendingRemoval !== null}
+        onClose={() => {
+          if (!uninstallMutation.isPending) setPendingRemoval(null);
+        }}
+        accessibilityLabel={t("addons.installed.uninstall")}
+        testID="addon-remove-overlay"
+        size="menu"
+        placement="center"
+      >
+        <View style={styles.removeDialog}>
+          <Text style={[styles.removeTitle, { color: colors.text }]}>
+            {t("addons.installed.uninstall")}
+          </Text>
+          <Text style={[styles.removeMessage, { color: colors.textSecondary }]}>
+            {pendingRemoval
+              ? t("addons.installed.confirmRemove", {
+                  name: pendingRemoval.name,
+                })
+              : null}
+          </Text>
+          <View style={styles.removeActions}>
+            <AppButton
+              label={t("addons.installed.cancel")}
+              variant="ghost"
+              onPress={() => setPendingRemoval(null)}
+              disabled={uninstallMutation.isPending}
+              testID="addon-remove-cancel"
+            />
+            <AppButton
+              label={t("addons.installed.remove")}
+              variant="danger"
+              loading={uninstallMutation.isPending}
+              onPress={confirmRemoval}
+              testID="addon-remove-confirm"
+            />
+          </View>
+        </View>
+      </AdaptiveOverlay>
     </>
   );
 }
@@ -471,6 +507,22 @@ const styles = StyleSheet.create({
   addonSetupHint: {
     ...uiTypography.caption,
     marginTop: uiSpacing.xs,
+  },
+  removeDialog: {
+    padding: uiSpacing.xl,
+    gap: uiSpacing.md,
+  },
+  removeTitle: {
+    ...uiTypography.title,
+  },
+  removeMessage: {
+    ...uiTypography.body,
+  },
+  removeActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: uiSpacing.sm,
+    marginTop: uiSpacing.sm,
   },
   removeButton: {
     width: uiTouchTarget,
