@@ -147,7 +147,7 @@ Each business domain lives in `src/modules/<domain>/` and follows a ports-and-ad
 | `aggregator`   | Fan-out catalog/meta/stream requests to all of a user's add-ons; enriches and sorts streams                     |
 | `library`      | Persist watched items per user (add/remove from library, watch progress)                                        |
 | `trakt`        | OAuth integration with Trakt.tv — sync watch history bidirectionally                                            |
-| `sync`         | SSE (Server-Sent Events) endpoint for real-time client sync                                                     |
+| `sync`         | Authenticated WebSocket endpoint for bidirectional real-time client sync                                        |
 | `sessions`     | Active device session tracking (device ID, IP, last activity)                                                   |
 | `notification` | In-app notification store — download completion, system alerts                                                  |
 | `debrid`       | Real-Debrid resolver — upgrades torrent magnets to a fast direct HTTP link                                      |

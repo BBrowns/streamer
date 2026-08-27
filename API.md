@@ -82,12 +82,20 @@ Important plan states:
 
 ### 1.6 Trakt & Sync (`/api/trakt` & `/api/sync`)
 
-| Method | Route                     | Description                                                                                  |
-| ------ | ------------------------- | -------------------------------------------------------------------------------------------- |
-| `POST` | `/trakt/connect`          | Completes OAuth flow. Body: `{ code, redirectUri }`.                                         |
-| `GET`  | `/trakt/status`           | `true` if connected and token is valid.                                                      |
-| `POST` | `/trakt/scrobble/:action` | `action` = `start` \| `pause` \| `stop`. Syncs to Trakt TV.                                  |
-| `GET`  | `/sync/events`            | **SSE Endpoint.** Yields realtime events across devices (e.g. session death, notifications). |
+| Method | Route                     | Description                                                                         |
+| ------ | ------------------------- | ----------------------------------------------------------------------------------- |
+| `POST` | `/trakt/connect`          | Completes OAuth flow. Body: `{ code, redirectUri }`.                                |
+| `GET`  | `/trakt/status`           | `true` if connected and token is valid.                                             |
+| `POST` | `/trakt/scrobble/:action` | `action` = `start` \| `pause` \| `stop`. Syncs to Trakt TV.                         |
+| `WS`   | `/sync/events`            | Authenticated bidirectional WebSocket for cross-device updates and remote commands. |
+
+Native clients authenticate the sync socket with the normal bearer and device
+headers. Browser and Electron renderers, whose WebSocket API cannot set custom
+headers, offer `streamer-sync-v1` first and carry bounded access/device
+credentials in additional subprotocol values. The server always negotiates the
+stable public protocol, so credential-bearing values are not echoed as the
+selected protocol. A malformed explicit `Authorization` header never falls
+back to subprotocol authentication.
 
 ---
 
@@ -245,9 +253,13 @@ If `POST /refresh` fails (token revoked or expired > 7 days), the queue is rejec
 
 ## 5. API Intricacies
 
-### 5.1 SSE Connection Management
+### 5.1 Sync WebSocket Authentication
 
-In Hono, Server-Sent Events (`streamSSE`) typically close as soon as the synchronous execution of the handler finishes. To prevent the `/api/sync/events` stream from dying, the server executes an infinite `while (true)` loop that yields a promise every 30 seconds to send a heartbeat (`"ping"` event). The loop is safely terminated when the client disconnects and triggers the `stream.onAbort` callback, which runs cleanup and breaks the reference holding the connection open.
+`/api/sync/events` uses one authentication owner for HTTP bearer credentials
+and browser WebSocket subprotocol credentials. Both paths run the same JWT age,
+signature, previous-secret, device-session, and heartbeat policy. The public
+`streamer-sync-v1` protocol must be offered first; duplicate, malformed, or
+oversized credential carriers are rejected before JWT verification.
 
 ### 5.2 Axios 401 Interceptor Queue
 
@@ -275,16 +287,12 @@ The `window.desktopBridge` context bridge is invoked as `(window as any).desktop
 
 ### Medium Priority
 
-#### 3. Migrate from SSE to WebSockets for Sync
-
-The `/api/sync/events` endpoint relies on Server-Sent Events, which are unidirectional (Server → Client). This requires the mobile app to hit standard REST endpoints (`/api/sessions/command`) for remote control orchestration (e.g., pausing an iPad from the iPhone). Upgrading this to a bidirectional WebSocket (`ws`) connection would allow lower-latency RPC commands between devices and reduce HTTP overhead.
-
-#### 4. Add-on Payload Sanitation Validation
+#### 3. Add-on Payload Sanitation Validation
 
 While `server/src/modules/addon` validates add-on manifests via Zod on installation, the `AggregatorService` dynamically fetches catalogues and streams from third-party URLs. If a third-party add-on is compromised and returns malformed JSON or malicious XSS payloads in string fields (e.g., `<script>` in the stream `title`), the server forwards it blindly. Enforce a final `z.parse()` or `z.safeParse()` on all incoming external add-on HTTP responses _before_ returning data to the mobile client.
 
 ### Lower Priority
 
-#### 5. Local Network Stream Handoff
+#### 4. Local Network Stream Handoff
 
 Most bridge control routes now support token auth through `STREAMER_BRIDGE_TOKEN`, bearer auth, or `x-streamer-bridge-token`. Gateway stream URLs are signed query URLs so `expo-video` and cast devices can consume them without custom headers. Future hardening should focus on observability redaction, pairing-token lifecycle, and release-time secret management.

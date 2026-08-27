@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
-import { DeviceEventEmitter } from "react-native";
+import { DeviceEventEmitter, Platform } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
+import { createSyncWebSocketProtocols } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
 import { BASE_URL } from "../services/api";
 
@@ -72,15 +73,21 @@ export function useSync() {
 
       log("Connecting to", wsUrl);
 
-      // Note: standard WebSocket API doesn't support custom headers in all environments,
-      // but React Native's WebSocket implementation DOES support them.
-      // @ts-ignore: React Native WebSocket supports a 3rd argument for headers
-      const ws = new WebSocket(wsUrl, undefined, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "X-Device-Id": deviceId || "unknown",
-        },
-      });
+      const ws =
+        Platform.OS === "web"
+          ? new WebSocket(
+              wsUrl,
+              createSyncWebSocketProtocols(accessToken, deviceId),
+            )
+          : // React Native supports request headers through its third
+            // constructor argument; the browser WebSocket API does not.
+            // @ts-ignore: React Native WebSocket supports a 3rd argument.
+            new WebSocket(wsUrl, undefined, {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "X-Device-Id": deviceId || "unknown",
+              },
+            });
 
       wsRef.current = ws;
 

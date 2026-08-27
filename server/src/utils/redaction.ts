@@ -44,6 +44,7 @@ function redactUrlPreservingRoute(urlString: string): string {
 export function redactSensitiveText(text: string): string {
   return text
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, `Bearer ${REDACTED}`)
+    .replace(/streamer-auth\.[A-Za-z0-9._~-]+/gi, `streamer-auth.${REDACTED}`)
     .replace(
       /x-streamer-bridge-token:\s*[^\s,;]+/gi,
       `x-streamer-bridge-token: ${REDACTED}`,
