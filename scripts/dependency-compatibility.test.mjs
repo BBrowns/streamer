@@ -51,12 +51,12 @@ test("React Native resolves the supported Metro line without image-size", () => 
 test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
   const lockfile = readLockfile();
   const mobilePackage = lockfile.packages["apps/mobile"];
-  const tailwindPackage =
-    lockfile.packages["apps/mobile/node_modules/tailwindcss"];
+  const tailwindPackage = lockfile.packages["node_modules/tailwindcss"];
   const cssInteropPackage =
     lockfile.packages["node_modules/react-native-css-interop"];
 
   assert.equal(mobilePackage.dependencies.tailwindcss, "3.4.19");
+  assert.equal(lockfile.packages[""].devDependencies.tailwindcss, "3.4.19");
   assert.equal(tailwindPackage.version.split(".")[0], "3");
   assert.equal(cssInteropPackage.peerDependencies.tailwindcss, "~3");
 });
