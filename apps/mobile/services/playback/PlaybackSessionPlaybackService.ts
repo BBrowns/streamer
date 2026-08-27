@@ -40,6 +40,7 @@ import {
 } from "./PlaybackErrors";
 import { toPlaybackSessionError } from "./PlaybackSessionReducer";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
+import { recordPlaybackDebugEvent } from "./playbackDebug";
 import {
   ActionPreflightError,
   buildActionBridgeHint,
@@ -241,6 +242,30 @@ function sameRoute(
     left.capabilities.cast === right.capabilities.cast &&
     left.capabilities.offline === right.capabilities.offline &&
     left.capabilities.thumbnails === right.capabilities.thumbnails
+  );
+}
+
+function isAllowedBridgeDeliveryUpgrade(
+  prepared: PlaybackRoute | undefined,
+  expected: PlaybackRoute | undefined,
+) {
+  if (!prepared || !expected) return false;
+
+  return (
+    expected.delivery === "range-http" &&
+    prepared.delivery === "seekable-cache" &&
+    expected.executionTarget !== "on-device" &&
+    prepared.candidateId === expected.candidateId &&
+    prepared.executionTarget === expected.executionTarget &&
+    prepared.capabilities.seek === "immediate" &&
+    prepared.capabilities.audioTracks === expected.capabilities.audioTracks &&
+    prepared.capabilities.embeddedSubtitles ===
+      expected.capabilities.embeddedSubtitles &&
+    prepared.capabilities.externalSubtitles ===
+      expected.capabilities.externalSubtitles &&
+    prepared.capabilities.cast === expected.capabilities.cast &&
+    prepared.capabilities.offline === expected.capabilities.offline &&
+    prepared.capabilities.thumbnails === expected.capabilities.thumbnails
   );
 }
 
@@ -876,12 +901,23 @@ async function attemptCandidate(
   try {
     const actionDeviceProfile =
       action === "cast" ? getDeviceProfile() : session.deviceProfile;
-    requireActionPreflight(
-      preflightStreamAction(action, stream, {
-        deviceProfile: actionDeviceProfile,
-        requiresRemux: candidate.requiresRemux,
-      }),
-    );
+    const preflight = preflightStreamAction(action, stream, {
+      deviceProfile: actionDeviceProfile,
+      requiresRemux: candidate.requiresRemux,
+    });
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "playback.action_preflight",
+      data: {
+        action,
+        candidateKind: candidate.kind,
+        ready: preflight.ready,
+        reason: preflight.reason,
+        requiresBridge: preflight.requiresBridge,
+        retryable: preflight.retryable,
+      },
+    });
+    requireActionPreflight(preflight);
     const currentSession = getSession(sessionId);
     if (!currentSession || isTerminal(currentSession)) {
       return {
@@ -960,10 +996,14 @@ async function attemptCandidate(
     const expectedRoute = isRoutedCandidate(candidate)
       ? candidate.route
       : undefined;
+    const routeMatchesAttempt =
+      sameRoute(preparedSource.route, expectedRoute) ||
+      (Boolean(preparedSource.bridgeJobId) &&
+        isAllowedBridgeDeliveryUpgrade(preparedSource.route, expectedRoute));
     if (
       preparedSource.released ||
       preparedSource.attemptId !== attempt.id ||
-      !sameRoute(preparedSource.route, expectedRoute)
+      !routeMatchesAttempt
     ) {
       await releasePreparedSource(preparedSource);
       throw new SourcePreparationError(

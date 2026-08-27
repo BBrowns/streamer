@@ -24,7 +24,7 @@ const MAX_DEPTH = 6;
 const SENSITIVE_KEY_PATTERN =
   /(^|[_-])(access|refresh|reset|verification|bridge|gateway)?(token|secret|password|signature|authorization|credential|apikey|api_key)([_-]|$)|^(auth|bearer)$/i;
 const SENSITIVE_VALUE_KEY_PATTERN =
-  /^(magnet|playbackUrl|streamUrl|sourceUrl|downloadUrl|externalUrl|localUri|uri|url|requestUrl|filePath|tempPath|path|infoHash)$/i;
+  /^(magnet|playbackUrl|streamUrl|sourceUrl|sourceUri|downloadUrl|externalUrl|localUri|uri|url|requestUrl|filePath|tempPath|path|infoHash)$/i;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (

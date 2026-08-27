@@ -97,6 +97,7 @@ import {
   type PlaybackDiagnosticEvent,
 } from "../services/playback/PlaybackDiagnostics";
 import { addMobileBreadcrumb } from "../services/sentryBreadcrumbs";
+import { recordPlaybackDebugEvent } from "../services/playback/playbackDebug";
 import { getActivePlaybackSegment } from "../services/playback/PlaybackSegmentsProvider";
 import { createPlayerScreenStyles } from "../components/player/playerScreenStyles";
 import { useWindowClass } from "../hooks/useWindowClass";
@@ -871,6 +872,29 @@ export default function PlayerScreen() {
     const statusSub = player.addListener(
       "statusChange",
       ({ status, error }: any) => {
+        if (
+          status === "loading" ||
+          status === "readyToPlay" ||
+          status === "error"
+        ) {
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.status_changed",
+            data: {
+              status,
+              sourceKind: currentStream?.infoHash
+                ? "torrent"
+                : currentStream?.url
+                  ? "url"
+                  : "unknown",
+              hasPlaybackUri: Boolean(playbackUri),
+              mediaErrorCode:
+                typeof error?.code === "string"
+                  ? error.code.slice(0, 80)
+                  : undefined,
+            },
+          });
+        }
         if (status === "loading") {
           markLoading();
           return;

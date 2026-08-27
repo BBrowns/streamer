@@ -17,6 +17,7 @@ import {
 } from "../../bridge/BridgeV1PlaybackRuntime";
 import { bindBridgeV1StreamUri } from "../../bridge/BridgeV1StreamGuard";
 import type { GatewayJobProgress } from "../../streamEngine/IStreamEngine";
+import { recordPlaybackDebugEvent } from "../../playback/playbackDebug";
 import {
   PreparedSourceLease,
   SourcePreparationError,
@@ -81,6 +82,18 @@ export interface BridgeV1SourceAdapterOptions {
 
 function isBridgeDelivery(value: string): value is BridgeDelivery {
   return (BRIDGE_DELIVERIES as readonly string[]).includes(value);
+}
+
+function isCompatibleDeliveryUpgrade(
+  requested: BridgeDelivery,
+  previous: BridgeDelivery,
+  observed: BridgeDelivery,
+) {
+  return (
+    requested === "range-http" &&
+    previous === "range-http" &&
+    observed === "seekable-cache"
+  );
 }
 
 function defaultSleep(milliseconds: number, signal?: AbortSignal) {
@@ -421,6 +434,15 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
         delivery,
         ...(selection ? { selection } : {}),
       };
+      recordPlaybackDebugEvent({
+        category: "gateway",
+        message: "gateway.job_create_started",
+        data: {
+          executionTarget: this.executionTarget,
+          delivery,
+          attemptId: request.attemptId,
+        },
+      });
       let response = await awaitWithPreparationAbort(
         this.client.createJob(createInput, request.signal),
         request.signal,
@@ -428,11 +450,25 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
       );
       activeJobId = response.job.id;
       throwIfPreparationAborted(request.signal);
-      this.assertJobBinding(response.job, delivery);
+      let effectiveDelivery = this.assertJobBinding(
+        response.job,
+        delivery,
+        delivery,
+      );
+      recordPlaybackDebugEvent({
+        category: "gateway",
+        message: "gateway.job_created",
+        data: {
+          jobId: response.job.id,
+          delivery: response.job.delivery,
+          state: response.job.state,
+          phase: response.job.phase,
+        },
+      });
 
       let job = response.job;
-      const initialReadyTimeoutMs = job.readyTimeoutMs;
-      const deadline =
+      let authoritativeReadyTimeoutMs = job.readyTimeoutMs;
+      let deadline =
         this.now() + Math.max(0, job.readyTimeoutMs - job.elapsedMs);
       while (true) {
         notifyGatewayProgress(request.onGatewayProgress, progressFromJob(job));
@@ -440,7 +476,10 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
 
         const terminalError = terminalJobError(job);
         if (terminalError) throw terminalError;
-        if (job.elapsedMs >= initialReadyTimeoutMs || this.now() >= deadline) {
+        if (
+          job.elapsedMs >= authoritativeReadyTimeoutMs ||
+          this.now() >= deadline
+        ) {
           throw new SourcePreparationError(
             "GATEWAY_TIMEOUT",
             "The bridge took too long to prepare this source.",
@@ -468,15 +507,26 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
             client: this.client,
             baseOrigin: this.baseOrigin,
             jobId: job.id,
-            delivery,
+            delivery: effectiveDelivery,
             initialUri: uri,
             now: this.now,
           });
+          const effectiveRoute =
+            effectiveDelivery === request.route.delivery
+              ? request.route
+              : {
+                  ...request.route,
+                  delivery: effectiveDelivery,
+                  capabilities: {
+                    ...request.route.capabilities,
+                    seek: job.media.seek,
+                  },
+                };
           return new PreparedSourceLease({
             uri,
             stream: { ...request.candidate.stream, url: uri },
             attemptId: request.attemptId,
-            route: request.route,
+            route: effectiveRoute,
             bridgeJobId: job.id,
             runtime,
             release: async () => {
@@ -504,10 +554,49 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
           request.signal,
         );
         throwIfPreparationAborted(request.signal);
-        this.assertJobBinding(response.job, delivery, job.id);
+        const previousDelivery = effectiveDelivery;
+        effectiveDelivery = this.assertJobBinding(
+          response.job,
+          delivery,
+          effectiveDelivery,
+          job.id,
+        );
+        if (
+          isCompatibleDeliveryUpgrade(
+            delivery,
+            previousDelivery,
+            effectiveDelivery,
+          ) &&
+          response.job.readyTimeoutMs > authoritativeReadyTimeoutMs
+        ) {
+          authoritativeReadyTimeoutMs = response.job.readyTimeoutMs;
+          deadline = Math.max(
+            deadline,
+            this.now() +
+              Math.max(0, response.job.readyTimeoutMs - response.job.elapsedMs),
+          );
+        }
         job = response.job;
       }
     } catch (error) {
+      recordPlaybackDebugEvent({
+        category: "gateway",
+        message: "gateway.job_failed",
+        level: "warning",
+        data: {
+          executionTarget: this.executionTarget,
+          delivery,
+          attemptId: request.attemptId,
+          errorCode:
+            error instanceof BridgeClientError
+              ? error.code
+              : error instanceof SourcePreparationError
+                ? error.code
+                : "UNKNOWN",
+          httpStatus:
+            error instanceof BridgeClientError ? error.status : undefined,
+        },
+      });
       if (activeJobId) await cancelJobOnce(activeJobId);
       throw mapBridgeClientError(error, request.signal);
     }
@@ -515,17 +604,24 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
 
   private assertJobBinding(
     job: BridgeJobV1,
-    delivery: BridgeDelivery,
+    requestedDelivery: BridgeDelivery,
+    previousDelivery: BridgeDelivery,
     expectedJobId?: string,
-  ) {
+  ): BridgeDelivery {
     if (
       !job.id ||
-      job.delivery !== delivery ||
+      (job.delivery !== previousDelivery &&
+        !isCompatibleDeliveryUpgrade(
+          requestedDelivery,
+          previousDelivery,
+          job.delivery,
+        )) ||
       (expectedJobId !== undefined && job.id !== expectedJobId)
     ) {
       throw bridgeContractError(
         "The bridge response does not match the active preparation attempt.",
       );
     }
+    return job.delivery;
   }
 }

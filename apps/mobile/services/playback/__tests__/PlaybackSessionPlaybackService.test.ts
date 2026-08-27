@@ -391,6 +391,80 @@ describe("PlaybackSessionPlaybackService", () => {
     }
   });
 
+  it("accepts the bridge-owned range-http to seekable-cache delivery upgrade", async () => {
+    const readyJob: BridgeJobResponseV1 = {
+      protocolVersion: 1,
+      job: {
+        id: BRIDGE_JOB_ID,
+        state: "ready",
+        phase: "ready",
+        delivery: "seekable-cache",
+        peerCount: 4,
+        readinessProgress: 1,
+        elapsedMs: 100,
+        readyTimeoutMs: 65_000,
+        media: {
+          container: "mp4",
+          remuxed: true,
+          seek: "immediate",
+          seekableCache: { status: "ready" },
+        },
+        stream: {
+          path: `/api/bridge/v1/jobs/${BRIDGE_JOB_ID}/stream?expires=4102444800000&signature=signed`,
+          expiresAt: "2100-01-01T00:00:00.000Z",
+        },
+      },
+    };
+    const bridgeClient = {
+      createJob: jest.fn().mockResolvedValue(readyJob),
+      getJob: jest.fn().mockResolvedValue(readyJob),
+      cancelJob: jest.fn().mockResolvedValue(null),
+      getCapabilities: jest.fn(),
+      getJobMetrics: jest.fn(),
+      getTrackCatalog: jest.fn(),
+      getSubtitleDocument: jest.fn(),
+      getThumbnail: jest.fn(),
+    };
+    const getBridgeClient = jest
+      .spyOn(BridgeClientModule, "getBridgeClient")
+      .mockReturnValue(
+        bridgeClient as unknown as ReturnType<
+          typeof BridgeClientModule.getBridgeClient
+        >,
+      );
+    const session = createV3Session(
+      {
+        infoHash: "0123456789abcdef0123456789abcdef01234567",
+        fileIdx: 3,
+        title: "Bridge source with runtime remux discovery",
+      } as Stream,
+      {
+        primaryDelivery: "range-http",
+        primaryExecutionTarget: "paired-bridge",
+      },
+    );
+
+    try {
+      const result = await resolvePlaybackSession(session.id);
+
+      expect(result).toMatchObject({
+        ok: true,
+        bridgeJobId: BRIDGE_JOB_ID,
+        route: {
+          candidateId: PRIMARY_PLAN_ID,
+          executionTarget: "paired-bridge",
+          delivery: "seekable-cache",
+          capabilities: { seek: "immediate" },
+        },
+      });
+      expect(bridgeClient.createJob).toHaveBeenCalledTimes(1);
+      expect(resolveEngine).not.toHaveBeenCalled();
+    } finally {
+      cancelPlaybackSession(session.id, "Test cleanup.");
+      getBridgeClient.mockRestore();
+    }
+  });
+
   it("exposes an active lease only to its exact playback attempt", async () => {
     const session = createV3Session({
       url: "https://cdn.example.test/movie.mp4",
