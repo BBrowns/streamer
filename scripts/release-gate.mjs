@@ -125,6 +125,10 @@ function checkCiWorkflow() {
     ],
     ["--schema=prisma/schema.prisma", "workspace-relative Prisma schema path"],
     ["security:audit", "production dependency audit"],
+    [
+      "dependency:compatibility:test",
+      "dependency compatibility contract tests",
+    ],
     ["npm run process:check", "agent process asset validation"],
     ["npm run process:check:test", "agent process validator tests"],
     [

@@ -57,6 +57,8 @@ updates:
           - "@typescript-eslint/*"
           - "@sentry/*"
           - "@hono/*"
+          - "nativewind"
+          - "tailwindcss"
           - "esbuild"
           - "@rollup/*"
         update-types:

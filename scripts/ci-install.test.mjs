@@ -33,11 +33,11 @@ test("installs with scripts disabled and rebuilds only the approved native addon
   assert.deepEqual(commands[3].args, [
     "--yes",
     "npm@12.0.2",
+    "run",
+    "--prefix",
+    "node_modules/node-datachannel",
     "rebuild",
-    "node-datachannel",
-    "--ignore-scripts=false",
-    "--no-audit",
-    "--no-fund",
+    "--foreground-scripts",
   ]);
 });
 

@@ -48,6 +48,19 @@ test("React Native resolves the supported Metro line without image-size", () => 
   assert.deepEqual(imageSizeNodes, []);
 });
 
+test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
+  const lockfile = readLockfile();
+  const mobilePackage = lockfile.packages["apps/mobile"];
+  const tailwindPackage =
+    lockfile.packages["apps/mobile/node_modules/tailwindcss"];
+  const cssInteropPackage =
+    lockfile.packages["node_modules/react-native-css-interop"];
+
+  assert.equal(mobilePackage.dependencies.tailwindcss, "3.4.19");
+  assert.equal(tailwindPackage.version.split(".")[0], "3");
+  assert.equal(cssInteropPackage.peerDependencies.tailwindcss, "~3");
+});
+
 test("unused native adapters resolve without vulnerable parser packages", () => {
   const lockfile = readLockfile();
   const browserAdapter = lockfile.packages["node_modules/@vibrant/image-node"];
@@ -78,4 +91,19 @@ test("unused native adapters resolve without vulnerable parser packages", () => 
   );
   assert.equal(ipAdapter.name, "ip-address");
   assert.equal(ipAdapter.version, "10.5.0");
+});
+
+test("registry lock entries retain immutable tarball and integrity pins", () => {
+  const lockfile = readLockfile();
+  const unpinned = Object.entries(lockfile.packages)
+    .filter(
+      ([path, packageInfo]) =>
+        path.includes("node_modules/") &&
+        packageInfo?.version &&
+        !packageInfo.link &&
+        (!packageInfo.resolved || !packageInfo.integrity),
+    )
+    .map(([path, packageInfo]) => `${path}@${packageInfo.version}`);
+
+  assert.deepEqual(unpinned, []);
 });

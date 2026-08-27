@@ -44,11 +44,13 @@ CI also:
 - requires external GitHub Actions to use reviewed full commit SHAs;
 - reviews the dependency delta on pull requests and blocks newly introduced
   high or critical advisories;
+- runs dependency compatibility contract tests alongside the production audit;
 - checks npm and GitHub Actions dependency drift through grouped weekly
   Dependabot updates;
 - queues only safe Dependabot patch/minor PRs for protected auto-merge. Expo,
-  React Native, Electron, Prisma, TypeScript, Sentry, Hono, native, and major
-  updates stay manual and require a code-owner review;
+  React Native, Electron, Prisma, TypeScript, Sentry, Hono, NativeWind,
+  Tailwind, native, and major updates stay manual and require a code-owner
+  review;
 - applies Prisma migrations in CI instead of mutating the schema with
   `db push`;
 - enforces finite timeouts on every CI and release job;
@@ -161,6 +163,11 @@ The root Hono override is constrained to the tested `4.13.x` line, and the
 server/mobile direct dependencies resolve one compatible version. Keep the
 override and direct specifications aligned when upgrading Hono so the Hono
 adapters and shared client code are verified against one runtime contract.
+
+NativeWind `4.2.x` currently brings `react-native-css-interop@0.2.6`, whose
+Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
+pins `tailwindcss@3.4.19`; keep the compatibility test in place and review the
+NativeWind migration before accepting a Tailwind 4 major bump.
 
 The mobile app intentionally tracks React `19.2.8` and the compatible
 React Native `4.5.x` native-module line ahead of Expo SDK 57's bundled patch

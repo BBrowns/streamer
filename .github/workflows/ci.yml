@@ -209,6 +209,8 @@ jobs:
         run: node scripts/ci-install.mjs
       - name: Audit production dependencies
         run: npx --yes "npm@${NPM_VERSION}" run security:audit
+      - name: Verify dependency compatibility contracts
+        run: npx --yes "npm@${NPM_VERSION}" run dependency:compatibility:test
 
   test-shared:
     name: Shared Tests
