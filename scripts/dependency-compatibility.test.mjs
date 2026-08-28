@@ -17,11 +17,13 @@ function readLockfile() {
 test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
   const xcode = require("xcode");
   const uuidPackage = require("uuid/package.json");
+  const xcodeUuidPackage = require("xcode/node_modules/uuid/package.json");
   const project = xcode.project("unused.pbxproj");
 
   project.hash = { project: { objects: {} } };
 
-  assert.equal(uuidPackage.version, "11.1.1");
+  assert.equal(uuidPackage.version, "14.0.2");
+  assert.equal(xcodeUuidPackage.version, "11.1.1");
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
 
