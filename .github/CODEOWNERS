@@ -1,0 +1,12 @@
+# Default owner for changes that can affect the shipped application.
+* @BBrowns
+
+# Keep the high-impact paths explicit so ownership remains visible when the
+# default owner changes.
+.github/ @BBrowns
+package.json @BBrowns
+package-lock.json @BBrowns
+server/prisma/ @BBrowns
+scripts/security-* @BBrowns
+scripts/release-* @BBrowns
+docs/DEPENDENCY_SECURITY.md @BBrowns

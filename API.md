@@ -253,13 +253,19 @@ If `POST /refresh` fails (token revoked or expired > 7 days), the queue is rejec
 
 ## 5. API Intricacies
 
-### 5.1 Sync WebSocket Authentication
+### 5.1 WebSocket Authentication
 
-`/api/sync/events` uses one authentication owner for HTTP bearer credentials
-and browser WebSocket subprotocol credentials. Both paths run the same JWT age,
-signature, previous-secret, device-session, and heartbeat policy. The public
-`streamer-sync-v1` protocol must be offered first; duplicate, malformed, or
-oversized credential carriers are rejected before JWT verification.
+`/api/sync/events` accepts the normal bearer and `X-Device-Id` headers from
+React Native. Browser and Electron clients, whose WebSocket API cannot attach
+custom request headers, offer `streamer-sync-v1` first and use bounded
+`streamer-auth.<access-token>` and optional `streamer-device.<device-id>`
+subprotocol values. Both paths use the same JWT signature, token-age,
+previous-secret, device-session, and heartbeat policy. The public protocol must
+be offered first; duplicate, malformed, unknown, or oversized credential
+carriers are rejected before JWT verification. A malformed explicit
+`Authorization` header never falls back to subprotocol authentication. A
+credential is never accepted from a query parameter or written to request
+logs, and the server negotiates only the stable, non-sensitive public protocol.
 
 ### 5.2 Axios 401 Interceptor Queue
 
@@ -287,12 +293,18 @@ The `window.desktopBridge` context bridge is invoked as `(window as any).desktop
 
 ### Medium Priority
 
-#### 3. Add-on Payload Sanitation Validation
+#### 3. WebSocket Sync Recovery
+
+The sync transport is bidirectional WebSocket today. Future work should keep
+reconnect and access-token refresh bounded and coordinated so an expired token
+cannot produce a reconnect storm across retained browser tabs.
+
+#### 4. Add-on Payload Sanitation Validation
 
 While `server/src/modules/addon` validates add-on manifests via Zod on installation, the `AggregatorService` dynamically fetches catalogues and streams from third-party URLs. If a third-party add-on is compromised and returns malformed JSON or malicious XSS payloads in string fields (e.g., `<script>` in the stream `title`), the server forwards it blindly. Enforce a final `z.parse()` or `z.safeParse()` on all incoming external add-on HTTP responses _before_ returning data to the mobile client.
 
 ### Lower Priority
 
-#### 4. Local Network Stream Handoff
+#### 5. Local Network Stream Handoff
 
 Most bridge control routes now support token auth through `STREAMER_BRIDGE_TOKEN`, bearer auth, or `x-streamer-bridge-token`. Gateway stream URLs are signed query URLs so `expo-video` and cast devices can consume them without custom headers. Future hardening should focus on observability redaction, pairing-token lifecycle, and release-time secret management.

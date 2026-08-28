@@ -32,13 +32,10 @@ beforeAll(async () => {
   process.env.PORT = "0";
   process.env.LOG_LEVEL = "debug";
 
-  execSync(
-    "npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss",
-    {
-      env: { ...process.env, DATABASE_URL: dbUri },
-      stdio: "inherit",
-    },
-  );
+  execSync("npx prisma migrate deploy --schema=./prisma/schema.prisma", {
+    env: { ...process.env, DATABASE_URL: dbUri },
+    stdio: "inherit",
+  });
 
   const AppMod = await import("../src/app.js");
   app = AppMod.createApp();

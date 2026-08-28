@@ -50,12 +50,14 @@ streamer/
 nvm install
 nvm use
 npm install --global npm@12.0.2
-npm ci
+npm run ci:install
 ```
 
-Use `npm install` only when intentionally changing dependencies and committing
-the resulting lockfile. Keeping the pinned Node/npm pair is especially
-important for Electron and native bridge modules. See
+`npm run ci:install` checks lifecycle-script approvals, installs with scripts
+disabled, and then applies only the reviewed dependency patches. Use `npm
+install` only when intentionally changing dependencies and committing the
+resulting lockfile. Keeping the pinned Node/npm pair is especially important
+for Electron and native bridge modules. See
 [DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md) for the audit and
 install-script policy.
 

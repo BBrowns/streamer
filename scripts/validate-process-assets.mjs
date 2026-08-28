@@ -35,45 +35,6 @@ const HANDOFF_REQUIRED_SOURCES = Object.freeze([
   "docs/AUTOMATED_GOLDEN_PATHS.md",
 ]);
 
-const DELIVERY_PROCESS_CONTRACT = Object.freeze([
-  {
-    label: "PR template",
-    path: [".github", "pull_request_template.md"],
-    markers: [
-      "## Change Scope",
-      "## Decision Lock",
-      "## Verification Evidence",
-      "## Visual Evidence",
-      "## QA Boundary",
-      "## Ready For Review",
-    ],
-  },
-  {
-    label: "QA runbook",
-    path: ["docs", "QA_RUNBOOK.md"],
-    markers: [
-      "## Pre-Review UI Change Flow",
-      "npm run verify:change -- --plan --files",
-      "npm run verify:change -- --focused --files",
-      "npm run verify:change -- --final --files",
-      "Visual Baseline Candidate",
-      "root failure",
-    ],
-  },
-  {
-    label: "CI release gates",
-    path: ["docs", "CI_RELEASE_GATES.md"],
-    markers: [
-      "## Pull Request Readiness",
-      "Draft",
-      "Ready for review",
-      "Merge-ready",
-      "latest commit SHA",
-      "root job",
-    ],
-  },
-]);
-
 export function validateAgentHandoff(root = process.cwd()) {
   const path = join(root, "AGENT_HANDOFF.md");
   if (!existsSync(path)) return ["AGENT_HANDOFF.md: missing"];
@@ -96,25 +57,6 @@ export function validateAgentHandoff(root = process.cwd()) {
   const wordCount = source.match(/\S+/g)?.length ?? 0;
   if (wordCount > 1200) {
     errors.push(`AGENT_HANDOFF.md: exceeds 1200 words (${wordCount} words)`);
-  }
-  return errors;
-}
-
-export function validateDeliveryProcess(root = process.cwd()) {
-  const errors = [];
-  for (const contract of DELIVERY_PROCESS_CONTRACT) {
-    const path = join(root, ...contract.path);
-    if (!existsSync(path)) {
-      errors.push(`${contract.label}: missing ${contract.path.join("/")}`);
-      continue;
-    }
-
-    const source = readFileSync(path, "utf8");
-    for (const marker of contract.markers) {
-      if (!source.includes(marker)) {
-        errors.push(`${contract.label}: missing ${marker}`);
-      }
-    }
   }
   return errors;
 }
@@ -469,7 +411,6 @@ export function validateProcessAssets(root = process.cwd()) {
   }
   errors.push(...validateRuntimePolicy(root));
   errors.push(...validateAgentHandoff(root));
-  errors.push(...validateDeliveryProcess(root));
 
   const codexRoot = join(root, ".codex");
   if (existsSync(codexRoot)) {

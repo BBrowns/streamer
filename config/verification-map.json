@@ -22,7 +22,7 @@
       "id": "workflow-policy",
       "patterns": [
         "^\\.github/workflows/",
-        "^scripts/(check-github-actions|ci-affected|ci-needs-check|change-scope-parity)"
+        "^scripts/(check-github-actions|ci-affected|ci-install|ci-needs-check|change-scope-parity)"
       ],
       "focusedCommands": [
         "npm run process:check",

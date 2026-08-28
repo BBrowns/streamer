@@ -17,7 +17,6 @@ let prisma: any;
 let addonFixture: ReturnType<typeof startSearchAddonFixture>;
 let resetFailedAttempts: () => void;
 let resetRateLimitStore: () => void;
-let testDatabaseSchema: string;
 const createdUserIds: string[] = [];
 const originalEnvironment: Record<string, string | undefined> = {};
 
@@ -44,31 +43,29 @@ beforeAll(async () => {
     originalEnvironment[key] = process.env[key];
   }
 
-  const configuredDatabase = process.env.DATABASE_URL;
   const baseDatabaseUrl =
-    configuredDatabase?.startsWith("postgresql://") ||
-    configuredDatabase?.startsWith("postgres://")
-      ? configuredDatabase
-      : "postgresql://streamer:streamer_dev@127.0.0.1:5432/streamer_db?schema=public";
-  const parsedDatabaseUrl = new URL(baseDatabaseUrl);
-  testDatabaseSchema = `search_addon_${crypto.randomUUID().replaceAll("-", "")}`;
-  parsedDatabaseUrl.searchParams.set("schema", testDatabaseSchema);
-  const databaseUrl = parsedDatabaseUrl.toString();
+    process.env.STREAMER_TEST_DATABASE_URL || process.env.DATABASE_URL;
+  if (
+    !baseDatabaseUrl ||
+    (!baseDatabaseUrl.startsWith("postgresql://") &&
+      !baseDatabaseUrl.startsWith("postgres://"))
+  ) {
+    throw new Error(
+      "Search add-on integration tests require STREAMER_TEST_DATABASE_URL or a PostgreSQL DATABASE_URL from the disposable test setup.",
+    );
+  }
 
-  process.env.DATABASE_URL = databaseUrl;
+  process.env.DATABASE_URL = baseDatabaseUrl;
   process.env.JWT_SECRET = "search-addon-integration-secret";
   process.env.PORT = "0";
   process.env.NODE_ENV = "test";
   process.env.LOG_LEVEL = "silent";
   process.env.ADDON_ALLOW_PRIVATE_NETWORKS = "true";
 
-  execSync(
-    "npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss",
-    {
-      env: { ...process.env, DATABASE_URL: databaseUrl },
-      stdio: "pipe",
-    },
-  );
+  execSync("npx prisma migrate deploy --schema=./prisma/schema.prisma", {
+    env: { ...process.env, DATABASE_URL: baseDatabaseUrl },
+    stdio: "pipe",
+  });
 
   const AppModule = await import("../src/app.js");
   app = AppModule.createApp();
@@ -98,9 +95,6 @@ afterEach(async () => {
 afterAll(async () => {
   addonFixture?.close();
   if (prisma) {
-    await prisma.$executeRawUnsafe(
-      `DROP SCHEMA IF EXISTS "${testDatabaseSchema}" CASCADE`,
-    );
     await prisma.$disconnect();
   }
 

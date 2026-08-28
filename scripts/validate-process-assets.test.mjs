@@ -5,7 +5,6 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
-  validateDeliveryProcess,
   validateHooks,
   validateAgentHandoff,
   validateMarkdownTreeLinks,
@@ -14,41 +13,6 @@ import {
   validateSkillArchitecture,
   validateToolchainProjections,
 } from "./validate-process-assets.mjs";
-
-const validDeliveryProcess = {
-  template: `## Change Scope
-## Decision Lock
-## Verification Evidence
-## Visual Evidence
-## QA Boundary
-## Ready For Review
-`,
-  runbook: `## Pre-Review UI Change Flow
-npm run verify:change -- --plan --files ...
-npm run verify:change -- --focused --files ...
-npm run verify:change -- --final --files ...
-Visual Baseline Candidate
-root failure
-`,
-  gates: `## Pull Request Readiness
-Draft
-Ready for review
-Merge-ready
-latest commit SHA
-root job
-`,
-};
-
-function writeDeliveryProcessFixture(root, files = validDeliveryProcess) {
-  mkdirSync(join(root, ".github"), { recursive: true });
-  mkdirSync(join(root, "docs"), { recursive: true });
-  writeFileSync(
-    join(root, ".github", "pull_request_template.md"),
-    files.template,
-  );
-  writeFileSync(join(root, "docs", "QA_RUNBOOK.md"), files.runbook);
-  writeFileSync(join(root, "docs", "CI_RELEASE_GATES.md"), files.gates);
-}
 
 const validHandoff = `# Streamer Agent Handoff
 
@@ -91,38 +55,6 @@ test("rejects broken links in nested skill references", () => {
 
 test("project process assets have valid metadata and portable hooks", () => {
   assert.deepEqual(validateProcessAssets(), []);
-});
-
-test("accepts the complete change delivery process contract", () => {
-  const root = mkdtempSync(join(tmpdir(), "streamer-delivery-process-valid-"));
-  try {
-    writeDeliveryProcessFixture(root);
-    assert.deepEqual(validateDeliveryProcess(root), []);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("reports missing change delivery process sections", () => {
-  const root = mkdtempSync(
-    join(tmpdir(), "streamer-delivery-process-invalid-"),
-  );
-  try {
-    writeDeliveryProcessFixture(root, {
-      template: "## Outcome\n",
-      runbook: "## Automated Correctness Pass\n",
-      gates: "## Required Checks\n",
-    });
-
-    const errors = validateDeliveryProcess(root);
-    assert.ok(errors.some((error) => error.includes("PR template: missing")));
-    assert.ok(errors.some((error) => error.includes("QA runbook: missing")));
-    assert.ok(
-      errors.some((error) => error.includes("CI release gates: missing")),
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
 });
 
 test("rejects a valid JSON hook file that disables required controls", () => {

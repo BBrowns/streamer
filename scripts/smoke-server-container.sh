@@ -20,7 +20,7 @@ docker run -d --name "$postgres" --network "$network" \
   -e POSTGRES_USER=streamer \
   -e POSTGRES_PASSWORD=streamer_test \
   -e POSTGRES_DB=streamer_test \
-  postgres:17-alpine >/dev/null
+  postgres:17-alpine@sha256:3430fe182f5065a6ea505c3d432d2c7fff18fbab954df8f277c1dbf4c70124af >/dev/null
 
 for attempt in $(seq 1 30); do
   if docker exec "$postgres" pg_isready -U streamer -d streamer_test >/dev/null 2>&1; then

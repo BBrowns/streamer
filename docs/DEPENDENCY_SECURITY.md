@@ -7,7 +7,7 @@ Streamer pins its development toolchain to **Node.js 26.7.0** and
 nvm install
 nvm use
 npm install --global npm@12.0.2
-npm ci
+npm run ci:install
 ```
 
 The root `dev:stream-server` launcher also checks CPU architecture before
@@ -30,18 +30,30 @@ bridge unable to load `node-datachannel`.
 Pull requests block on:
 
 ```bash
+npm run ci:install
 npm run security:install-scripts
 npm run security:audit
 ```
 
 CI also:
 
+- installs with lifecycle scripts disabled, then runs only the version-pinned
+  `patch-package` postinstall step and the explicitly approved
+  `node-datachannel` native rebuild after the install-script policy passes;
 - validates every GitHub Actions workflow with `actionlint@v1.7.12`;
 - requires external GitHub Actions to use reviewed full commit SHAs;
 - reviews the dependency delta on pull requests and blocks newly introduced
   high or critical advisories;
+- runs dependency compatibility contract tests alongside the production audit;
 - checks npm and GitHub Actions dependency drift through grouped weekly
   Dependabot updates;
+- queues only safe Dependabot patch/minor PRs for protected auto-merge. Expo,
+  React Native, Electron, Prisma, TypeScript, Sentry, Hono, NativeWind,
+  Tailwind, native, and major updates stay manual and require a code-owner
+  review;
+- applies Prisma migrations in CI instead of mutating the schema with
+  `db push`;
+- enforces finite timeouts on every CI and release job;
 - runs GitHub CodeQL default setup for Actions and JavaScript/TypeScript.
 
 The weekly Maintenance Radar runs the read-only collector and stores a bounded
@@ -58,6 +70,12 @@ Repository secret scanning and push protection must remain enabled in GitHub.
 Push protection is the preventive secret gate; do not replace it with an ad hoc
 regular-expression scan. If these server-side controls are unavailable or
 disabled, restore an equivalent reviewed scanner before removing this policy.
+
+`CODEOWNERS` keeps the dependency manifests, release workflows, migration
+directory, and security tooling assigned to the repository owner. The master
+ruleset requires at least one approving review; automatic Dependabot merges can
+only enter the merge queue after the required CI and dependency-review checks
+are green.
 
 `security:audit` rejects **high and critical production dependency findings**.
 It runs npm's production audit and permits only exact, unexpired advisory
@@ -81,21 +99,25 @@ When a dependency version changes, review what its install script executes,
 update the policy intentionally, and rerun the install-script check. Never add
 a broad name-only approval to make CI pass.
 
+The script-disabled install intentionally leaves native artifacts absent until
+the final targeted rebuild. This keeps arbitrary dependency lifecycle code out
+of CI while still producing the checked-in desktop bridge binary. If the
+`node-datachannel` version changes, update the exact allow-list entry and the
+rebuild contract in the same reviewed dependency change.
+
 ## Reviewed Transitive Findings
 
 These exceptions do not block the production high/critical audit. Re-evaluate
 them before the next release candidate or by **2026-09-30**, whichever comes
 first. Owners: platform maintainers.
 
-| Dependency path                                                  | Scope                                                                          | Current decision                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@hono/node-ws@1.3.1` -> `@hono/node-server@1.19.17`             | Server runtime nested compatibility; moderate finding                          | `@hono/node-server@2.1.1` is now the direct server adapter. `@hono/node-ws@1.3.1` still brings a nested 1.19.17 adapter for its compatibility contract; remove this exception when the WebSocket adapter moves to the 2.x line.                                                                                                                                                                                                                                       |
-| Expo/xcode tooling -> older `uuid`                               | Mobile development tooling; moderate finding                                   | Track Expo updates; do not force an incompatible nested major.                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Vite/tsx -> `esbuild@0.27.x`                                     | Local development server only                                                  | Direct stream-server builds use patched `esbuild@0.28.x`. Keep dev servers bound to trusted local interfaces and update with the upstream toolchain.                                                                                                                                                                                                                                                                                                                  |
-| Testcontainers/node-gyp -> `undici`                              | Test/build tooling only                                                        | Track Testcontainers and node-gyp updates; it is not shipped in the application runtime.                                                                                                                                                                                                                                                                                                                                                                              |
-| WebTorrent -> bittorrent tracker -> `ip`                         | Stream-server development dependency with no fixed compatible upstream release | `bittorrent-tracker@11.2.3` is patched locally to replace its single UDP integer-to-IPv4 conversion and no application code imports `ip`. The package remains in the lockfile because npm resolves the published package before `patch-package` runs; treat the upstream advisory as a reviewed development-only exception and remove this patch when a maintained tracker release removes `ip`. Keep URL/private-network controls and bridge authentication enabled. |
-| React Native/Jest tooling -> `test-exclude` -> `brace-expansion` | Transform and test tooling; high resource-exhaustion finding                   | Advisory `GHSA-mh99-v99m-4gvg` has no patched 1.x release. The audit exception accepts only `node_modules/test-exclude/node_modules/brace-expansion`; a new path still fails CI. Do not force 5.x into legacy `minimatch`, whose CommonJS callable API is incompatible. Inputs are repository-controlled globs, not remote user patterns. Exception expires 2026-09-30 or before the next RC; upgrade the owning Expo toolchain when a compatible fix ships.          |
-| Expo/Metro -> `image-size`                                       | Mobile development/build tooling; high parser resource-exhaustion findings     | `image-size@1.2.1` is patched locally to advance zero-sized ICNS entries and already contains the equivalent JXL/HEIF zero-progress guard. The exact root node remains reviewed because Metro owns the 1.x parser contract and no fixed compatible npm release exists. Exception expires 2026-09-30 or before the next RC; replace the patch when Expo/Metro adopts a fixed release.                                                                                  |
+| Dependency path                                                  | Scope                                                        | Current decision                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@hono/node-ws@1.3.1` -> root peer `@hono/node-server@1.19.17`   | Server runtime peer compatibility; moderate finding          | The private root workspace declares an exact 1.19.17 peer so npm installs the adapter required by `@hono/node-ws`, while the server workspace keeps its direct `@hono/node-server@2.1.1` runtime adapter. The lockfile contract test asserts both versions; remove this exception when the WebSocket adapter moves to the 2.x line.                                                                                                                          |
+| Expo/xcode tooling -> older `uuid`                               | Mobile development tooling; moderate finding                 | Track Expo updates; do not force an incompatible nested major.                                                                                                                                                                                                                                                                                                                                                                                               |
+| Vite/tsx -> `esbuild@0.27.x`                                     | Local development server only                                | Direct stream-server builds use patched `esbuild@0.28.x`. Keep dev servers bound to trusted local interfaces and update with the upstream toolchain.                                                                                                                                                                                                                                                                                                         |
+| Testcontainers/node-gyp -> `undici`                              | Test/build tooling only                                      | Track Testcontainers and node-gyp updates; it is not shipped in the application runtime.                                                                                                                                                                                                                                                                                                                                                                     |
+| React Native/Jest tooling -> `test-exclude` -> `brace-expansion` | Transform and test tooling; high resource-exhaustion finding | Advisory `GHSA-mh99-v99m-4gvg` has no patched 1.x release. The audit exception accepts only `node_modules/test-exclude/node_modules/brace-expansion`; a new path still fails CI. Do not force 5.x into legacy `minimatch`, whose CommonJS callable API is incompatible. Inputs are repository-controlled globs, not remote user patterns. Exception expires 2026-09-30 or before the next RC; upgrade the owning Expo toolchain when a compatible fix ships. |
 
 ## Compatibility Overrides
 
@@ -121,10 +143,39 @@ that exact integration. Remove the pin and override when the Expo toolchain
 ships an `xcode` release with a patched UUID range, and retain the lockfile/API
 smoke check when doing so.
 
+The mobile color extraction package follows `node-vibrant`'s browser entry in
+the supported web path, so the unused Node/Jimp adapter is replaced with the
+equivalent `@vibrant/image-browser@4.0.4` package through the scoped
+`node-vibrant` override. This removes the legacy `file-type` parser branch from
+the lockfile while preserving the browser API. Remove the override when
+`react-native-image-colors` or `node-vibrant` no longer installs the unused
+Node adapter; the dependency compatibility test must continue to prove that
+no `file-type` node is present. Owner: mobile/platform maintainers.
+
+`bittorrent-tracker@11.2.3` keeps its local UDP parser patch, while its `ip`
+edge is resolved to `ip-address@10.5.0` through a scoped npm override. The
+tracker tests cover IPv4 conversion and fallback behavior, and the lockfile
+must not contain the vulnerable `ip` package. Remove both controls when a
+maintained tracker release removes the legacy edge and retains the tested
+parser behavior. Owner: stream-server/platform maintainers.
+
 The root Hono override is constrained to the tested `4.13.x` line, and the
 server/mobile direct dependencies resolve one compatible version. Keep the
 override and direct specifications aligned when upgrading Hono so the Hono
 adapters and shared client code are verified against one runtime contract.
+
+The server currently has two intentionally separate Hono Node adapters: the
+server workspace imports `@hono/node-server@2.1.1`, while `@hono/node-ws@1.3.1`
+requires a `^1.19.11` peer. The private root workspace declares the exact
+`@hono/node-server@1.19.17` peer so npm installs that compatibility adapter
+alongside the server-local 2.x package. `npm run dependency:compatibility:test`
+asserts this topology; remove the root peer when `@hono/node-ws` supports the
+2.x adapter.
+
+NativeWind `4.2.x` currently brings `react-native-css-interop@0.2.6`, whose
+Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
+pins `tailwindcss@3.4.19`; keep the compatibility test in place and review the
+NativeWind migration before accepting a Tailwind 4 major bump.
 
 The mobile app intentionally tracks React `19.2.8` and the compatible
 React Native `4.5.x` native-module line ahead of Expo SDK 57's bundled patch

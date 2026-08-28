@@ -11,6 +11,9 @@ const preloadSource = fs.readFileSync(
   "utf8",
 );
 const { INVOKE_IPC_CHANNELS, SUBSCRIBE_IPC_CHANNELS } = require("./security");
+const rootPackage = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "../../../package.json"), "utf8"),
+);
 
 test("BrowserWindow opts into hardened renderer preferences", () => {
   for (const requiredSnippet of [
@@ -193,4 +196,17 @@ test("desktop smoke mode skips bridge and Bonjour startup only outside packaged 
   assert.match(mainSource, /!electron_1\.app\.isPackaged/);
   assert.match(mainSource, /desktop-smoke-bridge-disabled/);
   assert.match(mainSource, /Bridge daemon and Bonjour discovery are disabled/);
+});
+
+test("desktop development waits for the renderer before launching Electron", () => {
+  assert.match(rootPackage.scripts["dev:desktop"], /dev-runtime\.cjs/);
+  assert.match(
+    fs.readFileSync(path.join(__dirname, "../scripts/dev.cjs"), "utf8"),
+    /waitForRenderer/,
+  );
+});
+
+test("desktop-all uses readiness checks instead of a fixed startup sleep", () => {
+  assert.doesNotMatch(rootPackage.scripts["dev:desktop-all"], /sleep\s+4/);
+  assert.match(rootPackage.scripts["dev:desktop-all"], /dev-desktop-all\.cjs/);
 });

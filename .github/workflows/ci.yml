@@ -26,6 +26,7 @@ jobs:
   ci_scope:
     name: Determine CI Scope
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       full_ci: ${{ steps.scope.outputs.full_ci }}
       run_lint: ${{ steps.scope.outputs.run_lint }}
@@ -105,6 +106,7 @@ jobs:
   workflow-lint:
     name: GitHub Actions Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -127,6 +129,7 @@ jobs:
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs: ci_scope
     if: >-
       always() &&
@@ -149,7 +152,9 @@ jobs:
         run: npm run process:check:test
       - name: Test maintenance report classifier
         run: npm run maintenance:report:test
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        # ci-install.mjs runs security:install-scripts before npm ci.
+        run: node scripts/ci-install.mjs
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Lint All Workspaces
@@ -166,6 +171,7 @@ jobs:
   format-check:
     name: Format Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: ci_scope
     if: >-
       always() &&
@@ -178,13 +184,15 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Check formatting
         run: npm run format:check
 
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ci_scope
     if: >-
       always() &&
@@ -197,15 +205,17 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
-      - name: Verify dependency install-script policy
-        run: npx --yes "npm@${NPM_VERSION}" run security:install-scripts
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Audit production dependencies
         run: npx --yes "npm@${NPM_VERSION}" run security:audit
+      - name: Verify dependency compatibility contracts
+        run: npx --yes "npm@${NPM_VERSION}" run dependency:compatibility:test
 
   test-shared:
     name: Shared Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ci_scope
     if: >-
       always() &&
@@ -218,7 +228,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Run Shared Tests
         run: npm run test --workspace=@streamer/shared
       - name: Write CI summary
@@ -243,6 +254,7 @@ jobs:
   test-server:
     name: Server Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     needs: ci_scope
     if: >-
       always() &&
@@ -251,7 +263,7 @@ jobs:
       needs.ci_scope.outputs.run_server == 'true')
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-alpine@sha256:3430fe182f5065a6ea505c3d432d2c7fff18fbab954df8f277c1dbf4c70124af
         env:
           POSTGRES_USER: streamer
           POSTGRES_PASSWORD: streamer_dev
@@ -275,13 +287,14 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
-      - name: Push DB Schema
-        run: npx prisma db push --schema=server/prisma/schema.prisma
-      - name: Force Install Missing Native/Coverage Dependencies
-        run: npx --yes "npm@${NPM_VERSION}" install --no-save @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@4.1.10
+      - name: Apply Prisma migrations
+        run: npm run db:migrate:deploy --workspace=server -- --schema=prisma/schema.prisma
+      - name: Install Linux-only test helpers without lifecycle scripts
+        run: npx --yes "npm@${NPM_VERSION}" install --ignore-scripts --no-save @rollup/rollup-linux-x64-gnu @vitest/coverage-v8@4.1.10
       - name: Run Tests with Coverage
         run: npm run test --workspace=server -- --coverage
         env:
@@ -323,6 +336,7 @@ jobs:
   test-stream-server:
     name: Stream Server Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: ci_scope
     if: >-
       always() &&
@@ -335,7 +349,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Validate Dev Runtime Selection
         run: npm run dev:runtime:test
       - name: Run Stream Server Tests
@@ -362,6 +377,7 @@ jobs:
   test-mobile:
     name: Mobile Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs: ci_scope
     if: >-
       always() &&
@@ -374,7 +390,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Run Mobile Jest Tests
@@ -422,7 +439,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Restore Playwright browser cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -485,7 +503,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Restore Playwright browser cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -519,6 +538,7 @@ jobs:
   golden_path_gate:
     name: Golden Path Browser Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: always()
     needs: [ci_scope, test-golden-path]
     steps:
@@ -551,6 +571,7 @@ jobs:
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_visual == 'true')
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     needs: ci_scope
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -558,7 +579,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Restore Playwright browser cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -589,6 +611,7 @@ jobs:
   build-check:
     name: Build Check
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: ci_scope
     if: >-
       always() &&
@@ -601,7 +624,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Generate Prisma Client
         run: npx prisma generate --schema=server/prisma/schema.prisma
       - name: Build Shared
@@ -660,6 +684,7 @@ jobs:
   server-container:
     name: Server Production Container
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ci_scope
     if: >-
       always() &&
@@ -674,6 +699,7 @@ jobs:
   desktop-package:
     name: Desktop Package Artifact
     runs-on: macos-latest
+    timeout-minutes: 35
     needs: ci_scope
     if: >-
       always() &&
@@ -686,7 +712,8 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
-      - run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
       - name: Build macOS desktop package directory
         run: npm run package:mac --workspace=@streamer/desktop
       - name: Validate packaged inputs
@@ -721,6 +748,7 @@ jobs:
   release-gate:
     name: Release Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: always()
     needs:
       - ci_scope
