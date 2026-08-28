@@ -105,7 +105,9 @@ export async function setup() {
 
   try {
     console.log("[Test database] Booting ephemeral PostgreSQL container...");
-    container = await new PostgreSqlContainer("postgres:17-alpine")
+    container = await new PostgreSqlContainer(
+      "postgres:17-alpine@sha256:3430fe182f5065a6ea505c3d432d2c7fff18fbab954df8f277c1dbf4c70124af",
+    )
       .withDatabase("streamer_test")
       .withUsername("streamer")
       .withPassword("streamer_dev")

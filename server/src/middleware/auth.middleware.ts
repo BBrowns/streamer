@@ -11,6 +11,10 @@ export interface AuthPayload {
   jti?: string;
 }
 
+type AccessTokenAuthenticationOptions = {
+  deviceId?: string;
+};
+
 /** Maximum allowed token age in seconds (prevent replay of very old tokens) */
 const MAX_TOKEN_AGE_SECONDS = 24 * 60 * 60; // 24 hours
 
@@ -70,15 +74,12 @@ function scheduleSessionHeartbeat(
     });
 }
 
-export async function authMiddleware(c: Context, next: Next) {
-  const authHeader = c.req.header("authorization");
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    return c.json({ error: "Missing or invalid Authorization header" }, 401);
-  }
-
-  const token = authHeader.slice(7);
-
+export async function authenticateAccessToken(
+  c: Context,
+  next: Next,
+  token: string,
+  options: AccessTokenAuthenticationOptions = {},
+) {
   let payload: AuthPayload;
   try {
     payload = verifyAccessToken(token);
@@ -118,7 +119,8 @@ export async function authMiddleware(c: Context, next: Next) {
   c.set("user", payload);
 
   // Multi-Device Session Logic
-  const deviceId = c.req.header("x-device-id") || "unknown-browser";
+  const deviceId =
+    options.deviceId || c.req.header("x-device-id") || "unknown-browser";
   const ip = c.req.header("x-forwarded-for") || "127.0.0.1";
   const userAgent = c.req.header("user-agent");
 
@@ -138,4 +140,14 @@ export async function authMiddleware(c: Context, next: Next) {
   // Downstream route errors deliberately propagate to the global error
   // handler. They are not token-verification failures.
   await next();
+}
+
+export async function authMiddleware(c: Context, next: Next) {
+  const authHeader = c.req.header("authorization");
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Missing or invalid Authorization header" }, 401);
+  }
+
+  return authenticateAccessToken(c, next, authHeader.slice(7));
 }

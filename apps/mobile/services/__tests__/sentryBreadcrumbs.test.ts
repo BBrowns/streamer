@@ -15,6 +15,7 @@ describe("mobile Sentry breadcrumbs", () => {
         sessionId: "session-1",
         candidateId: "candidate-1",
         streamUrl: "https://resolver.example.test/movie.mp4?token=secret",
+        sourceUri: "https://resolver.example.test/stream.mp4",
         infoHash: "abcdef",
       },
     });
@@ -24,6 +25,7 @@ describe("mobile Sentry breadcrumbs", () => {
     expect(breadcrumb.message).toContain("[magnet]");
     expect(breadcrumb.message).not.toContain("abcdef");
     expect(breadcrumb.data?.streamUrl).toBe("[redacted]");
+    expect(breadcrumb.data?.sourceUri).toBe("[redacted]");
     expect(breadcrumb.data?.infoHash).toBe("[redacted]");
   });
 });

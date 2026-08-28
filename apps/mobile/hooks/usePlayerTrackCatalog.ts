@@ -87,6 +87,12 @@ export function usePlayerTrackCatalog({
     () => mergeSubtitleTracks([...engineSubtitles, ...addonSubtitles]),
     [addonSubtitles, engineSubtitles],
   );
+  const routeAllowsAudioTracks =
+    playbackRoute?.capabilities.audioTracks ?? true;
+  const routeAllowsEmbeddedSubtitles =
+    playbackRoute?.capabilities.embeddedSubtitles ?? true;
+  const routeAllowsExternalSubtitles =
+    playbackRoute?.capabilities.externalSubtitles ?? true;
 
   useEffect(() => {
     setAddonSubtitles([]);
@@ -127,30 +133,20 @@ export function usePlayerTrackCatalog({
     if (!player) {
       setCatalogAudioTracks([]);
       setAudioTracks([]);
-      setSubtitles(
-        playbackRoute && !playbackRoute.capabilities.externalSubtitles
-          ? []
-          : runtimeSubtitles,
-      );
+      setSubtitles(routeAllowsExternalSubtitles ? runtimeSubtitles : []);
       return;
     }
 
     const adapterCapabilities = mediaAdapter.getCapabilities();
     const catalog = buildMediaAdapterTrackCatalog({
       capabilities: {
-        audioTracks:
-          adapterCapabilities.audioTracks &&
-          (playbackRoute?.capabilities.audioTracks ?? true),
+        audioTracks: adapterCapabilities.audioTracks && routeAllowsAudioTracks,
         embeddedSubtitles:
-          adapterCapabilities.embeddedSubtitles &&
-          (playbackRoute?.capabilities.embeddedSubtitles ?? true),
+          adapterCapabilities.embeddedSubtitles && routeAllowsEmbeddedSubtitles,
       },
       mediaAudioTracks: mediaAdapter.getAudioTracks(),
       mediaSubtitleTracks: mediaAdapter.getSubtitleTracks(),
-      engineSubtitles:
-        playbackRoute && !playbackRoute.capabilities.externalSubtitles
-          ? []
-          : runtimeSubtitles,
+      engineSubtitles: routeAllowsExternalSubtitles ? runtimeSubtitles : [],
     });
     setCatalogAudioTracks(catalog.audioTracks);
     setAudioTracks(catalog.audioTracks);
@@ -158,8 +154,10 @@ export function usePlayerTrackCatalog({
   }, [
     engine,
     mediaAdapter,
-    playbackRoute,
     player,
+    routeAllowsAudioTracks,
+    routeAllowsEmbeddedSubtitles,
+    routeAllowsExternalSubtitles,
     setAudioTracks,
     setSubtitles,
   ]);

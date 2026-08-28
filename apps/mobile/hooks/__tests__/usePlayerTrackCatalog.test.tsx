@@ -148,4 +148,27 @@ describe("usePlayerTrackCatalog", () => {
     expect(result.current.refreshPlayerTracks).toBeDefined();
     expect(options.mediaAdapter.getAudioTracks).toHaveBeenCalledTimes(3);
   });
+
+  it("does not restart engine track discovery for a semantically unchanged route", async () => {
+    const { options } = createOptions();
+    const { rerender } = await renderHook(
+      ({ playbackRoute }: { playbackRoute: PlaybackRoute }) =>
+        usePlayerTrackCatalog({ ...options, playbackRoute }),
+      { initialProps: { playbackRoute: route } },
+    );
+
+    await waitFor(() =>
+      expect(options.engine.refreshTrackCatalog).toHaveBeenCalledTimes(1),
+    );
+    options.engine.refreshTrackCatalog.mockClear();
+
+    await rerender({
+      playbackRoute: {
+        ...route,
+        capabilities: { ...route.capabilities },
+      },
+    });
+
+    expect(options.engine.refreshTrackCatalog).not.toHaveBeenCalled();
+  });
 });

@@ -1,5 +1,4 @@
 import React from "react";
-import { Alert } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AddonsScreen from "../index";
@@ -7,6 +6,12 @@ import { api } from "../../../services/api";
 import { useAuthStore } from "../../../stores/authStore";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
+jest.mock("../../../components/ui/AdaptiveOverlay", () => ({
+  AdaptiveOverlay: ({ visible, children, testID }: any) => {
+    const { View } = require("react-native");
+    return visible ? <View testID={testID}>{children}</View> : null;
+  },
+}));
 jest.mock("../../../services/api", () => ({
   api: { get: jest.fn(), post: jest.fn(), delete: jest.fn() },
 }));
@@ -33,11 +38,9 @@ describe("Add-ons removal", () => {
     (api.get as jest.Mock).mockResolvedValue({
       data: { addons: [installedAddon] },
     });
-    jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
@@ -63,8 +66,7 @@ describe("Add-ons removal", () => {
     await fireEvent.press(
       screen.getByLabelText("addons.installed.confirmRemove"),
     );
-    const confirmationButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    confirmationButtons[1].onPress();
+    await fireEvent.press(screen.getByTestId("addon-remove-confirm"));
 
     await waitFor(() => {
       expect(screen.getByText("Service unavailable")).toBeTruthy();
@@ -138,8 +140,7 @@ describe("Add-ons removal", () => {
     await fireEvent.press(
       screen.getByLabelText("addons.installed.confirmRemove"),
     );
-    const confirmationButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    confirmationButtons[1].onPress();
+    await fireEvent.press(screen.getByTestId("addon-remove-confirm"));
 
     await waitFor(() =>
       expect(invalidateQueries).toHaveBeenCalledWith({

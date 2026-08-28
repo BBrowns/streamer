@@ -5,11 +5,13 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY server/package.json ./server/
 COPY packages/shared/package.json ./packages/shared/
+COPY scripts/check-install-script-policy.mjs ./scripts/
 
 # Keep container installs aligned with the repository lockfile/toolchain. Root
 # lifecycle scripts target the full desktop/mobile workspace and are not needed
 # for this server-only image; Prisma generation runs explicitly below.
-RUN npx --yes npm@12.0.2 ci --ignore-scripts --no-audit --no-fund \
+RUN node scripts/check-install-script-policy.mjs \
+    && npx --yes npm@12.0.2 ci --ignore-scripts --no-audit --no-fund \
     --workspace=server --workspace=packages/shared
 
 # Copy source

@@ -63,6 +63,10 @@ const {
   redactSensitiveText,
 } = require("./sentry");
 const { createDesktopBuildMetadata } = require("./build-metadata");
+const {
+  createDesktopBonjourInstanceId,
+  createDesktopBonjourServiceConfig,
+} = require("./desktop-bonjour");
 
 const { autoUpdater } = require("electron-updater");
 const RELEASES_URL =
@@ -2302,17 +2306,17 @@ electron_1.app.whenReady().then(async () => {
       try {
         const { Bonjour } = await import("bonjour-service");
         const bonjour = new Bonjour();
-        const service = bonjour.publish({
-          name: `Streamer Desktop (${require("os").hostname()})`,
-          type: "streamer-bridge",
-          protocol: "tcp",
-          port: 11470,
-          txt: {
-            version: desktopBuildMetadata.appVersion,
-            id: electron_1.app.getPath("userData"),
-          },
+        const service = bonjour.publish(
+          createDesktopBonjourServiceConfig({
+            hostname: os.hostname(),
+            appVersion: desktopBuildMetadata.appVersion,
+            port: 11470,
+            instanceId: createDesktopBonjourInstanceId(),
+          }),
+        );
+        service.once("up", () => {
+          console.log("[discovery] Desktop bridge announced via Bonjour.");
         });
-        console.log(`[discovery] Announcing desktop bridge: ${service.name}`);
 
         electron_1.app.on("will-quit", () => {
           bonjour.unpublishAll(() => {

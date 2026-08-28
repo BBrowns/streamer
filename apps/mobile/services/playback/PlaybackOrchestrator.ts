@@ -29,6 +29,7 @@ import {
   mapPlaybackPlanToRuntimeFailure,
 } from "./PlaybackErrors";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
+import { recordPlaybackDebugEvent } from "./playbackDebug";
 
 export interface PlaybackOrchestratorInput {
   type: "movie" | "series";
@@ -490,6 +491,10 @@ function recordSessionStarted(
     typeof streamEngineManager.getBridgeDiagnostics
   >,
 ) {
+  const selectedRoute =
+    plan.selectedCandidate && "route" in plan.selectedCandidate
+      ? plan.selectedCandidate.route
+      : undefined;
   addMobileBreadcrumb({
     category: "playback",
     message: "playback.session_started",
@@ -511,6 +516,24 @@ function recordSessionStarted(
       selectedRequiresRemux: plan.selectedCandidate?.requiresRemux,
       bridgeStatus: bridgeDiagnostics.status,
       bridgeReason: bridgeDiagnostics.reason,
+    },
+  });
+  recordPlaybackDebugEvent({
+    category: "playback",
+    message: "playback.plan_selected",
+    data: {
+      action,
+      planState: plan.state,
+      candidateCount:
+        plan.orderedCandidates?.length ??
+        (plan.selectedCandidate
+          ? 1 + (plan.fallbackCandidates?.length ?? 0)
+          : 0),
+      selectedCandidateKind: plan.selectedCandidate?.kind,
+      selectedRequiresBridge: plan.selectedCandidate?.requiresBridge,
+      executionTarget: selectedRoute?.executionTarget,
+      delivery: selectedRoute?.delivery,
+      bridgeStatus: bridgeDiagnostics.status,
     },
   });
 }

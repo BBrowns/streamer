@@ -16,7 +16,7 @@ on:
           - rc
           - production
       notarize:
-        description: "Run Apple notarization after signing"
+        description: "Run Apple notarization after signing (required for production)"
         required: true
         default: false
         type: boolean
@@ -27,44 +27,86 @@ on:
         type: boolean
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
-  artifact-metadata: write
+  contents: read
 
 env:
   NPM_VERSION: "12.0.2"
 
 jobs:
+  validate-dispatch:
+    name: Validate release dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      dispatch_sha: ${{ steps.validate.outputs.dispatch_sha }}
+    steps:
+      - name: Validate release ref, tag, and channel policy
+        id: validate
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          DISPATCH_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ inputs.tag_name }}
+          RELEASE_CHANNEL: ${{ inputs.build_channel }}
+          RELEASE_NOTARIZE: ${{ inputs.notarize }}
+        run: |
+          set -euo pipefail
+          if [[ "${RELEASE_REF}" != "refs/heads/master" ]]; then
+            echo "::error::Desktop releases must be dispatched from the protected master branch."
+            exit 1
+          fi
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::tag_name must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N."
+            exit 1
+          fi
+          if [[ "${RELEASE_CHANNEL}" == "production" && "${RELEASE_NOTARIZE}" != "true" ]]; then
+            echo "::error::Production releases require Apple notarization."
+            exit 1
+          fi
+          echo "dispatch_sha=${DISPATCH_SHA}" >> "${GITHUB_OUTPUT}"
+
   macos-release:
     name: macOS Release Artifact
+    needs: validate-dispatch
     runs-on: macos-latest
+    timeout-minutes: 60
+    environment: ${{ inputs.build_channel == 'production' && 'production' || 'release-candidate' }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    concurrency:
+      group: desktop-release-${{ inputs.tag_name }}
+      cancel-in-progress: false
     env:
       STREAMER_BUILD_CHANNEL: ${{ inputs.build_channel }}
       STREAMER_BUILD_ENVIRONMENT: production
-      STREAMER_GIT_SHA: ${{ github.sha }}
       STREAMER_NOTARIZE: ${{ inputs.notarize }}
       STREAMER_RELEASE_TAG: ${{ inputs.tag_name }}
-      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
-      CSC_NAME: ${{ secrets.MACOS_CSC_NAME }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validate-dispatch.outputs.dispatch_sha }}
+          persist-credentials: false
+
+      - name: Stamp protected source revision
+        env:
+          EXPECTED_SHA: ${{ needs.validate-dispatch.outputs.dispatch_sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "${actual_sha}" = "${EXPECTED_SHA}"
+          echo "STREAMER_GIT_SHA=${actual_sha}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
 
-      - name: Install dependencies
-        run: npx --yes "npm@${NPM_VERSION}" ci --no-audit --no-fund
+      - name: Install dependencies with the reviewed lifecycle policy
+        run: node scripts/ci-install.mjs
 
       - name: Stamp build metadata
         run: |
@@ -78,7 +120,37 @@ jobs:
       - name: Validate release configuration
         run: npm run release:check --workspace=@streamer/desktop
 
+      - name: Validate release ref, tag, and channel policy
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ inputs.tag_name }}
+          RELEASE_CHANNEL: ${{ inputs.build_channel }}
+          RELEASE_NOTARIZE: ${{ inputs.notarize }}
+        run: |
+          set -euo pipefail
+          if [[ "${RELEASE_REF}" != "refs/heads/master" ]]; then
+            echo "::error::Desktop releases must be dispatched from the protected master branch."
+            exit 1
+          fi
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::tag_name must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N."
+            exit 1
+          fi
+          if [[ "${RELEASE_CHANNEL}" == "production" && "${RELEASE_NOTARIZE}" != "true" ]]; then
+            echo "::error::Production releases require Apple notarization."
+            exit 1
+          fi
+
       - name: Validate signing and notarization secrets
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_NAME: ${{ secrets.MACOS_CSC_NAME }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -z "$CSC_LINK" ] && [ -z "$CSC_NAME" ]; then
             echo "::error::MACOS_CSC_LINK or MACOS_CSC_NAME is required for a desktop release build."
@@ -97,6 +169,16 @@ jobs:
           fi
 
       - name: Build signed macOS release artifacts
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          CSC_NAME: ${{ secrets.MACOS_CSC_NAME }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run package:mac:release --workspace=@streamer/desktop
 
       - name: Validate release artifact inventory
