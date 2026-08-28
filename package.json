@@ -72,6 +72,9 @@
     "postinstall": "patch-package",
     "prepare": "husky"
   },
+  "peerDependencies": {
+    "@hono/node-server": "1.19.17"
+  },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.60.0",

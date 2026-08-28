@@ -61,6 +61,28 @@ test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
   assert.equal(cssInteropPackage.peerDependencies.tailwindcss, "~3");
 });
 
+test("Hono WebSocket tooling keeps its compatible peer beside the server adapter", () => {
+  const lockfile = readLockfile();
+  const rootPackage = lockfile.packages[""];
+  const websocketPackage = lockfile.packages["node_modules/@hono/node-ws"];
+  const rootNodeServer =
+    lockfile.packages["node_modules/@hono/node-server"];
+  const serverNodeServer =
+    lockfile.packages["server/node_modules/@hono/node-server"];
+
+  assert.equal(
+    rootPackage.peerDependencies["@hono/node-server"],
+    "1.19.17",
+  );
+  assert.equal(rootNodeServer.version, "1.19.17");
+  assert.equal(rootNodeServer.peer, true);
+  assert.equal(
+    websocketPackage.peerDependencies["@hono/node-server"],
+    "^1.19.11",
+  );
+  assert.equal(serverNodeServer.version, "2.1.1");
+});
+
 test("unused native adapters resolve without vulnerable parser packages", () => {
   const lockfile = readLockfile();
   const browserAdapter = lockfile.packages["node_modules/@vibrant/image-node"];
