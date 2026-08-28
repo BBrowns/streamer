@@ -363,6 +363,13 @@ consumers that need a complete file. Fragmented MP4 is a container transmux, not
 a video transcode: an unsupported copied codec such as HEVC or AV1 still relies
 on the existing candidate fallback rather than being made playable by remuxing.
 
+The bridge may discover during file selection that a route planned as
+`range-http` needs the already-supported `seekable-cache` delivery. The source
+adapter accepts only that exact forward transition, keeps the job and attempt
+binding checks intact, and returns an effective route whose seek capability
+matches the ready job. Any other delivery change remains a bridge contract
+error.
+
 A `no_peers` result belongs to that candidate rather than the bridge as a whole,
 so the next eligible torrent source is still attempted. Gateway preparation
 does not report an elapsed-time percentage; the player presents phase and peer

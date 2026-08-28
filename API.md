@@ -87,7 +87,15 @@ Important plan states:
 | `POST` | `/trakt/connect`          | Completes OAuth flow. Body: `{ code, redirectUri }`.                                |
 | `GET`  | `/trakt/status`           | `true` if connected and token is valid.                                             |
 | `POST` | `/trakt/scrobble/:action` | `action` = `start` \| `pause` \| `stop`. Syncs to Trakt TV.                         |
-| `GET`  | `/sync/events`            | **WebSocket endpoint.** Authenticated bidirectional events across a user's devices. |
+| `WS`   | `/sync/events`            | Authenticated bidirectional WebSocket for cross-device updates and remote commands. |
+
+Native clients authenticate the sync socket with the normal bearer and device
+headers. Browser and Electron renderers, whose WebSocket API cannot set custom
+headers, offer `streamer-sync-v1` first and carry bounded access/device
+credentials in additional subprotocol values. The server always negotiates the
+stable public protocol, so credential-bearing values are not echoed as the
+selected protocol. A malformed explicit `Authorization` header never falls
+back to subprotocol authentication.
 
 ---
 
@@ -251,10 +259,13 @@ If `POST /refresh` fails (token revoked or expired > 7 days), the queue is rejec
 React Native. Browser and Electron clients, whose WebSocket API cannot attach
 custom request headers, offer `streamer-sync-v1` first and use bounded
 `streamer-auth.<access-token>` and optional `streamer-device.<device-id>`
-subprotocol values. The server applies the same JWT verification and token-age
-rules to both paths. A credential is never accepted from a query parameter and
-must not be written to request logs. The server negotiates only the first,
-non-sensitive public protocol.
+subprotocol values. Both paths use the same JWT signature, token-age,
+previous-secret, device-session, and heartbeat policy. The public protocol must
+be offered first; duplicate, malformed, unknown, or oversized credential
+carriers are rejected before JWT verification. A malformed explicit
+`Authorization` header never falls back to subprotocol authentication. A
+credential is never accepted from a query parameter or written to request
+logs, and the server negotiates only the stable, non-sensitive public protocol.
 
 ### 5.2 Axios 401 Interceptor Queue
 

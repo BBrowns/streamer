@@ -23,6 +23,28 @@ describe("server log redaction", () => {
     expect(output).not.toContain("token=reset");
   });
 
+  it("redacts sync credentials carried by the WebSocket protocol header", () => {
+    const token = "header.payload.signature";
+    const input =
+      `Sec-WebSocket-Protocol: streamer-sync-v1, streamer-auth.${token}, ` +
+      "streamer-device.desktop-browser-1";
+
+    const output = redactSensitiveText(input);
+
+    expect(output).toContain("streamer-auth.[redacted]");
+    expect(output).not.toContain(token);
+    expect(
+      redactSensitiveLogValue({
+        headers: { "sec-websocket-protocol": input },
+      }),
+    ).toEqual({
+      headers: {
+        "sec-websocket-protocol":
+          "Sec-WebSocket-Protocol: streamer-sync-v1, streamer-auth.[redacted], streamer-device.desktop-browser-1",
+      },
+    });
+  });
+
   it("redacts sensitive nested log values by key", () => {
     const output = redactSensitiveLogValue({
       requestId: "req-1",
