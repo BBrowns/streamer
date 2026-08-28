@@ -114,7 +114,7 @@ first. Owners: platform maintainers.
 | Dependency path                                                  | Scope                                                        | Current decision                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@hono/node-ws@1.3.1` -> root peer `@hono/node-server@1.19.17`   | Server runtime peer compatibility; moderate finding          | The private root workspace declares an exact 1.19.17 peer so npm installs the adapter required by `@hono/node-ws`, while the server workspace keeps its direct `@hono/node-server@2.1.1` runtime adapter. The lockfile contract test asserts both versions; remove this exception when the WebSocket adapter moves to the 2.x line.                                                                                                                          |
-| Expo/xcode tooling -> older `uuid`                               | Mobile development tooling; moderate finding                 | Track Expo updates; do not force an incompatible nested major.                                                                                                                                                                                                                                                                                                                                                                                               |
+| Expo/xcode tooling -> older `uuid`                               | Mobile development tooling; moderate finding                 | The root tooling pin is now `uuid@14.0.2`, while `xcode@3.0.1` keeps a scoped nested `uuid@11.1.1` override for its CommonJS helper. Remove the nested override when Expo ships an xcode release that supports the newer UUID API.                                                                                                                                                                                                                           |
 | Vite/tsx -> `esbuild@0.27.x`                                     | Local development server only                                | Direct stream-server builds use patched `esbuild@0.28.x`. Keep dev servers bound to trusted local interfaces and update with the upstream toolchain.                                                                                                                                                                                                                                                                                                         |
 | Testcontainers/node-gyp -> `undici`                              | Test/build tooling only                                      | Track Testcontainers and node-gyp updates; it is not shipped in the application runtime.                                                                                                                                                                                                                                                                                                                                                                     |
 | React Native/Jest tooling -> `test-exclude` -> `brace-expansion` | Transform and test tooling; high resource-exhaustion finding | Advisory `GHSA-mh99-v99m-4gvg` has no patched 1.x release. The audit exception accepts only `node_modules/test-exclude/node_modules/brace-expansion`; a new path still fails CI. Do not force 5.x into legacy `minimatch`, whose CommonJS callable API is incompatible. Inputs are repository-controlled globs, not remote user patterns. Exception expires 2026-09-30 or before the next RC; upgrade the owning Expo toolchain when a compatible fix ships. |
@@ -135,13 +135,14 @@ raising each line to a patched release. Avoid a global `ws` major override,
 which would make Expo/React Native tooling invalid.
 
 The Expo config-plugin chain still depends on `xcode@3.0.1`, whose UUID helper
-range is stuck on the vulnerable `uuid@7` line. The root development pin and
-scoped `xcode` override resolve `uuid@11.1.1`, whose CommonJS API still exposes
-the `uuid.v4()` call that `xcode` uses, without forcing the newer UUID major
-onto the server workspace. `npm run dependency:compatibility:test` exercises
-that exact integration. Remove the pin and override when the Expo toolchain
-ships an `xcode` release with a patched UUID range, and retain the lockfile/API
-smoke check when doing so.
+range is stuck on the vulnerable `uuid@7` line. The root development dependency
+now tracks `uuid@14.0.2`, while a scoped `xcode` override keeps
+`uuid@11.1.1` next to xcode because that release still exposes the CommonJS
+`uuid.v4()` call that xcode uses. The server workspace continues to use its
+direct UUID 14 runtime. `npm run dependency:compatibility:test` exercises that
+exact topology. Remove the scoped override when the Expo toolchain ships an
+`xcode` release with a compatible UUID API, and retain the lockfile/API smoke
+check when doing so.
 
 The mobile color extraction package follows `node-vibrant`'s browser entry in
 the supported web path, so the unused Node/Jimp adapter is replaced with the

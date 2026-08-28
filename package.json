@@ -122,7 +122,7 @@
       "@vibrant/image-node": "npm:@vibrant/image-browser@4.0.4"
     },
     "xcode@3.0.1": {
-      "uuid": "$uuid"
+      "uuid": "11.1.1"
     },
     "vite": "^7.3.4",
     "webtorrent": "^3.0.21",
