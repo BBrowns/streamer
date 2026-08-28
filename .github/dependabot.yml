@@ -22,6 +22,24 @@ updates:
       - dependency-name: react-native
         versions:
           - ">=0.87.0"
+      # Expo SDK 57 also pins the React Native tooling packages to 0.86.x;
+      # Metro 0.87 pulls image-size advisories that are not safe to allow.
+      - dependency-name: "@react-native/metro-config"
+        versions:
+          - ">=0.87.0"
+      - dependency-name: "@react-native/jest-preset"
+        versions:
+          - ">=0.87.0"
+      # NativeWind 4.2.x has a Tailwind 3 peer contract; Tailwind 4 needs a
+      # coordinated NativeWind migration instead of an isolated bot bump.
+      - dependency-name: tailwindcss
+        versions:
+          - ">=4.0.0"
+      # xcode@3.0.1 still calls the CommonJS UUID API; review a future major
+      # explicitly after the current root uuid14 + nested uuid11 arrangement.
+      - dependency-name: uuid
+        versions:
+          - ">=15.0.0"
     groups:
       npm-security-runtime:
         applies-to: security-updates
@@ -50,6 +68,7 @@ updates:
           - "react-*"
           - "react-native"
           - "react-native-*"
+          - "@react-native/*"
           - "electron"
           - "@prisma/*"
           - "prisma"
