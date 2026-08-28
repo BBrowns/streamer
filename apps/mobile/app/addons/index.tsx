@@ -131,8 +131,10 @@ export default function AddonsScreen() {
       void queryClient.invalidateQueries({ queryKey: ["search"] });
       void queryClient.invalidateQueries({ queryKey: ["streams"] });
       setRemovalError(null);
+      setPendingRemoval(null);
     },
     onError: (error: unknown, id: string) => {
+      setPendingRemoval(null);
       setRemovalError({
         addonId: id,
         message: getMutationError(
@@ -153,9 +155,7 @@ export default function AddonsScreen() {
 
   const confirmRemoval = () => {
     if (!pendingRemoval || uninstallMutation.isPending) return;
-    const addonId = pendingRemoval.id;
-    setPendingRemoval(null);
-    uninstallMutation.mutate(addonId);
+    uninstallMutation.mutate(pendingRemoval.id);
   };
 
   return (

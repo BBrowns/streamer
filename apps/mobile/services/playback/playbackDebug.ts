@@ -34,10 +34,9 @@ function shouldWriteDevelopmentLog() {
 }
 
 /**
- * Emits the small set of playback boundary events that are useful in a local
- * dev log. The breadcrumb sanitizer runs before anything reaches the console,
- * so transient source URLs, magnets and credentials cannot be copied into a
- * pasted diagnostic log.
+ * Emits a bounded set of playback boundary events that are useful in a local
+ * development log. The breadcrumb sanitizer runs before console output, so
+ * transient source URLs, magnets, and credentials cannot enter pasted logs.
  */
 export function recordPlaybackDebugEvent(event: PlaybackDebugEvent) {
   const breadcrumb = addMobileBreadcrumb(event);
