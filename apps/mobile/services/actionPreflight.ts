@@ -93,8 +93,8 @@ export function buildActionBridgeHint(
       bridgeConfigured: diagnostics.auth?.configured,
       // Desktop uses a short-lived renderer access session instead of
       // exposing the bridge pairing token to the renderer. Use the effective
-      // in-memory credential here so a healthy desktop bridge is not rejected
-      // by a stale persisted-token check.
+      // in-memory credential so a healthy bridge is not rejected by a stale
+      // persisted-token check.
       clientConfigured: Boolean(getBridgeAuthHeaders().Authorization),
     },
     capabilities: diagnostics.capabilities,

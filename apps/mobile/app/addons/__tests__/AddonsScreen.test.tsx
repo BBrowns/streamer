@@ -71,6 +71,7 @@ describe("Add-ons removal", () => {
     await waitFor(() => {
       expect(screen.getByText("Service unavailable")).toBeTruthy();
       expect(screen.getByText("Example Provider")).toBeTruthy();
+      expect(screen.queryByTestId("addon-remove-overlay")).toBeNull();
     });
 
     await fireEvent.press(screen.getByText("common.retry"));

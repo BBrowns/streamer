@@ -59,6 +59,21 @@ export function parseSyncWebSocketProtocols(
     .map((protocol) => protocol.trim())
     .filter(Boolean);
 
+  if (
+    protocols.length < 2 ||
+    protocols.length > 3 ||
+    protocols.filter((protocol) => protocol === SYNC_WEBSOCKET_PROTOCOL)
+      .length !== 1 ||
+    protocols.some(
+      (protocol) =>
+        protocol !== SYNC_WEBSOCKET_PROTOCOL &&
+        !protocol.startsWith(AUTH_PROTOCOL_PREFIX) &&
+        !protocol.startsWith(DEVICE_PROTOCOL_PREFIX),
+    )
+  ) {
+    return null;
+  }
+
   // The Node WebSocket adapter negotiates the first offered protocol. Keep
   // the stable public protocol first so credentials are never echoed back as
   // the selected subprotocol.
