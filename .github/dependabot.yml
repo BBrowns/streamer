@@ -21,15 +21,35 @@ updates:
       # Expo SDK 57 remains pinned to the validated React Native 0.86.2 line.
       - dependency-name: react-native
         versions:
-          - ">=0.87.0"
+          - ">=0.86.3"
       # Expo SDK 57 also pins the React Native tooling packages to 0.86.x;
       # Metro 0.87 pulls image-size advisories that are not safe to allow.
       - dependency-name: "@react-native/metro-config"
         versions:
-          - ">=0.87.0"
+          - ">=0.86.3"
       - dependency-name: "@react-native/jest-preset"
         versions:
-          - ">=0.87.0"
+          - ">=0.86.3"
+      # Reanimated, safe-area-context, and worklets are pinned to the
+      # versions validated with the Expo SDK 57 native contract. Upgrade
+      # these together in a focused native migration with device QA.
+      - dependency-name: react-native-reanimated
+        versions:
+          - ">=4.6.0"
+      - dependency-name: react-native-safe-area-context
+        versions:
+          - ">=5.9.1"
+      - dependency-name: react-native-worklets
+        versions:
+          - ">=0.12.1"
+      # Jest 30 is not compatible with the current Expo/RN Jest preset; keep
+      # the tested Jest 29 line until the owning toolchain is migrated.
+      - dependency-name: jest
+        versions:
+          - ">=30.0.0"
+      - dependency-name: "@types/jest"
+        versions:
+          - ">=30.0.0"
       # NativeWind 4.2.x has a Tailwind 3 peer contract; Tailwind 4 needs a
       # coordinated NativeWind migration instead of an isolated bot bump.
       - dependency-name: tailwindcss
