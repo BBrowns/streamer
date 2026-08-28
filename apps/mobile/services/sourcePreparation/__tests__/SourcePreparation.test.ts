@@ -369,6 +369,72 @@ describe("BridgeV1SourceAdapter", () => {
     await prepared.release();
   });
 
+  it("adopts the longer authoritative timeout when runtime inspection requires remux", async () => {
+    let clock = 0;
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(
+      jobResponse({
+        delivery: "range-http",
+        elapsedMs: 19_000,
+        readyTimeoutMs: 20_000,
+        media: {
+          container: "unknown",
+          remuxed: false,
+          seek: "preparing",
+        },
+      }),
+    );
+    client.getJob
+      .mockResolvedValueOnce(
+        jobResponse({
+          delivery: "seekable-cache",
+          elapsedMs: 20_500,
+          readyTimeoutMs: 65_000,
+          media: {
+            container: "mp4",
+            remuxed: true,
+            seek: "preparing",
+            seekableCache: { status: "preparing" },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        readyJobFor(
+          "seekable-cache",
+          {
+            container: "mp4",
+            remuxed: true,
+            seek: "immediate",
+            seekableCache: { status: "ready" },
+          },
+          { elapsedMs: 21_000, readyTimeoutMs: 65_000 },
+        ),
+      );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+      pollIntervalMs: 800,
+      now: () => clock,
+      sleep: jest.fn(async (milliseconds: number) => {
+        clock += milliseconds;
+      }),
+    });
+    const selectedRoute = route("range-http", "local-sidecar");
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: "attempt-extended-remux-budget",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(selectedRoute),
+      route: selectedRoute,
+    });
+
+    expect(client.getJob).toHaveBeenCalledTimes(2);
+    expect(prepared.route?.delivery).toBe("seekable-cache");
+    await prepared.release();
+  });
+
   it("creates, polls and releases an exactly bound seekable-cache job", async () => {
     const client = bridgeClient();
     client.createJob.mockResolvedValue(jobResponse());

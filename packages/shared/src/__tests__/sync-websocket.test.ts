@@ -45,6 +45,16 @@ describe("sync WebSocket protocols", () => {
         `${SYNC_WEBSOCKET_PROTOCOL}, streamer-auth.${ACCESS_TOKEN}, streamer-device.invalid device`,
       ),
     ).toBeNull();
+    expect(
+      parseSyncWebSocketProtocols(
+        `${SYNC_WEBSOCKET_PROTOCOL}, streamer-auth.${ACCESS_TOKEN}, unknown-protocol`,
+      ),
+    ).toBeNull();
+    expect(
+      parseSyncWebSocketProtocols(
+        `${SYNC_WEBSOCKET_PROTOCOL}, streamer-auth.${ACCESS_TOKEN}, ${SYNC_WEBSOCKET_PROTOCOL}`,
+      ),
+    ).toBeNull();
   });
 
   it("omits a malformed optional device id without blocking authentication", () => {

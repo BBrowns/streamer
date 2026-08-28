@@ -1,10 +1,30 @@
 import { serve } from "@hono/node-server";
 import jwt from "jsonwebtoken";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createApp } from "../src/app.js";
-import { env } from "../src/config/env.js";
-import { injectWebSocket } from "../src/config/websocket.js";
-import { syncService } from "../src/modules/sync/sync.service.js";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+
+vi.mock("../src/modules/auth/session.service.js", () => ({
+  SessionService: { heartbeat: vi.fn() },
+}));
+
+let createApp: (typeof import("../src/app.js"))["createApp"];
+let env: (typeof import("../src/config/env.js"))["env"];
+let injectWebSocket: (typeof import("../src/config/websocket.js"))["injectWebSocket"];
+let syncService: (typeof import("../src/modules/sync/sync.service.js"))["syncService"];
+
+const originalEnvironment = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  JWT_SECRET: process.env.JWT_SECRET,
+  NODE_ENV: process.env.NODE_ENV,
+  LOG_LEVEL: process.env.LOG_LEVEL,
+};
 
 const TEST_DEVICE_ID = "desktop-browser-test";
 
@@ -56,8 +76,31 @@ function waitForConnectionMessage(ws: WebSocket) {
 }
 
 describe("sync WebSocket authentication", () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL =
+      "postgresql://streamer:streamer_dev@127.0.0.1:5432/streamer_test";
+    process.env.JWT_SECRET = "sync-websocket-unit-secret";
+    process.env.NODE_ENV = "test";
+    process.env.LOG_LEVEL = "silent";
+
+    [{ createApp }, { env }, { injectWebSocket }, { syncService }] =
+      await Promise.all([
+        import("../src/app.js"),
+        import("../src/config/env.js"),
+        import("../src/config/websocket.js"),
+        import("../src/modules/sync/sync.service.js"),
+      ]);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterAll(() => {
+    for (const [key, value] of Object.entries(originalEnvironment)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   });
 
   it("authenticates browser clients without a custom Authorization header", async () => {
@@ -83,5 +126,36 @@ describe("sync WebSocket authentication", () => {
       ws.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+
+  it("does not fall back to subprotocol credentials from an invalid explicit auth header", async () => {
+    const token = accessToken();
+    const response = await createApp().request("/api/sync/events", {
+      headers: {
+        Authorization: "Basic invalid",
+        "Sec-WebSocket-Protocol": [
+          "streamer-sync-v1",
+          `streamer-auth.${token}`,
+        ].join(", "),
+      },
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing or invalid Authorization header",
+    });
+  });
+
+  it("rejects malformed browser credential subprotocols before upgrade", async () => {
+    const response = await createApp().request("/api/sync/events", {
+      headers: {
+        "Sec-WebSocket-Protocol": "streamer-sync-v1, streamer-auth.not/a/token",
+      },
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing or invalid sync credentials",
+    });
   });
 });

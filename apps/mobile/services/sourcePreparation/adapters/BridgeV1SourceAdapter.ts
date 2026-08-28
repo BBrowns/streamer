@@ -467,8 +467,8 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
       });
 
       let job = response.job;
-      const initialReadyTimeoutMs = job.readyTimeoutMs;
-      const deadline =
+      let authoritativeReadyTimeoutMs = job.readyTimeoutMs;
+      let deadline =
         this.now() + Math.max(0, job.readyTimeoutMs - job.elapsedMs);
       while (true) {
         notifyGatewayProgress(request.onGatewayProgress, progressFromJob(job));
@@ -476,7 +476,10 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
 
         const terminalError = terminalJobError(job);
         if (terminalError) throw terminalError;
-        if (job.elapsedMs >= initialReadyTimeoutMs || this.now() >= deadline) {
+        if (
+          job.elapsedMs >= authoritativeReadyTimeoutMs ||
+          this.now() >= deadline
+        ) {
           throw new SourcePreparationError(
             "GATEWAY_TIMEOUT",
             "The bridge took too long to prepare this source.",
@@ -551,12 +554,28 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
           request.signal,
         );
         throwIfPreparationAborted(request.signal);
+        const previousDelivery = effectiveDelivery;
         effectiveDelivery = this.assertJobBinding(
           response.job,
           delivery,
           effectiveDelivery,
           job.id,
         );
+        if (
+          isCompatibleDeliveryUpgrade(
+            delivery,
+            previousDelivery,
+            effectiveDelivery,
+          ) &&
+          response.job.readyTimeoutMs > authoritativeReadyTimeoutMs
+        ) {
+          authoritativeReadyTimeoutMs = response.job.readyTimeoutMs;
+          deadline = Math.max(
+            deadline,
+            this.now() +
+              Math.max(0, response.job.readyTimeoutMs - response.job.elapsedMs),
+          );
+        }
         job = response.job;
       }
     } catch (error) {

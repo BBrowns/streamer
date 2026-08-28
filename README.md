@@ -122,8 +122,8 @@ npm run dev:db              # Compose PostgreSQL only — waits until ready
 npm run dev:db:status       # Read-only Compose DB status
 npm run dev:stream-server   # P2P daemon only  — http://localhost:11470
 npm run dev:mobile          # Expo client only — press 'i' (iOS), 'a' (Android), 'w' (Web)
-npm run dev:desktop         # Electron shell   — requires mobile web running on :8081 first
-npm run dev:desktop-all     # Desktop-oriented dev flow: API + Expo web + Electron
+npm run dev:desktop         # Electron shell — requires Expo web on :8081 and a free bridge port
+npm run dev:desktop-all     # Canonical desktop flow: API + Expo web + Electron-owned bridge
 ```
 
 Root development commands check the installed native dependencies and
@@ -146,6 +146,12 @@ The API server does not start the bridge by default. Desktop starts and owns its
 own bridge sidecar so it can choose the correct Node/native-module
 architecture. Set `STREAMER_BRIDGE_SUPERVISOR=true` only when you explicitly
 want the API server to supervise a standalone bridge process.
+
+Do not run `dev:stream-server` alongside `dev:desktop`: both would own port
+`11470`. The desktop launcher now fails before opening Electron when that port
+is occupied, and `dev:desktop-all` waits for both the API and the HTML renderer
+before it starts the desktop process. One interrupt stops the complete
+desktop-all process group.
 
 ---
 

@@ -245,6 +245,30 @@ function sameRoute(
   );
 }
 
+function isAllowedBridgeDeliveryUpgrade(
+  prepared: PlaybackRoute | undefined,
+  expected: PlaybackRoute | undefined,
+) {
+  if (!prepared || !expected) return false;
+
+  return (
+    expected.delivery === "range-http" &&
+    prepared.delivery === "seekable-cache" &&
+    expected.executionTarget !== "on-device" &&
+    prepared.candidateId === expected.candidateId &&
+    prepared.executionTarget === expected.executionTarget &&
+    prepared.capabilities.seek === "immediate" &&
+    prepared.capabilities.audioTracks === expected.capabilities.audioTracks &&
+    prepared.capabilities.embeddedSubtitles ===
+      expected.capabilities.embeddedSubtitles &&
+    prepared.capabilities.externalSubtitles ===
+      expected.capabilities.externalSubtitles &&
+    prepared.capabilities.cast === expected.capabilities.cast &&
+    prepared.capabilities.offline === expected.capabilities.offline &&
+    prepared.capabilities.thumbnails === expected.capabilities.thumbnails
+  );
+}
+
 function buildRuntimeSourcePreparer(
   candidate: PlaybackPlanCandidate,
   session: PlaybackSession,
@@ -972,10 +996,14 @@ async function attemptCandidate(
     const expectedRoute = isRoutedCandidate(candidate)
       ? candidate.route
       : undefined;
+    const routeMatchesAttempt =
+      sameRoute(preparedSource.route, expectedRoute) ||
+      (Boolean(preparedSource.bridgeJobId) &&
+        isAllowedBridgeDeliveryUpgrade(preparedSource.route, expectedRoute));
     if (
       preparedSource.released ||
       preparedSource.attemptId !== attempt.id ||
-      !sameRoute(preparedSource.route, expectedRoute)
+      !routeMatchesAttempt
     ) {
       await releasePreparedSource(preparedSource);
       throw new SourcePreparationError(
