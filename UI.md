@@ -328,7 +328,7 @@ Window-class gutters remain shared: 20 compact, 24 medium, 40 expanded, and
 56 large. Routes must select a role through `ContentBoundary` or
 `AdaptiveRoutePage` instead of inventing another width and margin pair.
 
-### 3.2 Responsive Grid (`useResponsiveColumns`)
+### 3.2 Responsive Grid (Shared Window Class)
 
 Catalog grids derive their columns from the same window class: compact 2,
 medium 3, expanded 4, and large 6. Avoid introducing local breakpoint buckets
@@ -632,13 +632,12 @@ A compound component for TV show episode navigation. Displays a season picker (s
 
 **Known historical bug:** Duplicate `key` props were a source of React warnings when episode lists had entries with the same `id` field from different add-ons. Fixed by using a composite key `${season}-${episode}-${addonId}`.
 
-### 5.4 `HeroBanner` / `HomeHeroBanner`
+### 5.4 `HomeHeroBanner`
 
 Full-bleed hero image with a gradient overlay, title, metadata, and primary
 actions. `HomeHeroBanner` is used at the top of Home on phone and desktop with
-responsive sizing and Play/Resume launch intent; `HeroBanner` is used on
-Discover/detail contexts where the component is fed by a specific add-on
-catalog.
+responsive sizing and Play/Resume launch intent. Discover and detail contexts
+use their own catalog and detail components rather than a second hero variant.
 
 PR #118 gave Home an initial hierarchy that is now refined to hero, Continue
 Watching, neutral title-type rails, and genuine named provider rails. Home must
@@ -1088,17 +1087,17 @@ All server communication goes through **TanStack Query (React Query) v5** using 
 
 Each domain has a custom hook:
 
-| Hook                    | Query key                     | Purpose                            |
-| ----------------------- | ----------------------------- | ---------------------------------- |
-| `useCatalog(type)`      | `["catalog", type]`           | Fetches the main catalog grid      |
-| `useMeta(type, id)`     | `["meta", type, id]`          | Fetches detail metadata            |
-| `useStreams(type, id)`  | `["streams", type, id]`       | Fetches available streams          |
-| `useLibrary()`          | `["library"]`                 | User's saved items                 |
-| `useContinueWatching()` | `["progress", "continue"]`    | In-progress items (watch progress) |
-| `useWatchHistory()`     | `["progress", "history", 24]` | Cursor-paginated personal history  |
-| `useAddons()`           | `["addons", userId]`          | Signed-in user's installed add-ons |
-| `useNotifications()`    | `["notifications"]`           | In-app notifications               |
-| `useSessions()`         | `["sessions"]`                | Active device sessions             |
+| Hook                                         | Query key                                         | Purpose                                                  |
+| -------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------- |
+| `useAddonCatalog(addonId, catalog, search?)` | `["catalog", "addon", addonId, type, id, search]` | Fetches a paginated catalog row from an installed add-on |
+| `useMeta(type, id)`                          | `["meta", type, id]`                              | Fetches detail metadata                                  |
+| `useStreams(type, id)`                       | `["streams", type, id]`                           | Fetches available streams                                |
+| `useLibrary()`                               | `["library"]`                                     | User's saved items                                       |
+| `useContinueWatching()`                      | `["progress", "continue"]`                        | In-progress items (watch progress)                       |
+| `useWatchHistory()`                          | `["progress", "history", 24]`                     | Cursor-paginated personal history                        |
+| `useAddons()`                                | `["addons", userId]`                              | Signed-in user's installed add-ons                       |
+| `useNotifications()`                         | `["notifications"]`                               | In-app notifications                                     |
+| `useSessions()`                              | `["sessions"]`                                    | Active device sessions                                   |
 
 **Authentication interception:** `services/api.ts` has an Axios response interceptor that catches `401` responses, attempts a token refresh via `POST /api/auth/refresh`, and retries the original request. If the refresh fails (expired or revoked refresh token), the user is logged out. **Intricacy:** This interceptor uses a `Promise`-based queue to prevent multiple concurrent refresh attempts when several requests 401 simultaneously — without this, the refresh endpoint would be called N times in parallel and all but one would fail.
 
@@ -1119,13 +1118,15 @@ failure/recycling requirements, then profile long native rails before adding
 more caching or placeholder assets. Do not replace a failed provider image with
 an unrelated title image or use it as a content-availability signal.
 
-#### 2. Pagination / Infinite Scroll in Catalog
+#### 2. Pagination / Infinite Scroll in Catalog (Implemented)
 
-The catalog `FlatList` loads all items from the first API call. The aggregator supports a `skip` parameter, and the `AggregatorService.getCatalog` method accepts `skip`. However, the mobile `useCatalog` hook never passes `skip`. As catalog sizes grow (Cinemeta returns hundreds of items), this creates a large initial payload. Implement React Query's `useInfiniteQuery` with `getNextPageParam: (last, all) => all.length * PAGE_SIZE` and add an `onEndReached` handler on the `FlatList`.
+`useAddonCatalog` uses React Query's `useInfiniteQuery` and passes the current
+`skip` offset to each installed add-on. Catalog rows can request the next page
+without replacing the existing Play Best and source-preparation flows.
 
 #### 3. Reanimated-Based Skeleton Shimmer
 
-The `SkeletonLoader` uses the legacy `Animated` API for its opacity pulse. Moving to `react-native-reanimated` (already in the project at v4.2.1) would allow a horizontal gradient shimmer effect (via `LinearGradient` + a shared value animated position) rather than a simple opacity pulse, which is the standard modern pattern and looks significantly more polished.
+The `SkeletonLoader` uses the legacy `Animated` API for its opacity pulse. Moving to `react-native-reanimated` (already in the project at v4.5.3) would allow a horizontal gradient shimmer effect (via `LinearGradient` + a shared value animated position) rather than a simple opacity pulse, which is the standard modern pattern and looks significantly more polished.
 
 #### 4. Stream List Virtualization
 
@@ -1214,12 +1215,12 @@ changing normal interactive npm/mobile commands.
 
 ### `Platform.OS === "web"` Guards
 
-Many features branch on `Platform.OS === "web"`. File downloads, the `CommandPalette`, `desktopBridge` detection, keyboard event listeners, and hover states all use this guard. On native, web-specific code is dead code but is not tree-shaken unless using platform-specific file extensions (e.g. `.web.ts`). Some hooks already do this (e.g. `useClientOnlyValue.ts` / `useClientOnlyValue.web.ts`). The more complex branching cases should be moved to platform-specific files.
+Many features branch on `Platform.OS === "web"`. File downloads, the `CommandPalette`, `desktopBridge` detection, keyboard event listeners, and hover states all use this guard. On native, web-specific code is dead code but is not tree-shaken unless using platform-specific file extensions (e.g. `.web.ts`). The more complex branching cases should be moved to platform-specific files.
 
 ### `onPointerEnter` / `onPointerLeave` on Native
 
 `CinematicTopBar` and `MediaCard` use `onPointerEnter` and `onPointerLeave` for
-hover effects. React Native 0.83 also supports these on iOS/iPadOS with a
+hover effects. React Native 0.86.2 also supports these on iOS/iPadOS with a
 pointer device. Touch presentation must not depend on hover: quick actions
 remain reachable through the explicit More/adaptive-overlay path.
 

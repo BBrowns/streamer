@@ -43,7 +43,7 @@ The core value proposition: you own your data, you choose your add-ons, and you 
 ```
 streamer/
 ├── apps/
-│   ├── mobile/          # Expo SDK 55 — iOS, Android, Web
+│   ├── mobile/          # Expo SDK 57 — iOS, Android, Web
 │   └── desktop/         # Electron shell (wraps the web build of apps/mobile)
 ├── packages/
 │   ├── shared/          # TypeScript types + Zod schemas shared by server & mobile
@@ -331,7 +331,7 @@ need QA evidence.
 
 | Concern          | Solution                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------ |
-| Framework        | Expo SDK 55 / React Native 0.83                                                            |
+| Framework        | Expo SDK 57 / React Native 0.86.2                                                          |
 | Routing          | Expo Router (file-based, similar to Next.js App Router)                                    |
 | Data fetching    | TanStack Query (React Query) v5                                                            |
 | State management | Zustand v5 (multiple atomic stores)                                                        |
@@ -791,12 +791,12 @@ Mobile stores `accessToken` in `expo-secure-store`. Axios interceptors on the mo
 
 ### Server
 
-| Layer       | Tool                                | Approach                                                                                        |
-| ----------- | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Unit        | Vitest                              | Pure functions (StreamParser, resilience policies, auth service) with mocked Prisma             |
-| Integration | Vitest + Supertest + Testcontainers | Full HTTP stack against an ephemeral PostgreSQL container — tests the real DB                   |
-| Load        | k6                                  | 50 VUs for 50s; requires `NODE_ENV=test` (disables rate limiting)                               |
-| E2E Journey | `ts-node`                           | Scripted HTTP calls simulating a full user journey (register → install add-on → browse catalog) |
+| Layer       | Tool                                | Approach                                                                                             |
+| ----------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Unit        | Vitest                              | Pure functions (StreamParser, resilience policies, auth service) with mocked Prisma                  |
+| Integration | Vitest + Supertest + Testcontainers | Full HTTP stack against an ephemeral PostgreSQL container — tests the real DB                        |
+| Load        | k6                                  | Optional manual pre-release check: 50 VUs for 50s; requires `NODE_ENV=test` (disables rate limiting) |
+| E2E Journey | `ts-node`                           | Scripted HTTP calls simulating a full user journey (register → install add-on → browse catalog)      |
 
 **Integration test pattern:** Each test file brings up a Postgres container via `@testcontainers/postgresql`, runs `prisma db push` to apply the schema, then tears down the container in `afterAll`. A `setTimeout` delay in teardown allows in-flight async DB operations to complete before disconnecting Prisma — this was a hard-won fix for intermittent connection errors.
 
