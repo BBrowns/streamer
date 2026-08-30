@@ -40,6 +40,19 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local diagnostic reports and test output
+/audit_mobile.json
+/audit_root.json
+/audit_stream_server.json
+/outdated_server.json
+/format_output.txt
+/typecheck_output.txt
+/server/audit_server.json
+/server/outdated_server.json
+/server/test_output.txt
+/server/tests/k6-results.txt
+/server/dev.db
+
 # Prisma
 server/prisma/*.db
 server/prisma/migrations/*

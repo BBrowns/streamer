@@ -21,7 +21,7 @@ Torrent streams work on all platforms, including iOS, via a local P2P daemon tha
 ```
 streamer/
 ├── apps/
-│   ├── mobile/          # Expo SDK 55 — iOS, Android, Web
+│   ├── mobile/          # Expo SDK 57 — iOS, Android, Web
 │   └── desktop/         # Electron shell (wraps the web build)
 ├── packages/
 │   ├── shared/          # TypeScript types & Zod schemas (shared by server + mobile)
@@ -303,7 +303,7 @@ npm run test:all
 # E2E user journey — requires server on :3001
 npx ts-node server/tests/e2e-journey.ts
 
-# Load test — 50 VUs for 50 s (requires k6 installed)
+# Optional load test — 50 VUs for 50 s (requires k6; run before release/performance changes)
 NODE_ENV=test npm run dev:server &
 k6 run server/tests/k6-load-test.js
 
@@ -399,3 +399,18 @@ npm run db:seed --workspace=server     # Seed the database
 npm run package:dir --workspace=@streamer/desktop    # Build unpacked desktop app
 npm run package:check --workspace=@streamer/desktop  # Verify packaged sidecar inputs
 ```
+
+## Contribution and repository hygiene
+
+Pull requests run the repository's formatting, lint, typecheck, workspace-test,
+dependency-compatibility, security-audit, browser, and release-gate checks as
+applicable. Dependabot groups routine updates and keeps Expo, React Native,
+native-module, and Jest dependencies on their validated compatibility lines;
+an update is not ready to merge until the relevant CI checks pass.
+
+For local changes, install with `npm run ci:install` and run
+`npm run verify:quick` before opening a pull request. Use `npm run verify:full`
+when the complete release-oriented suite is available. Do not commit local
+audit reports, test output, database files, or build artifacts.
+See [DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md) and
+[CI_RELEASE_GATES.md](./docs/CI_RELEASE_GATES.md) for the detailed policies.
