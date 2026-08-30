@@ -30,7 +30,6 @@ import { ToastContainer } from "../components/ui/ToastContainer";
 import "../lib/i18n";
 import { CommandPalette } from "../components/ui/CommandPalette";
 import { useAuth } from "../hooks/useAuth";
-import { useSync } from "../hooks/useSync";
 import { useTheme } from "../hooks/useTheme";
 import { migrateTokensToSecureStorage } from "../services/secureStorage";
 import { BiometricLockOverlay } from "../components/ui/BiometricLockOverlay";
@@ -54,6 +53,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { setDesktopBridgeAccessSession } from "../services/bridgeAuth";
 import { CinematicThemeProvider } from "../contexts/CinematicThemeContext";
+import { SyncProvider } from "../contexts/SyncContext";
 import { useWindowClass } from "../hooks/useWindowClass";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -172,7 +172,6 @@ function RootLayoutNav() {
 
   // Global hooks MUST be inside QueryClientProvider
   useAuth();
-  useSync();
 
   useEffect(() => {
     if (isHydrated && !deviceId) {
@@ -372,9 +371,11 @@ function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CinematicThemeProvider>
-        <RootLayoutNav />
-      </CinematicThemeProvider>
+      <SyncProvider>
+        <CinematicThemeProvider>
+          <RootLayoutNav />
+        </CinematicThemeProvider>
+      </SyncProvider>
     </QueryClientProvider>
   );
 }

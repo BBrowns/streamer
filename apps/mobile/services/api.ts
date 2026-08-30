@@ -14,6 +14,12 @@ type RefreshableRequest = AxiosRequestConfig & {
   _retry?: boolean;
 };
 
+type AuthRefreshResponse = {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn?: number;
+};
+
 function getAuthorizationHeader(headers: unknown): string | null {
   if (!headers || typeof headers !== "object") return null;
 
@@ -112,19 +118,45 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-let isRefreshing = false;
-let failedQueue: any[] = [];
+let refreshInFlight: Promise<string> | null = null;
 
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
+/**
+ * Refresh the app session once for all callers, including WebSocket and Axios
+ * consumers. Refresh tokens rotate on the server, so concurrent refresh
+ * requests must share the same promise.
+ */
+export function refreshAuthSession(): Promise<string> {
+  if (refreshInFlight) return refreshInFlight;
+
+  let refreshPromise: Promise<string>;
+  refreshPromise = Promise.resolve()
+    .then(async () => {
+      const { backendUrl, refreshToken } = useAuthStore.getState();
+      if (!refreshToken) throw new Error("No refresh token");
+
+      const targetUrl = backendUrl || BASE_URL;
+      const { data } = await axios.post<AuthRefreshResponse>(
+        `${targetUrl}/api/auth/refresh`,
+        { refreshToken },
+      );
+      const expiresInMs = data.expiresIn ? data.expiresIn * 1000 : undefined;
+
+      await useAuthStore
+        .getState()
+        .setTokens(data.accessToken, data.refreshToken, expiresInMs);
+      return data.accessToken;
+    })
+    .catch(async (error) => {
+      await useAuthStore.getState().logout();
+      throw error;
+    })
+    .finally(() => {
+      if (refreshInFlight === refreshPromise) refreshInFlight = null;
+    });
+
+  refreshInFlight = refreshPromise;
+  return refreshPromise;
+}
 
 // Auto-refresh on 401
 api.interceptors.response.use(
@@ -141,53 +173,16 @@ api.interceptors.response.use(
       // cannot infer that relationship across the helper boundary.
       if (!originalRequest) return Promise.reject(error);
 
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            const headers = originalRequest.headers as
-              Record<string, unknown> | undefined;
-            if (headers) headers.Authorization = `Bearer ${token}`;
-            return api(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(err);
-          });
-      }
-
       originalRequest._retry = true;
-      isRefreshing = true;
 
       try {
-        const { backendUrl, refreshToken } = auth;
-        // shouldRefreshUnauthorizedRequest guarantees this, but retaining the
-        // guard keeps the failure local if the store changes between awaits.
-        if (!refreshToken) throw new Error("No refresh token");
-
-        const targetUrl = backendUrl || BASE_URL;
-        const { data } = await axios.post(`${targetUrl}/api/auth/refresh`, {
-          refreshToken,
-        });
-
-        // Pass expiresInMs so authStore can track proactive refresh timing
-        const expiresInMs = data.expiresIn ? data.expiresIn * 1000 : undefined;
-
-        useAuthStore
-          .getState()
-          .setTokens(data.accessToken, data.refreshToken, expiresInMs);
-
-        processQueue(null, data.accessToken);
+        const accessToken = await refreshAuthSession();
         const headers = originalRequest.headers as
           Record<string, unknown> | undefined;
-        if (headers) headers.Authorization = `Bearer ${data.accessToken}`;
+        if (headers) headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (err) {
-        processQueue(err, null);
-        useAuthStore.getState().logout();
         return Promise.reject(err);
-      } finally {
-        isRefreshing = false;
       }
     }
 

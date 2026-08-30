@@ -1,5 +1,9 @@
 import axios from "axios";
-import { api, shouldRefreshUnauthorizedRequest } from "../api";
+import {
+  api,
+  refreshAuthSession,
+  shouldRefreshUnauthorizedRequest,
+} from "../api";
 import { useAuthStore } from "../../stores/authStore";
 
 const authenticated = {
@@ -65,5 +69,43 @@ describe("shouldRefreshUnauthorizedRequest", () => {
 
     await expect(responseInterceptor(error)).rejects.toBe(error);
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("single-flights explicit session refreshes and stores rotated tokens", async () => {
+    let resolveRefresh!: (value: unknown) => void;
+    const refreshResponse = new Promise((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const refresh = jest
+      .spyOn(axios, "post")
+      .mockReturnValue(refreshResponse as Promise<never>);
+
+    const first = refreshAuthSession();
+    const second = refreshAuthSession();
+
+    await Promise.resolve();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    resolveRefresh({
+      data: {
+        accessToken: "rotated-access-token",
+        refreshToken: "rotated-refresh-token",
+      },
+    });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      "rotated-access-token",
+      "rotated-access-token",
+    ]);
+    expect(useAuthStore.getState().accessToken).toBe("rotated-access-token");
+    expect(useAuthStore.getState().refreshToken).toBe("rotated-refresh-token");
+  });
+
+  it("logs out when the refresh token is rejected", async () => {
+    jest.spyOn(axios, "post").mockRejectedValue(new Error("refresh failed"));
+
+    await expect(refreshAuthSession()).rejects.toThrow("refresh failed");
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().refreshToken).toBeNull();
   });
 });
