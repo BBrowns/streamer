@@ -2,6 +2,7 @@ import type { PropsWithChildren } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react-native";
 import { Platform } from "react-native";
+import { SyncProvider } from "../../contexts/SyncContext";
 import { useAuthStore } from "../../stores/authStore";
 import { useSync } from "../useSync";
 
@@ -16,7 +17,9 @@ describe("useSync WebSocket transport", () => {
     useAuthStore.setState({
       isAuthenticated: true,
       accessToken: ACCESS_TOKEN,
+      refreshToken: "refresh-token",
       deviceId: DEVICE_ID,
+      tokenExpiresAt: Date.now() + 60_000,
     });
   });
 
@@ -33,7 +36,9 @@ describe("useSync WebSocket transport", () => {
     useAuthStore.setState({
       isAuthenticated: false,
       accessToken: null,
+      refreshToken: null,
       deviceId: null,
+      tokenExpiresAt: null,
     });
     jest.clearAllMocks();
   });
@@ -59,7 +64,9 @@ describe("useSync WebSocket transport", () => {
       defaultOptions: { queries: { retry: false } },
     });
     return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <SyncProvider>{children}</SyncProvider>
+      </QueryClientProvider>
     );
   }
 
