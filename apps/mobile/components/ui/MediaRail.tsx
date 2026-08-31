@@ -164,7 +164,7 @@ export function MediaRail<Item>({
         <View style={[styles.header, { paddingHorizontal: contentPadding }]}>
           <View style={styles.headingCopy}>
             {eyebrow ? (
-              <Text style={[styles.eyebrow, { color: colors.tint }]}>
+              <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>
                 {eyebrow}
               </Text>
             ) : null}
@@ -205,7 +205,7 @@ export function MediaRail<Item>({
       {loading ? (
         (loadingContent ?? (
           <View style={styles.loading}>
-            <ActivityIndicator color={colors.tint} />
+            <ActivityIndicator color={colors.textSecondary} />
           </View>
         ))
       ) : (
@@ -240,7 +240,7 @@ export function MediaRail<Item>({
             ListFooterComponent={
               isFetchingNextPage ? (
                 <View style={styles.fetchingMore}>
-                  <ActivityIndicator color={colors.tint} />
+                  <ActivityIndicator color={colors.textSecondary} />
                 </View>
               ) : null
             }

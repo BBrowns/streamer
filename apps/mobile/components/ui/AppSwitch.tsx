@@ -19,6 +19,7 @@ type AppSwitchProps = {
   onValueChange: (value: boolean) => void;
   accessibilityLabel: string;
   disabled?: boolean;
+  testID?: string;
 };
 
 export function AppSwitch({
@@ -26,6 +27,7 @@ export function AppSwitch({
   onValueChange,
   accessibilityLabel,
   disabled = false,
+  testID,
 }: AppSwitchProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
@@ -48,20 +50,28 @@ export function AppSwitch({
       ]}
     >
       <View
+        testID={testID ? `${testID}-track` : undefined}
         style={[
           styles.track,
           {
-            backgroundColor: value ? colors.tint : colors.surfaceElevated,
-            borderColor: value ? colors.tint : colors.border,
+            backgroundColor: value ? colors.text : colors.surfaceElevated,
+            borderColor: value ? colors.text : colors.border,
           },
         ]}
       >
         <View
+          testID={testID ? `${testID}-thumb` : undefined}
           style={[
             styles.thumb,
             !reducedMotion && styles.thumbMotion,
             {
-              backgroundColor: isDark ? colors.text : colors.card,
+              backgroundColor: value
+                ? isDark
+                  ? colors.background
+                  : colors.card
+                : isDark
+                  ? colors.text
+                  : colors.card,
               transform: [{ translateX: value ? 16 : 0 }],
             },
           ]}
