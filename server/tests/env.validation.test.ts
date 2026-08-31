@@ -62,15 +62,18 @@ describe("server production environment validation", () => {
     );
   });
 
-  it("requires Redis for multi-instance production", () => {
-    const messages = issueMessages({
-      ...validProductionEnvironment,
-      SERVER_INSTANCE_MODE: "multi",
-    });
+  it("requires Redis for every production instance mode", () => {
+    for (const SERVER_INSTANCE_MODE of ["single", "multi"] as const) {
+      const messages = issueMessages({
+        ...validProductionEnvironment,
+        SERVER_INSTANCE_MODE,
+        REDIS_URL: undefined,
+      });
 
-    expect(messages).toContain(
-      "REDIS_URL is required for multi-instance production deployments.",
-    );
+      expect(messages).toContain(
+        "REDIS_URL is required in production for immediate session revocation and bounded shared throttling.",
+      );
+    }
   });
 
   it("accepts Redis-backed multi-instance production", () => {

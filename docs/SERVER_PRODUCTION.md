@@ -51,9 +51,10 @@ typed `503` if Redis becomes unavailable; it never silently applies separate
 per-process limits. Use a managed Redis service with authentication and TLS
 (`rediss://`) when traffic crosses an untrusted network.
 
-When Redis is explicitly configured in single mode but unavailable, the server
-may start for diagnostics, but `/ready` and `/health` remain unhealthy and rate
-limiting uses the bounded single-process fallback.
+Production startup fails closed when Redis is unavailable, before the HTTP
+listener accepts requests. Development and test environments may omit Redis
+and use the bounded single-process fallback; when Redis is explicitly
+configured there but unavailable, `/ready` and `/health` remain unhealthy.
 
 ## Reverse Proxy And Client Addresses
 
@@ -93,9 +94,9 @@ The same production packaging boundary used by CI can be checked locally with:
 bash scripts/smoke-server-container.sh
 ```
 
-This builds the production image, starts an isolated PostgreSQL dependency,
-verifies `/live` and `/ready`, confirms the non-root runtime user, and exercises
-graceful container shutdown.
+This builds the production image, starts isolated PostgreSQL and Redis
+dependencies, verifies `/live` and `/ready`, confirms the non-root runtime
+user, and exercises graceful container shutdown.
 
 ## Database And Startup
 
@@ -106,9 +107,9 @@ instances:
 npx prisma migrate deploy --schema=server/prisma/schema.prisma
 ```
 
-The process verifies PostgreSQL and, in multi-instance mode, Redis before it
-opens the listener. Do not run destructive development schema commands in a
-production release.
+The process verifies PostgreSQL and Redis in production (and Redis in
+multi-instance mode outside production) before it opens the listener. Do not
+run destructive development schema commands in a production release.
 
 The migration history starts with `20260101000000_init`, then applies the two
 additive watch-progress migrations and the security-hardening migration
@@ -117,6 +118,10 @@ Real-Debrid credentials, session IDs, and encrypted Trakt storage. It also
 invalidates existing refresh, password-reset, and email-verification tokens and
 removes existing plaintext Trakt credentials; users must sign in again and
 reconnect Trakt after deployment.
+
+Changing `TOKEN_HASH_KEY` invalidates stored refresh, password-reset, and
+email-verification digests; schedule it as a security event that requires
+users to sign in again or request a new recovery link.
 
 A database created before this history was introduced (for example with
 `prisma db push`) must be inspected and backed up once, then have only the
