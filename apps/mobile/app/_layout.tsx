@@ -89,6 +89,14 @@ const queryClient = new QueryClient({
   },
 });
 
+const E2E_USER = {
+  id: "e2e-user",
+  email: "e2e@streamer.test",
+  displayName: "E2E Test User",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  emailVerified: true,
+} as const;
+
 async function hydrateDesktopBridgeSettings() {
   if (Platform.OS !== "web" || !window.desktopBridge?.getBridgeInfo) return;
 
@@ -161,6 +169,10 @@ function RootLayoutNav() {
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const [searchOpen, setSearchOpen] = useState(false);
   const { t } = useTranslation();
+  const isE2E =
+    __DEV__ &&
+    (Constants.expoConfig?.extra?.streamer?.e2e === true ||
+      process.env.EXPO_PUBLIC_STREAMER_E2E === "true");
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -181,6 +193,17 @@ function RootLayoutNav() {
       setDeviceId(newId);
     }
   }, [deviceId, isHydrated]);
+
+  useEffect(() => {
+    if (!isE2E || !isHydrated) return;
+
+    const state = useAuthStore.getState();
+    if (!state.isAuthenticated) {
+      // Detox has no backend fixture. Keep the E2E build in the authenticated
+      // shell with a fixture profile, without requiring real credentials.
+      useAuthStore.setState({ user: E2E_USER, isAuthenticated: true });
+    }
+  }, [isE2E, isHydrated]);
 
   useEffect(() => {
     // 1. One-time migration from plain AsyncStorage to SecureStore (idempotent)
@@ -204,6 +227,8 @@ function RootLayoutNav() {
       })
       .then(async () => {
         // 6. Check onboarding status
+        if (isE2E) return;
+
         const hasSeenOnboarding = await AsyncStorage.getItem(
           "HAS_SEEN_ONBOARDING",
         );
@@ -236,7 +261,13 @@ function RootLayoutNav() {
     });
 
     return () => sub.remove();
-  }, []);
+  }, [isE2E]);
+
+  useEffect(() => {
+    if (isE2E && pathname.startsWith("/onboarding")) {
+      router.replace("/(tabs)" as never);
+    }
+  }, [isE2E, pathname, router]);
 
   // ⌘K / Ctrl+K keyboard shortcut for global search
   useEffect(() => {

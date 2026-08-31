@@ -296,7 +296,10 @@ function HomeContent() {
 
   if (!isAuthenticated) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View
+        testID="home-screen"
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <EmptyState
           size="large"
           icon="film-outline"

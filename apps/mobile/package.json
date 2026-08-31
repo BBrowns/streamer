@@ -11,10 +11,10 @@
     "test": "jest",
     "test:e2e": "npm run test:e2e:ios",
     "test:e2e:ios": "detox test --configuration ios.sim.debug",
-    "test:e2e:android": "detox test --configuration android.emu.debug",
+    "test:e2e:android": "node ../../scripts/android-detox.cjs test --configuration android.emu.debug",
     "build:e2e": "npm run build:e2e:ios",
     "build:e2e:ios": "detox build --configuration ios.sim.debug",
-    "build:e2e:android": "detox build --configuration android.emu.debug",
+    "build:e2e:android": "node ../../scripts/android-detox.cjs build --configuration android.emu.debug",
     "eas-build-pre-install": "node scripts/eas-build-pre-install.cjs"
   },
   "dependencies": {

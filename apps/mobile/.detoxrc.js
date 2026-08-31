@@ -20,7 +20,7 @@ module.exports = {
       type: "android.apk",
       binaryPath: "android/app/build/outputs/apk/debug/app-debug.apk",
       build:
-        "cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug && cd ..",
+        "cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -DtestBuildType=debug -PreactNativeArchitectures=${REACT_NATIVE_ARCHITECTURES:-x86_64} -Dorg.gradle.jvmargs='-Xmx4096m -XX:MaxMetaspaceSize=1024m' --max-workers=2 && cd ..",
     },
   },
   devices: {

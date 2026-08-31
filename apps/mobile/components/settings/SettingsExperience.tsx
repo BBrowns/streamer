@@ -348,6 +348,7 @@ function SettingsSectionContent({
               />
               <SettingsActionRow
                 icon="shield-checkmark-outline"
+                testID="btn-settings-sessions"
                 title={t("settings.items.activeSessions")}
                 subtitle={
                   account.isSessionsLoading
