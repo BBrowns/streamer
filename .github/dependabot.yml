@@ -35,13 +35,18 @@ updates:
       # these together in a focused native migration with device QA.
       - dependency-name: react-native-reanimated
         versions:
-          - ">=4.6.0"
+          - ">=4.5.4"
       - dependency-name: react-native-safe-area-context
         versions:
           - ">=5.9.1"
       - dependency-name: react-native-worklets
         versions:
-          - ">=0.12.1"
+          - ">=0.12.0"
+      # Gesture Handler 3 requires a separate native migration; keep the
+      # Expo SDK 57 override on the validated 2.32.x line.
+      - dependency-name: react-native-gesture-handler
+        versions:
+          - ">=3.0.0"
       # Jest 30 is not compatible with the current Expo/RN Jest preset; keep
       # the tested Jest 29 line until the owning toolchain is migrated.
       - dependency-name: jest
