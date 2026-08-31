@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
   subheadingTitle: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "800",
+    fontWeight: "600",
   },
   subheadingCopy: {
     fontSize: 12,
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   readinessTitle: {
     fontSize: 22,
     lineHeight: 28,
-    fontWeight: "900",
+    fontWeight: "600",
   },
   readinessCopy: {
     fontSize: 13,
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   rowCopy: {
     marginTop: 3,

@@ -56,6 +56,7 @@ import {
   getWebFocusStyle,
   getWindowGutter,
   uiLayout,
+  uiTypography,
 } from "../ui/designSystem";
 import { PageHeader } from "../ui/PageHeader";
 import { PageLayout } from "../ui/PageLayout";
@@ -63,6 +64,7 @@ import { SearchField } from "../ui/SearchField";
 import { FilterSheet } from "./SearchFilters";
 import { SearchDiscovery } from "./SearchDiscovery";
 import { SearchResultCard } from "./SearchResultCard";
+import { getSearchResultHeading } from "./searchPresentation";
 import { SearchSuggestions } from "./SearchSuggestions";
 
 type YearFilter = "all" | string;
@@ -695,23 +697,29 @@ export function SearchScreen() {
                   accessibilityLiveRegion="polite"
                   style={[styles.resultsTitle, { color: colors.text }]}
                 >
+                  {getSearchResultHeading(submittedQuery)}
+                </Text>
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[styles.resultsCount, { color: colors.textSecondary }]}
+                >
                   {resultState === "loading-results"
                     ? isPreparingFilteredResults
                       ? t("search.results.preparingFilters", {
                           count: results.length,
                         })
-                      : t("search.results.searching", {
-                          query: submittedQuery,
+                      : t("search.results.searchingShort", {
+                          defaultValue: "Searching…",
                         })
                     : resultState === "filter-pagination-limit"
                       ? t("search.states.filterLimitTitle")
-                      : t("search.results.summary", {
+                      : t("search.results.count", {
                           count:
                             secondaryFilterCount > 0
                               ? filteredResults.length
                               : (fullSearch.data?.total ??
                                 filteredResults.length),
-                          query: submittedQuery,
+                          defaultValue: `${secondaryFilterCount > 0 ? filteredResults.length : (fullSearch.data?.total ?? filteredResults.length)} results`,
                         })}
                 </Text>
               </View>
@@ -784,13 +792,13 @@ export function SearchScreen() {
                   <View
                     style={[
                       styles.partialBanner,
-                      { backgroundColor: colors.tint + "10" },
+                      { backgroundColor: colors.info + "16" },
                     ]}
                   >
                     <Ionicons
                       name="information-circle-outline"
                       size={19}
-                      color={colors.tint}
+                      color={colors.info}
                     />
                     <Text style={[styles.partialText, { color: colors.text }]}>
                       {t("search.states.truncated")}
@@ -802,7 +810,10 @@ export function SearchScreen() {
                 <View style={styles.resultsMain}>
                   {resultState === "loading-results" && (
                     <View style={styles.loadingState}>
-                      <ActivityIndicator size="large" color={colors.tint} />
+                      <ActivityIndicator
+                        size="large"
+                        color={colors.textSecondary}
+                      />
                       <Text
                         style={[
                           styles.loadingLabel,
@@ -953,7 +964,7 @@ function SearchToolbarButton({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }: any) => [
         styles.toolbarButton,
-        { backgroundColor: colors.card },
+        { borderColor: colors.border },
         pressed && styles.pressed,
         Platform.OS === "web" &&
           isKeyboardFocused &&
@@ -1004,7 +1015,9 @@ function SearchLoadMoreButton({
           getWebFocusStyle(colors.focus),
       ]}
     >
-      {loading ? <ActivityIndicator size="small" color={colors.tint} /> : null}
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : null}
       <Text style={[styles.loadMoreText, { color: colors.text }]}>
         {loading
           ? t("search.results.loadingMore")
@@ -1062,14 +1075,16 @@ const styles = StyleSheet.create({
   toolbarButton: {
     minHeight: 44,
     borderRadius: 8,
+    borderWidth: 1,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
   },
-  toolbarButtonText: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
-  resultsHeading: { marginTop: 4, marginBottom: 14, gap: 3 },
-  resultsTitle: { fontSize: 22, lineHeight: 27, fontWeight: "800" },
+  toolbarButtonText: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  resultsHeading: { marginTop: 4, marginBottom: 18, gap: 4 },
+  resultsTitle: { ...uiTypography.utilityCompactTitle },
+  resultsCount: { ...uiTypography.body, fontSize: 14, lineHeight: 20 },
   partialBanner: {
     minHeight: 48,
     borderRadius: 10,
@@ -1104,6 +1119,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  loadMoreText: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
+  loadMoreText: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
   pressed: { opacity: 0.72 },
 });

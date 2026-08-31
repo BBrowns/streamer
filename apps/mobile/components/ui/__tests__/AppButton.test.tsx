@@ -15,6 +15,7 @@ jest.mock("../../../hooks/useTheme", () => ({
       error: "#B8324D",
       text: "#101216",
       surfaceElevated: "#E9E8E4",
+      border: "rgba(16,18,22,0.09)",
       focus: "#7A4C2E",
     },
   }),
@@ -48,5 +49,18 @@ describe("AppButton", () => {
         themeFocus: "#7A4C2E",
       }),
     ).toBe("#365B78");
+  });
+
+  it("keeps secondary utility actions quiet instead of using an elevated fill", async () => {
+    const screen = await render(
+      <AppButton label="Select" variant="secondary" />,
+    );
+
+    expect(
+      StyleSheet.flatten(screen.getByLabelText("Select").props.style),
+    ).toMatchObject({
+      backgroundColor: "transparent",
+      borderColor: "rgba(16,18,22,0.09)",
+    });
   });
 });

@@ -1,20 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { PlaybackPlanResponse } from "@streamer/shared";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/useTheme";
 import { hapticImpactLight } from "../../lib/haptics";
-import {
-  getWebFocusStyle,
-  uiRadii,
-  uiSpacing,
-  uiTypography,
-} from "../ui/designSystem";
+import { getWebFocusStyle, uiSpacing, uiTypography } from "../ui/designSystem";
 import { SourceChoiceList, useSourceChoicePlan } from "./SourceChoiceList";
 import { TechnicalSourceDisclosure } from "./TechnicalSourceDisclosure";
 import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 import { useCinematicTheme } from "../../contexts/CinematicThemeContext";
+import { AppIconButton } from "../ui/AppIconButton";
 
 type MoreSourcesPanelProps = {
   contentId: string;
@@ -27,7 +23,6 @@ type MoreSourcesPanelProps = {
 export function MoreSourcesPanel({
   contentId,
   title,
-  sourceCount = 0,
   initiallyOpen = false,
   onSelect,
 }: MoreSourcesPanelProps) {
@@ -35,6 +30,22 @@ export function MoreSourcesPanel({
   const { theme: cinematicTheme } = useCinematicTheme();
   const { t } = useTranslation();
   const [open, setOpen] = useState(initiallyOpen);
+  const [eligibleSourceCount, setEligibleSourceCount] = useState<number | null>(
+    null,
+  );
+  const sourceSummary =
+    eligibleSourceCount === null
+      ? t("detail.sources.bestAvailableLabel", {
+          defaultValue: "Best available",
+        })
+      : eligibleSourceCount === 0
+        ? t("detail.sources.noneConsumer", {
+            defaultValue: "No compatible sources are available.",
+          })
+        : t("detail.sources.bestAvailable", {
+            count: eligibleSourceCount,
+            defaultValue: `Best available · ${eligibleSourceCount} sources`,
+          });
 
   return (
     <View
@@ -77,10 +88,7 @@ export function MoreSourcesPanel({
               })}
             </Text>
             <Text style={[styles.summary, { color: colors.textSecondary }]}>
-              {t("detail.sources.bestAvailable", {
-                count: sourceCount,
-                defaultValue: `Best available · ${sourceCount} sources`,
-              })}
+              {sourceSummary}
             </Text>
           </View>
         </View>
@@ -108,32 +116,22 @@ export function MoreSourcesPanel({
             <Text
               style={[styles.overlaySummary, { color: colors.textSecondary }]}
             >
-              {t("detail.sources.bestAvailable", {
-                count: sourceCount,
-                defaultValue: `Best available · ${sourceCount} sources`,
-              })}
+              {sourceSummary}
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
+          <AppIconButton
             accessibilityLabel={t("common.close", { defaultValue: "Close" })}
+            icon="close"
             onPress={() => setOpen(false)}
-            style={({ pressed, focused }: any) => [
-              styles.closeButton,
-              pressed && { opacity: 0.68 },
-              Platform.OS === "web" &&
-                focused &&
-                getWebFocusStyle(cinematicTheme.focus),
-            ]}
-          >
-            <Ionicons name="close" size={20} color={colors.text} />
-          </Pressable>
+            variant="ghost"
+          />
         </View>
         {open ? (
           <MoreSourcesBody
             contentId={contentId}
             title={title}
             onSelect={onSelect}
+            onAvailableCount={setEligibleSourceCount}
           />
         ) : null}
       </AdaptiveOverlay>
@@ -145,24 +143,38 @@ function MoreSourcesBody({
   contentId,
   title,
   onSelect,
-}: Pick<MoreSourcesPanelProps, "contentId" | "title" | "onSelect">) {
-  const { colors } = useTheme();
-  const { t } = useTranslation();
+  onAvailableCount,
+}: Pick<MoreSourcesPanelProps, "contentId" | "title" | "onSelect"> & {
+  onAvailableCount: (count: number | null) => void;
+}) {
   const sourceState = useSourceChoicePlan({
     contentType: "movie",
     contentId,
   });
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    if (sourceState.loading || sourceState.error) {
+      onAvailableCount(null);
+      return;
+    }
+    onAvailableCount(sourceState.choices.length);
+  }, [
+    onAvailableCount,
+    sourceState.choices.length,
+    sourceState.error,
+    sourceState.loading,
+  ]);
 
   return (
     <View style={styles.body}>
-      {!sourceState.loading && !sourceState.error ? (
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {t("detail.sources.available", {
-            count: sourceState.choices.length,
-          })}
-        </Text>
-      ) : null}
-      <SourceChoiceList state={sourceState} onSelect={onSelect} />
+      <SourceChoiceList
+        state={sourceState}
+        onSelect={onSelect}
+        maxChoices={6}
+        showAll={showAll}
+        onShowAll={() => setShowAll(true)}
+      />
       <TechnicalSourceDisclosure
         contentType="movie"
         contentId={contentId}
@@ -190,7 +202,6 @@ const styles = StyleSheet.create({
   headingCopy: { flex: 1, minWidth: 0, gap: 2 },
   title: { ...uiTypography.control },
   summary: { ...uiTypography.caption },
-  meta: { ...uiTypography.caption, marginTop: 2 },
   overlay: { width: "100%" },
   overlayHeader: {
     minHeight: 68,
@@ -203,12 +214,5 @@ const styles = StyleSheet.create({
   },
   overlayTitle: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
   overlaySummary: { ...uiTypography.caption, marginTop: 2 },
-  closeButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: uiRadii.pill,
-  },
   body: { padding: uiSpacing.xl, paddingTop: uiSpacing.sm, gap: uiSpacing.lg },
 });

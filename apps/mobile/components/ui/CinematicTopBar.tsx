@@ -261,7 +261,7 @@ function NotificationsMenu({
                 {
                   backgroundColor: notification.read
                     ? "transparent"
-                    : colors.tint,
+                    : colors.info,
                 },
               ]}
             />

@@ -47,7 +47,7 @@ export function AppearanceSection() {
           <Ionicons
             name={name as any}
             size={20}
-            color={active ? colors.tint : colors.textSecondary}
+            color={active ? colors.text : colors.textSecondary}
           />
         )}
       />

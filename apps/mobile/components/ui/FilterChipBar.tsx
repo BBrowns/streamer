@@ -68,11 +68,11 @@ export function FilterChipBar<T extends string | null = string>({
                 styles.chip,
                 {
                   backgroundColor: isActive
-                    ? colors.tint
+                    ? colors.stateSelected
                     : isDark
                       ? "rgba(255,255,255,0.06)"
                       : "rgba(0,0,0,0.05)",
-                  borderColor: isActive ? colors.tint : colors.border,
+                  borderColor: isActive ? colors.borderStrong : colors.border,
                 },
                 isWeb &&
                   hovered &&
@@ -82,7 +82,7 @@ export function FilterChipBar<T extends string | null = string>({
                       : "rgba(0,0,0,0.1)",
                   },
                 pressed && { opacity: 0.8 },
-                isWeb && focused && getWebFocusStyle(colors.tint),
+                isWeb && focused && getWebFocusStyle(colors.focus),
                 isWeb &&
                   ({
                     transition: `background-color ${feedbackDuration}ms ease`,
@@ -97,11 +97,7 @@ export function FilterChipBar<T extends string | null = string>({
                 style={[
                   styles.chipText,
                   {
-                    color: isActive
-                      ? isDark
-                        ? "#000"
-                        : "#fff"
-                      : colors.textSecondary,
+                    color: isActive ? colors.text : colors.textSecondary,
                   },
                   isActive && styles.chipTextActive,
                 ]}
