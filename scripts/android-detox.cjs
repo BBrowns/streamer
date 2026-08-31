@@ -269,9 +269,8 @@ async function runDetox(args) {
     paths: [mobileRoot],
   });
 
-  console.log(`[android-detox] Using JAVA_HOME=${environment.JAVA_HOME}`);
   console.log(
-    `[android-detox] Using ANDROID_SDK_ROOT=${environment.ANDROID_SDK_ROOT}`,
+    "[android-detox] Android toolchain ready (Java 17+ and Android SDK tools found)",
   );
 
   const metro = args[0] === "test" ? await startMetro(environment) : null;
