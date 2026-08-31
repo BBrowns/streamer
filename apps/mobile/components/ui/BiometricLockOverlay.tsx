@@ -84,7 +84,7 @@ export function BiometricLockOverlay() {
   return (
     <View style={[styles.overlay, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
-        <Ionicons name="lock-closed" size={64} color={colors.tint} />
+        <Ionicons name="lock-closed" size={64} color={colors.textSecondary} />
         <Text style={[styles.title, { color: colors.text }]}>
           {t("biometricLock.title")}
         </Text>

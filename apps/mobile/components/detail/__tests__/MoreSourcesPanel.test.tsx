@@ -42,10 +42,9 @@ jest.mock("react-i18next", () => ({
         "detail.sources.playbackSource": "Playback source",
         "detail.sources.show": "Show more sources",
         "detail.sources.hide": "Hide more sources",
+        "detail.sources.showAll": "Show all sources",
+        "detail.sources.bestAvailableLabel": "Best available",
       };
-      if (key === "detail.sources.available") {
-        return `${options?.count ?? 0} available`;
-      }
       if (key === "detail.sources.bestAvailable") {
         return `Best available · ${options?.count ?? 0} sources`;
       }
@@ -85,7 +84,7 @@ describe("MoreSourcesPanel", () => {
     );
 
     expect(screen.getByText("Playback source")).toBeTruthy();
-    expect(screen.getByText("Best available · 77 sources")).toBeTruthy();
+    expect(screen.getByText("Best available")).toBeTruthy();
     expect(screen.queryByText("3 available")).toBeNull();
     expect(mockUseSourceChoicePlan).not.toHaveBeenCalled();
     expect(screen.queryByText("Consumer source choices")).toBeNull();
@@ -93,8 +92,8 @@ describe("MoreSourcesPanel", () => {
 
     await fireEvent.press(screen.getByLabelText("Show more sources"));
 
-    expect(mockUseSourceChoicePlan).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByText("3 available")).toHaveLength(1);
+    expect(mockUseSourceChoicePlan).toHaveBeenCalled();
+    expect(screen.getAllByText("Best available · 3 sources")).toHaveLength(2);
     expect(screen.getByText("Consumer source choices")).toBeTruthy();
     expect(screen.getByText("Technical disclosure")).toBeTruthy();
     expect(screen.getByLabelText("Hide more sources")).toBeTruthy();

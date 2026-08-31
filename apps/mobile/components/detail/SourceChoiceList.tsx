@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,7 +20,11 @@ import {
   uiSpacing,
   uiTypography,
 } from "../ui/designSystem";
-import { createSourceChoices, type SourceChoice } from "./sourceChoices";
+import {
+  createSourceChoices,
+  getSourceChoicePreview,
+  type SourceChoice,
+} from "./sourceChoices";
 
 export type SourceChoiceQuery = {
   contentType: "movie" | "series";
@@ -39,6 +44,9 @@ export type SourceChoicePlanState = {
 type SourceChoiceListProps = {
   state: SourceChoicePlanState;
   onSelect: (plan: PlaybackPlanResponse, candidateId: string) => void;
+  maxChoices?: number;
+  showAll?: boolean;
+  onShowAll?: () => void;
 };
 
 export function useSourceChoicePlan({
@@ -98,7 +106,13 @@ export function useSourceChoicePlan({
   return { plan, choices, loading, error, retry: load };
 }
 
-export function SourceChoiceList({ state, onSelect }: SourceChoiceListProps) {
+export function SourceChoiceList({
+  state,
+  onSelect,
+  maxChoices,
+  showAll = false,
+  onShowAll,
+}: SourceChoiceListProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { plan, choices, loading, error, retry } = state;
@@ -106,7 +120,7 @@ export function SourceChoiceList({ state, onSelect }: SourceChoiceListProps) {
   if (loading) {
     return (
       <View style={styles.stateRow}>
-        <ActivityIndicator color={colors.tint} />
+        <ActivityIndicator color={colors.textSecondary} />
         <Text style={[styles.stateText, { color: colors.textSecondary }]}>
           {t("detail.actionPanel.findingSources")}
         </Text>
@@ -131,7 +145,7 @@ export function SourceChoiceList({ state, onSelect }: SourceChoiceListProps) {
             Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
         >
-          <Text style={[styles.retryText, { color: colors.tint }]}>
+          <Text style={[styles.retryText, { color: colors.text }]}>
             {t("common.retry")}
           </Text>
         </Pressable>
@@ -149,15 +163,58 @@ export function SourceChoiceList({ state, onSelect }: SourceChoiceListProps) {
     );
   }
 
+  const visibleChoices =
+    maxChoices !== undefined && !showAll
+      ? getSourceChoicePreview(choices, maxChoices)
+      : choices;
+  const renderChoice = ({ item }: { item: SourceChoice }) => (
+    <ChoiceRow choice={item} onPress={() => onSelect(plan, item.candidateId)} />
+  );
+
   return (
     <View testID="source-choice-list" style={styles.list}>
-      {choices.map((choice) => (
-        <ChoiceRow
-          key={choice.candidateId}
-          choice={choice}
-          onPress={() => onSelect(plan, choice.candidateId)}
+      {showAll ? (
+        <FlatList
+          data={visibleChoices}
+          keyExtractor={(choice) => choice.candidateId}
+          renderItem={renderChoice}
+          style={styles.fullList}
+          contentContainerStyle={styles.fullListContent}
+          showsVerticalScrollIndicator={false}
         />
-      ))}
+      ) : (
+        visibleChoices.map((choice) => (
+          <ChoiceRow
+            key={choice.candidateId}
+            choice={choice}
+            onPress={() => onSelect(plan, choice.candidateId)}
+          />
+        ))
+      )}
+      {maxChoices !== undefined &&
+      choices.length > maxChoices &&
+      !showAll &&
+      onShowAll ? (
+        <Pressable
+          testID="source-choice-show-all"
+          accessibilityRole="button"
+          accessibilityLabel={t("detail.sources.showAll")}
+          onPress={onShowAll}
+          style={({ pressed, focused }: any) => [
+            styles.showAll,
+            pressed && styles.pressed,
+            Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
+          ]}
+        >
+          <Text style={[styles.showAllText, { color: colors.text }]}>
+            {t("detail.sources.showAll", {
+              count: choices.length,
+              defaultValue: "Show all sources",
+            })}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.text} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -215,7 +272,7 @@ function ChoiceRow({
       ]}
     >
       <View style={styles.quality}>
-        <Text style={[styles.qualityText, { color: colors.tint }]}>
+        <Text style={[styles.qualityText, { color: colors.text }]}>
           {quality}
         </Text>
       </View>
@@ -234,6 +291,8 @@ function ChoiceRow({
 
 const styles = StyleSheet.create({
   list: { gap: 0 },
+  fullList: { maxHeight: 420 },
+  fullListContent: { paddingBottom: uiSpacing.xs },
   choice: {
     minHeight: 56,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -266,6 +325,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: uiSpacing.sm,
   },
   retryText: { ...uiTypography.control },
+  showAll: {
+    minHeight: 48,
+    paddingHorizontal: uiSpacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  showAllText: { ...uiTypography.control },
   empty: { ...uiTypography.body, paddingVertical: uiSpacing.md },
   pressed: { opacity: 0.72 },
 });

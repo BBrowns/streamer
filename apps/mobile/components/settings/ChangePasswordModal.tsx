@@ -84,7 +84,11 @@ export function ChangePasswordModal({
     <View style={inline ? styles.inlineCard : styles.modalContent}>
       <View style={styles.modalHeader}>
         <View style={styles.modalTitleRow}>
-          <Ionicons name="lock-closed-outline" size={20} color={colors.tint} />
+          <Ionicons
+            name="lock-closed-outline"
+            size={20}
+            color={colors.textSecondary}
+          />
           <Text style={[styles.modalTitle, { color: colors.text }]}>
             {t("settings.accountModals.password.title")}
           </Text>
@@ -150,7 +154,7 @@ export function ChangePasswordModal({
       <Pressable
         style={({ focused, pressed }: any) => [
           styles.modalButton,
-          { backgroundColor: colors.tint },
+          { backgroundColor: colors.primary },
           pwLoading && styles.opacity50,
           pressed && styles.pressed,
           Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
@@ -162,9 +166,9 @@ export function ChangePasswordModal({
         accessibilityState={{ disabled: pwLoading }}
       >
         {pwLoading ? (
-          <ActivityIndicator color={colors.onTint} />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
-          <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
+          <Text style={[styles.modalButtonText, { color: colors.onPrimary }]}>
             {t("settings.accountModals.password.update")}
           </Text>
         )}
@@ -212,13 +216,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  modalTitle: { fontSize: 20, fontWeight: "900" },
+  modalTitle: { fontSize: 20, lineHeight: 26, fontWeight: "600" },
   modalTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  modalCancel: { fontWeight: "800", fontSize: 15 },
+  modalCancel: { fontWeight: "600", fontSize: 15 },
   headerAction: {
     minWidth: 44,
     minHeight: 44,
@@ -242,7 +246,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     minHeight: 52,
   },
-  modalButtonText: { fontWeight: "900", fontSize: 16 },
+  modalButtonText: { fontWeight: "600", fontSize: 16 },
   opacity50: { opacity: 0.5 },
   pressed: { opacity: 0.72 },
 });

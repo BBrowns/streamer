@@ -299,7 +299,10 @@ function SettingsSectionContent({
         return (
           <View style={styles.detailStack}>
             <View
-              style={[styles.accountHero, { backgroundColor: colors.card }]}
+              style={[
+                styles.accountHero,
+                { borderBottomColor: colors.borderSubtle },
+              ]}
             >
               <View
                 style={[
@@ -323,7 +326,7 @@ function SettingsSectionContent({
                 </Text>
               </View>
             </View>
-            <SettingsRowGroup contained>
+            <SettingsRowGroup>
               <SettingsActionRow
                 icon="create-outline"
                 title={t("settings.detail.account.editProfile")}
@@ -396,7 +399,10 @@ function SettingsSectionContent({
         return (
           <View style={styles.detailStack}>
             <View
-              style={[styles.controlBlock, { backgroundColor: colors.card }]}
+              style={[
+                styles.controlBlock,
+                { borderBottomColor: colors.borderSubtle },
+              ]}
             >
               <Text
                 style={[styles.groupLabel, { color: colors.textSecondary }]}
@@ -406,7 +412,10 @@ function SettingsSectionContent({
               <AppearanceSection />
             </View>
             <View
-              style={[styles.controlBlock, { backgroundColor: colors.card }]}
+              style={[
+                styles.controlBlock,
+                { borderBottomColor: colors.borderSubtle },
+              ]}
             >
               <Text
                 style={[styles.groupLabel, { color: colors.textSecondary }]}
@@ -469,7 +478,12 @@ function SettingsSectionContent({
 
         return (
           <View style={styles.detailStack}>
-            <View style={[styles.aboutCard, { backgroundColor: colors.card }]}>
+            <View
+              style={[
+                styles.aboutCard,
+                { borderBottomColor: colors.borderSubtle },
+              ]}
+            >
               <Ionicons name="play-circle" size={38} color={colors.text} />
               <View style={styles.summaryText}>
                 <Text style={[styles.accountName, { color: colors.text }]}>
@@ -1014,7 +1028,7 @@ const styles = StyleSheet.create({
   dashboardTitle: {
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: "700",
+    fontWeight: "600",
     letterSpacing: -0.25,
   },
   secondarySettings: { gap: 12 },
@@ -1042,7 +1056,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   summaryText: { flex: 1, gap: 3 },
-  summaryTitle: { fontSize: 15, lineHeight: 20, fontWeight: "700" },
+  summaryTitle: { fontSize: 15, lineHeight: 20, fontWeight: "600" },
   summarySubtitle: { fontSize: 13, lineHeight: 18 },
   readinessSummary: {
     minHeight: 76,
@@ -1058,7 +1072,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: "800",
+    fontWeight: "600",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
@@ -1070,22 +1084,26 @@ const styles = StyleSheet.create({
   detailStack: { gap: 20 },
   accountHero: {
     minHeight: 96,
-    borderRadius: 12,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  accountName: { fontSize: 20, lineHeight: 26, fontWeight: "800" },
-  controlBlock: { borderRadius: 12, padding: 18, gap: 12 },
+  accountName: { fontSize: 20, lineHeight: 26, fontWeight: "600" },
+  controlBlock: {
+    paddingBottom: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
   dangerBlock: { gap: 9, marginTop: 8 },
   aboutCard: {
     minHeight: 92,
-    borderRadius: 12,
     padding: 18,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   bodyCopy: { fontSize: 14, lineHeight: 21, maxWidth: 620 },
 });

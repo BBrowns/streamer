@@ -50,7 +50,11 @@ export function SmartDownloadsStatusRow({ onPress }: { onPress: () => void }) {
         defaultValue: "Manage Smart Downloads settings",
       })}
     >
-      <Ionicons name="sparkles-outline" size={19} color={colors.tint} />
+      <Ionicons
+        name="sparkles-outline"
+        size={19}
+        color={colors.textSecondary}
+      />
       <View style={styles.statusCopy}>
         <Text style={[styles.statusTitle, { color: colors.text }]}>
           {t("downloads.smart.title", { defaultValue: "Smart Downloads" })}

@@ -36,7 +36,7 @@ export function PageHeader({
     >
       <View style={styles.copy}>
         {eyebrow ? (
-          <Text style={[styles.eyebrow, { color: colors.tint }]}>
+          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>
             {eyebrow}
           </Text>
         ) : null}
@@ -84,10 +84,10 @@ const styles = StyleSheet.create({
     marginBottom: uiSpacing.sm,
   },
   title: {
-    ...uiTypography.headline,
+    ...uiTypography.utilityTitle,
   },
   compactTitle: {
-    ...uiTypography.title,
+    ...uiTypography.utilityCompactTitle,
   },
   description: {
     ...uiTypography.body,

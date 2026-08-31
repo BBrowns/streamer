@@ -224,7 +224,7 @@ export default function AddonsScreen() {
 
           {isLoading || isRefetching ? (
             <View style={styles.loadingState}>
-              <ActivityIndicator color={colors.tint} />
+              <ActivityIndicator color={colors.textSecondary} />
             </View>
           ) : isError ? (
             <EmptyState
@@ -263,11 +263,14 @@ export default function AddonsScreen() {
                       <View
                         style={[
                           styles.addonIcon,
-                          { backgroundColor: colors.tint + "12" },
+                          { backgroundColor: colors.surfaceSubtle },
                         ]}
                       >
                         <Text
-                          style={[styles.addonIconText, { color: colors.tint }]}
+                          style={[
+                            styles.addonIconText,
+                            { color: colors.textSecondary },
+                          ]}
                         >
                           {item.manifest.name.charAt(0).toUpperCase()}
                         </Text>
@@ -429,7 +432,7 @@ const styles = StyleSheet.create({
     gap: uiSpacing.lg,
   },
   sectionTitle: {
-    ...uiTypography.title,
+    ...uiTypography.utilitySectionTitle,
   },
   inputRow: {
     flexDirection: "row",
@@ -513,7 +516,7 @@ const styles = StyleSheet.create({
     gap: uiSpacing.md,
   },
   removeTitle: {
-    ...uiTypography.title,
+    ...uiTypography.utilitySectionTitle,
   },
   removeMessage: {
     ...uiTypography.body,
