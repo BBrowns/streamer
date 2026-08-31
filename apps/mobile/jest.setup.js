@@ -32,6 +32,7 @@ jest.mock("react-native-reanimated", () => {
     useSharedValue: (value) => ({ value }),
     useAnimatedStyle: (factory) => factory(),
     useAnimatedScrollHandler: () => ({}),
+    isSharedValue: () => false,
     withTiming: (value) => value,
     withSpring: (value) => value,
     withRepeat: (value) => value,
