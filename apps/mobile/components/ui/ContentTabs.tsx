@@ -188,7 +188,7 @@ function ContentTab<T extends string>({
   registerRef: (node: any) => void;
   onLayout: (event: any) => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const activate = useCallback(
     () => onChange(option.value),
     [onChange, option],
@@ -220,15 +220,13 @@ function ContentTab<T extends string>({
         variant === "segmented" && styles.segmentedTab,
         variant === "segmented" &&
           selected && {
-            backgroundColor: colors.surfaceElevated,
-            borderColor: colors.tint + (isDark ? "66" : "42"),
+            backgroundColor: colors.stateSelected,
+            borderColor: colors.borderStrong,
           },
         Platform.OS === "web" &&
           hovered &&
           !selected && {
-            backgroundColor: isDark
-              ? "rgba(244,245,247,0.04)"
-              : "rgba(16,18,22,0.04)",
+            backgroundColor: colors.stateHover,
           },
         pressed && styles.pressed,
         Platform.OS === "web" &&
@@ -248,7 +246,7 @@ function ContentTab<T extends string>({
       {selected && variant === "underline" && (
         <View
           testID={`content-tab-indicator-${option.value}`}
-          style={[styles.indicator, { backgroundColor: colors.tint }]}
+          style={[styles.indicator, { backgroundColor: colors.text }]}
         />
       )}
     </Pressable>

@@ -164,7 +164,7 @@ export default function TabLayout() {
           },
           hasSideNavigation && { display: "none" },
         ],
-        tabBarActiveTintColor: colors.tint,
+        tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.disabled,
         tabBarLabelStyle: {
           fontFamily: uiTypography.sectionLabel.fontFamily,

@@ -115,7 +115,7 @@ export function SearchDiscovery({
           accessibilityLabel={t("search.discovery.title")}
           style={styles.loading}
         >
-          <ActivityIndicator color={colors.tint} />
+          <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : isError ? (
         <EmptyState

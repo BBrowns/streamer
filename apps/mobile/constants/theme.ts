@@ -9,6 +9,9 @@ export type ThemeColors = {
   textTertiary: string;
   header: string;
   border: string;
+  brandAccent: string;
+  onBrandAccent: string;
+  info: string;
   tint: string;
   onTint: string;
   primary: string;
@@ -43,11 +46,14 @@ export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
     textTertiary: "#85848A",
     header: "#08090B",
     border: "rgba(244,245,247,0.09)",
+    brandAccent: "#C89B6D",
+    onBrandAccent: "#08090B",
+    info: "#7E9CC5",
     tint: "#C89B6D",
     onTint: "#08090B",
     primary: "#F4F2EE",
     onPrimary: "#08090B",
-    focus: "#D6AA7C",
+    focus: "#E2E5EA",
     scrim: "rgba(0,0,0,0.76)",
     disabled: "#5E646E",
     opaqueGlassFallback: "#111318",
@@ -60,7 +66,7 @@ export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
     borderSubtle: "rgba(244,242,238,0.07)",
     stateHover: "rgba(255,255,255,0.04)",
     statePressed: "rgba(255,255,255,0.08)",
-    stateSelected: "rgba(200,155,109,0.10)",
+    stateSelected: "rgba(244,242,238,0.10)",
     scrimSoft: "rgba(8,9,11,0.56)",
     scrimStrong: "rgba(8,9,11,0.84)",
   },
@@ -75,11 +81,14 @@ export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
     textTertiary: "#85868B",
     header: "#F3F2EF",
     border: "rgba(16,18,22,0.09)",
+    brandAccent: "#8A5A35",
+    onBrandAccent: "#FFFFFF",
+    info: "#496B96",
     tint: "#8A5A35",
     onTint: "#FFFFFF",
     primary: "#101216",
     onPrimary: "#FFFFFF",
-    focus: "#7A4C2E",
+    focus: "#303844",
     scrim: "rgba(16,18,22,0.48)",
     disabled: "#9A9EA5",
     opaqueGlassFallback: "#FFFFFF",
@@ -92,7 +101,7 @@ export const PALETTE: { dark: ThemeColors; light: ThemeColors } = {
     borderSubtle: "rgba(16,18,22,0.07)",
     stateHover: "rgba(16,18,22,0.04)",
     statePressed: "rgba(16,18,22,0.08)",
-    stateSelected: "rgba(138,90,53,0.08)",
+    stateSelected: "rgba(16,18,22,0.08)",
     scrimSoft: "rgba(243,242,239,0.58)",
     scrimStrong: "rgba(243,242,239,0.88)",
   },

@@ -83,7 +83,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   const color: Record<ToastType, string> = {
     success: colors.success,
     error: colors.error,
-    info: colors.tint,
+    info: colors.info,
   };
 
   return (
@@ -118,7 +118,7 @@ function ToastItem({ toast }: { toast: Toast }) {
           accessibilityRole="button"
           accessibilityLabel={toast.actionLabel}
         >
-          <Text style={[styles.actionText, { color: colors.tint }]}>
+          <Text style={[styles.actionText, { color: colors.text }]}>
             {toast.actionLabel}
           </Text>
         </Pressable>

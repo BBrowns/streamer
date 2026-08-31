@@ -51,7 +51,7 @@ export function TextField({
           {
             backgroundColor: colors.surfaceElevated,
             color: colors.text,
-            borderColor: focused ? colors.tint : "transparent",
+            borderColor: focused ? colors.focus : "transparent",
           },
           Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           style,

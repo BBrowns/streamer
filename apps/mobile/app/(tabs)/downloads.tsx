@@ -454,8 +454,8 @@ export default function DownloadsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={refreshQueue}
-            tintColor={colors.tint}
-            colors={[colors.tint]}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
           />
         }
         ListHeaderComponent={
@@ -502,7 +502,7 @@ export default function DownloadsScreen() {
                   defaultValue: "Active",
                 })}
                 value={String(summary.active)}
-                color={colors.tint}
+                color={colors.info}
               />
               <SummaryItem
                 label={t("downloads.summary.ready", {
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    ...uiTypography.headline,
+    ...uiTypography.utilityTitle,
   },
   subtitle: {
     marginTop: 5,
@@ -777,9 +777,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionTitle: {
-    ...uiTypography.title,
-    fontSize: 20,
-    lineHeight: 26,
+    ...uiTypography.utilitySectionTitle,
   },
   sectionSubtitle: {
     marginTop: 2,

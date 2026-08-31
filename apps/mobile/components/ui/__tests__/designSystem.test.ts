@@ -58,7 +58,12 @@ describe("design system tokens", () => {
     expect(uiTypography.control).toMatchObject({
       fontSize: 14,
       lineHeight: 20,
-      fontWeight: "700",
+      fontWeight: "600",
+    });
+    expect(uiTypography.utilityTitle).toMatchObject({
+      fontSize: 32,
+      lineHeight: 38,
+      fontWeight: "600",
     });
   });
 
@@ -165,6 +170,7 @@ describe("design system tokens", () => {
       borderColor: PALETTE.dark.error + "42",
     });
     expect(getToneColor(PALETTE.light, "success")).toBe(PALETTE.light.success);
+    expect(getToneColor(PALETTE.light, "info")).toBe(PALETTE.light.info);
     expect(getSoftOverlayColor(true)).toBe("rgba(8,9,11,0.72)");
   });
 
@@ -177,6 +183,8 @@ describe("design system tokens", () => {
       textSecondary: "#B8B5B0",
       textTertiary: "#85848A",
       tint: "#C89B6D",
+      brandAccent: "#C89B6D",
+      info: "#7E9CC5",
     });
     expect(PALETTE.light).toMatchObject({
       background: "#F3F2EF",
@@ -184,6 +192,8 @@ describe("design system tokens", () => {
       text: "#101216",
       textSecondary: "#656B75",
       tint: "#8A5A35",
+      brandAccent: "#8A5A35",
+      info: "#496B96",
     });
   });
 

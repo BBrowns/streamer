@@ -102,7 +102,7 @@ export function SettingsNavRow({
         compact ? styles.compactRow : styles.overviewRow,
         Platform.OS === "web" &&
           hovered && { backgroundColor: colors.stateHover },
-        selected && { backgroundColor: colors.tint + "16" },
+        selected && { backgroundColor: colors.stateSelected },
         pressed && { backgroundColor: colors.statePressed },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
@@ -113,7 +113,7 @@ export function SettingsNavRow({
       <Ionicons
         name={selected && compact ? "checkmark" : "chevron-forward"}
         size={18}
-        color={selected ? colors.tint : colors.textSecondary}
+        color={selected ? colors.text : colors.textSecondary}
       />
     </Pressable>
   );
@@ -316,7 +316,7 @@ export function SettingsMultiSelectRow<T extends string>({
                     !option.disabled && {
                       backgroundColor: colors.stateHover,
                     },
-                  selected && { backgroundColor: colors.tint + "0D" },
+                  selected && { backgroundColor: colors.stateSelected },
                   option.disabled && styles.disabled,
                   pressed &&
                     !option.disabled && {
@@ -339,7 +339,7 @@ export function SettingsMultiSelectRow<T extends string>({
                 <Ionicons
                   name={selected ? "checkbox" : "square-outline"}
                   size={23}
-                  color={selected ? colors.tint : colors.textSecondary}
+                  color={selected ? colors.text : colors.textSecondary}
                 />
               </Pressable>
             </View>
@@ -373,7 +373,7 @@ export function SettingsRadioRow({
         styles.row,
         styles.radioRow,
         hovered && !selected && { backgroundColor: colors.stateHover },
-        selected && { backgroundColor: colors.tint + "12" },
+        selected && { backgroundColor: colors.stateSelected },
         pressed && { backgroundColor: colors.statePressed },
         pressed && styles.pressed,
         Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
@@ -384,13 +384,13 @@ export function SettingsRadioRow({
         style={[
           styles.radioIndicator,
           {
-            borderColor: selected ? colors.tint : colors.border,
-            backgroundColor: selected ? colors.tint : "transparent",
+            borderColor: selected ? colors.text : colors.border,
+            backgroundColor: "transparent",
           },
         ]}
       >
         {selected && (
-          <Ionicons name="checkmark" size={16} color={colors.onTint} />
+          <Ionicons name="checkmark" size={16} color={colors.text} />
         )}
       </View>
     </Pressable>
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   subtitle: {
     fontSize: 13,

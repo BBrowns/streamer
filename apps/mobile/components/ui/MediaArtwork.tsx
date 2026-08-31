@@ -175,7 +175,7 @@ export function MediaArtwork({
           <Ionicons
             name={fallbackIconFor(variant)}
             size={variant === "poster" ? 28 : 32}
-            color={colors.tint}
+            color={colors.textSecondary}
           />
           {fallbackTitle ? (
             <Text

@@ -74,7 +74,7 @@ export function EmptyState({
           <Ionicons
             name={icon}
             size={isLarge ? 64 : isSmall ? 32 : 48}
-            color={colors.tint}
+            color={colors.textSecondary}
           />
         </View>
       ) : null}
