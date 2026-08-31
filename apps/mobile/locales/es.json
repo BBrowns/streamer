@@ -211,7 +211,7 @@
       "select": "Seleccionar",
       "cancel": "Cancelar",
       "back": "Volver a ajustes",
-      "description": "Películas y series guardadas, y todo lo que puedes continuar."
+      "description": "Tus películas y series guardadas en un solo lugar."
     },
     "filters": {
       "all": "Todo",
@@ -253,6 +253,8 @@
       "bulkRemoved_one": "1 título eliminado de la biblioteca"
     },
     "history": {
+      "title": "Historial de reproducciones",
+      "description": "Títulos vistos recientemente y progreso de reproducción.",
       "emptyTitle": "Aún no hay historial",
       "emptyDescription": "Los títulos que veas aparecerán aquí, incluidos los que hayas terminado.",
       "lastWatched": "Visto el {{date}}",

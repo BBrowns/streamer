@@ -211,7 +211,7 @@
       "select": "Select",
       "cancel": "Cancel",
       "back": "Back to settings",
-      "description": "Saved films, series, and everything ready to continue."
+      "description": "Your saved films and series in one place."
     },
     "filters": {
       "all": "All",
@@ -253,6 +253,8 @@
       "bulkRemoved_one": "1 title removed from Library"
     },
     "history": {
+      "title": "Watch History",
+      "description": "Recently watched titles and playback progress.",
       "emptyTitle": "No watch history yet",
       "emptyDescription": "Titles you watch will appear here, including completed ones.",
       "lastWatched": "Watched {{date}}",

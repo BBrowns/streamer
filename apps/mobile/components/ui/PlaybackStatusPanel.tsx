@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    ...uiTypography.title,
+    ...uiTypography.utilitySectionTitle,
     textAlign: "center",
   },
   message: {

@@ -23,6 +23,7 @@ export const uiRadii = {
   lg: 16,
   xl: 20,
   control: 8,
+  button: 10,
   card: 12,
   sheet: 20,
   hero: 20,
@@ -205,10 +206,10 @@ export const uiTypography = {
     letterSpacing: -0.15,
   },
   sectionLabel: {
-    fontFamily: uiFonts.bold,
+    fontFamily: uiFonts.semibold,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: "700" as const,
+    fontWeight: "600" as const,
     letterSpacing: 0.4,
   },
   control: {
@@ -262,7 +263,7 @@ export function getSurfaceColors(
 
   if (tone === "accent") {
     return {
-      backgroundColor: colors.tint + (isDark ? "14" : "10"),
+      backgroundColor: colors.stateSelected,
       borderColor: "transparent",
     };
   }

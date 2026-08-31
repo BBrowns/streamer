@@ -6,7 +6,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { useRouter, useNavigation } from "expo-router";
+import { useRouter, useNavigation, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "../../stores/authStore";
 import { useTranslation } from "react-i18next";
 import {
@@ -19,10 +19,8 @@ import {
   useRemoveWatchHistoryEntry,
   useWatchHistory,
 } from "../../hooks/useWatchHistory";
-import { ContinueWatchingRow } from "../../components/catalog/ContinueWatchingRow";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useDownloadStore } from "../../stores/downloadStore";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -42,6 +40,7 @@ import {
   buildLibraryGridItems,
   canStartLibrarySelection,
   getLibraryGridMetrics,
+  resolveLibraryView,
   type LibraryFilter,
 } from "../../components/library/libraryPresentation";
 import type { WatchProgress } from "@streamer/shared";
@@ -55,6 +54,8 @@ export default function LibraryScreen() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const router = useRouter();
   const navigation = useNavigation();
+  const { view } = useLocalSearchParams<{ view?: string | string[] }>();
+  const requestedView = resolveLibraryView(view);
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const { data: items, isLoading } = useLibrary();
@@ -70,17 +71,17 @@ export default function LibraryScreen() {
   const removeHistoryEntry = useRemoveWatchHistoryEntry();
   const clearWatchHistory = useClearWatchHistory();
   const { t } = useTranslation();
-  const tasks = useDownloadStore((s) => s.tasks);
   const [refreshing, setRefreshing] = useState(false);
   const { isCompact, windowClass, width } = useWindowClass();
   const [gridContainerWidth, setGridContainerWidth] = useState(width);
-  const [activeFilter, setActiveFilter] = useState<LibraryFilter>("all");
+  const [activeFilter, setActiveFilter] =
+    useState<LibraryFilter>(requestedView);
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const gridItems = useMemo(
-    () => buildLibraryGridItems(items, tasks, activeFilter, historyItems),
-    [activeFilter, historyItems, items, tasks],
+    () => buildLibraryGridItems(items, activeFilter, historyItems),
+    [activeFilter, historyItems, items],
   );
   const gridMetrics = useMemo(
     () => getLibraryGridMetrics(gridContainerWidth, windowClass),
@@ -97,6 +98,18 @@ export default function LibraryScreen() {
     setIsSelectionMode((current) => !current);
     setSelectedIds(new Set());
   }, [canSelect, isSelectionMode]);
+
+  const navigateToHistory = useCallback(() => {
+    router.push({ pathname: "/library", params: { view: "history" } } as never);
+  }, [router]);
+
+  const navigateToCollection = useCallback(() => {
+    router.push("/library" as never);
+  }, [router]);
+
+  useEffect(() => {
+    setActiveFilter(requestedView);
+  }, [requestedView]);
 
   const handleRemoveHistoryEntry = useCallback(
     (historyId: string, title: string) => {
@@ -248,16 +261,57 @@ export default function LibraryScreen() {
     />
   ) : undefined;
 
+  const historyNavigation = isHistoryView ? (
+    <AppButton
+      testID="library-collection-action"
+      label={t("library.actions.backToCollection", {
+        defaultValue: "Back to Library",
+      })}
+      variant="ghost"
+      size="small"
+      icon="chevron-back"
+      onPress={navigateToCollection}
+    />
+  ) : (
+    <AppButton
+      testID="library-history-action"
+      label={t("library.actions.history", { defaultValue: "History" })}
+      variant="ghost"
+      size="small"
+      icon="time-outline"
+      onPress={navigateToHistory}
+    />
+  );
+
+  const headerActions = (
+    <View style={styles.headerActions}>
+      {historyNavigation}
+      {headerAction}
+    </View>
+  );
+
+  const pageTitle = isHistoryView
+    ? t("library.history.title", { defaultValue: "Watch History" })
+    : t("tabs.library");
+  const pageDescription = isHistoryView
+    ? t("library.history.description", {
+        defaultValue: "Recently watched titles and playback progress.",
+      })
+    : t("library.header.description", {
+        defaultValue: "Your saved films and series in one place.",
+      });
+
   // Setup header button
   useEffect(() => {
     if (!isAuthenticated) return;
     navigation.setOptions({
+      title: pageTitle,
       headerRight: () =>
         headerAction ? (
           <View style={styles.headerAction}>{headerAction}</View>
         ) : null,
     });
-  }, [headerAction, isAuthenticated, navigation]);
+  }, [headerAction, isAuthenticated, navigation, pageTitle]);
 
   const handleRemove = useCallback(
     (itemId: string) => {
@@ -404,46 +458,27 @@ export default function LibraryScreen() {
           <>
             {!isCompact ? (
               <PageHeader
-                title={t("tabs.library")}
-                description={t("library.header.description", {
-                  defaultValue:
-                    "Saved films, series, and everything ready to continue.",
-                })}
-                actions={headerAction}
+                title={pageTitle}
+                description={pageDescription}
+                actions={headerActions}
                 style={styles.pageHeader}
               />
             ) : null}
-            {!isHistoryView ? <ContinueWatchingRow /> : null}
-            <ContentTabs
-              options={[
-                { label: t("library.filters.all"), value: "all" },
-                { label: t("library.filters.movies"), value: "movie" },
-                { label: t("library.filters.series"), value: "series" },
-                { label: t("library.filters.offline"), value: "offline" },
-                {
-                  label: t("library.filters.history", {
-                    defaultValue: "History",
-                  }),
-                  value: "history",
-                },
-              ]}
-              value={activeFilter}
-              onChange={(v) => setActiveFilter(v as typeof activeFilter)}
-              style={styles.libraryTabs}
-              accessibilityLabel={t("tabs.library")}
-            />
-            {activeFilter === "offline" ? (
-              <View style={styles.offlineAction}>
-                <AppButton
-                  label={t("library.actions.manageDownloads", {
-                    defaultValue: "Manage downloads",
-                  })}
-                  icon="cloud-download-outline"
-                  variant="secondary"
-                  size="small"
-                  onPress={() => router.push("/downloads" as never)}
-                />
-              </View>
+            {!isHistoryView ? (
+              <ContentTabs
+                options={[
+                  { label: t("library.filters.all"), value: "all" },
+                  { label: t("library.filters.movies"), value: "movie" },
+                  { label: t("library.filters.series"), value: "series" },
+                ]}
+                value={activeFilter}
+                onChange={(v) => setActiveFilter(v as typeof activeFilter)}
+                style={styles.libraryTabs}
+                accessibilityLabel={t("tabs.library")}
+              />
+            ) : null}
+            {isCompact ? (
+              <View style={styles.compactActions}>{headerActions}</View>
             ) : null}
           </>
         }
@@ -457,18 +492,14 @@ export default function LibraryScreen() {
               icon={
                 activeFilter === "history"
                   ? "time-outline"
-                  : activeFilter === "offline"
-                    ? "cloud-download-outline"
-                    : "bookmarks-outline"
+                  : "bookmarks-outline"
               }
               title={
                 activeFilter === "history"
                   ? t("library.history.emptyTitle", {
                       defaultValue: "No watch history yet",
                     })
-                  : activeFilter === "offline"
-                    ? t("downloads.empty.title")
-                    : t("library.empty.title")
+                  : t("library.empty.title")
               }
               description={
                 activeFilter === "history"
@@ -482,7 +513,7 @@ export default function LibraryScreen() {
                       ? t("library.empty.noMovies")
                       : activeFilter === "series"
                         ? t("library.empty.noSeries")
-                        : t("downloads.empty.description")
+                        : t("library.empty.description")
               }
             />
           )
@@ -512,9 +543,6 @@ export default function LibraryScreen() {
           <LibraryCard
             item={item.item}
             selectionKey={item.selectionKey}
-            downloadTaskId={
-              item.kind === "history" ? undefined : item.downloadTaskId
-            }
             historyEntry={item.kind === "history" ? item.history : undefined}
             metadata={
               item.kind === "history"
@@ -572,16 +600,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: uiSpacing.lg,
     paddingTop: uiSpacing.xxxl,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: uiSpacing.sm,
+  },
   libraryTabs: {
     marginTop: uiSpacing.md,
     marginBottom: uiSpacing.xs,
     marginHorizontal: uiSpacing.lg,
   },
-  offlineAction: {
+  compactActions: {
     marginHorizontal: uiSpacing.lg,
     marginTop: uiSpacing.sm,
     marginBottom: uiSpacing.lg,
-    alignItems: "flex-start",
   },
   headerAction: {
     marginRight: uiSpacing.sm,

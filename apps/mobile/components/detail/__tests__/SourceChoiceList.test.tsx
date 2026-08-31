@@ -104,7 +104,9 @@ describe("SourceChoiceList", () => {
     );
 
     await fireEvent.press(
-      screen.getByLabelText("1080P, 2 MB, EN, Ready on this device"),
+      screen.getByLabelText(
+        "Best available, 1080P, 2 MB, EN, Ready on this device",
+      ),
     );
 
     expect(onSelect).toHaveBeenCalledWith(plan, "candidate-en");

@@ -283,7 +283,11 @@ export function ContinueWatchingRow({
 const styles = StyleSheet.create({
   container: { marginBottom: uiSpacing.xxxl },
   loadingHeader: { marginBottom: uiSpacing.md },
-  sectionTitle: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
+  sectionTitle: {
+    ...uiTypography.utilitySectionTitle,
+    fontSize: 20,
+    lineHeight: 26,
+  },
   emptySurface: {
     flexDirection: "row",
     alignItems: "center",

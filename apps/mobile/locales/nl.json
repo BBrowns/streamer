@@ -211,7 +211,7 @@
       "select": "Selecteer",
       "cancel": "Annuleren",
       "back": "Terug naar instellingen",
-      "description": "Opgeslagen films, series en alles waarmee je verder kunt."
+      "description": "Je opgeslagen films en series op één plek."
     },
     "filters": {
       "all": "Alle",
@@ -253,6 +253,8 @@
       "bulkRemoved_one": "1 titel uit de bibliotheek verwijderd"
     },
     "history": {
+      "title": "Kijkgeschiedenis",
+      "description": "Onlangs bekeken titels en hun kijkvoortgang.",
       "emptyTitle": "Nog geen kijkgeschiedenis",
       "emptyDescription": "Titels die je bekijkt verschijnen hier, ook als je ze al hebt afgerond.",
       "lastWatched": "Bekeken op {{date}}",

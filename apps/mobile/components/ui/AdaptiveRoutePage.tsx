@@ -33,7 +33,7 @@ export function AdaptiveRoutePage({
   boundaryStyle,
   children,
 }: AdaptiveRoutePageProps) {
-  const { isLarge } = useWindowClass();
+  const { isCompact } = useWindowClass();
 
   return (
     <PageLayout
@@ -48,8 +48,8 @@ export function AdaptiveRoutePage({
         eyebrow={eyebrow}
         description={description}
         actions={actions}
-        compact={!isLarge}
-        titleVisibility={isLarge ? "visible" : "navigation-owned"}
+        compact={isCompact}
+        titleVisibility={isCompact ? "navigation-owned" : "visible"}
       />
       {children}
     </PageLayout>

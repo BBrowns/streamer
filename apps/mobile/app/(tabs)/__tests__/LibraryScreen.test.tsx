@@ -4,6 +4,8 @@ import { Alert } from "react-native";
 import LibraryScreen from "../library";
 
 const mockNavigation = { setOptions: jest.fn() };
+const mockPush = jest.fn();
+let mockLibraryView: string | undefined;
 const mockRemove = { mutateAsync: jest.fn() };
 const mockBulkRemove = { mutateAsync: jest.fn() };
 const mockRemoveHistory = { mutateAsync: jest.fn() };
@@ -32,7 +34,8 @@ const mockLibraryItems = [
 
 jest.mock("expo-router", () => ({
   useNavigation: () => mockNavigation,
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
+  useLocalSearchParams: () => ({ view: mockLibraryView }),
 }));
 
 jest.mock("../../../hooks/useLibrary", () => ({
@@ -72,12 +75,6 @@ jest.mock("../../../stores/authStore", () => ({
     selector({ isAuthenticated: true }),
 }));
 
-jest.mock("../../../stores/downloadStore", () => ({
-  useDownloadStore: (selector: (state: { tasks: object }) => unknown) =>
-    selector({ tasks: {} }),
-  isTaskOfflinePlayable: jest.fn(() => false),
-}));
-
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
@@ -106,10 +103,6 @@ jest.mock("../../../hooks/useWindowClass", () => ({
 jest.mock("../../../lib/haptics", () => ({
   hapticSelection: jest.fn(),
   hapticSuccess: jest.fn(),
-}));
-
-jest.mock("../../../components/catalog/ContinueWatchingRow", () => ({
-  ContinueWatchingRow: () => null,
 }));
 
 jest.mock("../../../components/ui/SkeletonLoader", () => ({
@@ -242,8 +235,8 @@ jest.mock("react-i18next", () => ({
         "library.filters.all": "All",
         "library.filters.movies": "Movies",
         "library.filters.series": "Series",
-        "library.filters.offline": "Offline",
-        "library.filters.history": "History",
+        "library.actions.history": "History",
+        "library.actions.backToCollection": "Back to Library",
         "library.fab.delete": "Delete",
         "library.actions.manageDownloads": "Manage downloads",
         "library.history.clearAction": "Clear history",
@@ -259,9 +252,10 @@ jest.mock("react-i18next", () => ({
 describe("LibraryScreen selection", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLibraryView = undefined;
   });
 
-  it("clears selection on Cancel and filter changes and disables selection offline", async () => {
+  it("keeps collection selection separate from the history action", async () => {
     const screen = await render(<LibraryScreen />);
 
     expect(screen.queryByText("0 selected")).toBeNull();
@@ -282,18 +276,21 @@ describe("LibraryScreen selection", () => {
     await waitFor(() => expect(screen.queryByText("1 selected")).toBeNull());
     expect(screen.getByText("Select")).toBeTruthy();
 
-    await fireEvent.press(screen.getByLabelText("filter-offline"));
-    await waitFor(() => expect(screen.queryByText("Select")).toBeNull());
-    expect(screen.getByText("Manage downloads")).toBeTruthy();
+    expect(screen.queryByLabelText("filter-offline")).toBeNull();
+    await fireEvent.press(screen.getByText("History"));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: "/library",
+      params: { view: "history" },
+    });
   });
 
   it("keeps a separately paginated watch history accessible and confirms clearing it", async () => {
     const alertSpy = jest.spyOn(Alert, "alert");
+    mockLibraryView = "history";
     const screen = await render(<LibraryScreen />);
 
-    await fireEvent.press(screen.getByLabelText("filter-history"));
-
     await waitFor(() => {
+      expect(screen.getByText("Watch History")).toBeTruthy();
       expect(screen.getByText("Watched Episode")).toBeTruthy();
       expect(screen.getByText("Clear history")).toBeTruthy();
       expect(screen.queryByText("Select")).toBeNull();

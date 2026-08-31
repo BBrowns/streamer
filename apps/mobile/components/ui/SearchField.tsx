@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   shortcut: {
     fontSize: 11,
     lineHeight: 16,
-    fontWeight: "700",
+    fontWeight: "600",
     letterSpacing: 0.2,
     borderWidth: 1,
     borderRadius: 6,

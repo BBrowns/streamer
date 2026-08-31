@@ -1,9 +1,9 @@
 import type { LibraryItem, WatchProgress } from "@streamer/shared";
-import type { DownloadTask } from "../../../stores/downloadStore";
 import {
   buildLibraryGridItems,
   canStartLibrarySelection,
   getLibraryGridMetrics,
+  resolveLibraryView,
 } from "../libraryPresentation";
 
 const libraryItems = [
@@ -58,30 +58,6 @@ const historyEntries = [
   },
 ] satisfies WatchProgress[];
 
-function offlineTask(id: string, episode: number): DownloadTask {
-  return {
-    id,
-    mediaInfo: {
-      itemId: "series-1",
-      type: "series",
-      title: `Episode ${episode}`,
-      episode,
-    },
-    progress: 1,
-    status: "Completed",
-    downloadedBytes: 2_000_000,
-    metadataBytes: 0,
-    expectedMediaBytes: 2_000_000,
-    verifiedFileSizeBytes: 2_000_000,
-    verificationState: "verified",
-    playableState: "playable",
-    localUri: `file:///episode-${episode}.mp4`,
-    offlineVerifiedAt: "2026-07-15T00:00:00.000Z",
-    createdAt: "2026-07-15T00:00:00.000Z",
-    updatedAt: "2026-07-15T00:00:00.000Z",
-  };
-}
-
 describe("libraryPresentation", () => {
   it("keeps fixed grid sizing independent of item count", () => {
     const large = getLibraryGridMetrics(1440, "large");
@@ -114,58 +90,36 @@ describe("libraryPresentation", () => {
           itemId: `item-${index}`,
         }));
         for (const filter of ["all", "movie", "series"] as const) {
-          const filtered = buildLibraryGridItems(items, {}, filter);
+          const filtered = buildLibraryGridItems(items, filter);
           expect(filtered.length).toBeLessThanOrEqual(itemCount);
           const metrics = getLibraryGridMetrics(width, windowClass);
           expect(metrics.columns).toBeGreaterThanOrEqual(minimum);
           expect(metrics.columns).toBeLessThanOrEqual(maximum);
           expect(metrics.gap).toBe(16);
         }
-
-        const offlineTasks = Object.fromEntries(
-          Array.from({ length: itemCount }, (_, index) => [
-            `episode-${index}`,
-            offlineTask(`episode-${index}`, index + 1),
-          ]),
-        );
-        expect(
-          buildLibraryGridItems(items, offlineTasks, "offline"),
-        ).toHaveLength(itemCount);
       }
     },
   );
 
-  it("does not start selection with an empty or offline filter", () => {
+  it("does not start selection with an empty or history filter", () => {
     expect(canStartLibrarySelection("all", 0)).toBe(false);
     expect(canStartLibrarySelection("movie", 1)).toBe(true);
-    expect(canStartLibrarySelection("offline", 2)).toBe(false);
     expect(canStartLibrarySelection("history", 2)).toBe(false);
   });
 
-  it("filters library types and gives offline episodes unique task keys", () => {
-    expect(buildLibraryGridItems(libraryItems, {}, "movie")).toHaveLength(1);
-    expect(buildLibraryGridItems(libraryItems, {}, "series")).toHaveLength(1);
+  it("filters library types without mixing in download ownership", () => {
+    expect(buildLibraryGridItems(libraryItems, "movie")).toHaveLength(1);
+    expect(buildLibraryGridItems(libraryItems, "series")).toHaveLength(1);
     expect(
-      buildLibraryGridItems(libraryItems, {}, "all").map(
+      buildLibraryGridItems(libraryItems, "all").map(
         (item) => item.selectionKey,
       ),
     ).toEqual(["library:db-1", "library:db-2"]);
-
-    const offline = buildLibraryGridItems(
-      libraryItems,
-      { first: offlineTask("first", 1), second: offlineTask("second", 2) },
-      "offline",
-    );
-    expect(offline.map((item) => item.selectionKey)).toEqual([
-      "download:first",
-      "download:second",
-    ]);
   });
 
   it("keeps independently watched episodes addressable by their history row id", () => {
     const history = buildLibraryGridItems(
       libraryItems,
-      {},
       "history",
       historyEntries,
     );
@@ -179,5 +133,12 @@ describe("libraryPresentation", () => {
       "history:history-episode-one",
       "history:history-episode-two",
     ]);
+  });
+
+  it("normalizes the secondary history deep link without accepting unknown views", () => {
+    expect(resolveLibraryView("history")).toBe("history");
+    expect(resolveLibraryView(["history"])).toBe("history");
+    expect(resolveLibraryView("offline")).toBe("all");
+    expect(resolveLibraryView("unknown")).toBe("all");
   });
 });

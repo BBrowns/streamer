@@ -42,10 +42,16 @@ export function MoreSourcesPanel({
         ? t("detail.sources.noneConsumer", {
             defaultValue: "No compatible sources are available.",
           })
-        : t("detail.sources.bestAvailable", {
-            count: eligibleSourceCount,
-            defaultValue: `Best available · ${eligibleSourceCount} sources`,
+        : t("detail.sources.bestAvailableLabel", {
+            defaultValue: "Best available",
           });
+  const sourceCountSummary =
+    eligibleSourceCount !== null && eligibleSourceCount > 0
+      ? t("detail.sources.bestAvailable", {
+          count: eligibleSourceCount,
+          defaultValue: `Best available · ${eligibleSourceCount} sources`,
+        })
+      : sourceSummary;
 
   return (
     <View
@@ -116,7 +122,7 @@ export function MoreSourcesPanel({
             <Text
               style={[styles.overlaySummary, { color: colors.textSecondary }]}
             >
-              {sourceSummary}
+              {sourceCountSummary}
             </Text>
           </View>
           <AppIconButton
@@ -212,7 +218,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: uiSpacing.lg,
   },
-  overlayTitle: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
+  overlayTitle: {
+    ...uiTypography.utilitySectionTitle,
+    fontSize: 20,
+    lineHeight: 26,
+  },
   overlaySummary: { ...uiTypography.caption, marginTop: 2 },
   body: { padding: uiSpacing.xl, paddingTop: uiSpacing.sm, gap: uiSpacing.lg },
 });

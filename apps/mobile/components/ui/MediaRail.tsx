@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: "uppercase",
   },
-  title: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
+  title: { ...uiTypography.utilitySectionTitle, fontSize: 20, lineHeight: 26 },
   subtitle: { ...uiTypography.caption },
   headerActions: {
     flexDirection: "row",

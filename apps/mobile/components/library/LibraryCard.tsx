@@ -33,7 +33,6 @@ import type { LibraryCardItem } from "./libraryPresentation";
 type LibraryCardProps = {
   item: LibraryCardItem;
   selectionKey: string;
-  downloadTaskId?: string;
   historyEntry?: WatchProgress;
   onRemove?: (itemId: string) => void;
   removeId?: string;
@@ -49,7 +48,6 @@ type LibraryCardProps = {
 export function LibraryCard({
   item,
   selectionKey,
-  downloadTaskId,
   historyEntry,
   onRemove,
   removeId,
@@ -71,11 +69,9 @@ export function LibraryCard({
   const itemId = item.itemId || item.id;
   const removalId = removeId ?? itemId;
   const tasks = useDownloadStore((state) => state.tasks);
-  const task = downloadTaskId
-    ? tasks[downloadTaskId]
-    : Object.values(tasks).find(
-        (candidate) => candidate.mediaInfo.itemId === itemId,
-      );
+  const task = Object.values(tasks).find(
+    (candidate) => candidate.mediaInfo.itemId === itemId,
+  );
   const isPreparing = task?.status === "Preparing";
   const isDownloading =
     task?.status === "Downloading" ||

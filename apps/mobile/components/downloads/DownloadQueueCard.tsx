@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    ...uiTypography.title,
+    ...uiTypography.label,
     fontSize: 17,
     lineHeight: 22,
   },
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: "700",
+    fontWeight: "600",
     letterSpacing: 0,
   },
   errorBox: {
