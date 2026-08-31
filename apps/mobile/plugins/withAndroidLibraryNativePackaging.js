@@ -9,6 +9,8 @@ const path = require("node:path");
 // Expo SDK 57's aggregate :expo library is also assembled for the Android
 // instrumentation-test variant. Several Expo/RN modules contribute the same
 // native runtime libraries there, so Gradle needs a deterministic winner.
+// Keep this list aligned with expo-modules-core's test packaging rules and
+// remove the plugin once Expo no longer exposes duplicate native libraries.
 const sharedNativeLibraries = [
   "**/libc++_shared.so",
   "**/libfabricjni.so",
