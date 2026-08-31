@@ -6,3 +6,7 @@ graphify-out/
 AGENTS.md
 .agent-memory/
 .agents/
+
+# Expo-generated native projects may be present locally for simulator checks.
+apps/mobile/ios/
+apps/mobile/android/

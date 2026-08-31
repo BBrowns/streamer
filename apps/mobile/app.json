@@ -50,7 +50,8 @@
           "backgroundColor": "#fbf6f4"
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "./plugins/withAndroidLibraryNativePackaging"
     ],
     "experiments": {
       "typedRoutes": true

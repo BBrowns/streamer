@@ -27,6 +27,12 @@ test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
 
+test("Detox remains loadable with the workspace glob override", () => {
+  const detox = require("detox");
+
+  assert.ok(detox);
+});
+
 test("React Native resolves the supported Metro line without image-size", () => {
   const lockfile = readLockfile();
   const metroConfig =
@@ -41,13 +47,32 @@ test("React Native resolves the supported Metro line without image-size", () => 
       path.endsWith("/node_modules/image-size"),
   );
 
-  assert.equal(metroConfig.version, "0.86.2");
+  assert.equal(metroConfig.version, "0.86.3");
   assert.ok(metroNodes.length > 0);
   assert.deepEqual(
     [...new Set(metroNodes.map(([, packageInfo]) => packageInfo.version))],
     ["0.84.5"],
   );
   assert.deepEqual(imageSizeNodes, []);
+});
+
+test("Expo 57 native modules stay on a compatible Worklets contract", () => {
+  const lockfile = readLockfile();
+  const expoModulesCore = lockfile.packages["node_modules/expo-modules-core"];
+  const reanimated = lockfile.packages["node_modules/react-native-reanimated"];
+  const worklets = lockfile.packages["node_modules/react-native-worklets"];
+  const safeArea =
+    lockfile.packages["node_modules/react-native-safe-area-context"];
+
+  assert.equal(expoModulesCore.version, "57.0.14");
+  assert.equal(reanimated.version, "4.5.5");
+  assert.equal(worklets.version, "0.10.4");
+  assert.equal(safeArea.version, "5.9.1");
+  assert.equal(
+    expoModulesCore.peerDependencies["react-native-worklets"],
+    "^0.7.4 || ^0.8.0 || ^0.9.0 || ^0.10.0",
+  );
+  assert.match(reanimated.peerDependencies["react-native-worklets"], /0\.10\.x/);
 });
 
 test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
