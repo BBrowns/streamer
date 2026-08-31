@@ -27,6 +27,9 @@ export const env = {
 
   jwtSecret: envData.JWT_SECRET,
   jwtSecretPrevious: envData.JWT_SECRET_PREVIOUS,
+  tokenHashKey: envData.TOKEN_HASH_KEY || envData.JWT_SECRET,
+  credentialEncryptionKey:
+    envData.CREDENTIAL_ENCRYPTION_KEY || envData.JWT_SECRET,
   jwtAccessExpiry: envData.JWT_ACCESS_EXPIRY,
   jwtRefreshExpiry: envData.JWT_REFRESH_EXPIRY,
 
@@ -48,7 +51,8 @@ export const env = {
   addonTimeoutMs: envData.ADDON_TIMEOUT_MS,
   addonMaxConcurrent: envData.ADDON_MAX_CONCURRENT,
 
-  rdApiToken: envData.RD_API_TOKEN,
+  rdClientId: envData.RD_CLIENT_ID,
+  rdClientSecret: envData.RD_CLIENT_SECRET,
 
   traktClientId: envData.TRAKT_CLIENT_ID,
   traktClientSecret: envData.TRAKT_CLIENT_SECRET,

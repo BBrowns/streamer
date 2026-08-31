@@ -11,6 +11,7 @@ import { execSync } from "child_process";
 import { request } from "./test-utils.js";
 import crypto from "crypto";
 import axios from "axios";
+import { encryptSecret } from "../src/utils/secret-box.js";
 
 // Mock axios
 vi.mock("axios");
@@ -72,8 +73,8 @@ describe("Integration: Trakt Synchronization", () => {
     await prisma.traktToken.create({
       data: {
         userId: user.userId,
-        accessToken: "trakt-access-token",
-        refreshToken: "trakt-refresh-token",
+        accessTokenCiphertext: encryptSecret("trakt-access-token"),
+        refreshTokenCiphertext: encryptSecret("trakt-refresh-token"),
         expiresAt: new Date(Date.now() + 3600000),
       },
     });

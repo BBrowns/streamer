@@ -16,6 +16,7 @@ import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass, type WindowClass } from "../../hooks/useWindowClass";
 import { useTrakt } from "../../hooks/useTrakt";
+import { useRealDebrid } from "../../hooks/useRealDebrid";
 import { useSessions } from "../../hooks/useSessions";
 import { useAccount } from "../../hooks/useAccount";
 import { clearQueryCache } from "../../services/queryPersister";
@@ -265,6 +266,10 @@ type SettingsAccountState = {
   isTraktLoading: boolean;
   connect: () => void;
   disconnect: () => void;
+  realDebridConnected: boolean;
+  isRealDebridLoading: boolean;
+  connectRealDebrid: () => void;
+  disconnectRealDebrid: () => void;
   sessionsCount: number;
   isSessionsLoading: boolean;
   biometricEnabled: boolean;
@@ -344,6 +349,30 @@ function SettingsSectionContent({
                 loading={account.isTraktLoading}
                 onPress={
                   account.connected ? account.disconnect : account.connect
+                }
+              />
+              <SettingsActionRow
+                icon="link-outline"
+                title={t("settings.items.realDebrid", {
+                  defaultValue: "Real-Debrid",
+                })}
+                subtitle={
+                  account.isRealDebridLoading
+                    ? t("settings.common.loading")
+                    : account.realDebridConnected
+                      ? t("settings.subtitles.realDebridConnected", {
+                          defaultValue: "Connected",
+                        })
+                      : t("settings.subtitles.realDebridDisconnected", {
+                          defaultValue:
+                            "Connect a personal Real-Debrid account",
+                        })
+                }
+                loading={account.isRealDebridLoading}
+                onPress={
+                  account.realDebridConnected
+                    ? account.disconnectRealDebrid
+                    : account.connectRealDebrid
                 }
               />
               <SettingsActionRow
@@ -742,6 +771,7 @@ function SettingsExperienceContent({
   );
   const deviceId = useAuthStore((state) => state.deviceId);
   const trakt = useTrakt();
+  const realDebrid = useRealDebrid();
   const sessionData = useSessions();
   const account = useAccount();
   const activeSection = section ?? "account";
@@ -868,6 +898,32 @@ function SettingsExperienceContent({
     );
   };
 
+  const handleDisconnectRealDebrid = () => {
+    Alert.alert(
+      "Disconnect Real-Debrid",
+      "Remove the Real-Debrid credentials from this account?",
+      [
+        { text: t("library.header.cancel"), style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: () => {
+            void realDebrid.disconnect();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleConnectRealDebrid = () => {
+    void realDebrid.connect().catch((error) => {
+      Alert.alert(
+        "Real-Debrid connection failed",
+        error instanceof Error ? error.message : "Please try again later.",
+      );
+    });
+  };
+
   const handleToggleBiometrics = async (value: boolean) => {
     if (!value) {
       setBiometricEnabled(false);
@@ -939,6 +995,10 @@ function SettingsExperienceContent({
       isTraktLoading: trakt.isLoading,
       connect: trakt.connect,
       disconnect: handleDisconnectTrakt,
+      realDebridConnected: realDebrid.status?.connected === true,
+      isRealDebridLoading: realDebrid.isLoading,
+      connectRealDebrid: handleConnectRealDebrid,
+      disconnectRealDebrid: handleDisconnectRealDebrid,
       sessionsCount: sessionData.sessions.length,
       isSessionsLoading: sessionData.isLoading,
       biometricEnabled,

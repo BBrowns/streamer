@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { createNodeWebSocket } from "@hono/node-ws";
+import { SECURITY_LIMITS } from "@streamer/shared";
 
 let _upgradeWebSocket: any;
 let _injectWebSocket: any;
@@ -30,6 +31,13 @@ export const injectWebSocket: any = (server: any) => {
 
 export function initWebSockets(app: Hono<any, any, any>) {
   const ws = createNodeWebSocket({ app });
+  const websocketServer = ws.wss as any;
+  if (websocketServer?.options) {
+    websocketServer.options.maxPayload =
+      SECURITY_LIMITS.syncWebSocketPayloadBytes;
+    websocketServer.options.maxBackpressure =
+      SECURITY_LIMITS.syncWebSocketPayloadBytes * 4;
+  }
   _upgradeWebSocket = ws.upgradeWebSocket;
   _injectWebSocket = ws.injectWebSocket;
   return ws;

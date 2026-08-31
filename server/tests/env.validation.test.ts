@@ -5,6 +5,11 @@ const validProductionEnvironment = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://streamer:secret@db:5432/streamer",
   JWT_SECRET: "a-secure-production-secret-with-32-chars",
+  TOKEN_HASH_KEY:
+    "a-dedicated-token-hash-key-with-sufficient-entropy-1234567890",
+  CREDENTIAL_ENCRYPTION_KEY:
+    "a-dedicated-credential-encryption-key-with-sufficient-entropy-1234567890",
+  REDIS_URL: "rediss://cache.streamer.example:6379",
   CORS_ORIGINS: "https://app.streamer.example",
   SERVER_INSTANCE_MODE: "single",
   EMAIL_DELIVERY_MODE: "smtp",
@@ -42,7 +47,7 @@ describe("server production environment validation", () => {
 
     expect(parsed.NODE_ENV).toBe("production");
     expect(parsed.SERVER_INSTANCE_MODE).toBe("single");
-    expect(parsed.REDIS_URL).toBeUndefined();
+    expect(parsed.REDIS_URL).toMatch(/^rediss:/);
     expect(parsed.EMAIL_DELIVERY_MODE).toBe("smtp");
   });
 
@@ -57,15 +62,18 @@ describe("server production environment validation", () => {
     );
   });
 
-  it("requires Redis for multi-instance production", () => {
-    const messages = issueMessages({
-      ...validProductionEnvironment,
-      SERVER_INSTANCE_MODE: "multi",
-    });
+  it("requires Redis for every production instance mode", () => {
+    for (const SERVER_INSTANCE_MODE of ["single", "multi"] as const) {
+      const messages = issueMessages({
+        ...validProductionEnvironment,
+        SERVER_INSTANCE_MODE,
+        REDIS_URL: undefined,
+      });
 
-    expect(messages).toContain(
-      "REDIS_URL is required for multi-instance production deployments.",
-    );
+      expect(messages).toContain(
+        "REDIS_URL is required in production for immediate session revocation and bounded shared throttling.",
+      );
+    }
   });
 
   it("accepts Redis-backed multi-instance production", () => {

@@ -8,6 +8,7 @@ import { logger } from "./config/logger.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { rateLimiter } from "./middleware/rateLimiter.middleware.js";
 import { requestContextStorage } from "./utils/request-context.js";
+import { safeRequestPath } from "./utils/redaction.js";
 
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { addonRouter } from "./modules/addon/addon.routes.js";
@@ -20,6 +21,7 @@ import { sessionRouter } from "./modules/sessions/session.routes.js";
 import { docsRouter } from "./modules/docs/docs.routes.js";
 import { systemRouter } from "./modules/system/system.routes.js";
 import { playbackRouter } from "./modules/playback/playback.routes.js";
+import { realDebridRouter } from "./modules/debrid/real-debrid.routes.js";
 
 import { initWebSockets } from "./config/websocket.js";
 
@@ -75,7 +77,7 @@ export function createApp() {
     logger.info(
       {
         method: c.req.method,
-        url: c.req.url,
+        path: safeRequestPath(c.req.url),
         status: c.res.status,
         responseTime: `${ms}ms`,
         requestId: c.get("requestId"),
@@ -95,6 +97,7 @@ export function createApp() {
     .route("/api/sync", syncRouter)
     .route("/api/sessions", sessionRouter)
     .route("/api/playback", playbackRouter)
+    .route("/api/integrations/real-debrid", realDebridRouter)
     .route("/api", aggregatorRouter)
     .route("/api/docs", docsRouter);
 

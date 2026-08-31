@@ -1,4 +1,9 @@
+import { z } from "zod";
+import { SECURITY_LIMITS } from "./limits";
+
 export const SYNC_WEBSOCKET_PROTOCOL = "streamer-sync-v1";
+export const SYNC_WEBSOCKET_MAX_PAYLOAD_BYTES =
+  SECURITY_LIMITS.syncWebSocketPayloadBytes;
 
 const AUTH_PROTOCOL_PREFIX = "streamer-auth.";
 const DEVICE_PROTOCOL_PREFIX = "streamer-device.";
@@ -26,6 +31,16 @@ function isBoundedDeviceId(value: string) {
     value.length <= MAX_DEVICE_ID_LENGTH &&
     DEVICE_ID_PATTERN.test(value)
   );
+}
+
+/** Keep device-derived Redis keys and session records bounded and delimiter-safe. */
+export function normalizeDeviceId(
+  value: unknown,
+  fallback = "unknown-browser",
+): string {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim();
+  return isBoundedDeviceId(normalized) ? normalized : fallback;
 }
 
 export function createSyncWebSocketProtocols(
@@ -100,3 +115,19 @@ export function parseSyncWebSocketProtocols(
     ...(deviceId ? { deviceId } : {}),
   };
 }
+
+export const syncWebSocketMessageSchema = z
+  .object({
+    event: z.literal("playback_update"),
+    data: z
+      .record(z.string().max(128), z.unknown())
+      .superRefine((value, context) => {
+        if (Object.keys(value).length > 64) {
+          context.addIssue({
+            code: "custom",
+            message: "Too many fields in sync message",
+          });
+        }
+      }),
+  })
+  .strict();

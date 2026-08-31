@@ -23,9 +23,12 @@ async function main() {
     logger.info("Database connected");
 
     const redisStatus = await connectRedis();
-    if (env.instanceMode === "multi" && redisStatus !== "connected") {
+    if (
+      (env.nodeEnv === "production" || env.instanceMode === "multi") &&
+      redisStatus !== "connected"
+    ) {
       throw new Error(
-        "Redis must be available before a multi-instance server can start",
+        "Redis must be available before a protected server can start",
       );
     }
     if (env.redisUrl && redisStatus !== "connected") {

@@ -24,6 +24,7 @@ const {
 } = require("./download-job-persistence");
 const {
   createPinnedLookup,
+  MAX_DIRECT_DOWNLOAD_BYTES,
   validateDownloadUrlWithDns,
 } = require("./download-url-policy");
 const {
@@ -641,6 +642,14 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
 
   let startByte = getSafeResumeOffset(job, resumeAt);
 
+  if (startByte > MAX_DIRECT_DOWNLOAD_BYTES) {
+    try {
+      fs.rmSync(job.tempPath, { force: true });
+    } catch {}
+    failDownloadJob(job, new Error("Download exceeds the size limit"));
+    return;
+  }
+
   job.status = "Downloading";
   job.error = null;
   job.failureReason = null;
@@ -728,6 +737,17 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
       const rangeTotal = parseContentRangeTotal(res.headers["content-range"]);
       job.totalBytesExpectedToWrite =
         rangeTotal || (contentLength ? contentLength + startByte : 0);
+      if (
+        job.totalBytesExpectedToWrite > MAX_DIRECT_DOWNLOAD_BYTES ||
+        job.totalBytesWritten > MAX_DIRECT_DOWNLOAD_BYTES
+      ) {
+        res.resume();
+        try {
+          fs.rmSync(job.tempPath, { force: true });
+        } catch {}
+        failDownloadJob(job, new Error("Download exceeds the size limit"));
+        return;
+      }
       job.contentType = Array.isArray(res.headers["content-type"])
         ? res.headers["content-type"][0]
         : res.headers["content-type"] || null;
@@ -749,6 +769,15 @@ async function startDownloadRequest(job, resumeAt = 0, redirectCount = 0) {
 
       res.on("data", (chunk) => {
         job.totalBytesWritten += chunk.length;
+        if (job.totalBytesWritten > MAX_DIRECT_DOWNLOAD_BYTES) {
+          res.destroy(new Error("Download exceeds the size limit"));
+          file.destroy();
+          try {
+            fs.rmSync(job.tempPath, { force: true });
+          } catch {}
+          failDownloadJob(job, new Error("Download exceeds the size limit"));
+          return;
+        }
         if (job.totalBytesWritten % (1024 * 512) < chunk.length) {
           emitDownloadJob(job);
         }

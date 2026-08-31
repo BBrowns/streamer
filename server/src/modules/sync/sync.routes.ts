@@ -7,6 +7,8 @@ import {
   authenticateAccessToken,
   authMiddleware,
 } from "../../middleware/auth.middleware.js";
+import { SessionService } from "../auth/session.service.js";
+import { env } from "../../config/env.js";
 import type { HonoEnv } from "../../types/hono.js";
 import { syncService } from "./sync.service.js";
 import { logger } from "../../config/logger.js";
@@ -43,38 +45,87 @@ syncRouter.use("*", syncAuthMiddleware);
 syncRouter.get(
   "/events",
   upgradeWebSocket((c: Context) => {
-    const { userId } = c.get("user");
+    const authPayload = c.get("user");
+    const { userId } = authPayload;
+    const sessionId = authPayload.sid || authPayload.jti;
     const deviceId = c.get("deviceId");
     const connId = Math.random().toString(36).substring(2, 11);
+    let socket: WSContext | undefined;
 
     return {
       onOpen(_event: Event, ws: WSContext) {
+        socket = ws;
         // Register connection
-        syncService.addConnection(userId, {
+        const accepted = syncService.addConnection(userId, {
           id: connId,
           deviceId,
           ws,
         });
+        if (!accepted) {
+          ws.close(1008, "Connection limit reached");
+          return;
+        }
 
         // Send connection confirmation
         ws.send(JSON.stringify({ event: "ping", data: "connected" }));
 
         logger.debug({ userId, connId }, "WebSocket connection opened");
       },
-      onMessage(event: { data: any }) {
+      async onMessage(event: { data: any }) {
+        const expired =
+          typeof authPayload.exp === "number" &&
+          Math.floor(Date.now() / 1000) >= authPayload.exp;
+        let revocation: Awaited<
+          ReturnType<typeof SessionService.checkAccessToken>
+        > = "active";
         try {
-          const { event: type, data } = JSON.parse(event.data.toString());
-
-          // Handle incoming events (e.g. remote control)
-          if (type === "playback_update") {
-            // Broadcast to other devices of the same user
-            syncService.broadcast(userId, type, data, deviceId);
+          if (!expired && sessionId) {
+            revocation = await SessionService.checkAccessToken(
+              userId,
+              sessionId,
+              authPayload.iat,
+            );
           }
-
-          logger.debug({ userId, type }, "WebSocket message received");
-        } catch (err) {
-          logger.error({ userId, err }, "Failed to parse WebSocket message");
+        } catch {
+          revocation = "unavailable";
         }
+
+        if (
+          expired ||
+          revocation === "revoked" ||
+          (env.nodeEnv === "production" && revocation !== "active")
+        ) {
+          try {
+            socket?.close(1008, "Authentication expired or revoked");
+          } catch {}
+          syncService.removeConnection(userId, connId);
+          return;
+        }
+
+        const result = syncService.acceptIncomingMessage(
+          userId,
+          connId,
+          event.data,
+        );
+        if (!result.ok) {
+          const closeCode = result.code === "payload_too_large" ? 1009 : 1008;
+          try {
+            socket?.close(closeCode, "Invalid or excessive WebSocket message");
+          } catch {}
+          syncService.removeConnection(userId, connId);
+          return;
+        }
+
+        syncService.broadcast(
+          userId,
+          result.message.event,
+          result.message.data,
+          deviceId,
+        );
+        logger.debug(
+          { userId, type: result.message.event },
+          "WebSocket message received",
+        );
       },
       onClose() {
         syncService.removeConnection(userId, connId);

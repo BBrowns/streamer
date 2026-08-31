@@ -21,6 +21,8 @@ import { recordBridgeOperationalEvent } from "./bridge-metrics.js";
 
 export interface CastUrlValidationOptions {
   allowedHosts?: string[];
+  allowedOrigins?: string[];
+  allowedExternalHosts?: string[];
 }
 
 export interface CastUrlDnsValidationOptions extends CastUrlValidationOptions {
@@ -127,6 +129,17 @@ export function getConfiguredBridgePublicOrigin() {
   } catch {
     return null;
   }
+}
+
+export function getConfiguredCastExternalHosts() {
+  return Array.from(
+    new Set(
+      (process.env.STREAMER_CAST_ALLOWED_HOSTS || "")
+        .split(",")
+        .map((host) => normalizeHost(host))
+        .filter(Boolean),
+    ),
+  );
 }
 
 function hashBridgeCredential(value: string) {
@@ -392,6 +405,13 @@ export function requireBridgeAuth(
       return;
     }
 
+    if (!isLoopbackAddress(req.socket.remoteAddress)) {
+      res.status(401).json({ error: "Bridge authentication required" });
+      return;
+    }
+
+    // Tokenless bridge access is a deliberately narrow local-development
+    // fallback. A non-loopback bind is rejected by the server startup path.
     next();
     return;
   }
@@ -403,6 +423,53 @@ export function requireBridgeAuth(
   }
 
   res.status(401).json({ error: "Bridge authentication required" });
+}
+
+function trustedBridgeHost(hostHeader: string | undefined) {
+  if (!hostHeader) return false;
+  try {
+    const parsed = new URL(`http://${hostHeader}`);
+    if (parsed.username || parsed.password || parsed.pathname !== "/") {
+      return false;
+    }
+    const host = normalizeHost(parsed.hostname);
+    if (["localhost", "127.0.0.1", "::1"].includes(host)) return true;
+
+    const configuredOrigin = getConfiguredBridgePublicOrigin();
+    if (configuredOrigin) {
+      const allowed = new URL(configuredOrigin);
+      if (
+        normalizeHost(allowed.hostname) === host &&
+        (!parsed.port ||
+          parsed.port ===
+            (allowed.port || (allowed.protocol === "https:" ? "443" : "80")))
+      ) {
+        return true;
+      }
+    }
+
+    return (process.env.STREAMER_BRIDGE_ALLOWED_HOSTS || "")
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean)
+      .some(
+        (value) => value === hostHeader.trim().toLowerCase() || value === host,
+      );
+  } catch {
+    return false;
+  }
+}
+
+export function requireTrustedBridgeHost(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (!trustedBridgeHost(req.get("host"))) {
+    res.status(400).json({ error: "Untrusted bridge Host header" });
+    return;
+  }
+  next();
 }
 
 function createSignedStreamPath(
@@ -513,7 +580,7 @@ function ipv4FromMappedIpv6(host: string) {
   const dottedMatch = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
   if (dottedMatch) return dottedMatch[1];
 
-  const hexMatch = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  const hexMatch = host.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
   if (!hexMatch) return null;
 
   const high = Number.parseInt(hexMatch[1], 16);
@@ -567,6 +634,11 @@ export function validateCastPlaybackUrl(
 
   const host = normalizeHost(parsed.hostname);
   const allowedHosts = options.allowedHosts?.map(normalizeHost) ?? [];
+  const allowedExternalHosts =
+    options.allowedExternalHosts?.map(normalizeHost) ?? [];
+  const exactAllowedOrigin =
+    (options.allowedOrigins ?? []).includes(parsed.origin) ||
+    (options.allowedOrigins === undefined && allowedHosts.includes(host));
 
   if (LOCAL_HOSTNAMES.has(host) || host.endsWith(".localhost")) {
     return { ok: false, reason: "Localhost playback URLs cannot be cast" };
@@ -596,6 +668,22 @@ export function validateCastPlaybackUrl(
         reason: "Private network playback URLs must point to this bridge",
       };
     }
+  }
+
+  if (parsed.protocol === "http:" && !exactAllowedOrigin) {
+    return {
+      ok: false,
+      reason: "HTTP cast sources must use the configured bridge origin",
+    };
+  }
+
+  if (
+    parsed.protocol === "https:" &&
+    options.allowedExternalHosts &&
+    !allowedExternalHosts.includes(host) &&
+    !exactAllowedOrigin
+  ) {
+    return { ok: false, reason: "Cast source host is not allowlisted" };
   }
 
   return { ok: true, url: parsed.toString() };

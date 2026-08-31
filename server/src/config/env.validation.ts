@@ -24,6 +24,8 @@ export const serverEnvSchema = z
 
     JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
     JWT_SECRET_PREVIOUS: optionalString,
+    TOKEN_HASH_KEY: optionalString,
+    CREDENTIAL_ENCRYPTION_KEY: optionalString,
     JWT_ACCESS_EXPIRY: z.string().trim().min(1).default("15m"),
     JWT_REFRESH_EXPIRY: z.string().trim().min(1).default("7d"),
 
@@ -39,7 +41,8 @@ export const serverEnvSchema = z
     ADDON_TIMEOUT_MS: integer(5000, 250, 60000),
     ADDON_MAX_CONCURRENT: integer(10, 1, 100),
 
-    RD_API_TOKEN: optionalString,
+    RD_CLIENT_ID: optionalString,
+    RD_CLIENT_SECRET: optionalString,
     TRAKT_CLIENT_ID: optionalString,
     TRAKT_CLIENT_SECRET: optionalString,
 
@@ -83,11 +86,11 @@ export const serverEnvSchema = z
       addIssue(ctx, "PORT", "PORT must be between 1 and 65535 in production.");
     }
 
-    if (data.SERVER_INSTANCE_MODE === "multi" && !data.REDIS_URL) {
+    if (!data.REDIS_URL) {
       addIssue(
         ctx,
         "REDIS_URL",
-        "REDIS_URL is required for multi-instance production deployments.",
+        "REDIS_URL is required in production for immediate session revocation and bounded shared throttling.",
       );
     }
 
@@ -106,6 +109,13 @@ export const serverEnvSchema = z
         );
       }
     }
+
+    validateProductionSecret("TOKEN_HASH_KEY", data.TOKEN_HASH_KEY || "", ctx);
+    validateProductionSecret(
+      "CREDENTIAL_ENCRYPTION_KEY",
+      data.CREDENTIAL_ENCRYPTION_KEY || "",
+      ctx,
+    );
 
     if ((data.EMAIL_DELIVERY_MODE || "log") !== "smtp") {
       addIssue(
@@ -263,7 +273,11 @@ function validateSmtp(data: ParsedServerEnvironment, ctx: z.RefinementCtx) {
 }
 
 function validateProductionSecret(
-  path: "JWT_SECRET" | "JWT_SECRET_PREVIOUS",
+  path:
+    | "JWT_SECRET"
+    | "JWT_SECRET_PREVIOUS"
+    | "TOKEN_HASH_KEY"
+    | "CREDENTIAL_ENCRYPTION_KEY",
   value: string,
   ctx: z.RefinementCtx,
 ) {

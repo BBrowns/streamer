@@ -18,6 +18,7 @@ vi.mock("../src/prisma/client.js", () => ({
     refreshToken: {
       create: vi.fn(),
       findUnique: vi.fn(),
+      updateMany: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
       deleteMany: vi.fn(),
@@ -53,6 +54,8 @@ vi.mock("../src/config/env.js", () => ({
   env: {
     nodeEnv: "test",
     jwtSecret: "test-secret-key-for-testing-only",
+    tokenHashKey: "test-token-hash-key",
+    credentialEncryptionKey: "test-credential-encryption-key",
     jwtAccessExpiry: "15m",
   },
 }));
@@ -66,6 +69,10 @@ describe("AuthService", () => {
     service = new AuthService();
     _resetFailedAttempts();
     vi.clearAllMocks();
+    (prisma.refreshToken.updateMany as Mock).mockResolvedValue({ count: 0 });
+    (prisma.$transaction as Mock).mockImplementation(async (input: any) =>
+      Array.isArray(input) ? Promise.all(input) : input(prisma),
+    );
   });
 
   describe("register", () => {
@@ -146,23 +153,28 @@ describe("AuthService", () => {
       ).rejects.toThrow(AppError);
     });
 
-    it("should lock account after 5 failed attempts", async () => {
+    it("does not permanently lock the account after repeated failures", async () => {
       (prisma.user.findUnique as Mock).mockResolvedValue(mockUser);
+      (prisma.refreshToken.create as Mock).mockResolvedValue({});
+      vi.useFakeTimers();
 
-      // Fail 5 times
-      for (let i = 0; i < 5; i++) {
-        await expect(
-          service.login("test@example.com", "WrongPass1"),
-        ).rejects.toThrow();
-      }
-
-      // 6th attempt should be locked out (even with correct password)
       try {
-        await service.login("test@example.com", "Password1");
-        expect.fail("Should have thrown");
-      } catch (err) {
-        expect((err as AppError).statusCode).toBe(429);
-        expect((err as AppError).message).toContain("locked");
+        for (let i = 0; i < 5; i++) {
+          const attempt = service.login("test@example.com", "WrongPass1");
+          await vi.advanceTimersByTimeAsync(5_000);
+          await expect(attempt).rejects.toThrow();
+        }
+
+        const successfulAttempt = service.login(
+          "test@example.com",
+          "Password1",
+        );
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(successfulAttempt).resolves.toMatchObject({
+          user: { id: "user-1" },
+        });
+      } finally {
+        vi.useRealTimers();
       }
     });
 
@@ -207,13 +219,14 @@ describe("AuthService", () => {
         revokedAt: null,
         user: mockUser,
       });
+      (prisma.refreshToken.updateMany as Mock).mockResolvedValue({ count: 1 });
 
       const result = await service.refresh("valid_token");
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
-      expect(prisma.refreshToken.update).toHaveBeenCalledWith(
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: "token-1" },
+          where: expect.objectContaining({ id: "token-1", revokedAt: null }),
           data: expect.objectContaining({ revokedAt: expect.any(Date) }),
         }),
       );

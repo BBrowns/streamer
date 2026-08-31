@@ -86,11 +86,13 @@ let _migrationRan = false;
  */
 export async function migrateTokensToSecureStorage(): Promise<void> {
   if (_migrationRan || Platform.OS === "web") return;
-  _migrationRan = true;
 
   try {
     const raw = await AsyncStorage.getItem(LEGACY_AUTH_KEY);
-    if (!raw) return;
+    if (!raw) {
+      _migrationRan = true;
+      return;
+    }
 
     const parsed = JSON.parse(raw) as {
       state?: {
@@ -101,7 +103,10 @@ export async function migrateTokensToSecureStorage(): Promise<void> {
     };
 
     const state = parsed?.state;
-    if (!state) return;
+    if (!state) {
+      _migrationRan = true;
+      return;
+    }
 
     const migrations: Promise<void>[] = [];
 
@@ -124,9 +129,9 @@ export async function migrateTokensToSecureStorage(): Promise<void> {
       );
     }
 
-    await Promise.all(migrations);
-
-    // Scrub tokens from the plain AsyncStorage blob so they aren't duplicated
+    // Scrub the plaintext copy before writing to SecureStore. If SecureStore
+    // fails, the user must sign in again, but the old bearer values do not
+    // remain in a readable legacy store.
     const scrubbed = {
       ...parsed,
       state: {
@@ -137,8 +142,10 @@ export async function migrateTokensToSecureStorage(): Promise<void> {
       },
     };
     await AsyncStorage.setItem(LEGACY_AUTH_KEY, JSON.stringify(scrubbed));
+    await Promise.all(migrations);
+    _migrationRan = true;
   } catch {
-    // Non-fatal — app still works, tokens will be read from the old store
-    // until the user logs in again.
+    // Leave the flag unset so a later boot/retry can finish migration. The
+    // legacy blob is scrubbed before any SecureStore write is attempted.
   }
 }

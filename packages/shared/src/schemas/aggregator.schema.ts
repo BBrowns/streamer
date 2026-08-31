@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { metaPreviewSchema } from "./meta.schema";
+import { SECURITY_LIMITS } from "../limits";
 
 export const aggregatorSearchSchema = z.object({
   q: z.string().trim().min(2).max(200),
@@ -74,11 +75,28 @@ export const aggregatorSubtitleDocumentSchema = z.object({
 });
 
 export const aggregatorResolveSchema = aggregatorStreamSchema.extend({
-  infoHash: z.string().min(1),
+  infoHash: z
+    .string()
+    .trim()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9]+$/, "Info hash contains unsupported characters")
+    .transform((value) => value.toLowerCase()),
 });
 
 export const aggregatorResolveBulkSchema = z.object({
   type: z.string().min(1),
   id: z.string().min(1).optional(),
-  infoHashes: z.array(z.string()).min(1),
+  infoHashes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .regex(/^[A-Za-z0-9]+$/, "Info hash contains unsupported characters")
+        .transform((value) => value.toLowerCase()),
+    )
+    .min(1)
+    .max(SECURITY_LIMITS.bulkResolveItems),
 });

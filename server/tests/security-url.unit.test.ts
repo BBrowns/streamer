@@ -73,7 +73,19 @@ describe("validateSafeUrl", () => {
     await expect(
       validateSafeUrl("https://[::ffff:127.0.0.1]/manifest.json"),
     ).rejects.toThrow("SSRF Blocked");
+    await expect(
+      validateSafeUrl("https://[::c0a8:101]/manifest.json"),
+    ).rejects.toThrow("SSRF Blocked");
   });
+
+  it.each(["fe90::1", "fea0::1", "febf::1"])(
+    "blocks every IPv6 link-local range (%s)",
+    async (address) => {
+      await expect(
+        validateSafeUrl(`https://[${address}]/manifest.json`),
+      ).rejects.toThrow("SSRF Blocked");
+    },
+  );
 
   it("blocks metadata hostnames and suspicious protocols", async () => {
     await expect(
@@ -122,6 +134,7 @@ describe("validateSafeUrl", () => {
       }),
     ).rejects.toThrow("local hostname");
 
+    lookup.mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }] as any);
     await expect(
       validateSafeUrl("http://localhost:8080/manifest.json", {
         allowHttp: true,

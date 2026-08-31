@@ -1,10 +1,19 @@
 import { redis } from "../../services/redis.js";
 import { syncService } from "../sync/sync.service.js";
 import { logger } from "../../config/logger.js";
+import {
+  boundedDeviceIdSchema,
+  remotePlaybackSessionSchema,
+  playbackSessionUpdateSchema,
+  remoteSessionCommandSchema,
+  SECURITY_LIMITS,
+} from "@streamer/shared";
 
 const PLAYBACK_TTL = 24 * 60 * 60; // 24 hours
 const PLAYBACK_PREFIX = "playback:session:";
 const USER_PLAYBACK_PREFIX = "playback:user-sessions:";
+const MAX_PLAYBACK_SESSIONS_PER_USER = SECURITY_LIMITS.boundedMapEntries;
+const STALE_SESSION_BROADCAST_MS = 5 * 60 * 1000;
 
 export interface PlaybackSession {
   deviceId: string;
@@ -26,22 +35,38 @@ class SessionService {
   ) {
     if (!redis) return;
 
-    const sessionKey = `${PLAYBACK_PREFIX}${userId}:${deviceId}`;
+    const normalizedDeviceId = boundedDeviceIdSchema.parse(deviceId);
+    const parsedData = playbackSessionUpdateSchema.parse(data);
+    const sessionKey = `${PLAYBACK_PREFIX}${userId}:${normalizedDeviceId}`;
     const userSessionsKey = `${USER_PLAYBACK_PREFIX}${userId}`;
 
     // Get existing to merge
     const existingData = await redis.get(sessionKey);
-    const existing: PlaybackSession = existingData
-      ? JSON.parse(existingData)
-      : {
-          deviceId,
-          status: "idle",
-          lastUpdate: Date.now(),
-        };
+    let existing: PlaybackSession = {
+      deviceId: normalizedDeviceId,
+      status: "idle",
+      lastUpdate: Date.now(),
+    };
+    if (existingData) {
+      try {
+        const parsed = remotePlaybackSessionSchema.parse(
+          JSON.parse(existingData),
+        );
+        if (parsed.deviceId === normalizedDeviceId) existing = parsed;
+      } catch {
+        await redis.srem(userSessionsKey, normalizedDeviceId);
+      }
+    } else if (
+      (await redis.scard(userSessionsKey)) >= MAX_PLAYBACK_SESSIONS_PER_USER
+    ) {
+      logger.warn({ userId }, "Playback session limit reached");
+      return;
+    }
 
     const updated: PlaybackSession = {
       ...existing,
-      ...data,
+      ...parsedData,
+      deviceId: normalizedDeviceId,
       lastUpdate: Date.now(),
     };
 
@@ -49,7 +74,7 @@ class SessionService {
     await redis
       .multi()
       .set(sessionKey, JSON.stringify(updated), "EX", PLAYBACK_TTL)
-      .sadd(userSessionsKey, deviceId)
+      .sadd(userSessionsKey, normalizedDeviceId)
       .expire(userSessionsKey, PLAYBACK_TTL)
       .exec();
 
@@ -60,7 +85,7 @@ class SessionService {
     });
 
     logger.debug(
-      { userId, deviceId, status: updated.status },
+      { userId, deviceId: normalizedDeviceId, status: updated.status },
       "Playback session updated in Redis",
     );
   }
@@ -70,13 +95,22 @@ class SessionService {
     if (!redis) return [];
 
     const userSessionsKey = `${USER_PLAYBACK_PREFIX}${userId}`;
-    const devices = await redis.smembers(userSessionsKey);
+    const devices = (await redis.smembers(userSessionsKey)).slice(
+      0,
+      MAX_PLAYBACK_SESSIONS_PER_USER,
+    );
     const sessions: PlaybackSession[] = [];
 
     for (const dId of devices) {
       const data = await redis.get(`${PLAYBACK_PREFIX}${userId}:${dId}`);
       if (data) {
-        sessions.push(JSON.parse(data));
+        try {
+          const parsed = remotePlaybackSessionSchema.parse(JSON.parse(data));
+          if (parsed.deviceId === dId) sessions.push(parsed);
+          else await redis.srem(userSessionsKey, dId);
+        } catch {
+          await redis.srem(userSessionsKey, dId);
+        }
       } else {
         await redis.srem(userSessionsKey, dId);
       }
@@ -85,7 +119,9 @@ class SessionService {
     // Filter out stale sessions (inactive for more than 5 minutes for "broadcast" purposes)
     // But keep them in Redis for 24h as history/resume
     const now = Date.now();
-    return sessions.filter((s) => now - s.lastUpdate < 5 * 60 * 1000);
+    return sessions.filter(
+      (s) => now - s.lastUpdate < STALE_SESSION_BROADCAST_MS,
+    );
   }
 
   /** Send a remote command to a specific device */
@@ -95,11 +131,23 @@ class SessionService {
     action: string,
     data?: any,
   ) {
-    logger.info({ userId, targetDeviceId, action }, "Sending remote command");
-
-    syncService.sendToDevice(userId, targetDeviceId, "REMOTE_COMMAND", {
+    const command = remoteSessionCommandSchema.parse({
+      targetDeviceId,
       action,
-      data,
+      ...(data === undefined ? {} : { data }),
+    });
+    logger.info(
+      {
+        userId,
+        targetDeviceId: command.targetDeviceId,
+        action: command.action,
+      },
+      "Sending remote command",
+    );
+
+    syncService.sendToDevice(userId, command.targetDeviceId, "REMOTE_COMMAND", {
+      action: command.action,
+      data: command.data,
       timestamp: Date.now(),
     });
   }
@@ -108,10 +156,15 @@ class SessionService {
   async removeSession(userId: string, deviceId: string) {
     if (!redis) return;
 
-    const sessionKey = `${PLAYBACK_PREFIX}${userId}:${deviceId}`;
+    const normalizedDeviceId = boundedDeviceIdSchema.parse(deviceId);
+    const sessionKey = `${PLAYBACK_PREFIX}${userId}:${normalizedDeviceId}`;
     const userSessionsKey = `${USER_PLAYBACK_PREFIX}${userId}`;
 
-    await redis.multi().del(sessionKey).srem(userSessionsKey, deviceId).exec();
+    await redis
+      .multi()
+      .del(sessionKey)
+      .srem(userSessionsKey, normalizedDeviceId)
+      .exec();
 
     const allSessions = await this.getSessions(userId);
     syncService.broadcast(userId, "SESSION_UPDATE", {

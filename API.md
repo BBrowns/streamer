@@ -26,14 +26,14 @@ All REST routes are mounted under `/api` and return JSON. Unless specified, all 
 
 This is the core content fan-out router. It queries all installed add-ons in parallel.
 
-| Method | Route                                 | Description                                                                                                                                                                            |
-| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/catalog/:type`                      | Fetches the aggregated Home catalog grid for `movie` or `series`. Supports catalog extras such as `skip` where add-ons support them.                                                   |
-| `GET`  | `/search?q={query}`                   | Global search across installed add-ons.                                                                                                                                                |
-| `GET`  | `/meta/:type/:id`                     | Aggregated metadata. Priority: Trakt > TMDB/Cinemeta > Others.                                                                                                                         |
-| `GET`  | `/stream/:type/:id`                   | Returns source metadata from all stream add-ons. Returned streams include `type` and `id` context so client-side resolution can call exact resolve routes later.                       |
-| `GET`  | `/stream/resolve/:type/:id/:infoHash` | Resolves one torrent/infoHash stream for playback. Real-Debrid can upgrade to direct HTTP when enabled; otherwise the client/bridge handles the torrent path.                          |
-| `POST` | `/stream/resolve-bulk`                | Bulk resolution for multiple stream hashes. Body: `{ type, id?, infoHashes: string[] }`. Keep request sizes bounded; current schemas cap this to prevent accidental N+1 amplification. |
+| Method | Route                                 | Description                                                                                                                                                                                                |
+| ------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/catalog/:type`                      | Fetches the aggregated Home catalog grid for `movie` or `series`. Supports catalog extras such as `skip` where add-ons support them.                                                                       |
+| `GET`  | `/search?q={query}`                   | Global search across installed add-ons.                                                                                                                                                                    |
+| `GET`  | `/meta/:type/:id`                     | Aggregated metadata. Priority: Trakt > TMDB/Cinemeta > Others.                                                                                                                                             |
+| `GET`  | `/stream/:type/:id`                   | Returns source metadata from all stream add-ons. Returned streams include `type` and `id` context so client-side resolution can call exact resolve routes later.                                           |
+| `GET`  | `/stream/resolve/:type/:id/:infoHash` | Resolves one torrent/infoHash stream for playback. A connected user's Real-Debrid account can upgrade it to direct HTTP when the feature is enabled; otherwise the client/bridge handles the torrent path. |
+| `POST` | `/stream/resolve-bulk`                | Bulk resolution for multiple stream hashes. Body: `{ type, id?, infoHashes: string[] }`. Keep request sizes bounded; current schemas cap this to prevent accidental N+1 amplification.                     |
 
 ### 1.3 Playback Planner (`/api/playback`)
 
@@ -97,13 +97,37 @@ stable public protocol, so credential-bearing values are not echoed as the
 selected protocol. A malformed explicit `Authorization` header never falls
 back to subprotocol authentication.
 
+### 1.7 Real-Debrid integration (`/api/integrations/real-debrid`)
+
+Real-Debrid is connected per user through a bounded device-authorization flow.
+The API never returns or exports Real-Debrid access or refresh tokens; they are
+encrypted at rest. The integration must be configured with `RD_CLIENT_ID` and
+`RD_CLIENT_SECRET`; resolution remains disabled unless the `real-debrid`
+feature flag is enabled.
+
+| Method   | Route                  | Description                                                                                   |
+| -------- | ---------------------- | --------------------------------------------------------------------------------------------- |
+| `GET`    | `/status`              | Returns `{ configured, connected, isPremium?, expiresAt? }`; no credential material.          |
+| `POST`   | `/device`              | Starts a device flow and returns a bounded `flowId`, verification URL, user code, and expiry. |
+| `POST`   | `/device/:flowId/poll` | Polls the caller's own flow; returns `pending`, `expired`, or `connected`.                    |
+| `DELETE` | `/`                    | Disconnects the current user's Real-Debrid account and deletes stored credentials.            |
+
+The resolver accepts only validated info hashes and HTTPS download URLs. Bulk
+resolution is capped at 16 hashes with bounded concurrency and falls back to
+the local magnet path when the user's integration is unavailable.
+
 ---
 
 ## 2. Stream-Server API (Local P2P Daemon)
 
 The stream-server runs locally on the device (or on the local network via Docker) on port `:11470`.
 
-Most control routes support bridge authentication. When `STREAMER_BRIDGE_TOKEN` is configured, clients must send either `Authorization: Bearer <token>` or `x-streamer-bridge-token: <token>`.
+The raw torrent HTTP listener binds to loopback only. LAN access is provided by
+the authenticated/signed bridge gateway rather than by exposing WebTorrent
+directly. Most control routes support bridge authentication. When
+`STREAMER_BRIDGE_TOKEN` is configured, clients must send either
+`Authorization: Bearer <token>` or `x-streamer-bridge-token: <token>`. In
+production, and for any non-loopback bind, the bridge token is required.
 
 Third-party add-on fetches are treated as untrusted outbound requests. Manifest
 and runtime resource URLs must use HTTPS by default and are checked against

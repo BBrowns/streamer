@@ -1,9 +1,16 @@
 import dns from "dns/promises";
 import net from "net";
+import http from "node:http";
+import https from "node:https";
 
 export interface SafeUrlValidationOptions {
   allowHttp?: boolean;
   allowPrivateNetworks?: boolean;
+}
+
+export interface SafeUrlValidationResult {
+  parsed: URL;
+  addresses: Array<{ address: string; family: number }>;
 }
 
 const LOCAL_HOSTNAMES = new Set([
@@ -48,7 +55,7 @@ function ipv4FromMappedIpv6(ip: string) {
   const dottedMatch = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
   if (dottedMatch) return dottedMatch[1];
 
-  const hexMatch = ip.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  const hexMatch = ip.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
   if (!hexMatch) return null;
 
   const high = Number.parseInt(hexMatch[1], 16);
@@ -63,14 +70,13 @@ function isPrivateOrReservedIpv6(ip: string) {
   if (mappedIpv4) return isPrivateOrReservedIpv4(mappedIpv4);
 
   const lower = ip.toLowerCase();
-  return (
-    lower === "::1" ||
-    lower === "::" ||
-    lower.startsWith("fe80:") ||
-    lower.startsWith("fc") ||
-    lower.startsWith("fd") ||
-    lower.startsWith("ff")
-  );
+  if (lower === "::1" || lower === "::") return true;
+
+  const privateRanges = new net.BlockList();
+  privateRanges.addSubnet("fe80::", 10, "ipv6");
+  privateRanges.addSubnet("fc00::", 7, "ipv6");
+  privateRanges.addSubnet("ff00::", 8, "ipv6");
+  return privateRanges.check(lower, "ipv6");
 }
 
 function isPrivateOrReservedIp(ip: string) {
@@ -81,16 +87,21 @@ function isPrivateOrReservedIp(ip: string) {
 }
 
 function allowPrivateNetworksFromEnvironment() {
+  // Private-network add-ons are a local development/testing escape hatch.
+  // Production must not be able to enable this trust boundary through an
+  // accidentally inherited environment variable.
+  if (process.env.NODE_ENV === "production") return false;
+
   return ["1", "true", "yes", "on"].includes(
     (process.env.ADDON_ALLOW_PRIVATE_NETWORKS || "").toLowerCase(),
   );
 }
 
 /** Validates that a given URL resolves to a safe, public IP to prevent SSRF */
-export async function validateSafeUrl(
+export async function resolveSafeUrl(
   urlString: string,
   options: SafeUrlValidationOptions = {},
-): Promise<void> {
+): Promise<SafeUrlValidationResult> {
   const parsedUrl = new URL(urlString);
 
   if (parsedUrl.username || parsedUrl.password) {
@@ -118,13 +129,6 @@ export async function validateSafeUrl(
     (LOCAL_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost"))
   ) {
     throw new Error("SSRF Blocked: Target resolves to local hostname");
-  }
-
-  if (
-    allowPrivateNetworks &&
-    (LOCAL_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost"))
-  ) {
-    return;
   }
 
   const addresses: string[] = [];
@@ -163,4 +167,66 @@ export async function validateSafeUrl(
       );
     }
   }
+
+  return {
+    parsed: parsedUrl,
+    addresses: addresses.map((address) => ({
+      address,
+      family: net.isIP(address),
+    })),
+  };
+}
+
+export async function validateSafeUrl(
+  urlString: string,
+  options: SafeUrlValidationOptions = {},
+): Promise<void> {
+  await resolveSafeUrl(urlString, options);
+}
+
+/**
+ * Pin the socket lookup to the addresses validated immediately before the
+ * request. This closes the DNS-rebinding gap between validation and connect.
+ */
+export function createPinnedLookup(
+  addresses: Array<{ address: string; family: number }>,
+) {
+  return ((
+    _hostname: string,
+    options: number | { family?: number; all?: boolean },
+    callback: (
+      error: NodeJS.ErrnoException | null,
+      address?: string | Array<{ address: string; family: number }>,
+      family?: number,
+    ) => void,
+  ) => {
+    const requestedFamily =
+      typeof options === "number" ? options : Number(options?.family || 0);
+    const candidates = requestedFamily
+      ? addresses.filter(({ family }) => family === requestedFamily)
+      : addresses;
+    if (candidates.length === 0) {
+      const error = new Error(
+        "No validated address matches the request family",
+      ) as NodeJS.ErrnoException;
+      error.code = "ENOTFOUND";
+      callback(error);
+      return;
+    }
+    if (typeof options === "object" && options.all) {
+      callback(null, candidates);
+      return;
+    }
+    callback(null, candidates[0].address, candidates[0].family);
+  }) as any;
+}
+
+export function createPinnedHttpAgents(
+  addresses: Array<{ address: string; family: number }>,
+) {
+  const lookup = createPinnedLookup(addresses);
+  return {
+    httpAgent: new http.Agent({ lookup }),
+    httpsAgent: new https.Agent({ lookup }),
+  };
 }

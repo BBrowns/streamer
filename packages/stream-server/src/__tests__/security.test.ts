@@ -11,7 +11,7 @@ import {
   validateCastPlaybackUrl,
   validateGatewayStreamSignature,
 } from "../security.js";
-import { redactSensitiveText } from "../redaction.js";
+import { redactSensitiveText, safeRequestPath } from "../redaction.js";
 import { createStreamServerApp } from "../index.js";
 import { pruneTorrents, validateTorrentFiles } from "../torrent.js";
 import { getSafeCastContentType } from "../cast.js";
@@ -315,6 +315,15 @@ describe("Gateway stream URL signing", () => {
 });
 
 describe("stream-server log redaction", () => {
+  it("keeps request telemetry route-only even when the query contains a magnet", () => {
+    const path = safeRequestPath(
+      "/api/stream?magnet=magnet%3A%3Fxt%3Durn%3Abtih%3Asensitive-hash",
+    );
+
+    expect(path).toBe("/api/stream");
+    expect(path).not.toContain("sensitive-hash");
+  });
+
   it("redacts signed gateway and bridge v1 URLs, magnets, and bearer tokens", () => {
     const output = redactSensitiveText(
       "Bearer bridge-token magnet:?xt=urn:btih:abcdef http://127.0.0.1:11470/api/gateway/jobs/job-1/stream?expires=123&signature=sig http://bridge.local:11470/api/bridge/v1/jobs/job-2/stream?expires=456&signature=v1-sig",
@@ -426,6 +435,15 @@ describe("Cast playback URL validation", () => {
       });
     },
   );
+
+  it("blocks IPv4-compatible IPv6 forms of private addresses", () => {
+    expect(
+      validateCastPlaybackUrl("http://[::c0a8:101]:11470/movie.mp4"),
+    ).toMatchObject({
+      ok: false,
+      reason: "Private network playback URLs must point to this bridge",
+    });
+  });
 
   it("accepts only a canonical configured bridge public origin", () => {
     const previous = process.env.STREAMER_BRIDGE_PUBLIC_ORIGIN;
