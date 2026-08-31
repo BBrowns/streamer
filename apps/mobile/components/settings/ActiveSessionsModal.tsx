@@ -63,6 +63,7 @@ export function ActiveSessionsModal({
         {!inline && (
           <Pressable
             onPress={onClose}
+            testID="active-sessions-close"
             accessibilityRole="button"
             accessibilityLabel={t("settings.accountModals.sessions.done")}
             style={({ focused, pressed }: any) => [

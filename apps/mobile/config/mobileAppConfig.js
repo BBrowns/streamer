@@ -144,6 +144,9 @@ function resolveMobileAppConfig(baseConfig, env = process.env) {
   }
 
   const updatesEnabled = Boolean(projectId);
+  const e2eEnabled =
+    environment === "development" &&
+    optionalValue(env.EXPO_PUBLIC_STREAMER_E2E) === "true";
   const extra = {
     ...(baseConfig.extra || {}),
     ...(projectId
@@ -158,6 +161,7 @@ function resolveMobileAppConfig(baseConfig, env = process.env) {
       apiUrl,
       buildEnvironment: environment,
       buildChannel: channel,
+      e2e: e2eEnabled,
       gitSha: optionalValue(env.EXPO_PUBLIC_STREAMER_GIT_SHA),
       buildDate: optionalValue(env.EXPO_PUBLIC_STREAMER_BUILD_DATE),
       updates: {
@@ -181,7 +185,10 @@ function resolveMobileAppConfig(baseConfig, env = process.env) {
     slug: "streamer",
     scheme: "streamer",
     plugins,
-    runtimeVersion: { policy: "appVersion" },
+    // Expo CLI cannot resolve a policy runtime version for a bare/dev-client
+    // project without an EAS project. Keep the policy for EAS builds, but use
+    // the concrete app version while local updates are disabled.
+    runtimeVersion: updatesEnabled ? { policy: "appVersion" } : version,
     updates: updatesEnabled
       ? {
           ...(baseConfig.updates || {}),

@@ -89,6 +89,7 @@ function HeaderRight() {
         <MobileMenuRow
           icon="settings-outline"
           label="Settings"
+          testID="mobile-settings-menu-item"
           onPress={() => navigate("/settings")}
         />
         <View
@@ -113,16 +114,19 @@ function MobileMenuRow({
   label,
   onPress,
   destructive = false,
+  testID,
 }: {
   icon: ComponentProps<typeof Ionicons>["name"];
   label: string;
   onPress: () => void;
   destructive?: boolean;
+  testID?: string;
 }) {
   const { colors } = useTheme();
   const color = destructive ? colors.error : colors.text;
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -178,6 +182,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t("tabs.home"),
+          tabBarButtonTestID: "tab-home",
           headerRight: () => <HeaderRight />,
           headerTitle: "",
           headerTransparent: true,
@@ -211,6 +216,7 @@ export default function TabLayout() {
         name="search"
         options={{
           title: t("tabs.search", { defaultValue: "Search" }),
+          tabBarButtonTestID: "tab-search",
           headerRight: () => <HeaderRight />,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
@@ -256,6 +262,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: t("tabs.settings"),
+          tabBarButtonTestID: "tab-settings",
           href: null,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons

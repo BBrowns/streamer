@@ -90,11 +90,19 @@ function assertStableIdentity(config, profile) {
     "com.bbrowns.streamer",
     `${profile} Android package`,
   );
-  assert.deepEqual(
-    config.runtimeVersion,
-    { policy: "appVersion" },
-    `${profile} runtime version policy`,
-  );
+  if (profile === "development") {
+    assert.equal(
+      config.runtimeVersion,
+      config.version,
+      `${profile} runtime version must be concrete for the bare dev client`,
+    );
+  } else {
+    assert.deepEqual(
+      config.runtimeVersion,
+      { policy: "appVersion" },
+      `${profile} runtime version policy`,
+    );
+  }
 }
 
 for (const [profile, profileEnvironment] of Object.entries(
