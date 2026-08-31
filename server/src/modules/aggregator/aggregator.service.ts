@@ -7,9 +7,10 @@ import {
   resilienceRegistry,
   type ResilienceMetrics,
 } from "./resilience.js";
-import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver.js";
 import type { ResolvedStream } from "../debrid/ports/debrid.ports.js";
+import { realDebridService } from "../debrid/real-debrid.service.js";
 import { featureFlags } from "../feature-flag/feature-flag.service.js";
+import { AppError } from "../../middleware/error.middleware.js";
 import {
   fetchSafeAddonJson,
   fetchSafeAddonText,
@@ -29,6 +30,7 @@ import {
   type SubtitleCandidate,
   requiresAddonConfiguration,
   supportsCatalogType,
+  SECURITY_LIMITS,
 } from "@streamer/shared";
 import { z } from "zod";
 import { StreamParser } from "./domain/stream-parser.js";
@@ -282,6 +284,8 @@ const STREAM_DISCOVERY_CACHE_TTL_MS = 30_000;
 const STREAM_DISCOVERY_CACHE_MAX_ENTRIES = 100;
 const STREAM_DISCOVERY_FAST_WINDOW_MS = 250;
 const STREAM_DISCOVERY_FAST_DEADLINE_MS = 1_750;
+const REAL_DEBRID_RESOLUTION_WINDOW_MS = 60_000;
+const INFO_HASH_PATTERN = /^[a-z0-9]{1,128}$/i;
 
 const searchOutboundBudget = new SearchOutboundBudget(
   GLOBAL_SEARCH_MAX_CONCURRENT,
@@ -525,6 +529,8 @@ export interface StreamDiscoveryResult {
 export interface StreamDiscoveryRequestOptions {
   /** Stops provider work only while no caller has received a fast result. */
   signal?: AbortSignal;
+  /** Wait for every provider so the result can authorize a source. */
+  requireComplete?: boolean;
 }
 
 type CachedStreamDiscoveryEntry = {
@@ -535,8 +541,11 @@ type CachedStreamDiscoveryEntry = {
 type InFlightStreamDiscoveryEntry = {
   controller: AbortController;
   fastPromise: Promise<StreamDiscoveryResult>;
+  completePromise: Promise<StreamDiscoveryResult>;
   resolveFast: (value: StreamDiscoveryResult) => void;
   rejectFast: (reason?: unknown) => void;
+  resolveComplete: (value: StreamDiscoveryResult) => void;
+  rejectComplete: (reason?: unknown) => void;
   waiters: number;
   fastSettled: boolean;
   settled: boolean;
@@ -654,6 +663,18 @@ function deduplicateAndBoundSubtitleCandidates(
 
 function isPlayableStreamResult(stream: Stream) {
   return Boolean(stream.url || stream.infoHash);
+}
+
+function normalizeInfoHash(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return INFO_HASH_PATTERN.test(normalized) ? normalized : null;
+}
+
+function isResolutionSecurityError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: unknown }).code;
+  return code === "SOURCE_NOT_AUTHORIZED" || code === "REAL_DEBRID_QUOTA";
 }
 
 function sortAndEnrichStreams(
@@ -787,6 +808,10 @@ export class AggregatorService {
   private readonly subtitleDocuments = new Map<
     string,
     SubtitleDocumentCacheEntry
+  >();
+  private readonly realDebridResolutionQuota = new Map<
+    string,
+    { windowStartedAt: number; count: number }
   >();
 
   private pruneSubtitleDocuments() {
@@ -980,15 +1005,27 @@ export class AggregatorService {
         rejectFast = reject;
       },
     );
+    let resolveComplete!: (value: StreamDiscoveryResult) => void;
+    let rejectComplete!: (reason?: unknown) => void;
+    const completePromise = new Promise<StreamDiscoveryResult>(
+      (resolve, reject) => {
+        resolveComplete = resolve;
+        rejectComplete = reject;
+      },
+    );
     // A caller may cancel before the run finishes. Keep the background
     // single-flight from producing an unhandled rejection in that case.
     void fastPromise.catch(() => undefined);
+    void completePromise.catch(() => undefined);
 
     const entry: InFlightStreamDiscoveryEntry = {
       controller,
       fastPromise,
+      completePromise,
       resolveFast,
       rejectFast,
+      resolveComplete,
+      rejectComplete,
       waiters: 0,
       fastSettled: false,
       settled: false,
@@ -1003,6 +1040,7 @@ export class AggregatorService {
   private waitForStreamDiscoveryRun(
     entry: InFlightStreamDiscoveryEntry,
     callerSignal?: AbortSignal,
+    promise: Promise<StreamDiscoveryResult> = entry.fastPromise,
   ): Promise<StreamDiscoveryResult> {
     entry.waiters += 1;
     return new Promise((resolve, reject) => {
@@ -1041,7 +1079,7 @@ export class AggregatorService {
       }
 
       callerSignal?.addEventListener("abort", abortForCaller, { once: true });
-      entry.fastPromise.then(
+      promise.then(
         (value) => finish(() => resolve(value)),
         (error) => finish(() => reject(error)),
       );
@@ -1118,6 +1156,7 @@ export class AggregatorService {
       if (!entry.invalidated && !entry.cancelledBeforeFastResult) {
         this.storeStreamDiscoveryCache(key, result);
       }
+      entry.resolveComplete(result);
       entry.settled = true;
       if (this.streamDiscoveryInFlight.get(key) === entry) {
         this.streamDiscoveryInFlight.delete(key);
@@ -1140,6 +1179,7 @@ export class AggregatorService {
         entry.fastSettled = true;
         entry.rejectFast(error);
       }
+      entry.rejectComplete(error);
       if (this.streamDiscoveryInFlight.get(key) === entry) {
         this.streamDiscoveryInFlight.delete(key);
       }
@@ -1263,7 +1303,11 @@ export class AggregatorService {
       id,
       requestId,
     );
-    return this.waitForStreamDiscoveryRun(entry, options.signal);
+    return this.waitForStreamDiscoveryRun(
+      entry,
+      options.signal,
+      options.requireComplete ? entry.completePromise : entry.fastPromise,
+    );
   }
 
   invalidateStreamDiscoveryCacheForUser(userId: string) {
@@ -1701,6 +1745,70 @@ export class AggregatorService {
     return discovery.streams;
   }
 
+  private consumeRealDebridResolutionQuota(userId: string) {
+    const now = Date.now();
+    for (const [key, entry] of this.realDebridResolutionQuota) {
+      if (now - entry.windowStartedAt >= REAL_DEBRID_RESOLUTION_WINDOW_MS) {
+        this.realDebridResolutionQuota.delete(key);
+      }
+    }
+
+    const current = this.realDebridResolutionQuota.get(userId);
+    if (
+      current &&
+      current.count >= SECURITY_LIMITS.realDebridResolutionsPerMinute
+    ) {
+      return false;
+    }
+
+    if (!current) {
+      this.realDebridResolutionQuota.set(userId, {
+        windowStartedAt: now,
+        count: 1,
+      });
+    } else {
+      current.count += 1;
+    }
+
+    while (
+      this.realDebridResolutionQuota.size > SECURITY_LIMITS.boundedMapEntries
+    ) {
+      const oldest = this.realDebridResolutionQuota.keys().next().value;
+      if (oldest === undefined) break;
+      this.realDebridResolutionQuota.delete(oldest);
+    }
+    return true;
+  }
+
+  private async assertDiscoveredStream(
+    userId: string,
+    type: string,
+    id: string,
+    infoHash: string,
+    requestId: string,
+  ) {
+    const discovery = await this.getStreamDiscovery(
+      userId,
+      type,
+      id,
+      requestId,
+      {
+        requireComplete: true,
+      },
+    );
+    const requestedHash = normalizeInfoHash(infoHash);
+    const authorized = discovery.streams.some(
+      (stream) => normalizeInfoHash(stream.infoHash) === requestedHash,
+    );
+    if (!authorized) {
+      throw new AppError(
+        403,
+        "The selected source is not authorized for this title.",
+        "SOURCE_NOT_AUTHORIZED",
+      );
+    }
+  }
+
   /** Resolve a specific stream (torrent) via Debrid if enabled, otherwise return original */
   async resolveStream(
     userId: string,
@@ -1709,14 +1817,40 @@ export class AggregatorService {
     infoHash: string,
     requestId: string,
   ) {
+    const normalizedInfoHash = normalizeInfoHash(infoHash);
+    if (!normalizedInfoHash) {
+      throw new AppError(
+        400,
+        "Info hash contains unsupported characters.",
+        "INVALID_INFO_HASH",
+      );
+    }
+
     const isRdEnabled = featureFlags.getAll()["real-debrid"];
-    const magnet = `magnet:?xt=urn:btih:${infoHash}`;
+    const magnet = `magnet:?xt=urn:btih:${normalizedInfoHash}`;
 
     if (isRdEnabled) {
-      const rd = new RealDebridResolver();
-      const resolved = await rd.resolve({ infoHash, title: id }, requestId);
-      if (resolved) {
-        return resolved;
+      const rd = await realDebridService.getResolver(userId);
+      if (rd) {
+        await this.assertDiscoveredStream(
+          userId,
+          type,
+          id,
+          normalizedInfoHash,
+          requestId,
+        );
+        if (!this.consumeRealDebridResolutionQuota(userId)) {
+          throw new AppError(
+            429,
+            "Real-Debrid resolution limit reached. Please try again later.",
+            "REAL_DEBRID_QUOTA",
+          );
+        }
+        const resolved = await rd.resolve(
+          { infoHash: normalizedInfoHash, title: id },
+          requestId,
+        );
+        if (resolved) return resolved;
       }
     }
 
@@ -1735,9 +1869,39 @@ export class AggregatorService {
     infoHashes: string[],
     requestId: string,
   ): Promise<Record<string, ResolvedStream | { url: string; type: string }>> {
-    const results = await Promise.allSettled(
-      infoHashes.map((infoHash) =>
-        this.resolveStream(userId, type, id ?? infoHash, infoHash, requestId),
+    const results: Array<
+      PromiseSettledResult<ResolvedStream | { url: string; type: string }>
+    > = new Array(infoHashes.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (true) {
+        const index = nextIndex++;
+        if (index >= infoHashes.length) return;
+        try {
+          results[index] = {
+            status: "fulfilled",
+            value: await this.resolveStream(
+              userId,
+              type,
+              id ?? infoHashes[index],
+              infoHashes[index],
+              requestId,
+            ),
+          };
+        } catch (reason) {
+          results[index] = { status: "rejected", reason };
+        }
+      }
+    };
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(
+            SECURITY_LIMITS.bulkResolveConcurrency,
+            infoHashes.length,
+          ),
+        },
+        () => worker(),
       ),
     );
 
@@ -1750,6 +1914,9 @@ export class AggregatorService {
       if (result.status === "fulfilled") {
         resolved[infoHashes[i]] = result.value;
       } else {
+        if (isResolutionSecurityError(result.reason)) {
+          throw result.reason;
+        }
         // Fallback: raw magnet
         resolved[infoHashes[i]] = {
           url: `magnet:?xt=urn:btih:${infoHashes[i]}`,

@@ -1,7 +1,38 @@
 import { z } from "zod";
 
+const playbackUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(8_192)
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return (
+        protocol === "https:" || protocol === "http:" || protocol === "magnet:"
+      );
+    } catch {
+      return false;
+    }
+  }, "Playback URL must use a supported runtime protocol");
+
+const externalNavigationUrlSchema = z
+  .string()
+  .trim()
+  .max(8_192)
+  .refine((value) => {
+    try {
+      const parsed = new URL(value);
+      return (
+        parsed.protocol === "https:" && !parsed.username && !parsed.password
+      );
+    } catch {
+      return false;
+    }
+  }, "External URLs must use HTTPS without credentials");
+
 export const streamSchema = z.object({
-  url: z.string().url().optional(),
+  url: playbackUrlSchema.optional(),
   infoHash: z.string().optional(),
   fileIdx: z.number().int().nonnegative().optional(),
   fileSelectionHints: z
@@ -12,7 +43,7 @@ export const streamSchema = z.object({
     })
     .optional(),
   ytId: z.string().optional(),
-  externalUrl: z.string().url().optional(),
+  externalUrl: externalNavigationUrlSchema.optional(),
   title: z.string().optional(),
   name: z.string().optional(),
   type: z.string().optional(),

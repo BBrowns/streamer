@@ -8,15 +8,20 @@ import {
   InvalidSearchCursorError,
   MetadataProvidersUnavailableError,
 } from "./aggregator.service";
-import { RealDebridResolver } from "../debrid/adapters/real-debrid.resolver";
+import { realDebridService } from "../debrid/real-debrid.service";
 import { featureFlags } from "../feature-flag/feature-flag.service";
 import { prisma } from "../../prisma/client";
 import { resilienceRegistry } from "./resilience";
 import { logger } from "../../config/logger";
+import { SECURITY_LIMITS } from "@streamer/shared";
 
 // Mock dependencies
 vi.mock("axios");
-vi.mock("../debrid/adapters/real-debrid.resolver");
+vi.mock("../debrid/real-debrid.service", () => ({
+  realDebridService: {
+    getResolver: vi.fn(),
+  },
+}));
 vi.mock("../feature-flag/feature-flag.service");
 vi.mock("../../prisma/client", () => ({
   prisma: {
@@ -25,6 +30,14 @@ vi.mock("../../prisma/client", () => ({
 }));
 vi.mock("../../utils/security", () => ({
   validateSafeUrl: vi.fn().mockResolvedValue(undefined),
+  resolveSafeUrl: vi.fn().mockResolvedValue({
+    parsed: new URL("https://example.test"),
+    addresses: [{ address: "93.184.216.34", family: 4 }],
+  }),
+  createPinnedHttpAgents: vi.fn().mockReturnValue({
+    httpAgent: undefined,
+    httpsAgent: undefined,
+  }),
 }));
 vi.mock("../../config/logger", () => ({
   logger: {
@@ -2037,12 +2050,13 @@ describe("AggregatorService", () => {
         host: "rd",
         size: 100,
       };
-      vi.mocked(RealDebridResolver).mockImplementation(function (this: any) {
-        this.resolve = vi.fn().mockResolvedValue(mockResolved);
-        this.canResolve = vi.fn().mockReturnValue(true);
-        this.getAccountStatus = vi.fn();
-        return this;
+      vi.mocked(realDebridService.getResolver).mockResolvedValue({
+        resolve: vi.fn().mockResolvedValue(mockResolved),
       } as any);
+      vi.spyOn(service, "getStreamDiscovery").mockResolvedValue({
+        streams: [{ infoHash: mockStream.infoHash } as any],
+        status: "complete",
+      });
 
       const result = await service.resolveStream(
         mockStream.userId,
@@ -2089,12 +2103,13 @@ describe("AggregatorService", () => {
         "server-driven-ui": true,
       });
 
-      vi.mocked(RealDebridResolver).mockImplementation(function (this: any) {
-        this.resolve = vi.fn().mockResolvedValue(null);
-        this.canResolve = vi.fn().mockReturnValue(true);
-        this.getAccountStatus = vi.fn();
-        return this;
+      vi.mocked(realDebridService.getResolver).mockResolvedValue({
+        resolve: vi.fn().mockResolvedValue(null),
       } as any);
+      vi.spyOn(service, "getStreamDiscovery").mockResolvedValue({
+        streams: [{ infoHash: mockStream.infoHash } as any],
+        status: "complete",
+      });
 
       const result = await service.resolveStream(
         mockStream.userId,
@@ -2108,6 +2123,78 @@ describe("AggregatorService", () => {
         url: `magnet:?xt=urn:btih:${mockStream.infoHash}`,
         type: "magnet",
       });
+    });
+
+    it("rejects a hash that was not discovered for the user's title", async () => {
+      vi.mocked(featureFlags.getAll).mockReturnValue({
+        "real-debrid": true,
+        "torrent-engine": false,
+        "trakt-sync": false,
+        "ai-recommendations": false,
+        "continue-watching": true,
+        "server-driven-ui": true,
+      });
+      const resolve = vi.fn();
+      vi.mocked(realDebridService.getResolver).mockResolvedValue({
+        resolve,
+      } as any);
+      vi.spyOn(service, "getStreamDiscovery").mockResolvedValue({
+        streams: [{ infoHash: "different-hash" } as any],
+        status: "complete",
+      });
+
+      await expect(
+        service.resolveStream(
+          mockStream.userId,
+          mockStream.type,
+          mockStream.id,
+          mockStream.infoHash,
+          mockStream.requestId,
+        ),
+      ).rejects.toMatchObject({ code: "SOURCE_NOT_AUTHORIZED" });
+      expect(resolve).not.toHaveBeenCalled();
+    });
+
+    it("enforces the Real-Debrid resolution quota per user", async () => {
+      vi.mocked(featureFlags.getAll).mockReturnValue({
+        "real-debrid": true,
+        "torrent-engine": false,
+        "trakt-sync": false,
+        "ai-recommendations": false,
+        "continue-watching": true,
+        "server-driven-ui": true,
+      });
+      vi.mocked(realDebridService.getResolver).mockResolvedValue({
+        resolve: vi.fn().mockResolvedValue(null),
+      } as any);
+      vi.spyOn(service, "getStreamDiscovery").mockResolvedValue({
+        streams: [{ infoHash: mockStream.infoHash } as any],
+        status: "complete",
+      });
+
+      for (
+        let index = 0;
+        index < SECURITY_LIMITS.realDebridResolutionsPerMinute;
+        index += 1
+      ) {
+        await service.resolveStream(
+          mockStream.userId,
+          mockStream.type,
+          mockStream.id,
+          mockStream.infoHash,
+          mockStream.requestId,
+        );
+      }
+
+      await expect(
+        service.resolveStream(
+          mockStream.userId,
+          mockStream.type,
+          mockStream.id,
+          mockStream.infoHash,
+          mockStream.requestId,
+        ),
+      ).rejects.toMatchObject({ code: "REAL_DEBRID_QUOTA" });
     });
   });
 });

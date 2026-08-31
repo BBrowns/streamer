@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { AuthService } from "../auth.service.js";
-import { AppError } from "../../../middleware/error.middleware.js";
+import { hashOpaqueToken } from "../../../utils/token-hash.js";
 
 // Mock Prisma
 vi.mock("../../../prisma/client.js", () => ({
@@ -108,7 +108,7 @@ describe("Auth Resilience (Normalization & Reset)", () => {
       expect(prisma.passwordResetToken.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId: "u1",
-          token: result.resetToken,
+          token: hashOpaqueToken(result.resetToken),
         }),
       });
     });

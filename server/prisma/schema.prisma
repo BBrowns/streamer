@@ -21,6 +21,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   libraryItems         LibraryItem[]
   watchProgress        WatchProgress[]
+  realDebridToken      RealDebridToken?
   traktToken           TraktToken?
   traktSyncQueue       TraktSyncQueue[]
   sessions             ActiveSession[]
@@ -60,7 +61,7 @@ model ActiveSession {
 
 model PasswordResetToken {
   id        String   @id @default(uuid())
-  token     String   @unique
+  token     String   @unique // keyed digest; the opaque token is never persisted
   userId    String   @map("user_id")
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
@@ -72,7 +73,7 @@ model PasswordResetToken {
 
 model EmailVerificationToken {
   id        String   @id @default(uuid())
-  token     String   @unique
+  token     String   @unique // keyed digest; the opaque token is never persisted
   userId    String   @map("user_id")
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
@@ -84,15 +85,32 @@ model EmailVerificationToken {
 
 model RefreshToken {
   id        String    @id @default(uuid())
-  token     String    @unique
+  token     String    @unique // keyed digest; the opaque token is never persisted
   userId    String    @map("user_id")
+  sessionId String    @map("session_id")
   expiresAt DateTime  @map("expires_at")
   createdAt DateTime  @default(now()) @map("created_at")
   revokedAt DateTime? @map("revoked_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, sessionId])
   @@map("refresh_tokens")
+}
+
+model RealDebridToken {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique @map("user_id")
+  accessTokenCiphertext  String   @map("access_token_ciphertext")
+  refreshTokenCiphertext String   @map("refresh_token_ciphertext")
+  expiresAt              DateTime @map("expires_at")
+  keyVersion             Int      @default(1) @map("key_version")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("real_debrid_tokens")
 }
 
 model InstalledAddon {
@@ -152,11 +170,12 @@ model WatchProgress {
 // -- NEW MODEL: Trakt.tv Token Storage --
 
 model TraktToken {
-  id           String   @id @default(uuid())
-  userId       String   @unique @map("user_id")
-  accessToken  String   @map("access_token")
-  refreshToken String   @map("refresh_token")
-  expiresAt    DateTime @map("expires_at")
+  id                     String   @id @default(uuid())
+  userId                 String   @unique @map("user_id")
+  accessTokenCiphertext  String   @map("access_token_ciphertext")
+  refreshTokenCiphertext String   @map("refresh_token_ciphertext")
+  expiresAt              DateTime @map("expires_at")
+  keyVersion             Int      @default(1) @map("key_version")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   

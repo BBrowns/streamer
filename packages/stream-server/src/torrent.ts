@@ -1686,7 +1686,10 @@ export async function getClient(): Promise<any> {
       // Create the shared HTTP server (webtorrent v3 API)
       serverInstance = client.createServer();
       await new Promise<void>((resolve, reject) => {
-        serverInstance.server.listen(0, "0.0.0.0", () => {
+        // WebTorrent's raw file server is an internal implementation detail.
+        // LAN clients use the authenticated/signed gateway instead, so never
+        // expose this listener as an unauthenticated network service.
+        serverInstance.server.listen(0, "127.0.0.1", () => {
           const addr = serverInstance.server.address();
           if (addr && typeof addr !== "string") {
             serverPort = addr.port;

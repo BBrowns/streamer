@@ -351,6 +351,71 @@ components:
           format: date-time
       required: [id, userId, title, message, read, createdAt]
 
+    RealDebridStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        connected:
+          type: boolean
+        isPremium:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+      required: [configured, connected]
+
+    RealDebridDeviceFlow:
+      type: object
+      properties:
+        flowId:
+          type: string
+          format: uuid
+        userCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+        verificationUrl:
+          type: string
+          format: uri
+          pattern: '^https://'
+        expiresAt:
+          type: string
+          format: date-time
+        intervalSeconds:
+          type: integer
+          minimum: 1
+          maximum: 60
+      required: [flowId, userCode, verificationUrl, expiresAt, intervalSeconds]
+
+    RealDebridDevicePollResult:
+      oneOf:
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [pending]
+            retryAfterSeconds:
+              type: integer
+              minimum: 1
+              maximum: 60
+          required: [status, retryAfterSeconds]
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [expired]
+          required: [status]
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [connected]
+            expiresAt:
+              type: string
+              format: date-time
+          required: [status, expiresAt]
+
 paths:
   /health:
     get:
@@ -477,6 +542,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /api/integrations/real-debrid/status:
+    get:
+      tags: [Integrations]
+      summary: Get the current user's Real-Debrid connection status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Connection status without provider credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealDebridStatus'
+
+  /api/integrations/real-debrid/device:
+    post:
+      tags: [Integrations]
+      summary: Start a Real-Debrid device authorization flow
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Device authorization instructions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealDebridDeviceFlow'
+        '429':
+          description: Too many pending flows for this user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/integrations/real-debrid/device/{flowId}/poll:
+    post:
+      tags: [Integrations]
+      summary: Poll the current user's Real-Debrid device flow
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: flowId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Device flow state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealDebridDevicePollResult'
+        '404':
+          description: Flow does not belong to the current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/integrations/real-debrid:
+    delete:
+      tags: [Integrations]
+      summary: Disconnect the current user's Real-Debrid account
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Credentials deleted
 
   /api/addons:
     get:

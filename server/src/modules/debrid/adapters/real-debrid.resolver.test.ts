@@ -11,12 +11,10 @@ describe("RealDebridResolver", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    process.env.RD_API_TOKEN = "test-token";
-    resolver = new RealDebridResolver();
+    resolver = new RealDebridResolver("test-token");
   });
 
   it("should return false for canResolve if token is missing", () => {
-    delete process.env.RD_API_TOKEN;
     const noTokenResolver = new RealDebridResolver();
     expect(noTokenResolver.canResolve({ infoHash: "abc" } as any)).toBe(false);
   });

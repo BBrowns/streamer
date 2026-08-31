@@ -1,6 +1,9 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import { env } from "../../config/env.js";
-import { validateSafeUrl } from "../../utils/security.js";
+import {
+  createPinnedHttpAgents,
+  resolveSafeUrl,
+} from "../../utils/security.js";
 
 export type AddonFetchKind = "manifest" | "resource";
 export type AddonSourcePolicyCode =
@@ -82,7 +85,11 @@ function assertPayloadSize(
 
 async function assertSafeAddonUrl(url: string) {
   try {
-    await validateSafeUrl(url);
+    // Add-on manifests/resources historically support public HTTP endpoints.
+    // Keep that compatibility while still requiring DNS-pinned public targets;
+    // private targets remain blocked unless the explicit development opt-in is
+    // enabled by resolveSafeUrl.
+    return await resolveSafeUrl(url, { allowHttp: true });
   } catch (error) {
     throw new AddonSourcePolicyError(
       "unsafe-url",
@@ -104,7 +111,8 @@ export async function fetchSafeAddonJson(
     );
   }
 
-  await assertSafeAddonUrl(url);
+  const safeTarget = await assertSafeAddonUrl(url);
+  const pinnedAgents = createPinnedHttpAgents(safeTarget.addresses);
 
   const maxBytes = resolveResponseLimit(options);
   let response;
@@ -112,10 +120,14 @@ export async function fetchSafeAddonJson(
     response = await axios.get(url, {
       timeout: options.timeoutMs ?? env.addonTimeoutMs,
       signal: options.signal,
+      ...options.axiosOptions,
+      // These policy fields must be last: callers cannot disable redirect
+      // validation or replace the DNS-pinned socket lookup.
+      httpAgent: pinnedAgents.httpAgent,
+      httpsAgent: pinnedAgents.httpsAgent,
       maxRedirects: 0,
       maxContentLength: maxBytes,
       maxBodyLength: maxBytes,
-      ...options.axiosOptions,
       validateStatus: (status) =>
         (status >= 200 && status < 300) || isRedirectStatus(status),
     });
@@ -163,7 +175,8 @@ export async function fetchSafeAddonText(
     );
   }
 
-  await assertSafeAddonUrl(url);
+  const safeTarget = await assertSafeAddonUrl(url);
+  const pinnedAgents = createPinnedHttpAgents(safeTarget.addresses);
   const requestedLimit =
     options.maxResponseBytes === undefined ||
     !Number.isSafeInteger(options.maxResponseBytes)
@@ -181,10 +194,12 @@ export async function fetchSafeAddonText(
       signal: options.signal,
       responseType: "text",
       transformResponse: [(value) => value],
+      ...options.axiosOptions,
+      httpAgent: pinnedAgents.httpAgent,
+      httpsAgent: pinnedAgents.httpsAgent,
       maxRedirects: 0,
       maxContentLength: maxBytes,
       maxBodyLength: maxBytes,
-      ...options.axiosOptions,
       validateStatus: (status) =>
         (status >= 200 && status < 300) || isRedirectStatus(status),
     });

@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { ZodError } from "zod";
 import { logger } from "../config/logger.js";
 import { captureServerException } from "../services/sentry.service.js";
+import { safeRequestPath } from "../utils/redaction.js";
 
 /**
  * A short retry window gives a local database (for example Docker Desktop
@@ -208,7 +209,7 @@ export function errorHandler(err: Error, c: Context) {
   captureServerException(err, {
     requestId,
     method: c.req.method,
-    url: c.req.url,
+    path: safeRequestPath(c.req.url),
   });
 
   return c.json(

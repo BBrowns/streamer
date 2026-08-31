@@ -26,7 +26,7 @@ export const loginRequestSchema = z.object({
 });
 
 export const refreshRequestSchema = z.object({
-  refreshToken: z.string().min(1),
+  refreshToken: z.string().min(1).max(4096),
 });
 
 export const forgotPasswordSchema = z.object({
@@ -34,7 +34,7 @@ export const forgotPasswordSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Reset token is required"),
+  token: z.string().min(1, "Reset token is required").max(4096),
   newPassword: passwordSchema,
 });
 
@@ -48,7 +48,7 @@ export const updateProfileSchema = z.object({
 });
 
 export const verifyEmailSchema = z.object({
-  token: z.string().min(1, "Verification token is required"),
+  token: z.string().min(1, "Verification token is required").max(4096),
 });
 
 export const resendVerificationSchema = z.object({

@@ -72,6 +72,8 @@ Edit `server/.env`:
 ```env
 DATABASE_URL=postgresql://streamer:streamer_dev@127.0.0.1:5432/streamer_db?schema=public
 JWT_SECRET=<a-long-random-secret-minimum-32-chars>
+# Production also requires dedicated TOKEN_HASH_KEY, CREDENTIAL_ENCRYPTION_KEY,
+# and a Redis URL; development falls back to JWT_SECRET and may omit Redis.
 ```
 
 ### 3. Start the local database
@@ -333,22 +335,26 @@ the default is intentionally quiet so failures remain readable.
 
 ## Environment Variables
 
-| Variable                           | Default                 | Required | Description                                                                               |
-| ---------------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                     | —                       | ✅       | PostgreSQL connection string                                                              |
-| `JWT_SECRET`                       | —                       | ✅       | HS256 signing secret (≥ 32 chars)                                                         |
-| `JWT_ACCESS_EXPIRY`                | `15m`                   |          | Access token lifetime                                                                     |
-| `JWT_REFRESH_EXPIRY`               | `7d`                    |          | Refresh token lifetime                                                                    |
-| `PORT`                             | `3001`                  |          | API server port                                                                           |
-| `NODE_ENV`                         | `development`           |          | Set to `test` to disable rate limiting                                                    |
-| `CORS_ORIGINS`                     | `http://localhost:8081` |          | Comma-separated allowed origins                                                           |
-| `ADDON_TIMEOUT_MS`                 | `5000`                  |          | Per-add-on HTTP request timeout                                                           |
-| `ADDON_ALLOW_PRIVATE_NETWORKS`     | `false`                 |          | Dev/test opt-in for local/private add-ons; keep off in production                         |
-| `STREAMER_TORRENT_CACHE_DIR`       | platform cache dir      |          | App-owned WebTorrent cache root; macOS defaults to `~/Library/Caches/Streamer/webtorrent` |
-| `STREAMER_TORRENT_CACHE_MAX_BYTES` | `8589934592`            |          | Max WebTorrent cache size before oldest inactive entries are evicted                      |
-| `STREAMER_TORRENT_CACHE_TTL_MS`    | `86400000`              |          | Stale inactive WebTorrent cache TTL before startup/lifecycle cleanup                      |
-| `STREAMER_REMUX_CACHE_MAX_BYTES`   | `5368709120`            |          | Max seekable MP4 remux cache size                                                         |
-| `STREAMER_REMUX_CACHE_TTL_MS`      | `1800000`               |          | Stale remux cache TTL                                                                     |
+| Variable                           | Default                         | Required   | Description                                                                               |
+| ---------------------------------- | ------------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                     | —                               | ✅         | PostgreSQL connection string                                                              |
+| `JWT_SECRET`                       | —                               | ✅         | HS256 signing secret (≥ 32 chars)                                                         |
+| `TOKEN_HASH_KEY`                   | `JWT_SECRET` outside production | production | Dedicated HMAC key for opaque auth/recovery token digests                                 |
+| `CREDENTIAL_ENCRYPTION_KEY`        | `JWT_SECRET` outside production | production | Dedicated key for encrypted integration credentials                                       |
+| `JWT_ACCESS_EXPIRY`                | `15m`                           |            | Access token lifetime                                                                     |
+| `JWT_REFRESH_EXPIRY`               | `7d`                            |            | Refresh token lifetime                                                                    |
+| `PORT`                             | `3001`                          |            | API server port                                                                           |
+| `NODE_ENV`                         | `development`                   |            | Set to `test` to disable rate limiting                                                    |
+| `CORS_ORIGINS`                     | `http://localhost:8081`         |            | Comma-separated allowed origins                                                           |
+| `REDIS_URL`                        | —                               | production | Redis for session revocation, shared throttling, and cross-device state                   |
+| `RD_CLIENT_ID`, `RD_CLIENT_SECRET` | —                               |            | Optional Real-Debrid device authorization client credentials                              |
+| `ADDON_TIMEOUT_MS`                 | `5000`                          |            | Per-add-on HTTP request timeout                                                           |
+| `ADDON_ALLOW_PRIVATE_NETWORKS`     | `false`                         |            | Dev/test opt-in for local/private add-ons; keep off in production                         |
+| `STREAMER_TORRENT_CACHE_DIR`       | platform cache dir              |            | App-owned WebTorrent cache root; macOS defaults to `~/Library/Caches/Streamer/webtorrent` |
+| `STREAMER_TORRENT_CACHE_MAX_BYTES` | `8589934592`                    |            | Max WebTorrent cache size before oldest inactive entries are evicted                      |
+| `STREAMER_TORRENT_CACHE_TTL_MS`    | `86400000`                      |            | Stale inactive WebTorrent cache TTL before startup/lifecycle cleanup                      |
+| `STREAMER_REMUX_CACHE_MAX_BYTES`   | `5368709120`                    |            | Max seekable MP4 remux cache size                                                         |
+| `STREAMER_REMUX_CACHE_TTL_MS`      | `1800000`                       |            | Stale remux cache TTL                                                                     |
 
 ### Torrent Cache Hygiene
 

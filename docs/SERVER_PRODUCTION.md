@@ -13,6 +13,9 @@ At minimum, set:
 NODE_ENV=production
 DATABASE_URL=postgresql://user:password@database:5432/streamer
 JWT_SECRET=<at-least-32-random-characters>
+TOKEN_HASH_KEY=<dedicated-high-entropy-token-hash-key>
+CREDENTIAL_ENCRYPTION_KEY=<dedicated-high-entropy-credential-encryption-key>
+REDIS_URL=rediss://redis-user:password@redis.example.com:6379
 SERVER_INSTANCE_MODE=single
 CORS_ORIGINS=https://app.example.com
 APP_URL_WEB=https://app.example.com
@@ -31,17 +34,16 @@ invalid numeric limits. A loopback HTTP CORS origin remains permitted for the
 packaged desktop renderer when it is explicitly listed.
 
 Do not log the environment or print connection URLs. Store database, JWT,
-Redis, SMTP, Trakt, Real-Debrid, and Sentry credentials in the deployment
-platform's secret manager.
+token-hash, credential-encryption, Redis, SMTP, Trakt, Real-Debrid, and Sentry
+credentials in the deployment platform's secret manager.
 
 ## Single Versus Multiple Instances
 
-`SERVER_INSTANCE_MODE=single` permits the built-in bounded in-memory rate-limit
-store when `REDIS_URL` is absent. It is appropriate only when all traffic is
-routed to one API process. Cross-device presence/session features that use
-Redis remain limited when Redis is absent. `RATE_LIMIT_GLOBAL_MAX` defaults to
-1000 requests per 15 minutes per hashed client address; auth and catalog routes
-also apply their narrower limits.
+`SERVER_INSTANCE_MODE=single` still means one API process for rate-limit
+accounting, but production Redis is required for immediate session revocation,
+refresh-token replay response, and shared security state. `RATE_LIMIT_GLOBAL_MAX`
+defaults to 1000 requests per 15 minutes per hashed client address; auth and
+catalog routes also apply their narrower limits.
 
 `SERVER_INSTANCE_MODE=multi` requires `REDIS_URL` during configuration and a
 working Redis connection during startup. Rate limiting fails closed with a
@@ -108,11 +110,17 @@ The process verifies PostgreSQL and, in multi-instance mode, Redis before it
 opens the listener. Do not run destructive development schema commands in a
 production release.
 
-The migration history starts with `20260101000000_init` and then applies the
-two additive watch-progress migrations. A database created before this history
-was introduced (for example with `prisma db push`) must be inspected and
-backed up once, then have only the baseline marked as applied before the first
-deployment:
+The migration history starts with `20260101000000_init`, then applies the two
+additive watch-progress migrations and the security-hardening migration
+`20260831150000_security_hardening`. The security migration adds per-user
+Real-Debrid credentials, session IDs, and encrypted Trakt storage. It also
+invalidates existing refresh, password-reset, and email-verification tokens and
+removes existing plaintext Trakt credentials; users must sign in again and
+reconnect Trakt after deployment.
+
+A database created before this history was introduced (for example with
+`prisma db push`) must be inspected and backed up once, then have only the
+baseline marked as applied before the first deployment:
 
 ```bash
 npx prisma migrate resolve --applied 20260101000000_init \

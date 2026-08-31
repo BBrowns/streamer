@@ -14,7 +14,12 @@ import {
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import type { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
-import type { ActionPreflightReason, Stream } from "@streamer/shared";
+import {
+  validateExternalNavigationUrl,
+  SECURITY_LIMITS,
+  type ActionPreflightReason,
+  type Stream,
+} from "@streamer/shared";
 import { api } from "./api";
 import type {
   DesktopDownloadJob,
@@ -711,8 +716,12 @@ export class DownloadService {
         options.playbackSession,
       );
       if (Platform.OS === "web") {
+        const safeExternalUrl = validateExternalNavigationUrl(
+          stream.externalUrl,
+        );
+        if (!safeExternalUrl) return;
         const link = document.createElement("a");
-        link.href = stream.externalUrl;
+        link.href = safeExternalUrl;
         link.target = "_blank";
         link.rel = "noreferrer";
         document.body.appendChild(link);
@@ -772,6 +781,19 @@ export class DownloadService {
         console.error(
           "[DownloadService] Could not resolve playback URI for download",
         );
+      return;
+    }
+
+    if (
+      options.expectedMediaBytes !== undefined &&
+      options.expectedMediaBytes > SECURITY_LIMITS.directDownloadBytes
+    ) {
+      this.markTaskFailed(
+        id,
+        "Download exceeds the maximum supported size.",
+        "Download exceeds the maximum supported size.",
+        options.playbackSession,
+      );
       return;
     }
 
@@ -874,8 +896,14 @@ export class DownloadService {
 
       // Native Browser Fallback
       try {
+        const safeDownloadUrl = validateExternalNavigationUrl(
+          stream.externalUrl || downloadUrl,
+        );
+        if (!safeDownloadUrl) {
+          throw new Error("Browser download source must use HTTPS");
+        }
         const link = document.createElement("a");
-        link.href = stream.externalUrl || downloadUrl;
+        link.href = safeDownloadUrl;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
@@ -921,9 +949,23 @@ export class DownloadService {
 
     // 3. Setup callback with periodic state saving
     let lastSavedProgress = 0;
+    let downloadResumable: FileSystem.DownloadResumable | undefined;
+    let sizeLimitError: Error | undefined;
     const callback = async (
       downloadProgress: FileSystem.DownloadProgressData,
     ) => {
+      if (
+        downloadProgress.totalBytesWritten >
+          SECURITY_LIMITS.directDownloadBytes ||
+        downloadProgress.totalBytesExpectedToWrite >
+          SECURITY_LIMITS.directDownloadBytes
+      ) {
+        sizeLimitError = new Error(
+          "Download exceeds the maximum supported size.",
+        );
+        await downloadResumable?.cancelAsync().catch(() => undefined);
+        return;
+      }
       const progress =
         downloadProgress.totalBytesWritten /
         downloadProgress.totalBytesExpectedToWrite;
@@ -957,7 +999,7 @@ export class DownloadService {
     };
 
     // 4. Create and start resumable download
-    const downloadResumable = FileSystem.createDownloadResumable(
+    downloadResumable = FileSystem.createDownloadResumable(
       downloadUrl,
       localUri,
       {},
@@ -968,12 +1010,57 @@ export class DownloadService {
 
     try {
       const result = await downloadResumable.downloadAsync();
+      if (sizeLimitError) {
+        if (result?.uri) {
+          await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(
+            () => undefined,
+          );
+        }
+        this.markTaskFailed(
+          id,
+          sizeLimitError,
+          "Download exceeds the maximum supported size.",
+          options.playbackSession,
+        );
+        return;
+      }
       if (result) {
         const headers = (result as any).headers || {};
         const contentLength = getReliableContentLength(
           headers,
           Number((result as any).status) || undefined,
         );
+        const savedInspection = await this.inspectLocalUri(result.uri);
+        if (
+          contentLength !== undefined &&
+          contentLength > SECURITY_LIMITS.directDownloadBytes
+        ) {
+          await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(
+            () => undefined,
+          );
+          this.markTaskFailed(
+            id,
+            "Download exceeds the maximum supported size.",
+            "Download exceeds the maximum supported size.",
+            options.playbackSession,
+          );
+          return;
+        }
+        if (
+          savedInspection.exists &&
+          savedInspection.sizeBytes > SECURITY_LIMITS.directDownloadBytes
+        ) {
+          await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(
+            () => undefined,
+          );
+          this.markTaskFailed(
+            id,
+            "Download exceeds the maximum supported size.",
+            "Download exceeds the maximum supported size.",
+            options.playbackSession,
+          );
+          return;
+        }
         setDownloadMetadata(id, {
           contentType: headers["content-type"] || headers["Content-Type"],
           expectedMediaBytes: contentLength,
@@ -1311,11 +1398,28 @@ export class DownloadService {
     }
 
     let resumable = this.downloadResumables[id];
+    let resumeSizeLimitError: Error | undefined;
+    let resumableFileUri = task.localUri;
 
     if (!resumable && task.resumeData && task.localUri) {
       const callback = async (
         downloadProgress: FileSystem.DownloadProgressData,
       ) => {
+        if (
+          downloadProgress.totalBytesWritten >
+            SECURITY_LIMITS.directDownloadBytes ||
+          downloadProgress.totalBytesExpectedToWrite >
+            SECURITY_LIMITS.directDownloadBytes
+        ) {
+          resumeSizeLimitError = new Error(
+            "Download exceeds the maximum supported size.",
+          );
+          await this.downloadResumables[id]
+            ?.cancelAsync()
+            .catch(() => undefined);
+          return;
+        }
+
         const progress =
           downloadProgress.totalBytesWritten /
           downloadProgress.totalBytesExpectedToWrite;
@@ -1346,6 +1450,10 @@ export class DownloadService {
 
       try {
         const savable = JSON.parse(task.resumeData);
+        resumableFileUri =
+          typeof savable.fileUri === "string"
+            ? savable.fileUri
+            : resumableFileUri;
         resumable = new FileSystem.DownloadResumable(
           savable.url,
           savable.fileUri,
@@ -1366,8 +1474,49 @@ export class DownloadService {
     if (resumable) {
       setStatus(id, "Downloading");
       this.setSessionStatus(task.playbackSession, "downloading");
+
+      const existingInspection = await this.inspectLocalUri(resumableFileUri);
+      if (
+        task.expectedMediaBytes > SECURITY_LIMITS.directDownloadBytes ||
+        existingInspection.sizeBytes > SECURITY_LIMITS.directDownloadBytes
+      ) {
+        if (resumableFileUri) {
+          await FileSystem.deleteAsync(resumableFileUri, {
+            idempotent: true,
+          }).catch(() => undefined);
+        }
+        const message = this.markTaskFailed(
+          id,
+          "Download exceeds the maximum supported size.",
+          "Download exceeds the maximum supported size.",
+          task.playbackSession,
+        );
+        return { ok: false, error: message };
+      }
+
       try {
         const result = await resumable.resumeAsync();
+        const resultUri = result?.uri || resumableFileUri;
+        if (
+          resumeSizeLimitError ||
+          (resultUri &&
+            (await this.inspectLocalUri(resultUri)).sizeBytes >
+              SECURITY_LIMITS.directDownloadBytes)
+        ) {
+          if (resultUri) {
+            await FileSystem.deleteAsync(resultUri, {
+              idempotent: true,
+            }).catch(() => undefined);
+          }
+          const message = this.markTaskFailed(
+            id,
+            resumeSizeLimitError ||
+              "Download exceeds the maximum supported size.",
+            "Download exceeds the maximum supported size.",
+            task.playbackSession,
+          );
+          return { ok: false, error: message };
+        }
         if (result) {
           setDownloadMetadata(id, {
             contentType:
@@ -1380,6 +1529,21 @@ export class DownloadService {
         }
         return { ok: true };
       } catch (error) {
+        if (resumeSizeLimitError) {
+          if (resumableFileUri) {
+            await FileSystem.deleteAsync(resumableFileUri, {
+              idempotent: true,
+            }).catch(() => undefined);
+          }
+          const message = this.markTaskFailed(
+            id,
+            resumeSizeLimitError,
+            "Download exceeds the maximum supported size.",
+            task.playbackSession,
+          );
+          return { ok: false, error: message };
+        }
+
         // 1. Detect expiration or source errors that signal we need a new URL
         const rawMessage =
           error instanceof Error ? error.message : String(error);

@@ -5,6 +5,11 @@ const validProductionEnvironment = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://streamer:secret@db:5432/streamer",
   JWT_SECRET: "a-secure-production-secret-with-32-chars",
+  TOKEN_HASH_KEY:
+    "a-dedicated-token-hash-key-with-sufficient-entropy-1234567890",
+  CREDENTIAL_ENCRYPTION_KEY:
+    "a-dedicated-credential-encryption-key-with-sufficient-entropy-1234567890",
+  REDIS_URL: "rediss://cache.streamer.example:6379",
   CORS_ORIGINS: "https://app.streamer.example",
   SERVER_INSTANCE_MODE: "single",
   EMAIL_DELIVERY_MODE: "smtp",
@@ -42,7 +47,7 @@ describe("server production environment validation", () => {
 
     expect(parsed.NODE_ENV).toBe("production");
     expect(parsed.SERVER_INSTANCE_MODE).toBe("single");
-    expect(parsed.REDIS_URL).toBeUndefined();
+    expect(parsed.REDIS_URL).toMatch(/^rediss:/);
     expect(parsed.EMAIL_DELIVERY_MODE).toBe("smtp");
   });
 

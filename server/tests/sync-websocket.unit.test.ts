@@ -11,7 +11,10 @@ import {
 } from "vitest";
 
 vi.mock("../src/modules/auth/session.service.js", () => ({
-  SessionService: { heartbeat: vi.fn() },
+  SessionService: {
+    heartbeat: vi.fn(),
+    checkAccessToken: vi.fn().mockResolvedValue("active"),
+  },
 }));
 
 let createApp: (typeof import("../src/app.js"))["createApp"];
@@ -30,7 +33,7 @@ const TEST_DEVICE_ID = "desktop-browser-test";
 
 function accessToken() {
   return jwt.sign(
-    { userId: "sync-user", email: "sync@example.com" },
+    { userId: "sync-user", email: "sync@example.com", sid: "sync-session" },
     env.jwtSecret,
     { expiresIn: "15m" },
   );
