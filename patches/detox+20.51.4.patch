@@ -1,0 +1,12 @@
+diff --git a/node_modules/detox/src/artifacts/utils/temporaryPath.js b/node_modules/detox/src/artifacts/utils/temporaryPath.js
+index faca7ff..ef8339f 100644
+--- a/node_modules/detox/src/artifacts/utils/temporaryPath.js
++++ b/node_modules/detox/src/artifacts/utils/temporaryPath.js
+@@ -11,3 +11,6 @@
+ const globSync = glob.sync;
+-const globAsync = promisify(glob);
++const globAsync =
++  typeof glob === 'function'
++    ? promisify(glob)
++    : (pattern, options) => glob.glob(pattern, options);
+ const getRoot = _.once(() => path.dirname(tempfile()));

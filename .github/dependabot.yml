@@ -18,35 +18,28 @@ updates:
       - dependency-name: typescript
         versions:
           - ">=7.0.0"
-      # Expo SDK 57 remains pinned to the validated React Native 0.86.2 line.
+      # Expo SDK 57 remains pinned to the validated React Native 0.86.x line.
       - dependency-name: react-native
         versions:
-          - ">=0.86.3"
+          - ">=0.87.0"
       # Expo SDK 57 also pins the React Native tooling packages to 0.86.x;
       # Metro 0.87 pulls image-size advisories that are not safe to allow.
       - dependency-name: "@react-native/metro-config"
         versions:
-          - ">=0.86.3"
+          - ">=0.87.0"
       - dependency-name: "@react-native/jest-preset"
         versions:
-          - ">=0.86.3"
-      # Reanimated, safe-area-context, and worklets are pinned to the
-      # versions validated with the Expo SDK 57 native contract. Upgrade
-      # these together in a focused native migration with device QA.
-      - dependency-name: react-native-reanimated
-        versions:
-          - ">=4.5.4"
-      - dependency-name: react-native-safe-area-context
-        versions:
-          - ">=5.9.1"
+          - ">=0.87.0"
+      # Expo SDK 57's expo-modules-core peer contract ends at Worklets 0.10.x;
+      # review the Worklets/Reanimated pair with the next Expo SDK migration.
       - dependency-name: react-native-worklets
         versions:
-          - ">=0.12.0"
-      # Gesture Handler 3 requires a separate native migration; keep the
-      # Expo SDK 57 override on the validated 2.32.x line.
-      - dependency-name: react-native-gesture-handler
+          - ">=0.11.0"
+      # Reanimated 4.6 requires Worklets 0.12.x, outside Expo SDK 57's native
+      # adapter contract. Keep the latest compatible 4.5.x patch line.
+      - dependency-name: react-native-reanimated
         versions:
-          - ">=3.0.0"
+          - ">=4.6.0"
       # Jest 30 is not compatible with the current Expo/RN Jest preset; keep
       # the tested Jest 29 line until the owning toolchain is migrated.
       - dependency-name: jest

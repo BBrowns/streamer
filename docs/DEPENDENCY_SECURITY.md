@@ -121,6 +121,14 @@ first. Owners: platform maintainers.
 
 ## Compatibility Overrides
 
+Detox `20.51.4` still calls the callback-style `glob` export, while the
+workspace keeps `glob@13` for the patched transitive toolchain. The scoped
+`patches/detox+20.51.4.patch` adapts Detox's artifact globber to the Promise API
+without downgrading the shared `glob` override. The dependency compatibility
+test verifies that Detox loads; remove the patch when Detox publishes support
+for the current glob API (or when the workspace no longer needs the glob
+override). Owner: mobile/platform maintainers.
+
 `castv2-client@1.2.0` is the current published release but depends on the old
 `castv2` package, which declares `protobufjs@^6.8.8`. The repository forces
 `protobufjs@7.6.5` to remove known parser vulnerabilities. A stream-server smoke
@@ -178,9 +186,10 @@ Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
 pins `tailwindcss@3.4.19`; keep the compatibility test in place and review the
 NativeWind migration before accepting a Tailwind 4 major bump.
 
-The mobile app intentionally tracks React `19.2.8` and the compatible
-React Native `4.5.x` native-module line ahead of Expo SDK 57's bundled patch
-versions. The corresponding `expo.install.exclude` entries are reviewed
+The mobile app intentionally tracks React `19.2.8`, React Native `0.86.3`,
+Reanimated `4.5.5`, Worklets `0.10.4`, and safe-area-context `5.9.1` ahead of
+Expo SDK 57's bundled patch versions. The corresponding `expo.install.exclude`
+entries are reviewed
 exceptions, not permission to skip native validation; revisit them with the
 next Expo SDK upgrade and rebuild native projects after changing these modules.
 AsyncStorage `3.1.1` is also intentionally excluded because Expo SDK 57 still
@@ -190,14 +199,31 @@ mobile suite are covered, while native-device validation remains deferred.
 repository tracks its tested release above the SDK 57 bundled version.
 
 The current native/tooling migration keeps the Expo SDK 57 contract on React
-`19.2.8` and React Native `0.86.2`. React Native Testing Library `14.0.1`
+`19.2.8` and React Native `0.86.3`. The root and mobile workspaces both pin
+React Native and `@react-native/jest-preset` to `0.86.3` so npm's hoisted Expo
+peer dependencies cannot resolve an older RN patch line. React Native Testing
+Library `14.0.1`
 therefore uses `test-renderer@1.2.0`, the React 19-compatible replacement for
-the deprecated direct `react-test-renderer` dependency. `jest-expo@57` may
-still retain a nested React test renderer internally; that does not justify a
-Jest 30 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
+the deprecated direct `react-test-renderer` dependency. `jest-expo@57.0.5`
+aligns with the React Native `0.86.3` Jest preset, but may still retain a
+nested React test renderer internally; that does not justify a Jest 30
+migration. AsyncStorage 3 also changes its Jest mock entrypoint to
 `@react-native-async-storage/async-storage/jest`. The tested native upgrades
-are safe-area-context `5.9.0`, worklets `0.11.4`, and Sentry React Native
-`8.23.x`; keep them aligned with Expo before changing the SDK major.
+are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.9.1`, and
+Sentry React Native `8.24.x`; keep them aligned with Expo before changing the
+SDK major. `expo-modules-core@57` accepts Worklets through the 0.10.x line, so
+Reanimated 4.6/Worklets 0.12 must wait for the next Expo SDK migration. These
+modules require the New Architecture and a fresh native rebuild; CI and
+simulator evidence are part of this migration's merge gate.
+
+Android instrumentation builds also load the Expo aggregate `:expo` library.
+Expo SDK 57 can contribute the same native runtime libraries from
+`expo-updates` and React Native, so
+`apps/mobile/plugins/withAndroidLibraryNativePackaging.js` adds Gradle
+`pickFirsts` to every Android library module during Expo prebuild. This keeps
+`assembleAndroidTest` deterministic without excluding the native runtime;
+remove the plugin after an Expo upgrade confirms that the duplicate library
+inputs no longer occur.
 
 React Native Gesture Handler follows the same native-module boundary. The
 mobile app and root override must stay on the same exact major/minor line; a
@@ -211,7 +237,7 @@ builds before merging a future RNGH, React Native, or Expo major upgrade.
 
 The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
 retains its nested adapter until an upstream compatible release exists. The
-desktop app uses Electron `43.4.0` and direct `@electron/notarize` `3.1.1`;
+desktop app uses Electron `44.0.0` and direct `@electron/notarize` `3.1.1`;
 electron-builder may retain its own nested notarize 2.x contract. These nested
 paths are compatibility boundaries, not reasons to force global overrides.
 
