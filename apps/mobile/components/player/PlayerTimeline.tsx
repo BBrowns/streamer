@@ -8,6 +8,12 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useTranslation } from "react-i18next";
+import {
+  GestureDetector,
+  usePanGesture,
+  type PanGestureActiveEvent,
+  type PanGestureEvent,
+} from "react-native-gesture-handler";
 import { getWebFocusStyle, uiRadii, uiSpacing } from "../ui/designSystem";
 import {
   TimelineController,
@@ -61,6 +67,12 @@ function pointerOffset(event: TimelinePointerEvent) {
   if (typeof locationX === "number") return locationX;
   const offsetX = event.nativeEvent?.offsetX;
   return typeof offsetX === "number" ? offsetX : null;
+}
+
+function gestureOffset(
+  event: PanGestureEvent | PanGestureActiveEvent,
+): number | null {
+  return Number.isFinite(event.x) ? event.x : null;
 }
 
 export function PlayerTimeline({
@@ -182,9 +194,8 @@ export function PlayerTimeline({
       });
   const timelineActive = isScrubbing || isFocused || hoverPosition !== null;
 
-  const begin = (event: TimelinePointerEvent) => {
-    const offset = pointerOffset(event);
-    if (!canSeek || offset === null || width <= 0) return;
+  const begin = (offset: number) => {
+    if (!canSeek || width <= 0) return;
     const position = controllerRef.current?.beginDrag({
       offset,
       width,
@@ -195,9 +206,8 @@ export function PlayerTimeline({
     if (typeof position === "number") requestThumbnail(position);
   };
 
-  const move = (event: TimelinePointerEvent) => {
-    const offset = pointerOffset(event);
-    if (!canSeek || offset === null || width <= 0) return;
+  const move = (offset: number) => {
+    if (!canSeek || width <= 0) return;
     const position = controllerRef.current?.updateDrag({
       offset,
       width,
@@ -214,11 +224,28 @@ export function PlayerTimeline({
     controllerRef.current?.cancelDrag();
   };
 
+  const panGesture = usePanGesture({
+    enabled: canSeek,
+    minDistance: 0,
+    runOnJS: true,
+    shouldCancelWhenOutside: false,
+    testID: "player-timeline-gesture",
+    onBegin: (event) => {
+      const offset = gestureOffset(event);
+      if (offset !== null) begin(offset);
+    },
+    onUpdate: (event) => {
+      const offset = gestureOffset(event);
+      if (offset !== null) move(offset);
+    },
+    onFinalize: (event) => {
+      if (event.canceled) cancel();
+      else end();
+    },
+  });
+
   const handlePointerMove = (event: TimelinePointerEvent) => {
-    if (isScrubbing) {
-      move(event);
-      return;
-    }
+    if (isScrubbing) return;
     const offset = pointerOffset(event);
     if (!canSeek || offset === null || width <= 0) return;
     const position = clampTimelinePosition(
@@ -277,85 +304,83 @@ export function PlayerTimeline({
 
       <View style={styles.row}>
         <Text style={styles.timeText}>{currentLabel}</Text>
-        <View
-          testID="player-progress-slider"
-          style={[
-            styles.slider,
-            Platform.OS === "web" && isFocused && getWebFocusStyle(focusColor),
-          ]}
-          focusable={canSeek}
-          accessibilityRole="adjustable"
-          accessibilityLabel={progressLabel}
-          accessibilityState={{ disabled: !canSeek }}
-          accessibilityValue={{
-            min: 0,
-            max: safeDuration,
-            now: safeCurrentTime,
-            text: canSeek
-              ? `${currentLabel} of ${durationLabel}`
-              : unavailableMessage,
-          }}
-          accessibilityActions={
-            canSeek
-              ? [
-                  { name: "decrement", label: "Seek back 10 seconds" },
-                  { name: "increment", label: "Seek forward 10 seconds" },
-                ]
-              : []
-          }
-          onAccessibilityAction={(event) => {
-            if (!canSeek) return;
-            onSeekBy?.(
-              event.nativeEvent.actionName === "increment"
-                ? SEEK_STEP_SECONDS
-                : -SEEK_STEP_SECONDS,
-            );
-          }}
-          onLayout={handleLayout}
-          onStartShouldSetResponder={() => canSeek}
-          onMoveShouldSetResponder={() => canSeek}
-          onResponderGrant={begin}
-          onResponderMove={move}
-          onResponderRelease={end}
-          onResponderTerminate={cancel}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          {...({
-            tabIndex: canSeek ? 0 : -1,
-            ...(Platform.OS === "web" ? { "aria-disabled": !canSeek } : {}),
-            onKeyDown: handleKeyDown,
-            onPointerMove: handlePointerMove,
-            onPointerLeave: () => {
-              setHoverPosition(null);
-              setThumbnailSource(null);
-              thumbnailRequestRef.current += 1;
-            },
-          } as any)}
-        >
-          <View style={[styles.track, timelineActive && styles.trackActive]}>
-            <View
-              testID="player-timeline-buffered"
-              style={[styles.buffered, { width: `${bufferedPercent}%` }]}
-            />
-            <View
-              testID="player-timeline-watched"
-              style={[
-                styles.watched,
-                { width: `${watchedPercent}%`, backgroundColor: accent },
-              ]}
-            />
-            {canSeek ? (
+        <GestureDetector gesture={panGesture}>
+          <View
+            testID="player-progress-slider"
+            style={[
+              styles.slider,
+              Platform.OS === "web" &&
+                isFocused &&
+                getWebFocusStyle(focusColor),
+            ]}
+            focusable={canSeek}
+            accessibilityRole="adjustable"
+            accessibilityLabel={progressLabel}
+            accessibilityState={{ disabled: !canSeek }}
+            accessibilityValue={{
+              min: 0,
+              max: safeDuration,
+              now: safeCurrentTime,
+              text: canSeek
+                ? `${currentLabel} of ${durationLabel}`
+                : unavailableMessage,
+            }}
+            accessibilityActions={
+              canSeek
+                ? [
+                    { name: "decrement", label: "Seek back 10 seconds" },
+                    { name: "increment", label: "Seek forward 10 seconds" },
+                  ]
+                : []
+            }
+            onAccessibilityAction={(event) => {
+              if (!canSeek) return;
+              onSeekBy?.(
+                event.nativeEvent.actionName === "increment"
+                  ? SEEK_STEP_SECONDS
+                  : -SEEK_STEP_SECONDS,
+              );
+            }}
+            onLayout={handleLayout}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            {...({
+              tabIndex: canSeek ? 0 : -1,
+              ...(Platform.OS === "web" ? { "aria-disabled": !canSeek } : {}),
+              onKeyDown: handleKeyDown,
+              onPointerMove: handlePointerMove,
+              onPointerLeave: () => {
+                setHoverPosition(null);
+                setThumbnailSource(null);
+                thumbnailRequestRef.current += 1;
+              },
+            } as any)}
+          >
+            <View style={[styles.track, timelineActive && styles.trackActive]}>
               <View
-                testID="player-timeline-playhead"
+                testID="player-timeline-buffered"
+                style={[styles.buffered, { width: `${bufferedPercent}%` }]}
+              />
+              <View
+                testID="player-timeline-watched"
                 style={[
-                  styles.playhead,
-                  timelineActive && styles.playheadActive,
-                  { left: `${watchedPercent}%` },
+                  styles.watched,
+                  { width: `${watchedPercent}%`, backgroundColor: accent },
                 ]}
               />
-            ) : null}
+              {canSeek ? (
+                <View
+                  testID="player-timeline-playhead"
+                  style={[
+                    styles.playhead,
+                    timelineActive && styles.playheadActive,
+                    { left: `${watchedPercent}%` },
+                  ]}
+                />
+              ) : null}
+            </View>
           </View>
-        </View>
+        </GestureDetector>
         <Text style={styles.timeText}>{durationLabel}</Text>
       </View>
 

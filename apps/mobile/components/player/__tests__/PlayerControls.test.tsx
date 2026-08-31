@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
 import { Platform, StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { getVolumeFromKeyboard, PlayerControls } from "../PlayerControls";
 import { playerChrome } from "../playerChrome";
 
@@ -32,6 +33,10 @@ jest.mock("../../../hooks/useReducedMotion", () => ({
   useReducedMotion: () => false,
 }));
 
+function renderControls(element: React.ReactElement) {
+  return render(<GestureHandlerRootView>{element}</GestureHandlerRootView>);
+}
+
 describe("PlayerControls", () => {
   const createPlayer = () =>
     ({
@@ -43,7 +48,7 @@ describe("PlayerControls", () => {
     }) as any;
 
   it("does not render while hidden", async () => {
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={createPlayer()}
         currentTime={60}
@@ -60,7 +65,7 @@ describe("PlayerControls", () => {
   it("exposes play/pause and skip controls", async () => {
     const player = createPlayer();
     const onPlayPause = jest.fn();
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={player}
         currentTime={60}
@@ -82,7 +87,7 @@ describe("PlayerControls", () => {
 
   it("supports accessibility seek actions on the progress control", async () => {
     const player = createPlayer();
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -118,7 +123,7 @@ describe("PlayerControls", () => {
     const stopPropagation = jest.fn();
 
     try {
-      const screen = await render(
+      const screen = await renderControls(
         <PlayerControls
           player={createPlayer()}
           currentTime={30}
@@ -185,7 +190,7 @@ describe("PlayerControls", () => {
     const stopPropagation = jest.fn();
 
     try {
-      const screen = await render(
+      const screen = await renderControls(
         <PlayerControls
           player={createPlayer()}
           currentTime={30}
@@ -236,7 +241,7 @@ describe("PlayerControls", () => {
   it("truthfully explains seek availability for progressive fMP4 streams", async () => {
     const player = createPlayer();
     const onSeekBy = jest.fn();
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -276,7 +281,7 @@ describe("PlayerControls", () => {
 
   it("reports background seek preparation and enables controls after handoff", async () => {
     const player = createPlayer();
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -301,15 +306,17 @@ describe("PlayerControls", () => {
     ).toBeTruthy();
 
     await screen.rerender(
-      <PlayerControls
-        player={player}
-        currentTime={30}
-        duration={120}
-        isVisible
-        isPlaying
-        onPlayPause={jest.fn()}
-        capabilities={{ canSeek: true, isRemux: true }}
-      />,
+      <GestureHandlerRootView>
+        <PlayerControls
+          player={player}
+          currentTime={30}
+          duration={120}
+          isVisible
+          isPlaying
+          onPlayPause={jest.fn()}
+          capabilities={{ canSeek: true, isRemux: true }}
+        />
+      </GestureHandlerRootView>,
     );
 
     await fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
@@ -320,7 +327,7 @@ describe("PlayerControls", () => {
   it("routes seek controls through the provided guarded seek callback", async () => {
     const player = createPlayer();
     const onSeekBy = jest.fn();
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -348,7 +355,7 @@ describe("PlayerControls", () => {
     const onOpenCast = jest.fn();
     const onRetry = jest.fn();
 
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={player}
         currentTime={30}
@@ -394,7 +401,7 @@ describe("PlayerControls", () => {
   });
 
   it("keeps secondary player controls cinema-dark independently of app theme", async () => {
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={createPlayer()}
         currentTime={30}
@@ -416,7 +423,7 @@ describe("PlayerControls", () => {
 
   it("shows segment skipping only when verified segment evidence is active", async () => {
     const onSkipSegment = jest.fn();
-    const screen = await render(
+    const screen = await renderControls(
       <PlayerControls
         player={createPlayer()}
         currentTime={30}
@@ -434,15 +441,17 @@ describe("PlayerControls", () => {
     expect(onSkipSegment).toHaveBeenCalledWith(84);
 
     await screen.rerender(
-      <PlayerControls
-        player={createPlayer()}
-        currentTime={90}
-        duration={120}
-        isVisible
-        isPlaying
-        onPlayPause={jest.fn()}
-        capabilities={{ canSeek: true }}
-      />,
+      <GestureHandlerRootView>
+        <PlayerControls
+          player={createPlayer()}
+          currentTime={90}
+          duration={120}
+          isVisible
+          isPlaying
+          onPlayPause={jest.fn()}
+          capabilities={{ canSeek: true }}
+        />
+      </GestureHandlerRootView>,
     );
     expect(screen.queryByLabelText("Skip intro")).toBeNull();
   });
