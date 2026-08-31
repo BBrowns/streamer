@@ -167,8 +167,18 @@ export function SourceChoiceList({
     maxChoices !== undefined && !showAll
       ? getSourceChoicePreview(choices, maxChoices)
       : choices;
-  const renderChoice = ({ item }: { item: SourceChoice }) => (
-    <ChoiceRow choice={item} onPress={() => onSelect(plan, item.candidateId)} />
+  const renderChoice = ({
+    item,
+    index,
+  }: {
+    item: SourceChoice;
+    index: number;
+  }) => (
+    <ChoiceRow
+      choice={item}
+      isBestAvailable={index === 0}
+      onPress={() => onSelect(plan, item.candidateId)}
+    />
   );
 
   return (
@@ -183,10 +193,11 @@ export function SourceChoiceList({
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        visibleChoices.map((choice) => (
+        visibleChoices.map((choice, index) => (
           <ChoiceRow
             key={choice.candidateId}
             choice={choice}
+            isBestAvailable={index === 0}
             onPress={() => onSelect(plan, choice.candidateId)}
           />
         ))
@@ -221,9 +232,11 @@ export function SourceChoiceList({
 
 function ChoiceRow({
   choice,
+  isBestAvailable = false,
   onPress,
 }: {
   choice: SourceChoice;
+  isBestAvailable?: boolean;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
@@ -260,7 +273,17 @@ function ChoiceRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={[quality, size, language, compatibility]
+      accessibilityLabel={[
+        isBestAvailable
+          ? t("detail.sources.bestAvailableLabel", {
+              defaultValue: "Best available",
+            })
+          : null,
+        quality,
+        size,
+        language,
+        compatibility,
+      ]
         .filter(Boolean)
         .join(", ")}
       style={({ pressed, hovered, focused }: any) => [
@@ -277,6 +300,13 @@ function ChoiceRow({
         </Text>
       </View>
       <View style={styles.choiceCopy}>
+        {isBestAvailable ? (
+          <Text style={[styles.bestLabel, { color: colors.textSecondary }]}>
+            {t("detail.sources.bestAvailableLabel", {
+              defaultValue: "Best available",
+            })}
+          </Text>
+        ) : null}
         <Text style={[styles.choiceTitle, { color: colors.text }]}>
           {[size, language].filter(Boolean).join(" · ")}
         </Text>
@@ -310,6 +340,7 @@ const styles = StyleSheet.create({
   },
   qualityText: { ...uiTypography.control },
   choiceCopy: { flex: 1, minWidth: 0 },
+  bestLabel: { ...uiTypography.caption, fontWeight: "600" },
   choiceTitle: { ...uiTypography.label },
   choiceMeta: { ...uiTypography.caption, marginTop: 2 },
   stateRow: {

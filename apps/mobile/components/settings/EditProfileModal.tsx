@@ -3,7 +3,6 @@ import {
   Text,
   Pressable,
   TextInput,
-  ActivityIndicator,
   Alert,
   StyleSheet,
   KeyboardAvoidingView,
@@ -16,7 +15,8 @@ import { api } from "../../services/api";
 import { AxiosError } from "axios";
 import { useAuthStore } from "../../stores/authStore";
 import { useTheme } from "../../hooks/useTheme";
-import { getWebFocusStyle } from "../ui/designSystem";
+import { AppButton } from "../ui/AppButton";
+import { getWebFocusStyle, uiRadii } from "../ui/designSystem";
 import { AdaptiveOverlay } from "../ui/AdaptiveOverlay";
 
 interface EditProfileModalProps {
@@ -127,28 +127,17 @@ export function EditProfileModal({
         accessibilityLabel={t("settings.accountModals.profile.displayName")}
         autoComplete="name"
       />
-      <Pressable
-        style={({ focused, pressed }: any) => [
-          styles.modalButton,
-          { backgroundColor: colors.primary },
-          profileLoading && styles.opacity50,
-          pressed && styles.pressed,
-          Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
-        ]}
+      <AppButton
+        label={t("settings.accountModals.profile.save")}
+        variant="primary"
+        size="large"
+        fullWidth
+        style={styles.modalButton}
         onPress={handleUpdateProfile}
         disabled={profileLoading}
-        accessibilityRole="button"
+        loading={profileLoading}
         accessibilityLabel={t("settings.accountModals.profile.saveA11y")}
-        accessibilityState={{ disabled: profileLoading }}
-      >
-        {profileLoading ? (
-          <ActivityIndicator color={colors.onPrimary} />
-        ) : (
-          <Text style={[styles.modalButtonText, { color: colors.onPrimary }]}>
-            {t("settings.accountModals.profile.save")}
-          </Text>
-        )}
-      </Pressable>
+      />
     </View>
   );
 
@@ -208,7 +197,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   modalInput: {
-    borderRadius: 14,
+    borderRadius: uiRadii.control,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
@@ -216,13 +205,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   modalButton: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
     marginTop: 12,
-    minHeight: 52,
   },
-  modalButtonText: { fontWeight: "600", fontSize: 16 },
-  opacity50: { opacity: 0.5 },
   pressed: { opacity: 0.72 },
 });

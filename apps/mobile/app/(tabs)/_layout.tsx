@@ -151,6 +151,7 @@ export default function TabLayout() {
         headerTintColor: colors.text,
         headerTitleStyle: {
           ...uiTypography.title,
+          fontWeight: "600",
         },
         // DesktopLayout owns the horizontal topbar outside the compact shell.
         headerShown: isCompact,

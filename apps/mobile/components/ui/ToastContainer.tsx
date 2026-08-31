@@ -16,7 +16,7 @@ import {
 import { useUiMotion } from "../../hooks/useUiMotion";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "react-i18next";
-import { getWebFocusStyle } from "./designSystem";
+import { getWebFocusStyle, uiTypography } from "./designSystem";
 
 // ─── Individual Toast ─────────────────────────────────────────────────────────
 function ToastItem({ toast }: { toast: Toast }) {
@@ -194,9 +194,7 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
+    ...uiTypography.control,
   },
   action: {
     minHeight: 44,
@@ -204,8 +202,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   actionText: {
-    fontSize: 14,
-    fontWeight: "800",
+    ...uiTypography.control,
   },
   dismiss: {
     width: 44,

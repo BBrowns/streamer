@@ -77,7 +77,7 @@ function CatalogRowInner({
             Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
           ]}
         >
-          <Text style={[styles.retryText, { color: colors.tint }]}>
+          <Text style={[styles.retryText, { color: colors.info }]}>
             {t("common.retry")}
           </Text>
         </Pressable>

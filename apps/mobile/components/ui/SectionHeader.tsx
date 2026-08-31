@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, gap: uiSpacing.xxs },
   eyebrow: { ...uiTypography.sectionLabel, textTransform: "uppercase" },
-  title: { ...uiTypography.title, fontSize: 20, lineHeight: 26 },
+  title: { ...uiTypography.utilitySectionTitle },
   action: {
     minHeight: 44,
     flexDirection: "row",

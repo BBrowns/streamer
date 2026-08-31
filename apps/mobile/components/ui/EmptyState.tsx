@@ -8,6 +8,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 import { AppButton } from "./AppButton";
+import { uiTypography } from "./designSystem";
 
 interface EmptyStateProps {
   testID?: string;
@@ -161,28 +162,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "900",
+    ...uiTypography.utilitySectionTitle,
     textAlign: "center",
     marginBottom: 12,
-    letterSpacing: 0,
   },
   titleLarge: {
-    fontSize: 36,
-    letterSpacing: 0,
+    ...uiTypography.utilityTitle,
     marginBottom: 16,
   },
   titleSmall: {
-    fontSize: 16,
+    ...uiTypography.label,
     marginBottom: 8,
   },
   description: {
-    fontSize: 15,
+    ...uiTypography.body,
     textAlign: "center",
-    lineHeight: 22,
     marginBottom: 28,
     maxWidth: 320,
-    fontWeight: "600",
   },
   descriptionLarge: {
     fontSize: 18,

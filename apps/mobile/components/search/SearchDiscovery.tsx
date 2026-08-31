@@ -181,7 +181,7 @@ export function SearchDiscovery({
 const styles = StyleSheet.create({
   container: { gap: uiSpacing.xxl, paddingBottom: uiSpacing.xxl },
   intro: { paddingHorizontal: uiSpacing.xxl, gap: uiSpacing.sm },
-  title: { ...uiTypography.title, fontSize: 26, lineHeight: 32 },
+  title: { ...uiTypography.utilityTitle, fontSize: 26, lineHeight: 32 },
   subtitle: { ...uiTypography.body, maxWidth: 540 },
   typeControl: { marginTop: uiSpacing.md, gap: uiSpacing.xs },
   typeLabel: { ...uiTypography.label },

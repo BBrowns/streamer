@@ -1,8 +1,6 @@
 import {
   ActivityIndicator,
   FlatList,
-  Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -28,13 +26,13 @@ import { invalidatePlaybackPlanCache } from "../../services/playback/PlaybackPla
 import { hapticImpactLight, hapticWarning } from "../../lib/haptics";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { AppButton } from "../../components/ui/AppButton";
+import { AppIconButton } from "../../components/ui/AppIconButton";
 import { AdaptiveRoutePage } from "../../components/ui/AdaptiveRoutePage";
 import { AdaptiveOverlay } from "../../components/ui/AdaptiveOverlay";
 import { InlineNotice } from "../../components/ui/InlineNotice";
 import { Surface } from "../../components/ui/Surface";
 import { TextField } from "../../components/ui/TextField";
 import {
-  getWebFocusStyle,
   uiSpacing,
   uiTouchTarget,
   uiTypography,
@@ -312,28 +310,16 @@ export default function AddonsScreen() {
                           </Text>
                         ) : null}
                       </View>
-                      <Pressable
-                        accessibilityRole="button"
+                      <AppIconButton
+                        icon="trash-outline"
                         accessibilityLabel={t(
                           "addons.installed.confirmRemove",
                           { name: item.manifest.name },
                         )}
-                        accessibilityState={{
-                          disabled: isRemoving,
-                          busy: isRemoving,
-                        }}
                         disabled={isRemoving}
-                        style={({ hovered, pressed, focused }: any) => [
-                          styles.removeButton,
-                          {
-                            backgroundColor:
-                              colors.error + (hovered ? "20" : "12"),
-                            opacity: pressed ? 0.72 : isRemoving ? 0.48 : 1,
-                          },
-                          Platform.OS === "web" &&
-                            focused &&
-                            getWebFocusStyle(colors.focus),
-                        ]}
+                        loading={isRemoving}
+                        variant="danger"
+                        style={styles.removeButton}
                         onPress={() => {
                           hapticWarning();
                           setPendingRemoval({
@@ -341,20 +327,7 @@ export default function AddonsScreen() {
                             name: item.manifest.name,
                           });
                         }}
-                      >
-                        {isRemoving ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={colors.error}
-                          />
-                        ) : (
-                          <Ionicons
-                            name="trash-outline"
-                            size={19}
-                            color={colors.error}
-                          />
-                        )}
-                      </Pressable>
+                      />
                     </View>
                     {removalError?.addonId === item.id && (
                       <InlineNotice
@@ -528,10 +501,6 @@ const styles = StyleSheet.create({
     marginTop: uiSpacing.sm,
   },
   removeButton: {
-    width: uiTouchTarget,
-    height: uiTouchTarget,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
+    alignSelf: "center",
   },
 });

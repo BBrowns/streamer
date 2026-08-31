@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   plansTitle: {
-    ...uiTypography.title,
+    ...uiTypography.utilitySectionTitle,
     fontSize: 18,
     lineHeight: 24,
     paddingHorizontal: uiSpacing.lg,

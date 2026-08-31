@@ -41,7 +41,7 @@ describe("AdaptiveRoutePage", () => {
     expect(screen.getByTestId("adaptive-route-page-header")).toBeTruthy();
   });
 
-  it("keeps supporting copy and actions while navigation owns the title", async () => {
+  it("keeps the editorial title visible when the native header is hidden", async () => {
     mockUseWindowClass.mockReturnValue({
       windowClass: "medium",
       isCompact: false,
@@ -61,7 +61,7 @@ describe("AdaptiveRoutePage", () => {
       </AdaptiveRoutePage>,
     );
 
-    expect(screen.queryByText("Notifications")).toBeNull();
+    expect(screen.getByText("Notifications")).toBeTruthy();
     expect(screen.getByText("1 unread notification")).toBeTruthy();
     expect(screen.getByText("Mark all read")).toBeTruthy();
   });

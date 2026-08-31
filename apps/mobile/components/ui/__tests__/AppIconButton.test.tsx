@@ -57,4 +57,23 @@ describe("AppIconButton", () => {
     expect(button.props.tabIndex).toBe(-1);
     expect(button.props.onKeyDown).toBeUndefined();
   });
+
+  it("treats a loading icon action as unavailable to interaction", async () => {
+    const screen = await render(
+      <AppIconButton
+        icon="trash-outline"
+        accessibilityLabel="Remove"
+        onPress={() => {}}
+        loading
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Remove" });
+    expect(button.props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
+    });
+    expect(button.props.focusable).toBe(false);
+    expect(button.props.tabIndex).toBe(-1);
+  });
 });

@@ -37,7 +37,7 @@ export function LegalDocumentScreen({
     >
       {sections.map((section) => (
         <View key={section.title} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.tint }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {section.title}
           </Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     marginBottom: uiSpacing.xxl,
   },
   sectionTitle: {
-    ...uiTypography.title,
+    ...uiTypography.utilitySectionTitle,
     fontSize: 18,
     lineHeight: 24,
     marginBottom: uiSpacing.sm,

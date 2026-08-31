@@ -51,6 +51,6 @@ const styles = StyleSheet.create({
   },
   label: {
     ...uiTypography.caption,
-    fontWeight: "800",
+    fontWeight: "600",
   },
 });

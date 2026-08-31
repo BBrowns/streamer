@@ -27,6 +27,7 @@ import {
 import { EmptyState } from "../../components/ui/EmptyState";
 import { FilterChipBar } from "../../components/ui/FilterChipBar";
 import { AppButton } from "../../components/ui/AppButton";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Surface } from "../../components/ui/Surface";
 import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass } from "../../hooks/useWindowClass";
@@ -416,6 +417,18 @@ export default function DownloadsScreen() {
           compact && styles.emptyContentCompact,
         ]}
       >
+        <View style={styles.emptyHeader}>
+          <PageHeader
+            title={t("downloads.title", { defaultValue: "Downloads" })}
+            description={t("downloads.header.subtitle", {
+              defaultValue:
+                "Your queue and verified offline files on this device",
+            })}
+            compact={compact}
+            titleVisibility={compact ? "navigation-owned" : "visible"}
+            style={styles.emptyPageHeader}
+          />
+        </View>
         <View style={styles.emptyHero}>
           <EmptyState
             testID="downloads-empty-state"
@@ -704,6 +717,15 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",
+  },
+  emptyHeader: {
+    width: "100%",
+    maxWidth: 880,
+    alignSelf: "center",
+  },
+  emptyPageHeader: {
+    paddingTop: 0,
+    marginBottom: 0,
   },
   emptySmartStatus: {
     width: "100%",

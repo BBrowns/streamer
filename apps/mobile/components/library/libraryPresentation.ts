@@ -1,11 +1,7 @@
 import type { LibraryItem, WatchProgress } from "@streamer/shared";
 import type { WindowClass } from "../../hooks/useWindowClass";
-import {
-  isTaskOfflinePlayable,
-  type DownloadTask,
-} from "../../stores/downloadStore";
 
-export type LibraryFilter = "all" | "movie" | "series" | "offline" | "history";
+export type LibraryFilter = "all" | "movie" | "series" | "history";
 
 export type LibraryCardItem = Pick<
   LibraryItem,
@@ -16,9 +12,8 @@ export type LibraryGridItem =
   | {
       key: string;
       selectionKey: string;
-      kind: "library" | "offline";
+      kind: "library";
       item: LibraryCardItem;
-      downloadTaskId?: string;
     }
   | {
       key: string;
@@ -30,7 +25,6 @@ export type LibraryGridItem =
 
 export function buildLibraryGridItems(
   items: LibraryItem[] | undefined,
-  tasks: Record<string, DownloadTask>,
   filter: LibraryFilter,
   history: WatchProgress[] = [],
 ): LibraryGridItem[] {
@@ -48,24 +42,6 @@ export function buildLibraryGridItems(
         poster: entry.poster ?? null,
       },
     }));
-  }
-
-  if (filter === "offline") {
-    return Object.values(tasks)
-      .filter(isTaskOfflinePlayable)
-      .map((task) => ({
-        key: `download:${task.id}`,
-        selectionKey: `download:${task.id}`,
-        kind: "offline" as const,
-        downloadTaskId: task.id,
-        item: {
-          id: task.id,
-          itemId: task.mediaInfo.itemId,
-          type: task.mediaInfo.type,
-          title: task.mediaInfo.title,
-          poster: task.mediaInfo.poster ?? null,
-        },
-      }));
   }
 
   return (items ?? [])
@@ -89,7 +65,15 @@ export function canStartLibrarySelection(
   filter: LibraryFilter,
   itemCount: number,
 ) {
-  return filter !== "offline" && filter !== "history" && itemCount > 0;
+  return filter !== "history" && itemCount > 0;
+}
+
+/** History is a secondary Library view, but remains addressable by deep link. */
+export function resolveLibraryView(value?: string | string[]): LibraryFilter {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  if (normalized === "history") return "history";
+  if (normalized === "movie" || normalized === "series") return normalized;
+  return "all";
 }
 
 function clamp(value: number, minimum: number, maximum: number) {

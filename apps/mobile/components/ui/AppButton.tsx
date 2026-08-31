@@ -166,7 +166,7 @@ export function AppButton({
 const styles = StyleSheet.create({
   button: {
     minHeight: uiTouchTarget,
-    borderRadius: uiRadii.control,
+    borderRadius: uiRadii.button,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     minHeight: uiTouchTarget,
     paddingHorizontal: uiSpacing.md,
     paddingVertical: uiSpacing.sm,
-    borderRadius: uiRadii.control,
+    borderRadius: uiRadii.button,
   },
   medium: {
     paddingHorizontal: uiSpacing.lg,

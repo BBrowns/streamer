@@ -556,7 +556,7 @@ export function DesktopCastModal({
         ? colors.warning
         : state.status === "ready" || state.status === "connected"
           ? colors.success
-          : colors.tint;
+          : colors.info;
   const statusBusy =
     state.status === "discovering" ||
     state.status === "preparing" ||
@@ -623,14 +623,14 @@ export function DesktopCastModal({
         defaultValue: "Cast",
       })}
       testID="cast-adaptive-overlay"
-      contentStyle={[styles.container, { backgroundColor: colors.card }]}
+      contentStyle={styles.container}
     >
       <View style={styles.header}>
         <View style={styles.headerTextContainer}>
           <MaterialIcons
             name="cast"
             size={24}
-            color={colors.tint}
+            color={colors.textSecondary}
             style={styles.headerIcon}
           />
           <View>
@@ -765,8 +765,8 @@ export function DesktopCastModal({
                       backgroundColor: colors.surfaceSubtle,
                     },
                   isActiveDevice && {
-                    backgroundColor: colors.tint,
-                    borderColor: colors.tint,
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
                   },
                   pressed && !deviceDisabled && styles.pressed,
                   deviceDisabled && !isActiveDevice && styles.deviceDisabled,
@@ -781,14 +781,18 @@ export function DesktopCastModal({
                   <MaterialIcons
                     name={iconName}
                     size={26}
-                    color={isActiveDevice ? colors.onTint : colors.tint}
+                    color={
+                      isActiveDevice ? colors.onPrimary : colors.textSecondary
+                    }
                   />
                   <View style={styles.deviceTextCol}>
                     <Text
                       style={[
                         styles.deviceName,
                         {
-                          color: isActiveDevice ? colors.onTint : colors.text,
+                          color: isActiveDevice
+                            ? colors.onPrimary
+                            : colors.text,
                         },
                       ]}
                     >
@@ -799,7 +803,7 @@ export function DesktopCastModal({
                         styles.deviceType,
                         {
                           color: isActiveDevice
-                            ? colors.onTint
+                            ? colors.onPrimary
                             : colors.textSecondary,
                         },
                       ]}
@@ -818,9 +822,13 @@ export function DesktopCastModal({
                   </View>
                 </View>
                 {isCasting && !isConnected ? (
-                  <ActivityIndicator size="small" color={colors.onTint} />
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
                 ) : isConnected ? (
-                  <MaterialIcons name="check" size={24} color={colors.onTint} />
+                  <MaterialIcons
+                    name="check"
+                    size={24}
+                    color={colors.onPrimary}
+                  />
                 ) : (
                   <MaterialIcons
                     name="chevron-right"
@@ -859,7 +867,7 @@ const styles = StyleSheet.create({
     marginRight: uiSpacing.sm + 2,
   },
   title: {
-    ...uiTypography.title,
+    ...uiTypography.utilitySectionTitle,
   },
   subtitle: {
     ...uiTypography.label,

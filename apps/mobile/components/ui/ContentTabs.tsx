@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   labelSelected: {
-    fontWeight: "700",
+    fontWeight: "600",
   },
   indicator: {
     position: "absolute",

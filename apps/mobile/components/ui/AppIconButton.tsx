@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   StyleProp,
@@ -17,6 +18,7 @@ type AppIconButtonProps = {
   onPress: () => void;
   variant?: "default" | "ghost" | "danger";
   disabled?: boolean;
+  loading?: boolean;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 };
@@ -28,6 +30,7 @@ export function AppIconButton({
   onPress,
   variant = "default",
   disabled = false,
+  loading = false,
   testID,
   style,
 }: AppIconButtonProps) {
@@ -36,28 +39,29 @@ export function AppIconButton({
   const { isKeyboardFocused, webPressableProps } =
     useWebPressableActivation(activate);
   const foreground = variant === "danger" ? colors.error : colors.text;
-  const interactionProps = disabled ? {} : webPressableProps;
+  const inactive = disabled || loading;
+  const interactionProps = inactive ? {} : webPressableProps;
 
   return (
     <Pressable
       {...interactionProps}
       testID={testID}
       onPress={activate}
-      disabled={disabled}
-      focusable={!disabled}
-      {...(disabled ? { tabIndex: -1 } : {})}
+      disabled={inactive}
+      focusable={!inactive}
+      {...(inactive ? { tabIndex: -1 } : {})}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled: inactive, busy: loading }}
       style={({ hovered, pressed }: any) => [
         styles.button,
         variant === "ghost" && styles.ghost,
-        disabled && styles.disabled,
+        inactive && styles.disabled,
         Platform.OS === "web" &&
           hovered &&
-          !disabled && { backgroundColor: colors.stateHover },
+          !inactive && { backgroundColor: colors.stateHover },
         pressed &&
-          !disabled && {
+          !inactive && {
             backgroundColor: colors.statePressed,
             opacity: 0.78,
           },
@@ -67,7 +71,11 @@ export function AppIconButton({
         style,
       ]}
     >
-      <Ionicons name={icon} size={20} color={foreground} />
+      {loading ? (
+        <ActivityIndicator size="small" color={foreground} />
+      ) : (
+        <Ionicons name={icon} size={20} color={foreground} />
+      )}
     </Pressable>
   );
 }

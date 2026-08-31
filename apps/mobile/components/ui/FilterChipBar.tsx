@@ -15,6 +15,7 @@ import {
   uiRadii,
   uiSpacing,
   uiTouchTarget,
+  uiTypography,
 } from "./designSystem";
 
 export interface FilterChipOption<T extends string | null = string> {
@@ -38,7 +39,7 @@ export function FilterChipBar<T extends string | null = string>({
   containerStyle,
   accessibilityLabel = "Filters",
 }: FilterChipBarProps<T>) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const isWeb = Platform.OS === "web";
   const { duration } = useUiMotion();
   const feedbackDuration = duration("feedback");
@@ -69,19 +70,17 @@ export function FilterChipBar<T extends string | null = string>({
                 {
                   backgroundColor: isActive
                     ? colors.stateSelected
-                    : isDark
-                      ? "rgba(255,255,255,0.06)"
-                      : "rgba(0,0,0,0.05)",
-                  borderColor: isActive ? colors.borderStrong : colors.border,
+                    : "transparent",
+                  borderColor: isActive
+                    ? colors.borderStrong
+                    : colors.borderSubtle,
                 },
                 isWeb &&
                   hovered &&
                   !isActive && {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.12)"
-                      : "rgba(0,0,0,0.1)",
+                    backgroundColor: colors.stateHover,
                   },
-                pressed && { opacity: 0.8 },
+                pressed && { backgroundColor: colors.statePressed },
                 isWeb && focused && getWebFocusStyle(colors.focus),
                 isWeb &&
                   ({
@@ -130,11 +129,8 @@ const styles = StyleSheet.create({
     cursor: Platform.OS === "web" ? "pointer" : undefined,
   } as any,
   chipText: {
-    fontSize: 13,
-    fontWeight: "700",
+    ...uiTypography.label,
     textAlign: "center",
   },
-  chipTextActive: {
-    fontWeight: "800",
-  },
+  chipTextActive: {},
 });

@@ -93,7 +93,7 @@ describe("MoreSourcesPanel", () => {
     await fireEvent.press(screen.getByLabelText("Show more sources"));
 
     expect(mockUseSourceChoicePlan).toHaveBeenCalled();
-    expect(screen.getAllByText("Best available · 3 sources")).toHaveLength(2);
+    expect(screen.getByText("Best available · 3 sources")).toBeTruthy();
     expect(screen.getByText("Consumer source choices")).toBeTruthy();
     expect(screen.getByText("Technical disclosure")).toBeTruthy();
     expect(screen.getByLabelText("Hide more sources")).toBeTruthy();
