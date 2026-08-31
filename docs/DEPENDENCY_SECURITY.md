@@ -199,6 +199,16 @@ Jest 30 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
 are safe-area-context `5.9.0`, worklets `0.11.4`, and Sentry React Native
 `8.23.x`; keep them aligned with Expo before changing the SDK major.
 
+React Native Gesture Handler follows the same native-module boundary. The
+mobile app and root override must stay on the same exact major/minor line; a
+Dependabot bump is incomplete until `package.json`, the root override, and
+`package-lock.json` agree. The current RNGH 3 migration uses the hooks API
+(`usePanGesture`/`GestureDetector`) and keeps the player timeline's keyboard,
+accessibility, and web pointer contracts intact. Keep
+`GestureHandlerRootView` around gesture consumers in native and Jest renders,
+enable the RNGH Jest setup, and run the mobile suite plus iOS/Android smoke
+builds before merging a future RNGH, React Native, or Expo major upgrade.
+
 The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
 retains its nested adapter until an upstream compatible release exists. The
 desktop app uses Electron `43.4.0` and direct `@electron/notarize` `3.1.1`;

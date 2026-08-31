@@ -1,36 +1,47 @@
 import React from "react";
-import { fireEvent, render } from "@testing-library/react-native";
-import { PlayerTimeline } from "../PlayerTimeline";
+import { act, fireEvent, render } from "@testing-library/react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  createGestureController,
+  getByGestureTestId,
+} from "react-native-gesture-handler/jest-utils";
+import { PlayerTimeline, type PlayerTimelineProps } from "../PlayerTimeline";
+
+function renderTimeline(props: PlayerTimelineProps) {
+  return render(
+    <GestureHandlerRootView>
+      <PlayerTimeline {...props} />
+    </GestureHandlerRootView>,
+  );
+}
 
 describe("PlayerTimeline", () => {
   it("previews continuously while dragging and commits once on release", async () => {
     const onPreviewSeek = jest.fn();
     const onSeekTo = jest.fn();
     const onScrubbingChange = jest.fn();
-    const screen = await render(
-      <PlayerTimeline
-        currentTime={20}
-        duration={100}
-        bufferedPosition={50}
-        isPlaying
-        canSeek
-        onPreviewSeek={onPreviewSeek}
-        onSeekTo={onSeekTo}
-        onScrubbingChange={onScrubbingChange}
-      />,
-    );
+    const screen = await renderTimeline({
+      currentTime: 20,
+      duration: 100,
+      bufferedPosition: 50,
+      isPlaying: true,
+      canSeek: true,
+      onPreviewSeek,
+      onSeekTo,
+      onScrubbingChange,
+    });
     const slider = screen.getByTestId("player-progress-slider");
 
     await fireEvent(slider, "layout", {
       nativeEvent: { layout: { width: 200, height: 24, x: 0, y: 0 } },
     });
-    await fireEvent(slider, "responderGrant", {
-      nativeEvent: { locationX: 40 },
-      persist: jest.fn(),
-    });
-    await fireEvent(slider, "responderMove", {
-      nativeEvent: { locationX: 120 },
-      persist: jest.fn(),
+    const gesture = createGestureController(
+      getByGestureTestId("player-timeline-gesture"),
+    );
+    await act(async () => {
+      gesture.begin({ x: 40, y: 0 });
+      gesture.activate({ x: 40, y: 0 });
+      gesture.update({ x: 120, y: 0 });
     });
 
     expect(screen.getByText("1:00")).toBeTruthy();
@@ -41,9 +52,8 @@ describe("PlayerTimeline", () => {
       shouldResume: true,
     });
 
-    await fireEvent(slider, "responderRelease", {
-      nativeEvent: { locationX: 120 },
-      persist: jest.fn(),
+    await act(async () => {
+      gesture.end({ x: 120, y: 0 });
     });
 
     expect(onSeekTo).toHaveBeenCalledTimes(1);
@@ -54,38 +64,33 @@ describe("PlayerTimeline", () => {
     });
   });
 
-  it("ends scrubbing without seeking when the responder is cancelled", async () => {
+  it("ends scrubbing without seeking when the gesture is cancelled", async () => {
     const onPreviewSeek = jest.fn();
     const onSeekTo = jest.fn();
     const onScrubbingChange = jest.fn();
-    const screen = await render(
-      <PlayerTimeline
-        currentTime={20}
-        duration={100}
-        bufferedPosition={50}
-        isPlaying
-        canSeek
-        onPreviewSeek={onPreviewSeek}
-        onSeekTo={onSeekTo}
-        onScrubbingChange={onScrubbingChange}
-      />,
-    );
+    const screen = await renderTimeline({
+      currentTime: 20,
+      duration: 100,
+      bufferedPosition: 50,
+      isPlaying: true,
+      canSeek: true,
+      onPreviewSeek,
+      onSeekTo,
+      onScrubbingChange,
+    });
     const slider = screen.getByTestId("player-progress-slider");
 
     await fireEvent(slider, "layout", {
       nativeEvent: { layout: { width: 200, height: 24, x: 0, y: 0 } },
     });
-    await fireEvent(slider, "responderGrant", {
-      nativeEvent: { locationX: 40 },
-      persist: jest.fn(),
-    });
-    await fireEvent(slider, "responderMove", {
-      nativeEvent: { locationX: 120 },
-      persist: jest.fn(),
-    });
-    await fireEvent(slider, "responderTerminate", {
-      nativeEvent: { locationX: 120 },
-      persist: jest.fn(),
+    const gesture = createGestureController(
+      getByGestureTestId("player-timeline-gesture"),
+    );
+    await act(async () => {
+      gesture.begin({ x: 40, y: 0 });
+      gesture.activate({ x: 40, y: 0 });
+      gesture.update({ x: 120, y: 0 });
+      gesture.cancel({ x: 120, y: 0 });
     });
 
     expect(onSeekTo).not.toHaveBeenCalled();
@@ -102,16 +107,14 @@ describe("PlayerTimeline", () => {
   });
 
   it("shows watched and buffered progress as separate layers", async () => {
-    const screen = await render(
-      <PlayerTimeline
-        currentTime={25}
-        duration={100}
-        bufferedPosition={70}
-        isPlaying={false}
-        canSeek
-        onSeekTo={jest.fn()}
-      />,
-    );
+    const screen = await renderTimeline({
+      currentTime: 25,
+      duration: 100,
+      bufferedPosition: 70,
+      isPlaying: false,
+      canSeek: true,
+      onSeekTo: jest.fn(),
+    });
 
     expect(screen.getByTestId("player-timeline-buffered")).toHaveStyle({
       width: "70%",
@@ -124,17 +127,15 @@ describe("PlayerTimeline", () => {
   it("supports keyboard and accessibility seeking", async () => {
     const onSeekBy = jest.fn();
     const onSeekTo = jest.fn();
-    const screen = await render(
-      <PlayerTimeline
-        currentTime={20}
-        duration={100}
-        bufferedPosition={0}
-        isPlaying
-        canSeek
-        onSeekBy={onSeekBy}
-        onSeekTo={onSeekTo}
-      />,
-    );
+    const screen = await renderTimeline({
+      currentTime: 20,
+      duration: 100,
+      bufferedPosition: 0,
+      isPlaying: true,
+      canSeek: true,
+      onSeekBy,
+      onSeekTo,
+    });
     const slider = screen.getByTestId("player-progress-slider");
     const preventDefault = jest.fn();
     const stopPropagation = jest.fn();
@@ -154,17 +155,15 @@ describe("PlayerTimeline", () => {
 
   it("keeps unavailable timelines honest and non-interactive", async () => {
     const onSeekTo = jest.fn();
-    const screen = await render(
-      <PlayerTimeline
-        currentTime={20}
-        duration={100}
-        bufferedPosition={80}
-        isPlaying
-        canSeek={false}
-        unavailableMessage="Preparing seek controls"
-        onSeekTo={onSeekTo}
-      />,
-    );
+    const screen = await renderTimeline({
+      currentTime: 20,
+      duration: 100,
+      bufferedPosition: 80,
+      isPlaying: true,
+      canSeek: false,
+      unavailableMessage: "Preparing seek controls",
+      onSeekTo,
+    });
 
     expect(screen.getByText("Preparing seek controls")).toBeTruthy();
     expect(screen.getByLabelText("Playback progress unavailable")).toHaveProp(
