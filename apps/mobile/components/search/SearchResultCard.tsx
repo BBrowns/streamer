@@ -18,10 +18,6 @@ function releaseYear(item: SearchCardItem) {
   return value.match(/\b(19|20)\d{2}\b/)?.[0];
 }
 
-function providerCount(item: SearchCardItem) {
-  return "providerIds" in item ? item.providerIds.length : 0;
-}
-
 function SearchResultCardInner({
   item,
   onPress,
@@ -45,7 +41,6 @@ function SearchResultCardInner({
     useWebPressableActivation(openDetail);
 
   const year = releaseYear(item);
-  const sources = providerCount(item);
   const accessibilityLabel = [
     item.name,
     t(`search.types.${item.type}`),
@@ -129,11 +124,6 @@ function SearchResultCardInner({
             </>
           )}
         </View>
-        {!compact && sources > 0 && (
-          <Text style={[styles.sourceText, { color: colors.textSecondary }]}>
-            {t("search.results.sources", { count: sources })}
-          </Text>
-        )}
       </View>
       {compact && (
         <Ionicons
@@ -183,11 +173,10 @@ const styles = StyleSheet.create({
   poster: { width: "100%", height: "100%" },
   copy: { gap: 4 },
   compactCopy: { flex: 1, minWidth: 0 },
-  title: { fontSize: 15, lineHeight: 20, fontWeight: "700" },
+  title: { fontSize: 15, lineHeight: 20, fontWeight: "600" },
   compactTitle: { fontSize: 14, lineHeight: 18 },
   metadata: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
   metaText: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
   dot: { marginHorizontal: 5, fontSize: 11 },
-  rating: { fontSize: 12, lineHeight: 17, fontWeight: "700" },
-  sourceText: { fontSize: 11, lineHeight: 15, fontWeight: "500" },
+  rating: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
 });

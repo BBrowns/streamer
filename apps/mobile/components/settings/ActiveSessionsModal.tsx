@@ -73,14 +73,17 @@ export function ActiveSessionsModal({
                 getWebFocusStyle(colors.focus),
             ]}
           >
-            <Text style={[styles.modalCancel, { color: colors.tint }]}>
+            <Text style={[styles.modalCancel, { color: colors.text }]}>
               {t("settings.accountModals.sessions.done")}
             </Text>
           </Pressable>
         )}
       </View>
       {isSessionsLoading ? (
-        <ActivityIndicator color={colors.tint} style={{ marginTop: 24 }} />
+        <ActivityIndicator
+          color={colors.textSecondary}
+          style={{ marginTop: 24 }}
+        />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false}>
           {sessions.map((session) => {
@@ -208,13 +211,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  modalTitle: { fontSize: 20, fontWeight: "900" },
+  modalTitle: { fontSize: 20, lineHeight: 26, fontWeight: "600" },
   modalTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  modalCancel: { fontWeight: "800", fontSize: 15 },
+  modalCancel: { fontWeight: "600", fontSize: 15 },
   headerAction: {
     minWidth: 44,
     minHeight: 44,

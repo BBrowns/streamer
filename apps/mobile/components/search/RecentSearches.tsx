@@ -70,7 +70,7 @@ export function RecentSearches({
                 getWebFocusStyle(colors.focus),
             ]}
           >
-            <Text style={[styles.clearLabel, { color: colors.tint }]}>
+            <Text style={[styles.clearLabel, { color: colors.text }]}>
               {t("search.recent.clear")}
             </Text>
           </Pressable>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 11,
     lineHeight: 15,
-    fontWeight: "800",
+    fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   clearLabel: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   list: {
     width: "100%",

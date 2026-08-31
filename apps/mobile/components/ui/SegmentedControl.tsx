@@ -45,7 +45,7 @@ export function SegmentedControl<T extends string>({
   renderIcon,
   accessibilityLabel,
 }: Props<T>) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <View
@@ -64,8 +64,8 @@ export function SegmentedControl<T extends string>({
               styles.btn,
               hovered && !isActive && { backgroundColor: colors.stateHover },
               isActive && {
-                backgroundColor: colors.tint + "20",
-                borderColor: colors.tint,
+                backgroundColor: colors.stateSelected,
+                borderColor: colors.borderStrong,
               },
               pressed && styles.pressed,
               Platform.OS === "web" &&
