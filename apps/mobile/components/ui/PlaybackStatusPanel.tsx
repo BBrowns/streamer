@@ -57,12 +57,12 @@ export function PlaybackStatusPanel({
       <Surface style={styles.panel}>
         <View style={styles.iconShell}>
           {loading ? (
-            <ActivityIndicator size="large" color={colors.tint} />
+            <ActivityIndicator size="large" color={colors.textSecondary} />
           ) : (
             <Ionicons
               name={iconName}
               size={34}
-              color={tone === "error" ? colors.error : colors.tint}
+              color={tone === "error" ? colors.error : colors.info}
             />
           )}
         </View>

@@ -105,7 +105,7 @@ export function DownloadQueueCard({
       ? colors.success
       : task.status === "Paused"
         ? colors.warning
-        : colors.tint;
+        : colors.info;
   const statusTone = isError
     ? "error"
     : isReady
@@ -170,7 +170,7 @@ export function DownloadQueueCard({
         compact && styles.cardCompact,
         {
           borderColor: isSelected
-            ? colors.tint
+            ? colors.text
             : isError
               ? colors.error + "50"
               : colors.border,
@@ -205,7 +205,7 @@ export function DownloadQueueCard({
                 styles.selectionBadge,
                 {
                   backgroundColor: isSelected
-                    ? colors.tint
+                    ? colors.text
                     : colors.surfaceOverlay,
                 },
               ]}
@@ -213,7 +213,7 @@ export function DownloadQueueCard({
               <Ionicons
                 name={isSelected ? "checkmark" : "ellipse-outline"}
                 size={17}
-                color={isSelected ? colors.onTint : colors.text}
+                color={isSelected ? colors.onPrimary : colors.text}
               />
             </View>
           ) : null}
@@ -302,7 +302,7 @@ export function DownloadQueueCard({
         >
           {isWorking ? (
             <View style={styles.workingState}>
-              <ActivityIndicator size="small" color={colors.tint} />
+              <ActivityIndicator size="small" color={colors.textSecondary} />
               <Text
                 style={[styles.workingText, { color: colors.textSecondary }]}
               >

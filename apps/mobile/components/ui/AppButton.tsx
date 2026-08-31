@@ -114,12 +114,12 @@ export function AppButton({
                 ? colors.error + "14"
                 : onArtwork
                   ? "rgba(8,9,11,0.42)"
-                  : colors.surfaceElevated,
+                  : "transparent",
           borderColor: isPrimary
             ? "transparent"
             : isDanger
               ? colors.error + "33"
-              : "transparent",
+              : colors.border,
           opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
         },
         Platform.OS === "web" &&

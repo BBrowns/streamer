@@ -133,7 +133,7 @@ export default function NotificationsScreen() {
             accessibilityLabel={t("notifications.loading")}
             style={styles.loadingState}
           >
-            <ActivityIndicator color={colors.tint} />
+            <ActivityIndicator color={colors.textSecondary} />
           </View>
         ) : isError ? (
           <EmptyState
@@ -182,7 +182,7 @@ export default function NotificationsScreen() {
               <RefreshControl
                 refreshing={isRefetching}
                 onRefresh={() => void refetch()}
-                tintColor={colors.tint}
+                tintColor={colors.textSecondary}
               />
             }
             contentContainerStyle={styles.listContent}
@@ -249,7 +249,7 @@ function NotificationRow({
         <Ionicons
           name={isUnread ? "notifications-outline" : "checkmark-outline"}
           size={20}
-          color={isUnread ? colors.tint : colors.textSecondary}
+          color={isUnread ? colors.info : colors.textSecondary}
         />
       </View>
       <View style={styles.copy}>
@@ -278,7 +278,7 @@ function NotificationRow({
       {isUnread ? (
         <View
           accessibilityLabel={t("notifications.unread")}
-          style={[styles.unreadDot, { backgroundColor: colors.tint }]}
+          style={[styles.unreadDot, { backgroundColor: colors.info }]}
         />
       ) : null}
     </>
