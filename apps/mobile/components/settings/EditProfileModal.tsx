@@ -81,7 +81,11 @@ export function EditProfileModal({
     <View style={inline ? styles.inlineCard : styles.modalContent}>
       <View style={styles.modalHeader}>
         <View style={styles.modalTitleRow}>
-          <Ionicons name="pencil-outline" size={20} color={colors.tint} />
+          <Ionicons
+            name="pencil-outline"
+            size={20}
+            color={colors.textSecondary}
+          />
           <Text style={[styles.modalTitle, { color: colors.text }]}>
             {t("settings.accountModals.profile.title")}
           </Text>
@@ -126,7 +130,7 @@ export function EditProfileModal({
       <Pressable
         style={({ focused, pressed }: any) => [
           styles.modalButton,
-          { backgroundColor: colors.tint },
+          { backgroundColor: colors.primary },
           profileLoading && styles.opacity50,
           pressed && styles.pressed,
           Platform.OS === "web" && focused && getWebFocusStyle(colors.focus),
@@ -138,9 +142,9 @@ export function EditProfileModal({
         accessibilityState={{ disabled: profileLoading }}
       >
         {profileLoading ? (
-          <ActivityIndicator color={colors.onTint} />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
-          <Text style={[styles.modalButtonText, { color: colors.onTint }]}>
+          <Text style={[styles.modalButtonText, { color: colors.onPrimary }]}>
             {t("settings.accountModals.profile.save")}
           </Text>
         )}
@@ -188,13 +192,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  modalTitle: { fontSize: 20, fontWeight: "900" },
+  modalTitle: { fontSize: 20, lineHeight: 26, fontWeight: "600" },
   modalTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  modalCancel: { fontWeight: "800", fontSize: 15 },
+  modalCancel: { fontWeight: "600", fontSize: 15 },
   headerAction: {
     minWidth: 44,
     minHeight: 44,
@@ -218,7 +222,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     minHeight: 52,
   },
-  modalButtonText: { fontWeight: "900", fontSize: 16 },
+  modalButtonText: { fontWeight: "600", fontSize: 16 },
   opacity50: { opacity: 0.5 },
   pressed: { opacity: 0.72 },
 });

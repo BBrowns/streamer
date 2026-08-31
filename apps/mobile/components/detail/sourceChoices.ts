@@ -1,5 +1,7 @@
 import type { PlaybackPlanResponse } from "@streamer/shared";
 
+export const SOURCE_PREVIEW_LIMIT = 6;
+
 export type SourceChoice = {
   candidateId: string;
   quality: { kind: "auto" } | { kind: "label"; value: string };
@@ -44,4 +46,18 @@ export function createSourceChoices(
           ? ("local-service" as const)
           : ("ready" as const),
     }));
+}
+
+export function getSourceChoicePreview(
+  choices: SourceChoice[],
+  limit = SOURCE_PREVIEW_LIMIT,
+) {
+  return choices.slice(0, Math.max(0, limit));
+}
+
+export function getSourceChoiceRemainder(
+  choices: SourceChoice[],
+  limit = SOURCE_PREVIEW_LIMIT,
+) {
+  return choices.slice(Math.max(0, limit));
 }

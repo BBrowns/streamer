@@ -154,7 +154,7 @@ export function getWebAriaChecked(checked: boolean) {
 }
 
 export function getAccentForeground(colors: ThemeColors) {
-  return colors.onTint;
+  return colors.onBrandAccent;
 }
 
 export function getPrimaryForeground(colors: ThemeColors) {
@@ -183,6 +183,27 @@ export const uiTypography = {
     fontWeight: "800" as const,
     letterSpacing: -0.8,
   },
+  utilityTitle: {
+    fontFamily: uiFonts.semibold,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "600" as const,
+    letterSpacing: -0.6,
+  },
+  utilityCompactTitle: {
+    fontFamily: uiFonts.semibold,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "600" as const,
+    letterSpacing: -0.4,
+  },
+  utilitySectionTitle: {
+    fontFamily: uiFonts.semibold,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "600" as const,
+    letterSpacing: -0.15,
+  },
   sectionLabel: {
     fontFamily: uiFonts.bold,
     fontSize: 12,
@@ -191,10 +212,10 @@ export const uiTypography = {
     letterSpacing: 0.4,
   },
   control: {
-    fontFamily: uiFonts.bold,
+    fontFamily: uiFonts.semibold,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "700" as const,
+    fontWeight: "600" as const,
     letterSpacing: 0,
   },
   caption: {
@@ -270,7 +291,7 @@ export function getToneColor(colors: ThemeColors, tone: StatusTone) {
   if (tone === "success") return colors.success;
   if (tone === "warning") return colors.warning;
   if (tone === "error") return colors.error;
-  if (tone === "info") return colors.tint;
+  if (tone === "info") return colors.info;
   return colors.textSecondary;
 }
 

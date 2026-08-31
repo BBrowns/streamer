@@ -98,7 +98,7 @@ export function SearchSuggestions({
           accessibilityLiveRegion="polite"
           accessibilityRole="progressbar"
         >
-          <ActivityIndicator size="small" color={colors.tint} />
+          <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={[styles.messageText, { color: colors.textSecondary }]}>
             {t("search.suggestions.loading")}
           </Text>
@@ -161,7 +161,7 @@ export function SearchSuggestions({
                 accessibilityLiveRegion={selected ? "polite" : "none"}
                 style={[
                   styles.result,
-                  selected && { backgroundColor: colors.tint + "14" },
+                  selected && { backgroundColor: colors.stateSelected },
                 ]}
               >
                 <SearchResultCard
@@ -211,7 +211,7 @@ export function SearchSuggestions({
           styles.showAll,
           { borderTopColor: colors.border },
           selectedIndex === items.length && {
-            backgroundColor: colors.tint + "14",
+            backgroundColor: colors.stateSelected,
           },
           pressed && styles.pressed,
           Platform.OS === "web" &&
@@ -220,12 +220,12 @@ export function SearchSuggestions({
         ]}
       >
         <View style={styles.showAllCopy}>
-          <Ionicons name="search" size={17} color={colors.tint} />
-          <Text style={[styles.showAllText, { color: colors.tint }]}>
+          <Ionicons name="search" size={17} color={colors.text} />
+          <Text style={[styles.showAllText, { color: colors.text }]}>
             {showAllLabel}
           </Text>
         </View>
-        <Ionicons name="arrow-forward" size={17} color={colors.tint} />
+        <Ionicons name="arrow-forward" size={17} color={colors.text} />
       </Pressable>
     </ScrollView>
   );
@@ -263,7 +263,7 @@ function SuggestionMessage({
             getWebFocusStyle(colors.focus),
         ]}
       >
-        <Text style={[styles.messageActionText, { color: colors.tint }]}>
+        <Text style={[styles.messageActionText, { color: colors.text }]}>
           {action}
         </Text>
       </Pressable>
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 6,
   },
-  messageActionText: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
+  messageActionText: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
   inlineNotice: {
     minHeight: 40,
     paddingHorizontal: 12,
@@ -327,6 +327,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  showAllText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: "700" },
+  showAllText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: "600" },
   pressed: { opacity: 0.7 },
 });

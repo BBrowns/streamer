@@ -1087,8 +1087,12 @@ test("Search keeps active retrieval focused and results media-first", async ({
     .getByTestId("search-results-grid")
     .boundingBox();
   expect(resultsBox).not.toBeNull();
+  // The active-query presentation intentionally reserves a second line for
+  // the result count beneath the query title. Keep the large layout compact
+  // enough to show the result grid in the first viewport without preserving
+  // the old single-line heading threshold.
   expect(resultsBox!.y).toBeLessThan(
-    testInfo.project.name === "desktop-renderer" ? 360 : 460,
+    testInfo.project.name === "desktop-renderer" ? 400 : 460,
   );
   await expectNoHorizontalPageOverflow(page);
 

@@ -103,7 +103,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(
           style={[styles.input, { color: colors.text }, inputStyle]}
         />
         {loading ? (
-          <ActivityIndicator size="small" color={colors.tint} />
+          <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : null}
         {!loading && shortcutHint && value.length === 0 ? (
           <Text

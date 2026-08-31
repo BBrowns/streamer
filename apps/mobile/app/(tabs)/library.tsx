@@ -450,7 +450,7 @@ export default function LibraryScreen() {
         ListEmptyComponent={
           isHistoryView && isHistoryLoading ? (
             <View style={styles.historyLoading}>
-              <ActivityIndicator color={colors.tint} />
+              <ActivityIndicator color={colors.textSecondary} />
             </View>
           ) : (
             <EmptyState
@@ -490,7 +490,7 @@ export default function LibraryScreen() {
         ListFooterComponent={
           isHistoryView && (isHistoryLoading || isFetchingMoreHistory) ? (
             <View style={styles.historyLoading}>
-              <ActivityIndicator color={colors.tint} />
+              <ActivityIndicator color={colors.textSecondary} />
             </View>
           ) : null
         }
@@ -504,8 +504,8 @@ export default function LibraryScreen() {
               await queryClient.invalidateQueries({ queryKey: ["progress"] });
               setRefreshing(false);
             }}
-            tintColor={colors.tint}
-            colors={[colors.tint]}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
           />
         }
         renderItem={({ item }) => (

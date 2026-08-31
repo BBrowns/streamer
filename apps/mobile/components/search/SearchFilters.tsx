@@ -155,7 +155,10 @@ function ChoiceRow<T extends string>({
       {...getWebAriaChecked(selected)}
       style={({ pressed, hovered }: any) => [
         styles.choice,
-        selected && { backgroundColor: colors.tint + "18" },
+        selected && {
+          backgroundColor: colors.stateSelected,
+          borderColor: colors.borderStrong,
+        },
         Platform.OS === "web" &&
           hovered &&
           !selected && {
@@ -178,7 +181,7 @@ function ChoiceRow<T extends string>({
       >
         {option.label}
       </Text>
-      {selected && <Ionicons name="checkmark" size={17} color={colors.tint} />}
+      {selected && <Ionicons name="checkmark" size={17} color={colors.text} />}
     </Pressable>
   );
 }
@@ -331,13 +334,13 @@ export function FilterSheet({
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 18, lineHeight: 23, fontWeight: "800" },
+  title: { fontSize: 18, lineHeight: 24, fontWeight: "600" },
   subtitle: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: "500" },
   group: { gap: 8 },
   groupLabel: {
     fontSize: 11,
     lineHeight: 15,
-    fontWeight: "800",
+    fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.7,
   },
@@ -352,7 +355,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   choiceLabel: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: "600" },
-  choiceLabelSelected: { fontWeight: "700" },
+  choiceLabelSelected: { fontWeight: "600" },
   reset: {
     minHeight: 44,
     borderRadius: 8,
@@ -363,7 +366,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  resetLabel: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
+  resetLabel: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
   sheet: {
     width: "100%",
     maxHeight: "82%",
