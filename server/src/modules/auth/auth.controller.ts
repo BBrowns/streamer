@@ -2,6 +2,8 @@ import type { Context } from "hono";
 import { env } from "../../config/env.js";
 import { authService } from "./auth.service.js";
 import { SessionService } from "./session.service.js";
+import { resolveRateLimitClientAddress } from "../../middleware/rateLimiter.middleware.js";
+import { normalizeDeviceId } from "@streamer/shared";
 
 export class AuthController {
   async register(c: Context) {
@@ -16,7 +18,12 @@ export class AuthController {
 
   async login(c: Context) {
     const data = (c.req as any).valid("json");
-    const result = await authService.login(data.email, data.password);
+    const result = await authService.login(
+      data.email,
+      data.password,
+      normalizeDeviceId(c.req.header("x-device-id")),
+      resolveRateLimitClientAddress(c, env.trustProxyHops),
+    );
     return c.json(result);
   }
 

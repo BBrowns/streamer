@@ -39,6 +39,15 @@ jest.mock("../../../hooks/useWindowClass", () => ({
   }),
 }));
 jest.mock("../../../hooks/useTrakt", () => ({ useTrakt: () => ({}) }));
+jest.mock("../../../hooks/useRealDebrid", () => ({
+  useRealDebrid: () => ({
+    status: { connected: false },
+    isLoading: false,
+    isError: false,
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+  }),
+}));
 jest.mock("../../../hooks/useSessions", () => ({
   useSessions: () => ({
     sessions: [],

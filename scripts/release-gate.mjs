@@ -638,8 +638,8 @@ function checkProductionDefaults() {
   );
   requireText(
     "server/src/config/env.validation.ts",
-    "REDIS_URL is required for multi-instance production deployments",
-    "multi-instance Redis requirement",
+    "REDIS_URL is required in production for immediate session revocation and bounded shared throttling",
+    "production Redis requirement",
   );
   requireText(
     "server/src/app.ts",

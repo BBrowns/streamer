@@ -3,6 +3,12 @@
 const net = require("node:net");
 const { lookup: defaultDnsLookup } = require("node:dns/promises");
 
+const MAX_DIRECT_DOWNLOAD_BYTES = 20 * 1024 * 1024 * 1024;
+const PRIVATE_IPV6_RANGES = new net.BlockList();
+PRIVATE_IPV6_RANGES.addSubnet("fe80::", 10, "ipv6");
+PRIVATE_IPV6_RANGES.addSubnet("fc00::", 7, "ipv6");
+PRIVATE_IPV6_RANGES.addSubnet("ff00::", 8, "ipv6");
+
 function normalizeHostname(hostname) {
   return String(hostname || "")
     .trim()
@@ -14,7 +20,7 @@ function ipv4FromMappedIpv6(host) {
   const dottedMatch = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
   if (dottedMatch) return dottedMatch[1];
 
-  const hexMatch = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  const hexMatch = host.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
   if (!hexMatch) return null;
   const high = Number.parseInt(hexMatch[1], 16);
   const low = Number.parseInt(hexMatch[2], 16);
@@ -56,11 +62,8 @@ function isPrivateOrReservedIpv6(host) {
   return (
     normalized === "::" ||
     normalized === "::1" ||
-    normalized.startsWith("fe80:") ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("ff") ||
-    normalized.startsWith("2001:db8:")
+    normalized.startsWith("2001:db8:") ||
+    PRIVATE_IPV6_RANGES.check(normalized, "ipv6")
   );
 }
 
@@ -160,5 +163,6 @@ function createPinnedLookup(addresses) {
 module.exports = {
   createPinnedLookup,
   isOwnedBridgeStreamUrl,
+  MAX_DIRECT_DOWNLOAD_BYTES,
   validateDownloadUrlWithDns,
 };

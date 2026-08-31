@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { HonoEnv } from "../../types/hono.js";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { authController } from "./auth.controller.js";
 import { authRateLimiter } from "../../middleware/rateLimiter.middleware.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
@@ -17,6 +18,15 @@ import {
 } from "@streamer/shared";
 
 export const authRouter = new Hono<HonoEnv>();
+
+const sessionIdParamSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/),
+});
 
 const routes = authRouter
   .post(
@@ -74,8 +84,11 @@ const routes = authRouter
     (c) => authController.updateProfile(c),
   )
   .get("/sessions", authMiddleware, (c) => authController.getSessions(c))
-  .delete("/sessions/:id", authMiddleware, (c) =>
-    authController.revokeSession(c),
+  .delete(
+    "/sessions/:id",
+    authMiddleware,
+    zValidator("param", sessionIdParamSchema),
+    (c) => authController.revokeSession(c),
   )
   .delete("/account", authMiddleware, (c) => authController.deleteAccount(c))
   .get("/export", authMiddleware, (c) => authController.exportData(c));

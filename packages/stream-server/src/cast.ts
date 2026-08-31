@@ -10,6 +10,7 @@ import { Router, type Request, type Response } from "express";
 import type { Client as CastClientType } from "castv2-client";
 import {
   getConfiguredBridgePublicOrigin,
+  getConfiguredCastExternalHosts,
   requireBridgeAuth,
   validateCastPlaybackUrlWithDns,
 } from "./security.js";
@@ -310,6 +311,8 @@ router.post("/play", async (req: Request, res: Response) => {
   }
   const safeUrl = await validateCastPlaybackUrlWithDns(url, {
     allowedHosts: [new URL(bridgeOrigin).hostname],
+    allowedOrigins: [bridgeOrigin],
+    allowedExternalHosts: getConfiguredCastExternalHosts(),
   });
   if (!safeUrl.ok) {
     return res.status(400).json({ error: safeUrl.reason });

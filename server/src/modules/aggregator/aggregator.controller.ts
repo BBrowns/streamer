@@ -118,12 +118,13 @@ export class AggregatorController {
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
-    const deviceId = c.req.header("X-Device-Id") || "unknown";
+    const deviceId = c.get("deviceId");
 
     // Track active session heartbeat
     const sessionCount = await SessionService.heartbeat(
       user.userId,
       deviceId,
+      c.get("user").sid || c.get("user").jti || "legacy-session",
       c.req.header("X-Forwarded-For") || "127.0.0.1",
       c.req.header("User-Agent"),
     );
@@ -155,12 +156,13 @@ export class AggregatorController {
     const user = c.get("user");
     const requestId = c.get("requestId") ?? "";
 
-    const deviceId = c.req.header("X-Device-Id") || "unknown";
+    const deviceId = c.get("deviceId");
 
     // Track active session heartbeat
     const sessionCount = await SessionService.heartbeat(
       user.userId,
       deviceId,
+      c.get("user").sid || c.get("user").jti || "legacy-session",
       c.req.header("X-Forwarded-For") || "127.0.0.1",
       c.req.header("User-Agent"),
     );

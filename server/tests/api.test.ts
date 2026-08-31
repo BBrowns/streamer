@@ -41,6 +41,8 @@ vi.mock("../src/config/env.js", () => ({
     logLevel: "silent",
     databaseUrl: "mock",
     jwtSecret: "test-secret-key-for-unit-testing",
+    tokenHashKey: "test-token-hash-key",
+    credentialEncryptionKey: "test-credential-encryption-key",
     jwtAccessExpiry: "15m",
     jwtRefreshExpiry: "7d",
     corsOrigins: ["http://localhost:8081"],
@@ -256,7 +258,11 @@ describe("Aggregator Module", () => {
     app = createApp();
     vi.clearAllMocks();
     token = jwt.sign(
-      { userId: "user-1", email: "test@example.com" },
+      {
+        userId: "user-1",
+        email: "test@example.com",
+        sid: "test-session",
+      },
       "test-secret-key-for-unit-testing",
       { expiresIn: "15m" },
     );
@@ -355,7 +361,7 @@ describe("Add-on Module", () => {
     app = createApp();
     vi.clearAllMocks();
     token = jwt.sign(
-      { userId: "user-1", email: "test@example.com" },
+      { userId: "user-1", email: "test@example.com", sid: "test-session" },
       "test-secret-key-for-unit-testing",
       { expiresIn: "15m" },
     );

@@ -4,6 +4,7 @@ import type {
   TraktTokens,
   TraktSyncQueueItem,
 } from "../ports/trakt.ports.js";
+import { decryptSecret, encryptSecret } from "../../../utils/secret-box.js";
 
 /** Prisma adapter for Trakt token persistence */
 export class PrismaTraktRepository implements ITraktRepository {
@@ -15,8 +16,8 @@ export class PrismaTraktRepository implements ITraktRepository {
     if (!record) return null;
 
     return {
-      accessToken: record.accessToken,
-      refreshToken: record.refreshToken,
+      accessToken: decryptSecret(record.accessTokenCiphertext),
+      refreshToken: decryptSecret(record.refreshTokenCiphertext),
       expiresAt: record.expiresAt,
     };
   }
@@ -26,13 +27,13 @@ export class PrismaTraktRepository implements ITraktRepository {
       where: { userId },
       create: {
         userId,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessTokenCiphertext: encryptSecret(tokens.accessToken),
+        refreshTokenCiphertext: encryptSecret(tokens.refreshToken),
         expiresAt: tokens.expiresAt,
       },
       update: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessTokenCiphertext: encryptSecret(tokens.accessToken),
+        refreshTokenCiphertext: encryptSecret(tokens.refreshToken),
         expiresAt: tokens.expiresAt,
       },
     });

@@ -7,6 +7,18 @@ const SENSITIVE_KEY_PATTERN =
 const SENSITIVE_VALUE_KEY_PATTERN =
   /^(magnet|playbackUrl|streamUrl|sourceUrl|downloadUrl|externalUrl|localUri|uri|infoHash)$/i;
 
+/** Keep request telemetry route-only, including for percent-encoded queries. */
+export function safeRequestPath(value: unknown) {
+  if (typeof value !== "string") return "[unknown]";
+  try {
+    return (
+      new URL(value, "http://streamer.invalid").pathname.slice(0, 2_048) || "/"
+    );
+  } catch {
+    return (value.split("?", 1)[0] || "/").slice(0, 2_048);
+  }
+}
+
 export function redactSensitiveText(text: string) {
   return text
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")

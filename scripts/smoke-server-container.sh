@@ -4,11 +4,12 @@ set -Eeuo pipefail
 suffix="${GITHUB_RUN_ID:-local}-${RANDOM}"
 network="streamer-server-smoke-${suffix}"
 postgres="streamer-server-postgres-${suffix}"
+redis="streamer-server-redis-${suffix}"
 server="streamer-server-app-${suffix}"
 image="streamer-server-smoke:${suffix}"
 
 cleanup() {
-  docker rm -f "$server" "$postgres" >/dev/null 2>&1 || true
+  docker rm -f "$server" "$postgres" "$redis" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
   docker image rm "$image" >/dev/null 2>&1 || true
 }
@@ -33,12 +34,29 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 
+docker run -d --name "$redis" --network "$network" \
+  redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf >/dev/null
+
+for attempt in $(seq 1 30); do
+  if docker exec "$redis" redis-cli ping 2>/dev/null | grep -q PONG; then
+    break
+  fi
+  if [[ "$attempt" -eq 30 ]]; then
+    echo "Redis smoke dependency did not become ready."
+    exit 1
+  fi
+  sleep 1
+done
+
 docker run -d --name "$server" --network "$network" \
   -e NODE_ENV=production \
   -e PORT=3001 \
   -e SERVER_INSTANCE_MODE=single \
   -e "DATABASE_URL=postgresql://streamer:streamer_test@${postgres}:5432/streamer_test" \
   -e JWT_SECRET=9f4e3d2c1b0a8765fedcba0987654321 \
+  -e TOKEN_HASH_KEY=7c9e4b2a1f6d8e0c3b5a7d9f1e2c4b6a8d0f2e4c6b8a0d2f \
+  -e CREDENTIAL_ENCRYPTION_KEY=4a8c1e6f9b2d5a7c0e3f6b8d1a4c7e9f2b5d8a0c3e6f9b1d \
+  -e "REDIS_URL=redis://${redis}:6379" \
   -e CORS_ORIGINS=https://app.streamer.example \
   -e APP_URL_WEB=https://app.streamer.example \
   -e APP_URL_DEEPLINK=streamer:// \

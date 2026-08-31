@@ -229,11 +229,11 @@ explicit `ADDON_ALLOW_PRIVATE_NETWORKS=true` opt-in for development or tests.
 
 ### 4.4 Authentication
 
-- **Access tokens:** Short-lived JWT (HS256, default 15 min), signed with `JWT_SECRET`.
-- **Refresh tokens:** Long-lived (default 7 days), stored hashed in the `refresh_tokens` table. On use, the old token is deleted and a new one issued (rotation).
+- **Access tokens:** Short-lived JWT (HS256, default 15 min), signed with `JWT_SECRET`, carrying an opaque session ID and token ID. Protected requests check session revocation in Redis.
+- **Refresh, reset, and verification tokens:** Opaque random values whose keyed HMAC digests are stored in the database. Refresh tokens are single-use and rotated atomically; replay revokes the refresh family and active sessions.
 - **Rate limiting:** `express-rate-limit` middleware with separate limits for auth endpoints (stricter) vs. catalog endpoints (more permissive). In `NODE_ENV=test`, rate limiting is bypassed entirely to avoid test flakiness.
 - **Email verification:** Required on registration. Tokens stored in `email_verification_tokens` with an `expiresAt` timestamp. Emails sent via Nodemailer.
-- **Device sessions:** Every login records an `ActiveSession` keyed on `(userId, deviceId)`. The client sends `X-Device-Id` header; the server upserts the session on each authenticated request.
+- **Device sessions:** Every login records an `ActiveSession` keyed on `(userId, deviceId)`. The client sends `X-Device-Id` header; the server upserts the session on each authenticated request. Password changes and resets revoke all refresh/session state.
 
 ### 4.5 Database
 
@@ -254,15 +254,25 @@ explicit `ADDON_ALLOW_PRIVATE_NETWORKS=true` opt-in for development or tests.
 | `InstalledAddon`         | User → add-on mapping; manifest stored as JSON blob                         |
 | `LibraryItem`            | User's saved movies/series                                                  |
 | `WatchProgress`          | Per-user position plus nullable landscape artwork (supports season/episode) |
-| `TraktToken`             | Trakt.tv OAuth access + refresh tokens per user                             |
+| `TraktToken`             | Encrypted Trakt.tv OAuth access + refresh tokens per user                   |
+| `RealDebridToken`        | Encrypted Real-Debrid access + refresh tokens per user                      |
 | `TraktSyncQueue`         | Outbound Trakt scrobbles queued for retry on failure                        |
 | `Notification`           | In-app notifications                                                        |
 
 ### 4.6 Real-Debrid Integration
 
-When the `real-debrid` feature flag is enabled, the `resolveStream` method in the aggregator delegates to `RealDebridResolver`. It converts a torrent `infoHash` to a fast, uncached direct HTTP link via the Real-Debrid API. If Real-Debrid fails or is disabled, the fallback is a raw `magnet:?xt=urn:btih:<infoHash>` URI, which the stream-server daemon then handles locally.
+When the `real-debrid` feature flag is enabled and the current user has
+connected Real-Debrid through `/api/integrations/real-debrid`, the aggregator
+delegates validated torrent hashes to `RealDebridResolver`. The server stores
+the provider credentials encrypted per user and never accepts a global
+`RD_API_TOKEN`. It converts a torrent `infoHash` to a fast, uncached direct
+HTTPS link. If the integration is unavailable or disabled, the fallback is a
+raw `magnet:?xt=urn:btih:<infoHash>` URI, which the stream-server daemon then
+handles locally.
 
-A bulk-resolve endpoint (`POST /api/resolve-streams-bulk`) eliminates N+1 resolution calls from the detail screen when many streams are visible simultaneously.
+`POST /api/stream/resolve-bulk` accepts at most 16 hashes and resolves them
+with bounded concurrency, preventing a detail screen from creating an
+unbounded provider fan-out.
 
 ---
 
@@ -983,53 +993,55 @@ packaged-app QA before claiming production desktop distribution.
 
 ## 14. Environment Variables Reference
 
-| Variable                              | Default                      | Required                  | Description                                                                                                                                 |
-| ------------------------------------- | ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                        | —                            | ✅                        | PostgreSQL connection string                                                                                                                |
-| `JWT_SECRET`                          | —                            | ✅                        | HS256 signing secret (minimum 32 chars recommended)                                                                                         |
-| `JWT_ACCESS_EXPIRY`                   | `15m`                        |                           | Access token lifetime                                                                                                                       |
-| `JWT_REFRESH_EXPIRY`                  | `7d`                         |                           | Refresh token lifetime                                                                                                                      |
-| `PORT`                                | `3001`                       |                           | API server port                                                                                                                             |
-| `NODE_ENV`                            | `development`                |                           | `test` disables rate limiting                                                                                                               |
-| `SERVER_INSTANCE_MODE`                | `single` outside production  | production                | Explicit `single` or Redis-required `multi` process topology.                                                                               |
-| `TRUST_PROXY_HOPS`                    | `0`                          |                           | Number of trusted reverse-proxy hops allowed to supply `X-Forwarded-For`.                                                                   |
-| `SHUTDOWN_TIMEOUT_MS`                 | `10000`                      |                           | Grace period before remaining HTTP connections are force-closed.                                                                            |
-| `RATE_LIMIT_GLOBAL_MAX`               | `1000`                       |                           | Global API requests allowed per hashed client address in each 15-minute window.                                                             |
-| `CORS_ORIGINS`                        | `http://localhost:8081`      |                           | Comma-separated allowed origins                                                                                                             |
-| `REDIS_URL`                           | —                            | multi-instance production | Redis used for shared rate limiting and session/presence state.                                                                             |
-| `EMAIL_DELIVERY_MODE`                 | `log` outside production     | production                | `smtp` is required in production so verification and recovery messages are delivered.                                                       |
-| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | —                            | SMTP mode                 | SMTP transport credentials; keep them in a secret manager.                                                                                  |
-| `APP_URL_WEB`                         | `http://localhost:8081`      | production                | Public HTTPS application URL used in email actions.                                                                                         |
-| `ADDON_TIMEOUT_MS`                    | `5000`                       |                           | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                                                  |
-| `ADDON_MAX_CONCURRENT`                | (configured)                 |                           | Bulkhead concurrency limit per add-on                                                                                                       |
-| `ADDON_ALLOW_PRIVATE_NETWORKS`        | `false`                      |                           | Development/test opt-in for local/private add-on targets. Public HTTP add-ons still require HTTPS. Do not enable in production.             |
-| `STREAMER_BRIDGE_SUPERVISOR`          | `false`                      |                           | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime.                          |
-| `STREAMER_BRIDGE_TOKEN`               | —                            |                           | Optional bridge control-route token; clients send bearer auth or `x-streamer-bridge-token`.                                                 |
-| `STREAMER_BRIDGE_ENTRYPOINT`          | packaged/dev auto-detect     |                           | Optional desktop bridge entrypoint override. Intended for diagnostics and local repair only.                                                |
-| `STREAMER_BRIDGE_NODE`                | packaged/dev auto-detect     |                           | Optional Node runtime override. Packaged desktop apps ignore it unless `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE=1`.                               |
-| `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE`   | `false` in packaged desktop  |                           | Allows packaged desktop apps to fall back to system Node for bridge repair/debugging.                                                       |
-| `STREAMER_GATEWAY_STREAM_SECRET`      | per-process random fallback  |                           | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
-| `STREAMER_GATEWAY_STREAM_URL_TTL_MS`  | `7200000`                    |                           | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
-| `STREAMER_FFMPEG_PATH`                | `ffmpeg`                     |                           | FFmpeg binary used for MP4 remux jobs and health probing. Packaged desktop builds can point this at a bundled runtime.                      |
-| `STREAMER_REMUX_CACHE_DIR`            | OS temp dir                  |                           | Optional fixed **seekable-cache** remux directory. The bridge removes stale `.partial.mp4` files on startup.                                |
-| `STREAMER_REMUX_CACHE_MAX_BYTES`      | `5368709120`                 |                           | Maximum bytes for completed **seekable-cache** remux entries before least-recently-used eviction.                                           |
-| `STREAMER_REMUX_CACHE_TTL_MS`         | `1800000`                    |                           | TTL for completed seekable-cache remux entries.                                                                                             |
-| `REMUX_READY_TIMEOUT_MS`              | `90000`                      |                           | Timeout budget for an individual seekable-cache FFmpeg remux readiness operation.                                                           |
-| `STREAMER_APP_VERSION`                | package/app fallback         |                           | Product version exposed in build metadata, health endpoints, diagnostics, logs, and Sentry release names.                                   |
-| `STREAMER_GIT_SHA`                    | CI fallback or `unknown`     |                           | Full commit SHA exposed as build metadata.                                                                                                  |
-| `STREAMER_BUILD_DATE`                 | CI fallback or `unknown`     |                           | ISO build timestamp exposed as build metadata.                                                                                              |
-| `STREAMER_BUILD_CHANNEL`              | environment fallback         |                           | Build channel such as `development`, `preview`, `rc`, or `production`.                                                                      |
-| `STREAMER_BUILD_ENVIRONMENT`          | `NODE_ENV` fallback          |                           | Normalized to `development`, `preview`, `production`, or `test` for diagnostics and telemetry.                                              |
-| `SENTRY_DSN`                          | —                            |                           | Enables API server Sentry in production and can act as a fallback DSN for the stream-server bridge.                                         |
-| `SENTRY_ENVIRONMENT`                  | `NODE_ENV`                   |                           | Environment name attached to server/bridge Sentry events.                                                                                   |
-| `SENTRY_RELEASE`                      | package fallback             |                           | Release name attached to server/bridge Sentry events.                                                                                       |
-| `SENTRY_TRACES_SAMPLE_RATE`           | `0.05` in production         |                           | Server/bridge Sentry trace sample rate. Clamped to `0..1`.                                                                                  |
-| `SENTRY_ERROR_SAMPLE_RATE`            | `1`                          |                           | Server/bridge Sentry error event sample rate. Clamped to `0..1`.                                                                            |
-| `SENTRY_ENABLE_DEV`                   | `false`                      |                           | Allows server/bridge Sentry in development when a DSN is present.                                                                           |
-| `STREAMER_BRIDGE_SENTRY_DSN`          | `SENTRY_DSN` fallback        |                           | Bridge-specific Sentry DSN for the stream-server sidecar.                                                                                   |
-| `STREAMER_BRIDGE_SENTRY_*`            | matching `SENTRY_*` fallback |                           | Bridge-specific overrides for environment, release, sample rates, and development enablement.                                               |
-| `STREAMER_DESKTOP_SENTRY_DSN`         | `SENTRY_DSN` fallback        |                           | Desktop Electron main-process Sentry DSN. Disabled when unset.                                                                              |
-| `STREAMER_DESKTOP_SENTRY_*`           | matching `SENTRY_*` fallback |                           | Desktop-specific overrides for environment, release, sample rates, and development enablement.                                              |
+| Variable                              | Default                         | Required   | Description                                                                                                                                 |
+| ------------------------------------- | ------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                        | —                               | ✅         | PostgreSQL connection string                                                                                                                |
+| `JWT_SECRET`                          | —                               | ✅         | HS256 signing secret (minimum 32 chars recommended)                                                                                         |
+| `TOKEN_HASH_KEY`                      | `JWT_SECRET` outside production | production | Dedicated HMAC key for opaque auth/recovery token digests.                                                                                  |
+| `CREDENTIAL_ENCRYPTION_KEY`           | `JWT_SECRET` outside production | production | Dedicated key for encrypted third-party integration credentials.                                                                            |
+| `JWT_ACCESS_EXPIRY`                   | `15m`                           |            | Access token lifetime                                                                                                                       |
+| `JWT_REFRESH_EXPIRY`                  | `7d`                            |            | Refresh token lifetime                                                                                                                      |
+| `PORT`                                | `3001`                          |            | API server port                                                                                                                             |
+| `NODE_ENV`                            | `development`                   |            | `test` disables rate limiting                                                                                                               |
+| `SERVER_INSTANCE_MODE`                | `single` outside production     | production | Explicit `single` or Redis-required `multi` process topology.                                                                               |
+| `TRUST_PROXY_HOPS`                    | `0`                             |            | Number of trusted reverse-proxy hops allowed to supply `X-Forwarded-For`.                                                                   |
+| `SHUTDOWN_TIMEOUT_MS`                 | `10000`                         |            | Grace period before remaining HTTP connections are force-closed.                                                                            |
+| `RATE_LIMIT_GLOBAL_MAX`               | `1000`                          |            | Global API requests allowed per hashed client address in each 15-minute window.                                                             |
+| `CORS_ORIGINS`                        | `http://localhost:8081`         |            | Comma-separated allowed origins                                                                                                             |
+| `REDIS_URL`                           | —                               | production | Redis used for immediate session revocation, shared throttling, refresh replay response, and session/presence state.                        |
+| `EMAIL_DELIVERY_MODE`                 | `log` outside production        | production | `smtp` is required in production so verification and recovery messages are delivered.                                                       |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` | —                               | SMTP mode  | SMTP transport credentials; keep them in a secret manager.                                                                                  |
+| `APP_URL_WEB`                         | `http://localhost:8081`         | production | Public HTTPS application URL used in email actions.                                                                                         |
+| `ADDON_TIMEOUT_MS`                    | `5000`                          |            | Per-add-on HTTP timeout (matches Cockatiel timeout policy)                                                                                  |
+| `ADDON_MAX_CONCURRENT`                | (configured)                    |            | Bulkhead concurrency limit per add-on                                                                                                       |
+| `ADDON_ALLOW_PRIVATE_NETWORKS`        | `false`                         |            | Development/test opt-in for local/private add-on targets. Public HTTP add-ons still require HTTPS. Do not enable in production.             |
+| `STREAMER_BRIDGE_SUPERVISOR`          | `false`                         |            | Opt-in API server bridge supervision. Keep disabled for desktop flows so Electron owns the bridge sidecar/runtime.                          |
+| `STREAMER_BRIDGE_TOKEN`               | —                               |            | Optional bridge control-route token; clients send bearer auth or `x-streamer-bridge-token`.                                                 |
+| `STREAMER_BRIDGE_ENTRYPOINT`          | packaged/dev auto-detect        |            | Optional desktop bridge entrypoint override. Intended for diagnostics and local repair only.                                                |
+| `STREAMER_BRIDGE_NODE`                | packaged/dev auto-detect        |            | Optional Node runtime override. Packaged desktop apps ignore it unless `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE=1`.                               |
+| `STREAMER_BRIDGE_ALLOW_SYSTEM_NODE`   | `false` in packaged desktop     |            | Allows packaged desktop apps to fall back to system Node for bridge repair/debugging.                                                       |
+| `STREAMER_GATEWAY_STREAM_SECRET`      | per-process random fallback     |            | Optional HMAC secret for signed gateway stream URLs. Defaults to `STREAMER_BRIDGE_TOKEN` when set, otherwise a process-local random secret. |
+| `STREAMER_GATEWAY_STREAM_URL_TTL_MS`  | `7200000`                       |            | Signed gateway stream URL lifetime. Status polling renews URLs; active streams get a short grace window for range requests.                 |
+| `STREAMER_FFMPEG_PATH`                | `ffmpeg`                        |            | FFmpeg binary used for MP4 remux jobs and health probing. Packaged desktop builds can point this at a bundled runtime.                      |
+| `STREAMER_REMUX_CACHE_DIR`            | OS temp dir                     |            | Optional fixed **seekable-cache** remux directory. The bridge removes stale `.partial.mp4` files on startup.                                |
+| `STREAMER_REMUX_CACHE_MAX_BYTES`      | `5368709120`                    |            | Maximum bytes for completed **seekable-cache** remux entries before least-recently-used eviction.                                           |
+| `STREAMER_REMUX_CACHE_TTL_MS`         | `1800000`                       |            | TTL for completed seekable-cache remux entries.                                                                                             |
+| `REMUX_READY_TIMEOUT_MS`              | `90000`                         |            | Timeout budget for an individual seekable-cache FFmpeg remux readiness operation.                                                           |
+| `STREAMER_APP_VERSION`                | package/app fallback            |            | Product version exposed in build metadata, health endpoints, diagnostics, logs, and Sentry release names.                                   |
+| `STREAMER_GIT_SHA`                    | CI fallback or `unknown`        |            | Full commit SHA exposed as build metadata.                                                                                                  |
+| `STREAMER_BUILD_DATE`                 | CI fallback or `unknown`        |            | ISO build timestamp exposed as build metadata.                                                                                              |
+| `STREAMER_BUILD_CHANNEL`              | environment fallback            |            | Build channel such as `development`, `preview`, `rc`, or `production`.                                                                      |
+| `STREAMER_BUILD_ENVIRONMENT`          | `NODE_ENV` fallback             |            | Normalized to `development`, `preview`, `production`, or `test` for diagnostics and telemetry.                                              |
+| `SENTRY_DSN`                          | —                               |            | Enables API server Sentry in production and can act as a fallback DSN for the stream-server bridge.                                         |
+| `SENTRY_ENVIRONMENT`                  | `NODE_ENV`                      |            | Environment name attached to server/bridge Sentry events.                                                                                   |
+| `SENTRY_RELEASE`                      | package fallback                |            | Release name attached to server/bridge Sentry events.                                                                                       |
+| `SENTRY_TRACES_SAMPLE_RATE`           | `0.05` in production            |            | Server/bridge Sentry trace sample rate. Clamped to `0..1`.                                                                                  |
+| `SENTRY_ERROR_SAMPLE_RATE`            | `1`                             |            | Server/bridge Sentry error event sample rate. Clamped to `0..1`.                                                                            |
+| `SENTRY_ENABLE_DEV`                   | `false`                         |            | Allows server/bridge Sentry in development when a DSN is present.                                                                           |
+| `STREAMER_BRIDGE_SENTRY_DSN`          | `SENTRY_DSN` fallback           |            | Bridge-specific Sentry DSN for the stream-server sidecar.                                                                                   |
+| `STREAMER_BRIDGE_SENTRY_*`            | matching `SENTRY_*` fallback    |            | Bridge-specific overrides for environment, release, sample rates, and development enablement.                                               |
+| `STREAMER_DESKTOP_SENTRY_DSN`         | `SENTRY_DSN` fallback           |            | Desktop Electron main-process Sentry DSN. Disabled when unset.                                                                              |
+| `STREAMER_DESKTOP_SENTRY_*`           | matching `SENTRY_*` fallback    |            | Desktop-specific overrides for environment, release, sample rates, and development enablement.                                              |
 
 ---
 

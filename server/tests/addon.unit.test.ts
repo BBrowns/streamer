@@ -31,6 +31,14 @@ vi.mock("../src/config/logger.js", () => ({
 // Mock security
 vi.mock("../src/utils/security.js", () => ({
   validateSafeUrl: vi.fn().mockResolvedValue(true),
+  resolveSafeUrl: vi.fn().mockResolvedValue({
+    parsed: new URL("http://example.com"),
+    addresses: [{ address: "93.184.216.34", family: 4 }],
+  }),
+  createPinnedHttpAgents: vi.fn().mockReturnValue({
+    httpAgent: undefined,
+    httpsAgent: undefined,
+  }),
 }));
 
 const { prisma } = await import("../src/prisma/client.js");

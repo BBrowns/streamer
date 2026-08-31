@@ -2,6 +2,8 @@ import type { Context, Next } from "hono";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
+import { SessionService } from "../modules/auth/session.service.js";
+import { normalizeDeviceId } from "@streamer/shared";
 
 export interface AuthPayload {
   userId: string;
@@ -9,6 +11,7 @@ export interface AuthPayload {
   iat?: number;
   exp?: number;
   jti?: string;
+  sid?: string;
 }
 
 type AccessTokenAuthenticationOptions = {
@@ -20,6 +23,8 @@ const MAX_TOKEN_AGE_SECONDS = 24 * 60 * 60; // 24 hours
 
 // Small memory cache to throttle heartbeat DB writes (prevent connection floods on burst N+1 requests)
 const heartbeatCache = new Map<string, number>();
+const HEARTBEAT_CACHE_MAX = 10_000;
+const HEARTBEAT_CACHE_TTL_MS = 60_000;
 
 function isJwtVerificationError(error: unknown): error is Error {
   if (!(error instanceof Error)) return false;
@@ -59,12 +64,19 @@ function verifyAccessToken(token: string): AuthPayload {
 function scheduleSessionHeartbeat(
   payload: AuthPayload,
   deviceId: string,
+  sessionId: string,
   ip: string,
   userAgent: string | undefined,
 ) {
   void import("../modules/auth/session.service.js")
     .then(({ SessionService }) =>
-      SessionService.heartbeat(payload.userId, deviceId, ip, userAgent),
+      SessionService.heartbeat(
+        payload.userId,
+        deviceId,
+        sessionId,
+        ip,
+        userAgent,
+      ),
     )
     .catch((err) => {
       logger.debug(
@@ -116,23 +128,56 @@ export async function authenticateAccessToken(
     }
   }
 
+  const sessionId = payload.sid || payload.jti;
+  if (!sessionId || !/^[A-Za-z0-9_-]{1,128}$/.test(sessionId)) {
+    return c.json({ error: "Invalid or expired token" }, 401);
+  }
+
+  const revocation = await SessionService.checkAccessToken(
+    payload.userId,
+    sessionId,
+    payload.iat,
+  );
+  if (revocation === "revoked") {
+    return c.json({ error: "Session has been revoked" }, 401);
+  }
+  if (
+    (revocation === "unavailable" || revocation === "not_configured") &&
+    env.nodeEnv === "production"
+  ) {
+    c.header("Retry-After", "5");
+    return c.json(
+      { error: "Session protection is temporarily unavailable" },
+      503,
+    );
+  }
+
   c.set("user", payload);
 
   // Multi-Device Session Logic
-  const deviceId =
-    options.deviceId || c.req.header("x-device-id") || "unknown-browser";
+  const deviceId = normalizeDeviceId(
+    options.deviceId || c.req.header("x-device-id"),
+  );
   const ip = c.req.header("x-forwarded-for") || "127.0.0.1";
   const userAgent = c.req.header("user-agent");
 
   // Proactive heartbeat — do not await it, so Redis/session bookkeeping does
   // not turn a valid authenticated request into an auth failure.
-  const cacheKey = `${payload.userId}:${deviceId}`;
+  const cacheKey = `${payload.userId}:${sessionId}`;
   const lastHeartbeat = heartbeatCache.get(cacheKey) || 0;
   const now = Date.now();
 
   if (now - lastHeartbeat > 10000) {
     heartbeatCache.set(cacheKey, now);
-    scheduleSessionHeartbeat(payload, deviceId, ip, userAgent);
+    scheduleSessionHeartbeat(payload, deviceId, sessionId, ip, userAgent);
+    for (const [key, timestamp] of heartbeatCache) {
+      if (now - timestamp > HEARTBEAT_CACHE_TTL_MS) heartbeatCache.delete(key);
+    }
+    while (heartbeatCache.size > HEARTBEAT_CACHE_MAX) {
+      const oldest = heartbeatCache.keys().next().value;
+      if (!oldest) break;
+      heartbeatCache.delete(oldest);
+    }
   }
 
   c.set("deviceId", deviceId);

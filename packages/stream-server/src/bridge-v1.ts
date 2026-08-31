@@ -36,6 +36,7 @@ import {
 import {
   createBridgeV1AccessSession,
   getConfiguredBridgePublicOrigin,
+  getConfiguredCastExternalHosts,
   getBridgeV1AuthContext,
   requireBridgeV1MasterAuth,
   requireBridgeV1Scope,
@@ -947,6 +948,8 @@ bridgeV1Router.post(
 
     const safeSource = await validateCastPlaybackUrlWithDns(sourceUrl, {
       allowedHosts: [new URL(bridgeOrigin).hostname],
+      allowedOrigins: [bridgeOrigin],
+      allowedExternalHosts: getConfiguredCastExternalHosts(),
     });
     if (!safeSource.ok || !safeSource.url) {
       return sendBridgeV1Error(

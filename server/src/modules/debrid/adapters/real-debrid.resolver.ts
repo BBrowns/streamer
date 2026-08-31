@@ -5,19 +5,74 @@ import type {
   DebridAccountStatus,
 } from "../ports/debrid.ports.js";
 import { logger } from "../../../config/logger.js";
+import { validateExternalNavigationUrl } from "@streamer/shared";
+
+const MAX_REAL_DEBRID_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_TORRENT_FILES = 4_096;
+const MAX_TORRENT_ID_LENGTH = 128;
+
+async function readBoundedResponseText(response: Response): Promise<string> {
+  const contentLength = Number(response.headers?.get?.("content-length") || 0);
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_REAL_DEBRID_RESPONSE_BYTES
+  ) {
+    throw new Error("Real-Debrid response exceeded the size limit");
+  }
+
+  const body = response.body;
+  if (!body || typeof body.getReader !== "function") {
+    const text =
+      typeof response.text === "function"
+        ? await response.text()
+        : JSON.stringify(await response.json());
+    if (
+      new TextEncoder().encode(text).byteLength > MAX_REAL_DEBRID_RESPONSE_BYTES
+    ) {
+      throw new Error("Real-Debrid response exceeded the size limit");
+    }
+    return text;
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_REAL_DEBRID_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new Error("Real-Debrid response exceeded the size limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
 
 /**
  * Real-Debrid adapter.
  *
- * Requires `RD_API_TOKEN` environment variable.
- * Implements the Real-Debrid API v2:
- * https://api.real-debrid.com/rest/2.0/
+ * Receives a user-scoped OAuth access token from the integration service. The
+ * adapter deliberately has no process-wide credential fallback.
  */
 export class RealDebridResolver implements IDebridResolver {
-  private readonly apiToken: string | undefined;
+  private readonly accessToken: string;
 
-  constructor() {
-    this.apiToken = process.env.RD_API_TOKEN;
+  constructor(accessToken = "") {
+    this.accessToken = accessToken;
   }
 
   private async request<T>(
@@ -25,9 +80,9 @@ export class RealDebridResolver implements IDebridResolver {
     endpoint: string,
     body?: URLSearchParams,
   ): Promise<T> {
-    const url = `https://api.real-debrid.com/rest/2.0${endpoint}`;
+    const url = `https://api.real-debrid.com/rest/1.0${endpoint}`;
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.apiToken}`,
+      Authorization: `Bearer ${this.accessToken}`,
     };
 
     const options: RequestInit = { method, headers };
@@ -39,27 +94,34 @@ export class RealDebridResolver implements IDebridResolver {
 
     const res = await fetch(url, options);
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Real-Debrid API error: ${res.status} ${text}`);
+      // Consume errors through the same bounded reader as successful
+      // responses. Do not include the upstream body in the thrown error: it
+      // is untrusted data and is not needed by callers or logs.
+      await readBoundedResponseText(res);
+      throw new Error(`Real-Debrid API error: ${res.status}`);
     }
 
     if (res.status === 204) {
       return {} as T;
     }
 
-    return res.json() as Promise<T>;
+    const text = await readBoundedResponseText(res);
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error("Real-Debrid returned invalid JSON");
+    }
   }
 
   canResolve(stream: Stream): boolean {
-    if (!this.apiToken) return false;
-    return !!stream.infoHash;
+    return Boolean(this.accessToken && stream.infoHash);
   }
 
   async resolve(
     stream: Stream,
     requestId: string,
   ): Promise<ResolvedStream | null> {
-    if (!this.apiToken || !stream.infoHash) {
+    if (!this.accessToken || !stream.infoHash) {
       logger.debug(
         { requestId },
         "Real-Debrid not configured or no infoHash, skipping",
@@ -78,13 +140,26 @@ export class RealDebridResolver implements IDebridResolver {
         "/torrents/addMagnet",
         addForm,
       );
-      const torrentId = addRes.id;
+      const torrentId = String(addRes.id || "");
+      if (
+        !torrentId ||
+        torrentId.length > MAX_TORRENT_ID_LENGTH ||
+        !/^[A-Za-z0-9_-]+$/.test(torrentId)
+      ) {
+        throw new Error("Real-Debrid returned an invalid torrent id");
+      }
 
       // 2. Get Torrent Info
       let info = await this.request<any>("GET", `/torrents/info/${torrentId}`);
 
       // 3. Select Files (if pending)
       if (info.status === "waiting_files_selection") {
+        if (
+          !Array.isArray(info.files) ||
+          info.files.length > MAX_TORRENT_FILES
+        ) {
+          throw new Error("Real-Debrid returned too many torrent files");
+        }
         const videoExts = [
           ".mp4",
           ".mkv",
@@ -151,6 +226,13 @@ export class RealDebridResolver implements IDebridResolver {
 
       // 5. Unrestrict the hoster link
       const link = info.links[0];
+      if (
+        typeof link !== "string" ||
+        link.length === 0 ||
+        link.length > 8_192
+      ) {
+        throw new Error("Real-Debrid returned an invalid hoster link");
+      }
       const unrestrictForm = new URLSearchParams();
       unrestrictForm.append("link", link);
 
@@ -160,20 +242,31 @@ export class RealDebridResolver implements IDebridResolver {
         unrestrictForm,
       );
 
-      if (unrestrictRes.download) {
+      const safeDownloadUrl = validateExternalNavigationUrl(
+        unrestrictRes.download,
+      );
+      if (safeDownloadUrl) {
         logger.info(
           { requestId, stream: stream.title },
           "Real-Debrid resolved successfully",
         );
         return {
-          url: unrestrictRes.download,
-          host: unrestrictRes.host,
-          size: unrestrictRes.filesize,
+          url: safeDownloadUrl,
+          host:
+            typeof unrestrictRes.host === "string"
+              ? unrestrictRes.host.slice(0, 256)
+              : undefined,
+          size:
+            typeof unrestrictRes.filesize === "number" &&
+            Number.isFinite(unrestrictRes.filesize) &&
+            unrestrictRes.filesize >= 0
+              ? unrestrictRes.filesize
+              : undefined,
         };
       }
     } catch (error: any) {
       logger.error(
-        { requestId, err: error.message },
+        { requestId, errorName: error?.name || "Error" },
         "Real-Debrid resolution error",
       );
     }
@@ -182,10 +275,6 @@ export class RealDebridResolver implements IDebridResolver {
   }
 
   async getAccountStatus(): Promise<DebridAccountStatus> {
-    if (!this.apiToken) {
-      return { isActive: false, isPremium: false };
-    }
-
     try {
       const user = await this.request<any>("GET", "/user");
       return {
@@ -193,7 +282,7 @@ export class RealDebridResolver implements IDebridResolver {
         isPremium: user.premium > 0,
         expiresAt: user.expiration,
       };
-    } catch (error) {
+    } catch {
       return { isActive: false, isPremium: false };
     }
   }

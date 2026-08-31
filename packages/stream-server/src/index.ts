@@ -21,8 +21,12 @@ import { legacySubtitlesRetiredRequest } from "./subtitles.js";
 import { handoffRouter } from "./handoff.js";
 import { gatewayRouter } from "./gateway.js";
 import { bridgeV1Router } from "./bridge-v1.js";
-import { getBridgeAuthDiagnostics, requireBridgeAuth } from "./security.js";
-import { redactSensitiveText } from "./redaction.js";
+import {
+  getBridgeAuthDiagnostics,
+  requireBridgeAuth,
+  requireTrustedBridgeHost,
+} from "./security.js";
+import { redactSensitiveText, safeRequestPath } from "./redaction.js";
 import { streamServerBuildMetadata } from "./build-metadata.js";
 import {
   captureStreamServerException,
@@ -272,6 +276,22 @@ export function createStreamServerApp() {
   app.use(cors());
   app.use(express.json({ limit: BRIDGE_V1_MAX_REQUEST_BYTES }));
 
+  // Host validation only protects routes that can create/proxy/cast media;
+  // the versioned hello/capability contract keeps its own typed auth errors.
+  app.use(
+    [
+      "/api/cast",
+      "/api/gateway",
+      "/stream",
+      "/stats",
+      "/api/torrent",
+      "/api/cache",
+      "/api/subtitles",
+      "/api/handoff",
+    ],
+    requireTrustedBridgeHost,
+  );
+
   app.use("/api/bridge/v1", bridgeV1Router);
   app.use("/api/cast", castRouter);
   app.use("/api/gateway", gatewayRouter);
@@ -380,7 +400,7 @@ export function createStreamServerApp() {
     ) => {
       captureStreamServerException(err, {
         method: req.method,
-        url: req.originalUrl,
+        url: safeRequestPath(req.originalUrl),
       });
       console.error(
         "[stream-server] Unhandled route error:",
@@ -413,8 +433,20 @@ export function createStreamServerApp() {
 
 export function startStreamServer(port: number | string = PORT) {
   initStreamServerSentry();
+  const configuredToken = process.env.STREAMER_BRIDGE_TOKEN?.trim();
+  const configuredHost = process.env.STREAMER_BRIDGE_HOST?.trim();
+  const host = configuredHost || (configuredToken ? "0.0.0.0" : "127.0.0.1");
+  const isLoopbackBind = ["localhost", "127.0.0.1", "::1"].includes(host);
+  if (process.env.NODE_ENV === "production" && !configuredToken) {
+    throw new Error("STREAMER_BRIDGE_TOKEN is required in production");
+  }
+  if (!configuredToken && !isLoopbackBind) {
+    throw new Error(
+      "A bridge token is required when STREAMER_BRIDGE_HOST is not loopback",
+    );
+  }
   const app = createStreamServerApp();
-  const server = app.listen(Number(port), "0.0.0.0", () => {
+  const server = app.listen(Number(port), host, () => {
     console.log(
       JSON.stringify({
         service: "streamer-stream-server",
@@ -423,7 +455,7 @@ export function startStreamServer(port: number | string = PORT) {
         build: streamServerBuildMetadata,
       }),
     );
-    console.log(`Stream server (Bridge) running on http://0.0.0.0:${port}`);
+    console.log(`Stream server (Bridge) running on http://${host}:${port}`);
   });
   server.on("error", (err: Error) => {
     captureStreamServerException(err, { component: "stream-server-listen" });

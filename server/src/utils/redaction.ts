@@ -9,6 +9,16 @@ const URL_KEY_PATTERN = /^(url|requestUrl)$/i;
 const SENSITIVE_QUERY_PARAM_PATTERN =
   /^(token|access_token|refresh_token|resetToken|verificationToken|signature|auth|authorization|key|api_key)$/i;
 
+/** Request telemetry should contain the route shape, never query parameters. */
+export function safeRequestPath(value: unknown): string {
+  if (typeof value !== "string") return "[unknown]";
+  try {
+    return new URL(value).pathname.slice(0, 2_048) || "/";
+  } catch {
+    return (value.split("?", 1)[0] || "/").slice(0, 2_048);
+  }
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
     typeof value === "object" &&

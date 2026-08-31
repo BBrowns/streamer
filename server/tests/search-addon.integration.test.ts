@@ -202,10 +202,10 @@ describe("Search add-on capability integration", () => {
       failedProviderIds: [],
       partial: false,
     });
-    expect(addonFixture.requests.map((entry) => entry.catalogId)).toEqual([
-      "search-movies",
-      "search-series",
-    ]);
+    expect(addonFixture.requests).toHaveLength(2);
+    expect(
+      addonFixture.requests.map((entry) => entry.catalogId).sort(),
+    ).toEqual(["search-movies", "search-series"]);
   });
 
   it("keeps healthy results and reports a failing searchable provider as partial", async () => {

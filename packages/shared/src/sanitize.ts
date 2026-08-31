@@ -213,3 +213,17 @@ export function stripSubtitleMarkup(input: string) {
     preserveBreaks: true,
   });
 }
+
+/** Validate a provider-controlled URL before handing it to browser navigation. */
+export function validateExternalNavigationUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}

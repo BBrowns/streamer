@@ -57,6 +57,22 @@ test("rejects public HTTP and private or mixed DNS answers", async () => {
   );
 });
 
+test("rejects all IPv6 link-local ranges", async () => {
+  for (const address of ["fe80::1", "fe90::1", "fea0::1", "febf::1"]) {
+    await assert.rejects(() =>
+      validateDownloadUrlWithDns(`https://[${address}]/movie.mp4`),
+    );
+  }
+});
+
+test("rejects IPv4-compatible IPv6 forms of private addresses", async () => {
+  for (const address of ["::c0a8:101", "::a00:1", "::7f00:1"]) {
+    await assert.rejects(() =>
+      validateDownloadUrlWithDns(`https://[${address}]/movie.mp4`),
+    );
+  }
+});
+
 async function expectPolicy(url, kind) {
   const validated = await validateDownloadUrlWithDns(url, async () => {
     throw new Error("Bridge loopback URLs must not perform DNS lookups");

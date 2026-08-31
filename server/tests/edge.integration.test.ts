@@ -14,9 +14,11 @@ import { sessionRouter } from "../src/modules/sessions/session.routes.js";
 import { sessionService } from "../src/modules/sessions/session.service.js";
 
 function accessToken(userId = "user-1") {
-  return jwt.sign({ userId, email: "test@example.com" }, env.jwtSecret, {
-    expiresIn: "15m",
-  });
+  return jwt.sign(
+    { userId, email: "test@example.com", sid: "test-session" },
+    env.jwtSecret,
+    { expiresIn: "15m" },
+  );
 }
 
 function databaseUnavailableError() {
