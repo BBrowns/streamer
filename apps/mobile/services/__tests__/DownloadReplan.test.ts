@@ -12,6 +12,13 @@ jest.mock("../playback/PlaybackOrchestrator", () => ({
 
 jest.mock("../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
+    getBridgeSnapshot: jest.fn(() => ({
+      available: false,
+      status: "unreachable",
+      diagnostics: { status: "unreachable" },
+      url: null,
+    })),
+    subscribeBridge: jest.fn(() => jest.fn()),
     getPlaybackUri: jest.fn(),
   },
 }));

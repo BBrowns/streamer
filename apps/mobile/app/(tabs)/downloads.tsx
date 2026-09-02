@@ -53,6 +53,7 @@ import {
   uiSpacing,
   uiTypography,
 } from "../../components/ui/designSystem";
+import { RouteAccessibilityBoundary } from "../../components/ui/RouteAccessibilityBoundary";
 
 type QueueFilter = "all" | DownloadQueueGroup;
 
@@ -410,250 +411,263 @@ export default function DownloadsScreen() {
 
   if (tasks.length === 0 && !refreshing) {
     return (
-      <ScrollView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={[
-          styles.emptyContent,
-          compact && styles.emptyContentCompact,
-        ]}
-      >
-        <View style={styles.emptyHeader}>
-          <PageHeader
-            title={t("downloads.title", { defaultValue: "Downloads" })}
-            description={t("downloads.header.subtitle", {
-              defaultValue:
-                "Your queue and verified offline files on this device",
-            })}
-            compact={compact}
-            titleVisibility={compact ? "navigation-owned" : "visible"}
-            style={styles.emptyPageHeader}
-          />
-        </View>
-        <View style={styles.emptyHero}>
-          <EmptyState
-            testID="downloads-empty-state"
-            fill={false}
-            size="medium"
-            icon="cloud-download-outline"
-            title={t("downloads.empty.title", { defaultValue: "No downloads" })}
-            description={t("downloads.empty.description", {
-              defaultValue:
-                "Movies and shows you save for offline viewing will appear here.",
-            })}
-            actionLabel={t("downloads.empty.action", {
-              defaultValue: "Browse movies and shows",
-            })}
-            onAction={() => router.push("/search")}
-          />
-        </View>
-        <View style={styles.emptySmartStatus}>
-          <SmartDownloadsStatusRow
-            onPress={() => router.push("/settings/downloads" as never)}
-          />
-          <SmartDownloadPlans />
-        </View>
-      </ScrollView>
+      <RouteAccessibilityBoundary>
+        <ScrollView
+          style={[styles.container, { backgroundColor: colors.background }]}
+          contentContainerStyle={[
+            styles.emptyContent,
+            compact && styles.emptyContentCompact,
+          ]}
+        >
+          <View style={styles.emptyHeader}>
+            <PageHeader
+              title={t("downloads.title", { defaultValue: "Downloads" })}
+              description={t("downloads.header.subtitle", {
+                defaultValue:
+                  "Your queue and verified offline files on this device",
+              })}
+              compact={compact}
+              titleVisibility={compact ? "navigation-owned" : "visible"}
+              style={styles.emptyPageHeader}
+            />
+          </View>
+          <View style={styles.emptyHero}>
+            <EmptyState
+              testID="downloads-empty-state"
+              fill={false}
+              size="medium"
+              icon="cloud-download-outline"
+              title={t("downloads.empty.title", {
+                defaultValue: "No downloads",
+              })}
+              description={t("downloads.empty.description", {
+                defaultValue:
+                  "Movies and shows you save for offline viewing will appear here.",
+              })}
+              actionLabel={t("downloads.empty.action", {
+                defaultValue: "Browse movies and shows",
+              })}
+              onAction={() => router.push("/search")}
+            />
+          </View>
+          <View style={styles.emptySmartStatus}>
+            <SmartDownloadsStatusRow
+              onPress={() => router.push("/settings/downloads" as never)}
+            />
+            <SmartDownloadPlans />
+          </View>
+        </ScrollView>
+      </RouteAccessibilityBoundary>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        stickySectionHeadersEnabled={false}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refreshQueue}
-            tintColor={colors.textSecondary}
-            colors={[colors.textSecondary]}
-          />
-        }
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <View
-              style={[
-                styles.headerTitleRow,
-                compact && styles.headerTitleRowCompact,
-              ]}
-            >
-              <View style={styles.headerText}>
-                {!compact ? (
-                  <Text style={[styles.title, { color: colors.text }]}>
-                    {t("downloads.title", { defaultValue: "Downloads" })}
+    <RouteAccessibilityBoundary>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={refreshQueue}
+              tintColor={colors.textSecondary}
+              colors={[colors.textSecondary]}
+            />
+          }
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <View
+                style={[
+                  styles.headerTitleRow,
+                  compact && styles.headerTitleRowCompact,
+                ]}
+              >
+                <View style={styles.headerText}>
+                  {!compact ? (
+                    <Text style={[styles.title, { color: colors.text }]}>
+                      {t("downloads.title", { defaultValue: "Downloads" })}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={[styles.subtitle, { color: colors.textSecondary }]}
+                  >
+                    {t("downloads.header.subtitle", {
+                      defaultValue:
+                        "Your queue and verified offline files on this device",
+                    })}
                   </Text>
+                </View>
+                {canSelect || isSelectionMode ? (
+                  <AppButton
+                    label={
+                      isSelectionMode
+                        ? t("library.header.cancel", { defaultValue: "Cancel" })
+                        : t("library.header.select", { defaultValue: "Select" })
+                    }
+                    variant="secondary"
+                    size="small"
+                    onPress={toggleSelectionMode}
+                    style={compact ? styles.clearButtonCompact : undefined}
+                  />
                 ) : null}
-                <Text
-                  style={[styles.subtitle, { color: colors.textSecondary }]}
-                >
-                  {t("downloads.header.subtitle", {
-                    defaultValue:
-                      "Your queue and verified offline files on this device",
-                  })}
-                </Text>
               </View>
-              {canSelect || isSelectionMode ? (
-                <AppButton
-                  label={
-                    isSelectionMode
-                      ? t("library.header.cancel", { defaultValue: "Cancel" })
-                      : t("library.header.select", { defaultValue: "Select" })
-                  }
-                  variant="secondary"
-                  size="small"
-                  onPress={toggleSelectionMode}
-                  style={compact ? styles.clearButtonCompact : undefined}
+
+              <View style={styles.summaryRow}>
+                <SummaryItem
+                  label={t("downloads.summary.active", {
+                    defaultValue: "Active",
+                  })}
+                  value={String(summary.active)}
+                  color={colors.info}
                 />
-              ) : null}
-            </View>
+                <SummaryItem
+                  label={t("downloads.summary.ready", {
+                    defaultValue: "Ready",
+                  })}
+                  value={String(summary.ready)}
+                  color={colors.success}
+                />
+                <SummaryItem
+                  label={t("downloads.summary.needsVerification", {
+                    defaultValue: "Needs check",
+                  })}
+                  value={String(summary.needsVerification)}
+                  color={colors.warning}
+                />
+                <SummaryItem
+                  label={t("downloads.summary.storage", {
+                    defaultValue: "Verified storage",
+                  })}
+                  value={readySize || "—"}
+                  color={colors.warning}
+                />
+              </View>
 
-            <View style={styles.summaryRow}>
-              <SummaryItem
-                label={t("downloads.summary.active", {
-                  defaultValue: "Active",
+              <FilterChipBar
+                options={filterOptions}
+                value={filter}
+                onChange={setFilter}
+                containerStyle={styles.filters}
+                accessibilityLabel={t("downloads.filters.label", {
+                  defaultValue: "Filter downloads",
                 })}
-                value={String(summary.active)}
-                color={colors.info}
               />
-              <SummaryItem
-                label={t("downloads.summary.ready", {
-                  defaultValue: "Ready",
-                })}
-                value={String(summary.ready)}
-                color={colors.success}
-              />
-              <SummaryItem
-                label={t("downloads.summary.needsVerification", {
-                  defaultValue: "Needs check",
-                })}
-                value={String(summary.needsVerification)}
-                color={colors.warning}
-              />
-              <SummaryItem
-                label={t("downloads.summary.storage", {
-                  defaultValue: "Verified storage",
-                })}
-                value={readySize || "—"}
-                color={colors.warning}
-              />
-            </View>
 
-            <FilterChipBar
-              options={filterOptions}
-              value={filter}
-              onChange={setFilter}
-              containerStyle={styles.filters}
-              accessibilityLabel={t("downloads.filters.label", {
-                defaultValue: "Filter downloads",
+              <View style={styles.smartDownloadsPanel}>
+                <SmartDownloadsStatusRow
+                  onPress={() => router.push("/settings/downloads" as never)}
+                />
+                <SmartDownloadPlans />
+              </View>
+            </View>
+          }
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {section.title}
+              </Text>
+              <Text
+                style={[
+                  styles.sectionSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {section.subtitle}
+              </Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <DownloadQueueCard
+              task={item}
+              busy={busyIds.has(item.id)}
+              onOpen={() => void openTask(item)}
+              onPause={() =>
+                void runTaskOperation(item.id, () =>
+                  downloadService.pauseDownload(item.id),
+                )
+              }
+              onResume={() =>
+                void runTaskOperation(item.id, () =>
+                  downloadService.resumeDownload(item.id),
+                )
+              }
+              onRetry={() =>
+                void runTaskOperation(item.id, () =>
+                  downloadService.resumeDownload(item.id),
+                )
+              }
+              onVerify={() =>
+                void runTaskOperation(item.id, async () => {
+                  const verified = await downloadService.verifyTask(item.id);
+                  return {
+                    ok: verified,
+                    error: verified
+                      ? undefined
+                      : "Downloaded file could not be verified.",
+                  };
+                })
+              }
+              onRepairBridge={() => router.push("/settings/sources" as any)}
+              onManageStorage={manageStorage}
+              onDelete={() => confirmDelete(item)}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedIds.has(item.id)}
+              onToggleSelect={() => toggleTaskSelection(item.id)}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
+          SectionSeparatorComponent={() => (
+            <View style={styles.sectionSeparator} />
+          )}
+          ListEmptyComponent={
+            <EmptyState
+              icon="filter-outline"
+              title={t("downloads.empty.filterTitle", {
+                defaultValue: "Nothing in this view",
               })}
-            />
-
-            <View style={styles.smartDownloadsPanel}>
-              <SmartDownloadsStatusRow
-                onPress={() => router.push("/settings/downloads" as never)}
-              />
-              <SmartDownloadPlans />
-            </View>
-          </View>
-        }
-        renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              {section.title}
-            </Text>
-            <Text
-              style={[styles.sectionSubtitle, { color: colors.textSecondary }]}
-            >
-              {section.subtitle}
-            </Text>
-          </View>
-        )}
-        renderItem={({ item }) => (
-          <DownloadQueueCard
-            task={item}
-            busy={busyIds.has(item.id)}
-            onOpen={() => void openTask(item)}
-            onPause={() =>
-              void runTaskOperation(item.id, () =>
-                downloadService.pauseDownload(item.id),
-              )
-            }
-            onResume={() =>
-              void runTaskOperation(item.id, () =>
-                downloadService.resumeDownload(item.id),
-              )
-            }
-            onRetry={() =>
-              void runTaskOperation(item.id, () =>
-                downloadService.resumeDownload(item.id),
-              )
-            }
-            onVerify={() =>
-              void runTaskOperation(item.id, async () => {
-                const verified = await downloadService.verifyTask(item.id);
-                return {
-                  ok: verified,
-                  error: verified
-                    ? undefined
-                    : "Downloaded file could not be verified.",
-                };
-              })
-            }
-            onRepairBridge={() => router.push("/settings/sources" as any)}
-            onManageStorage={manageStorage}
-            onDelete={() => confirmDelete(item)}
-            isSelectionMode={isSelectionMode}
-            isSelected={selectedIds.has(item.id)}
-            onToggleSelect={() => toggleTaskSelection(item.id)}
-          />
-        )}
-        ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
-        SectionSeparatorComponent={() => (
-          <View style={styles.sectionSeparator} />
-        )}
-        ListEmptyComponent={
-          <EmptyState
-            icon="filter-outline"
-            title={t("downloads.empty.filterTitle", {
-              defaultValue: "Nothing in this view",
-            })}
-            description={t("downloads.empty.filterDescription", {
-              defaultValue:
-                "Choose another filter to see the rest of the queue.",
-            })}
-          />
-        }
-        ListFooterComponent={
-          <View style={styles.footer}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={16}
-              color={colors.textSecondary}
-            />
-            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-              {t("downloads.footer.verified", {
+              description={t("downloads.empty.filterDescription", {
                 defaultValue:
-                  "Offline items are shown as ready only after the local file is verified.",
+                  "Choose another filter to see the rest of the queue.",
               })}
-            </Text>
-          </View>
-        }
-      />
-      <SelectionActionBar
-        selectedCount={isSelectionMode ? selectedIds.size : 0}
-        selectedLabel={t("downloads.selection.selected", {
-          count: selectedIds.size,
-          defaultValue: `${selectedIds.size} selected`,
-        })}
-        actionLabel={t("downloads.actions.delete", { defaultValue: "Delete" })}
-        actionAccessibilityLabel={t("downloads.selection.deleteSelected", {
-          defaultValue: "Delete selected downloads",
-        })}
-        onAction={confirmBulkDelete}
-      />
-    </View>
+            />
+          }
+          ListFooterComponent={
+            <View style={styles.footer}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text
+                style={[styles.footerText, { color: colors.textSecondary }]}
+              >
+                {t("downloads.footer.verified", {
+                  defaultValue:
+                    "Offline items are shown as ready only after the local file is verified.",
+                })}
+              </Text>
+            </View>
+          }
+        />
+        <SelectionActionBar
+          selectedCount={isSelectionMode ? selectedIds.size : 0}
+          selectedLabel={t("downloads.selection.selected", {
+            count: selectedIds.size,
+            defaultValue: `${selectedIds.size} selected`,
+          })}
+          actionLabel={t("downloads.actions.delete", {
+            defaultValue: "Delete",
+          })}
+          actionAccessibilityLabel={t("downloads.selection.deleteSelected", {
+            defaultValue: "Delete selected downloads",
+          })}
+          onAction={confirmBulkDelete}
+        />
+      </View>
+    </RouteAccessibilityBoundary>
   );
 }
 

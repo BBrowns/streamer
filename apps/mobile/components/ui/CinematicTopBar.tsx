@@ -55,9 +55,9 @@ export function resolveTopBarLayout(
     rightPadding: medium ? 16 : 24,
     brandWidth: medium ? 48 : 220,
     actionsWidth: medium ? 152 : 220,
-    navItemMinWidth: medium ? 60 : 72,
+    navItemMinWidth: medium ? 72 : 72,
     navItemPaddingHorizontal: medium ? 8 : 12,
-    navGap: medium ? 0 : 8,
+    navGap: medium ? 4 : 8,
     navFontSize: medium ? 13 : 14,
   };
 }
@@ -350,7 +350,7 @@ export function CinematicTopBar({
   const { colors, isDark } = useTheme();
   const { theme: cinematicTheme } = useCinematicTheme();
   const { windowClass, isLarge, isExpanded } = useWindowClass();
-  const { unreadCount } = useNotifications();
+  const { unreadCount } = useNotifications({ poll: true });
   const user = useAuthStore((state) => state.user);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -425,6 +425,7 @@ export function CinematicTopBar({
               <Link key={item.href} href={item.href as never} asChild>
                 <Pressable
                   accessibilityRole="link"
+                  accessibilityLabel={t(item.labelKey)}
                   accessibilityState={{ selected: active }}
                   style={({ hovered, pressed, focused }: any) => [
                     styles.navLink,

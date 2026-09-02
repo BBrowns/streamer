@@ -296,6 +296,13 @@ the first peer connects, it gets up to 20 seconds to provide metadata, with a
 torrent file—not an add-on label—then decides whether the gateway can bridge it
 directly or needs an MP4 remux.
 
+If a legacy or generic `range-http` request discovers at runtime that its
+selected file requires remuxing, the gateway promotes that same job to
+`progressive-fmp4` before reporting it ready. The metadata event is sufficient
+for file selection; the first-byte probe, not the later WebTorrent `ready`
+event, is the playback readiness gate. Explicit seekable-cache jobs remain
+seekable-cache jobs for downloads, cast, and later seek handoff.
+
 For the primary Play action, the playback control plane passes a runtime-only
 `progressive-fmp4` delivery choice for a remuxed torrent. Gateway readiness then
 only requires a verified first torrent byte (up to 20 seconds); when the player
@@ -364,11 +371,11 @@ a video transcode: an unsupported copied codec such as HEVC or AV1 still relies
 on the existing candidate fallback rather than being made playable by remuxing.
 
 The bridge may discover during file selection that a route planned as
-`range-http` needs the already-supported `seekable-cache` delivery. The source
-adapter accepts only that exact forward transition, keeps the job and attempt
-binding checks intact, and returns an effective route whose seek capability
-matches the ready job. Any other delivery change remains a bridge contract
-error.
+`range-http` needs either `progressive-fmp4` for primary Play or the already-
+supported `seekable-cache` delivery for a complete handoff. The source adapter
+accepts only these exact forward transitions, keeps the job and attempt binding
+checks intact, and returns an effective route whose seek capability matches the
+ready job. Any other delivery change remains a bridge contract error.
 
 A `no_peers` result belongs to that candidate rather than the bridge as a whole,
 so the next eligible torrent source is still attempted. Gateway preparation
@@ -383,10 +390,28 @@ readiness budget, so a desktop bridge and a mobile/web renderer do not need
 synchronized wall clocks. Unknown-container torrent labels reserve the bounded
 remux allowance until metadata makes the container decision authoritative.
 When that inspection proves a requested `range-http` file requires an MKV
-remux, the bridge may narrow the job to `seekable-cache`. The client accepts and
-adopts only this exact delivery upgrade, including the bridge's authoritative
-seek capability. Any other delivery drift or downgrade remains a bridge
-contract failure.
+remux, primary Play uses negotiated `hls` when the target advertises
+`hls-segments`; otherwise it uses `progressive-fmp4`. Downloads, cast, and
+explicit seekable handoffs continue to use `seekable-cache`. HLS publishes an
+event playlist, init segment, and media fragments as soon as the first fragment
+is ready, so the timeline can seek inside the published window while the
+episode continues to materialize. A seek beyond that window is rejected
+without moving the playhead. The client accepts and adopts only these exact
+delivery upgrades, including the bridge's authoritative seek capability. Any
+other delivery drift or downgrade remains a bridge contract failure.
+
+For bridge playback, the gateway inspects embedded audio tracks after selecting
+the actual media file. An explicitly selected track wins; otherwise an English
+main track wins when English is preferred. Language metadata is authoritative,
+with only an unambiguous English track title as a safe fallback; `unknown` is
+not English. If English is required but unavailable, that candidate fails with
+a fallbackable track error instead of silently starting Spanish. The runtime
+track catalog exposes the same effective selection. On platforms where the
+media adapter cannot switch tracks in place, selecting another catalog entry
+opens a new signed variant for the same candidate; the original
+playback-session identity remains unchanged. A live non-default audio variant
+is not silently replaced by the default-audio seekable cache during the later
+handoff.
 Remaining work is reliability and productization: real-device
 download/cast/gateway tests, release evidence, and a more polished player
 readiness UI.

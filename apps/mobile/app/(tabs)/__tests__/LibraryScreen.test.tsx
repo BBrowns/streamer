@@ -36,6 +36,7 @@ jest.mock("expo-router", () => ({
   useNavigation: () => mockNavigation,
   useRouter: () => ({ push: mockPush }),
   useLocalSearchParams: () => ({ view: mockLibraryView }),
+  useIsFocused: () => true,
 }));
 
 jest.mock("../../../hooks/useLibrary", () => ({

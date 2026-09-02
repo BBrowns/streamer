@@ -162,6 +162,10 @@ export function AdaptiveOverlay({
       statusBarTranslucent
       animationType={animationType ?? (reducedMotion ? "none" : "fade")}
       onRequestClose={onClose}
+      accessibilityViewIsModal
+      accessibilityLabel={
+        Platform.OS === "web" ? accessibilityLabel : undefined
+      }
     >
       <View
         style={[
@@ -202,9 +206,11 @@ export function AdaptiveOverlay({
         >
           <View
             ref={surfaceRef}
-            accessibilityViewIsModal
-            accessibilityLabel={accessibilityLabel}
-            role="dialog"
+            accessibilityViewIsModal={Platform.OS !== "web"}
+            accessibilityLabel={
+              Platform.OS === "web" ? undefined : accessibilityLabel
+            }
+            role={Platform.OS === "web" ? undefined : "dialog"}
             style={styles.content}
           >
             {presentation === "bottom-sheet" ? (

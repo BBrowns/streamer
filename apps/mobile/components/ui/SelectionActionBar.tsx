@@ -2,6 +2,10 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { AppButton } from "./AppButton";
 import { uiLayout, uiRadii, uiSpacing, uiTypography } from "./designSystem";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 type SelectionActionBarProps = {
   selectedCount: number;
@@ -24,7 +28,10 @@ export function SelectionActionBar({
   if (selectedCount <= 0) return null;
 
   return (
-    <View pointerEvents="box-none" style={styles.positioner}>
+    <View
+      pointerEvents={getNativePointerEvents("box-none")}
+      style={[styles.positioner, getPointerEventsStyle("box-none")]}
+    >
       <View
         style={[
           styles.bar,

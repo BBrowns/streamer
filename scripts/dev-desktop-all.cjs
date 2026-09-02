@@ -4,6 +4,7 @@ const http = require("node:http");
 const https = require("node:https");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { stopOwnedBridge } = require("../apps/desktop/scripts/dev.cjs");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "..");
 const SERVICE_TIMEOUT_MS = 120_000;
@@ -141,8 +142,10 @@ async function run(options = {}) {
   const spawnScript = options.spawnScript || spawnNpmScript;
   const waitUntilReady = options.waitForService || waitForService;
   const terminate = options.terminateChildren || terminateChildren;
+  const cleanupBridge = options.stopOwnedBridge || stopOwnedBridge;
   const children = [];
   const childOutcomes = [];
+  let desktopWasStarted = false;
   let resolveSignal;
   const signalOutcome = new Promise((resolve) => {
     resolveSignal = resolve;
@@ -175,6 +178,7 @@ async function run(options = {}) {
     }
 
     const desktop = spawnScript("dev:desktop");
+    desktopWasStarted = true;
     children.push(desktop);
     childOutcomes.push(watchChild(desktop, "dev:desktop"));
 
@@ -185,6 +189,9 @@ async function run(options = {}) {
     signalSource.removeListener("SIGINT", onSigint);
     signalSource.removeListener("SIGTERM", onSigterm);
     const stopped = await terminate(children);
+    if (desktopWasStarted) {
+      await cleanupBridge();
+    }
     if (!stopped) {
       console.error("[desktop-all] Some child processes did not stop cleanly.");
     }

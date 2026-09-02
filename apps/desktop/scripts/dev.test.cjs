@@ -2,7 +2,12 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { assertBridgePortAvailable, waitForRenderer } = require("./dev.cjs");
+const {
+  assertBridgePortAvailable,
+  getOwnedBridgePid,
+  stopOwnedBridge,
+  waitForRenderer,
+} = require("./dev.cjs");
 
 test("waits for an HTML renderer instead of assuming the port is ready", async () => {
   let attempts = 0;
@@ -52,4 +57,48 @@ test("allows desktop startup when its bridge port is free", async () => {
   await assert.doesNotReject(
     assertBridgePortAvailable({ probe: async () => false }),
   );
+});
+
+test("only identifies a desktop-owned bridge for cleanup", () => {
+  assert.equal(
+    getOwnedBridgePid({ runtime: { owner: "desktop", pid: 4242 } }),
+    4242,
+  );
+  assert.equal(
+    getOwnedBridgePid({ runtime: { owner: "standalone", pid: 4242 } }),
+    null,
+  );
+  assert.equal(
+    getOwnedBridgePid({ runtime: { owner: "desktop", pid: 0 } }),
+    null,
+  );
+});
+
+test("stops the owned bridge with a bounded graceful cleanup", async () => {
+  const signals = [];
+  let alive = true;
+
+  const stopped = await stopOwnedBridge({
+    health: { runtime: { owner: "desktop", pid: 4242 } },
+    selfPid: 100,
+    kill: (pid, signal) => signals.push([pid, signal]),
+    isAlive: () => alive,
+    sleep: async () => {
+      alive = false;
+    },
+  });
+
+  assert.equal(stopped, true);
+  assert.deepEqual(signals, [[4242, "SIGTERM"]]);
+});
+
+test("does not stop a non-desktop bridge owner", async () => {
+  const signals = [];
+  const stopped = await stopOwnedBridge({
+    health: { runtime: { owner: "standalone", pid: 4242 } },
+    kill: (pid, signal) => signals.push([pid, signal]),
+  });
+
+  assert.equal(stopped, false);
+  assert.deepEqual(signals, []);
 });

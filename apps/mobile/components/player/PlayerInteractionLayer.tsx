@@ -1,4 +1,8 @@
 import { Platform, Pressable, StyleSheet, View } from "react-native";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 type PlayerInteractionLayerProps = {
   onTapSide: (side: "left" | "right") => void;
@@ -22,7 +26,10 @@ export function PlayerInteractionLayer({
   };
 
   return (
-    <View style={styles.layer} pointerEvents="box-none">
+    <View
+      style={[styles.layer, getPointerEventsStyle("box-none")]}
+      pointerEvents={getNativePointerEvents("box-none")}
+    >
       <Pressable
         {...passiveProps}
         testID="player-hit-zone-left"

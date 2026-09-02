@@ -74,4 +74,38 @@ describe("bridge v1 gateway serialization", () => {
     expect(JSON.stringify(response)).not.toContain("sensitive-hash");
     expect(JSON.stringify(response)).not.toContain("/private/");
   });
+
+  it("maps asynchronous preparation errors to a fallbackable internal failure", () => {
+    const response = serializeBridgeJobV1(
+      makeJob({
+        mode: "remux",
+        remuxStrategy: "progressive-fmp4",
+        state: "error",
+        error: "FFmpeg input ended prematurely",
+        retryable: true,
+      }),
+    );
+
+    expect(response.job.failure).toEqual({
+      code: "INTERNAL",
+      message: "The bridge could not prepare this source.",
+      retryable: true,
+    });
+  });
+
+  it("preserves runtime-unavailable as a non-fallbackable bridge failure", () => {
+    const response = serializeBridgeJobV1(
+      makeJob({
+        state: "error",
+        failureCode: "RUNTIME_UNAVAILABLE",
+        retryable: false,
+      }),
+    );
+
+    expect(response.job.failure).toEqual({
+      code: "RUNTIME_UNAVAILABLE",
+      message: "The torrent runtime is unavailable.",
+      retryable: false,
+    });
+  });
 });

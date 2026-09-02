@@ -1,7 +1,8 @@
 import React from "react";
-import { Alert, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { AdvancedSourcesSection, SourcesSection } from "../SourcesSection";
+import { BridgeReadinessOwner } from "../../BridgeReadinessOwner";
 import { streamEngineManager } from "../../../services/streamEngine/StreamEngineManager";
 import { useAuthStore } from "../../../stores/authStore";
 
@@ -11,10 +12,18 @@ jest.mock("@expo/vector-icons", () => ({
 
 describe("Sources and Advanced ownership", () => {
   const originalPlatform = Platform.OS;
+  const originalAppState = AppState.currentState;
   const originalDesktopBridge = window.desktopBridge;
+  const originalDocumentVisibility =
+    typeof document === "undefined" ? undefined : document.visibilityState;
 
   beforeEach(() => {
-    useAuthStore.setState({ streamServerToken: "pairing-token" });
+    useAuthStore.setState({
+      streamServerToken: "pairing-token",
+      isHydrated: true,
+      credentialsHydrated: true,
+      isAuthenticated: true,
+    });
     jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -24,6 +33,16 @@ describe("Sources and Advanced ownership", () => {
       configurable: true,
       value: "web",
     });
+    Object.defineProperty(AppState, "currentState", {
+      configurable: true,
+      value: "active",
+    });
+    if (typeof document !== "undefined") {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+      });
+    }
     jest.spyOn(streamEngineManager, "detectBridge").mockResolvedValue(false);
     jest.spyOn(streamEngineManager, "getBridgeDiagnostics").mockReturnValue({
       status: "unsupported",
@@ -81,6 +100,15 @@ describe("Sources and Advanced ownership", () => {
     } as any;
   });
 
+  function renderWithReadinessOwner(element: React.ReactElement) {
+    return render(
+      <>
+        <BridgeReadinessOwner />
+        {element}
+      </>,
+    );
+  }
+
   afterEach(async () => {
     jest.restoreAllMocks();
     await act(() => {
@@ -91,11 +119,21 @@ describe("Sources and Advanced ownership", () => {
       configurable: true,
       value: originalPlatform,
     });
+    Object.defineProperty(AppState, "currentState", {
+      configurable: true,
+      value: originalAppState,
+    });
+    if (typeof document !== "undefined" && originalDocumentVisibility) {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: originalDocumentVisibility,
+      });
+    }
     window.desktopBridge = originalDesktopBridge;
   });
 
   it("keeps consumer readiness, add-ons and device capabilities in Sources", async () => {
-    const screen = await render(<SourcesSection />);
+    const screen = await renderWithReadinessOwner(<SourcesSection />);
 
     await waitFor(() => {
       expect(screen.getByText("Content Add-ons")).toBeTruthy();
@@ -107,7 +145,7 @@ describe("Sources and Advanced ownership", () => {
   });
 
   it("keeps connection, maintenance and collapsed diagnostics in Advanced", async () => {
-    const screen = await render(<AdvancedSourcesSection />);
+    const screen = await renderWithReadinessOwner(<AdvancedSourcesSection />);
 
     await waitFor(() => {
       expect(screen.getByText("Backend API URL")).toBeTruthy();
@@ -134,7 +172,7 @@ describe("Sources and Advanced ownership", () => {
   });
 
   it("cleans inactive playback cache through the configured service", async () => {
-    const screen = await render(<AdvancedSourcesSection />);
+    const screen = await renderWithReadinessOwner(<AdvancedSourcesSection />);
 
     await waitFor(() => {
       expect(screen.getByText("Clean playback cache")).toBeTruthy();
@@ -172,12 +210,46 @@ describe("Sources and Advanced ownership", () => {
       .spyOn(streamEngineManager, "getBridgeUrl")
       .mockReturnValue("http://localhost:11470");
 
-    const screen = await render(<AdvancedSourcesSection />);
+    const screen = await renderWithReadinessOwner(<AdvancedSourcesSection />);
 
     await waitFor(() => {
       expect(
         screen.getByText("Use the desktop service LAN address"),
       ).toBeTruthy();
     });
+  });
+
+  it("hydrates advanced connection fields after secure credentials load", async () => {
+    useAuthStore.setState({
+      credentialsHydrated: false,
+      backendUrl: null,
+      streamServerUrl: null,
+      streamServerToken: null,
+    });
+
+    const screen = await renderWithReadinessOwner(<AdvancedSourcesSection />);
+
+    await act(async () => {
+      useAuthStore.setState({
+        credentialsHydrated: true,
+        backendUrl: "http://backend.example.test",
+        streamServerUrl: "http://bridge.example.test",
+        streamServerToken: "pairing-token",
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByDisplayValue("http://backend.example.test"),
+      ).toBeTruthy();
+      expect(
+        screen.getByDisplayValue("http://bridge.example.test"),
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(
+      screen.getByRole("button", { name: "settings.advanced.apply" }),
+    );
+    expect(useAuthStore.getState().streamServerToken).toBe("pairing-token");
   });
 });

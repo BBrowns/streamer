@@ -24,7 +24,7 @@ export interface Stream {
      * Runtime-only delivery choice made by the playback control plane. It is
      * never persisted with a session or treated as add-on metadata.
      */
-    remuxStrategy?: "progressive-fmp4" | "seekable-cache";
+    remuxStrategy?: "progressive-fmp4" | "seekable-cache" | "hls";
   };
 }
 

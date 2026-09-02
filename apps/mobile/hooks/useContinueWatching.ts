@@ -1,7 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type UseMutationResult,
+} from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 import { api } from "../services/api";
 import type { WatchProgress, UpdateProgressRequest } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
+import { toRateLimitError } from "../services/rateLimit";
 
 /** Query key factory */
 export const progressKeys = {
@@ -29,7 +36,7 @@ export function useContinueWatching() {
 
 /** Report watch progress to the server */
 export function useUpdateProgress() {
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (progress: UpdateProgressRequest) => {
       const { data } = await api.post<WatchProgress>(
         "/api/library/progress",
@@ -37,11 +44,95 @@ export function useUpdateProgress() {
       );
       return data;
     },
-    // Don't show errors for background progress reporting
-    onError: (err: unknown) => {
-      console.warn("Failed to sync watch progress:", err);
-    },
+    // Background progress is best-effort. The queue below keeps the latest
+    // position and deliberately drops a failed write instead of retrying it
+    // in a tight loop.
   });
+
+  const pendingRef = useRef<UpdateProgressRequest | null>(null);
+  const mutateAsyncRef = useRef(mutation.mutateAsync);
+  mutateAsyncRef.current = mutation.mutateAsync;
+  const inFlightRef = useRef<Promise<unknown> | null>(null);
+  const cooldownUntilRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushRef = useRef<(() => void) | null>(null);
+
+  const scheduleFlush = useCallback((delayMs: number) => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = setTimeout(
+      () => {
+        retryTimerRef.current = null;
+        flushRef.current?.();
+      },
+      Math.max(0, delayMs),
+    );
+    retryTimerRef.current.unref?.();
+  }, []);
+
+  const flush = useCallback(() => {
+    if (inFlightRef.current || !pendingRef.current) return;
+
+    const cooldownMs = cooldownUntilRef.current - Date.now();
+    if (cooldownMs > 0) {
+      scheduleFlush(cooldownMs);
+      return;
+    }
+
+    const next = pendingRef.current;
+    pendingRef.current = null;
+    const request = mutateAsyncRef
+      .current(next)
+      .catch((error: unknown) => {
+        const rateLimitError = toRateLimitError(error);
+        if (rateLimitError) {
+          cooldownUntilRef.current = Date.now() + rateLimitError.retryAfterMs;
+          if (pendingRef.current) scheduleFlush(rateLimitError.retryAfterMs);
+          return;
+        }
+        if (__DEV__) console.warn("Failed to sync watch progress.");
+      })
+      .finally(() => {
+        inFlightRef.current = null;
+        if (pendingRef.current) flushRef.current?.();
+      });
+    inFlightRef.current = request;
+  }, [scheduleFlush]);
+
+  flushRef.current = flush;
+
+  const mutate = useCallback(
+    (progress: UpdateProgressRequest) => {
+      pendingRef.current = progress;
+      flush();
+    },
+    [flush],
+  );
+
+  useEffect(
+    () => () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+      pendingRef.current = null;
+    },
+    [],
+  );
+
+  const mutateAsync = useCallback(
+    async (progress: UpdateProgressRequest) => {
+      mutate(progress);
+    },
+    [mutate],
+  );
+
+  return {
+    ...mutation,
+    mutate,
+    mutateAsync,
+  } as unknown as UseMutationResult<
+    WatchProgress,
+    unknown,
+    UpdateProgressRequest
+  >;
 }
 
 /** Remove one title from Continue Watching. */

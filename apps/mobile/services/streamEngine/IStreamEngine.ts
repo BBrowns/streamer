@@ -152,6 +152,19 @@ export interface IStreamEngine {
   /** Get available audio tracks */
   getAudioTracks(): AudioTrack[];
 
+  /**
+   * Select an engine-owned audio track. The returned URI is runtime-only and
+   * may represent a new stream variant; engines without server-side track
+   * switching do not implement this capability.
+   */
+  selectAudioTrack?(id: string): Promise<string | null>;
+
+  /** Commit a server-side audio variant after its replacement is usable. */
+  commitAudioTrackSelection?(id: string, uri: string): void;
+
+  /** Return the currently committed runtime source, when the engine owns one. */
+  getActivePlaybackUri?(): string | null;
+
   /** Get available subtitle tracks */
   getSubtitles(): SubtitleTrack[];
 

@@ -183,14 +183,21 @@ export function normalizeStream(stream: Stream): MediaCandidate {
             ? "480p"
             : "SD";
 
+  // A torrent title is provider metadata, not the selected file's container.
+  // Treating a `.mp4` label as authoritative can route an MKV through
+  // range-http before WebTorrent metadata is available. The gateway performs
+  // the runtime file inspection and may later demote a proven MP4 back to the
+  // direct route.
   const container =
-    kind === "hls" || lower.includes(".m3u8")
-      ? "hls"
-      : lower.includes(".mp4") || lower.includes(" mp4")
-        ? "mp4"
-        : lower.includes(".mkv") || lower.includes(" mkv")
-          ? "mkv"
-          : "unknown";
+    kind === "torrent"
+      ? "unknown"
+      : kind === "hls" || lower.includes(".m3u8")
+        ? "hls"
+        : lower.includes(".mp4") || lower.includes(" mp4")
+          ? "mp4"
+          : lower.includes(".mkv") || lower.includes(" mkv")
+            ? "mkv"
+            : "unknown";
 
   const videoCodec = /\b(?:av1|av01)\b/i.test(text)
     ? "av1"
@@ -336,10 +343,30 @@ export function candidateNeedsRemux(
   deviceProfile: DeviceProfile,
 ) {
   return (
-    candidate.container === "mkv" &&
+    candidate.kind === "torrent" &&
+    (candidate.container === "mkv" || candidate.container === "unknown") &&
     !deviceProfile.supports.mkv &&
     deviceProfile.supports.mp4 &&
     hasCompatibleVideo(candidate, deviceProfile)
+  );
+}
+
+/**
+ * Provider labels are not authoritative for torrent containers. A Play
+ * candidate without a trustworthy container marker must be inspected by the
+ * bridge before the player receives a delivery. This is deliberately limited
+ * to torrent playback; downloads and cast retain their existing cache route.
+ */
+export function candidateNeedsRuntimeProbe(
+  candidate: MediaCandidate,
+  action: "play" | "download" | "cast",
+  deviceProfile: DeviceProfile,
+) {
+  return (
+    action === "play" &&
+    candidate.kind === "torrent" &&
+    candidate.container === "unknown" &&
+    deviceProfile.supports.mp4
   );
 }
 

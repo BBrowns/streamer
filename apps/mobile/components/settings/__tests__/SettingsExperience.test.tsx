@@ -38,6 +38,11 @@ jest.mock("../../../hooks/useWindowClass", () => ({
     width: 390,
   }),
 }));
+jest.mock("../../../hooks/usePlaybackEnvironmentStatus", () => ({
+  usePlaybackEnvironmentStatus: () => ({
+    bridgeReady: false,
+  }),
+}));
 jest.mock("../../../hooks/useTrakt", () => ({ useTrakt: () => ({}) }));
 jest.mock("../../../hooks/useRealDebrid", () => ({
   useRealDebrid: () => ({
@@ -193,5 +198,12 @@ describe("SettingsExperience boundary contract", () => {
     expect(
       screen.root?.queryAll((node) => node.type === "RCTScrollView"),
     ).toHaveLength(1);
+  });
+
+  it("shows setup attention when the bridge requires client pairing", async () => {
+    const screen = await render(<SettingsExperience />);
+
+    expect(screen.getByText("settings.readiness.attentionTitle")).toBeTruthy();
+    expect(screen.queryByText("settings.readiness.readyTitle")).toBeNull();
   });
 });

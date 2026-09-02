@@ -22,6 +22,7 @@ import type {
 import { aggregatorService } from "../aggregator/aggregator.service.js";
 import {
   candidateNeedsRemux,
+  candidateNeedsRuntimeProbe,
   candidateNeedsTranscode,
   candidateSortKey,
   getCastSourceReachability,
@@ -197,6 +198,7 @@ function desiredDelivery(
   action: PlaybackAction,
   requiresRemux: boolean,
   platform: PlaybackPlanV3Request["deviceProfile"]["platform"],
+  executionNodes: PlaybackExecutionNode[],
 ): PlaybackDelivery | undefined {
   if (candidate.kind === "direct") {
     // DownloadService still has to copy and verify a remote direct response.
@@ -212,7 +214,18 @@ function desiredDelivery(
     // for media that is already local to the on-device executor.
     if (action === "download") return "seekable-cache";
     if (action === "cast") return "seekable-cache";
-    return requiresRemux ? "progressive-fmp4" : "range-http";
+    if (!requiresRemux) return "range-http";
+    const hlsAvailable = executionNodes.some(
+      (node) =>
+        node.availability === "available" &&
+        node.acceptedSourceKinds.includes("torrent") &&
+        node.deliveries.some(
+          (entry) =>
+            entry.delivery === "hls" &&
+            entry.capabilities.seek !== "unavailable",
+        ),
+    );
+    return hlsAvailable ? "hls" : "progressive-fmp4";
   }
   return undefined;
 }
@@ -376,12 +389,18 @@ function evaluateCandidate(
 ): CandidateEvaluationV3 {
   const requiresRemux =
     candidate.kind === "torrent" &&
-    candidateNeedsRemux(candidate, request.deviceProfile);
+    (candidateNeedsRemux(candidate, request.deviceProfile) ||
+      candidateNeedsRuntimeProbe(
+        candidate,
+        request.action,
+        request.deviceProfile,
+      ));
   const delivery = desiredDelivery(
     candidate,
     request.action,
     requiresRemux,
     request.deviceProfile.platform,
+    request.executionNodes,
   );
   const routeSelection = delivery
     ? selectRoute(candidate, delivery, request)
@@ -501,7 +520,8 @@ function withRouteHints(
   if (
     !requiresRemux &&
     route.delivery !== "progressive-fmp4" &&
-    route.delivery !== "seekable-cache"
+    route.delivery !== "seekable-cache" &&
+    route.delivery !== "hls"
   ) {
     return candidate;
   }
@@ -514,7 +534,8 @@ function withRouteHints(
         ...candidate.stream.behaviorHints,
         ...(requiresRemux ? { remuxToMp4: true } : {}),
         ...(route.delivery === "progressive-fmp4" ||
-        route.delivery === "seekable-cache"
+        route.delivery === "seekable-cache" ||
+        route.delivery === "hls"
           ? { remuxStrategy: route.delivery }
           : {}),
       },

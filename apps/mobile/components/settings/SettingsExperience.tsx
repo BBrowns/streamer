@@ -19,6 +19,7 @@ import { useTrakt } from "../../hooks/useTrakt";
 import { useRealDebrid } from "../../hooks/useRealDebrid";
 import { useSessions } from "../../hooks/useSessions";
 import { useAccount } from "../../hooks/useAccount";
+import { usePlaybackEnvironmentStatus } from "../../hooks/usePlaybackEnvironmentStatus";
 import { clearQueryCache } from "../../services/queryPersister";
 import type {
   DesktopBridgeInfo,
@@ -26,8 +27,6 @@ import type {
 } from "../../services/desktop-bridge";
 import { clientBuildMetadata } from "../../services/buildMetadata";
 import { hapticSelection, hapticWarning } from "../../lib/haptics";
-import { streamEngineManager } from "../../services/streamEngine/StreamEngineManager";
-import { getBridgeStatusPresentation } from "../../services/streamEngine/bridgeStatusPresentation";
 import { EmptyState } from "../ui/EmptyState";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import { AppButton } from "../ui/AppButton";
@@ -135,25 +134,7 @@ function SettingsOverview({
   const { colors } = useTheme();
   const { isCompact } = useWindowClass();
   const user = useAuthStore((state) => state.user);
-  const [readiness, setReadiness] = useState(streamEngineManager.bridgeStatus);
-
-  useEffect(() => {
-    let active = true;
-    streamEngineManager
-      .detectBridge()
-      .then(() => {
-        if (active) setReadiness(streamEngineManager.bridgeStatus);
-      })
-      .catch(() => {
-        if (active) setReadiness(streamEngineManager.bridgeStatus);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const presentation = getBridgeStatusPresentation(readiness);
-  const isReady = presentation.tone === "success";
+  const { bridgeReady: isReady } = usePlaybackEnvironmentStatus();
 
   return (
     <ScrollView

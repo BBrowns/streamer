@@ -34,6 +34,7 @@ const BRIDGE_DELIVERIES = [
   "range-http",
   "progressive-fmp4",
   "seekable-cache",
+  "hls",
 ] as const satisfies readonly BridgeDelivery[];
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_TRACKERS = [
@@ -92,7 +93,26 @@ function isCompatibleDeliveryUpgrade(
   return (
     requested === "range-http" &&
     previous === "range-http" &&
-    observed === "seekable-cache"
+    (observed === "seekable-cache" ||
+      observed === "progressive-fmp4" ||
+      observed === "hls")
+  );
+}
+
+function isCompatibleRuntimeDeliveryDowngrade(
+  requested: BridgeDelivery,
+  previous: BridgeDelivery,
+  observed: BridgeDelivery,
+) {
+  // A runtime probe may prove that a planner's unknown torrent is already a
+  // directly playable MP4. The gateway can then switch the same job to
+  // range-http without making the client retry the source as a protocol
+  // violation. This is only valid for the two remux-capable Play deliveries;
+  // downloads/cast and arbitrary delivery changes remain strict.
+  return (
+    (requested === "hls" || requested === "progressive-fmp4") &&
+    previous === requested &&
+    observed === "range-http"
   );
 }
 
@@ -187,7 +207,7 @@ function terminalJobError(job: BridgeJobV1): SourcePreparationError | null {
       );
     case "stalled":
       return new SourcePreparationError(
-        "GATEWAY_TIMEOUT",
+        "SOURCE_STALLED",
         "The bridge stalled while preparing this source.",
         { retryable: true, shouldFallback: true },
       );
@@ -211,8 +231,18 @@ function terminalJobError(job: BridgeJobV1): SourcePreparationError | null {
           "The bridge cannot execute the selected playback route.",
         );
       }
+      if (job.failure?.code === "TRACKS_UNAVAILABLE") {
+        return new SourcePreparationError(
+          "TRACKS_UNAVAILABLE",
+          "English audio is unavailable for this source.",
+          {
+            retryable: job.failure?.retryable ?? true,
+            shouldFallback: true,
+          },
+        );
+      }
       return new SourcePreparationError(
-        "SOURCE_UNAVAILABLE",
+        "INTERNAL",
         "The bridge could not prepare this source.",
         {
           retryable: job.failure?.retryable ?? false,
@@ -258,6 +288,13 @@ function assertReadyJobMedia(job: BridgeJobV1) {
         media.seek === "immediate" &&
         media.seekableCache?.status === "ready";
       break;
+    case "hls":
+      valid =
+        media.remuxed &&
+        media.container === "mp4" &&
+        media.seek === "immediate" &&
+        media.seekableCache === undefined;
+      break;
   }
 
   if (!valid) {
@@ -287,7 +324,7 @@ function mapBridgeClientError(error: unknown, signal?: AbortSignal) {
   }
   if (error.code === "SOURCE_STALLED") {
     return new SourcePreparationError(
-      "GATEWAY_TIMEOUT",
+      "SOURCE_STALLED",
       "The bridge stalled while preparing this source.",
       { retryable: error.retryable, shouldFallback: true, cause: error },
     );
@@ -308,6 +345,17 @@ function mapBridgeClientError(error: unknown, signal?: AbortSignal) {
       { retryable: error.retryable, shouldFallback: false, cause: error },
     );
   }
+  if (error.code === "TRACKS_UNAVAILABLE") {
+    return new SourcePreparationError(
+      "TRACKS_UNAVAILABLE",
+      "English audio is unavailable for this source.",
+      {
+        retryable: error.retryable,
+        shouldFallback: true,
+        cause: error,
+      },
+    );
+  }
   if (
     error.code === "BRIDGE_UNREACHABLE" ||
     error.code === "AUTH_REQUIRED" ||
@@ -321,7 +369,7 @@ function mapBridgeClientError(error: unknown, signal?: AbortSignal) {
     );
   }
   return new SourcePreparationError(
-    "SOURCE_UNAVAILABLE",
+    "INTERNAL",
     "The bridge could not prepare this source.",
     { retryable: error.retryable, shouldFallback: true, cause: error },
   );
@@ -611,10 +659,17 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
     if (
       !job.id ||
       (job.delivery !== previousDelivery &&
-        !isCompatibleDeliveryUpgrade(
-          requestedDelivery,
-          previousDelivery,
-          job.delivery,
+        !(
+          isCompatibleDeliveryUpgrade(
+            requestedDelivery,
+            previousDelivery,
+            job.delivery,
+          ) ||
+          isCompatibleRuntimeDeliveryDowngrade(
+            requestedDelivery,
+            previousDelivery,
+            job.delivery,
+          )
         )) ||
       (expectedJobId !== undefined && job.id !== expectedJobId)
     ) {

@@ -62,7 +62,17 @@ const resolutionBySession = new Map<
   string,
   Promise<PlaybackSessionInternalResolutionResult>
 >();
+// Resolution is deliberately separate from the persisted session. A session
+// can be cancelled/removed while a bridge or torrent preparation promise is
+// still unwinding, so late continuations need a cheap generation check before
+// touching the store.
+const resolutionGenerationBySession = new Map<string, number>();
 const lastGatewayBreadcrumbPhaseBySession = new Map<string, string>();
+const MAX_AUTOMATIC_PLAY_CANDIDATES = 5;
+// A post-ready failure can re-enter the resolver after the first attempt has
+// already succeeded. Keep the Play budget session-wide so that recovery does
+// not silently turn five allowed candidates into an unbounded chain.
+const automaticPlayAttemptCountBySession = new Map<string, number>();
 
 /**
  * Runtime-only handoff for the active player. Deliberately excludes the
@@ -172,6 +182,54 @@ function isTerminal(session: PlaybackSession | null) {
   return !!session && TERMINAL_STATUSES.has(session.status);
 }
 
+function beginSessionResolution(sessionId: string) {
+  const generation = (resolutionGenerationBySession.get(sessionId) ?? 0) + 1;
+  resolutionGenerationBySession.set(sessionId, generation);
+  return generation;
+}
+
+function invalidateSessionResolution(sessionId: string) {
+  resolutionGenerationBySession.set(
+    sessionId,
+    (resolutionGenerationBySession.get(sessionId) ?? 0) + 1,
+  );
+}
+
+function isSessionResolutionCurrent(sessionId: string, generation: number) {
+  const session = getSession(sessionId);
+  return (
+    resolutionGenerationBySession.get(sessionId) === generation &&
+    !!session &&
+    !isTerminal(session)
+  );
+}
+
+function failActiveSession(sessionId: string, error: PlaybackRuntimeError) {
+  const session = getSession(sessionId);
+  if (!session || isTerminal(session)) return false;
+  usePlaybackSessionStore.getState().failSession(sessionId, error);
+  return true;
+}
+
+function cancelledResolution(
+  sessionId: string,
+  action: SessionResolutionAction,
+): PlaybackSessionResolutionFailure {
+  return {
+    ok: false,
+    sessionId,
+    error: createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      getActionMessage(action, {
+        play: "Playback preparation was cancelled.",
+        download: "Download preparation was cancelled.",
+        cast: "Cast preparation was cancelled.",
+      }),
+      { retryable: false, shouldFallback: false },
+    ),
+  };
+}
+
 function runtimeErrorFromSession(
   session: PlaybackSession,
 ): PlaybackRuntimeError {
@@ -251,13 +309,27 @@ function isAllowedBridgeDeliveryUpgrade(
 ) {
   if (!prepared || !expected) return false;
 
+  const runtimeDirectDeliveryDowngrade =
+    (expected.delivery === "hls" || expected.delivery === "progressive-fmp4") &&
+    prepared.delivery === "range-http";
+  const preparedDeliveryIsAllowed =
+    prepared.delivery === "progressive-fmp4" ||
+    prepared.delivery === "seekable-cache" ||
+    prepared.delivery === "hls" ||
+    runtimeDirectDeliveryDowngrade;
+  const preparedSeekIsAllowed =
+    prepared.delivery === "progressive-fmp4" || prepared.delivery === "hls"
+      ? prepared.capabilities.seek === "preparing" ||
+        prepared.capabilities.seek === "immediate"
+      : prepared.capabilities.seek === "immediate";
+
   return (
-    expected.delivery === "range-http" &&
-    prepared.delivery === "seekable-cache" &&
+    (expected.delivery === "range-http" || runtimeDirectDeliveryDowngrade) &&
+    preparedDeliveryIsAllowed &&
     expected.executionTarget !== "on-device" &&
     prepared.candidateId === expected.candidateId &&
     prepared.executionTarget === expected.executionTarget &&
-    prepared.capabilities.seek === "immediate" &&
+    preparedSeekIsAllowed &&
     prepared.capabilities.audioTracks === expected.capabilities.audioTracks &&
     prepared.capabilities.embeddedSubtitles ===
       expected.capabilities.embeddedSubtitles &&
@@ -321,10 +393,10 @@ function candidateWithPreparationStream(
 function toSafeRuntimeError(
   error: unknown,
   candidate: PlaybackPlanCandidate | null,
-  shouldFallback: boolean,
+  fallbackAvailable: boolean,
 ): PlaybackRuntimeError {
   if (error instanceof ActionPreflightError) {
-    return runtimeErrorFromActionPreflight(error.preflight, shouldFallback);
+    return runtimeErrorFromActionPreflight(error.preflight, fallbackAvailable);
   }
 
   if (error instanceof DownloadEligibilityError) {
@@ -334,7 +406,7 @@ function toSafeRuntimeError(
         : "SOURCE_UNAVAILABLE";
     return createPlaybackRuntimeError(code, error.message, {
       retryable: error.eligibility.mode === "bridge-torrent",
-      shouldFallback,
+      shouldFallback: fallbackAvailable,
     });
   }
 
@@ -349,12 +421,27 @@ function toSafeRuntimeError(
         ? candidate?.requiresBridge
           ? "BRIDGE_UNSUPPORTED"
           : "SOURCE_UNAVAILABLE"
-        : error.code === "INVALID_SOURCE" || error.code === "CANCELLED"
-          ? "SOURCE_UNAVAILABLE"
-          : error.code);
-    return createPlaybackRuntimeError(code, undefined, {
+        : error.code === "SOURCE_STALLED"
+          ? "GATEWAY_TIMEOUT"
+          : error.code === "INTERNAL" ||
+              error.code === "TRACKS_UNAVAILABLE" ||
+              error.code === "INVALID_SOURCE" ||
+              error.code === "CANCELLED"
+            ? "SOURCE_UNAVAILABLE"
+            : error.code);
+    const message =
+      error.code === "SOURCE_STALLED"
+        ? "This source stalled before becoming ready."
+        : error.code === "TRACKS_UNAVAILABLE"
+          ? "English audio is unavailable for this source."
+          : undefined;
+    return createPlaybackRuntimeError(code, message, {
       retryable: error.retryable,
-      shouldFallback: shouldFallback && error.shouldFallback,
+      // Preserve the intrinsic fallback policy on the error. Whether there
+      // is a next candidate is decided by resolveCandidateChain; collapsing
+      // the two here made the final candidate look non-fallbackable and
+      // bypassed the aggregate terminal error classification.
+      shouldFallback: error.shouldFallback,
       debugMessage: causeMessage || error.message,
     });
   }
@@ -373,7 +460,7 @@ function toSafeRuntimeError(
 
   return createPlaybackRuntimeError(code, undefined, {
     retryable: true,
-    shouldFallback,
+    shouldFallback: true,
     debugMessage: rawMessage || undefined,
   });
 }
@@ -473,6 +560,55 @@ function createAllCandidatesFailedError(
     failedAttempts
       .map((attempt) => `${attempt.sourceType}:${attempt.error?.code}`)
       .join("; ") || undefined;
+
+  const errors = failedAttempts
+    .map((attempt) => attempt.error)
+    .filter((error): error is NonNullable<typeof error> => Boolean(error));
+  const allNoPeers =
+    errors.length > 0 && errors.every((error) => error.code === "NO_PEERS");
+  const allMetadataStalled =
+    errors.length > 0 &&
+    errors.every(
+      (error) =>
+        error.code === "GATEWAY_TIMEOUT" &&
+        /stalled|metadata/i.test(error.message),
+    );
+  const allEnglishTracksUnavailable =
+    errors.length > 0 &&
+    errors.every(
+      (error) =>
+        error.code === "SOURCE_UNAVAILABLE" &&
+        /english audio/i.test(error.message),
+    );
+
+  if (allNoPeers) {
+    return createPlaybackRuntimeError(
+      "NO_PEERS",
+      getActionMessage(action, {
+        play: "None of the selected sources had peers available to start playback.",
+        download:
+          "None of the selected sources had peers available for download.",
+        cast: "None of the selected sources had peers available for casting.",
+      }),
+      { retryable: true, shouldFallback: false, debugMessage },
+    );
+  }
+
+  if (allMetadataStalled) {
+    return createPlaybackRuntimeError(
+      "GATEWAY_TIMEOUT",
+      "The selected torrent sources found peers, but their metadata was not ready in time.",
+      { retryable: true, shouldFallback: false, debugMessage },
+    );
+  }
+
+  if (allEnglishTracksUnavailable) {
+    return createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      "English audio was not available on the selected sources.",
+      { retryable: true, shouldFallback: false, debugMessage },
+    );
+  }
 
   return createPlaybackRuntimeError(
     "NO_PLAYABLE_SOURCE",
@@ -619,6 +755,7 @@ function isPreparationLifecycleCurrent(
   candidate: PlaybackPlanCandidate,
   attemptId: string,
   preparationController: AbortController,
+  resolutionGeneration: number,
 ) {
   const currentSession = getSession(sessionId);
   const currentCandidate = usePlaybackSessionStore
@@ -629,6 +766,7 @@ function isPreparationLifecycleCurrent(
   );
 
   return (
+    isSessionResolutionCurrent(sessionId, resolutionGeneration) &&
     preparationAbortBySession.get(sessionId) === preparationController &&
     !preparationController.signal.aborted &&
     !!currentSession &&
@@ -765,10 +903,15 @@ async function attemptCandidate(
   candidateId: string,
   hasFallback: boolean,
   action: SessionResolutionAction,
+  resolutionGeneration: number,
 ): Promise<PlaybackSessionInternalResolutionResult> {
   const store = usePlaybackSessionStore.getState();
   const session = getSession(sessionId);
   const candidate = store.getRuntimeCandidate(sessionId, candidateId);
+
+  if (!isSessionResolutionCurrent(sessionId, resolutionGeneration)) {
+    return cancelledResolution(sessionId, action);
+  }
 
   if (!session || !candidate) {
     const error = createPlaybackRuntimeError(
@@ -780,7 +923,7 @@ async function attemptCandidate(
       }),
       { retryable: true, shouldFallback: false },
     );
-    if (session && !isTerminal(session)) store.failSession(sessionId, error);
+    failActiveSession(sessionId, error);
     return { ok: false, sessionId, error };
   }
 
@@ -834,7 +977,7 @@ async function attemptCandidate(
   if (action !== "cast" && unsupportedCodecReason) {
     const error = createPlaybackRuntimeError("UNSUPPORTED_CODEC", undefined, {
       retryable: false,
-      shouldFallback: hasFallback,
+      shouldFallback: true,
       debugMessage: unsupportedCodecReason,
     });
     store.dispatchPlaybackEvent(sessionId, {
@@ -877,13 +1020,19 @@ async function attemptCandidate(
 
   await stopActiveSource(sessionId, "Preparing the selected source.");
   const sessionAfterRelease = getSession(sessionId);
-  if (!sessionAfterRelease || isTerminal(sessionAfterRelease)) {
+  if (
+    !isSessionResolutionCurrent(sessionId, resolutionGeneration) ||
+    !sessionAfterRelease ||
+    isTerminal(sessionAfterRelease)
+  ) {
     return {
       ok: false,
       sessionId,
-      error: sessionAfterRelease
-        ? runtimeErrorFromSession(sessionAfterRelease)
-        : createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
+      error: isSessionResolutionCurrent(sessionId, resolutionGeneration)
+        ? sessionAfterRelease
+          ? runtimeErrorFromSession(sessionAfterRelease)
+          : createPlaybackRuntimeError("SOURCE_UNAVAILABLE")
+        : cancelledResolution(sessionId, action).error,
     };
   }
 
@@ -919,13 +1068,19 @@ async function attemptCandidate(
     });
     requireActionPreflight(preflight);
     const currentSession = getSession(sessionId);
-    if (!currentSession || isTerminal(currentSession)) {
+    if (
+      !isSessionResolutionCurrent(sessionId, resolutionGeneration) ||
+      !currentSession ||
+      isTerminal(currentSession)
+    ) {
       return {
         ok: false,
         sessionId,
-        error: currentSession
-          ? runtimeErrorFromSession(currentSession)
-          : createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
+        error: isSessionResolutionCurrent(sessionId, resolutionGeneration)
+          ? currentSession
+            ? runtimeErrorFromSession(currentSession)
+            : createPlaybackRuntimeError("SOURCE_UNAVAILABLE")
+          : cancelledResolution(sessionId, action).error,
       };
     }
 
@@ -980,6 +1135,7 @@ async function attemptCandidate(
         candidate,
         attempt.id,
         preparationController,
+        resolutionGeneration,
       )
     ) {
       await releasePreparedSource(preparedSource);
@@ -1085,6 +1241,7 @@ async function attemptCandidate(
       isStreamEngineCancellationError(error) ||
       (isSourcePreparationError(error) && error.isCancellation)
     ) {
+      invalidateSessionResolution(sessionId);
       let cancelledSession = getSession(sessionId);
       if (cancelledSession && !isTerminal(cancelledSession)) {
         store.cancelSession(
@@ -1156,6 +1313,7 @@ async function attemptCandidate(
 async function resolveCandidateChain(
   sessionId: string,
   action: SessionResolutionAction,
+  resolutionGeneration: number,
   startCandidateId?: string,
   initialFallbackReason?: string,
 ): Promise<PlaybackSessionInternalResolutionResult> {
@@ -1168,13 +1326,16 @@ async function resolveCandidateChain(
       error: createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
     };
   }
+  if (!isSessionResolutionCurrent(sessionId, resolutionGeneration)) {
+    return cancelledResolution(sessionId, action);
+  }
   if (session.action !== action) {
     const error = createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",
       `This session cannot be used for ${action}.`,
       { retryable: false, shouldFallback: false },
     );
-    if (!isTerminal(session)) store.failSession(sessionId, error);
+    failActiveSession(sessionId, error);
     return { ok: false, sessionId, error };
   }
   if (isTerminal(session)) {
@@ -1190,7 +1351,7 @@ async function resolveCandidateChain(
       }),
       { retryable: true, shouldFallback: false },
     );
-    store.failSession(sessionId, error);
+    failActiveSession(sessionId, error);
     return { ok: false, sessionId, error };
   }
 
@@ -1204,17 +1365,53 @@ async function resolveCandidateChain(
         ),
       );
   const orderedCandidates = startIndex >= 0 ? candidates.slice(startIndex) : [];
+  const attemptedCandidateIds = new Set(
+    session.attempts
+      .filter((attempt) => attempt.status !== "pending")
+      .map((attempt) => attempt.candidateId),
+  );
+  const unattemptedCandidates = orderedCandidates.filter(
+    (candidate) => !attemptedCandidateIds.has(candidate.id),
+  );
+  const automaticAttemptsUsed =
+    action === "play"
+      ? (automaticPlayAttemptCountBySession.get(sessionId) ?? 0)
+      : 0;
+  const automaticAttemptsRemaining = Math.max(
+    0,
+    MAX_AUTOMATIC_PLAY_CANDIDATES - automaticAttemptsUsed,
+  );
+  const candidatesToAttempt =
+    action === "play"
+      ? unattemptedCandidates.slice(0, automaticAttemptsRemaining)
+      : unattemptedCandidates;
+
+  if (action === "play" && candidatesToAttempt.length === 0) {
+    const terminalError = createAllCandidatesFailedError(
+      getSession(sessionId),
+      action,
+    );
+    failActiveSession(sessionId, terminalError);
+    automaticPlayAttemptCountBySession.delete(sessionId);
+    return { ok: false, sessionId, error: terminalError };
+  }
   let fallbackReason = initialFallbackReason;
 
-  for (const [index, candidate] of orderedCandidates.entries()) {
+  for (const [index, candidate] of candidatesToAttempt.entries()) {
     const currentSession = getSession(sessionId);
-    if (!currentSession || isTerminal(currentSession)) {
+    if (
+      !isSessionResolutionCurrent(sessionId, resolutionGeneration) ||
+      !currentSession ||
+      isTerminal(currentSession)
+    ) {
       return {
         ok: false,
         sessionId,
-        error: currentSession
-          ? runtimeErrorFromSession(currentSession)
-          : createPlaybackRuntimeError("SOURCE_UNAVAILABLE"),
+        error: isSessionResolutionCurrent(sessionId, resolutionGeneration)
+          ? currentSession
+            ? runtimeErrorFromSession(currentSession)
+            : createPlaybackRuntimeError("SOURCE_UNAVAILABLE")
+          : cancelledResolution(sessionId, action).error,
       };
     }
 
@@ -1224,17 +1421,24 @@ async function resolveCandidateChain(
     // having discovered sources and possibly still receiving peers/remux data.
     if (getRemainingBudgetMs(currentSession) <= 0) {
       const error = createSessionBudgetExhaustedError(currentSession, action);
-      store.failSession(sessionId, error);
+      failActiveSession(sessionId, error);
       return { ok: false, sessionId, error };
     }
 
+    if (action === "play") {
+      automaticPlayAttemptCountBySession.set(
+        sessionId,
+        (automaticPlayAttemptCountBySession.get(sessionId) ?? 0) + 1,
+      );
+    }
     selectCandidate(sessionId, candidate.id, fallbackReason);
-    const hasFallback = index < orderedCandidates.length - 1;
+    const hasFallback = index < candidatesToAttempt.length - 1;
     const result = await attemptCandidate(
       sessionId,
       candidate.id,
       hasFallback,
       action,
+      resolutionGeneration,
     );
     if (result.ok) {
       return {
@@ -1247,6 +1451,11 @@ async function resolveCandidateChain(
     }
 
     fallbackReason = result.error.message;
+    if (!result.error.shouldFallback) {
+      failActiveSession(sessionId, result.error);
+      automaticPlayAttemptCountBySession.delete(sessionId);
+      return result;
+    }
     if (isTerminal(getSession(sessionId))) return result;
   }
 
@@ -1254,22 +1463,29 @@ async function resolveCandidateChain(
     getSession(sessionId),
     action,
   );
-  if (!isTerminal(getSession(sessionId))) {
-    store.failSession(sessionId, terminalError);
-  }
+  failActiveSession(sessionId, terminalError);
+  if (action === "play") automaticPlayAttemptCountBySession.delete(sessionId);
   return { ok: false, sessionId, error: terminalError };
 }
 
 function runSessionResolutionSingleFlight(
   sessionId: string,
-  resolve: () => Promise<PlaybackSessionInternalResolutionResult>,
+  resolve: (
+    resolutionGeneration: number,
+  ) => Promise<PlaybackSessionInternalResolutionResult>,
 ) {
   const existing = resolutionBySession.get(sessionId);
   if (existing) return existing;
 
-  const resolution = resolve().finally(() => {
+  const resolutionGeneration = beginSessionResolution(sessionId);
+  const resolution = resolve(resolutionGeneration).finally(() => {
     if (resolutionBySession.get(sessionId) === resolution) {
       resolutionBySession.delete(sessionId);
+      if (
+        resolutionGenerationBySession.get(sessionId) === resolutionGeneration
+      ) {
+        resolutionGenerationBySession.delete(sessionId);
+      }
     }
   });
   resolutionBySession.set(sessionId, resolution);
@@ -1280,8 +1496,13 @@ export function resolvePlaybackSession(
   sessionId: string,
   startCandidateId?: string,
 ): Promise<PlaybackSessionResolutionResult> {
-  return runSessionResolutionSingleFlight(sessionId, () =>
-    resolveCandidateChain(sessionId, "play", startCandidateId),
+  return runSessionResolutionSingleFlight(sessionId, (resolutionGeneration) =>
+    resolveCandidateChain(
+      sessionId,
+      "play",
+      resolutionGeneration,
+      startCandidateId,
+    ),
   );
 }
 
@@ -1289,36 +1510,44 @@ export async function resolveDownloadSession(
   sessionId: string,
   startCandidateId?: string,
 ): Promise<PlaybackSessionDownloadResolutionResult> {
-  const resolution = runSessionResolutionSingleFlight(sessionId, () =>
-    resolveCandidateChain(sessionId, "download", startCandidateId),
+  const resolution = runSessionResolutionSingleFlight(
+    sessionId,
+    async (resolutionGeneration) => {
+      const result = await resolveCandidateChain(
+        sessionId,
+        "download",
+        resolutionGeneration,
+        startCandidateId,
+      );
+      if (!result.ok || result.eligibility) return result;
+
+      const error = createPlaybackRuntimeError(
+        "SOURCE_UNAVAILABLE",
+        "Download eligibility could not be verified.",
+        { retryable: true, shouldFallback: false },
+      );
+      if (!isSessionResolutionCurrent(sessionId, resolutionGeneration)) {
+        return cancelledResolution(sessionId, "download");
+      }
+      failActiveSession(sessionId, error);
+      return { ok: false, sessionId, error };
+    },
   );
 
-  const result = await resolution;
-  if (!result.ok) return result;
-  if (result.eligibility) {
-    return {
-      ...result,
-      eligibility: result.eligibility,
-    };
-  }
-
-  const error = createPlaybackRuntimeError(
-    "SOURCE_UNAVAILABLE",
-    "Download eligibility could not be verified.",
-    { retryable: true, shouldFallback: false },
-  );
-  if (!isTerminal(getSession(sessionId))) {
-    usePlaybackSessionStore.getState().failSession(sessionId, error);
-  }
-  return { ok: false, sessionId, error };
+  return await resolution;
 }
 
 export function resolveCastSession(
   sessionId: string,
   startCandidateId?: string,
 ): Promise<PlaybackSessionResolutionResult> {
-  return runSessionResolutionSingleFlight(sessionId, () =>
-    resolveCandidateChain(sessionId, "cast", startCandidateId),
+  return runSessionResolutionSingleFlight(sessionId, (resolutionGeneration) =>
+    resolveCandidateChain(
+      sessionId,
+      "cast",
+      resolutionGeneration,
+      startCandidateId,
+    ),
   );
 }
 
@@ -1328,17 +1557,21 @@ async function advanceSessionAfterFailure(
   attemptId: string | null,
   error: PlaybackRuntimeError,
   action: "play" | "cast",
+  resolutionGeneration: number,
 ): Promise<PlaybackSessionResolutionResult> {
   const store = usePlaybackSessionStore.getState();
   const session = getSession(sessionId);
   if (!session) return { ok: false, sessionId, error };
+  if (!isSessionResolutionCurrent(sessionId, resolutionGeneration)) {
+    return cancelledResolution(sessionId, action);
+  }
   if (session.action !== action) {
     const actionError = createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",
       `This session cannot be used for ${action}.`,
       { retryable: false, shouldFallback: false },
     );
-    if (!isTerminal(session)) store.failSession(sessionId, actionError);
+    failActiveSession(sessionId, actionError);
     return { ok: false, sessionId, error: actionError };
   }
   if (isTerminal(session)) {
@@ -1346,19 +1579,26 @@ async function advanceSessionAfterFailure(
   }
 
   await stopActiveSource(sessionId, "Switching to a fallback source.");
+  if (!isSessionResolutionCurrent(sessionId, resolutionGeneration)) {
+    return cancelledResolution(sessionId, action);
+  }
+  const currentSession = getSession(sessionId);
+  if (!currentSession) return cancelledResolution(sessionId, action);
   const attempt =
-    session.attempts.find((item) => item.id === attemptId) ||
-    [...session.attempts]
+    currentSession.attempts.find((item) => item.id === attemptId) ||
+    [...currentSession.attempts]
       .reverse()
       .find((item) => item.candidateId === candidateId);
-  const candidates = [...session.candidates].sort((a, b) => a.rank - b.rank);
+  const candidates = [...currentSession.candidates].sort(
+    (a, b) => a.rank - b.rank,
+  );
   const candidateIndex = candidates.findIndex(
     (candidate) => candidate.id === candidateId,
   );
   const nextCandidate = candidates[candidateIndex + 1];
   const safeError = createPlaybackRuntimeError(error.code, undefined, {
     retryable: error.retryable,
-    shouldFallback: !!nextCandidate,
+    shouldFallback: error.shouldFallback && Boolean(nextCandidate),
     debugMessage: error.debugMessage || error.message,
   });
 
@@ -1371,8 +1611,9 @@ async function advanceSessionAfterFailure(
     });
   }
 
-  if (!nextCandidate) {
-    store.failSession(sessionId, { ...safeError, shouldFallback: false });
+  if (!error.shouldFallback || !nextCandidate) {
+    failActiveSession(sessionId, { ...safeError, shouldFallback: false });
+    automaticPlayAttemptCountBySession.delete(sessionId);
     return {
       ok: false,
       sessionId,
@@ -1383,6 +1624,7 @@ async function advanceSessionAfterFailure(
   return resolveCandidateChain(
     sessionId,
     action,
+    resolutionGeneration,
     nextCandidate.id,
     safeError.message,
   );
@@ -1394,13 +1636,14 @@ export function advancePlaybackSessionAfterFailure(
   attemptId: string | null,
   error: PlaybackRuntimeError,
 ): Promise<PlaybackSessionResolutionResult> {
-  return runSessionResolutionSingleFlight(sessionId, () =>
+  return runSessionResolutionSingleFlight(sessionId, (resolutionGeneration) =>
     advanceSessionAfterFailure(
       sessionId,
       candidateId,
       attemptId,
       error,
       "play",
+      resolutionGeneration,
     ),
   );
 }
@@ -1411,13 +1654,14 @@ export function advanceCastSessionAfterFailure(
   attemptId: string | null,
   error: PlaybackRuntimeError,
 ): Promise<PlaybackSessionResolutionResult> {
-  return runSessionResolutionSingleFlight(sessionId, () =>
+  return runSessionResolutionSingleFlight(sessionId, (resolutionGeneration) =>
     advanceSessionAfterFailure(
       sessionId,
       candidateId,
       attemptId,
       error,
       "cast",
+      resolutionGeneration,
     ),
   );
 }
@@ -1438,24 +1682,26 @@ export function failPlaybackSession(
   sessionId: string,
   error: PlaybackRuntimeError,
 ) {
+  invalidateSessionResolution(sessionId);
   void stopActiveSource(sessionId, "Playback session failed.");
   clearSessionBreadcrumbState(sessionId);
-  const session = getSession(sessionId);
-  if (session && !isTerminal(session)) {
-    usePlaybackSessionStore.getState().failSession(sessionId, error);
-  }
+  failActiveSession(sessionId, error);
+  automaticPlayAttemptCountBySession.delete(sessionId);
 }
 
 export function completePlaybackSession(sessionId: string) {
+  invalidateSessionResolution(sessionId);
   void stopActiveSource(sessionId, "Playback session completed.");
   clearSessionBreadcrumbState(sessionId);
   const session = getSession(sessionId);
   if (session && !isTerminal(session)) {
     usePlaybackSessionStore.getState().completeSession(sessionId);
   }
+  automaticPlayAttemptCountBySession.delete(sessionId);
 }
 
 export function cancelPlaybackSession(sessionId: string, reason?: string) {
+  invalidateSessionResolution(sessionId);
   const session = getSession(sessionId);
 
   if (session && !isTerminal(session)) {
@@ -1464,4 +1710,5 @@ export function cancelPlaybackSession(sessionId: string, reason?: string) {
 
   void stopActiveSource(sessionId, reason || "Playback session cancelled.");
   clearSessionBreadcrumbState(sessionId);
+  automaticPlayAttemptCountBySession.delete(sessionId);
 }

@@ -4,19 +4,23 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   type PropsWithChildren,
 } from "react";
-import { DeviceEventEmitter } from "react-native";
+import { AppState, DeviceEventEmitter, Platform } from "react-native";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/authStore";
 import {
   syncClient,
   type SyncClient,
   type SyncMessage,
+  type SyncStatusSnapshot,
 } from "../services/syncClient";
 
 type SyncContextValue = {
   sendMessage: (event: string, data: unknown) => void;
+  retry: () => void;
+  status: SyncStatusSnapshot;
 };
 
 type SyncProviderProps = PropsWithChildren<{
@@ -67,11 +71,59 @@ export function SyncProvider({
   client = syncClient,
 }: SyncProviderProps) {
   const queryClient = useQueryClient();
+  const [status, setStatus] = useState<SyncStatusSnapshot>(() =>
+    client.getStatus(),
+  );
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const credentialsHydrated = useAuthStore(
+    (state) => state.credentialsHydrated,
+  );
   const accessToken = useAuthStore((state) => state.accessToken);
   const deviceId = useAuthStore((state) => state.deviceId);
 
   useEffect(() => {
+    setStatus(client.getStatus());
+    return client.subscribeStatus(setStatus);
+  }, [client]);
+
+  useEffect(() => {
+    const getCurrentAppState = () => {
+      const currentState = AppState.currentState;
+      return typeof currentState === "string" ? currentState : "active";
+    };
+    const isDocumentVisible = () =>
+      Platform.OS !== "web" ||
+      typeof document === "undefined" ||
+      document.visibilityState !== "hidden";
+    const isAppActive = () =>
+      (getCurrentAppState() === "active" ||
+        getCurrentAppState() === "unknown") &&
+      isDocumentVisible();
+    const updateActivity = () => client.setActive(isAppActive());
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      updateActivity,
+    );
+
+    updateActivity();
+
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      return () => appStateSubscription.remove();
+    }
+
+    document.addEventListener("visibilitychange", updateActivity);
+    return () => {
+      appStateSubscription.remove();
+      document.removeEventListener("visibilitychange", updateActivity);
+    };
+  }, [client]);
+
+  useEffect(() => {
+    if (!credentialsHydrated) {
+      client.stop();
+      return;
+    }
+
     const unsubscribe = client.subscribe((message) => {
       handleSyncMessage(queryClient, message);
     });
@@ -81,21 +133,25 @@ export function SyncProvider({
       unsubscribe();
       client.stop();
     };
-  }, [client, queryClient]);
+  }, [client, credentialsHydrated, queryClient]);
 
   useEffect(() => {
-    if (!isAuthenticated || !accessToken) {
+    if (!credentialsHydrated || !isAuthenticated || !accessToken) {
       client.stop();
       return;
     }
     client.updateAuth();
-  }, [accessToken, client, deviceId, isAuthenticated]);
+  }, [accessToken, client, credentialsHydrated, deviceId, isAuthenticated]);
 
   const sendMessage = useCallback(
     (event: string, data: unknown) => client.sendMessage(event, data),
     [client],
   );
-  const contextValue = useMemo(() => ({ sendMessage }), [sendMessage]);
+  const retry = useCallback(() => client.retryNow(), [client]);
+  const contextValue = useMemo(
+    () => ({ sendMessage, retry, status }),
+    [retry, sendMessage, status],
+  );
 
   return (
     <SyncContext.Provider value={contextValue}>{children}</SyncContext.Provider>

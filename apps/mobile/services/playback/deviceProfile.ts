@@ -22,6 +22,30 @@ function canPlayType(mimeType: string): boolean {
   return support === "probably" || support === "maybe";
 }
 
+function canPlayHlsThroughMse(): boolean {
+  if (Platform.OS !== "web" || typeof window === "undefined") return false;
+  const mediaSource = (
+    window as typeof window & {
+      MediaSource?: {
+        isTypeSupported?: (mimeType: string) => boolean;
+      };
+    }
+  ).MediaSource;
+  if (!mediaSource || typeof mediaSource.isTypeSupported !== "function") {
+    return false;
+  }
+  // HLS.js supplies the playlist/segment handling; the browser only needs an
+  // MSE fMP4 path. This keeps Chrome/Electron from being rejected merely
+  // because they do not implement native HLS MIME detection.
+  try {
+    return mediaSource.isTypeSupported(
+      'video/mp4; codecs="avc1.42E01E,mp4a.40.2"',
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getDeviceProfile(): DeviceProfile {
   if (Platform.OS === "web") {
     const isElectron =
@@ -40,7 +64,8 @@ export function getDeviceProfile(): DeviceProfile {
         mkv: canPlayType("video/x-matroska"),
         hls:
           canPlayType("application/vnd.apple.mpegurl") ||
-          canPlayType("application/x-mpegURL"),
+          canPlayType("application/x-mpegURL") ||
+          canPlayHlsThroughMse(),
         dolbyVision: false,
         aac: true,
         ac3: false,

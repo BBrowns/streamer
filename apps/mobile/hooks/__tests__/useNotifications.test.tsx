@@ -1,8 +1,10 @@
 import React, { type PropsWithChildren } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import { AppState } from "react-native";
+import { useAuthStore } from "../../stores/authStore";
 import { api } from "../../services/api";
-import { useNotifications } from "../useNotifications";
+import { shouldPollNotifications, useNotifications } from "../useNotifications";
 
 jest.mock("../../services/api", () => ({
   api: { get: jest.fn(), patch: jest.fn() },
@@ -43,7 +45,34 @@ function createWrapper() {
 describe("useNotifications", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.defineProperty(AppState, "currentState", {
+      configurable: true,
+      value: "active",
+    });
+    useAuthStore.setState({
+      isAuthenticated: true,
+      credentialsHydrated: true,
+    });
     (api.get as jest.Mock).mockResolvedValue({ data: { notifications } });
+  });
+
+  it("only polls while credentials are ready and the app is visible", () => {
+    const ready = {
+      isAuthenticated: true,
+      credentialsHydrated: true,
+      appState: "active" as const,
+      documentVisibility: "visible" as const,
+    };
+    expect(shouldPollNotifications(ready)).toBe(true);
+    expect(shouldPollNotifications({ ...ready, appState: "background" })).toBe(
+      false,
+    );
+    expect(
+      shouldPollNotifications({ ...ready, documentVisibility: "hidden" }),
+    ).toBe(false);
+    expect(
+      shouldPollNotifications({ ...ready, credentialsHydrated: false }),
+    ).toBe(false);
   });
 
   it("marks all unread notifications optimistically through the scoped endpoint", async () => {

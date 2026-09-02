@@ -4,15 +4,25 @@
  * Architecture: "kick-and-redirect"
  * 1. Client hits GET /stream?magnet=...
  * 2. Bridge adds torrent to webtorrent client (non-blocking)
- * 3. Bridge waits for 'ready' event (metadata received, files populated)
+ * 3. Bridge waits for metadata (files populated), then probes the first byte
  * 4. The shared client HTTP server (started once) serves all torrents
  * 5. Bridge returns 302 redirect → webtorrent server URL for the largest video file
  * 6. expo-video follows redirect, streams directly from webtorrent
  */
 import { createHash } from "crypto";
 import { spawn as nodeSpawn } from "child_process";
-import { createReadStream } from "fs";
-import { mkdir, mkdtemp, readdir, rename, rm, stat, statfs } from "fs/promises";
+import { createReadStream, readFileSync } from "fs";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  statfs,
+} from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { Request, Response } from "express";
@@ -131,6 +141,7 @@ const LEGACY_STREAM_METADATA_TIMEOUT_MS =
 /** Track last access time per infoHash for pruning */
 const lastAccessMap = new Map<string, number>();
 const loggedTorrents = new WeakSet<object>();
+const PEER_LOG_INTERVAL_MS = 5_000;
 
 type FfmpegSpawner = typeof nodeSpawn;
 
@@ -384,6 +395,7 @@ function getRemuxCacheKey(
   options: {
     fileIdx?: number;
     hints?: FileSelectionHints;
+    audioTrackId?: string;
   },
 ) {
   const sourceIdentity = JSON.stringify({
@@ -393,6 +405,7 @@ function getRemuxCacheKey(
     name: file.name ?? null,
     path: file.path ?? null,
     length: file.length ?? null,
+    audioTrackId: options.audioTrackId ?? null,
   });
 
   return createHash("sha256").update(sourceIdentity).digest("hex").slice(0, 32);
@@ -414,6 +427,27 @@ class RemuxAbortError extends Error {
   }
 }
 
+function audioStreamIndex(audioTrackId?: string) {
+  if (!audioTrackId) return undefined;
+  const match = /^audio:(\d+)$/.exec(audioTrackId.trim());
+  if (!match) return undefined;
+  const index = Number(match[1]);
+  return Number.isSafeInteger(index) ? index : undefined;
+}
+
+function appendAudioMapping(args: string[], audioTrackId?: string) {
+  const streamIndex = audioStreamIndex(audioTrackId);
+  if (streamIndex === undefined) {
+    args.push("-map", "0:a?");
+    return;
+  }
+
+  // The bridge track catalog uses FFmpeg's input stream index. Mapping one
+  // selected stream makes the same audio choice work for both the live
+  // progressive response and the later seekable cache handoff.
+  args.push("-map", `0:${streamIndex}`, "-disposition:a:0", "default");
+}
+
 function isAbortLikeError(err: unknown) {
   return (
     err instanceof RemuxAbortError ||
@@ -429,10 +463,11 @@ function runFfmpegRemuxToFile(
     signal?: AbortSignal;
     stallTimeoutMs?: number;
     onProgress?: (bytesRead: number) => void;
+    audioTrackId?: string;
   } = {},
 ): Promise<RemuxedFile> {
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), [
+    const ffmpegArgs = [
       "-hide_banner",
       "-loglevel",
       "warning",
@@ -441,8 +476,9 @@ function runFfmpegRemuxToFile(
       "pipe:0",
       "-map",
       "0:v:0?",
-      "-map",
-      "0:a?",
+    ];
+    appendAudioMapping(ffmpegArgs, options.audioTrackId);
+    ffmpegArgs.push(
       "-map_metadata",
       "0",
       "-map_chapters",
@@ -456,9 +492,9 @@ function runFfmpegRemuxToFile(
       "-f",
       "mp4",
       partialPath,
-    ]);
+    );
+    const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), ffmpegArgs);
 
-    let stderr = "";
     let settled = false;
     let processClosed = false;
     let abortError: RemuxAbortError | null = null;
@@ -550,8 +586,7 @@ function runFfmpegRemuxToFile(
       const msg = data.toString().trim();
       if (!msg) return;
 
-      stderr = `${stderr}\n${msg}`.slice(-2_000);
-      console.warn(`[ffmpeg] ${redactSensitiveText(msg)}`);
+      console.warn("[stream-server] FFmpeg seekable remux diagnostic");
     });
 
     ffmpeg.on("error", fail);
@@ -579,13 +614,7 @@ function runFfmpegRemuxToFile(
       }
 
       if (code !== 0) {
-        finishReject(
-          new Error(
-            `FFmpeg remux failed with exit code ${code}${
-              stderr ? `: ${redactSensitiveText(stderr.trim())}` : ""
-            }`,
-          ),
-        );
+        finishReject(new Error(`FFmpeg remux failed with exit code ${code}`));
         return;
       }
 
@@ -631,6 +660,7 @@ async function getOrCreateSeekableRemux(
     signal?: AbortSignal;
     stallTimeoutMs?: number;
     onProgress?: (bytesRead: number) => void;
+    audioTrackId?: string;
   },
 ): Promise<RemuxedFile> {
   pruneRemuxCache();
@@ -682,14 +712,13 @@ async function getOrCreateSeekableRemux(
     await rm(filePath, { force: true });
     await rm(partialPath, { force: true });
 
-    console.log(
-      `[stream-server] Preparing seekable FFmpeg remux: ${file.name}`,
-    );
+    console.log("[stream-server] Preparing seekable FFmpeg remux");
 
     const remuxed = await runFfmpegRemuxToFile(file, partialPath, {
       signal: abortController.signal,
       stallTimeoutMs: options.stallTimeoutMs,
       onProgress: options.onProgress,
+      audioTrackId: options.audioTrackId,
     });
     await rename(remuxed.filePath, filePath);
 
@@ -795,10 +824,7 @@ async function serveSeekableVideoFile(
     stream.pipe(res);
     res.on("close", () => stream.destroy());
     stream.on("error", (err) => {
-      console.error(
-        "[stream-server] Remux cache stream error:",
-        redactSensitiveText(err.message),
-      );
+      console.error("[stream-server] Remux cache stream error");
       if (!res.headersSent) {
         res.status(503).json({ error: "Failed to stream remuxed file" });
       } else {
@@ -815,10 +841,7 @@ async function serveSeekableVideoFile(
   stream.pipe(res);
   res.on("close", () => stream.destroy());
   stream.on("error", (err) => {
-    console.error(
-      "[stream-server] Remux cache stream error:",
-      redactSensitiveText(err.message),
-    );
+    console.error("[stream-server] Remux cache stream error");
     if (!res.headersSent) {
       res.status(503).json({ error: "Failed to stream remuxed file" });
     } else {
@@ -839,6 +862,7 @@ async function serveSeekableRemuxedFile(
     remuxTimeoutMs?: number;
     stallTimeoutMs?: number;
     onProgress?: (bytesRead: number) => void;
+    audioTrackId?: string;
   },
 ) {
   const timeout = createRemuxTimeoutSignal(
@@ -878,10 +902,7 @@ async function serveSeekableRemuxedFile(
       return;
     }
 
-    console.error(
-      "[stream-server] FFmpeg remux failed:",
-      redactSensitiveText((err as Error | undefined)?.message ?? String(err)),
-    );
+    console.error("[stream-server] FFmpeg remux failed");
 
     if (!res.headersSent) {
       const message =
@@ -930,6 +951,9 @@ async function serveProgressiveRemuxedFile(
   options: {
     signal?: AbortSignal;
     firstFragmentTimeoutMs?: number;
+    onFirstFragment?: () => void;
+    onError?: (error: Error) => void;
+    audioTrackId?: string;
   },
 ) {
   const rangeHeader =
@@ -946,7 +970,7 @@ async function serveProgressiveRemuxedFile(
     return res.status(200).end();
   }
 
-  const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), [
+  const ffmpegArgs = [
     "-hide_banner",
     "-loglevel",
     "warning",
@@ -954,8 +978,9 @@ async function serveProgressiveRemuxedFile(
     "pipe:0",
     "-map",
     "0:v:0?",
-    "-map",
-    "0:a?",
+  ];
+  appendAudioMapping(ffmpegArgs, options.audioTrackId);
+  ffmpegArgs.push(
     "-map_metadata",
     "0",
     "-map_chapters",
@@ -971,7 +996,8 @@ async function serveProgressiveRemuxedFile(
     "-f",
     "mp4",
     "pipe:1",
-  ]);
+  );
+  const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), ffmpegArgs);
   const sourceStream = file.createReadStream();
 
   await new Promise<void>((resolve) => {
@@ -982,6 +1008,7 @@ async function serveProgressiveRemuxedFile(
     let boxTail = Buffer.alloc(0);
     let clientClosed = false;
     let terminalError: Error | null = null;
+    let sourceBytesRead = 0;
     let abortCloseGraceTimer: ReturnType<typeof setTimeout> | null = null;
     const firstFragmentTimeoutMs =
       options.firstFragmentTimeoutMs ??
@@ -1008,6 +1035,8 @@ async function serveProgressiveRemuxedFile(
       ffmpeg.stdout?.off?.("error", onProcessError);
       ffmpeg.stdin?.off?.("error", onStdinError);
       sourceStream.off?.("error", onSourceError);
+      sourceStream.off?.("data", onSourceData);
+      sourceStream.off?.("end", onSourceEnd);
     };
 
     const finish = () => {
@@ -1039,6 +1068,9 @@ async function serveProgressiveRemuxedFile(
       if (clientClosed || res.destroyed) {
         finish();
         return;
+      }
+      if (!(error instanceof RemuxAbortError)) {
+        options.onError?.(error);
       }
       if (!responseStarted && !res.headersSent) {
         const cancelled =
@@ -1109,6 +1141,21 @@ async function serveProgressiveRemuxedFile(
 
     const onProcessError = (error: Error) => stop(error);
     const onSourceError = (error: Error) => stop(error);
+    const onSourceData = (chunk: Buffer) => {
+      sourceBytesRead += chunk.length;
+    };
+    const onSourceEnd = () => {
+      const expectedBytes = Number(file.length);
+      if (
+        Number.isFinite(expectedBytes) &&
+        expectedBytes > 0 &&
+        sourceBytesRead < expectedBytes
+      ) {
+        stop(
+          new Error("Torrent source ended before the selected file completed."),
+        );
+      }
+    };
     const onStdinError = (error: NodeJS.ErrnoException) => {
       if (error.code !== "EPIPE") stop(error);
     };
@@ -1124,6 +1171,7 @@ async function serveProgressiveRemuxedFile(
         if (scan.includes(Buffer.from("moof"))) {
           playableFragmentSeen = true;
           clearTimeout(firstFragmentTimer);
+          options.onFirstFragment?.();
         } else {
           boxTail = scan.subarray(Math.max(0, scan.length - 3));
         }
@@ -1141,7 +1189,8 @@ async function serveProgressiveRemuxedFile(
 
     ffmpeg.stderr?.on?.("data", (data: Buffer) => {
       const message = data.toString().trim();
-      if (message) console.warn(`[ffmpeg] ${redactSensitiveText(message)}`);
+      if (message)
+        console.warn("[stream-server] FFmpeg progressive remux diagnostic");
     });
     ffmpeg.on("error", onProcessError);
     ffmpeg.on("close", (code) => {
@@ -1157,6 +1206,8 @@ async function serveProgressiveRemuxedFile(
     ffmpeg.stdout?.on?.("error", onProcessError);
     ffmpeg.stdin?.on?.("error", onStdinError);
     sourceStream.on?.("error", onSourceError);
+    sourceStream.on?.("data", onSourceData);
+    sourceStream.on?.("end", onSourceEnd);
     req.once?.("aborted", onClientClose);
     res.once?.("close", onClientClose);
     options.signal?.addEventListener("abort", onParentAbort, { once: true });
@@ -1170,6 +1221,241 @@ async function serveProgressiveRemuxedFile(
   });
 }
 
+export interface HlsRemuxSession {
+  waitUntilReady(signal?: AbortSignal): Promise<void>;
+  readManifest(): Promise<string>;
+  readSegment(name: string): Promise<Buffer>;
+  getPublishedWindow(): { durationSeconds: number; segmentCount: number };
+  close(reason?: string): void;
+}
+
+const HLS_SEGMENT_NAME = /^(?:init\.mp4|segment-\d{6}\.m4s)$/;
+const HLS_POLL_INTERVAL_MS = 100;
+const HLS_SEGMENT_DURATION_SECONDS = 2;
+// Keep a bounded rolling seek window on disk. The player can scrub within the
+// currently published window; older fragments are deliberately deleted instead
+// of turning a long-running Play session into an unbounded temporary cache.
+const HLS_MAX_PUBLISHED_SEGMENTS = 30;
+const HLS_CLOSE_GRACE_MS = 2_000;
+
+function parseHlsSegmentNames(manifest: string) {
+  return manifest
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => HLS_SEGMENT_NAME.test(line));
+}
+
+function manifestPublishesHlsSegment(manifest: string, name: string) {
+  if (name === "init.mp4") {
+    return /#EXT-X-MAP:.*URI="init\.mp4"/.test(manifest);
+  }
+  return parseHlsSegmentNames(manifest).includes(name);
+}
+
+function publishedHlsWindow(manifest: string) {
+  const durationSeconds = manifest.split(/\r?\n/).reduce((total, line) => {
+    const match = /^#EXTINF:([\d.]+)/.exec(line.trim());
+    return total + (match ? Number(match[1]) : 0);
+  }, 0);
+  return {
+    durationSeconds:
+      Number.isFinite(durationSeconds) && durationSeconds > 0
+        ? durationSeconds
+        : parseHlsSegmentNames(manifest).length * HLS_SEGMENT_DURATION_SECONDS,
+    segmentCount: parseHlsSegmentNames(manifest).filter((name) =>
+      name.endsWith(".m4s"),
+    ).length,
+  };
+}
+
+/**
+ * Starts a live HLS/fMP4 remux whose manifest and segments remain in a
+ * private, job-owned temporary directory. Only the gateway may turn those
+ * names into signed HTTP paths.
+ */
+export async function createHlsRemuxSession(
+  file: any,
+  options: {
+    signal?: AbortSignal;
+    firstFragmentTimeoutMs?: number;
+    audioTrackId?: string;
+    onFirstFragment?: () => void;
+  } = {},
+): Promise<HlsRemuxSession> {
+  const directory = await mkdtemp(path.join(tmpdir(), "streamer-hls-"));
+  const manifestPath = path.join(directory, "index.m3u8");
+  const initPath = path.join(directory, "init.mp4");
+  const segmentPattern = path.join(directory, "segment-%06d.m4s");
+  const ffmpegArgs = [
+    "-hide_banner",
+    "-loglevel",
+    "warning",
+    "-i",
+    "pipe:0",
+    "-map",
+    "0:v:0?",
+  ];
+  appendAudioMapping(ffmpegArgs, options.audioTrackId);
+  ffmpegArgs.push(
+    "-map_metadata",
+    "0",
+    "-map_chapters",
+    "0",
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-movflags",
+    "+frag_keyframe+empty_moov+default_base_moof",
+    "-f",
+    "hls",
+    "-hls_time",
+    String(HLS_SEGMENT_DURATION_SECONDS),
+    "-hls_list_size",
+    String(HLS_MAX_PUBLISHED_SEGMENTS),
+    "-hls_flags",
+    "delete_segments+temp_file",
+    "-hls_segment_type",
+    "fmp4",
+    "-hls_fmp4_init_filename",
+    path.basename(initPath),
+    "-hls_segment_filename",
+    segmentPattern,
+    manifestPath,
+  );
+
+  const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), ffmpegArgs);
+  const sourceStream = file.createReadStream();
+  let closed = false;
+  let closing = false;
+  let closeGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  let cleanupPromise: Promise<void> | null = null;
+  let processError: Error | null = null;
+
+  const cleanup = () => {
+    if (cleanupPromise) return cleanupPromise;
+    cleanupPromise = rm(directory, { recursive: true, force: true }).then(
+      () => undefined,
+      () => undefined,
+    );
+    return cleanupPromise;
+  };
+  const close = (reason = "HLS remux cancelled") => {
+    if (closing) return;
+    closing = true;
+    try {
+      sourceStream.destroy?.(new Error(reason));
+    } catch {}
+    try {
+      ffmpeg.kill?.("SIGTERM");
+    } catch {}
+    if (closed) {
+      void cleanup();
+      return;
+    }
+    closeGraceTimer = setTimeout(() => {
+      if (closed) return;
+      try {
+        ffmpeg.kill?.("SIGKILL");
+      } catch {}
+      void cleanup();
+    }, HLS_CLOSE_GRACE_MS);
+    closeGraceTimer.unref?.();
+  };
+
+  ffmpeg.on?.("error", (error: Error) => {
+    processError = error;
+    closed = true;
+    if (closeGraceTimer) clearTimeout(closeGraceTimer);
+    if (closing) void cleanup();
+  });
+  ffmpeg.on?.("close", (code: number | null) => {
+    if (code !== 0 && !closing) {
+      processError = new Error("HLS remux failed before playback was ready.");
+    }
+    closed = true;
+    if (closeGraceTimer) clearTimeout(closeGraceTimer);
+    closeGraceTimer = null;
+    if (closing) void cleanup();
+  });
+  sourceStream.on?.("error", (error: Error) => {
+    if (!closing) processError = error;
+  });
+  sourceStream.pipe(ffmpeg.stdin);
+
+  const waitUntilReady = async (signal?: AbortSignal) => {
+    const timeoutMs =
+      options.firstFragmentTimeoutMs ??
+      DEFAULT_PROGRESSIVE_REMUX_FIRST_FRAGMENT_TIMEOUT_MS;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (signal?.aborted || options.signal?.aborted) {
+        close("HLS remux was cancelled.");
+        throw new Error("HLS remux was cancelled.");
+      }
+      if (processError) {
+        close();
+        throw processError;
+      }
+      try {
+        const manifest = await readFile(manifestPath, "utf8");
+        const segmentNames = parseHlsSegmentNames(manifest).filter((name) =>
+          name.endsWith(".m4s"),
+        );
+        if (manifest.includes("#EXT-X-MAP") && segmentNames.length > 0) {
+          await access(initPath);
+          await access(path.join(directory, segmentNames[0]));
+          options.onFirstFragment?.();
+          return;
+        }
+      } catch {}
+      if (closed) {
+        close();
+        throw new Error("HLS remux ended before a playable fragment.");
+      }
+      await new Promise((resolve) => setTimeout(resolve, HLS_POLL_INTERVAL_MS));
+    }
+    close();
+    throw new Error("HLS remux did not produce a playable fragment in time.");
+  };
+
+  const readManifest = () => readFile(manifestPath, "utf8");
+  const readSegment = async (name: string) => {
+    if (!HLS_SEGMENT_NAME.test(name)) {
+      throw new Error("HLS segment is invalid.");
+    }
+    // Re-check the current event playlist for every request. This keeps the
+    // signed route job-scoped and prevents callers from reading an arbitrary
+    // retained file or a fragment that has fallen outside the rolling window.
+    const manifest = await readFile(manifestPath, "utf8");
+    if (!manifestPublishesHlsSegment(manifest, name)) {
+      throw new Error("HLS segment is outside the published window.");
+    }
+    return readFile(path.join(directory, name));
+  };
+
+  if (options.signal) {
+    if (options.signal.aborted) close("HLS remux was cancelled.");
+    else
+      options.signal.addEventListener("abort", () => close(), { once: true });
+  }
+
+  return {
+    waitUntilReady,
+    readManifest,
+    readSegment,
+    getPublishedWindow: () => {
+      try {
+        const manifest = readFileSync(manifestPath, "utf8");
+        return publishedHlsWindow(manifest);
+      } catch {
+        return { durationSeconds: 0, segmentCount: 0 };
+      }
+    },
+    close,
+  };
+}
+
 export async function prepareSeekableRemux(
   torrent: any,
   options: {
@@ -1179,6 +1465,7 @@ export async function prepareSeekableRemux(
     remuxTimeoutMs?: number;
     stallTimeoutMs?: number;
     onProgress?: (bytesRead: number) => void;
+    audioTrackId?: string;
   } = {},
 ) {
   if (!torrent.files || torrent.files.length === 0) {
@@ -1198,6 +1485,7 @@ export async function prepareSeekableRemux(
       signal: timeout.signal,
       stallTimeoutMs: options.stallTimeoutMs,
       onProgress: options.onProgress,
+      audioTrackId: options.audioTrackId,
     });
 
     return {
@@ -1220,6 +1508,7 @@ export function retainSeekableRemux(
   options: {
     fileIdx?: number;
     hints?: FileSelectionHints;
+    audioTrackId?: string;
   } = {},
 ): (() => void) | undefined {
   if (!torrent.files || torrent.files.length === 0) return undefined;
@@ -1252,6 +1541,7 @@ export function getRetainedSeekableRemuxSource(
   options: {
     fileIdx?: number;
     hints?: FileSelectionHints;
+    audioTrackId?: string;
   } = {},
 ): RetainedSeekableRemuxSource | undefined {
   if (!torrent.files || torrent.files.length === 0) return undefined;
@@ -1813,18 +2103,27 @@ function enhanceMagnetWithTrackers(magnet: string) {
   return enhancedMagnet;
 }
 
-function attachTorrentLogging(torrent: any) {
+export function attachTorrentLogging(torrent: any) {
   if (!torrent || loggedTorrents.has(torrent)) return;
   loggedTorrents.add(torrent);
 
-  let lastLoggedPeers = -1;
-  torrent.on("wire", () => {
-    const n = torrent.numPeers;
-    if (lastLoggedPeers === -1 || n >= lastLoggedPeers + 10) {
-      console.log(`[stream-server] Peers: ${n}`);
-      lastLoggedPeers = n;
-    }
-  });
+  let lastPeerCount: number | undefined;
+  const logPeerCount = () => {
+    const count = Number(torrent.numPeers);
+    const peers = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+    if (peers === lastPeerCount) return;
+    lastPeerCount = peers;
+    console.log(`[stream-server] Peers: ${peers}`);
+  };
+  logPeerCount();
+  const peerLogTimer = setInterval(logPeerCount, PEER_LOG_INTERVAL_MS);
+  peerLogTimer.unref?.();
+  const stopPeerLogging = () => clearInterval(peerLogTimer);
+  if (typeof torrent.once === "function") {
+    torrent.once("close", stopPeerLogging);
+  } else if (typeof torrent.on === "function") {
+    torrent.on("close", stopPeerLogging);
+  }
 
   const transientPatterns = [
     "ENOTFOUND",
@@ -1837,14 +2136,10 @@ function attachTorrentLogging(torrent: any) {
     const msgStr = String(msg);
     const isTransient = transientPatterns.some((p) => msgStr.includes(p));
     if (isTransient) return;
-    console.warn(
-      `[stream-server] Torrent warning: ${redactSensitiveText(msgStr)}`,
-    );
+    console.warn("[stream-server] Torrent warning");
   });
-  torrent.on("error", (err: Error) => {
-    console.error(
-      `[stream-server] Torrent error: ${redactSensitiveText(err.message)}`,
-    );
+  torrent.on("error", () => {
+    console.error("[stream-server] Torrent runtime error");
   });
 }
 
@@ -1936,6 +2231,9 @@ export async function serveTorrentFile(
     hints?: FileSelectionHints;
     signal?: AbortSignal;
     remuxTimeoutMs?: number;
+    onFirstFragment?: () => void;
+    onError?: (error: Error) => void;
+    audioTrackId?: string;
   } = {},
 ) {
   if (!torrent.files || torrent.files.length === 0) {
@@ -1953,6 +2251,9 @@ export async function serveTorrentFile(
       return serveProgressiveRemuxedFile(req, res, file, {
         signal: options.signal,
         firstFragmentTimeoutMs: options.remuxTimeoutMs,
+        onFirstFragment: options.onFirstFragment,
+        onError: options.onError,
+        audioTrackId: options.audioTrackId,
       });
     }
     return serveSeekableRemuxedFile(req, res, torrent, file, {
@@ -1960,11 +2261,12 @@ export async function serveTorrentFile(
       hints: options.hints,
       signal: options.signal,
       remuxTimeoutMs: options.remuxTimeoutMs,
+      audioTrackId: options.audioTrackId,
     });
   }
 
   // Proxy directly to avoid redirect issues
-  console.log(`[stream-server] Proxying direct stream: ${file.name}`);
+  console.log("[stream-server] Proxying direct torrent stream");
   const mimeType = mimeFromExt(file.name);
 
   res.setHeader("Content-Type", mimeType);
@@ -2002,20 +2304,16 @@ export async function serveTorrentFile(
       start: range.start,
       end: range.end,
     });
-    pipeTorrentStreamToResponse(req, res, stream, (error) => {
-      console.error(
-        `[stream-server] Direct torrent stream error: ${redactSensitiveText(error.message)}`,
-      );
+    pipeTorrentStreamToResponse(req, res, stream, () => {
+      console.error("[stream-server] Direct torrent stream error");
     });
   } else {
     res.setHeader("Content-Length", total);
     if (req.method === "HEAD") return res.end();
 
     const stream = file.createReadStream();
-    pipeTorrentStreamToResponse(req, res, stream, (error) => {
-      console.error(
-        `[stream-server] Direct torrent stream error: ${redactSensitiveText(error.message)}`,
-      );
+    pipeTorrentStreamToResponse(req, res, stream, () => {
+      console.error("[stream-server] Direct torrent stream error");
     });
   }
 }
@@ -2064,16 +2362,14 @@ export function validateTorrentFiles(torrent: any) {
       nameData.endsWith(ext),
     );
     if (isForbidden) {
-      throw new Error(
-        `Security Violation: Malicious file detected (${file.name})`,
-      );
+      throw new Error("Security Violation: Forbidden torrent file type");
     }
 
     // Optional: Warn if it contains non-media files that aren't expected
     const ext = nameData.slice(nameData.lastIndexOf("."));
     if (!ALLOWED_MEDIA_EXTENSIONS.includes(ext) && nameData.includes(".")) {
       console.warn(
-        `[malware-shield] Suspicious non-media file ignored: ${file.name}`,
+        "[malware-shield] Suspicious non-media torrent file ignored",
       );
     }
   }
@@ -2117,21 +2413,27 @@ export async function streamRequest(req: Request, res: Response) {
     const msg = err?.message ?? "Failed to load torrent";
     const isNoPeers = msg.includes("Torrent peer discovery timeout");
     const isTimeout = msg.includes("timeout");
+    const isRuntimeUnavailable =
+      isTorrentEngineUnavailableError(err) ||
+      /^torrent engine unavailable$/i.test(String(msg).trim());
+    const safeError = isRuntimeUnavailable
+      ? "Torrent engine unavailable"
+      : isNoPeers
+        ? "No peers found quickly enough to start this source."
+        : isTimeout
+          ? "Torrent metadata was not ready in time."
+          : "The torrent source could not be loaded.";
     console.error(
       "[stream-server]",
       isTimeout
         ? isNoPeers
           ? "Torrent peer discovery timeout"
           : "Torrent metadata timeout"
-        : `Torrent error: ${redactSensitiveText(msg)}`,
+        : "Torrent source error",
     );
     if (!res.headersSent) {
       return res.status(503).json({
-        error: isNoPeers
-          ? "No peers found quickly enough to start this source."
-          : isTimeout
-            ? "Torrent metadata was not ready in time."
-            : msg,
+        error: safeError,
         retryable: isTimeout,
       });
     }

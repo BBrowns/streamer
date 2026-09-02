@@ -5,12 +5,16 @@ const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_JOB_ID = "22222222-2222-4222-8222-222222222222";
 const EXPIRES = 4_102_444_800_000;
 
-function job(path: string, expiresAt = "2100-01-01T00:00:00.000Z") {
+function job(
+  path: string,
+  expiresAt = "2100-01-01T00:00:00.000Z",
+  delivery: "range-http" | "progressive-fmp4" | "hls" = "range-http",
+) {
   return {
     id: JOB_ID,
     state: "ready",
     phase: "ready",
-    delivery: "range-http",
+    delivery,
     peerCount: 1,
     readinessProgress: 1,
     elapsedMs: 100,
@@ -39,12 +43,38 @@ describe("bindBridgeV1StreamUri", () => {
     );
   });
 
+  it("allows one numeric runtime audio variant on the signed stream", () => {
+    const path = `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=signed&audioTrack=2`;
+
+    expect(
+      bindBridgeV1StreamUri({
+        baseOrigin: "http://192.168.1.25:11470",
+        job: job(path, "2100-01-01T00:00:00.000Z", "progressive-fmp4"),
+        now: 1_000,
+      }),
+    ).toBe(`http://192.168.1.25:11470${path}`);
+  });
+
+  it("allows an audio variant on a signed HLS stream", () => {
+    const path = `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=signed&audioTrack=2`;
+
+    expect(
+      bindBridgeV1StreamUri({
+        baseOrigin: "http://192.168.1.25:11470",
+        job: job(path, "2100-01-01T00:00:00.000Z", "hls"),
+        now: 1_000,
+      }),
+    ).toBe(`http://192.168.1.25:11470${path}`);
+  });
+
   it.each([
     `//other.test/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=signed`,
     `/api/bridge/v1/jobs/${OTHER_JOB_ID}/stream?expires=${EXPIRES}&signature=signed`,
     `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&expires=${EXPIRES}&signature=signed`,
     `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=signed&source=private`,
     `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=`,
+    `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=signed&audioTrack=abc`,
+    `/api/bridge/v1/jobs/${JOB_ID}/stream?expires=${EXPIRES}&signature=signed&audioTrack=1&audioTrack=2`,
   ])("rejects an unbound or ambiguous signed path", (path) => {
     expect(() =>
       bindBridgeV1StreamUri({

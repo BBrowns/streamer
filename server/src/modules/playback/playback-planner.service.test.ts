@@ -713,7 +713,7 @@ describe("PlaybackPlannerService", () => {
     expect(plan.rejectedCandidates[0].reasonCode).toBe("unsupported_codec");
   });
 
-  it("returns a bridge plan for compatible torrent sources when bridge is available", async () => {
+  it("runtime-probes torrent labels before choosing a bridge delivery", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {
         infoHash: "abc123",
@@ -736,9 +736,10 @@ describe("PlaybackPlannerService", () => {
     );
 
     expect(plan.state).toBe("ready");
-    expect(plan.plan?.mode).toBe("bridge");
+    expect(plan.plan?.mode).toBe("remux");
     expect(plan.plan?.selectedCandidate.stream.infoHash).toBe("abc123");
     expect(plan.selectedCandidate?.requiresBridge).toBe(true);
+    expect(plan.selectedCandidate?.requiresRemux).toBe(true);
     expect(plan.requiresBridge).toBe(true);
   });
 

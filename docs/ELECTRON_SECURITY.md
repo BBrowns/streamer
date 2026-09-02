@@ -18,8 +18,9 @@ The main window must keep these defaults:
 
 The renderer URL allowlist is intentionally narrow:
 
-- Development: `http://localhost:8081`, `http://127.0.0.1:8081`, or
-  `http://[::1]:8081`.
+- Development: `http://localhost:8081` or `http://127.0.0.1:8081`.
+  Literal bracketed IPv6 hosts are intentionally excluded because they are
+  not valid CSP host sources in the renderer policy.
 - Packaged/local: file URLs only inside configured renderer asset roots.
 
 Do not add arbitrary remote renderer origins without a threat model and a

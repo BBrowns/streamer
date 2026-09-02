@@ -55,9 +55,16 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("../SourceChoiceList", () => ({
   useSourceChoicePlan: () => mockUseSourceChoicePlan(),
-  SourceChoiceList: () => {
-    const { Text } = require("react-native");
-    return <Text>Consumer source choices</Text>;
+  SourceChoiceList: ({ onSelect }: any) => {
+    const { Pressable, Text } = require("react-native");
+    return (
+      <Pressable
+        testID="source-choice-select"
+        onPress={() => onSelect({} as any, "candidate-1")}
+      >
+        <Text>Consumer source choices</Text>
+      </Pressable>
+    );
   },
 }));
 
@@ -97,5 +104,23 @@ describe("MoreSourcesPanel", () => {
     expect(screen.getByText("Consumer source choices")).toBeTruthy();
     expect(screen.getByText("Technical disclosure")).toBeTruthy();
     expect(screen.getByLabelText("Hide more sources")).toBeTruthy();
+  });
+
+  it("closes before handing a selected source to playback", async () => {
+    const onSelect = jest.fn();
+    const screen = await render(
+      <MoreSourcesPanel
+        contentId="tt123"
+        title="Example"
+        initiallyOpen
+        onSelect={onSelect}
+      />,
+    );
+
+    await fireEvent.press(screen.getByTestId("source-choice-select"));
+
+    expect(onSelect).toHaveBeenCalledWith({}, "candidate-1");
+    expect(screen.queryByText("Consumer source choices")).toBeNull();
+    expect(screen.queryByText("Technical disclosure")).toBeNull();
   });
 });

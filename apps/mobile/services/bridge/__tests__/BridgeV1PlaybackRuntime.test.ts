@@ -220,6 +220,81 @@ describe("BridgeV1PlaybackRuntime", () => {
     activeRuntime.stop();
   });
 
+  it("builds a signed stream variant for a supported audio track", async () => {
+    const activeRuntime = runtime();
+    await activeRuntime.refreshTrackCatalog();
+
+    await expect(activeRuntime.selectAudioTrack("audio:1")).resolves.toBe(null);
+    await expect(activeRuntime.selectAudioTrack("audio:2")).resolves.toBe(null);
+
+    const secondCatalog = trackCatalog({
+      tracks: [
+        trackCatalog().tracks[0],
+        {
+          ...trackCatalog().tracks[0],
+          id: "audio:2",
+          streamIndex: 2,
+          language: "es",
+          title: "Spanish",
+          default: false,
+        },
+      ],
+    });
+    const runtimeClient = client({
+      getTrackCatalog: jest.fn().mockResolvedValue(secondCatalog),
+    });
+    const runtimeWithTracks = runtime(runtimeClient);
+    await runtimeWithTracks.refreshTrackCatalog();
+
+    const spanishUri = await runtimeWithTracks.selectAudioTrack("audio:2");
+    expect(spanishUri).toBe(`${STREAM_URI}&audioTrack=2`);
+    expect(
+      runtimeWithTracks.getAudioTracks().find((track) => track.id === "audio:2")
+        ?.active,
+    ).toBe(false);
+    runtimeWithTracks.commitAudioTrackSelection("audio:2", spanishUri!);
+    expect(runtimeWithTracks.canPlay({ url: STREAM_URI } as Stream)).toBe(true);
+    expect(runtimeWithTracks.getAudioTracks()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "audio:2", active: true }),
+      ]),
+    );
+
+    await expect(runtimeWithTracks.selectAudioTrack("audio:999")).resolves.toBe(
+      null,
+    );
+    runtimeWithTracks.stop();
+    activeRuntime.stop();
+  });
+
+  it("keeps the committed audio track when a replacement is not committed", async () => {
+    const secondCatalog = trackCatalog({
+      tracks: [
+        trackCatalog().tracks[0],
+        {
+          ...trackCatalog().tracks[0],
+          id: "audio:2",
+          streamIndex: 2,
+          language: "es",
+          title: "Spanish",
+          default: false,
+        },
+      ],
+    });
+    const activeRuntime = runtime(
+      client({ getTrackCatalog: jest.fn().mockResolvedValue(secondCatalog) }),
+    );
+    await activeRuntime.refreshTrackCatalog();
+
+    const pendingUri = await activeRuntime.selectAudioTrack("audio:2");
+    expect(pendingUri).toBe(`${STREAM_URI}&audioTrack=2`);
+    expect(
+      activeRuntime.getAudioTracks().find((track) => track.active)?.id,
+    ).toBe("audio:1");
+    expect(activeRuntime.getActivePlaybackUri()).toBe(STREAM_URI);
+    activeRuntime.stop();
+  });
+
   it("rejects track catalogs that drift to another job or media identity", async () => {
     const runtimeClient = client({
       getTrackCatalog: jest

@@ -5,6 +5,11 @@ const test = require("node:test");
 
 const { entryFiles } = require("../scripts/build.cjs");
 
+test("desktop build includes renderer loader and packaged recovery source", () => {
+  assert.ok(entryFiles.includes("renderer-loader.js"));
+  assert.ok(fs.existsSync(path.join(__dirname, "renderer-error.html")));
+});
+
 test("desktop build includes runtime modules required by main", () => {
   const mainSource = fs.readFileSync(path.join(__dirname, "main.js"), "utf8");
   const localRequires = [

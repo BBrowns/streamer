@@ -34,7 +34,13 @@ const externalNavigationUrlSchema = z
 export const streamSchema = z.object({
   url: playbackUrlSchema.optional(),
   infoHash: z.string().optional(),
-  fileIdx: z.number().int().nonnegative().optional(),
+  // Some add-ons use null to mean that no concrete file was selected yet.
+  // Normalize that protocol-compatible representation to the optional field
+  // used by the rest of the application.
+  fileIdx: z.preprocess(
+    (value) => (value === null ? undefined : value),
+    z.number().int().nonnegative().optional(),
+  ),
   fileSelectionHints: z
     .object({
       season: z.number().int().positive().optional(),
@@ -53,7 +59,9 @@ export const streamSchema = z.object({
       notWebReady: z.boolean().optional(),
       bingeGroup: z.string().optional(),
       remuxToMp4: z.boolean().optional(),
-      remuxStrategy: z.enum(["progressive-fmp4", "seekable-cache"]).optional(),
+      remuxStrategy: z
+        .enum(["progressive-fmp4", "seekable-cache", "hls"])
+        .optional(),
     })
     .optional(),
   resolution: z.string().optional(),

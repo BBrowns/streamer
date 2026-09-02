@@ -95,6 +95,18 @@ function bridgeRouteCapabilities(
     };
   }
 
+  if (delivery === "hls") {
+    return {
+      seek: "immediate",
+      audioTracks: true,
+      embeddedSubtitles: true,
+      externalSubtitles: true,
+      cast: false,
+      offline: false,
+      thumbnails: false,
+    };
+  }
+
   return {
     seek: "preparing",
     audioTracks: true,

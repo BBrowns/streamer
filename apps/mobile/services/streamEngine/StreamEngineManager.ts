@@ -138,23 +138,48 @@ export class StreamEngineManager {
     status: "loading",
     url: this.bridgeUrl,
   };
-  private retryTimer: ReturnType<typeof setInterval> | null = null;
+  private detectBridgeInFlight: Promise<boolean> | null = null;
+  private bridgeListeners = new Set<() => void>();
 
   constructor() {
     this.registerEngine(new HLSEngine());
     this.registerEngine(new HttpVideoEngine());
     this.registerEngine(new TorrentEngine(this));
-
-    // Expo Router renders web routes on the server before browser hydration.
-    // The local bridge is a device concern, so only probe from a real client.
-    const canProbeFromRuntime =
-      Platform.OS !== "web" || typeof window !== "undefined";
-    if (process.env.NODE_ENV !== "test" && canProbeFromRuntime) {
-      this.detectBridge();
-    }
   }
 
   async detectBridge(): Promise<boolean> {
+    if (this.detectBridgeInFlight) return this.detectBridgeInFlight;
+
+    const detection = this.detectBridgeInternal();
+    this.detectBridgeInFlight = detection;
+    try {
+      return await detection;
+    } finally {
+      if (this.detectBridgeInFlight === detection) {
+        this.detectBridgeInFlight = null;
+      }
+    }
+  }
+
+  subscribeBridge(listener: () => void): () => void {
+    this.bridgeListeners.add(listener);
+    return () => this.bridgeListeners.delete(listener);
+  }
+
+  getBridgeSnapshot() {
+    return {
+      available: this.bridgeAvailable,
+      status: this.bridgeStatus,
+      diagnostics: this.getBridgeDiagnostics(),
+      url: this.bridgeUrl,
+    };
+  }
+
+  private notifyBridgeListeners() {
+    for (const listener of this.bridgeListeners) listener();
+  }
+
+  private async detectBridgeInternal(): Promise<boolean> {
     const urlsToTry = new Set<string>();
     const defaultUrl = this.getBridgeUrl();
     if (!defaultUrl) {
@@ -166,6 +191,7 @@ export class StreamEngineManager {
         message: "Bridge URL is not trusted.",
         checkedAt: Date.now(),
       };
+      this.notifyBridgeListeners();
       return false;
     }
     urlsToTry.add(defaultUrl);
@@ -179,8 +205,7 @@ export class StreamEngineManager {
     }
 
     console.log(
-      "[StreamEngineManager] Detecting bridge. Trying URLs:",
-      Array.from(urlsToTry),
+      `[StreamEngineManager] Detecting bridge across ${urlsToTry.size} trusted endpoint candidates.`,
     );
     this.bridgeStatus = "loading";
     this.bridgeDiagnostics = {
@@ -188,6 +213,7 @@ export class StreamEngineManager {
       url: defaultUrl,
       checkedAt: Date.now(),
     };
+    this.notifyBridgeListeners();
     let unsupportedProbe: BridgeProbeResult | null = null;
     let wrongUrlProbe: BridgeProbeResult | null = null;
 
@@ -208,10 +234,7 @@ export class StreamEngineManager {
         };
         this.activeStrategy = "local";
 
-        if (this.retryTimer) {
-          clearInterval(this.retryTimer);
-          this.retryTimer = null;
-        }
+        this.notifyBridgeListeners();
         return true;
       }
 
@@ -246,13 +269,7 @@ export class StreamEngineManager {
         : "[StreamEngineManager] Bridge unreachable after trying all fallbacks.",
     );
 
-    // Schedule retries if not already scheduled
-    if (!this.retryTimer) {
-      this.retryTimer = setInterval(() => {
-        this.detectBridge();
-      }, 5000);
-    }
-
+    this.notifyBridgeListeners();
     return false;
   }
 
@@ -406,10 +423,6 @@ export class StreamEngineManager {
   }
 
   destroy(): void {
-    if (this.retryTimer) {
-      clearInterval(this.retryTimer);
-      this.retryTimer = null;
-    }
     // Any other cleanup for engines that might have timers
     this.engines.forEach((e) => {
       if ("stop" in e && typeof e.stop === "function") {

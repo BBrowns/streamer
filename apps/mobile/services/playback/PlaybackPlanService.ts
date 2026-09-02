@@ -13,6 +13,7 @@ import {
 } from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
+import { refreshBridgeReadiness } from "../streamEngine/bridgeReadinessRuntime";
 import {
   normalizePreferredQualities,
   usePlayerStore,
@@ -559,7 +560,7 @@ export function getPlaybackPlan(
   return attachPlaybackPlanConsumer(requestKey, entry, options);
 }
 
-/** Start a bridge probe once while the plan request is in flight. */
+/** Refresh the shared bridge snapshot once while the plan request is in flight. */
 export function detectPlaybackBridgeOnce(): Promise<boolean> {
   // Do not turn a confirmed bridge back into a transient `loading` state just
   // because a direct plan is being requested. In particular, Cast resolves
@@ -570,11 +571,12 @@ export function detectPlaybackBridgeOnce(): Promise<boolean> {
   }
 
   if (!bridgeDetectionInFlight) {
-    bridgeDetectionInFlight = streamEngineManager
-      .detectBridge()
+    bridgeDetectionInFlight = refreshBridgeReadiness()
+      .then((snapshot) => snapshot.bridgeAvailable)
       .catch(() => false)
-      .finally(() => {
+      .then((available) => {
         bridgeDetectionInFlight = null;
+        return available;
       });
   }
   return bridgeDetectionInFlight;

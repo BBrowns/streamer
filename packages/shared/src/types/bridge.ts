@@ -6,7 +6,7 @@ export type BridgeProtocolVersion = 1;
 export const BRIDGE_V1_MAX_REQUEST_BYTES = 16 * 1024;
 
 export type BridgeDelivery =
-  "range-http" | "progressive-fmp4" | "seekable-cache";
+  "range-http" | "progressive-fmp4" | "seekable-cache" | "hls";
 
 export type BridgeJobState =
   | "preparing"

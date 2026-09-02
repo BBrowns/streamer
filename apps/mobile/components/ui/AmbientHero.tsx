@@ -84,7 +84,7 @@ export function AmbientHero({
           style={[
             styles.posterStage,
             isCompact && styles.posterStageCompact,
-            { shadowColor: theme.glow },
+            Platform.OS !== "web" && { shadowColor: theme.glow },
           ]}
         >
           <MediaArtwork
@@ -129,13 +129,14 @@ const styles = StyleSheet.create({
     bottom: 56,
     aspectRatio: 2 / 3,
     maxWidth: 260,
-    shadowOffset: { width: 0, height: 22 },
-    shadowOpacity: 0.42,
-    shadowRadius: 36,
     elevation: 14,
     ...(Platform.OS === "web"
       ? { filter: "drop-shadow(0 24px 44px rgba(0,0,0,0.42))" }
-      : null),
+      : {
+          shadowOffset: { width: 0, height: 22 },
+          shadowOpacity: 0.42,
+          shadowRadius: 36,
+        }),
   } as never,
   posterStageCompact: {
     width: 154,

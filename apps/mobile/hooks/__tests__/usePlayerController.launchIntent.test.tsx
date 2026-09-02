@@ -35,6 +35,13 @@ const mockGetActivePlaybackSourceRuntime = jest.fn(
 
 jest.mock("../../services/streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
+    getBridgeSnapshot: jest.fn(() => ({
+      available: false,
+      status: "unreachable",
+      diagnostics: { status: "unreachable" },
+      url: null,
+    })),
+    subscribeBridge: jest.fn(() => jest.fn()),
     resolveEngine: (stream: unknown) => mockResolveEngine(stream),
   },
 }));
@@ -314,6 +321,33 @@ describe("usePlayerController playback launch intent", () => {
     await act(() => player.emit("playToEnd", {}));
 
     expect(onCompleted).toHaveBeenCalledTimes(1);
+    await screen.unmount();
+  });
+
+  it("routes a progressive file end before the seekable handoff to fallback", async () => {
+    const player = createMockPlayer();
+    player.currentTime = 18;
+    player.duration = Number.POSITIVE_INFINITY;
+    const onCompleted = jest.fn();
+    const onPrematureEnd = jest.fn();
+    startSession({ type: "play" });
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        playbackUri: "https://cdn.example.test/progressive.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+        isProgressiveRemux: true,
+        hasSeekableHandoff: false,
+        onCompleted,
+        onPrematureEnd,
+      }),
+    );
+
+    await act(() => player.emit("playToEnd", {}));
+
+    expect(onPrematureEnd).toHaveBeenCalledTimes(1);
+    expect(onCompleted).not.toHaveBeenCalled();
     await screen.unmount();
   });
 

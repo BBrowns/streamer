@@ -37,9 +37,7 @@ function normalizeHostname(hostname) {
 }
 
 function isLoopbackHostname(hostname) {
-  return ["localhost", "127.0.0.1", "::1"].includes(
-    normalizeHostname(hostname),
-  );
+  return ["localhost", "127.0.0.1"].includes(normalizeHostname(hostname));
 }
 
 function isAllowedDevRendererUrl(parsedUrl) {
@@ -108,13 +106,10 @@ function createContentSecurityPolicy(options = {}) {
     "https:",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
-    "http://[::1]:3001",
     "ws://localhost:3001",
     "ws://127.0.0.1:3001",
-    "ws://[::1]:3001",
     "http://localhost:11470",
     "http://127.0.0.1:11470",
-    "http://[::1]:11470",
   ];
 
   if (allowDevServer) {
@@ -123,15 +118,12 @@ function createContentSecurityPolicy(options = {}) {
       "'unsafe-eval'",
       "http://localhost:8081",
       "http://127.0.0.1:8081",
-      "http://[::1]:8081",
     );
     connectSrc.push(
       "http://localhost:8081",
       "http://127.0.0.1:8081",
-      "http://[::1]:8081",
       "ws://localhost:8081",
       "ws://127.0.0.1:8081",
-      "ws://[::1]:8081",
     );
   }
 

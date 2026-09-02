@@ -178,6 +178,8 @@ export class BridgeV1PlaybackRuntime implements IStreamEngine {
   private audioTracks: AudioTrack[] = [];
   private subtitleTracks: SubtitleTrack[] = [];
   private subtitleDocumentIds = new Map<string, string>();
+  private selectedAudioTrackId: string | null = null;
+  private selectedAudioUri: string | null = null;
 
   constructor(options: BridgeV1PlaybackRuntimeOptions) {
     if (!isBridgeV1OpaqueId(options.jobId)) {
@@ -235,6 +237,60 @@ export class BridgeV1PlaybackRuntime implements IStreamEngine {
 
   getAudioTracks(): AudioTrack[] {
     return this.audioTracks.map((track) => ({ ...track }));
+  }
+
+  async selectAudioTrack(id: string): Promise<string | null> {
+    if (
+      this.stopped ||
+      (this.delivery !== "progressive-fmp4" && this.delivery !== "hls")
+    ) {
+      return null;
+    }
+    const selectedTrack = this.audioTracks.find((track) => track.id === id);
+    if (!selectedTrack || selectedTrack.active) return null;
+
+    const streamIndex = /^audio:(\d+)$/.exec(selectedTrack.id)?.[1];
+    if (!streamIndex || !this.initialUri) return null;
+
+    const nextUri = new URL(this.selectedAudioUri ?? this.initialUri);
+    nextUri.searchParams.set("audioTrack", streamIndex);
+    // The player must commit the new language only after the replacement
+    // source reaches a usable state. A failed variant therefore leaves the
+    // currently playing language intact.
+    return nextUri.toString();
+  }
+
+  commitAudioTrackSelection(id: string, uri: string): void {
+    if (this.stopped || !this.initialUri) return;
+    const selectedTrack = this.audioTracks.find((track) => track.id === id);
+    if (!selectedTrack || !/^audio:\d+$/.test(id)) return;
+
+    try {
+      const candidateUri = new URL(uri);
+      const currentUri = new URL(this.selectedAudioUri ?? this.initialUri);
+      if (
+        candidateUri.origin !== currentUri.origin ||
+        candidateUri.pathname !== currentUri.pathname ||
+        candidateUri.searchParams.get("audioTrack") !==
+          id.slice("audio:".length)
+      ) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    this.selectedAudioUri = uri;
+    this.selectedAudioTrackId = selectedTrack.id;
+    this.audioTracks = this.audioTracks.map((track) => ({
+      ...track,
+      active: track.id === selectedTrack.id,
+    }));
+    this.emitTracks();
+  }
+
+  getActivePlaybackUri(): string | null {
+    return this.initialUri ? (this.selectedAudioUri ?? this.initialUri) : null;
   }
 
   getSubtitles(): SubtitleTrack[] {
@@ -336,6 +392,11 @@ export class BridgeV1PlaybackRuntime implements IStreamEngine {
     ) {
       return { status: "unavailable" };
     }
+
+    // The seekable cache is materialized for the original/default audio
+    // choice. Do not silently replace a user-selected live audio variant with
+    // that cache and switch the language back underneath the viewer.
+    if (this.selectedAudioTrackId) return { status: "unavailable" };
 
     this.handoffController?.abort(
       abortError(undefined, "Seekable handoff request cancelled."),

@@ -92,6 +92,7 @@ describe("SyncClient", () => {
       getAuth: () => auth,
       createSocket,
       refreshAuth: jest.fn().mockResolvedValue("access-token"),
+      random: () => 0.5,
     });
 
     client.start();
@@ -100,7 +101,7 @@ describe("SyncClient", () => {
     const staleClose = firstSocket.onclose;
 
     firstSocket.onclose?.({ code: 1006, reason: "network" });
-    jest.advanceTimersByTime(2_000);
+    jest.advanceTimersByTime(2_100);
     await flushAsyncWork();
 
     expect(createSocket).toHaveBeenCalledTimes(2);
@@ -153,6 +154,141 @@ describe("SyncClient", () => {
 
     expect(createSocket).not.toHaveBeenCalled();
     expect(refreshAuth).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports transient refresh failure as degraded instead of stopping auth", async () => {
+    auth.tokenExpiresAt = Date.now() - 1;
+    const refreshAuth = jest
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new Error("network unavailable"), { kind: "network" }),
+      );
+    const statuses: string[] = [];
+    const client = new SyncClient({
+      getAuth: () => auth,
+      createSocket,
+      refreshAuth,
+    });
+    client.subscribeStatus((status) => statuses.push(status.state));
+
+    client.start();
+    await flushAsyncWork();
+
+    expect(statuses).toContain("degraded");
+    expect(client.getStatus().state).toBe("degraded");
+    expect(createSocket).not.toHaveBeenCalled();
+    client.stop();
+  });
+
+  it("waits for a refresh cooldown before retrying a rate-limited session", async () => {
+    auth.tokenExpiresAt = Date.now() - 1;
+    const refreshAuth = jest
+      .fn()
+      .mockRejectedValueOnce(
+        Object.assign(new Error("rate limited"), {
+          kind: "rate-limited",
+          retryAfterMs: 7_000,
+        }),
+      )
+      .mockResolvedValue("access-token");
+    const client = new SyncClient({
+      getAuth: () => auth,
+      createSocket,
+      refreshAuth,
+      random: () => 0,
+    });
+
+    client.start();
+    await flushAsyncWork();
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+    expect(client.getStatus().retryDelayMs).toBeGreaterThanOrEqual(7_000);
+
+    jest.advanceTimersByTime(6_999);
+    await flushAsyncWork();
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(1_001);
+    await flushAsyncWork();
+    expect(refreshAuth).toHaveBeenCalledTimes(2);
+    client.stop();
+  });
+
+  it("returns to connected after manually retrying a transient refresh failure", async () => {
+    let now = Date.now();
+    auth.tokenExpiresAt = now + 30_000;
+    const refreshAuth = jest
+      .fn()
+      .mockRejectedValueOnce(
+        Object.assign(new Error("network unavailable"), { kind: "network" }),
+      )
+      .mockImplementation(async () => {
+        auth.tokenExpiresAt = now + 60_000;
+        return "access-token";
+      });
+    const client = new SyncClient({
+      getAuth: () => auth,
+      createSocket,
+      refreshAuth,
+      now: () => now,
+    });
+
+    client.start();
+    await flushAsyncWork();
+    sockets[0].readyState = OPEN;
+    sockets[0].onopen?.();
+    jest.advanceTimersByTime(1);
+    await flushAsyncWork();
+
+    expect(client.getStatus().state).toBe("degraded");
+
+    client.retryNow();
+    await flushAsyncWork();
+
+    expect(refreshAuth).toHaveBeenCalledTimes(2);
+    expect(client.getStatus().state).toBe("connected");
+    client.stop();
+  });
+
+  it("pauses reconnects while inactive and reconnects once on activation", async () => {
+    const client = new SyncClient({
+      getAuth: () => auth,
+      createSocket,
+      refreshAuth: jest.fn().mockResolvedValue("access-token"),
+    });
+
+    client.start();
+    await flushAsyncWork();
+    sockets[0].onclose?.({ code: 1006, reason: "network" });
+    client.setActive(false);
+    jest.advanceTimersByTime(60_000);
+    expect(createSocket).toHaveBeenCalledTimes(1);
+
+    client.setActive(true);
+    await flushAsyncWork();
+    expect(createSocket).toHaveBeenCalledTimes(2);
+    client.stop();
+  });
+
+  it("bounds reconnect delays and emits one degraded state per failed socket", async () => {
+    const client = new SyncClient({
+      getAuth: () => auth,
+      createSocket,
+      refreshAuth: jest.fn().mockResolvedValue("access-token"),
+      random: () => 0.5,
+    });
+    const statuses: string[] = [];
+    client.subscribeStatus((status) => statuses.push(status.state));
+
+    client.start();
+    await flushAsyncWork();
+    sockets[0].onclose?.({ code: 1006, reason: "network" });
+    expect(client.getStatus().retryDelayMs).toBeGreaterThan(0);
+    expect(statuses.filter((state) => state === "degraded")).toHaveLength(1);
+
+    jest.advanceTimersByTime(60_000);
+    await flushAsyncWork();
+    expect(createSocket).toHaveBeenCalledTimes(2);
+    client.stop();
   });
 
   it("refreshes proactively before the access token expires", async () => {

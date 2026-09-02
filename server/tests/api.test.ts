@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 import { request } from "./test-utils.js";
 import { createApp, resolveCorsOrigin } from "../src/app.js";
+import { getRequestId } from "../src/utils/request-context.js";
 
 // Mock prisma
 vi.mock("../src/prisma/client.js", () => ({
@@ -96,6 +97,37 @@ describe("CORS origin resolution", () => {
     (env as any).nodeEnv = "production";
 
     expect(resolveCorsOrigin("http://192.168.1.20:8081")).toBeNull();
+  });
+
+  it("allows PATCH preflight requests used by notification actions", async () => {
+    const app = createApp();
+
+    const response = await app.request("/api/notifications/read-all", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "http://localhost:8081",
+        "Access-Control-Request-Method": "PATCH",
+        "Access-Control-Request-Headers": "authorization,content-type",
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-methods")).toContain(
+      "PATCH",
+    );
+  });
+
+  it("uses one correlation id for the request context and response", async () => {
+    const app = createApp();
+    app.get(
+      "/request-context-probe",
+      () => new Response(getRequestId() ?? "missing"),
+    );
+
+    const response = await app.request("/request-context-probe");
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(response.headers.get("X-Request-ID"));
   });
 });
 

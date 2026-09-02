@@ -37,6 +37,18 @@ export function resolveFloatingSurfaceMaterial({
     : level === "sheet"
       ? colors.surfaceOverlay
       : colors.surfaceFloating;
+  const shadowOpacity =
+    level === "menu" ? 0.2 : level === "media" ? 0.24 : 0.28;
+  const shadowRadius = level === "menu" ? 18 : level === "media" ? 24 : 32;
+  const shadowStyle =
+    platform === "web"
+      ? { boxShadow: `0 12px ${shadowRadius}px rgba(0,0,0,${shadowOpacity})` }
+      : {
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: 12 },
+          shadowOpacity,
+          shadowRadius,
+        };
 
   return {
     backgroundColor,
@@ -47,9 +59,8 @@ export function resolveFloatingSurfaceMaterial({
         : level === "media"
           ? uiRadii.lg
           : uiRadii.lg,
-    shadowOpacity: level === "menu" ? 0.2 : level === "media" ? 0.24 : 0.28,
-    shadowRadius: level === "menu" ? 18 : level === "media" ? 24 : 32,
     elevation: level === "menu" ? 10 : level === "media" ? 12 : 16,
+    ...shadowStyle,
     ...(canUseWebMaterial && level !== "sheet"
       ? {
           backdropFilter: level === "media" ? "blur(10px)" : "blur(12px)",
@@ -108,8 +119,6 @@ export function FloatingSurface({
 const styles = StyleSheet.create({
   surface: {
     borderWidth: 1,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 12 },
     overflow: "hidden",
   },
 });

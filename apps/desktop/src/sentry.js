@@ -16,7 +16,7 @@ const {
 const SENSITIVE_KEY_PATTERN =
   /^(authorization|auth|bearer|token|access_token|refresh_token|signature|secret|password|api_key|key)$/i;
 const SENSITIVE_VALUE_KEY_PATTERN =
-  /^(magnet|playbackUrl|streamUrl|sourceUrl|downloadUrl|externalUrl|localUri|uri|infoHash|filePath|tempPath|nodeExecutable|entrypoint|nativeBinary)$/i;
+  /^(magnet|playbackUrl|streamUrl|sourceUrl|downloadUrl|externalUrl|bridgeUrl|localUri|uri|infoHash|filePath|tempPath|nodeExecutable|entrypoint|nativeBinary)$/i;
 
 function redactSensitiveText(value) {
   return String(value ?? "")

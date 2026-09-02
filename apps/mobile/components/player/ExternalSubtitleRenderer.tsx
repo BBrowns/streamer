@@ -12,6 +12,10 @@ import {
   cuesAtTime,
   type SubtitleCue,
 } from "../../services/playback/SubtitleParser";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 interface ExternalSubtitleRendererProps {
   cues: SubtitleCue[];
@@ -73,10 +77,11 @@ export function ExternalSubtitleRenderer({
 
   return (
     <View
-      pointerEvents="none"
+      pointerEvents={getNativePointerEvents("none")}
       accessibilityLiveRegion="polite"
       style={[
         styles.container,
+        getPointerEventsStyle("none"),
         {
           bottom,
         },

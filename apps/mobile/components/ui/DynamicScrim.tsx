@@ -4,6 +4,10 @@ import { useCinematicTheme } from "../../contexts/CinematicThemeContext";
 import { useTheme } from "../../hooks/useTheme";
 import type { ThemeColors } from "../../constants/theme";
 import type { CinematicTheme } from "../../services/cinematicTheme";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 export function getDynamicScrimBottomColors(
   theme: Pick<CinematicTheme, "scrimTransparent">,
@@ -21,7 +25,10 @@ export function DynamicScrim() {
   const { theme } = useCinematicTheme();
   const { colors } = useTheme();
   return (
-    <View pointerEvents="none" style={styles.fill}>
+    <View
+      pointerEvents={getNativePointerEvents("none")}
+      style={[styles.fill, getPointerEventsStyle("none")]}
+    >
       <LinearGradient
         colors={["rgba(8,9,11,0.56)", "rgba(8,9,11,0.18)", "rgba(8,9,11,0)"]}
         locations={[0, 0.16, 0.34]}

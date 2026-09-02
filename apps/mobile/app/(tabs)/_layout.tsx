@@ -18,7 +18,7 @@ import { AdaptiveOverlay } from "../../components/ui/AdaptiveOverlay";
 function HeaderRight() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { unreadCount } = useNotifications();
+  const { unreadCount } = useNotifications({ poll: true });
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -147,6 +147,7 @@ export default function TabLayout() {
 
   const tabsContent = (
     <Tabs
+      detachInactiveScreens
       screenOptions={{
         headerStyle: [
           styles.header,

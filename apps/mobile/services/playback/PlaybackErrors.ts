@@ -107,6 +107,10 @@ export function runtimeErrorFromActionPreflight(
     "bridge_unreachable",
     "bridge_auth_required",
   ]);
+  const nonFallbackable = new Set<ActionPreflightResult["reason"]>([
+    ...unsupportedReasons,
+    ...bridgeReasons,
+  ]);
   const code: PlaybackErrorCode = unsupportedReasons.has(preflight.reason)
     ? "BRIDGE_UNSUPPORTED"
     : bridgeReasons.has(preflight.reason)
@@ -120,7 +124,7 @@ export function runtimeErrorFromActionPreflight(
 
   return createPlaybackRuntimeError(code, preflight.message, {
     retryable: preflight.retryable,
-    shouldFallback,
+    shouldFallback: shouldFallback && !nonFallbackable.has(preflight.reason),
     debugMessage: `preflight:${preflight.reason}`,
   });
 }

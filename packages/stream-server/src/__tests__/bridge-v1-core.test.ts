@@ -29,6 +29,7 @@ vi.mock("../gateway.js", () => ({
   getGatewayJob: gatewayMocks.getGatewayJob,
   getGatewaySubtitleDocument: gatewayMocks.getGatewaySubtitleDocument,
   serializeBridgeJobV1: vi.fn((job) => job),
+  serveGatewayJobSegment: vi.fn(),
   serveGatewayJobStream: vi.fn(),
 }));
 
@@ -91,6 +92,20 @@ describe("bridge v1 application contract", () => {
     expect(capabilities.health).toBe("ready");
     expect(JSON.stringify(capabilities)).not.toContain("ffmpeg");
     expect(JSON.stringify(capabilities)).not.toContain("/private/");
+  });
+
+  it("advertises HLS only for clients that explicitly request the feature", async () => {
+    const legacy = await buildBridgeCapabilitiesV1();
+    const optedIn = await buildBridgeCapabilitiesV1({ hlsSegments: true });
+    const legacyDeliveries = legacy.capabilities.jobs.deliveries.map(
+      (entry) => entry.delivery,
+    );
+    const optedInDeliveries = optedIn.capabilities.jobs.deliveries.map(
+      (entry) => entry.delivery,
+    );
+
+    expect(legacyDeliveries).not.toContain("hls");
+    expect(optedInDeliveries).toContain("hls");
   });
 
   it("reports the API supervisor with the canonical bridge owner", async () => {

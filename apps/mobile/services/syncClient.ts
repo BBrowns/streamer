@@ -3,7 +3,8 @@ import { createSyncWebSocketProtocols } from "@streamer/shared";
 import { useAuthStore } from "../stores/authStore";
 import { BASE_URL, refreshAuthSession } from "./api";
 
-const RETRY_DELAYS_MS = [2_000, 5_000, 15_000] as const;
+const INITIAL_RETRY_DELAY_MS = 2_000;
+const MAX_RETRY_DELAY_MS = 60_000;
 const TOKEN_REFRESH_SKEW_MS = 30_000;
 
 export type SyncAuthState = {
@@ -19,8 +20,23 @@ export type SyncMessage = {
   data: unknown;
 };
 
+export type SyncStatusState =
+  "stopped" | "connecting" | "connected" | "degraded" | "paused";
+
+export type SyncStatusReason =
+  "transport" | "auth-refresh" | "rate-limited" | "inactive" | null;
+
+export type SyncStatusSnapshot = {
+  state: SyncStatusState;
+  reason: SyncStatusReason;
+  attempt: number;
+  retryAt: number | null;
+  retryDelayMs: number | null;
+};
+
 type SyncSocket = WebSocket;
 type SyncListener = (message: SyncMessage) => void;
+type SyncStatusListener = (status: SyncStatusSnapshot) => void;
 type Timer = ReturnType<typeof setTimeout>;
 
 type NativeWebSocketConstructor = {
@@ -36,6 +52,7 @@ export type SyncClientOptions = {
   createSocket?: (accessToken: string, deviceId: string | null) => SyncSocket;
   refreshAuth?: () => Promise<string>;
   now?: () => number;
+  random?: () => number;
 };
 
 const log = (...args: unknown[]) => {
@@ -76,7 +93,7 @@ function createDefaultSocket(
   const WebSocketConstructor =
     WebSocket as unknown as NativeWebSocketConstructor;
 
-  log("Connecting to", wsUrl);
+  log("Connecting");
 
   if (Platform.OS === "web") {
     return new WebSocketConstructor(
@@ -93,6 +110,25 @@ function createDefaultSocket(
   });
 }
 
+function getRefreshFailureKind(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const kind = (error as { kind?: unknown }).kind;
+  return typeof kind === "string" ? kind : null;
+}
+
+function getRefreshRetryAfter(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const retryAfterMs = (error as { retryAfterMs?: unknown }).retryAfterMs;
+  return typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)
+    ? retryAfterMs
+    : null;
+}
+
+function isRetryableRefreshFailure(error: unknown): boolean {
+  const kind = getRefreshFailureKind(error);
+  return kind === "rate-limited" || kind === "temporarily-unavailable";
+}
+
 export class SyncClient {
   private readonly getAuth: () => SyncAuthState;
   private readonly createSocket: (
@@ -101,9 +137,12 @@ export class SyncClient {
   ) => SyncSocket;
   private readonly refreshAuth: () => Promise<string>;
   private readonly now: () => number;
+  private readonly random: () => number;
   private readonly listeners = new Set<SyncListener>();
+  private readonly statusListeners = new Set<SyncStatusListener>();
 
   private started = false;
+  private active = true;
   private socket: SyncSocket | null = null;
   private socketDeviceId: string | null = null;
   private socketSequence = 0;
@@ -114,17 +153,32 @@ export class SyncClient {
   private retryCount = 0;
   private retryTimer: Timer | null = null;
   private tokenRefreshTimer: Timer | null = null;
+  private authRetryTimer: Timer | null = null;
+  private pendingPlaybackUpdate: SyncMessage | null = null;
+  private status: SyncStatusSnapshot = {
+    state: "stopped",
+    reason: null,
+    attempt: 0,
+    retryAt: null,
+    retryDelayMs: null,
+  };
 
   constructor(options: SyncClientOptions = {}) {
     this.getAuth = options.getAuth ?? getDefaultAuth;
     this.createSocket = options.createSocket ?? createDefaultSocket;
     this.refreshAuth = options.refreshAuth ?? refreshAuthSession;
     this.now = options.now ?? Date.now;
+    this.random = options.random ?? Math.random;
   }
 
   start(): void {
     if (this.started) return;
     this.started = true;
+    if (!this.active) {
+      this.setStatus("paused", "inactive");
+      return;
+    }
+    this.setStatus("connecting");
     void this.connectIfNeeded();
   }
 
@@ -132,6 +186,11 @@ export class SyncClient {
     const auth = this.getAuth();
     if (!auth.isAuthenticated || !auth.accessToken) {
       this.stop();
+      return;
+    }
+
+    if (!this.active) {
+      this.setStatus("paused", "inactive");
       return;
     }
 
@@ -155,7 +214,53 @@ export class SyncClient {
     this.retryCount = 0;
     this.clearRetryTimer();
     this.clearTokenRefreshTimer();
+    this.clearAuthRetryTimer();
+    this.pendingPlaybackUpdate = null;
     this.closeSocket();
+    this.setStatus("stopped");
+  }
+
+  setActive(active: boolean): void {
+    if (this.active === active) {
+      if (active && this.started) void this.connectIfNeeded();
+      return;
+    }
+
+    this.active = active;
+    if (!active) {
+      this.lifecycleSequence += 1;
+      this.clearRetryTimer();
+      this.clearTokenRefreshTimer();
+      this.clearAuthRetryTimer();
+      this.closeSocket();
+      if (this.started) this.setStatus("paused", "inactive");
+      return;
+    }
+
+    if (this.started) {
+      this.retryCount = 0;
+      this.setStatus("connecting");
+      void this.connectIfNeeded();
+    }
+  }
+
+  retryNow(): void {
+    if (!this.started || !this.active) return;
+
+    if (this.socket) {
+      // A proactive refresh keeps the transport alive. Do not put the live
+      // socket into a fake connecting state or bypass a server cooldown.
+      if (this.authRetryTimer) return;
+      this.retryCount = 0;
+      void this.refreshToken();
+      return;
+    }
+
+    this.clearRetryTimer();
+    this.clearAuthRetryTimer();
+    this.retryCount = 0;
+    this.setStatus("connecting");
+    void this.connectIfNeeded();
   }
 
   subscribe(listener: SyncListener): () => void {
@@ -163,9 +268,23 @@ export class SyncClient {
     return () => this.listeners.delete(listener);
   }
 
+  subscribeStatus(listener: SyncStatusListener): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => this.statusListeners.delete(listener);
+  }
+
+  getStatus(): SyncStatusSnapshot {
+    return this.status;
+  }
+
   sendMessage(event: string, data: unknown): void {
     if (!this.socket || this.socket.readyState !== 1) {
-      warn("Cannot send message: WebSocket is not open", event);
+      if (event === "playback_update") {
+        // Playback ticks are state, not an append-only event stream. Keep only
+        // the latest closed-connection update and flush it once on reconnect.
+        this.pendingPlaybackUpdate = { event, data };
+      }
       return;
     }
 
@@ -173,12 +292,16 @@ export class SyncClient {
       this.socket.send(JSON.stringify({ event, data }));
     } catch {
       warn("Failed to send WebSocket message", event);
+      if (event === "playback_update") {
+        this.pendingPlaybackUpdate = { event, data };
+      }
     }
   }
 
   private async connectIfNeeded(): Promise<void> {
     if (
       !this.started ||
+      !this.active ||
       this.socket ||
       this.retryTimer ||
       (this.connectInFlight &&
@@ -209,9 +332,23 @@ export class SyncClient {
         if (!this.isCurrentLifecycle(lifecycleSequence)) return;
         auth = this.getAuth();
         auth = { ...auth, accessToken: refreshedAccessToken };
-      } catch {
-        warn("Sync authentication refresh failed");
-        if (this.isCurrentLifecycle(lifecycleSequence)) this.stop();
+      } catch (error) {
+        if (!this.isCurrentLifecycle(lifecycleSequence)) return;
+        if (
+          !this.getAuth().isAuthenticated ||
+          getRefreshFailureKind(error) === "invalid-credentials"
+        ) {
+          this.stop();
+          return;
+        }
+
+        const kind = getRefreshFailureKind(error);
+        const reason: SyncStatusReason =
+          kind === "rate-limited" ? "rate-limited" : "auth-refresh";
+        this.setStatus("degraded", reason);
+        if (isRetryableRefreshFailure(error)) {
+          this.scheduleRetry(getRefreshRetryAfter(error), reason);
+        }
         return;
       }
     }
@@ -224,14 +361,14 @@ export class SyncClient {
   }
 
   private openSocket(accessToken: string, deviceId: string | null): void {
-    if (!this.started || this.socket) return;
+    if (!this.started || !this.active || this.socket) return;
 
     let socket: SyncSocket;
     try {
       socket = this.createSocket(accessToken, deviceId);
     } catch {
       errorLog("Failed to create WebSocket");
-      this.scheduleRetry();
+      this.scheduleRetry(undefined, "transport");
       return;
     }
 
@@ -245,6 +382,17 @@ export class SyncClient {
       log("Connection opened");
       this.retryCount = 0;
       this.clearRetryTimer();
+      this.clearAuthRetryTimer();
+      this.setStatus("connected");
+      const pendingPlaybackUpdate = this.pendingPlaybackUpdate;
+      this.pendingPlaybackUpdate = null;
+      if (pendingPlaybackUpdate) {
+        try {
+          socket.send(JSON.stringify(pendingPlaybackUpdate));
+        } catch {
+          this.pendingPlaybackUpdate = pendingPlaybackUpdate;
+        }
+      }
       this.scheduleTokenRefresh();
     };
 
@@ -269,35 +417,61 @@ export class SyncClient {
       }
     };
 
-    socket.onerror = (event: unknown) => {
+    socket.onerror = () => {
       if (!this.isActiveSocket(socket, socketSequence)) return;
-      const message =
-        event && typeof event === "object" && "message" in event
-          ? (event as { message?: unknown }).message
-          : undefined;
-      warn("Connection error:", message || "Unknown error");
+      // Browser WebSocket errors intentionally expose no useful diagnostic
+      // details. The following close event is the single failure signal.
     };
 
     socket.onclose = (event) => {
       if (!this.isActiveSocket(socket, socketSequence)) return;
 
-      log("Connection closed:", event.code, event.reason);
+      log("Connection closed", {
+        code: event.code,
+        wasClean: event.wasClean === true,
+      });
       this.socket = null;
       this.socketDeviceId = null;
       this.activeSocketSequence = 0;
-      this.scheduleRetry();
+      this.clearTokenRefreshTimer();
+      this.scheduleRetry(undefined, "transport");
     };
   }
 
-  private scheduleRetry(): void {
-    if (!this.started || this.retryTimer || this.socket) return;
+  private scheduleRetry(
+    requestedDelayMs?: number | null,
+    reason: SyncStatusReason = "transport",
+  ): void {
+    if (!this.started || !this.active || this.retryTimer || this.socket) return;
 
-    const delay =
-      RETRY_DELAYS_MS[Math.min(this.retryCount, RETRY_DELAYS_MS.length - 1)];
+    const hasServerCooldown =
+      requestedDelayMs !== undefined && requestedDelayMs !== null;
+    const baseDelay = hasServerCooldown
+      ? requestedDelayMs
+      : Math.min(
+          INITIAL_RETRY_DELAY_MS * 2 ** this.retryCount,
+          MAX_RETRY_DELAY_MS,
+        );
+    const random = Math.min(Math.max(this.random(), 0), 1);
+    const jitter = hasServerCooldown ? 1 + random * 0.2 : 0.8 + random * 0.4;
+    const delay = Math.min(
+      Math.max(0, Math.round(baseDelay * jitter)),
+      MAX_RETRY_DELAY_MS,
+    );
     this.retryCount += 1;
-    log(`Reconnecting in ${delay / 1000}s (attempt ${this.retryCount})…`);
+    const retryAt = this.now() + delay;
+    this.setStatus("degraded", reason, {
+      attempt: this.retryCount,
+      retryAt,
+      retryDelayMs: delay,
+    });
+    log("Reconnect scheduled", {
+      attempt: this.retryCount,
+      retryDelayMs: delay,
+    });
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
+      if (this.active) this.setStatus("connecting");
       void this.connectIfNeeded();
     }, delay);
   }
@@ -333,15 +507,33 @@ export class SyncClient {
       this.now() < auth.tokenExpiresAt - TOKEN_REFRESH_SKEW_MS
     ) {
       this.scheduleTokenRefresh();
+      if (this.socket?.readyState === 1) this.setStatus("connected");
       return;
     }
 
     try {
       await this.refreshAuth();
-      if (this.started) this.scheduleTokenRefresh();
-    } catch {
-      warn("Sync authentication refresh failed");
-      this.stop();
+      if (this.started) {
+        if (this.socket?.readyState === 1) this.setStatus("connected");
+        this.scheduleTokenRefresh();
+      }
+    } catch (error) {
+      if (!this.started) return;
+      if (
+        !this.getAuth().isAuthenticated ||
+        getRefreshFailureKind(error) === "invalid-credentials"
+      ) {
+        this.stop();
+        return;
+      }
+
+      const kind = getRefreshFailureKind(error);
+      const reason: SyncStatusReason =
+        kind === "rate-limited" ? "rate-limited" : "auth-refresh";
+      this.setStatus("degraded", reason);
+      if (isRetryableRefreshFailure(error)) {
+        this.scheduleAuthRetry(getRefreshRetryAfter(error), reason);
+      }
     }
   }
 
@@ -351,6 +543,7 @@ export class SyncClient {
     this.retryCount = 0;
     this.clearRetryTimer();
     this.clearTokenRefreshTimer();
+    this.clearAuthRetryTimer();
     this.closeSocket();
     if (this.started) void this.connectIfNeeded();
   }
@@ -383,6 +576,68 @@ export class SyncClient {
     if (!this.tokenRefreshTimer) return;
     clearTimeout(this.tokenRefreshTimer);
     this.tokenRefreshTimer = null;
+  }
+
+  private scheduleAuthRetry(
+    delayMs: number | null,
+    reason: SyncStatusReason = "auth-refresh",
+  ): void {
+    if (!this.started || !this.active || this.authRetryTimer) return;
+
+    const delay = Math.min(
+      Math.max(delayMs ?? INITIAL_RETRY_DELAY_MS, 0),
+      MAX_RETRY_DELAY_MS,
+    );
+    this.setStatus("degraded", reason, {
+      retryAt: this.now() + delay,
+      retryDelayMs: delay,
+    });
+    log("Auth retry scheduled", { reason, retryDelayMs: delay });
+    this.authRetryTimer = setTimeout(() => {
+      this.authRetryTimer = null;
+      void this.refreshToken();
+    }, delay);
+  }
+
+  private clearAuthRetryTimer(): void {
+    if (!this.authRetryTimer) return;
+    clearTimeout(this.authRetryTimer);
+    this.authRetryTimer = null;
+  }
+
+  private setStatus(
+    state: SyncStatusState,
+    reason: SyncStatusReason = null,
+    details: Partial<
+      Pick<SyncStatusSnapshot, "attempt" | "retryAt" | "retryDelayMs">
+    > = {},
+  ): void {
+    const nextStatus: SyncStatusSnapshot = {
+      state,
+      reason,
+      attempt:
+        details.attempt ?? (state === "connected" ? 0 : this.status.attempt),
+      retryAt: details.retryAt ?? null,
+      retryDelayMs: details.retryDelayMs ?? null,
+    };
+    if (
+      this.status.state === nextStatus.state &&
+      this.status.reason === nextStatus.reason &&
+      this.status.attempt === nextStatus.attempt &&
+      this.status.retryAt === nextStatus.retryAt &&
+      this.status.retryDelayMs === nextStatus.retryDelayMs
+    ) {
+      return;
+    }
+
+    this.status = nextStatus;
+    this.statusListeners.forEach((listener) => {
+      try {
+        listener(this.status);
+      } catch {
+        errorLog("Sync status listener failed");
+      }
+    });
   }
 
   private canConnect(auth: SyncAuthState): boolean {

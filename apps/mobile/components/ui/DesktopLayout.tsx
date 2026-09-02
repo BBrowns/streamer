@@ -13,6 +13,10 @@ import { useWindowClass } from "../../hooks/useWindowClass";
 import { isFullScreenRoute } from "./desktopShellRoutes";
 import { CinematicTopBar } from "./CinematicTopBar";
 import { getDesktopTopBarMode } from "./cinematicNavigation";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 type DesktopTopBarScrollReporter = (value: boolean | number) => void;
 
@@ -56,8 +60,11 @@ export function DesktopLayout({
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View
-        style={topBarMode === "overlay" ? styles.overlayTopBar : undefined}
-        pointerEvents={fullScreen ? "none" : "box-none"}
+        style={[
+          topBarMode === "overlay" ? styles.overlayTopBar : undefined,
+          getPointerEventsStyle(fullScreen ? "none" : "box-none"),
+        ]}
+        pointerEvents={getNativePointerEvents(fullScreen ? "none" : "box-none")}
       >
         {fullScreen ? null : (
           <CinematicTopBar

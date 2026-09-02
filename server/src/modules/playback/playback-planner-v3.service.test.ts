@@ -180,7 +180,7 @@ describe("PlaybackPlannerV3Service", () => {
     );
   });
 
-  it("routes a directly streamable torrent through bridge range HTTP", async () => {
+  it("runtime-probes a torrent even when its provider label says MP4", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {
         infoHash: "torrent-hash",
@@ -196,7 +196,10 @@ describe("PlaybackPlannerV3Service", () => {
         node({
           executionTarget: "local-sidecar",
           acceptedSourceKinds: ["torrent"],
-          deliveries: [{ delivery: "range-http", capabilities }],
+          deliveries: [
+            { delivery: "progressive-fmp4", capabilities },
+            { delivery: "range-http", capabilities },
+          ],
           bridgeProtocolVersion: 1,
         }),
       ]),
@@ -205,10 +208,10 @@ describe("PlaybackPlannerV3Service", () => {
 
     expect(plan.selectedCandidate?.route).toMatchObject({
       executionTarget: "local-sidecar",
-      delivery: "range-http",
+      delivery: "progressive-fmp4",
     });
     expect(plan.selectedCandidate?.requiresBridge).toBe(true);
-    expect(plan.selectedCandidate?.requiresRemux).toBe(false);
+    expect(plan.selectedCandidate?.requiresRemux).toBe(true);
     expect(playbackPlanV3Schema.safeParse(plan).success).toBe(true);
   });
 
@@ -239,6 +242,100 @@ describe("PlaybackPlannerV3Service", () => {
     expect(plan.selectedCandidate?.requiresRemux).toBe(true);
     expect(plan.selectedCandidate?.stream.behaviorHints?.remuxToMp4).toBe(true);
     expect(playbackPlanV3Schema.safeParse(plan).success).toBe(true);
+  });
+
+  it("selects HLS for a remuxing torrent when the bridge advertises it", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "torrent-hash",
+        title: "Movie.1080p.H264.AC3.mkv",
+        resolution: "1080p",
+        seeders: 50,
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlanV3(
+      "user-1",
+      request([
+        node({
+          executionTarget: "paired-bridge",
+          acceptedSourceKinds: ["torrent"],
+          deliveries: [{ delivery: "hls", capabilities }],
+          bridgeProtocolVersion: 1,
+        }),
+      ]),
+      "req-3-hls",
+    );
+
+    expect(plan.selectedCandidate?.route).toMatchObject({
+      executionTarget: "paired-bridge",
+      delivery: "hls",
+    });
+    expect(plan.selectedCandidate?.stream.behaviorHints?.remuxStrategy).toBe(
+      "hls",
+    );
+    expect(playbackPlanV3Schema.safeParse(plan).success).toBe(true);
+  });
+
+  it("uses HLS to runtime-probe a torrent whose container is not trustworthy", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "torrent-unknown-container",
+        title: "Series.1080p.WEB-DL.H264.AAC",
+        resolution: "1080p",
+        seeders: 50,
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlanV3(
+      "user-1",
+      request([
+        node({
+          executionTarget: "paired-bridge",
+          acceptedSourceKinds: ["torrent"],
+          deliveries: [{ delivery: "hls", capabilities }],
+          bridgeProtocolVersion: 1,
+        }),
+      ]),
+      "req-unknown-container-hls",
+    );
+
+    expect(plan.selectedCandidate?.route).toMatchObject({
+      executionTarget: "paired-bridge",
+      delivery: "hls",
+    });
+    expect(plan.selectedCandidate?.requiresRemux).toBe(true);
+    expect(plan.selectedCandidate?.stream.behaviorHints).toMatchObject({
+      remuxToMp4: true,
+      remuxStrategy: "hls",
+    });
+  });
+
+  it("uses progressive fMP4 for an unknown torrent when HLS is unavailable", async () => {
+    vi.mocked(aggregatorService.getStreams).mockResolvedValue([
+      {
+        infoHash: "torrent-unknown-container-progressive",
+        title: "Series.1080p.WEB-DL.H264.AAC",
+        resolution: "1080p",
+        seeders: 50,
+      },
+    ] as Stream[]);
+
+    const plan = await service.createPlanV3(
+      "user-1",
+      request([
+        node({
+          executionTarget: "paired-bridge",
+          acceptedSourceKinds: ["torrent"],
+          deliveries: [{ delivery: "progressive-fmp4", capabilities }],
+          bridgeProtocolVersion: 1,
+        }),
+      ]),
+      "req-unknown-container-progressive",
+    );
+
+    expect(plan.selectedCandidate?.route.delivery).toBe("progressive-fmp4");
+    expect(plan.selectedCandidate?.requiresRemux).toBe(true);
   });
 
   it("uses seekable cache for torrent casting", async () => {
@@ -355,7 +452,10 @@ describe("PlaybackPlannerV3Service", () => {
         node({
           executionTarget: "paired-bridge",
           acceptedSourceKinds: ["torrent"],
-          deliveries: [{ delivery: "range-http", capabilities }],
+          deliveries: [
+            { delivery: "progressive-fmp4", capabilities },
+            { delivery: "range-http", capabilities },
+          ],
           bridgeProtocolVersion: 2,
         }),
       ]),

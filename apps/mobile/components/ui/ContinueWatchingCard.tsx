@@ -16,6 +16,10 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "./designSystem";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 export function getContinueWatchingArtworkMode({
   background,
@@ -178,9 +182,9 @@ export function ContinueWatchingCard({
             />
           )}
           <LinearGradient
-            pointerEvents="none"
+            pointerEvents={getNativePointerEvents("none")}
             colors={["rgba(8,9,11,0)", "rgba(8,9,11,0.38)"]}
-            style={styles.fill}
+            style={[styles.fill, getPointerEventsStyle("none")]}
           />
           {typeof progress === "number" ? (
             <View
@@ -238,9 +242,12 @@ export function ContinueWatchingCard({
       <View
         {...({ dataSet: { cardQuickActions: true } } as any)}
         testID="continue-watching-quick-actions"
-        pointerEvents={quickActionsVisible ? "auto" : "none"}
+        pointerEvents={getNativePointerEvents(
+          quickActionsVisible ? "auto" : "none",
+        )}
         style={[
           styles.quickActions,
+          getPointerEventsStyle(quickActionsVisible ? "auto" : "none"),
           !reducedMotion && styles.quickActionsMotion,
           !quickActionsVisible && styles.quickActionsHidden,
         ]}
