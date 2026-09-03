@@ -1534,7 +1534,21 @@ export async function resolveDownloadSession(
     },
   );
 
-  return await resolution;
+  const result = await resolution;
+  if (!result.ok) return result;
+  if (result.eligibility) {
+    return { ...result, eligibility: result.eligibility };
+  }
+
+  return {
+    ok: false,
+    sessionId,
+    error: createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      "Download eligibility could not be verified.",
+      { retryable: true, shouldFallback: false },
+    ),
+  };
 }
 
 export function resolveCastSession(
