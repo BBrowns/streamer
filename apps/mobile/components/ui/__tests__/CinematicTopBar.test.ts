@@ -18,6 +18,8 @@ describe("resolveTopBarLayout", () => {
 
     expect(requiredWidth).toBeLessThanOrEqual(600);
     expect(layout.brandWidth).toBeLessThan(layout.actionsWidth);
+    expect(layout.navItemMinWidth).toBeGreaterThanOrEqual(72);
+    expect(layout.navGap).toBeGreaterThan(0);
   });
 });
 

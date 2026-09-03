@@ -455,7 +455,14 @@ export function startStreamServer(port: number | string = PORT) {
         build: streamServerBuildMetadata,
       }),
     );
-    console.log(`Stream server (Bridge) running on http://${host}:${port}`);
+    console.log(
+      JSON.stringify({
+        service: "streamer-stream-server",
+        event: "ready",
+        bind: isLoopbackBind ? "loopback" : "network",
+        port: Number(port),
+      }),
+    );
   });
   server.on("error", (err: Error) => {
     captureStreamServerException(err, { component: "stream-server-listen" });

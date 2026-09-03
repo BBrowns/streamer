@@ -29,4 +29,21 @@ describe("Stream Schema Validation", () => {
     const result = streamResponseSchema.safeParse(data);
     expect(result.success).toBe(true);
   });
+
+  it("accepts null file indexes as an unspecified provider field", () => {
+    const result = streamResponseSchema.safeParse({
+      streams: [
+        {
+          infoHash: "hash123",
+          fileIdx: null,
+          title: "Provider stream",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.streams[0].fileIdx).toBeUndefined();
+    }
+  });
 });

@@ -34,6 +34,12 @@ test("allows only explicit renderer origins", () => {
     }),
     false,
   );
+  assert.equal(
+    isAllowedRendererUrl("http://[::1]:8081/player", {
+      allowDevServer: true,
+    }),
+    false,
+  );
 });
 
 test("allows file renderer URLs only inside configured roots", () => {
@@ -77,6 +83,7 @@ test("keeps dev-only CSP looseness scoped to localhost Metro", () => {
   assert.match(csp, /http:\/\/localhost:8081/);
   assert.match(csp, /http:\/\/localhost:3001/);
   assert.match(csp, /ws:\/\/localhost:8081/);
+  assert.doesNotMatch(csp, /\[[0-9a-f:]+\]/i);
   assert.doesNotMatch(csp, /https:\/\/\*/);
 });
 

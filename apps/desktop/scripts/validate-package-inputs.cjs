@@ -8,6 +8,8 @@ const requiredFiles = [
   path.join(root, "dist/main.js"),
   path.join(root, "dist/preload.js"),
   path.join(root, "dist/bridge-runtime.js"),
+  path.join(root, "dist/renderer/index.html"),
+  path.join(root, "dist/renderer/renderer-error.html"),
   path.join(repoRoot, "packages/stream-server/dist/index.js"),
   path.join(root, "vendor/node/darwin-arm64/bin/node"),
   path.join(root, "vendor/node/darwin-x64/bin/node"),

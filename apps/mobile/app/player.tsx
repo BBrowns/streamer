@@ -54,6 +54,7 @@ import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
 import { MediaArtwork } from "../components/ui/MediaArtwork";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
+import { HlsVideoSurface } from "../components/player/HlsVideoSurface";
 import { PlayerInteractionLayer } from "../components/player/PlayerInteractionLayer";
 import { NextEpisodeOverlay } from "../components/player/NextEpisodeOverlay";
 import { ResumePrompt } from "../components/player/ResumePrompt";
@@ -72,6 +73,7 @@ import { playBest } from "../services/playback/PlaybackOrchestrator";
 import { beginPlaybackLaunch } from "../services/playback/PlaybackLaunchService";
 import {
   cancelPlaybackSession,
+  getActivePlaybackSourceRuntime,
   markPlaybackSessionBuffering,
   markPlaybackSessionPlaying,
 } from "../services/playback/PlaybackSessionPlaybackService";
@@ -83,6 +85,10 @@ import {
   shouldAdvanceAfterPlaybackStall,
 } from "../components/player/playbackStallWatchdog";
 import { createMediaPlayerAdapter } from "../services/playback/mediaPlayerAdapters";
+import {
+  createHlsPlayerFacade,
+  HlsWebVideoAdapter,
+} from "../services/playback/mediaPlayerAdapters/HlsWebVideoAdapter";
 import { resolveEffectivePlayerCapabilities } from "../services/playback/PlayerCapabilityPolicy";
 import {
   initialPlaybackRuntimeViewState,
@@ -97,6 +103,7 @@ import {
   type PlaybackDiagnosticEvent,
 } from "../services/playback/PlaybackDiagnostics";
 import { addMobileBreadcrumb } from "../services/sentryBreadcrumbs";
+import { refreshBridgeReadiness } from "../services/streamEngine/bridgeReadinessRuntime";
 import { recordPlaybackDebugEvent } from "../services/playback/playbackDebug";
 import { getActivePlaybackSegment } from "../services/playback/PlaybackSegmentsProvider";
 import { createPlayerScreenStyles } from "../components/player/playerScreenStyles";
@@ -113,6 +120,7 @@ import {
 const DOUBLE_TAP_DELAY = 300;
 const SEEK_SECONDS = 10;
 const PLAYBACK_START_TIMEOUT_MS = 60_000;
+const AUDIO_TRACK_SWITCH_TIMEOUT_MS = 20_000;
 const MAX_PLAYBACK_DIAGNOSTIC_BREADCRUMBS = 24;
 
 type SeekableCacheStatus =
@@ -192,6 +200,7 @@ export default function PlayerScreen() {
     (s) => s.setSubtitleSyncOffsetSeconds,
   );
   const setPlaying = usePlayerStore((s) => s.setPlaying);
+  const setProgress = usePlayerStore((s) => s.setProgress);
   const setBuffering = usePlayerStore((s) => s.setBuffering);
   const setStreamStatus = usePlayerStore((s) => s.setStreamStatus);
   const setRuntimeState = usePlayerStore((s) => s.setRuntimeState);
@@ -202,6 +211,7 @@ export default function PlayerScreen() {
     (s) => s.setPlaybackPlanningFailure,
   );
   const advanceToNextFallback = usePlayerStore((s) => s.advanceToNextFallback);
+
   useCinematicThemeSource(
     mediaInfo
       ? {
@@ -249,6 +259,7 @@ export default function PlayerScreen() {
       ) || null
     );
   });
+
   const activeGatewayJobId = activeSession?.gatewayJobId;
   const playbackSessionCreatedAt = activeSession?.createdAt;
   const playbackSessionTimeoutBudgetMs = activeSession?.timeoutBudgetMs;
@@ -670,7 +681,7 @@ export default function PlayerScreen() {
     setPlaybackUri(null);
     setStreamStatus("loading_metrics");
     if (currentStream.infoHash) {
-      await streamEngineManager.detectBridge();
+      await refreshBridgeReadiness();
     }
     setResolveAttempt((attempt) => attempt + 1);
   }, [
@@ -712,11 +723,28 @@ export default function PlayerScreen() {
     tryAdvanceToFallback,
   ]);
 
-  const player = useVideoPlayer(playbackUri || "", (p) => {
-    p.staysActiveInBackground = true;
-    p.showNowPlayingNotification = true;
-    p.play();
-  });
+  // Read the attempt-owned route before creating the media adapter. This is
+  // important for an unknown torrent: the planner may request HLS, while the
+  // gateway can safely demote the same job to range-http after proving the
+  // selected file is already an MP4.
+  const activeSourceRoute =
+    playbackSessionId && playbackAttemptId
+      ? getActivePlaybackSourceRuntime(playbackSessionId, playbackAttemptId)
+          ?.route
+      : undefined;
+  const hlsPlaybackRequested =
+    Platform.OS === "web" &&
+    (activeSourceRoute?.delivery === "hls" ||
+      (!activeSourceRoute &&
+        currentStream?.behaviorHints?.remuxStrategy === "hls"));
+  const player = useVideoPlayer(
+    hlsPlaybackRequested ? "" : playbackUri || "",
+    (p) => {
+      p.staysActiveInBackground = true;
+      p.showNowPlayingNotification = true;
+      if (!hlsPlaybackRequested) p.play();
+    },
+  );
   const platformPiPSupported = useMemo(() => {
     if (Platform.OS === "web") {
       return Boolean(
@@ -744,9 +772,17 @@ export default function PlayerScreen() {
           resolveVideoElement: () =>
             resolveOwnedWebVideoElement(videoViewRef.current),
         },
+        hls: hlsPlaybackRequested,
       }),
-    [platformPiPSupported, player],
+    [hlsPlaybackRequested, platformPiPSupported, player],
   );
+  const hlsAdapter =
+    mediaAdapter instanceof HlsWebVideoAdapter ? mediaAdapter : null;
+  const controllerPlayer = useMemo(
+    () => (hlsAdapter ? createHlsPlayerFacade(hlsAdapter) : player),
+    [hlsAdapter, player],
+  );
+  const audioReplacementInFlightRef = useRef(false);
 
   const handleFirstFrameRendered = useCallback(() => {
     dispatchRuntimeViewEvent({ type: "first_frame_rendered" });
@@ -778,12 +814,13 @@ export default function PlayerScreen() {
       markPlaybackSessionPlaying(playbackSessionId);
     }
     setBuffering(false);
-    setPlaying(Boolean(player.playing));
+    setPlaying(mediaAdapter.snapshot().playing);
     setStreamStatus("playing");
     setFallbackStatusMessage(null);
   }, [
     playbackSessionId,
     playbackSessionCreatedAt,
+    mediaAdapter,
     player,
     recordDiagnostic,
     setBuffering,
@@ -791,8 +828,101 @@ export default function PlayerScreen() {
     setStreamStatus,
   ]);
 
+  // HLS on web/Electron has its own HTMLMediaElement lifecycle. Keep it on
+  // the same application-facing adapter so controls, first-frame state and
+  // progress reporting do not observe the unused Expo player.
   useEffect(() => {
-    if (!player || !playbackUri || !currentStream) return;
+    if (!hlsAdapter || !playbackUri || !currentStream) return;
+
+    dispatchRuntimeViewEvent({ type: "media_loading" });
+    setBuffering(true);
+    playbackStartedRef.current = false;
+    setHasPlaybackStarted(false);
+
+    const unsubscribe = hlsAdapter.subscribe((event) => {
+      if (event.type === "status_changed") {
+        if (event.status === "loading") {
+          setBuffering(true);
+          return;
+        }
+        if (event.status === "ready") {
+          // Audio-variant replacement owns its own ready/pause decision. Do
+          // not let the initial HLS observer auto-play a source while a
+          // failed replacement is being rolled back.
+          if (audioReplacementInFlightRef.current) return;
+          dispatchRuntimeViewEvent({ type: "media_ready", shouldPlay: true });
+          hlsAdapter.play();
+          return;
+        }
+        if (event.status === "error") {
+          if (audioReplacementInFlightRef.current) return;
+          const failure = createPlaybackRuntimeError(
+            "SOURCE_UNAVAILABLE",
+            t("player.errors.playbackFailed"),
+            { retryable: true, shouldFallback: false },
+          );
+          void tryAdvanceToFallback(failure, failure.message).then(
+            (advanced) => {
+              if (advanced) return;
+              setBuffering(false);
+              setPlaying(false);
+              setRuntimeFailure(failure);
+            },
+          );
+        }
+        return;
+      }
+
+      if (event.type === "first_frame_rendered") {
+        handleFirstFrameRendered();
+        return;
+      }
+
+      if (event.type === "playing_changed") {
+        setPlaying(event.playing);
+        dispatchRuntimeViewEvent({
+          type: "playing_changed",
+          isPlaying: event.playing,
+        });
+        if (event.playing) setStreamStatus("playing");
+        return;
+      }
+
+      if (event.type === "time_updated") {
+        const snapshot = hlsAdapter.snapshot();
+        setProgress(snapshot.currentTime, snapshot.duration);
+        return;
+      }
+
+      if (event.type === "seek_rejected") {
+        setFallbackStatusMessage(
+          t("player.controls.seekOutsideWindow", {
+            defaultValue:
+              "That position is not ready yet. Scrubbing is limited to the prepared window.",
+          }),
+        );
+      }
+    });
+
+    return () => unsubscribe();
+  }, [
+    currentStream,
+    dispatchRuntimeViewEvent,
+    handleFirstFrameRendered,
+    hlsAdapter,
+    playbackUri,
+    setBuffering,
+    setPlaying,
+    setProgress,
+    setRuntimeFailure,
+    setStreamStatus,
+    setFallbackStatusMessage,
+    t,
+    tryAdvanceToFallback,
+  ]);
+
+  useEffect(() => {
+    if (hlsAdapter || !player || !playbackUri || !currentStream) return;
 
     dispatchRuntimeViewEvent({ type: "media_loading" });
     player.timeUpdateEventInterval = 1;
@@ -1107,6 +1237,7 @@ export default function PlayerScreen() {
     playbackSessionId,
     playbackSessionCreatedAt,
     playbackSessionTimeoutBudgetMs,
+    hlsAdapter,
     player,
     recordDiagnostic,
     setBuffering,
@@ -1124,6 +1255,29 @@ export default function PlayerScreen() {
     setBuffering(false);
     setPlaying(false);
   }, [setBuffering, setPlaying]);
+
+  const handlePrematurePlaybackEnd = useCallback(() => {
+    const fallbackMessage = t("player.status.playbackEndedTryingFallback", {
+      defaultValue: "This source ended early. Trying another source.",
+    });
+    const failure = createPlaybackRuntimeError(
+      "SOURCE_UNAVAILABLE",
+      fallbackMessage,
+      { retryable: true, shouldFallback: false },
+    );
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "playback.progressive_source_ended_before_handoff",
+      level: "warning",
+      data: { hasSeekableHandoff: false },
+    });
+    void tryAdvanceToFallback(failure, fallbackMessage).then((advanced) => {
+      if (advanced) return;
+      setBuffering(false);
+      setPlaying(false);
+      setRuntimeFailure(failure);
+    });
+  }, [setBuffering, setPlaying, setRuntimeFailure, t, tryAdvanceToFallback]);
 
   const {
     audioTracks,
@@ -1147,7 +1301,7 @@ export default function PlayerScreen() {
     completeProgressSourceReplacement,
     originalLanguage,
   } = usePlayerController({
-    player,
+    player: controllerPlayer,
     playbackUri,
     onClose: handleClose,
     showControls,
@@ -1155,6 +1309,7 @@ export default function PlayerScreen() {
       currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4",
     hasSeekableHandoff: seekableHandoffApplied,
     onCompleted: handlePlaybackCompleted,
+    onPrematureEnd: handlePrematurePlaybackEnd,
     onDiagnosticEvent: recordDiagnostic,
   });
 
@@ -1216,14 +1371,204 @@ export default function PlayerScreen() {
     recordDiagnostic,
   });
 
+  const progressiveAudioReplacement =
+    playbackRoute?.delivery === "progressive-fmp4" ||
+    currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4";
+  const switchPlayerAudioTrack = useCallback(
+    async (id: string, reportDiagnostic = true) => {
+      if (!player || audioReplacementInFlightRef.current) return false;
+
+      const adapterCapabilities = mediaAdapter.getCapabilities();
+      const nativeTrackAvailable = mediaAdapter
+        .getAudioTracks()
+        .some((track) => track.kind === "audio" && track.id === id);
+      if (adapterCapabilities.audioTracks && nativeTrackAvailable) {
+        const switched = mediaAdapter.selectAudioTrack(id);
+        if (reportDiagnostic) {
+          recordDiagnostic({
+            type: "audio_switch",
+            outcome: switched ? "succeeded" : "failed",
+          });
+        }
+        refreshPlayerTracks();
+        return switched;
+      }
+
+      // A native player may advertise audio-track support while exposing only
+      // one attached/default track. Bridge-owned variants must still go
+      // through the transactional source replacement path below.
+      if (typeof engine?.selectAudioTrack !== "function") {
+        if (reportDiagnostic) {
+          recordDiagnostic({ type: "audio_switch", outcome: "failed" });
+        }
+        return false;
+      }
+
+      audioReplacementInFlightRef.current = true;
+      let nextUri: string | null = null;
+      try {
+        nextUri = (await engine?.selectAudioTrack?.(id)) ?? null;
+      } catch {
+        nextUri = null;
+      }
+      if (!nextUri) {
+        audioReplacementInFlightRef.current = false;
+        if (reportDiagnostic) {
+          recordDiagnostic({ type: "audio_switch", outcome: "failed" });
+        }
+        return false;
+      }
+
+      const wasPlaying = mediaAdapter.snapshot().playing;
+      const position = mediaAdapter.snapshot().currentTime;
+      const previousUri =
+        engine?.getActivePlaybackUri?.() || playbackUri || null;
+      beginProgressSourceReplacement();
+
+      const switched = await new Promise<boolean>((resolve) => {
+        let settled = false;
+        let replacementTimer: ReturnType<typeof setTimeout> | null = null;
+        let mediaAdapterSubscription: (() => void) | undefined;
+        const cleanup = () => {
+          if (replacementTimer) {
+            clearTimeout(replacementTimer);
+            replacementTimer = null;
+          }
+          statusSubscription?.remove?.();
+          sourceSubscription?.remove?.();
+          mediaAdapterSubscription?.();
+        };
+        const restorePreviousSource = () => {
+          if (!previousUri || previousUri === nextUri) return Promise.resolve();
+          return new Promise<void>((resolveRestore) => {
+            let restored = false;
+            let restoreTimer: ReturnType<typeof setTimeout> | null = null;
+            let restoreSubscription: (() => void) | undefined;
+            const completeRestore = () => {
+              if (restored) return;
+              restored = true;
+              if (restoreTimer) clearTimeout(restoreTimer);
+              restoreSubscription?.();
+              resolveRestore();
+            };
+            restoreSubscription = mediaAdapter.subscribe((event) => {
+              if (
+                (event.type === "status_changed" && event.status === "ready") ||
+                event.type === "source_loaded"
+              ) {
+                if (!hlsAdapter || hlsAdapter.snapshot().status === "ready") {
+                  completeRestore();
+                }
+              }
+            });
+            restoreTimer = setTimeout(
+              completeRestore,
+              AUDIO_TRACK_SWITCH_TIMEOUT_MS,
+            );
+            restoreTimer.unref?.();
+            void mediaAdapter
+              .replaceSource(previousUri)
+              .then(completeRestore, completeRestore);
+          });
+        };
+        const finish = async (success: boolean) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          if (!success) await restorePreviousSource();
+          audioReplacementInFlightRef.current = false;
+          if (success) {
+            // A live progressive remux is intentionally non-seekable until a
+            // cache handoff exists. Keep the replacement deterministic rather
+            // than issuing a non-zero Range request that the gateway rejects.
+            const resumeAt = progressiveAudioReplacement ? 0 : position;
+            engine?.commitAudioTrackSelection?.(id, nextUri);
+            recordExplicitSeek(resumeAt);
+            completeProgressSourceReplacement(resumeAt);
+            mediaAdapter.commitSeek(resumeAt);
+            if (wasPlaying) mediaAdapter.play();
+            else mediaAdapter.pause();
+          } else {
+            completeProgressSourceReplacement(position);
+            if (wasPlaying) mediaAdapter.play();
+            else mediaAdapter.pause();
+          }
+          resolve(success);
+        };
+        const restoreWhenReady = (status?: string) => {
+          if (
+            status === "readyToPlay" ||
+            (hlsAdapter && hlsAdapter.snapshot().status === "ready")
+          ) {
+            finish(true);
+          }
+        };
+        const statusSubscription = hlsAdapter
+          ? undefined
+          : player.addListener?.(
+              "statusChange",
+              ({ status }: { status?: string }) => restoreWhenReady(status),
+            );
+        const sourceSubscription = hlsAdapter
+          ? undefined
+          : player.addListener?.("sourceLoad", () =>
+              restoreWhenReady(player.status),
+            );
+        if (hlsAdapter) {
+          mediaAdapterSubscription = mediaAdapter.subscribe((event) => {
+            if (
+              (event.type === "status_changed" && event.status === "ready") ||
+              event.type === "source_loaded"
+            ) {
+              restoreWhenReady();
+            } else if (
+              event.type === "status_changed" &&
+              event.status === "error"
+            ) {
+              void finish(false);
+            }
+          });
+        }
+        replacementTimer = setTimeout(
+          () => finish(false),
+          AUDIO_TRACK_SWITCH_TIMEOUT_MS,
+        );
+        replacementTimer.unref?.();
+
+        void mediaAdapter.replaceSource(nextUri).then(
+          () => restoreWhenReady(hlsAdapter ? undefined : player.status),
+          () => void finish(false),
+        );
+      });
+
+      if (reportDiagnostic) {
+        recordDiagnostic({
+          type: "audio_switch",
+          outcome: switched ? "succeeded" : "failed",
+        });
+      }
+      refreshPlayerTracks();
+      return switched;
+    },
+    [
+      beginProgressSourceReplacement,
+      completeProgressSourceReplacement,
+      progressiveAudioReplacement,
+      engine,
+      mediaAdapter,
+      player,
+      playbackUri,
+      recordDiagnostic,
+      refreshPlayerTracks,
+    ],
+  );
+
   useEffect(() => {
     if (!player || !playbackUri) return;
     if (appliedTrackPreferencesRef.current === playbackUri) return;
 
     const mediaCapabilities = mediaAdapter.getCapabilities();
-    const availableAudioTracks = mediaCapabilities.audioTracks
-      ? mediaAdapter.getAudioTracks()
-      : [];
+    const availableAudioTracks = audioTracks;
     const availableSubtitleTracks = mediaCapabilities.embeddedSubtitles
       ? mediaAdapter.getSubtitleTracks()
       : [];
@@ -1240,9 +1585,7 @@ export default function PlayerScreen() {
       availableAudioTracks,
       preferredAudioLang || originalLanguage,
     );
-    if (audioTrack) {
-      mediaAdapter.selectAudioTrack(audioTrack.id);
-    }
+    if (audioTrack) void switchPlayerAudioTrack(audioTrack.id, false);
 
     if (subtitleMode === "off") {
       mediaAdapter.selectSubtitleTrack(null);
@@ -1298,6 +1641,7 @@ export default function PlayerScreen() {
     audioTracks.length,
     handleSubtitleSelection,
     mediaAdapter,
+    switchPlayerAudioTrack,
     preferredAudioLang,
     preferredSubtitleLang,
     originalLanguage,
@@ -1319,16 +1663,21 @@ export default function PlayerScreen() {
     );
   }, [activeSession, playbackCandidateId]);
 
-  const playerDuration = player?.duration || 0;
+  const mediaSnapshot = mediaAdapter.snapshot();
+  const playerDuration = mediaSnapshot.duration || player?.duration || 0;
   const hasKnownDuration =
     Number.isFinite(playerDuration) && playerDuration > 0;
-  const isProgressiveRemuxPlayback =
-    playbackRoute?.delivery === "progressive-fmp4" ||
-    currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4";
+  const isProgressiveRemuxPlayback = playbackRoute
+    ? playbackRoute.delivery === "progressive-fmp4"
+    : currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4";
   const isRemuxPlayback = Boolean(
-    currentStream?.behaviorHints?.remuxToMp4 ||
-    isProgressiveRemuxPlayback ||
-    selectedSessionCandidate?.requiresRemux,
+    playbackRoute
+      ? ["progressive-fmp4", "seekable-cache", "hls"].includes(
+          playbackRoute.delivery,
+        )
+      : currentStream?.behaviorHints?.remuxToMp4 ||
+          isProgressiveRemuxPlayback ||
+          selectedSessionCandidate?.requiresRemux,
   );
   const isLivePlayback = Boolean(
     !isRemuxPlayback &&
@@ -1539,7 +1888,7 @@ export default function PlayerScreen() {
     handleToggleMute,
     handleVolumeChange,
   } = usePlayerMediaControls({
-    player,
+    player: controllerPlayer,
     mediaAdapter,
     engine,
     canSeek: canSeekPlayback,
@@ -1593,7 +1942,7 @@ export default function PlayerScreen() {
   ]);
 
   usePlayerHotkeys({
-    player,
+    player: controllerPlayer,
     showControls,
     setSeekFeedback,
     seekFeedbackTimer,
@@ -1778,7 +2127,13 @@ export default function PlayerScreen() {
             </View>
           ) : (
             <>
-              {previewControls ? (
+              {hlsAdapter ? (
+                <HlsVideoSurface
+                  adapter={hlsAdapter}
+                  source={playbackUri}
+                  style={styles.webVideo}
+                />
+              ) : previewControls ? (
                 <View style={styles.webVideo} />
               ) : (
                 <VideoView
@@ -1872,10 +2227,10 @@ export default function PlayerScreen() {
           )}
 
           <PlayerControls
-            player={player}
-            currentTime={mediaAdapter.snapshot().currentTime}
+            player={controllerPlayer}
+            currentTime={mediaSnapshot.currentTime}
             duration={playerDuration}
-            bufferedPosition={mediaAdapter.snapshot().bufferedPosition}
+            bufferedPosition={mediaSnapshot.bufferedPosition}
             isVisible={
               (controlsVisible || runtimeViewState.kind === "scrubbing") &&
               !activeCast
@@ -1929,8 +2284,8 @@ export default function PlayerScreen() {
             onControlFocusChange={setControlsFocused}
             onPlayPause={() => {
               if (previewControls) return;
-              if (player?.playing) player.pause();
-              else player?.play();
+              if (mediaAdapter.snapshot().playing) mediaAdapter.pause();
+              else mediaAdapter.play();
             }}
           />
         </View>
@@ -1963,21 +2318,7 @@ export default function PlayerScreen() {
             audioTracks={audioTracks}
             subtitles={subtitles}
             onSelectAudio={(id: string | null) => {
-              try {
-                const switched = Boolean(
-                  id && mediaAdapter.selectAudioTrack(id),
-                );
-                recordDiagnostic({
-                  type: "audio_switch",
-                  outcome: switched ? "succeeded" : "failed",
-                });
-              } catch {
-                recordDiagnostic({
-                  type: "audio_switch",
-                  outcome: "failed",
-                });
-              }
-              refreshPlayerTracks();
+              if (id) void switchPlayerAudioTrack(id);
             }}
             onSelectSubtitle={(id: string | null) => {
               void handleSubtitleSelection(id);

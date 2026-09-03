@@ -5,7 +5,14 @@ import { api } from "../services/api";
 
 export function useTraktScrobbler() {
   const { connected } = useTrakt();
-  const { isPlaying, currentTime, duration, mediaInfo } = usePlayerStore();
+  // Subscribe to the individual playback fields instead of the whole store.
+  // The whole-store selector forces Zustand to compare a freshly assembled
+  // state snapshot on every playback update and can make React's external
+  // store guard report a maximum-update-depth loop while the player mounts.
+  const isPlaying = usePlayerStore((state) => state.isPlaying);
+  const currentTime = usePlayerStore((state) => state.currentTime);
+  const duration = usePlayerStore((state) => state.duration);
+  const mediaInfo = usePlayerStore((state) => state.mediaInfo);
   const lastActionRef = useRef<"start" | "pause" | "stop" | null>(null);
   const lastProgressRef = useRef<number>(0);
 

@@ -23,6 +23,7 @@ import {
   completePlaybackSession,
   getActivePlaybackSourceRuntime,
 } from "../services/playback/PlaybackSessionPlaybackService";
+import { shouldTreatPlaybackEndAsPremature } from "../services/playback/PlaybackEndPolicy";
 import { findNextEpisode } from "../services/playback/NextEpisode";
 import { preplanNextEpisode } from "../services/playback/NextEpisodePreplanner";
 import {
@@ -39,6 +40,7 @@ interface UsePlayerControllerProps {
   isProgressiveRemux?: boolean;
   hasSeekableHandoff?: boolean;
   onCompleted?: () => void;
+  onPrematureEnd?: () => void;
   onDiagnosticEvent?: (event: PlaybackDiagnosticEvent) => void;
 }
 
@@ -65,6 +67,7 @@ export function usePlayerController({
   isProgressiveRemux = false,
   hasSeekableHandoff = false,
   onCompleted,
+  onPrematureEnd,
   onDiagnosticEvent,
 }: UsePlayerControllerProps) {
   const currentStream = usePlayerStore((s) => s.currentStream);
@@ -518,6 +521,17 @@ export function usePlayerController({
     );
     const completedSubscription = player.addListener?.("playToEnd", () => {
       reportProgress(true);
+      if (
+        shouldTreatPlaybackEndAsPremature({
+          isProgressiveRemux: effectiveIsProgressiveRemux,
+          hasSeekableHandoff,
+          currentTime: player.currentTime,
+          duration: player.duration,
+        })
+      ) {
+        onPrematureEnd?.();
+        return;
+      }
       if (playbackSessionId) completePlaybackSession(playbackSessionId);
       if (nextEpisode) setShowNextEpisodeOverlay(true);
       onCompleted?.();
@@ -564,9 +578,12 @@ export function usePlayerController({
     autoPlayNext,
     nextEpisode,
     onCompleted,
+    onPrematureEnd,
     onDiagnosticEvent,
     playbackSessionId,
     showNextEpisodeOverlay,
+    effectiveIsProgressiveRemux,
+    hasSeekableHandoff,
   ]);
 
   // 5. Sync Event Handlers

@@ -12,6 +12,7 @@ import {
   type WebMediaDocument,
   type WebVideoAdapterOptions,
 } from "./WebVideoAdapter";
+import { HlsWebVideoAdapter } from "./HlsWebVideoAdapter";
 
 export type MediaPlayerRuntime = NativeMediaPlatform | "web" | "electron";
 
@@ -22,6 +23,8 @@ export interface CreateMediaPlayerAdapterOptions {
   web?: Omit<WebVideoAdapterOptions, "document"> & {
     document?: WebMediaDocument;
   };
+  /** Opt-in HLS surface for web/Electron; native targets use Expo Video. */
+  hls?: boolean;
 }
 
 export function detectMediaPlayerRuntime(): MediaPlayerRuntime {
@@ -45,9 +48,16 @@ export function createMediaPlayerAdapter({
   runtime = detectMediaPlayerRuntime(),
   native,
   web,
+  hls = false,
 }: CreateMediaPlayerAdapterOptions): MediaPlayerAdapter {
   if (runtime === "ios" || runtime === "android") {
     return new NativeExpoVideoAdapter(player, runtime, native);
+  }
+
+  if (hls) {
+    return new HlsWebVideoAdapter({
+      document: web?.document ?? defaultWebDocument(),
+    });
   }
 
   const webOptions: WebVideoAdapterOptions = {

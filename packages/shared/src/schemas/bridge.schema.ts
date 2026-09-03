@@ -11,6 +11,7 @@ export const bridgeDeliverySchema = z.enum([
   "range-http",
   "progressive-fmp4",
   "seekable-cache",
+  "hls",
 ]);
 
 export const bridgeJobStateSchema = z.enum([
@@ -144,7 +145,7 @@ export const bridgeCapabilityDeliveryV1Schema = z
 const bridgeJobsCapabilitiesV1Schema = z
   .object({
     sourceKinds: z.tuple([z.literal("magnet")]),
-    deliveries: z.array(bridgeCapabilityDeliveryV1Schema).min(1).max(3),
+    deliveries: z.array(bridgeCapabilityDeliveryV1Schema).min(1).max(4),
     cancellation: z.literal(true),
     tracks: z.literal(true),
     subtitles: z.literal(true),

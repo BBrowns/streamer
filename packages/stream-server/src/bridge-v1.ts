@@ -31,6 +31,7 @@ import {
   getGatewaySubtitleDocument,
   getGatewayThumbnail,
   serializeBridgeJobV1,
+  serveGatewayJobSegment,
   serveGatewayJobStream,
 } from "./gateway.js";
 import {
@@ -134,7 +135,9 @@ function gatewayInputForDelivery(
     remuxStrategy:
       delivery === "progressive-fmp4"
         ? ("progressive-fmp4" as const)
-        : ("seekable-cache" as const),
+        : delivery === "hls"
+          ? ("hls" as const)
+          : ("seekable-cache" as const),
     requestedDelivery: delivery,
   };
 }
@@ -302,7 +305,14 @@ export function buildBridgeHelloV1() {
   });
 }
 
-export async function buildBridgeCapabilitiesV1() {
+export const BRIDGE_HLS_FEATURE_HEADER = "X-Streamer-Bridge-Features";
+export const BRIDGE_HLS_FEATURE = "hls-segments";
+
+export async function buildBridgeCapabilitiesV1(
+  options: {
+    hlsSegments?: boolean;
+  } = {},
+) {
   const torrent = getTorrentEngineStatus();
   const remux = await getRemuxRuntimeStatus();
   const health = !torrent.available
@@ -348,6 +358,21 @@ export async function buildBridgeCapabilitiesV1() {
                 }
               : {}),
           },
+          ...(options.hlsSegments
+            ? [
+                {
+                  delivery: "hls" as const,
+                  available: torrent.available && remux.available,
+                  ...(!(torrent.available && remux.available)
+                    ? {
+                        unavailableReason: !torrent.available
+                          ? ("torrent_unavailable" as const)
+                          : ("ffmpeg_unavailable" as const),
+                      }
+                    : {}),
+                },
+              ]
+            : []),
         ],
         cancellation: true,
         tracks: true,
@@ -408,8 +433,16 @@ bridgeV1Router.get(
   "/capabilities",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("capabilities:read"),
-  async (_req, res) => {
-    return res.json(await buildBridgeCapabilitiesV1());
+  async (req, res) => {
+    const requestedFeatures = String(req.get(BRIDGE_HLS_FEATURE_HEADER) ?? "")
+      .split(",")
+      .map((feature) => feature.trim())
+      .filter(Boolean);
+    return res.json(
+      await buildBridgeCapabilitiesV1({
+        hlsSegments: requestedFeatures.includes(BRIDGE_HLS_FEATURE),
+      }),
+    );
   },
 );
 
@@ -844,6 +877,7 @@ bridgeV1Router.delete(
 
 bridgeV1Router.get("/jobs/:id/stream", serveGatewayJobStream);
 bridgeV1Router.head("/jobs/:id/stream", serveGatewayJobStream);
+bridgeV1Router.get("/jobs/:id/segments/:segment", serveGatewayJobSegment);
 
 bridgeV1Router.get(
   "/cast/devices",

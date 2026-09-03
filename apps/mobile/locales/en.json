@@ -1212,6 +1212,7 @@
       "cancelPreparationHint": "You can also press Escape to cancel.",
       "tryingFallback": "Trying another source...",
       "playbackStalledTryingFallback": "Playback stopped making progress. Trying another source.",
+      "playbackEndedTryingFallback": "This source ended early. Trying another source.",
       "buffering": "Buffering...",
       "errorTitle": "Connection Failed",
       "noSourcesTitle": "No playable source",
@@ -1306,6 +1307,12 @@
       "dark": "Dark",
       "light": "Light",
       "system": "System"
+    },
+    "syncStatus": {
+      "transport": "Sync connection temporarily unavailable",
+      "authRefresh": "Session refresh is temporarily unavailable",
+      "rateLimited": "Sync is temporarily rate-limited",
+      "retry": "Retry sync"
     }
   },
   "notifications": {
@@ -1321,6 +1328,7 @@
     "loading": "Loading notifications",
     "errorTitle": "Notifications couldn't load",
     "errorDescription": "Check your connection and try again.",
+    "rateLimitedDescription": "Too many requests. Try again in about {{seconds}} seconds.",
     "unread": "Unread",
     "markAllRead": "Mark all read",
     "markAllReadA11y": "Mark all {{count}} unread notifications as read",

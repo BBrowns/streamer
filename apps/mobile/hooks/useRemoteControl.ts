@@ -80,7 +80,12 @@ export function useRemoteControl() {
   // partially hydrated app boot. Cancelling also aborts an in-flight poll.
   useEffect(() => {
     if (!canUseRemoteControl) {
-      setActiveSessions([]);
+      // Avoid publishing a fresh empty array on every render while auth is
+      // still hydrating or after logout. A new array here retriggers this
+      // effect indefinitely because the state update itself causes a render.
+      setActiveSessions((current) =>
+        current.length === 0 ? current : emptyPlaybackSessions,
+      );
       void queryClient.cancelQueries({ queryKey: playbackSessionsQueryKey });
       queryClient.removeQueries({ queryKey: playbackSessionsQueryKey });
       return;

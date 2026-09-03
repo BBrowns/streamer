@@ -21,6 +21,10 @@ import {
   type TimelineScrubbingChange,
 } from "../../services/playback/TimelineController";
 import { playerChrome } from "./playerChrome";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 const SEEK_STEP_SECONDS = 10;
 const THUMBNAIL_BUCKET_SECONDS = 10;
@@ -279,6 +283,7 @@ export function PlayerTimeline({
           testID="player-timeline-preview"
           style={[
             styles.preview,
+            getPointerEventsStyle("none"),
             width > 0 && {
               left: `${Math.min(
                 100,
@@ -286,7 +291,7 @@ export function PlayerTimeline({
               )}%`,
             },
           ]}
-          pointerEvents="none"
+          pointerEvents={getNativePointerEvents("none")}
         >
           {thumbnailSource ? (
             <Image

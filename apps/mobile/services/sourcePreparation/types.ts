@@ -67,10 +67,19 @@ export interface LegacySourcePreparationAdapter {
 }
 
 export type SourcePreparationErrorCode =
-  PlaybackErrorCode | "UNSUPPORTED_ROUTE" | "INVALID_SOURCE" | "CANCELLED";
+  | PlaybackErrorCode
+  | "SOURCE_STALLED"
+  | "INTERNAL"
+  | "TRACKS_UNAVAILABLE"
+  | "UNSUPPORTED_ROUTE"
+  | "INVALID_SOURCE"
+  | "CANCELLED";
 
 const retryableCodes = new Set<SourcePreparationErrorCode>([
   "NO_PEERS",
+  "SOURCE_STALLED",
+  "INTERNAL",
+  "TRACKS_UNAVAILABLE",
   "BRIDGE_UNAVAILABLE",
   "GATEWAY_TIMEOUT",
   "SOURCE_UNAVAILABLE",
@@ -81,6 +90,9 @@ const retryableCodes = new Set<SourcePreparationErrorCode>([
 
 const fallbackCodes = new Set<SourcePreparationErrorCode>([
   "NO_PEERS",
+  "SOURCE_STALLED",
+  "INTERNAL",
+  "TRACKS_UNAVAILABLE",
   "GATEWAY_TIMEOUT",
   "SOURCE_UNAVAILABLE",
   "NETWORK_OFFLINE",

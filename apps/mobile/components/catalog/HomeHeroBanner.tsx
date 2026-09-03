@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import type { MetaPreview, WatchProgress } from "@streamer/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
@@ -130,9 +130,13 @@ const styles = StyleSheet.create({
   title: {
     ...uiTypography.cinematicDisplay,
     color: "#F4F2EE",
-    textShadowColor: "rgba(0,0,0,0.34)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 16,
+    ...(Platform.OS === "web"
+      ? { textShadow: "0 2px 16px rgba(0,0,0,0.34)" }
+      : {
+          textShadowColor: "rgba(0,0,0,0.34)",
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 16,
+        }),
   },
   titleCompact: { fontSize: 42, lineHeight: 44, letterSpacing: -0.7 },
   titleMedium: { fontSize: 56, lineHeight: 58 },

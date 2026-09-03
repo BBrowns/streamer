@@ -48,6 +48,8 @@ export default function NotificationsScreen() {
     unreadCount,
     isLoading,
     isError,
+    isRateLimited,
+    rateLimitRetryAfterMs,
     isRefetching,
     refetch,
     markAsRead,
@@ -140,7 +142,16 @@ export default function NotificationsScreen() {
             testID="notifications-error-state"
             icon="cloud-offline-outline"
             title={t("notifications.errorTitle")}
-            description={t("notifications.errorDescription")}
+            description={
+              isRateLimited
+                ? t("notifications.rateLimitedDescription", {
+                    seconds: Math.max(
+                      1,
+                      Math.ceil((rateLimitRetryAfterMs ?? 0) / 1000),
+                    ),
+                  })
+                : t("notifications.errorDescription")
+            }
             actionLabel={t("common.retry")}
             onAction={() => void refetch()}
             fill

@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { useAuthStore } from "../stores/authStore";
 import { clientRuntimeConfig } from "./runtimeConfig";
+import { parseRetryAfterMs, toRateLimitError } from "./rateLimit";
 
 type AuthRefreshState = {
   isAuthenticated: boolean;
@@ -19,6 +20,150 @@ type AuthRefreshResponse = {
   refreshToken: string;
   expiresIn?: number;
 };
+
+export type AuthRefreshFailureKind =
+  | "invalid-credentials"
+  | "rate-limited"
+  | "temporarily-unavailable"
+  | "network"
+  | "timeout"
+  | "storage"
+  | "unknown";
+
+export class AuthRefreshError extends Error {
+  readonly name = "AuthRefreshError";
+  readonly kind: AuthRefreshFailureKind;
+  readonly retryAfterMs: number | null;
+  readonly status: number | null;
+
+  constructor(
+    kind: AuthRefreshFailureKind,
+    options: { retryAfterMs?: number | null; status?: number | null } = {},
+  ) {
+    super(`Authentication refresh failed: ${kind}`);
+    this.kind = kind;
+    this.retryAfterMs = options.retryAfterMs ?? null;
+    this.status = options.status ?? null;
+  }
+}
+
+export function isAuthRefreshError(error: unknown): error is AuthRefreshError {
+  return error instanceof AuthRefreshError;
+}
+
+const AUTH_REFRESH_TIMEOUT_MS = 10_000;
+
+function getResponseStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const response = (error as { response?: unknown }).response;
+  if (!response || typeof response !== "object") return null;
+  const status = (response as { status?: unknown }).status;
+  return typeof status === "number" ? status : null;
+}
+
+function getResponseHeaders(error: unknown): unknown {
+  if (!error || typeof error !== "object") return undefined;
+  const response = (error as { response?: unknown }).response;
+  if (!response || typeof response !== "object") return undefined;
+  return (response as { headers?: unknown }).headers;
+}
+
+function getRetryAfterValue(headers: unknown): unknown {
+  if (!headers || typeof headers !== "object") return undefined;
+  const candidate = headers as {
+    get?: (name: string) => unknown;
+    [key: string]: unknown;
+  };
+  return (
+    candidate.get?.("Retry-After") ??
+    candidate.get?.("retry-after") ??
+    candidate["Retry-After"] ??
+    candidate["retry-after"]
+  );
+}
+
+function classifyAuthRefreshFailure(error: unknown): AuthRefreshError {
+  if (isAuthRefreshError(error)) return error;
+
+  const rateLimitError = toRateLimitError(error);
+  if (rateLimitError) {
+    return new AuthRefreshError("rate-limited", {
+      retryAfterMs: rateLimitError.retryAfterMs,
+      status: 429,
+    });
+  }
+
+  const status = getResponseStatus(error);
+  if (status === 401) {
+    return new AuthRefreshError("invalid-credentials", { status });
+  }
+
+  if (status === 503) {
+    return new AuthRefreshError("temporarily-unavailable", {
+      retryAfterMs: parseRetryAfterMs(
+        getRetryAfterValue(getResponseHeaders(error)),
+      ),
+      status,
+    });
+  }
+
+  if (error && typeof error === "object") {
+    const code = (error as { code?: unknown }).code;
+    const name = (error as { name?: unknown }).name;
+    if (
+      code === "ECONNABORTED" ||
+      code === "ETIMEDOUT" ||
+      name === "AbortError"
+    ) {
+      return new AuthRefreshError("timeout");
+    }
+  }
+
+  if (!status) {
+    return new AuthRefreshError("network");
+  }
+
+  return new AuthRefreshError("unknown", { status });
+}
+
+function markRefreshHealth(error: AuthRefreshError): void {
+  const store = useAuthStore.getState();
+  if (error.kind === "invalid-credentials") {
+    store.setSessionHealth("invalid");
+    return;
+  }
+
+  const health = error.kind === "storage" ? "needs-attention" : "degraded";
+  const issue = error.kind;
+  const retryAt = error.retryAfterMs ? Date.now() + error.retryAfterMs : null;
+  store.setSessionHealth(health, issue, retryAt);
+}
+
+function logRefreshFailure(error: AuthRefreshError): void {
+  if (!__DEV__) return;
+  console.warn("[Auth] Session refresh failed", {
+    kind: error.kind,
+    status: error.status,
+    retryAfterMs: error.retryAfterMs,
+  });
+}
+
+function getActiveRefreshCooldown(): AuthRefreshError | null {
+  const { sessionIssue, sessionRetryAt } = useAuthStore.getState();
+  if (
+    (sessionIssue !== "rate-limited" &&
+      sessionIssue !== "temporarily-unavailable") ||
+    !sessionRetryAt ||
+    sessionRetryAt <= Date.now()
+  ) {
+    return null;
+  }
+
+  return new AuthRefreshError(sessionIssue, {
+    retryAfterMs: sessionRetryAt - Date.now(),
+    status: sessionIssue === "rate-limited" ? 429 : 503,
+  });
+}
 
 function getAuthorizationHeader(headers: unknown): string | null {
   if (!headers || typeof headers !== "object") return null;
@@ -103,8 +248,35 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+let refreshInFlight: Promise<string> | null = null;
+
+/**
+ * Ensure persisted sessions are refreshed before a protected request leaves
+ * the renderer. The response interceptor remains as a safety net for tokens
+ * that expire between this check and the server receiving the request.
+ */
+export async function ensureFreshAuthSession(): Promise<void> {
+  const state = useAuthStore.getState();
+  if (
+    !state.credentialsHydrated ||
+    !state.isAuthenticated ||
+    !state.accessToken ||
+    !state.refreshToken ||
+    !state.isTokenExpired()
+  ) {
+    return;
+  }
+
+  const cooldown = getActiveRefreshCooldown();
+  if (cooldown) throw cooldown;
+
+  await refreshAuthSession();
+}
+
 // Attach access token, device ID, and dynamic base URL to every request
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
+  await ensureFreshAuthSession();
+
   const { accessToken, deviceId, backendUrl } = useAuthStore.getState();
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
@@ -118,8 +290,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-let refreshInFlight: Promise<string> | null = null;
-
 /**
  * Refresh the app session once for all callers, including WebSocket and Axios
  * consumers. Refresh tokens rotate on the server, so concurrent refresh
@@ -128,27 +298,50 @@ let refreshInFlight: Promise<string> | null = null;
 export function refreshAuthSession(): Promise<string> {
   if (refreshInFlight) return refreshInFlight;
 
+  const cooldown = getActiveRefreshCooldown();
+  if (cooldown) return Promise.reject(cooldown);
+
   let refreshPromise: Promise<string>;
   refreshPromise = Promise.resolve()
     .then(async () => {
       const { backendUrl, refreshToken } = useAuthStore.getState();
-      if (!refreshToken) throw new Error("No refresh token");
+      if (!refreshToken) {
+        throw new AuthRefreshError("invalid-credentials", { status: 401 });
+      }
 
       const targetUrl = backendUrl || BASE_URL;
-      const { data } = await axios.post<AuthRefreshResponse>(
-        `${targetUrl}/api/auth/refresh`,
-        { refreshToken },
-      );
+      let data: AuthRefreshResponse;
+      try {
+        const response = await axios.post<AuthRefreshResponse>(
+          `${targetUrl}/api/auth/refresh`,
+          { refreshToken },
+          { timeout: AUTH_REFRESH_TIMEOUT_MS },
+        );
+        data = response.data;
+      } catch (error) {
+        throw classifyAuthRefreshFailure(error);
+      }
+
       const expiresInMs = data.expiresIn ? data.expiresIn * 1000 : undefined;
 
-      await useAuthStore
-        .getState()
-        .setTokens(data.accessToken, data.refreshToken, expiresInMs);
+      try {
+        await useAuthStore
+          .getState()
+          .setTokens(data.accessToken, data.refreshToken, expiresInMs);
+      } catch {
+        throw new AuthRefreshError("storage");
+      }
+
       return data.accessToken;
     })
     .catch(async (error) => {
-      await useAuthStore.getState().logout();
-      throw error;
+      const classified = classifyAuthRefreshFailure(error);
+      logRefreshFailure(classified);
+      markRefreshHealth(classified);
+      if (classified.kind === "invalid-credentials") {
+        await useAuthStore.getState().logout();
+      }
+      throw classified;
     })
     .finally(() => {
       if (refreshInFlight === refreshPromise) refreshInFlight = null;
@@ -162,6 +355,9 @@ export function refreshAuthSession(): Promise<string> {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const rateLimitError = toRateLimitError(error);
+    if (rateLimitError) return Promise.reject(rateLimitError);
+
     const originalRequest = error.config as RefreshableRequest | undefined;
     const auth = useAuthStore.getState();
 

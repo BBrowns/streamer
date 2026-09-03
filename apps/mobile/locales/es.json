@@ -1211,6 +1211,7 @@
       "cancelPreparationHint": "También puedes pulsar Escape para cancelar.",
       "tryingFallback": "Probando otra fuente...",
       "playbackStalledTryingFallback": "La reproducción ha dejado de avanzar. Probando otra fuente.",
+      "playbackEndedTryingFallback": "Esta fuente terminó antes de tiempo. Probando otra fuente.",
       "buffering": "Cargando el búfer...",
       "errorTitle": "Error de conexión",
       "noSourcesTitle": "No hay una fuente reproducible",
@@ -1305,6 +1306,12 @@
       "dark": "Oscuro",
       "light": "Claro",
       "system": "Sistema"
+    },
+    "syncStatus": {
+      "transport": "La conexión de sincronización no está disponible temporalmente",
+      "authRefresh": "La renovación de sesión no está disponible temporalmente",
+      "rateLimited": "La sincronización está limitada temporalmente",
+      "retry": "Reintentar sincronización"
     }
   },
   "notifications": {
@@ -1320,6 +1327,7 @@
     "loading": "Cargando notificaciones",
     "errorTitle": "No se pudieron cargar las notificaciones",
     "errorDescription": "Comprueba tu conexión e inténtalo de nuevo.",
+    "rateLimitedDescription": "Demasiadas solicitudes. Inténtalo de nuevo en unos {{seconds}} segundos.",
     "unread": "Sin leer",
     "markAllRead": "Marcar todo como leído",
     "markAllReadA11y": "Marcar las {{count}} notificaciones sin leer como leídas",

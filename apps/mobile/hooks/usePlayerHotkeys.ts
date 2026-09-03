@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
-import type { VideoPlayer } from "expo-video";
+import type { ExpoVideoPlayerLike } from "../services/playback/mediaPlayerAdapters/ExpoVideoAdapterBase";
 
 interface UsePlayerHotkeysArgs {
-  player: VideoPlayer | null;
+  player: ExpoVideoPlayerLike | null;
   showControls: () => void;
   setSeekFeedback: (side: "left" | "right" | null) => void;
   seekFeedbackTimer: React.MutableRefObject<ReturnType<

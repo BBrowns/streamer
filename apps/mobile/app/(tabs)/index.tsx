@@ -38,6 +38,7 @@ import { rankProviderCatalogRows } from "../../services/homeDiscovery";
 import { buildCatalogDiscoveryRows } from "../../services/catalogDiscovery";
 import { SectionHeader } from "../../components/ui/SectionHeader";
 import { useDesktopTopBarScroll } from "../../components/ui/DesktopLayout";
+import { RouteAccessibilityBoundary } from "../../components/ui/RouteAccessibilityBoundary";
 
 function flattenCatalogPages(data: any): MetaPreview[] {
   return (
@@ -441,9 +442,11 @@ function HomeContent() {
 
 export default function HomeScreen() {
   return (
-    <ErrorBoundary>
-      <HomeContent />
-    </ErrorBoundary>
+    <RouteAccessibilityBoundary>
+      <ErrorBoundary>
+        <HomeContent />
+      </ErrorBoundary>
+    </RouteAccessibilityBoundary>
   );
 }
 

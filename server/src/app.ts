@@ -44,6 +44,11 @@ export function createApp() {
   const app = new Hono();
   initWebSockets(app);
 
+  // Hono must assign the request id before the AsyncLocalStorage context is
+  // created so route logs, response logs, and downstream services share one
+  // correlation id.
+  app.use("*", requestId());
+
   // Request context middleware (Correlation ID)
   app.use("*", async (c, next) => {
     const requestId =
@@ -53,13 +58,12 @@ export function createApp() {
 
   // Global middleware
   app.use("*", secureHeaders());
-  app.use("*", requestId());
   app.use(
     "*",
     cors({
       origin: resolveCorsOrigin,
       credentials: true,
-      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization", "X-Device-Id"],
       exposeHeaders: ["Content-Length", "X-Request-Id"],
       maxAge: 600,

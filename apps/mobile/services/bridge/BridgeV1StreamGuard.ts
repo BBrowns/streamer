@@ -56,6 +56,7 @@ export function bindBridgeV1StreamUri(options: {
   const expectedPath = `/api/bridge/v1/jobs/${encodeURIComponent(job.id)}/stream`;
   const expiresValues = resolved.searchParams.getAll("expires");
   const signatureValues = resolved.searchParams.getAll("signature");
+  const audioTrackValues = resolved.searchParams.getAll("audioTrack");
   const queryKeys = Array.from(resolved.searchParams.keys());
   const expires = Number(expiresValues[0]);
   const expiresAt = Date.parse(stream.expiresAt);
@@ -65,10 +66,17 @@ export function bindBridgeV1StreamUri(options: {
     resolved.password ||
     resolved.pathname !== expectedPath ||
     resolved.hash ||
-    queryKeys.length !== 2 ||
-    !queryKeys.every((key) => key === "expires" || key === "signature") ||
+    (queryKeys.length !== 2 && queryKeys.length !== 3) ||
+    !queryKeys.every(
+      (key) => key === "expires" || key === "signature" || key === "audioTrack",
+    ) ||
     expiresValues.length !== 1 ||
     signatureValues.length !== 1 ||
+    audioTrackValues.length > 1 ||
+    (audioTrackValues.length === 1 &&
+      job.delivery !== "progressive-fmp4" &&
+      job.delivery !== "hls") ||
+    (audioTrackValues.length === 1 && !/^\d+$/.test(audioTrackValues[0])) ||
     !signatureValues[0] ||
     !Number.isSafeInteger(expires) ||
     expires <= 0 ||

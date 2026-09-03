@@ -1,20 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type SetStateAction,
+} from "react";
 import { Alert, Platform } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import {
   streamEngineManager,
   type BridgeDiagnostics,
-  type BridgeStatus,
 } from "../services/streamEngine/StreamEngineManager";
+import {
+  getBridgeReadinessSnapshot,
+  refreshBridgeReadiness,
+  subscribeBridgeReadiness,
+} from "../services/streamEngine/bridgeReadinessRuntime";
 import { getBridgeStatusPresentation } from "../services/streamEngine/bridgeStatusPresentation";
 import { diagnosticsFromDesktopBridge } from "../services/streamEngine/desktopBridgeDiagnostics";
-import type { DesktopBridgeInfo } from "../services/desktop-bridge";
 import { preflightBridgeAction } from "../services/actionPreflight";
-import {
-  getBridgeAuthHeaders,
-  setDesktopBridgeAccessSession,
-} from "../services/bridgeAuth";
+import { getBridgeAuthHeaders } from "../services/bridgeAuth";
 import { createDebugBundle, exportDebugBundle } from "../services/debugBundle";
 import { hapticSelection, hapticSuccess } from "../lib/haptics";
 import { formatBytes } from "../components/downloads/downloadPresentation";
@@ -57,85 +65,68 @@ export function usePlaybackEnvironmentStatus() {
     backendUrl,
     streamServerUrl,
     streamServerToken,
+    credentialsHydrated,
     setServerUrls,
     setStreamServerToken,
   } = useAuthStore();
-  const [backendInput, setBackendInput] = useState(backendUrl || "");
-  const [streamInput, setStreamInput] = useState(streamServerUrl || "");
-  const [pairingTokenInput, setPairingTokenInput] = useState(
+  const [backendInput, setBackendInputState] = useState(backendUrl || "");
+  const [streamInput, setStreamInputState] = useState(streamServerUrl || "");
+  const [pairingTokenInput, setPairingTokenInputState] = useState(
     streamServerToken || "",
   );
-  const [bridgeInfo, setBridgeInfo] = useState<DesktopBridgeInfo | null>(null);
-  const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>(
-    streamEngineManager.bridgeStatus,
+  const backendInputDirty = useRef(false);
+  const streamInputDirty = useRef(false);
+  const pairingTokenInputDirty = useRef(false);
+  const readiness = useSyncExternalStore(
+    subscribeBridgeReadiness,
+    getBridgeReadinessSnapshot,
+    getBridgeReadinessSnapshot,
   );
-  const [bridgeDiagnostics, setBridgeDiagnostics] = useState<BridgeDiagnostics>(
-    streamEngineManager.getBridgeDiagnostics(),
-  );
+  const { bridgeInfo, bridgeStatus, bridgeDiagnostics } = readiness;
   const [isRestarting, setIsRestarting] = useState(false);
   const [isCleaningCache, setIsCleaningCache] = useState(false);
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
-  const refreshDesktopInfo = useCallback(
-    async (isCancelled?: () => boolean) => {
-      if (
-        Platform.OS !== "web" ||
-        typeof window === "undefined" ||
-        !window.desktopBridge?.getBridgeInfo
-      ) {
-        return null;
-      }
-
-      try {
-        const info = await window.desktopBridge.getBridgeInfo();
-        if (!isCancelled?.()) {
-          setBridgeInfo(info);
-          setDesktopBridgeAccessSession(info.accessSession);
-          if (info.lanUrl) setStreamInput((current) => current || info.lanUrl);
-        }
-        return info;
-      } catch {
-        if (!isCancelled?.()) setBridgeInfo(null);
-        return null;
-      }
-    },
-    [],
-  );
-
-  const syncDiagnostics = useCallback(() => {
-    setBridgeStatus(streamEngineManager.bridgeStatus);
-    setBridgeDiagnostics(streamEngineManager.getBridgeDiagnostics());
+  const setBackendInput = useCallback((value: SetStateAction<string>) => {
+    backendInputDirty.current = true;
+    setBackendInputState(value);
+  }, []);
+  const setStreamInput = useCallback((value: SetStateAction<string>) => {
+    streamInputDirty.current = true;
+    setStreamInputState(value);
+  }, []);
+  const setPairingTokenInput = useCallback((value: SetStateAction<string>) => {
+    pairingTokenInputDirty.current = true;
+    setPairingTokenInputState(value);
   }, []);
 
-  const refreshEnvironment = useCallback(
-    async (withProgress = false, isCancelled?: () => boolean) => {
-      if (withProgress) setIsChecking(true);
-      try {
-        await refreshDesktopInfo(isCancelled);
-        await streamEngineManager.detectBridge();
-      } finally {
-        if (!isCancelled?.()) syncDiagnostics();
-        if (withProgress) setIsChecking(false);
-      }
-    },
-    [refreshDesktopInfo, syncDiagnostics],
-  );
-
   useEffect(() => {
-    let cancelled = false;
-    const isCancelled = () => cancelled;
+    if (!credentialsHydrated) return;
 
-    void refreshEnvironment(false, isCancelled).catch(() => undefined);
-    const timer = setInterval(() => {
-      void refreshEnvironment(false, isCancelled).catch(() => undefined);
-    }, 8000);
+    if (!backendInputDirty.current) {
+      setBackendInputState(backendUrl || "");
+    }
+    if (!streamInputDirty.current) {
+      setStreamInputState(streamServerUrl || "");
+    }
+    if (!pairingTokenInputDirty.current) {
+      setPairingTokenInputState(streamServerToken || "");
+    }
+  }, [backendUrl, credentialsHydrated, streamServerToken, streamServerUrl]);
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [refreshEnvironment]);
+  const refreshEnvironment = useCallback(async (withProgress = false) => {
+    if (withProgress) setIsChecking(true);
+    try {
+      const refreshed = await refreshBridgeReadiness();
+      const lanUrl = refreshed.bridgeInfo?.lanUrl;
+      if (lanUrl && !streamInputDirty.current) {
+        setStreamInputState((current) => current || lanUrl);
+      }
+    } finally {
+      if (withProgress) setIsChecking(false);
+    }
+  }, []);
 
   const derived = useMemo(() => {
     const desktopDiagnostics = diagnosticsFromDesktopBridge(bridgeInfo);
@@ -195,6 +186,9 @@ export function usePlaybackEnvironmentStatus() {
   const saveConnections = useCallback(async () => {
     setServerUrls(backendInput.trim() || null, streamInput.trim() || null);
     await setStreamServerToken(pairingTokenInput.trim() || null);
+    backendInputDirty.current = false;
+    streamInputDirty.current = false;
+    pairingTokenInputDirty.current = false;
     await refreshEnvironment();
     hapticSuccess();
     Alert.alert(
@@ -212,9 +206,12 @@ export function usePlaybackEnvironmentStatus() {
   ]);
 
   const resetConnections = useCallback(() => {
-    setBackendInput("");
-    setStreamInput("");
-    setPairingTokenInput("");
+    backendInputDirty.current = false;
+    streamInputDirty.current = false;
+    pairingTokenInputDirty.current = false;
+    setBackendInputState("");
+    setStreamInputState("");
+    setPairingTokenInputState("");
     setServerUrls(null, null);
     void setStreamServerToken(null);
     hapticSelection();
@@ -230,15 +227,12 @@ export function usePlaybackEnvironmentStatus() {
     setIsRestarting(true);
     try {
       const info = await window.desktopBridge.restartBridge();
-      setBridgeInfo(info);
-      setDesktopBridgeAccessSession(info.accessSession);
-      if (info.localUrl) setStreamInput(info.localUrl);
-      await streamEngineManager.detectBridge();
+      if (info.localUrl) setStreamInputState(info.localUrl);
+      await refreshBridgeReadiness();
     } finally {
-      syncDiagnostics();
       setIsRestarting(false);
     }
-  }, [syncDiagnostics]);
+  }, []);
 
   const showRepairSteps = useCallback(() => {
     const repair = derived.repair;

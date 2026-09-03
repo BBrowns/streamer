@@ -14,6 +14,7 @@ import {
 import { usePlaybackSessionStore } from "../stores/playbackSessionStore";
 import type { MediaInfo } from "../stores/playerStore";
 import { streamEngineManager } from "./streamEngine/StreamEngineManager";
+import { refreshBridgeReadiness } from "./streamEngine/bridgeReadinessRuntime";
 import {
   validateExternalNavigationUrl,
   SECURITY_LIMITS,
@@ -685,7 +686,7 @@ export class DownloadService {
       eligibility.mode === "bridge-torrent" &&
       !eligibility.canDownload
     ) {
-      await streamEngineManager.detectBridge();
+      await refreshBridgeReadiness();
       eligibility = getDownloadEligibility(stream);
     }
 

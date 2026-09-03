@@ -749,11 +749,7 @@ export class TorrentEngine implements IStreamEngine {
           this.emit("stats", stats);
         }
       } catch (e: any) {
-        const bridgeUrl = this.bridge.getBridgeUrl?.() ?? this.bridge.bridgeUrl;
-        console.warn(
-          `[TorrentEngine] Bridge unreachable (${bridgeUrl}):`,
-          e?.message || e,
-        );
+        console.warn("[TorrentEngine] Bridge stats poll failed.");
       }
     }, 2000); // poll every 2 seconds
   }
@@ -781,11 +777,8 @@ export class TorrentEngine implements IStreamEngine {
           progress: null,
         } satisfies GatewayJobProgress);
       }
-    } catch (error: any) {
-      console.warn(
-        "[TorrentEngine] Failed to cancel gateway job:",
-        error?.message || error,
-      );
+    } catch (_error: any) {
+      console.warn("[TorrentEngine] Failed to cancel gateway job.");
     }
   }
 

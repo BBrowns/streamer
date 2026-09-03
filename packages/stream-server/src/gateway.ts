@@ -20,10 +20,12 @@ import {
   shouldRemuxTorrentFile,
   waitForTorrentFileFirstBytes,
   destroyTorrentByInfoHash,
+  createHlsRemuxSession,
 } from "./torrent.js";
 import { seekThumbnailService } from "./seek-thumbnail.js";
 import type {
   FileSelectionHints,
+  HlsRemuxSession,
   SeekableRemuxUnavailableReason,
 } from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
@@ -36,6 +38,7 @@ import {
   bridgeJobResponseV1Schema,
   gatewayTrackCatalogSchema,
   type BridgeDelivery,
+  type BridgeV1ErrorCode,
   type BridgeV1Error,
   type SubtitleCandidate,
 } from "@streamer/shared";
@@ -54,7 +57,8 @@ export type GatewayJobState =
   | "cancelled"
   | "expired";
 export type GatewayJobMode = "bridge" | "remux";
-export type GatewayRemuxStrategy = "seekable-cache" | "progressive-fmp4";
+export type GatewayRemuxStrategy =
+  "seekable-cache" | "progressive-fmp4" | "hls";
 export type GatewaySeekableCacheStatus =
   "not_started" | "evaluating" | "preparing" | "ready" | "unavailable";
 type GatewaySeekableCacheUnavailableReason =
@@ -72,6 +76,10 @@ type GatewayJobPhase =
   | "error"
   | "cancelled"
   | "expired";
+type GatewayFailureCode = Extract<
+  BridgeV1ErrorCode,
+  "RUNTIME_UNAVAILABLE" | "INTERNAL" | "TRACKS_UNAVAILABLE"
+>;
 
 export interface GatewayJob {
   id: string;
@@ -86,9 +94,14 @@ export interface GatewayJob {
   error?: string;
   peerCount?: number;
   retryable?: boolean;
+  failureCode?: GatewayFailureCode;
+  lastPeerCountLogAt?: number;
+  lastLoggedPeerCount?: number;
   progressTimer?: ReturnType<typeof setInterval>;
   abortController?: AbortController;
   operationAbortControllers: Set<AbortController>;
+  /** Process-local marker used to expose metadata/file-selection progress. */
+  metadataReceivedAt?: number;
   firstByteProbeStartedAt?: number;
   remuxStartedAt?: number;
   /**
@@ -105,6 +118,14 @@ export interface GatewayJob {
   seekableCacheAbortController?: AbortController;
   seekableCachePromise?: Promise<void>;
   releaseSeekableCache?: () => void;
+  /** Process-local selected embedded audio stream for live/cache remuxing. */
+  audioTrackId?: string;
+  /** Process-local HLS variants; never serialized or persisted. */
+  hlsSessions?: Map<string, HlsRemuxSession>;
+  /** Single-flight HLS creation per job/variant; never serialized. */
+  hlsSessionPromises?: Map<string, Promise<HlsRemuxSession>>;
+  /** Abort controllers for HLS variants that are still being created. */
+  hlsSessionAbortControllers?: Map<string, AbortController>;
   activeStreamCount: number;
   activeStreamSignature?: string;
   lastStreamAccessAt?: number;
@@ -133,12 +154,16 @@ const GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS = 20_000;
 const GATEWAY_METADATA_TIMEOUT_MS =
   GATEWAY_PEER_DISCOVERY_TIMEOUT_MS + GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS;
 const GATEWAY_FIRST_BYTE_TIMEOUT_MS = 20_000;
+const GATEWAY_PEER_LOG_INTERVAL_MS = 5_000;
 const GATEWAY_REMUX_READY_TIMEOUT_MS = 60_000;
 const GATEWAY_BACKGROUND_REMUX_TIMEOUT_MS = 10 * 60_000;
 const GATEWAY_BACKGROUND_REMUX_STALL_TIMEOUT_MS = 30_000;
+const MAX_HLS_VARIANTS_PER_JOB = 4;
 export const GATEWAY_THUMBNAIL_BUCKET_SECONDS = 10;
 export const GATEWAY_MAX_THUMBNAIL_BUCKET = 24 * 60 * 6;
 const jobs = new Map<string, GatewayJob>();
+type GatewayJobRuntime = { torrent: any };
+const gatewayJobRuntimes = new Map<string, GatewayJobRuntime>();
 const mediaProbeCache = createMediaProbeCache({
   ttlMs: 5 * 60_000,
   maxEntries: 16,
@@ -177,6 +202,44 @@ function releaseGatewaySeekableCache(
   }
 }
 
+function hasOtherActiveTorrentReference(job: GatewayJob) {
+  if (!job.infoHash) return false;
+  const infoHash = job.infoHash.toLowerCase();
+  for (const other of jobs.values()) {
+    if (other.id === job.id || other.infoHash?.toLowerCase() !== infoHash) {
+      continue;
+    }
+    if (
+      other.activeStreamCount > 0 ||
+      !["error", "no_peers", "stalled", "cancelled", "expired"].includes(
+        other.state,
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function releaseGatewayJobRuntime(job: GatewayJob) {
+  for (const session of job.hlsSessions?.values() ?? []) session.close();
+  job.hlsSessions?.clear();
+  for (const controller of job.hlsSessionAbortControllers?.values() ?? []) {
+    controller.abort(new Error("Gateway HLS session released"));
+  }
+  job.hlsSessionAbortControllers?.clear();
+  job.hlsSessionPromises?.clear();
+  if (job.activeStreamCount > 0 || hasOtherActiveTorrentReference(job)) {
+    return;
+  }
+
+  const runtime = gatewayJobRuntimes.get(job.id);
+  gatewayJobRuntimes.delete(job.id);
+  if (runtime?.torrent && job.infoHash) {
+    void destroyTorrentByInfoHash(job.infoHash);
+  }
+}
+
 function parseInfoHash(magnet: string) {
   const match = magnet.match(/btih:([^&]+)/i);
   return match ? decodeURIComponent(match[1]).toLowerCase() : undefined;
@@ -184,7 +247,12 @@ function parseInfoHash(magnet: string) {
 
 function sanitizeGatewayError(err: unknown) {
   const message = String((err as Error | undefined)?.message ?? err);
-  if (isTorrentEngineUnavailableError(err)) return message;
+  if (
+    isTorrentEngineUnavailableError(err) ||
+    /^torrent engine unavailable$/i.test(message.trim())
+  ) {
+    return "Torrent engine unavailable";
+  }
   if (message.includes("Torrent peer discovery timeout")) {
     return "No peers found quickly enough to start this source.";
   }
@@ -197,7 +265,32 @@ function sanitizeGatewayError(err: unknown) {
   if (message.includes("Torrent file first byte timeout")) {
     return "Torrent stalled while checking piece availability.";
   }
-  return message || "Gateway job failed";
+  if (/ffmpeg|remux|compatible stream|selected torrent file/i.test(message)) {
+    return "A compatible stream could not be prepared.";
+  }
+  if (/preferred audio|english audio|audio track unavailable/i.test(message)) {
+    return "The preferred audio track is unavailable for this source.";
+  }
+  return "Gateway job failed";
+}
+
+function getGatewayFailureCode(error: unknown): GatewayFailureCode {
+  const message = String((error as Error | undefined)?.message ?? error);
+  const code = (error as { code?: unknown } | undefined)?.code;
+  if (code === "TRACKS_UNAVAILABLE") return "TRACKS_UNAVAILABLE";
+  return isTorrentEngineUnavailableError(error) ||
+    /^torrent engine unavailable$/i.test(message.trim())
+    ? "RUNTIME_UNAVAILABLE"
+    : "INTERNAL";
+}
+
+function getTorrentContainerCategory(filename: string) {
+  const extension = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
+  if (extension === "mkv") return "mkv";
+  if (extension === "mp4" || extension === "m4v") return "mp4";
+  if (extension === "webm") return "webm";
+  if (extension === "mov") return "mov";
+  return "other";
 }
 
 function isRetryableGatewayError(error: unknown) {
@@ -251,6 +344,7 @@ function pruneJobs(now = Date.now()) {
       if (job.progressTimer) clearInterval(job.progressTimer);
       abortGatewayOperations(job, "Gateway job expired");
       releaseGatewaySeekableCache(job, "Gateway job expired");
+      releaseGatewayJobRuntime(job);
       jobs.delete(id);
     }
   }
@@ -268,6 +362,7 @@ function getJobPhase(job: GatewayJob): GatewayJobPhase {
   if (job.state === "expired") return "expired";
   if (job.mode === "remux" && job.remuxStartedAt) return "remuxing";
   if (job.firstByteProbeStartedAt) return "checking_piece_availability";
+  if (job.metadataReceivedAt) return "selecting_file";
   return (job.peerCount ?? 0) > 0 ? "preparing_metadata" : "finding_peers";
 }
 
@@ -298,7 +393,7 @@ function getGatewayReadyTimeoutMs(job: GatewayJob) {
   if (job.mode === "remux" && job.remuxStrategy === "seekable-cache") {
     return GATEWAY_METADATA_TIMEOUT_MS + GATEWAY_REMUX_READY_TIMEOUT_MS;
   }
-  // Direct torrent bridging and progressive fMP4 remuxing only need verified
+  // Direct torrent bridging, HLS, and progressive fMP4 remuxing only need verified
   // piece-zero readability before returning the player URL.
   return GATEWAY_METADATA_TIMEOUT_MS + GATEWAY_FIRST_BYTE_TIMEOUT_MS;
 }
@@ -345,6 +440,15 @@ function getJobMediaMetadata(job: GatewayJob, state: GatewayJobState) {
           ? new Date(job.seekableCacheCompletedAt).toISOString()
           : null,
       },
+    };
+  }
+
+  if (job.remuxStrategy === "hls") {
+    return {
+      remuxed: true,
+      container: "mp4",
+      seekable: state === "ready",
+      cacheStatus: state === "ready" ? "ready" : "pending",
     };
   }
 
@@ -430,12 +534,19 @@ function getBridgeJobFailure(
         message: "The bridge job expired.",
         retryable: false,
       };
-    case "error":
+    case "error": {
+      const code = job.failureCode ?? "INTERNAL";
       return {
-        code: "RUNTIME_UNAVAILABLE",
-        message: "The bridge could not prepare this source.",
-        retryable: job.retryable ?? false,
+        code,
+        message:
+          code === "RUNTIME_UNAVAILABLE"
+            ? "The torrent runtime is unavailable."
+            : code === "TRACKS_UNAVAILABLE"
+              ? "The preferred audio track is unavailable for this source."
+              : "The bridge could not prepare this source.",
+        retryable: job.retryable ?? code === "INTERNAL",
       };
+    }
     default:
       return undefined;
   }
@@ -582,7 +693,7 @@ function getTerminalStreamResponse(job: GatewayJob) {
       status: 503,
       body: {
         error: job.error || "Gateway job failed",
-        retryable: true,
+        retryable: job.retryable ?? true,
         state: "error",
       },
     };
@@ -611,6 +722,9 @@ function addGatewayJobBreadcrumb(
       hasFileIdx: job.fileIdx !== undefined,
       hasHints: Boolean(job.hints),
       peerCount: job.peerCount,
+      requestedDelivery: job.requestedDelivery,
+      delivery: getBridgeDelivery(job),
+      failureCode: job.failureCode,
       retryable: job.retryable,
       activeStreamCount: job.activeStreamCount,
       ...data,
@@ -653,18 +767,26 @@ export function cancelGatewayJob(
   job.abortController = undefined;
   abortGatewayOperations(job, error);
   releaseGatewaySeekableCache(job, error);
+  for (const session of job.hlsSessions?.values() ?? []) session.close(error);
+  job.hlsSessions?.clear();
   job.state = "cancelled";
   job.error = error;
   job.retryable = false;
+  job.failureCode = undefined;
   job.updatedAt = Date.now();
   addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "warning");
-  if (job.activeStreamCount === 0) {
-    void destroyTorrentByInfoHash(job.infoHash);
-  }
+  releaseGatewayJobRuntime(job);
 }
 
 function isGatewayJobCancelled(job: GatewayJob) {
   return job.state === "cancelled";
+}
+
+function markGatewayMetadataReceived(job: GatewayJob) {
+  if (job.metadataReceivedAt) return;
+  job.metadataReceivedAt = Date.now();
+  job.updatedAt = job.metadataReceivedAt;
+  addGatewayJobBreadcrumb(job, "gateway.metadata_received", "info");
 }
 
 function getRequestSignature(req: Request) {
@@ -677,6 +799,7 @@ function trackGatewayStream(job: GatewayJob, res: Response) {
   job.activeStreamCount += 1;
   job.lastStreamAccessAt = Date.now();
   job.updatedAt = Date.now();
+  addGatewayJobBreadcrumb(job, "gateway.stream_consumer_attached", "info");
 
   let ended = false;
   const endTracking = () => {
@@ -685,6 +808,13 @@ function trackGatewayStream(job: GatewayJob, res: Response) {
     job.activeStreamCount = Math.max(0, job.activeStreamCount - 1);
     job.lastStreamAccessAt = Date.now();
     job.updatedAt = Date.now();
+    if (
+      ["error", "no_peers", "stalled", "cancelled", "expired"].includes(
+        job.state,
+      )
+    ) {
+      releaseGatewayJobRuntime(job);
+    }
   };
 
   res.once("finish", endTracking);
@@ -692,14 +822,52 @@ function trackGatewayStream(job: GatewayJob, res: Response) {
 }
 
 function trackGatewayJobProgress(job: GatewayJob, torrent: any) {
-  job.peerCount = torrent?.numPeers ?? 0;
+  const readPeerCount = () => {
+    const count = Number(torrent?.numPeers);
+    return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+  };
+  const recordPeerCount = () => {
+    const peerCount = readPeerCount();
+    const now = Date.now();
+    job.peerCount = peerCount;
+    if (
+      job.lastPeerCountLogAt === undefined ||
+      (now - job.lastPeerCountLogAt >= GATEWAY_PEER_LOG_INTERVAL_MS &&
+        peerCount !== job.lastLoggedPeerCount)
+    ) {
+      const previousPeerCount = job.lastLoggedPeerCount;
+      job.lastPeerCountLogAt = now;
+      job.lastLoggedPeerCount = peerCount;
+      addGatewayJobBreadcrumb(
+        job,
+        previousPeerCount === undefined
+          ? "gateway.peer_count_observed"
+          : "gateway.peer_count_changed",
+        "debug",
+        {
+          previousPeerCount,
+          peerCount,
+          direction:
+            previousPeerCount === undefined
+              ? "initial"
+              : peerCount > previousPeerCount
+                ? "up"
+                : peerCount < previousPeerCount
+                  ? "down"
+                  : "unchanged",
+        },
+      );
+    }
+  };
+
+  recordPeerCount();
   job.progressTimer = setInterval(() => {
     if (job.state === "cancelled") {
       if (job.progressTimer) clearInterval(job.progressTimer);
       job.progressTimer = undefined;
       return;
     }
-    job.peerCount = torrent?.numPeers ?? job.peerCount ?? 0;
+    recordPeerCount();
     job.updatedAt = Date.now();
   }, 1_000);
 
@@ -784,6 +952,7 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
     await prepareSeekableRemux(torrent, {
       fileIdx: job.fileIdx,
       hints: job.hints,
+      audioTrackId: job.audioTrackId,
       signal: abortController.signal,
       remuxTimeoutMs: GATEWAY_BACKGROUND_REMUX_TIMEOUT_MS,
       stallTimeoutMs: GATEWAY_BACKGROUND_REMUX_STALL_TIMEOUT_MS,
@@ -818,6 +987,7 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
       const release = retainSeekableRemux(torrent, {
         fileIdx: job.fileIdx,
         hints: job.hints,
+        audioTrackId: job.audioTrackId,
       });
       if (!release) {
         job.seekableCacheStatus = "unavailable";
@@ -882,6 +1052,7 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
   let stopProgressTracking: (() => void) | null = null;
   try {
     const torrent = preparedTorrent ?? (await prepareTorrent(job.magnet));
+    gatewayJobRuntimes.set(job.id, { torrent });
     if (isGatewayJobCancelled(job)) return;
 
     job.infoHash = torrent.infoHash || job.infoHash;
@@ -891,11 +1062,13 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
 
     const metadataAbortController = new AbortController();
     job.abortController = metadataAbortController;
+    addGatewayJobBreadcrumb(job, "gateway.metadata_wait_started", "info");
     try {
       await ensureTorrentReady(torrent, GATEWAY_METADATA_TIMEOUT_MS, {
         signal: metadataAbortController.signal,
         initialPeerTimeoutMs: GATEWAY_PEER_DISCOVERY_TIMEOUT_MS,
         metadataTimeoutAfterPeerMs: GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS,
+        onMetadata: () => markGatewayMetadataReceived(job),
       });
     } finally {
       if (job.abortController === metadataAbortController) {
@@ -921,11 +1094,72 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     // Resolve hints once and make the resulting index authoritative for every
     // later stream, probe, subtitle, thumbnail, and handoff operation.
     job.fileIdx = selectedFileIndex;
-    if (job.mode !== "remux" && shouldRemuxTorrentFile(selectedFile.name)) {
+    const selectedContainer = getTorrentContainerCategory(selectedFile.name);
+    addGatewayJobBreadcrumb(job, "gateway.selected_container", "info", {
+      selectedContainer,
+    });
+
+    // FFprobe is authoritative for Play audio, including sources whose
+    // provider label says MP4 but whose default track is Spanish. A direct
+    // range response can remain cheap only when its current default already
+    // matches the required English main track.
+    const audioTracksForSelection = await getGatewayTrackRows(job, torrent);
+    const availableAudioTracks = audioTracksForSelection.tracks.filter(
+      (track) => track.kind === "audio" && track.supported,
+    );
+    if (availableAudioTracks.length === 0) {
+      throw new GatewayTracksUnavailableError();
+    }
+    const selectedAudioTrackId =
+      selectPreferredAudioTrack(availableAudioTracks);
+    if (!selectedAudioTrackId) {
+      throw new GatewayTracksUnavailableError();
+    }
+    job.audioTrackId = selectedAudioTrackId;
+    addGatewayJobBreadcrumb(job, "gateway.audio_track_selected", "info", {
+      language: "en",
+      selection: "preferred",
+    });
+
+    const sourceDefaultAudioTrack =
+      availableAudioTracks.find((track) => track.default) ??
+      availableAudioTracks[0];
+    const directAudioIsCompatible =
+      availableAudioTracks.length === 1 ||
+      sourceDefaultAudioTrack?.id === selectedAudioTrackId;
+    const needsContainerRemux = shouldRemuxTorrentFile(selectedFile.name);
+    const needsAudioRemux = !directAudioIsCompatible;
+
+    if (job.mode !== "remux" && (needsContainerRemux || needsAudioRemux)) {
+      const previousDelivery = getBridgeDelivery(job);
       job.mode = "remux";
+      job.remuxStrategy =
+        job.requestedDelivery === "hls" ? "hls" : "progressive-fmp4";
       job.updatedAt = Date.now();
-      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info", {
-        remuxDetectedFromSelectedFile: true,
+      addGatewayJobBreadcrumb(job, "gateway.delivery_promoted", "info", {
+        fromDelivery: previousDelivery,
+        toDelivery: job.remuxStrategy,
+        selectedContainer,
+      });
+    }
+
+    // Runtime probing can prove that a planner's unknown/mislabeled candidate
+    // is already a browser-safe MP4. Do not pay for HLS/FFmpeg in that case;
+    // only keep remuxing when it is still needed to select English audio.
+    if (
+      job.mode === "remux" &&
+      selectedContainer === "mp4" &&
+      !needsAudioRemux &&
+      job.requestedDelivery !== "seekable-cache" &&
+      job.remuxStrategy !== "seekable-cache"
+    ) {
+      const previousDelivery = getBridgeDelivery(job);
+      job.mode = "bridge";
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.delivery_downgraded", "info", {
+        fromDelivery: previousDelivery,
+        toDelivery: "range-http",
+        selectedContainer,
       });
     }
 
@@ -938,18 +1172,83 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
       const abortController = new AbortController();
       job.abortController = abortController;
       try {
-        if (job.remuxStrategy === "progressive-fmp4") {
+        if (
+          job.remuxStrategy === "progressive-fmp4" ||
+          job.remuxStrategy === "hls"
+        ) {
+          const { tracks } = await getGatewayTrackRows(job, torrent);
+          const availableAudioTracks = tracks.filter(
+            (track) => track.kind === "audio" && track.supported,
+          );
+          if (availableAudioTracks.length === 0) {
+            throw new GatewayTracksUnavailableError();
+          }
+          const selectedAudioTrackId =
+            job.audioTrackId ?? selectPreferredAudioTrack(availableAudioTracks);
+          if (!selectedAudioTrackId) {
+            throw new GatewayTracksUnavailableError();
+          }
+          job.audioTrackId = selectedAudioTrackId;
+          addGatewayJobBreadcrumb(job, "gateway.audio_track_selected", "info", {
+            language: "en",
+            selection: "preferred",
+          });
+
           // Primary Play remuxes are fragmented MP4 streams. Proving the
           // first torrent byte is readable is the last preflight we need;
           // FFmpeg starts when the player connects, so we do not wait for the
           // whole movie just to relocate an MP4 index.
           job.firstByteProbeStartedAt = job.remuxStartedAt;
-          await waitForTorrentFileFirstBytes(torrent, {
+          addGatewayJobBreadcrumb(
+            job,
+            "gateway.first_byte_probe_started",
+            "info",
+          );
+          const firstByte = await waitForTorrentFileFirstBytes(torrent, {
             fileIdx: job.fileIdx,
             hints: job.hints,
             signal: abortController.signal,
             timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
           });
+          addGatewayJobBreadcrumb(
+            job,
+            "gateway.first_byte_probe_ready",
+            "info",
+            {
+              bytesRead: firstByte.bytesRead,
+            },
+          );
+          if (job.remuxStrategy === "hls") {
+            const session = await createHlsRemuxSession(selectedFile, {
+              signal: abortController.signal,
+              firstFragmentTimeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
+              audioTrackId: job.audioTrackId,
+              onFirstFragment: () => {
+                addGatewayJobBreadcrumb(
+                  job,
+                  "gateway.first_fmp4_fragment",
+                  "info",
+                );
+              },
+            });
+            job.hlsSessions = job.hlsSessions ?? new Map();
+            job.hlsSessions.set(job.audioTrackId ?? "default", session);
+            try {
+              await session.waitUntilReady(abortController.signal);
+              addGatewayJobBreadcrumb(
+                job,
+                "gateway.hls_manifest_ready",
+                "info",
+                {
+                  ...session.getPublishedWindow(),
+                },
+              );
+            } catch (error) {
+              session.close();
+              job.hlsSessions.delete(job.audioTrackId ?? "default");
+              throw error;
+            }
+          }
         } else {
           await prepareSeekableRemux(torrent, {
             fileIdx: job.fileIdx,
@@ -977,15 +1276,19 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
       job.retryable = true;
       job.updatedAt = Date.now();
       addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
+      addGatewayJobBreadcrumb(job, "gateway.first_byte_probe_started", "info");
 
       const abortController = new AbortController();
       job.abortController = abortController;
       try {
-        await waitForTorrentFileFirstBytes(torrent, {
+        const firstByte = await waitForTorrentFileFirstBytes(torrent, {
           fileIdx: job.fileIdx,
           hints: job.hints,
           signal: abortController.signal,
           timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
+        });
+        addGatewayJobBreadcrumb(job, "gateway.first_byte_probe_ready", "info", {
+          bytesRead: firstByte.bytesRead,
         });
       } finally {
         if (job.abortController === abortController) {
@@ -1007,14 +1310,17 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
       : isStalledGatewayError(err)
         ? "stalled"
         : "error";
-    job.retryable = isRetryableGatewayError(err);
+    job.failureCode =
+      job.state === "error" ? getGatewayFailureCode(err) : undefined;
+    job.retryable =
+      job.state === "error"
+        ? job.failureCode === "INTERNAL"
+        : isRetryableGatewayError(err);
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
       error: job.error,
     });
-    if (job.state === "no_peers" || job.state === "stalled") {
-      void destroyTorrentByInfoHash(job.infoHash);
-    }
+    releaseGatewayJobRuntime(job);
   } finally {
     stopProgressTracking?.();
   }
@@ -1034,7 +1340,9 @@ function parseJobRequest(req: Request) {
   const remuxStrategy: GatewayRemuxStrategy =
     req.body?.remuxStrategy === "progressive-fmp4"
       ? "progressive-fmp4"
-      : "seekable-cache";
+      : req.body?.remuxStrategy === "hls"
+        ? "hls"
+        : "seekable-cache";
   const hints = parseFileSelectionHints(req.body);
 
   return {
@@ -1066,9 +1374,13 @@ export async function createGatewayJob(
   };
   jobs.set(job.id, job);
   addGatewayJobBreadcrumb(job, "gateway.job_created", "info");
+  addGatewayJobBreadcrumb(job, "gateway.delivery_requested", "info", {
+    delivery: input.requestedDelivery ?? getBridgeDelivery(job),
+  });
 
   try {
     const torrent = await prepareTorrent(job.magnet);
+    gatewayJobRuntimes.set(job.id, { torrent });
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? 0;
     job.updatedAt = Date.now();
@@ -1079,6 +1391,7 @@ export async function createGatewayJob(
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
       error: sanitizeGatewayError(error),
     });
+    gatewayJobRuntimes.delete(job.id);
     jobs.delete(job.id);
     throw error;
   }
@@ -1130,13 +1443,16 @@ function subtitleFormatFromCodec(codec: string) {
   return "unknown" as const;
 }
 
-async function getGatewaySelectedMedia(job: GatewayJob) {
-  if (job.state !== "ready" || !Number.isInteger(job.fileIdx)) {
+async function getGatewaySelectedMedia(job: GatewayJob, runtimeTorrent?: any) {
+  if (
+    (job.state !== "ready" && job.state !== "preparing") ||
+    !Number.isInteger(job.fileIdx)
+  ) {
     throw new Error("Gateway media is not ready");
   }
   const selectedFileIndex = job.fileIdx as number;
 
-  const torrent = await prepareTorrent(job.magnet);
+  const torrent = runtimeTorrent ?? (await prepareTorrent(job.magnet));
   if (isGatewayJobCancelled(job)) {
     throw new Error("Gateway job cancelled");
   }
@@ -1156,11 +1472,10 @@ async function getGatewaySelectedMedia(job: GatewayJob) {
   };
 }
 
-export async function buildGatewayTrackCatalog(job: GatewayJob) {
+async function getGatewayTrackRows(job: GatewayJob, runtimeTorrent?: any) {
   const { torrent, selectedFileIndex, streamUrl } =
-    await getGatewaySelectedMedia(job);
+    await getGatewaySelectedMedia(job, runtimeTorrent);
   const cacheKey = `${job.id}:${selectedFileIndex}`;
-
   const tracks = await mediaProbeCache.getOrCreate(cacheKey, async () => {
     const controller = new AbortController();
     job.operationAbortControllers.add(controller);
@@ -1176,6 +1491,317 @@ export async function buildGatewayTrackCatalog(job: GatewayJob) {
   if (isGatewayJobCancelled(job)) {
     throw new Error("Gateway job cancelled");
   }
+
+  return { torrent, selectedFileIndex, tracks };
+}
+
+export class GatewayTracksUnavailableError extends Error {
+  readonly code = "TRACKS_UNAVAILABLE" as const;
+
+  constructor() {
+    super("Preferred audio track is unavailable for this source.");
+    this.name = "GatewayTracksUnavailableError";
+  }
+}
+
+export function selectPreferredAudioTrack(
+  tracks: Array<{
+    id: string;
+    kind: string;
+    language: string;
+    title?: string;
+    default: boolean;
+    audioDescription: boolean;
+    commentary: boolean;
+    supported: boolean;
+  }>,
+) {
+  const isEnglish = (track: { language: string; title?: string }) => {
+    if (track.language.toLowerCase() === "en") return true;
+    if (!track.title) return false;
+    const title = track.title
+      .toLowerCase()
+      .replace(/[()[\],:_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!title.startsWith("english")) return false;
+    if (
+      /\b(commentary|descriptive|description|audio description)\b/.test(title)
+    ) {
+      return false;
+    }
+    return /^english(?:\s+(?:original|default|stereo|mono|aac|ac3|dts|atmos|\d(?:\.\d)?))*$/i.test(
+      title,
+    );
+  };
+  const audioTracks = tracks.filter(
+    (track) => track.kind === "audio" && track.supported,
+  );
+  const englishMain = audioTracks.find(
+    (track) => isEnglish(track) && !track.audioDescription && !track.commentary,
+  );
+  // Never silently fall through to commentary/descriptive or unknown audio.
+  // The caller classifies an absent preferred track as TRACKS_UNAVAILABLE so
+  // PlaybackSession can try another candidate.
+  return englishMain?.id;
+}
+
+function preferredAudioTrackId(
+  tracks: Array<{
+    id: string;
+    kind: string;
+    language: string;
+    default: boolean;
+    audioDescription: boolean;
+    commentary: boolean;
+    supported: boolean;
+  }>,
+) {
+  return selectPreferredAudioTrack(tracks);
+}
+
+function requestedAudioTrackId(req: Request) {
+  const raw = Array.isArray(req.query.audioTrack)
+    ? req.query.audioTrack[0]
+    : req.query.audioTrack;
+  if (raw === undefined) return { present: false as const, id: undefined };
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
+    return { present: true as const, id: undefined };
+  }
+  return { present: true as const, id: `audio:${raw}` };
+}
+
+function signedHlsSegmentQuery(req: Request) {
+  const expires = Array.isArray(req.query.expires)
+    ? req.query.expires[0]
+    : req.query.expires;
+  const signature = Array.isArray(req.query.signature)
+    ? req.query.signature[0]
+    : req.query.signature;
+  if (typeof expires !== "string" || typeof signature !== "string") {
+    return "";
+  }
+  const audio = requestedAudioTrackId(req);
+  const audioQuery = audio.id
+    ? `&audioTrack=${encodeURIComponent(audio.id.replace(/^audio:/, ""))}`
+    : "";
+  return `?expires=${encodeURIComponent(expires)}&signature=${encodeURIComponent(signature)}${audioQuery}`;
+}
+
+function rewriteHlsManifest(job: GatewayJob, req: Request, manifest: string) {
+  const query = signedHlsSegmentQuery(req);
+  if (!query) throw new Error("HLS stream signature is unavailable.");
+  const segmentPath = (name: string) =>
+    `/api/bridge/v1/jobs/${encodeURIComponent(job.id)}/segments/${encodeURIComponent(name)}${query}`;
+
+  return manifest
+    .split(/(\r?\n)/)
+    .map((line) => {
+      const trimmed = line.trim();
+      if (HLS_MANIFEST_URI.test(trimmed)) {
+        return line.replace(
+          /URI="([^"]+)"/,
+          (_match, name: string) => `URI="${segmentPath(name)}"`,
+        );
+      }
+      if (trimmed && !trimmed.startsWith("#")) {
+        return segmentPath(trimmed);
+      }
+      return line;
+    })
+    .join("");
+}
+
+const HLS_MANIFEST_URI = /URI="(?:init\.mp4|segment-\d{6}\.m4s)"/;
+
+async function getOrCreateHlsSession(
+  job: GatewayJob,
+  torrent: any,
+  audioTrackId: string | undefined,
+  signal?: AbortSignal,
+) {
+  const key = audioTrackId ?? "default";
+  job.hlsSessions = job.hlsSessions ?? new Map();
+  const hlsSessions = job.hlsSessions;
+  job.hlsSessionPromises = job.hlsSessionPromises ?? new Map();
+  const existing = job.hlsSessions.get(key);
+  if (existing) return existing;
+  const inFlight = job.hlsSessionPromises.get(key);
+  if (inFlight) return inFlight;
+  if (
+    job.hlsSessions.size + job.hlsSessionPromises.size >=
+    MAX_HLS_VARIANTS_PER_JOB
+  ) {
+    throw new Error("Too many HLS audio variants are active for this job.");
+  }
+
+  const sessionAbortController = new AbortController();
+  const abortFromCaller = () =>
+    sessionAbortController.abort(
+      signal?.reason ?? new Error("HLS session request cancelled"),
+    );
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
+  job.hlsSessionAbortControllers = job.hlsSessionAbortControllers ?? new Map();
+  job.hlsSessionAbortControllers.set(key, sessionAbortController);
+
+  const creation = (async () => {
+    const selectedFile = getSelectedFile(torrent, job.fileIdx, job.hints);
+    const session = await createHlsRemuxSession(selectedFile, {
+      signal: sessionAbortController.signal,
+      audioTrackId,
+      firstFragmentTimeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
+      onFirstFragment: () => {
+        addGatewayJobBreadcrumb(job, "gateway.first_fmp4_fragment", "info");
+      },
+    });
+    try {
+      await session.waitUntilReady(sessionAbortController.signal);
+      if (isGatewayJobCancelled(job)) {
+        session.close("Gateway job cancelled");
+        throw new Error("Gateway HLS session was cancelled.");
+      }
+      // A successful audio replacement supersedes the previous variant. Keep
+      // the old process alive until this one has a first fragment, then close
+      // it so one player cannot accumulate FFmpeg jobs indefinitely.
+      for (const [otherKey, otherSession] of hlsSessions) {
+        if (otherKey === key) continue;
+        otherSession.close("HLS audio variant replaced");
+        hlsSessions.delete(otherKey);
+      }
+      hlsSessions.set(key, session);
+      addGatewayJobBreadcrumb(job, "gateway.hls_manifest_ready", "info", {
+        ...session.getPublishedWindow(),
+      });
+      return session;
+    } catch (error) {
+      session.close();
+      throw error;
+    }
+  })();
+  job.hlsSessionPromises.set(key, creation);
+  try {
+    return await creation;
+  } finally {
+    signal?.removeEventListener("abort", abortFromCaller);
+    if (job.hlsSessionAbortControllers?.get(key) === sessionAbortController) {
+      job.hlsSessionAbortControllers.delete(key);
+    }
+    if (job.hlsSessionPromises.get(key) === creation) {
+      job.hlsSessionPromises.delete(key);
+    }
+  }
+}
+
+/**
+ * Serves only the short-lived, job-owned HLS objects named by a rewritten
+ * manifest. The signed stream URL remains the authority; segment names and
+ * audio variants are validated again so a caller cannot turn this into a
+ * filesystem or cross-job read primitive.
+ */
+export async function serveGatewayJobSegment(
+  req: Request<{ id: string; segment: string }>,
+  res: Response,
+) {
+  pruneJobs();
+  const job = jobs.get(req.params.id);
+  if (!job) {
+    return res.status(404).json({ error: "Gateway job not found" });
+  }
+
+  const signature = validateGatewayStreamSignature(job.id, req.query, {
+    lastStreamAccessAt: job.lastStreamAccessAt,
+    activeSignature: job.activeStreamSignature,
+  });
+  if (!signature.ok) {
+    return res.status(403).json({
+      error:
+        signature.reason === "expired"
+          ? "Gateway stream URL expired"
+          : "Gateway stream URL signature required",
+    });
+  }
+  if (job.remuxStrategy !== "hls" || job.state !== "ready") {
+    return res.status(404).json({ error: "HLS media is unavailable" });
+  }
+
+  const requestedAudio = requestedAudioTrackId(req);
+  if (requestedAudio.present && !requestedAudio.id) {
+    return res
+      .status(400)
+      .json({ error: "The requested audio track is invalid." });
+  }
+  const audioTrackId = requestedAudio.id ?? job.audioTrackId;
+  const runtime = gatewayJobRuntimes.get(job.id);
+  if (!runtime?.torrent) {
+    return res.status(503).json({
+      error: "The stream runtime is unavailable.",
+      retryable: true,
+    });
+  }
+
+  try {
+    if (audioTrackId) {
+      const { tracks } = await getGatewayTrackRows(job, runtime.torrent);
+      const audioTrackExists = tracks.some(
+        (track) =>
+          track.kind === "audio" &&
+          track.supported &&
+          track.id === audioTrackId,
+      );
+      if (!audioTrackExists) {
+        return res.status(404).json({
+          error: "The requested HLS audio variant is unavailable.",
+          retryable: false,
+        });
+      }
+    }
+    const session = await getOrCreateHlsSession(
+      job,
+      runtime.torrent,
+      audioTrackId,
+    );
+    const segmentName = decodeURIComponent(req.params.segment);
+    const bytes = await session.readSegment(segmentName);
+    job.lastStreamAccessAt = Date.now();
+    job.updatedAt = job.lastStreamAccessAt;
+    res.set({
+      "Content-Type":
+        segmentName === "init.mp4" ? "video/mp4" : "video/iso.segment",
+      "Content-Length": String(bytes.byteLength),
+      "Cache-Control": "no-store",
+      "Accept-Ranges": "none",
+      "X-Content-Type-Options": "nosniff",
+      "Access-Control-Allow-Origin": "*",
+    });
+    return res.status(200).send(bytes);
+  } catch {
+    if (getGatewayJob(job.id)?.state === "cancelled") {
+      return res.status(410).json({
+        error: "The bridge job was cancelled.",
+        retryable: false,
+      });
+    }
+    return res.status(404).json({
+      error: "The requested HLS segment is unavailable.",
+      retryable: true,
+    });
+  }
+}
+
+export async function buildGatewayTrackCatalog(job: GatewayJob) {
+  const {
+    torrent,
+    selectedFileIndex,
+    tracks: probedTracks,
+  } = await getGatewayTrackRows(job);
+  const effectiveAudioTrackId =
+    job.audioTrackId ?? preferredAudioTrackId(probedTracks);
+  const tracks = probedTracks.map((track) =>
+    track.kind === "audio" && track.supported
+      ? { ...track, default: track.id === effectiveAudioTrackId }
+      : track,
+  );
 
   const externalSubtitles = discoverExternalSubtitleCandidates(
     torrent.files || [],
@@ -1251,6 +1877,7 @@ export async function getGatewayThumbnail(
   const source = getRetainedSeekableRemuxSource(torrent, {
     fileIdx: job.fileIdx,
     hints: job.hints,
+    audioTrackId: job.audioTrackId,
   });
   if (!source) return undefined;
 
@@ -1507,32 +2134,47 @@ export async function serveGatewayJobStream(
     });
   }
 
+  const audioSelection = requestedAudioTrackId(req);
+  if (audioSelection.present && !audioSelection.id) {
+    return res.status(400).json({
+      error: "The requested audio track is invalid.",
+      retryable: false,
+    });
+  }
+
   trackGatewayStream(job, res);
 
   try {
-    let torrent: any;
-    const readinessAbortController = new AbortController();
-    job.abortController = readinessAbortController;
-    try {
-      torrent = await prepareTorrent(job.magnet);
-      if (isGatewayJobCancelled(job)) {
-        return res.status(410).json({
-          error: job.error || "Gateway job cancelled",
-          retryable: false,
-        });
-      }
-      job.infoHash = torrent.infoHash || job.infoHash;
-      job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
-      job.updatedAt = Date.now();
+    let torrent = gatewayJobRuntimes.get(job.id)?.torrent;
+    if (!torrent) {
+      // This is only a compatibility path for jobs created outside the normal
+      // owner. A ready job created through the API always reuses the runtime
+      // that performed its metadata/first-byte preflight above.
+      const readinessAbortController = new AbortController();
+      job.abortController = readinessAbortController;
+      try {
+        torrent = await prepareTorrent(job.magnet);
+        gatewayJobRuntimes.set(job.id, { torrent });
+        if (isGatewayJobCancelled(job)) {
+          return res.status(410).json({
+            error: job.error || "Gateway job cancelled",
+            retryable: false,
+          });
+        }
+        job.infoHash = torrent.infoHash || job.infoHash;
+        job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
+        job.updatedAt = Date.now();
 
-      await ensureTorrentReady(torrent, GATEWAY_METADATA_TIMEOUT_MS, {
-        signal: readinessAbortController.signal,
-        initialPeerTimeoutMs: GATEWAY_PEER_DISCOVERY_TIMEOUT_MS,
-        metadataTimeoutAfterPeerMs: GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS,
-      });
-    } finally {
-      if (job.abortController === readinessAbortController) {
-        job.abortController = undefined;
+        await ensureTorrentReady(torrent, GATEWAY_METADATA_TIMEOUT_MS, {
+          signal: readinessAbortController.signal,
+          initialPeerTimeoutMs: GATEWAY_PEER_DISCOVERY_TIMEOUT_MS,
+          metadataTimeoutAfterPeerMs: GATEWAY_METADATA_AFTER_PEER_TIMEOUT_MS,
+          onMetadata: () => markGatewayMetadataReceived(job),
+        });
+      } finally {
+        if (job.abortController === readinessAbortController) {
+          job.abortController = undefined;
+        }
       }
     }
     if (isGatewayJobCancelled(job)) {
@@ -1541,13 +2183,83 @@ export async function serveGatewayJobStream(
         retryable: false,
       });
     }
+
+    let audioTrackId = audioSelection.id;
+    if (
+      job.mode === "remux" &&
+      (job.remuxStrategy === "progressive-fmp4" || job.remuxStrategy === "hls")
+    ) {
+      try {
+        const { tracks } = await getGatewayTrackRows(job, torrent);
+        const availableAudioTracks = tracks.filter(
+          (track) => track.kind === "audio" && track.supported,
+        );
+        if (
+          audioTrackId &&
+          !availableAudioTracks.some((track) => track.id === audioTrackId)
+        ) {
+          return res.status(400).json({
+            error: "The requested audio track is unavailable.",
+            retryable: false,
+          });
+        }
+
+        if (!audioTrackId && availableAudioTracks.length === 0) {
+          throw new GatewayTracksUnavailableError();
+        }
+
+        if (!audioTrackId && !job.audioTrackId) {
+          job.audioTrackId = selectPreferredAudioTrack(availableAudioTracks);
+          if (!job.audioTrackId) {
+            throw new GatewayTracksUnavailableError();
+          }
+          const selectedTrack = availableAudioTracks.find(
+            (track) => track.id === job.audioTrackId,
+          );
+          addGatewayJobBreadcrumb(job, "gateway.audio_track_selected", "info", {
+            language: selectedTrack?.language,
+            selection: selectedTrack ? "preferred" : "source-default",
+          });
+        }
+        audioTrackId = audioTrackId ?? job.audioTrackId;
+      } catch (error) {
+        if (error instanceof GatewayTracksUnavailableError) throw error;
+        // Track probing is required for the English-audio policy. A probe
+        // failure is a candidate-local INTERNAL error, not permission to
+        // start an unverified default (which could be Spanish).
+        addGatewayJobBreadcrumb(
+          job,
+          "gateway.audio_track_selection_unavailable",
+          "warning",
+          { reason: "probe_failed" },
+        );
+        throw error;
+      }
+    }
     if (job.mode === "remux") {
+      if (job.remuxStrategy === "hls") {
+        const hlsSession = await getOrCreateHlsSession(
+          job,
+          torrent,
+          audioTrackId ?? job.audioTrackId,
+        );
+        const manifest = await hlsSession.readManifest();
+        res.set({
+          "Content-Type": "application/vnd.apple.mpegurl",
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Expose-Headers": "Content-Type",
+        });
+        return res.status(200).send(rewriteHlsManifest(job, req, manifest));
+      }
+
       const abortController = new AbortController();
       job.abortController = abortController;
 
       try {
         const serveSeekableCache =
           job.remuxStrategy === "progressive-fmp4" &&
+          !audioSelection.id &&
           job.seekableCacheStatus === "ready";
         const serving = serveTorrentFile(req, res, torrent, {
           fileIdx: job.fileIdx,
@@ -1561,26 +2273,63 @@ export async function serveGatewayJobStream(
             : job.remuxStrategy,
           signal: abortController.signal,
           remuxTimeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
+          onFirstFragment: () => {
+            addGatewayJobBreadcrumb(job, "gateway.first_fmp4_fragment", "info");
+          },
+          onError: (error) => {
+            if (isGatewayJobCancelled(job)) return;
+            job.state = "error";
+            job.error = sanitizeGatewayError(error);
+            job.failureCode = getGatewayFailureCode(error);
+            job.retryable = job.failureCode === "INTERNAL";
+            job.updatedAt = Date.now();
+            addGatewayJobBreadcrumb(
+              job,
+              "gateway.progressive_remux_failed",
+              "error",
+              { error: job.error },
+            );
+          },
+          audioTrackId,
         });
         // Do not spend CPU/disk on a cache while a job merely warms. A real
         // GET consumer has now been counted by `trackGatewayStream`; start one
         // background cache only after the live delivery has been accepted.
         if (req.method === "GET" && !serveSeekableCache) {
+          addGatewayJobBreadcrumb(
+            job,
+            "gateway.cache_handoff_started",
+            "info",
+            {
+              handoff: "background-seekable-cache",
+            },
+          );
           startGatewaySeekableCachePreparation(job, torrent);
         }
         const result = await serving;
-        if (!isGatewayJobCancelled(job) && res.statusCode < 400) {
+        const stateAfterServing = getEffectiveJobState(job);
+        if (
+          !isGatewayJobCancelled(job) &&
+          stateAfterServing !== "error" &&
+          res.statusCode < 400
+        ) {
           job.state = "ready";
           job.retryable = false;
           addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
-        } else if (!isGatewayJobCancelled(job) && res.statusCode >= 400) {
+        } else if (
+          !isGatewayJobCancelled(job) &&
+          (stateAfterServing === "error" || res.statusCode >= 400)
+        ) {
           releaseGatewaySeekableCache(job, "Primary playback stream failed");
-          job.state = "error";
-          job.error = "Remux preparation failed.";
-          job.retryable = true;
-          addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
-            error: job.error,
-          });
+          if (stateAfterServing !== "error") {
+            job.state = "error";
+            job.error = "A compatible stream could not be prepared.";
+            job.retryable = true;
+            job.failureCode = "INTERNAL";
+            addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
+              error: job.error,
+            });
+          }
         }
         job.updatedAt = Date.now();
         return result;
@@ -1595,12 +2344,14 @@ export async function serveGatewayJobStream(
     job.infoHash = torrent.infoHash || job.infoHash;
     job.peerCount = torrent.numPeers ?? job.peerCount ?? 0;
     job.retryable = false;
+    job.failureCode = undefined;
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
 
     return serveTorrentFile(req, res, torrent, {
       fileIdx: job.fileIdx,
       hints: job.hints,
+      audioTrackId: job.audioTrackId,
     });
   } catch (err) {
     const terminalResponse = getTerminalStreamResponse(job);
@@ -1614,13 +2365,15 @@ export async function serveGatewayJobStream(
     releaseGatewaySeekableCache(job, "Primary playback stream failed");
     job.state = "error";
     job.error = error;
-    job.retryable = isRetryableGatewayError(err);
+    job.failureCode = getGatewayFailureCode(err);
+    job.retryable =
+      job.failureCode === "INTERNAL" || isRetryableGatewayError(err);
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
       error,
     });
     if (!res.headersSent) {
-      return res.status(503).json({ error, retryable: true });
+      return res.status(503).json({ error, retryable: job.retryable });
     }
   }
 }
@@ -1632,8 +2385,15 @@ export function __resetGatewayJobsForTests() {
     if (job.progressTimer) clearInterval(job.progressTimer);
     abortGatewayOperations(job, "Gateway jobs reset for tests");
     releaseGatewaySeekableCache(job, "Gateway jobs reset for tests");
+    for (const session of job.hlsSessions?.values() ?? []) {
+      session.close("Gateway jobs reset for tests");
+    }
+    job.hlsSessions?.clear();
+    job.activeStreamCount = 0;
+    releaseGatewayJobRuntime(job);
   }
   jobs.clear();
+  gatewayJobRuntimes.clear();
   mediaProbeCache.clear();
   subtitleDocumentCache.clear();
   seekThumbnailService.clear();

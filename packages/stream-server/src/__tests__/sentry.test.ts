@@ -1,5 +1,24 @@
-import { describe, expect, it } from "vitest";
-import { createStreamServerSentryOptionsFromInput } from "../sentry.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  addStreamServerBreadcrumb,
+  createStreamServerSentryOptionsFromInput,
+} from "../sentry.js";
+
+const originalNodeEnv = process.env.NODE_ENV;
+const originalConsoleBreadcrumbFlag =
+  process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS;
+
+afterEach(() => {
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalNodeEnv;
+  if (originalConsoleBreadcrumbFlag === undefined) {
+    delete process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS;
+  } else {
+    process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS =
+      originalConsoleBreadcrumbFlag;
+  }
+  vi.restoreAllMocks();
+});
 
 describe("stream-server Sentry config", () => {
   it("is disabled without a DSN and in tests", () => {
@@ -114,5 +133,29 @@ describe("stream-server Sentry config", () => {
     expect(String(breadcrumb?.data?.url)).toContain(
       "/api/gateway/jobs/[job]/stream",
     );
+  });
+
+  it("writes only sanitized breadcrumbs to the development console", () => {
+    process.env.NODE_ENV = "development";
+    delete process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS;
+    const consoleInfo = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+
+    addStreamServerBreadcrumb({
+      category: "playback",
+      message: "gateway job ready",
+      data: {
+        attemptId: "attempt-1",
+        gatewayJobId: "job-1",
+        url: "http://127.0.0.1:11470/api/gateway/jobs/job-1/stream",
+        magnet: "magnet:?xt=urn:btih:secret-hash",
+      },
+    });
+
+    const output = String(consoleInfo.mock.calls[0]?.[0]);
+    expect(output).toContain("attempt-1");
+    expect(output).not.toContain("127.0.0.1:11470");
+    expect(output).not.toContain("secret-hash");
   });
 });

@@ -57,6 +57,14 @@ function sanitizeBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
   return redactSensitiveValue(breadcrumb) as Sentry.Breadcrumb;
 }
 
+function shouldLogBreadcrumbsToConsole() {
+  const nodeEnv = String(process.env.NODE_ENV || "").toLowerCase();
+  return (
+    nodeEnv === "development" ||
+    process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS === "1"
+  );
+}
+
 export function createStreamServerSentryOptionsFromInput(
   input: StreamServerSentryConfigInput,
 ): Sentry.NodeOptions {
@@ -180,7 +188,18 @@ export function captureStreamServerException(
 export function addStreamServerBreadcrumb(
   input: StreamerBreadcrumbInput,
 ): void {
-  Sentry.addBreadcrumb(createStreamerBreadcrumb(input) as Sentry.Breadcrumb);
+  const breadcrumb = createStreamerBreadcrumb(input) as Sentry.Breadcrumb;
+  Sentry.addBreadcrumb(breadcrumb);
+
+  // The shared breadcrumb sanitizer runs before this write. This keeps the
+  // useful phase/correlation breadcrumbs visible in local development while
+  // keeping the server console free of URLs, source identifiers, and tokens.
+  if (shouldLogBreadcrumbsToConsole()) {
+    const data = breadcrumb.data ? ` ${JSON.stringify(breadcrumb.data)}` : "";
+    console.info(
+      `[stream-server] ${breadcrumb.category} ${breadcrumb.message}${data}`,
+    );
+  }
 }
 
 export async function flushStreamServerSentry(timeoutMs = 2000): Promise<void> {

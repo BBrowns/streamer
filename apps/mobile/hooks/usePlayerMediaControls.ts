@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type Dispatch } from "react";
-import type { VideoPlayer } from "expo-video";
+import type { ExpoVideoPlayerLike } from "../services/playback/mediaPlayerAdapters/ExpoVideoAdapterBase";
 import type { MediaPlayerAdapter } from "../services/playback/MediaPlayerAdapter";
 import type { PlaybackDiagnosticEvent } from "../services/playback/PlaybackDiagnostics";
 import type { PlaybackRuntimeViewEvent } from "../services/playback/PlaybackRuntimeCoordinator";
@@ -7,7 +7,7 @@ import type { TimelineScrubbingChange } from "../services/playback/TimelineContr
 import type { IStreamEngine } from "../services/streamEngine/IStreamEngine";
 
 interface UsePlayerMediaControlsOptions {
-  player: VideoPlayer | null;
+  player: ExpoVideoPlayerLike | null;
   mediaAdapter: MediaPlayerAdapter;
   engine: IStreamEngine | null;
   canSeek: boolean;
@@ -41,22 +41,19 @@ export function usePlayerMediaControls({
   useEffect(() => {
     if (!player) return;
     setMuted(Boolean(player.muted));
+    const currentVolume = typeof player.volume === "number" ? player.volume : 1;
     setVolume(
-      Number.isFinite(player.volume)
-        ? Math.min(1, Math.max(0, player.volume))
+      Number.isFinite(currentVolume)
+        ? Math.min(1, Math.max(0, currentVolume))
         : 1,
     );
 
-    const volumeSub = player.addListener?.(
-      "volumeChange",
-      ({ volume }: { volume: number }) =>
-        setVolume(
-          Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1,
-        ),
-    );
-    const mutedSub = player.addListener?.(
-      "mutedChange",
-      ({ muted }: { muted: boolean }) => setMuted(Boolean(muted)),
+    const volumeSub = player.addListener?.("volumeChange", (payload) => {
+      const volume = typeof payload?.volume === "number" ? payload.volume : 1;
+      setVolume(Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1);
+    });
+    const mutedSub = player.addListener?.("mutedChange", (payload) =>
+      setMuted(Boolean(payload?.muted)),
     );
 
     return () => {

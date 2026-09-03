@@ -27,6 +27,13 @@ jest.mock("../../api", () => ({
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
     bridgeStatus: "available",
+    getBridgeSnapshot: jest.fn(() => ({
+      available: false,
+      status: "available",
+      diagnostics: { status: "available" },
+      url: "http://192.168.1.25:11470",
+    })),
+    subscribeBridge: jest.fn(() => jest.fn()),
     getBridgeUrl: jest.fn(() => "http://192.168.1.25:11470"),
     getBridgeDiagnostics: jest.fn(() => ({
       status: "available",

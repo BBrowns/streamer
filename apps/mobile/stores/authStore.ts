@@ -20,12 +20,28 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { UserProfile } from "@streamer/shared";
 import { secureStorage, SECURE_KEYS } from "../services/secureStorage";
 
+export type AuthSessionHealth =
+  "ready" | "degraded" | "needs-attention" | "invalid";
+
+export type AuthSessionIssue =
+  | "rate-limited"
+  | "temporarily-unavailable"
+  | "network"
+  | "timeout"
+  | "storage"
+  | "unknown"
+  | null;
+
 interface AuthState {
   // ── Non-sensitive (AsyncStorage via Zustand persist) ──────────────────────
   user: UserProfile | null;
   deviceId: string | null;
   isAuthenticated: boolean;
   isHydrated: boolean;
+  credentialsHydrated: boolean;
+  sessionHealth: AuthSessionHealth;
+  sessionIssue: AuthSessionIssue;
+  sessionRetryAt: number | null;
   biometricEnabled: boolean;
   backendUrl: string | null;
   streamServerUrl: string | null;
@@ -57,6 +73,11 @@ interface AuthState {
   loadTokensFromSecureStore: () => Promise<void>;
   setDeviceId: (id: string) => void;
   setHydrated: (hydrated: boolean) => void;
+  setSessionHealth: (
+    health: AuthSessionHealth,
+    issue?: AuthSessionIssue,
+    retryAt?: number | null,
+  ) => void;
   setBiometricEnabled: (enabled: boolean) => void;
   setServerUrls: (
     backend?: string | null,
@@ -83,6 +104,10 @@ export const useAuthStore = create<AuthState>()(
       deviceId: null,
       isAuthenticated: false,
       isHydrated: false,
+      credentialsHydrated: false,
+      sessionHealth: "invalid",
+      sessionIssue: null,
+      sessionRetryAt: null,
       biometricEnabled: false,
       backendUrl: null,
       streamServerUrl: null,
@@ -104,6 +129,10 @@ export const useAuthStore = create<AuthState>()(
         set({
           user,
           isAuthenticated: true,
+          credentialsHydrated: true,
+          sessionHealth: "ready",
+          sessionIssue: null,
+          sessionRetryAt: null,
           accessToken,
           refreshToken,
           tokenExpiresAt: expiresAt,
@@ -124,7 +153,14 @@ export const useAuthStore = create<AuthState>()(
       setTokens: async (accessToken, refreshToken, expiresInMs) => {
         const expiresAt = Date.now() + (expiresInMs ?? DEFAULT_TOKEN_EXPIRY_MS);
 
-        set({ accessToken, refreshToken, tokenExpiresAt: expiresAt });
+        set({
+          accessToken,
+          refreshToken,
+          tokenExpiresAt: expiresAt,
+          sessionHealth: "ready",
+          sessionIssue: null,
+          sessionRetryAt: null,
+        });
 
         await Promise.all([
           secureStorage.setItem(SECURE_KEYS.ACCESS_TOKEN, accessToken),
@@ -140,17 +176,43 @@ export const useAuthStore = create<AuthState>()(
       // Hydrates the in-memory token values from SecureStore after persisted
       // non-sensitive state (user, isAuthenticated) has been rehydrated.
       loadTokensFromSecureStore: async () => {
-        const [accessToken, refreshToken, expiresAtStr, streamServerToken] =
-          await Promise.all([
-            secureStorage.getItem(SECURE_KEYS.ACCESS_TOKEN),
-            secureStorage.getItem(SECURE_KEYS.REFRESH_TOKEN),
-            secureStorage.getItem(SECURE_KEYS.TOKEN_EXPIRES_AT),
-            secureStorage.getItem(SECURE_KEYS.STREAM_SERVER_TOKEN),
-          ]);
+        try {
+          const [accessToken, refreshToken, expiresAtStr, streamServerToken] =
+            await Promise.all([
+              secureStorage.getItem(SECURE_KEYS.ACCESS_TOKEN),
+              secureStorage.getItem(SECURE_KEYS.REFRESH_TOKEN),
+              secureStorage.getItem(SECURE_KEYS.TOKEN_EXPIRES_AT),
+              secureStorage.getItem(SECURE_KEYS.STREAM_SERVER_TOKEN),
+            ]);
 
-        const tokenExpiresAt = expiresAtStr ? Number(expiresAtStr) : null;
+          const tokenExpiresAt = expiresAtStr ? Number(expiresAtStr) : null;
 
-        set({ accessToken, refreshToken, tokenExpiresAt, streamServerToken });
+          set({
+            accessToken,
+            refreshToken,
+            tokenExpiresAt,
+            streamServerToken,
+            credentialsHydrated: true,
+            sessionHealth: accessToken ? "ready" : "invalid",
+            sessionIssue: null,
+            sessionRetryAt: null,
+          });
+        } catch {
+          // Do not render an authenticated shell without knowing whether its
+          // credentials are available. The user can sign in again safely.
+          set({
+            user: null,
+            isAuthenticated: false,
+            accessToken: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            streamServerToken: null,
+            credentialsHydrated: true,
+            sessionHealth: "invalid",
+            sessionIssue: null,
+            sessionRetryAt: null,
+          });
+        }
       },
 
       // ── setDeviceId ──────────────────────────────────────────────────────
@@ -158,6 +220,14 @@ export const useAuthStore = create<AuthState>()(
 
       // ── setHydrated ──────────────────────────────────────────────────────
       setHydrated: (hydrated) => set({ isHydrated: hydrated }),
+
+      // ── setSessionHealth ────────────────────────────────────────────────
+      setSessionHealth: (health, issue = null, retryAt = null) =>
+        set({
+          sessionHealth: health,
+          sessionIssue: issue,
+          sessionRetryAt: retryAt,
+        }),
 
       // ── setBiometricEnabled ──────────────────────────────────────────────
       setBiometricEnabled: (enabled) => set({ biometricEnabled: enabled }),
@@ -210,6 +280,10 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           tokenExpiresAt: null,
           isAuthenticated: false,
+          credentialsHydrated: true,
+          sessionHealth: "invalid",
+          sessionIssue: null,
+          sessionRetryAt: null,
         });
         await secureStorage.clearTokens();
       },

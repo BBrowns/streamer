@@ -31,6 +31,7 @@ const mockReadyTask = {
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush }),
+  useIsFocused: () => true,
 }));
 
 jest.mock("../../../stores/downloadStore", () => ({

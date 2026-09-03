@@ -82,6 +82,7 @@ export function usePlayerTrackCatalog({
   >("idle");
   const [trackCatalogRevision, setTrackCatalogRevision] = useState(0);
   const subtitleDocumentControllerRef = useRef<AbortController | null>(null);
+  const refreshPlayerTracksRef = useRef<() => void>(() => undefined);
 
   const subtitles = useMemo(
     () => mergeSubtitleTracks([...engineSubtitles, ...addonSubtitles]),
@@ -140,13 +141,18 @@ export function usePlayerTrackCatalog({
     const adapterCapabilities = mediaAdapter.getCapabilities();
     const catalog = buildMediaAdapterTrackCatalog({
       capabilities: {
-        audioTracks: adapterCapabilities.audioTracks && routeAllowsAudioTracks,
+        audioTracks:
+          (adapterCapabilities.audioTracks ||
+            typeof engine?.selectAudioTrack === "function") &&
+          routeAllowsAudioTracks,
         embeddedSubtitles:
           adapterCapabilities.embeddedSubtitles && routeAllowsEmbeddedSubtitles,
       },
       mediaAudioTracks: mediaAdapter.getAudioTracks(),
       mediaSubtitleTracks: mediaAdapter.getSubtitleTracks(),
       engineSubtitles: routeAllowsExternalSubtitles ? runtimeSubtitles : [],
+      engineAudioTracks: engine?.getAudioTracks?.() || [],
+      engineAudioTrackSelection: typeof engine?.selectAudioTrack === "function",
     });
     setCatalogAudioTracks(catalog.audioTracks);
     setAudioTracks(catalog.audioTracks);
@@ -161,6 +167,7 @@ export function usePlayerTrackCatalog({
     setAudioTracks,
     setSubtitles,
   ]);
+  refreshPlayerTracksRef.current = refreshPlayerTracks;
 
   const handleSubtitleSelection = useCallback(
     async (id: string | null) => {
@@ -267,13 +274,14 @@ export function usePlayerTrackCatalog({
   }, [engine, playbackUri]);
 
   useEffect(() => {
-    setCatalogAudioTracks([]);
-    setAudioTracks([]);
-    setSubtitles(engine?.getSubtitles() || []);
     if (!engine) return;
 
+    setCatalogAudioTracks([]);
+    setAudioTracks([]);
+    setSubtitles(engine.getSubtitles());
+
     const controller = new AbortController();
-    const handleEngineTracks = () => refreshPlayerTracks();
+    const handleEngineTracks = () => refreshPlayerTracksRef.current();
     engine.on("tracks", handleEngineTracks);
     void engine.refreshTrackCatalog?.(controller.signal).catch(() => {
       // Track discovery is optional. Native tracks and playback stay usable
@@ -284,23 +292,23 @@ export function usePlayerTrackCatalog({
       controller.abort();
       engine.off("tracks", handleEngineTracks);
     };
-  }, [engine, playbackUri, refreshPlayerTracks, setAudioTracks, setSubtitles]);
+  }, [engine, playbackUri, setAudioTracks, setSubtitles]);
 
   useEffect(() => {
     if (!player) return;
 
-    refreshPlayerTracks();
+    refreshPlayerTracksRef.current();
     return mediaAdapter.subscribe((event) => {
       if (event.type === "tracks_changed") {
-        refreshPlayerTracks();
+        refreshPlayerTracksRef.current();
         return;
       }
       if (event.type === "source_loaded") {
-        refreshPlayerTracks();
+        refreshPlayerTracksRef.current();
         setTrackCatalogRevision((revision) => revision + 1);
       }
     });
-  }, [mediaAdapter, player, refreshPlayerTracks]);
+  }, [mediaAdapter, player]);
 
   return {
     addonSubtitles,

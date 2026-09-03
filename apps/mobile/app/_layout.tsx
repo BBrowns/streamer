@@ -55,6 +55,9 @@ import { setDesktopBridgeAccessSession } from "../services/bridgeAuth";
 import { CinematicThemeProvider } from "../contexts/CinematicThemeContext";
 import { SyncProvider } from "../contexts/SyncContext";
 import { useWindowClass } from "../hooks/useWindowClass";
+import { SyncStatusBanner } from "../components/ui/SyncStatusBanner";
+import { shouldRetryQuery } from "../services/queryRetry";
+import { BridgeReadinessOwner } from "../components/BridgeReadinessOwner";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* Expo Go may not have a native splash screen registered */
@@ -82,7 +85,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5 * 60 * 1000,
       gcTime: 30 * 60 * 1000, // Keep data in cache for offline use
-      retry: 3,
+      retry: shouldRetryQuery,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
     },
@@ -167,6 +170,7 @@ function RootLayoutNav() {
   const deviceId = useAuthStore((s) => s.deviceId);
   const setDeviceId = useAuthStore((s) => s.setDeviceId);
   const isHydrated = useAuthStore((s) => s.isHydrated);
+  const credentialsHydrated = useAuthStore((s) => s.credentialsHydrated);
   const [searchOpen, setSearchOpen] = useState(false);
   const { t } = useTranslation();
   const isE2E =
@@ -208,6 +212,11 @@ function RootLayoutNav() {
   useEffect(() => {
     // 1. One-time migration from plain AsyncStorage to SecureStore (idempotent)
     migrateTokensToSecureStorage()
+      .catch(() => {
+        // A failed legacy migration must not strand the app before the
+        // SecureStore hydration gate. Loading the current credential keys is
+        // still safe and will fail closed when the store is unavailable.
+      })
       .then(() => {
         // 2. Load tokens into memory from SecureStore
         return useAuthStore.getState().loadTokensFromSecureStore();
@@ -263,6 +272,8 @@ function RootLayoutNav() {
     return () => sub.remove();
   }, [isE2E]);
 
+  const runtimeReady = isHydrated && credentialsHydrated;
+
   useEffect(() => {
     if (isE2E && pathname.startsWith("/onboarding")) {
       router.replace("/(tabs)" as never);
@@ -296,8 +307,11 @@ function RootLayoutNav() {
     };
   }, [isCompact, router]);
 
+  if (!runtimeReady) return null;
+
   return (
     <RootLayoutNavInner>
+      <BridgeReadinessOwner />
       <DesktopLayout onSearchOpen={() => setSearchOpen(true)}>
         <CommandPalette
           visible={searchOpen}
@@ -385,6 +399,7 @@ function RootLayoutNav() {
           />
         </Stack>
       </DesktopLayout>
+      <SyncStatusBanner />
       <RemoteControlBar />
     </RootLayoutNavInner>
   );

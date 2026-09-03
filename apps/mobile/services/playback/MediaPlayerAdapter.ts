@@ -63,6 +63,8 @@ export type MediaPlayerEvent =
       bufferedPosition: number;
     }
   | { type: "source_loaded" }
+  | { type: "seek_rejected"; position: number; start: number; end: number }
+  | { type: "first_frame_rendered" }
   | { type: "tracks_changed" }
   | { type: "volume_changed"; muted: boolean; volume: number }
   | { type: "completed" };

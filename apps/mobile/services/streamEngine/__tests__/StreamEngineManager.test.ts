@@ -104,6 +104,26 @@ describe("StreamEngineManager", () => {
   });
 
   describe("detectBridge", () => {
+    it("shares one in-flight network probe across concurrent callers", async () => {
+      const response = createDeferred<any>();
+      global.fetch = jest.fn().mockReturnValue(response.promise) as any;
+
+      const first = manager.detectBridge();
+      const second = manager.detectBridge();
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      response.resolve({
+        ok: true,
+        json: async () => ({
+          torrentEngine: { available: true },
+        }),
+      });
+
+      await expect(first).resolves.toBe(true);
+      await expect(second).resolves.toBe(true);
+    });
+
     it("captures torrent engine diagnostics when the bridge runtime is unsupported", async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,

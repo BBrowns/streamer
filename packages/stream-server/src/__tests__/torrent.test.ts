@@ -24,10 +24,12 @@ import {
   evaluateSeekableRemuxPreparation,
   getRetainedSeekableRemuxSource,
   getSelectedFile,
+  attachTorrentLogging,
   prepareSeekableRemux,
   retainSeekableRemux,
   serveTorrentFile,
   shouldRemuxTorrentFile,
+  validateTorrentFiles,
   waitForTorrentFileFirstBytes,
 } from "../torrent.js";
 
@@ -631,10 +633,12 @@ describe("serveTorrentFile", () => {
     const file = makeFakeFile("film.mkv", 5_000_000);
     const torrent = makeTorrent([file]);
     const { req, res } = makeReqRes({ range: "bytes=0-" });
+    const onFirstFragment = vi.fn();
 
     const streaming = serveTorrentFile(req, res, torrent, {
       remuxFormat: "mp4",
       remuxStrategy: "progressive-fmp4",
+      onFirstFragment,
     });
 
     expect(spawner).toHaveBeenCalledWith(
@@ -666,11 +670,35 @@ describe("serveTorrentFile", () => {
     );
     expect(res.write).toHaveBeenCalledWith(firstFragment);
     expect(res.end).not.toHaveBeenCalled();
+    expect(onFirstFragment).toHaveBeenCalledTimes(1);
 
     child.emit("close", 0);
     await streaming;
 
     expect(res.end).toHaveBeenCalled();
+  });
+
+  it("maps the requested embedded audio stream for progressive playback", async () => {
+    const { child, spawner } = makeProgressiveFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const torrent = makeTorrent([file]);
+    const { req, res } = makeReqRes({ range: "bytes=0-" });
+
+    const streaming = serveTorrentFile(req, res, torrent, {
+      remuxFormat: "mp4",
+      remuxStrategy: "progressive-fmp4",
+      audioTrackId: "audio:2",
+    });
+
+    expect(spawner).toHaveBeenCalledWith(
+      "ffmpeg",
+      expect.arrayContaining(["-map", "0:2", "-disposition:a:0", "default"]),
+    );
+    child.stdout.emit("data", Buffer.from("fragmented-mp4-moof"));
+    child.emit("close", 0);
+    await streaming;
   });
 
   it("rejects non-zero seeks for a progressive remux without spawning FFmpeg", async () => {
@@ -731,16 +759,19 @@ describe("serveTorrentFile", () => {
     const file = makeFakeFile("film.mkv", 5_000_000);
     const torrent = makeTorrent([file]);
     const { req, res } = makeReqRes();
+    const onError = vi.fn();
 
     const streaming = serveTorrentFile(req, res, torrent, {
       remuxFormat: "mp4",
       remuxStrategy: "progressive-fmp4",
+      onError,
     });
     child.stdout.emit("data", Buffer.from("fragmented-mp4-moof"));
     child.emit("close", 1);
     await streaming;
 
     expect(res.destroy).toHaveBeenCalledWith(expect.any(Error));
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(res.status).not.toHaveBeenCalledWith(503);
   });
 
@@ -1003,6 +1034,39 @@ describe("getSelectedFile", () => {
   });
 });
 
+describe("attachTorrentLogging", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("reports the current peer count on a fixed interval, including drops", () => {
+    vi.useFakeTimers();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const torrent = makeTorrent();
+    torrent.numPeers = 1;
+
+    attachTorrentLogging(torrent);
+    expect(logSpy).toHaveBeenLastCalledWith("[stream-server] Peers: 1");
+
+    vi.advanceTimersByTime(5_000);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+
+    torrent.numPeers = 0;
+    vi.advanceTimersByTime(5_000);
+    expect(logSpy).toHaveBeenLastCalledWith("[stream-server] Peers: 0");
+
+    torrent.numPeers = 4;
+    vi.advanceTimersByTime(5_000);
+    expect(logSpy).toHaveBeenLastCalledWith("[stream-server] Peers: 4");
+
+    torrent.emit("close");
+    torrent.numPeers = 9;
+    vi.advanceTimersByTime(5_000);
+    expect(logSpy).toHaveBeenCalledTimes(3);
+  });
+});
+
 // ─── waitForReady ─────────────────────────────────────────────────────────────
 
 describe("waitForReady", () => {
@@ -1020,6 +1084,29 @@ describe("waitForReady", () => {
     }, 20);
 
     await expect(waitForReady(torrent, 1000)).resolves.toBeUndefined();
+  });
+
+  it("does not treat a ready event without metadata as usable readiness", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      const waiting = waitForReady(torrent, 1_000, {
+        initialPeerTimeoutMs: 50,
+        metadataTimeoutAfterPeerMs: 100,
+      });
+
+      torrent.numPeers = 1;
+      torrent.emit("wire");
+      torrent.emit("ready");
+
+      const assertion = expect(waiting).rejects.toThrow(
+        "Torrent metadata timeout after peer connection",
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects when the torrent emits an error", async () => {
@@ -1056,6 +1143,7 @@ describe("waitForReady", () => {
       await assertion;
 
       expect(torrent.listenerCount("ready")).toBe(0);
+      expect(torrent.listenerCount("metadata")).toBe(0);
       expect(torrent.listenerCount("error")).toBe(0);
       expect(torrent.listenerCount("wire")).toBe(0);
     } finally {
@@ -1078,6 +1166,28 @@ describe("waitForReady", () => {
       torrent.files = [makeFakeFile()];
       torrent.emit("ready");
       await expect(waiting).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resolves when metadata populates files before the ready event", async () => {
+    vi.useFakeTimers();
+    try {
+      const torrent = makeTorrent([]);
+      const onMetadata = vi.fn();
+      const waiting = waitForReady(torrent, 1_000, {
+        onMetadata,
+      });
+
+      torrent.files = [makeFakeFile("movie.mkv")];
+      torrent.emit("metadata");
+
+      const assertion = expect(waiting).resolves.toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await assertion;
+      expect(onMetadata).toHaveBeenCalledTimes(1);
+      expect(torrent.listenerCount("metadata")).toBe(0);
     } finally {
       vi.useRealTimers();
     }
@@ -1150,6 +1260,30 @@ describe("waitForReady", () => {
     }
   });
 
+  it("does not expose torrent filenames in malware-shield diagnostics", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      validateTorrentFiles({ files: [{ name: "private-screenshot.png" }] });
+      expect(warn).toHaveBeenCalledWith(
+        "[malware-shield] Suspicious non-media torrent file ignored",
+      );
+      expect(warn.mock.calls.flat().join(" ")).not.toContain(
+        "private-screenshot.png",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not expose forbidden torrent filenames in security errors", () => {
+    expect(() =>
+      validateTorrentFiles({ files: [{ name: "payload.exe" }] }),
+    ).toThrow("Security Violation: Forbidden torrent file type");
+    expect(() =>
+      validateTorrentFiles({ files: [{ name: "payload.exe" }] }),
+    ).not.toThrow("payload.exe");
+  });
+
   it("rejects promptly on abort and removes its listeners", async () => {
     const torrent = makeTorrent([]);
     const controller = new AbortController();
@@ -1164,6 +1298,7 @@ describe("waitForReady", () => {
       message: "Torrent readiness was cancelled",
     });
     expect(torrent.listenerCount("ready")).toBe(0);
+    expect(torrent.listenerCount("metadata")).toBe(0);
     expect(torrent.listenerCount("error")).toBe(0);
     expect(torrent.listenerCount("wire")).toBe(0);
   });

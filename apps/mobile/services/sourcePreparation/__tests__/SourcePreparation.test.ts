@@ -321,6 +321,104 @@ describe("SourcePreparer route registry", () => {
 });
 
 describe("BridgeV1SourceAdapter", () => {
+  it("adopts a progressive-fmp4 upgrade discovered from the selected torrent file", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(
+      jobResponse({
+        delivery: "range-http",
+        media: {
+          container: "unknown",
+          remuxed: false,
+          seek: "preparing",
+        },
+      }),
+    );
+    client.getJob.mockResolvedValue(
+      readyJobFor("progressive-fmp4", {
+        container: "mp4",
+        remuxed: true,
+        seek: "preparing",
+        seekableCache: { status: "not_started" },
+      }),
+    );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+      pollIntervalMs: 0,
+      sleep: jest.fn().mockResolvedValue(undefined),
+    });
+    const selectedRoute = route("range-http", "local-sidecar");
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: "attempt-progressive-container-upgrade",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(selectedRoute, { kind: "torrent" }),
+      route: selectedRoute,
+    });
+
+    expect(prepared.route).toEqual({
+      ...selectedRoute,
+      delivery: "progressive-fmp4",
+      capabilities: {
+        ...selectedRoute.capabilities,
+        seek: "preparing",
+      },
+    });
+    await prepared.release();
+  });
+
+  it("adopts a direct range-http route when an HLS probe proves the file is MP4", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(
+      jobResponse({
+        delivery: "hls",
+        media: {
+          container: "unknown",
+          remuxed: true,
+          seek: "immediate",
+        },
+      }),
+    );
+    client.getJob.mockResolvedValue(
+      readyJobFor("range-http", {
+        container: "mp4",
+        remuxed: false,
+        seek: "immediate",
+      }),
+    );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+      pollIntervalMs: 0,
+      sleep: jest.fn().mockResolvedValue(undefined),
+    });
+    const selectedRoute = {
+      ...route("hls", "local-sidecar"),
+      capabilities: {
+        ...route("hls", "local-sidecar").capabilities,
+        seek: "immediate" as const,
+      },
+    };
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: "attempt-direct-container-downgrade",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(selectedRoute, { kind: "torrent" }),
+      route: selectedRoute,
+    });
+
+    expect(prepared.route).toEqual({
+      ...selectedRoute,
+      delivery: "range-http",
+      capabilities: { ...selectedRoute.capabilities, seek: "immediate" },
+    });
+    await prepared.release();
+  });
+
   it("adopts a seekable-cache upgrade discovered from the selected torrent file", async () => {
     const client = bridgeClient();
     client.createJob.mockResolvedValue(
@@ -367,6 +465,53 @@ describe("BridgeV1SourceAdapter", () => {
       },
     });
     await prepared.release();
+  });
+
+  it("treats an asynchronous INTERNAL bridge failure as fallbackable", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(
+      jobResponse({
+        delivery: "range-http",
+        media: {
+          container: "unknown",
+          remuxed: false,
+          seek: "preparing",
+        },
+      }),
+    );
+    client.getJob.mockResolvedValue(
+      jobResponse({
+        delivery: "range-http",
+        state: "error",
+        phase: "error",
+        failure: {
+          code: "INTERNAL",
+          message: "The bridge could not prepare this source.",
+          retryable: true,
+        },
+      }),
+    );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+      pollIntervalMs: 0,
+      sleep: jest.fn().mockResolvedValue(undefined),
+    });
+
+    await expect(
+      adapter.prepare({
+        action: "play",
+        attemptId: "attempt-internal-bridge-failure",
+        requestId: REQUEST_ID,
+        candidate: candidateFor(route("range-http", "local-sidecar")),
+        route: route("range-http", "local-sidecar"),
+      }),
+    ).rejects.toMatchObject({
+      code: "INTERNAL",
+      retryable: true,
+      shouldFallback: true,
+    });
   });
 
   it("adopts the longer authoritative timeout when runtime inspection requires remux", async () => {
@@ -1090,5 +1235,40 @@ describe("BridgeV1SourceAdapter", () => {
       retryable: true,
     });
     expect(noPeersClient.cancelJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a peer-connected metadata stall separately from a no-peer failure", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(
+      jobResponse({
+        state: "stalled",
+        phase: "stalled",
+        failure: {
+          code: "SOURCE_STALLED",
+          message: "The source stalled while preparing media.",
+          retryable: true,
+        },
+      }),
+    );
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+    });
+
+    await expect(
+      adapter.prepare({
+        action: "play",
+        attemptId: "attempt-source-stalled",
+        requestId: REQUEST_ID,
+        candidate: candidateFor(route("seekable-cache", "local-sidecar")),
+        route: route("seekable-cache", "local-sidecar"),
+      }),
+    ).rejects.toMatchObject({
+      code: "SOURCE_STALLED",
+      retryable: true,
+      shouldFallback: true,
+    });
+    expect(client.cancelJob).toHaveBeenCalledTimes(1);
   });
 });

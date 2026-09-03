@@ -107,6 +107,7 @@ test("redacts nested sentry event payloads", () => {
     extra: {
       authorization: "Bearer secret",
       downloadUrl: "https://resolver.test/file.mp4?token=abc",
+      bridgeUrl: "http://192.168.1.25:11470",
       nodeExecutable: "/Users/alice/.nvm/versions/node/bin/node",
       nested: {
         api_key: "secret",
@@ -118,6 +119,7 @@ test("redacts nested sentry event payloads", () => {
   assert.equal(redacted.message, "open [magnet]");
   assert.equal(redacted.extra.authorization, "[redacted]");
   assert.equal(redacted.extra.downloadUrl, "[redacted]");
+  assert.equal(redacted.extra.bridgeUrl, "[redacted]");
   assert.equal(redacted.extra.nodeExecutable, "[redacted]");
   assert.equal(redacted.extra.nested.api_key, "[redacted]");
   assert.equal(

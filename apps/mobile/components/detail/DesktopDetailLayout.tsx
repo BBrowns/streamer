@@ -387,12 +387,16 @@ const styles = StyleSheet.create({
     aspectRatio: 2 / 3,
     borderRadius: uiRadii.card,
     overflow: "hidden",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.42,
-    shadowRadius: 30,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 20px 30px rgba(0,0,0,0.42)" }
+      : {
+          shadowColor: "#000000",
+          shadowOffset: { width: 0, height: 20 },
+          shadowOpacity: 0.42,
+          shadowRadius: 30,
+        }),
     elevation: 16,
-  },
+  } as any,
   poster: { width: "100%", height: "100%" },
   heroCopy: { flex: 1, maxWidth: 700, paddingBottom: 2 },
   eyebrow: {

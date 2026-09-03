@@ -465,6 +465,149 @@ describe("PlaybackSessionPlaybackService", () => {
     }
   });
 
+  it("accepts the bridge-owned range-http to progressive-fmp4 delivery upgrade", async () => {
+    const readyJob: BridgeJobResponseV1 = {
+      protocolVersion: 1,
+      job: {
+        id: BRIDGE_JOB_ID,
+        state: "ready",
+        phase: "ready",
+        delivery: "progressive-fmp4",
+        peerCount: 4,
+        readinessProgress: 1,
+        elapsedMs: 100,
+        readyTimeoutMs: 45_000,
+        media: {
+          container: "mp4",
+          remuxed: true,
+          seek: "preparing",
+          seekableCache: { status: "not_started" },
+        },
+        stream: {
+          path: `/api/bridge/v1/jobs/${BRIDGE_JOB_ID}/stream?expires=4102444800000&signature=signed`,
+          expiresAt: "2100-01-01T00:00:00.000Z",
+        },
+      },
+    };
+    const bridgeClient = {
+      createJob: jest.fn().mockResolvedValue(readyJob),
+      getJob: jest.fn().mockResolvedValue(readyJob),
+      cancelJob: jest.fn().mockResolvedValue(null),
+      getCapabilities: jest.fn(),
+      getJobMetrics: jest.fn(),
+      getTrackCatalog: jest.fn(),
+      getSubtitleDocument: jest.fn(),
+      getThumbnail: jest.fn(),
+    };
+    const getBridgeClient = jest
+      .spyOn(BridgeClientModule, "getBridgeClient")
+      .mockReturnValue(
+        bridgeClient as unknown as ReturnType<
+          typeof BridgeClientModule.getBridgeClient
+        >,
+      );
+    const session = createV3Session(
+      {
+        infoHash: "0123456789abcdef0123456789abcdef01234567",
+        fileIdx: 3,
+        title: "Bridge source with progressive runtime remux",
+      } as Stream,
+      {
+        primaryDelivery: "range-http",
+        primaryExecutionTarget: "paired-bridge",
+      },
+    );
+
+    try {
+      const result = await resolvePlaybackSession(session.id);
+
+      expect(result).toMatchObject({
+        ok: true,
+        bridgeJobId: BRIDGE_JOB_ID,
+        route: {
+          candidateId: PRIMARY_PLAN_ID,
+          executionTarget: "paired-bridge",
+          delivery: "progressive-fmp4",
+          capabilities: { seek: "preparing" },
+        },
+      });
+      expect(bridgeClient.createJob).toHaveBeenCalledTimes(1);
+      expect(resolveEngine).not.toHaveBeenCalled();
+    } finally {
+      cancelPlaybackSession(session.id, "Test cleanup.");
+      getBridgeClient.mockRestore();
+    }
+  });
+
+  it("accepts a runtime-demoted range-http route for an unknown HLS-probed torrent", async () => {
+    const readyJob: BridgeJobResponseV1 = {
+      protocolVersion: 1,
+      job: {
+        id: BRIDGE_JOB_ID,
+        state: "ready",
+        phase: "ready",
+        delivery: "range-http",
+        peerCount: 4,
+        readinessProgress: 1,
+        elapsedMs: 100,
+        readyTimeoutMs: 32_000,
+        media: {
+          container: "mp4",
+          remuxed: false,
+          seek: "immediate",
+        },
+        stream: {
+          path: `/api/bridge/v1/jobs/${BRIDGE_JOB_ID}/stream?expires=4102444800000&signature=signed`,
+          expiresAt: "2100-01-01T00:00:00.000Z",
+        },
+      },
+    };
+    const bridgeClient = {
+      createJob: jest.fn().mockResolvedValue(readyJob),
+      getJob: jest.fn().mockResolvedValue(readyJob),
+      cancelJob: jest.fn().mockResolvedValue(null),
+      getCapabilities: jest.fn(),
+      getJobMetrics: jest.fn(),
+      getTrackCatalog: jest.fn(),
+      getSubtitleDocument: jest.fn(),
+      getThumbnail: jest.fn(),
+    };
+    const getBridgeClient = jest
+      .spyOn(BridgeClientModule, "getBridgeClient")
+      .mockReturnValue(
+        bridgeClient as unknown as ReturnType<
+          typeof BridgeClientModule.getBridgeClient
+        >,
+      );
+    const session = createV3Session(
+      {
+        infoHash: "0123456789abcdef0123456789abcdef01234567",
+        fileIdx: 3,
+        title: "Bridge source with runtime MP4 discovery",
+      } as Stream,
+      { primaryDelivery: "hls", primaryExecutionTarget: "paired-bridge" },
+    );
+
+    try {
+      const result = await resolvePlaybackSession(session.id);
+
+      expect(result).toMatchObject({
+        ok: true,
+        bridgeJobId: BRIDGE_JOB_ID,
+        route: {
+          candidateId: PRIMARY_PLAN_ID,
+          executionTarget: "paired-bridge",
+          delivery: "range-http",
+          capabilities: { seek: "immediate" },
+        },
+      });
+      expect(bridgeClient.createJob).toHaveBeenCalledTimes(1);
+    } finally {
+      cancelPlaybackSession(session.id, "Test cleanup.");
+      getBridgeClient.mockRestore();
+    }
+  });
+
   it("exposes an active lease only to its exact playback attempt", async () => {
     const session = createV3Session({
       url: "https://cdn.example.test/movie.mp4",
@@ -591,6 +734,7 @@ describe("PlaybackSessionPlaybackService", () => {
       }
       expect(capturedRequest).toBeDefined();
       cancelPlaybackSession(session.id, "User left before preparation.");
+      usePlaybackSessionStore.getState().removeSession(session.id);
 
       resolvePreparation({
         uri: capturedRequest!.candidate.stream.url!,
@@ -602,6 +746,9 @@ describe("PlaybackSessionPlaybackService", () => {
       });
 
       await expect(resolution).resolves.toMatchObject({ ok: false });
+      expect(
+        usePlaybackSessionStore.getState().sessions[session.id],
+      ).toBeUndefined();
       expect(release).toHaveBeenCalledTimes(1);
       expect(
         getActivePlaybackSourceRuntime(session.id, capturedRequest!.attemptId),
@@ -1196,6 +1343,54 @@ describe("PlaybackSessionPlaybackService", () => {
         { status: "failed", error: { code: "SOURCE_UNAVAILABLE" } },
       ],
     });
+  });
+
+  it("bounds automatic Play fallback to five unique candidates", async () => {
+    const candidates = Array.from({ length: 6 }, (_, index) =>
+      makePlannedMediaCandidate({
+        id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, "0")}`,
+        rank: index,
+        kind: "direct",
+        stream: {
+          url: `https://cdn.example.test/failure-${index}.mp4`,
+          title: `Failure ${index}`,
+        },
+      }),
+    );
+    const plan = makePlaybackPlan({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidates[0],
+        fallbackCandidates: candidates.slice(1),
+      },
+    });
+    const engines: Array<ReturnType<typeof makeEngine>> = [];
+    resolveEngine.mockImplementation(() => {
+      const engine = makeEngine(async () => {
+        throw new Error("Source did not return a playback URL.");
+      });
+      engines.push(engine);
+      return engine;
+    });
+    const session = usePlaybackSessionStore.getState().createSession({
+      plan,
+      content: { type: "movie", id: "tt123" },
+      deviceProfile,
+    });
+
+    const result = await resolvePlaybackSession(session.id);
+    const updated = usePlaybackSessionStore.getState().sessions[session.id];
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "NO_PLAYABLE_SOURCE", shouldFallback: false },
+    });
+    expect(engines).toHaveLength(5);
+    expect(updated.attempts).toHaveLength(5);
+    expect(
+      new Set(updated.attempts.map((attempt) => attempt.candidateId)).size,
+    ).toBe(5);
   });
 
   it("enforces the planner timeout budget and stops a stalled engine", async () => {

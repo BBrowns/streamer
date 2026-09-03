@@ -68,6 +68,7 @@ const {
   createDesktopBonjourInstanceId,
   createDesktopBonjourServiceConfig,
 } = require("./desktop-bonjour");
+const { resolveRendererTarget } = require("./renderer-loader");
 
 const { autoUpdater } = require("electron-updater");
 const RELEASES_URL =
@@ -106,6 +107,7 @@ let bridgeLanUrl = "http://localhost:11470";
 let bridgePairingToken = "";
 let rendererBridgeAccessSession = null;
 let bridgeStartSequence = 0;
+let signalShutdownPromise = null;
 let bridgeState = {
   status: "stopped",
   startedAt: null,
@@ -436,6 +438,19 @@ electron_1.app.on("will-quit", persistDownloadJobsNow);
 electron_1.app.on("will-quit", () => {
   void flushDesktopSentry(2000);
 });
+
+function shutdownForProcessSignal(signal) {
+  if (signalShutdownPromise) return;
+  const exitCode = signal === "SIGINT" ? 130 : 143;
+  signalShutdownPromise = stopTrackedBridgeDaemon()
+    .catch(() => false)
+    .finally(() => {
+      process.exit(exitCode);
+    });
+}
+
+process.once("SIGINT", () => shutdownForProcessSignal("SIGINT"));
+process.once("SIGTERM", () => shutdownForProcessSignal("SIGTERM"));
 
 function emitDownloadJob(job) {
   const snapshot = snapshotDownloadJob(job);
@@ -2160,8 +2175,89 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
     },
   });
-  // Load the expo web app (assumes it is running on 8081 for dev)
-  mainWindow.loadURL(buildRendererUrl("/"));
+
+  let recoveryShown = false;
+  const rendererTarget = resolveRendererTarget({
+    isPackaged: electron_1.app.isPackaged,
+    rendererRoot: path.join(__dirname, "renderer"),
+    rendererUrl: getRendererBaseUrl(),
+    allowDevRenderer: shouldAllowDevRendererServer(),
+  });
+
+  const recordRendererEvent = (event, details = {}) => {
+    const payload = {
+      component: "desktop-renderer",
+      event,
+      packaged: electron_1.app.isPackaged,
+      target: rendererTarget.kind,
+      ...details,
+    };
+    const message = redactSensitiveText(JSON.stringify(payload));
+    if (/failed|gone|error/i.test(event))
+      console.error(`[renderer] ${message}`);
+    else console.log(`[renderer] ${message}`);
+    captureDesktopMessage(message, {
+      component: "desktop-renderer",
+      event,
+      target: rendererTarget.kind,
+    });
+  };
+
+  const showRendererRecoveryPage = (reason) => {
+    if (recoveryShown || mainWindow.isDestroyed()) return;
+    recoveryShown = true;
+    recordRendererEvent("recovery-page", { reason });
+    mainWindow
+      .loadFile(path.join(__dirname, "renderer", "renderer-error.html"))
+      .catch((error) => {
+        captureDesktopException(error, {
+          component: "desktop-renderer",
+          action: "load-recovery-page",
+        });
+        console.error(
+          "[renderer] Recovery page failed to load:",
+          redactSensitiveText(error?.message || error),
+        );
+      });
+  };
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    recordRendererEvent(recoveryShown ? "recovery-loaded" : "loaded");
+  });
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+      if (!isMainFrame || recoveryShown) return;
+      recordRendererEvent("load-failed", { errorCode });
+      showRendererRecoveryPage(`load-${errorCode}`);
+    },
+  );
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    recordRendererEvent("render-process-gone", {
+      reason: details?.reason || "unknown",
+      exitCode: Number.isFinite(details?.exitCode) ? details.exitCode : null,
+    });
+    showRendererRecoveryPage("render-process-gone");
+  });
+  mainWindow.webContents.on("console-message", (_event, level, message) => {
+    if (level < 2) return;
+    recordRendererEvent("console-error", {
+      level,
+      message: redactSensitiveText(String(message || "")).slice(0, 500),
+    });
+  });
+
+  recordRendererEvent("load-started");
+  const loadPromise =
+    rendererTarget.kind === "dev-url"
+      ? mainWindow.loadURL(buildRendererUrl("/"))
+      : mainWindow.loadFile(rendererTarget.path);
+  loadPromise.catch((error) => {
+    recordRendererEvent("load-rejected", {
+      reason: redactSensitiveText(error?.message || error).slice(0, 300),
+    });
+    showRendererRecoveryPage("load-rejected");
+  });
 
   mainWindow.on("close", (event) => {
     if (!electron_1.app.isQuiting) {
@@ -2324,7 +2420,7 @@ electron_1.app.whenReady().then(async () => {
       bridgeServer = await startBridgeDaemon();
       bridgeLanUrl = resolveLanBridgeUrl();
       console.log(
-        `Successfully started @streamer/stream-server background daemon at ${bridgeLanUrl}`,
+        "Successfully started @streamer/stream-server background daemon.",
       );
       electron_1.app.on("will-quit", () => {
         bridgeServer?.close?.();

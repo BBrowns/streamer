@@ -24,6 +24,7 @@ import {
 import { aggregatorService } from "../aggregator/aggregator.service.js";
 import {
   candidateNeedsRemux,
+  candidateNeedsRuntimeProbe,
   candidateNeedsTranscode,
   candidateSortKey,
   getCastSourceReachability,
@@ -283,7 +284,12 @@ function evaluateCandidate(
 ): CandidateEvaluation {
   const requiresRemux =
     candidate.kind === "torrent" &&
-    candidateNeedsRemux(candidate, request.deviceProfile);
+    (candidateNeedsRemux(candidate, request.deviceProfile) ||
+      candidateNeedsRuntimeProbe(
+        candidate,
+        request.action,
+        request.deviceProfile,
+      ));
   const sourceUrl =
     candidate.kind === "torrent"
       ? request.bridge?.url

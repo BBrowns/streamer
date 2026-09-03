@@ -153,6 +153,41 @@ describe("trackSelection", () => {
     });
   });
 
+  it("uses a bridge runtime catalog when the web adapter cannot switch tracks", () => {
+    const runtimeAudioTracks = [
+      {
+        id: "audio:1",
+        label: "English",
+        language: "en",
+        active: true,
+        codec: "aac",
+        source: "embedded" as const,
+      },
+      {
+        id: "audio:2",
+        label: "Spanish",
+        language: "es",
+        active: false,
+        codec: "aac",
+        source: "embedded" as const,
+      },
+    ];
+
+    expect(
+      buildMediaAdapterTrackCatalog({
+        capabilities: { audioTracks: true, embeddedSubtitles: false },
+        mediaAudioTracks: [],
+        mediaSubtitleTracks: [],
+        engineSubtitles: [],
+        engineAudioTracks: runtimeAudioTracks,
+        engineAudioTrackSelection: true,
+      }).audioTracks,
+    ).toEqual([
+      expect.objectContaining({ id: "audio:1", language: "en", active: true }),
+      expect.objectContaining({ id: "audio:2", language: "es", active: false }),
+    ]);
+  });
+
   it("expands accessibility track abbreviations into understandable labels", () => {
     expect(formatMediaTrackLabel("English AD", "audio")).toBe(
       "English AD (Audio description)",

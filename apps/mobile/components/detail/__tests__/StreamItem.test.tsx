@@ -16,6 +16,13 @@ jest.mock("../../../services/streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {
     bridgeAvailable: false,
     bridgeStatus: "unreachable",
+    getBridgeSnapshot: jest.fn(() => ({
+      available: false,
+      status: "unreachable",
+      diagnostics: { status: "unreachable" },
+      url: null,
+    })),
+    subscribeBridge: jest.fn(() => jest.fn()),
     resolveEngine: jest.fn(() => ({ getEngineType: () => "torrent" })),
     getBridgeUrl: jest.fn(() => "http://192.168.1.25:11470"),
     getPlaybackUri: jest.fn(),

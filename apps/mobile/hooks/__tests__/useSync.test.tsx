@@ -16,6 +16,7 @@ describe("useSync WebSocket transport", () => {
   beforeEach(() => {
     useAuthStore.setState({
       isAuthenticated: true,
+      credentialsHydrated: true,
       accessToken: ACCESS_TOKEN,
       refreshToken: "refresh-token",
       deviceId: DEVICE_ID,
@@ -35,6 +36,7 @@ describe("useSync WebSocket transport", () => {
     });
     useAuthStore.setState({
       isAuthenticated: false,
+      credentialsHydrated: true,
       accessToken: null,
       refreshToken: null,
       deviceId: null,

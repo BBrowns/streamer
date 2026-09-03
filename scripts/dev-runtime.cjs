@@ -559,6 +559,8 @@ async function startStreamServer() {
       ...process.env,
       PATH: `${path.dirname(runtime.execPath)}${path.delimiter}${process.env.PATH || ""}`,
       STREAMER_BRIDGE_RUNTIME_ARCH: runtime.targetArch,
+      STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS:
+        process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS || "1",
     },
   });
 }

@@ -26,6 +26,10 @@ import {
   uiTouchTarget,
   uiTypography,
 } from "./designSystem";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 type MediaRailProps<Item> = {
   data: readonly Item[];
@@ -248,20 +252,28 @@ export function MediaRail<Item>({
 
           {canScrollBack ? (
             <LinearGradient
-              pointerEvents="none"
+              pointerEvents={getNativePointerEvents("none")}
               colors={[edgeColor, edgeColor + "00"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[styles.fade, styles.fadeStart]}
+              style={[
+                styles.fade,
+                styles.fadeStart,
+                getPointerEventsStyle("none"),
+              ]}
             />
           ) : null}
           {canScrollForward ? (
             <LinearGradient
-              pointerEvents="none"
+              pointerEvents={getNativePointerEvents("none")}
               colors={[edgeColor + "00", edgeColor]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[styles.fade, styles.fadeEnd]}
+              style={[
+                styles.fade,
+                styles.fadeEnd,
+                getPointerEventsStyle("none"),
+              ]}
             />
           ) : null}
         </View>

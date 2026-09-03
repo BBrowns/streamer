@@ -26,6 +26,8 @@ export interface TorrentReadinessOptions {
   signal?: AbortSignal;
   initialPeerTimeoutMs?: number;
   metadataTimeoutAfterPeerMs?: number;
+  /** Called once when torrent metadata has populated the file list. */
+  onMetadata?: () => void;
 }
 
 type TorrentSourceStream = {
@@ -181,6 +183,7 @@ export function waitForReady(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (torrent.files && torrent.files.length > 0) {
+      options.onMetadata?.();
       return resolve();
     }
 
@@ -194,6 +197,7 @@ export function waitForReady(
     let readyTimer: ReturnType<typeof setTimeout> | null = null;
     let initialPeerTimer: ReturnType<typeof setTimeout> | null = null;
     let metadataAfterPeerTimer: ReturnType<typeof setTimeout> | null = null;
+    let metadataNotified = false;
     let sawInitialPeer = Number(torrent.numPeers) > 0;
     const hasInitialPeerDeadline =
       !sawInitialPeer &&
@@ -219,6 +223,7 @@ export function waitForReady(
         metadataAfterPeerTimer = null;
       }
       torrent.removeListener("ready", onReady);
+      torrent.removeListener("metadata", onMetadata);
       torrent.removeListener("error", onError);
       torrent.removeListener("wire", onWire);
       signal?.removeEventListener("abort", onAbort);
@@ -235,7 +240,24 @@ export function waitForReady(
       }
     }
 
+    function notifyMetadata() {
+      if (metadataNotified) return;
+      metadataNotified = true;
+      options.onMetadata?.();
+    }
+
+    function onMetadata() {
+      if (!torrent.files || torrent.files.length === 0) return;
+      notifyMetadata();
+      settle("resolve");
+    }
+
     function onReady() {
+      // WebTorrent normally populates files before ready, but do not let a
+      // malformed/mock ready event bypass the metadata deadline. A peer with
+      // no usable file list must remain a bounded SOURCE_STALLED path.
+      if (!torrent.files || torrent.files.length === 0) return;
+      notifyMetadata();
       settle("resolve");
     }
     function onError(err: Error) {
@@ -274,6 +296,7 @@ export function waitForReady(
       settle("reject", new Error("Torrent peer discovery timeout"));
     }
 
+    torrent.once("metadata", onMetadata);
     torrent.once("ready", onReady);
     torrent.once("error", onError);
     if (hasInitialPeerDeadline || hasMetadataAfterPeerDeadline) {

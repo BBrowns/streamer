@@ -13,11 +13,17 @@ type FakeSocket = {
   send: jest.Mock;
   onopen?: () => void;
   onmessage?: (event: { data: string }) => void;
+  onclose?: (event: { code: number; reason: string }) => void;
 };
 
 function CommandConsumer() {
   const { sendMessage } = useSync();
   return <Text>{sendMessage ? "consumer" : "missing"}</Text>;
+}
+
+function StatusConsumer() {
+  const { status } = useSync();
+  return <Text accessibilityLabel="sync status">{status.state}</Text>;
 }
 
 describe("SyncProvider", () => {
@@ -52,6 +58,7 @@ describe("SyncProvider", () => {
     await act(async () => {
       useAuthStore.setState({
         isAuthenticated: true,
+        credentialsHydrated: true,
         accessToken: "access-token",
         refreshToken: "refresh-token",
         deviceId: "device-id",
@@ -65,6 +72,7 @@ describe("SyncProvider", () => {
     await act(async () => {
       useAuthStore.setState({
         isAuthenticated: false,
+        credentialsHydrated: true,
         accessToken: null,
         refreshToken: null,
         deviceId: null,
@@ -122,6 +130,23 @@ describe("SyncProvider", () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(1);
     expect(emit).toHaveBeenCalledWith("REMOTE_COMMAND", { action: "pause" });
     expect(emit).toHaveBeenCalledTimes(1);
+    await screen.unmount();
+  });
+
+  it("exposes degraded sync state without changing the auth shell", async () => {
+    const screen = await render(<StatusConsumer />, { wrapper });
+
+    await waitFor(() => expect(createSocket).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      socket.onclose?.({ code: 1006, reason: "network" });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("sync status")).toHaveTextContent(
+        "degraded",
+      ),
+    );
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
     await screen.unmount();
   });
 });

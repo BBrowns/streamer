@@ -5,6 +5,10 @@ import {
   gatewayRouter,
   __pruneGatewayJobsForTests,
   __resetGatewayJobsForTests,
+  getGatewayJob,
+  serializeBridgeJobV1,
+  selectPreferredAudioTrack,
+  serveGatewayJobSegment,
 } from "../gateway.js";
 import { createSignedGatewayStreamPath } from "../security.js";
 import {
@@ -13,6 +17,7 @@ import {
   getClient,
   getRetainedSeekableRemuxSource,
   getSelectedFile,
+  createHlsRemuxSession,
   prepareSeekableRemux,
   retainSeekableRemux,
   prepareTorrent,
@@ -40,6 +45,7 @@ vi.mock("../torrent.js", () => ({
     (torrent: { files: unknown[] }, fileIdx?: number) =>
       torrent.files[typeof fileIdx === "number" ? fileIdx : 0],
   ),
+  createHlsRemuxSession: vi.fn(),
   isTorrentEngineUnavailableError: vi.fn(() => false),
   prepareSeekableRemux: vi.fn(),
   retainSeekableRemux: vi.fn(() => () => {}),
@@ -80,6 +86,7 @@ vi.mock("../subtitle-normalizer.js", () => ({
 const app = express();
 app.use(express.json());
 app.use("/api/gateway", gatewayRouter);
+app.get("/api/bridge/v1/jobs/:id/segments/:segment", serveGatewayJobSegment);
 
 const previousGatewayStreamSecret = process.env.STREAMER_GATEWAY_STREAM_SECRET;
 const previousGatewayStreamTtl = process.env.STREAMER_GATEWAY_STREAM_URL_TTL_MS;
@@ -117,7 +124,25 @@ describe("gateway jobs", () => {
       bytesRead: 1,
     });
     (discoverExternalSubtitleCandidates as any).mockReturnValue([]);
-    (probeMediaTracksAtUrl as any).mockResolvedValue([]);
+    (probeMediaTracksAtUrl as any).mockResolvedValue([
+      {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "en",
+        title: "English",
+        codec: "aac",
+        channelCount: 2,
+        channelLayout: "stereo",
+        default: true,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: false,
+        commentary: false,
+        source: "embedded",
+        supported: true,
+      },
+    ]);
     (normalizeSubtitleBuffer as any).mockReturnValue(
       "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nHello\n",
     );
@@ -127,6 +152,22 @@ describe("gateway jobs", () => {
     (extractEmbeddedSubtitleToVtt as any).mockResolvedValue(
       "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nHello\n",
     );
+  });
+
+  it("does not silently select a non-English track when English is required", () => {
+    expect(
+      selectPreferredAudioTrack([
+        {
+          id: "audio:1",
+          kind: "audio",
+          language: "es",
+          default: true,
+          audioDescription: false,
+          commentary: false,
+          supported: true,
+        },
+      ]),
+    ).toBeUndefined();
   });
 
   afterEach(() => {
@@ -203,6 +244,11 @@ describe("gateway jobs", () => {
       readyTimeoutMs: 52000,
       elapsedMs: expect.any(Number),
     });
+    const readinessCall = (ensureTorrentReady as any).mock.calls[0];
+    expect(readinessCall?.[1]).toBe(32_000);
+    expect(readinessCall?.[2]).toEqual(
+      expect.objectContaining({ onMetadata: expect.any(Function) }),
+    );
   });
 
   it("serves only fixed, authenticated thumbnail buckets from the retained seekable cache", async () => {
@@ -332,19 +378,12 @@ describe("gateway jobs", () => {
     });
   });
 
-  it("upgrades an unlabeled bridge job to remux before it can report ready", async () => {
-    let resolveRemux: (() => void) | undefined;
+  it("promotes a bridge job to progressive fMP4 when the selected file needs remux", async () => {
     (prepareTorrent as any).mockResolvedValueOnce({
       infoHash: "abcdef123456",
       numPeers: 1,
       files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
     });
-    (prepareSeekableRemux as any).mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveRemux = () =>
-          resolve({ fileName: "actual-video.mkv", size: 1024 });
-      }),
-    );
 
     const created = await request(app)
       .post("/api/gateway/jobs")
@@ -355,31 +394,27 @@ describe("gateway jobs", () => {
         `/api/gateway/jobs/${created.body.id}`,
       );
       expect(status.body).toMatchObject({
-        state: "preparing",
-        phase: "remuxing",
+        state: "ready",
+        phase: "ready",
         mode: "remux",
-        media: {
+        media: expect.objectContaining({
           remuxed: true,
-          seekable: false,
-          cacheStatus: "pending",
-        },
+          container: "mp4",
+        }),
       });
     });
-    expect(waitForTorrentFileFirstBytes).not.toHaveBeenCalled();
+    expect(serializeBridgeJobV1(getGatewayJob(created.body.id)!)).toMatchObject(
+      {
+        job: { delivery: "progressive-fmp4" },
+      },
+    );
+    expect(prepareSeekableRemux).not.toHaveBeenCalled();
+    expect(waitForTorrentFileFirstBytes).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ timeoutMs: 20_000 }),
+    );
     expect(getSelectedFile).toHaveBeenCalled();
     expect(shouldRemuxTorrentFile).toHaveBeenCalledWith("actual-video.mkv");
-
-    resolveRemux?.();
-
-    await vi.waitFor(async () => {
-      const status = await request(app).get(
-        `/api/gateway/jobs/${created.body.id}`,
-      );
-      expect(status.body).toMatchObject({
-        state: "ready",
-        mode: "remux",
-      });
-    });
   });
 
   it("binds later track and subtitle work to the exact inferred video file", async () => {
@@ -560,6 +595,21 @@ describe("gateway jobs", () => {
     });
     (probeMediaTracksAtUrl as any).mockResolvedValue([
       {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "en",
+        title: "English",
+        codec: "aac",
+        default: true,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: false,
+        commentary: false,
+        source: "embedded",
+        supported: true,
+      },
+      {
         id: "subtitle:3",
         streamIndex: 3,
         kind: "subtitle",
@@ -604,6 +654,21 @@ describe("gateway jobs", () => {
   it("aborts subtitle extraction when its owning gateway job is cancelled", async () => {
     let extractionSignal: AbortSignal | undefined;
     (probeMediaTracksAtUrl as any).mockResolvedValue([
+      {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "en",
+        title: "English",
+        codec: "aac",
+        default: true,
+        forced: false,
+        hearingImpaired: false,
+        audioDescription: false,
+        commentary: false,
+        source: "embedded",
+        supported: true,
+      },
       {
         id: "subtitle:3",
         streamIndex: 3,
@@ -724,6 +789,168 @@ describe("gateway jobs", () => {
         remuxStrategy: "progressive-fmp4",
       }),
     );
+  });
+
+  it("publishes an HLS manifest and first fragment before full remux completion", async () => {
+    const hlsSession = {
+      waitUntilReady: vi.fn().mockResolvedValue(undefined),
+      readManifest: vi
+        .fn()
+        .mockResolvedValue(
+          [
+            "#EXTM3U",
+            '#EXT-X-MAP:URI="init.mp4"',
+            "#EXTINF:2.000,",
+            "segment-000000.m4s",
+            "",
+          ].join("\n"),
+        ),
+      readSegment: vi.fn().mockResolvedValue(Buffer.from("fragment")),
+      getPublishedWindow: vi
+        .fn()
+        .mockReturnValue({ durationSeconds: 2, segmentCount: 1 }),
+      close: vi.fn(),
+    };
+    (createHlsRemuxSession as any).mockResolvedValueOnce(hlsSession);
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remux: "mp4",
+      remuxStrategy: "hls",
+    });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body).toMatchObject({
+        state: "ready",
+        mode: "remux",
+        media: { remuxed: true, seekable: true },
+      });
+    });
+
+    expect(serializeBridgeJobV1(getGatewayJob(created.body.id)!)).toMatchObject(
+      { job: { delivery: "hls" } },
+    );
+    expect(createHlsRemuxSession).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "actual-video.mkv" }),
+      expect.objectContaining({ firstFragmentTimeoutMs: 20_000 }),
+    );
+    expect(prepareSeekableRemux).not.toHaveBeenCalled();
+
+    const manifest = await request(app).get(created.body.playbackUrl);
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers["content-type"]).toMatch(
+      /^application\/vnd.apple.mpegurl/,
+    );
+    expect(manifest.text).toContain(
+      `/api/bridge/v1/jobs/${created.body.id}/segments/init.mp4`,
+    );
+    expect(manifest.text).toContain(
+      `/api/bridge/v1/jobs/${created.body.id}/segments/segment-000000.m4s`,
+    );
+
+    const segmentPath = manifest.text
+      .split(/\r?\n/)
+      .find((line) => line.includes("segment-000000.m4s"));
+    expect(segmentPath).toBeDefined();
+    const segment = await request(app).get(segmentPath!);
+    expect(segment.status).toBe(200);
+    expect(segment.body).toEqual(Buffer.from("fragment"));
+    expect(hlsSession.readSegment).toHaveBeenCalledWith("segment-000000.m4s");
+    expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
+  it("selects an English main audio track before starting a progressive remux", async () => {
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (probeMediaTracksAtUrl as any).mockResolvedValueOnce([
+      {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "es",
+        default: true,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+      {
+        id: "audio:2",
+        streamIndex: 2,
+        kind: "audio",
+        language: "en",
+        default: false,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+    ]);
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+
+    expect(serveTorrentFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ audioTrackId: "audio:2" }),
+    );
+  });
+
+  it("marks the gateway job failed when progressive remuxing dies after response start", async () => {
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (serveTorrentFile as any).mockImplementationOnce(
+      (_req: unknown, res: any, _torrent: unknown, options: any) => {
+        options.onError?.(new Error("FFmpeg progressive remux failed"));
+        return res.status(204).send();
+      },
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remuxStrategy: "progressive-fmp4",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    await request(app).get(created.body.playbackUrl).expect(204);
+
+    const status = await request(app).get(
+      `/api/gateway/jobs/${created.body.id}`,
+    );
+    expect(status.body).toMatchObject({
+      state: "error",
+      retryable: true,
+      error: "A compatible stream could not be prepared.",
+    });
   });
 
   it("starts one seekable cache only after a progressive job gets its first consumer and hands off through the same URL", async () => {
@@ -1266,7 +1493,7 @@ describe("gateway jobs", () => {
     expect(serveTorrentFile).not.toHaveBeenCalled();
   });
 
-  it("aborts a recovered bridge stream readiness wait when its job is cancelled", async () => {
+  it("reuses the ready torrent runtime without starting another metadata wait", async () => {
     const created = await request(app)
       .post("/api/gateway/jobs")
       .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
@@ -1278,41 +1505,15 @@ describe("gateway jobs", () => {
       expect(status.body.state).toBe("ready");
     });
 
-    let streamReadinessSignal: AbortSignal | undefined;
-    (ensureTorrentReady as any).mockImplementationOnce(
-      (
-        _torrent: unknown,
-        _timeoutMs: number,
-        options?: { signal?: AbortSignal },
-      ) =>
-        new Promise<void>((_resolve, reject) => {
-          streamReadinessSignal = options?.signal;
-          options?.signal?.addEventListener(
-            "abort",
-            () => reject(new Error("Gateway job cancelled")),
-            { once: true },
-          );
-        }),
-    );
+    const readinessCalls = (ensureTorrentReady as any).mock.calls.length;
+    const prepareCalls = (prepareTorrent as any).mock.calls.length;
 
-    const streamedPromise = request(app)
-      .get(created.body.playbackUrl)
-      .then((response) => response);
-    await vi.waitFor(() => expect(streamReadinessSignal).toBeDefined());
-    const cancelled = await request(app).delete(
-      `/api/gateway/jobs/${created.body.id}`,
-    );
-    const streamed = await streamedPromise;
+    const streamed = await request(app).get(created.body.playbackUrl);
 
-    expect(streamReadinessSignal?.aborted).toBe(true);
-    expect(cancelled.body.state).toBe("cancelled");
-    expect(streamed.status).toBe(410);
-    expect(streamed.body).toMatchObject({
-      error: "Gateway job cancelled",
-      retryable: false,
-      state: "cancelled",
-    });
-    expect(serveTorrentFile).not.toHaveBeenCalled();
+    expect(streamed.status).toBe(204);
+    expect(ensureTorrentReady).toHaveBeenCalledTimes(readinessCalls);
+    expect(prepareTorrent).toHaveBeenCalledTimes(prepareCalls);
+    expect(serveTorrentFile).toHaveBeenCalled();
   });
 
   it("keeps remux jobs in remuxing phase until the MP4 cache is ready", async () => {

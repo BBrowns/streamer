@@ -136,7 +136,13 @@ export function MoreSourcesPanel({
           <MoreSourcesBody
             contentId={contentId}
             title={title}
-            onSelect={onSelect}
+            onSelect={(plan, candidateId) => {
+              // Close the advanced source modal before playback preparation
+              // can open its own overlay. This keeps one modal owner visible
+              // during the handoff from source selection to playback.
+              setOpen(false);
+              onSelect(plan, candidateId);
+            }}
             onAvailableCount={setEligibleSourceCount}
           />
         ) : null}

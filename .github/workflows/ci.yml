@@ -640,6 +640,8 @@ jobs:
         run: npm run test --workspace=@streamer/desktop
       - name: Vendor Desktop Node Runtimes
         run: npm run vendor --workspace=@streamer/desktop
+      - name: Build Desktop Renderer
+        run: npm run build:renderer --workspace=@streamer/desktop
       - name: Desktop Package Input Smoke
         run: npm run package:check --workspace=@streamer/desktop
       - name: Desktop Release Config Smoke

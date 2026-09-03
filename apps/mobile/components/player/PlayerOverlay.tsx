@@ -8,6 +8,10 @@ import { getWebFocusStyle } from "../ui/designSystem";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { playerChrome } from "./playerChrome";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 interface PlayerOverlayProps {
   currentStream: Stream;
@@ -42,8 +46,8 @@ export function PlayerOverlay({
 
   return (
     <View
-      style={styles.overlay}
-      pointerEvents="box-none"
+      style={[styles.overlay, getPointerEventsStyle("box-none")]}
+      pointerEvents={getNativePointerEvents("box-none")}
       {...((Platform.OS === "web"
         ? {
             onFocusCapture: () => onControlFocusChange?.(true),
@@ -58,9 +62,10 @@ export function PlayerOverlay({
       {/* Top Bar */}
       <View
         testID="player-top-chrome"
-        pointerEvents="box-none"
+        pointerEvents={getNativePointerEvents("box-none")}
         style={[
           styles.topBar,
+          getPointerEventsStyle("box-none"),
           {
             paddingTop:
               Platform.OS === "web" ? 16 : Math.max(insets.top + 12, 24),

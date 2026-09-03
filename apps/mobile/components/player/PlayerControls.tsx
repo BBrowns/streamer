@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { VideoPlayer } from "expo-video";
+import type { ExpoVideoPlayerLike } from "../../services/playback/mediaPlayerAdapters/ExpoVideoAdapterBase";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
@@ -26,6 +26,10 @@ import { playerChrome } from "./playerChrome";
 import { PlayerTimeline } from "./PlayerTimeline";
 import type { TimelineScrubbingChange } from "../../services/playback/TimelineController";
 import type { PlaybackSegmentKind } from "../../services/playback/PlaybackSegmentsProvider";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 
 export interface PlayerControlCapabilities {
   canSeek: boolean;
@@ -47,7 +51,7 @@ export interface PlayerControlCapabilities {
 }
 
 interface PlayerControlsProps {
-  player: VideoPlayer;
+  player: ExpoVideoPlayerLike;
   currentTime: number;
   duration: number;
   bufferedPosition?: number;
@@ -311,10 +315,8 @@ export function PlayerControls({
       exiting={
         reducedMotion ? undefined : FadeOut.duration(motionDuration("overlay"))
       }
-      style={[
-        styles.container,
-        Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
-      ]}
+      style={[styles.container, getPointerEventsStyle("none")]}
+      pointerEvents={getNativePointerEvents("box-none")}
       testID="player-controls-cinematic"
       {...((Platform.OS === "web"
         ? {
@@ -331,8 +333,9 @@ export function PlayerControls({
         style={[
           styles.centerControls,
           compactLayout && styles.centerControlsCompact,
-          Platform.OS === "web" ? styles.webPassThrough : styles.nativeBoxNone,
+          getPointerEventsStyle("none"),
         ]}
+        pointerEvents={getNativePointerEvents("box-none")}
       >
         <ControlButton
           icon="play-back"
@@ -360,6 +363,10 @@ export function PlayerControls({
           onPress={onPlayPause}
           accessibilityRole="button"
           accessibilityLabel={playPauseLabel}
+          accessibilityState={{ selected: isPlaying }}
+          {...(Platform.OS === "web"
+            ? ({ "aria-pressed": isPlaying } as any)
+            : {})}
         >
           <Ionicons
             name={isPlaying ? "pause" : "play"}
@@ -392,11 +399,15 @@ export function PlayerControls({
                   : 20
                 : Math.max(insets.bottom + 12, 16),
           },
-          Platform.OS === "web" && styles.webInteractive,
+          getPointerEventsStyle("none"),
         ]}
       >
         <View
-          style={[styles.bottomTray, compactLayout && styles.bottomTrayCompact]}
+          style={[
+            styles.bottomTray,
+            compactLayout && styles.bottomTrayCompact,
+            getPointerEventsStyle("auto"),
+          ]}
         >
           <PlayerTimeline
             currentTime={currentTime}
@@ -754,12 +765,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 15,
     justifyContent: "space-between",
-  },
-  webPassThrough: {
-    pointerEvents: "none",
-  },
-  nativeBoxNone: {
-    pointerEvents: "box-none",
   },
   webInteractive: {
     pointerEvents: "auto",

@@ -37,7 +37,7 @@ type SourceInspectorPanelProps = {
 const ACTIONS: { action: PlaybackAction; label: string; icon: string }[] = [
   { action: "play", label: "Play", icon: "play" },
   { action: "download", label: "Download", icon: "download-outline" },
-  { action: "cast", label: "Cast", icon: "cast-outline" },
+  { action: "cast", label: "Cast", icon: "tv-outline" },
 ];
 
 function formatCandidateLabel(candidate: PlaybackPlanCandidate) {

@@ -6,6 +6,7 @@ const srcDir = path.join(root, "src");
 const distDir = path.join(root, "dist");
 const entryFiles = [
   "main.js",
+  "renderer-loader.js",
   "preload.js",
   "security.js",
   "build-metadata.js",
@@ -26,6 +27,13 @@ function build() {
   for (const file of entryFiles) {
     fs.copyFileSync(path.join(srcDir, file), path.join(distDir, file));
   }
+
+  const rendererDir = path.join(distDir, "renderer");
+  fs.mkdirSync(rendererDir, { recursive: true });
+  fs.copyFileSync(
+    path.join(srcDir, "renderer-error.html"),
+    path.join(rendererDir, "renderer-error.html"),
+  );
 
   console.log(`[desktop] Built ${entryFiles.join(", ")} into dist/`);
 }

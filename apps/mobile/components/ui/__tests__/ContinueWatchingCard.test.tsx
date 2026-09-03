@@ -147,8 +147,13 @@ describe("ContinueWatchingCard", () => {
     );
     const card = screen.getByTestId("continue-watching-card");
     const openArea = screen.getByLabelText("View Details: Dune: Part Two");
-    const getActionPointerEvents = () =>
-      screen.getByTestId("continue-watching-quick-actions").props.pointerEvents;
+    const getActionPointerEvents = () => {
+      const actions = screen.getByTestId("continue-watching-quick-actions");
+      return (
+        actions.props.pointerEvents ??
+        StyleSheet.flatten(actions.props.style).pointerEvents
+      );
+    };
 
     expect(getActionPointerEvents()).toBe("none");
     await fireEvent(card, "pointerEnter");

@@ -184,6 +184,8 @@ export function buildMediaAdapterTrackCatalog({
   mediaAudioTracks,
   mediaSubtitleTracks,
   engineSubtitles,
+  engineAudioTracks = [],
+  engineAudioTrackSelection = false,
 }: {
   capabilities: Pick<
     MediaPlayerCapabilities,
@@ -192,8 +194,10 @@ export function buildMediaAdapterTrackCatalog({
   mediaAudioTracks: MediaAdapterTrack[];
   mediaSubtitleTracks: MediaAdapterTrack[];
   engineSubtitles: SubtitleTrack[];
+  engineAudioTracks?: AudioTrack[];
+  engineAudioTrackSelection?: boolean;
 }) {
-  const audioTracks: AudioTrack[] = capabilities.audioTracks
+  const nativeAudioTracks: AudioTrack[] = capabilities.audioTracks
     ? mediaAudioTracks
         .filter((track) => track.kind === "audio")
         .map((track) => ({
@@ -203,6 +207,22 @@ export function buildMediaAdapterTrackCatalog({
           active: track.active,
         }))
     : [];
+  const runtimeAudioTracks =
+    capabilities.audioTracks && engineAudioTrackSelection
+      ? engineAudioTracks.map((track) => ({
+          ...track,
+          label: formatMediaTrackLabel(track.label, "audio"),
+          language: normalizeTrackLanguage(track.language),
+        }))
+      : [];
+  // Native adapters can expose only the currently attached/default track
+  // while the bridge runtime owns the complete catalog used for source
+  // replacement. Keep both catalogs available; the player decides which
+  // owner can handle a selected id.
+  const audioTracks = [...nativeAudioTracks, ...runtimeAudioTracks].filter(
+    (track, index, tracks) =>
+      tracks.findIndex((candidate) => candidate.id === track.id) === index,
+  );
   const embeddedSubtitles: SubtitleTrack[] = capabilities.embeddedSubtitles
     ? mediaSubtitleTracks
         .filter((track) => track.kind === "subtitle")

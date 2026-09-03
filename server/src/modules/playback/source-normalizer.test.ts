@@ -5,6 +5,7 @@ import type {
   PlaybackQuality,
 } from "@streamer/shared";
 import {
+  candidateNeedsRuntimeProbe,
   normalizeStream,
   qualityAllowedByPreferences,
   scoreCandidate,
@@ -67,6 +68,31 @@ function candidate(options: {
 }
 
 describe("scoreCandidate", () => {
+  it("does not trust a torrent title's container label", () => {
+    const torrent = normalizeStream({
+      infoHash: "labelled-mp4",
+      title: "Series.S01E01.1080p.H264.AAC.mp4",
+      resolution: "1080p",
+    });
+
+    expect(torrent.container).toBe("unknown");
+    expect(candidateNeedsRuntimeProbe(torrent, "play", webProfile)).toBe(true);
+    expect(candidateNeedsRuntimeProbe(torrent, "download", webProfile)).toBe(
+      false,
+    );
+  });
+
+  it("does not probe a torrent whose runtime container is already known", () => {
+    const knownMp4: MediaCandidate = {
+      ...candidate({ kind: "torrent", quality: "1080p", seeders: 20 }),
+      container: "mp4",
+    };
+
+    expect(candidateNeedsRuntimeProbe(knownMp4, "play", webProfile)).toBe(
+      false,
+    );
+  });
+
   it("prefers a healthy allowed 1080p torrent over a weak allowed 2160p torrent", () => {
     const weak2160p = candidate({
       kind: "torrent",

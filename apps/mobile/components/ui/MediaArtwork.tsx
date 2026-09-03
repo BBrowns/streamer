@@ -9,6 +9,10 @@ import {
   type ImageStyle,
   type ViewStyle,
 } from "react-native";
+import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../../lib/platformStyles";
 import { useUiMotion } from "../../hooks/useUiMotion";
 import { useTheme } from "../../hooks/useTheme";
 import { uiSpacing, uiTypography } from "./designSystem";
@@ -140,12 +144,13 @@ export function MediaArtwork({
 
       {state === "loading" ? (
         <View
-          pointerEvents="none"
+          pointerEvents={getNativePointerEvents("none")}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
           testID={testID ? `${testID}-skeleton` : undefined}
           style={[
             styles.skeleton,
+            getPointerEventsStyle("none"),
             {
               backgroundColor: colors.surfaceSubtle,
               opacity: duration("loadingLoop") === 0 ? 1 : 0.82,
@@ -163,14 +168,14 @@ export function MediaArtwork({
 
       {state === "fallback" ? (
         <View
-          pointerEvents="none"
+          pointerEvents={getNativePointerEvents("none")}
           accessibilityElementsHidden={!shouldExposeImage}
           importantForAccessibility={
             shouldExposeImage ? "auto" : "no-hide-descendants"
           }
           accessibilityLabel={imageAccessibilityLabel}
           testID={testID ? `${testID}-fallback` : undefined}
-          style={styles.fallback}
+          style={[styles.fallback, getPointerEventsStyle("none")]}
         >
           <Ionicons
             name={fallbackIconFor(variant)}

@@ -18,6 +18,7 @@ test("one SIGINT coordinates shutdown for every desktop-all child", async () => 
   const children = [createChild(101), createChild(102), createChild(103)];
   const spawnedScripts = [];
   let terminatedChildren = [];
+  let bridgeCleanedUp = false;
 
   const result = run({
     signalSource,
@@ -28,6 +29,10 @@ test("one SIGINT coordinates shutdown for every desktop-all child", async () => 
     waitForService: async () => true,
     terminateChildren: async (value) => {
       terminatedChildren = value.slice();
+      return true;
+    },
+    stopOwnedBridge: async () => {
+      bridgeCleanedUp = true;
       return true;
     },
   });
@@ -42,6 +47,7 @@ test("one SIGINT coordinates shutdown for every desktop-all child", async () => 
     "dev:desktop",
   ]);
   assert.deepEqual(terminatedChildren, children);
+  assert.equal(bridgeCleanedUp, true);
   assert.equal(signalSource.listenerCount("SIGINT"), 0);
   assert.equal(signalSource.listenerCount("SIGTERM"), 0);
 });

@@ -1208,6 +1208,7 @@
       "cancelPreparationHint": "Je kunt ook op Escape drukken om te annuleren.",
       "tryingFallback": "Een andere bron proberen...",
       "playbackStalledTryingFallback": "Het afspelen gaat niet meer vooruit. Een andere bron wordt geprobeerd.",
+      "playbackEndedTryingFallback": "Deze bron eindigde te vroeg. Een andere bron wordt geprobeerd.",
       "buffering": "Bufferen...",
       "errorTitle": "Verbinding mislukt",
       "noSourcesTitle": "Geen afspeelbare bron",
@@ -1302,6 +1303,12 @@
       "dark": "Donker",
       "light": "Licht",
       "system": "Systeem"
+    },
+    "syncStatus": {
+      "transport": "Synchronisatieverbinding tijdelijk niet beschikbaar",
+      "authRefresh": "Sessievernieuwing tijdelijk niet beschikbaar",
+      "rateLimited": "Synchronisatie tijdelijk beperkt",
+      "retry": "Synchronisatie opnieuw proberen"
     }
   },
   "notifications": {
@@ -1317,6 +1324,7 @@
     "loading": "Notificaties laden",
     "errorTitle": "Notificaties konden niet laden",
     "errorDescription": "Controleer je verbinding en probeer het opnieuw.",
+    "rateLimitedDescription": "Te veel aanvragen. Probeer het over ongeveer {{seconds}} seconden opnieuw.",
     "unread": "Ongelezen",
     "markAllRead": "Alles als gelezen markeren",
     "markAllReadA11y": "Markeer alle {{count}} ongelezen notificaties als gelezen",

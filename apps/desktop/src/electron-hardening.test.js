@@ -174,6 +174,15 @@ test("bridge restart stops only the tracked bridge and waits before starting", (
   assert.doesNotMatch(mainSource, /SIGKILL/);
 });
 
+test("desktop process signals stop the Electron-owned bridge before exit", () => {
+  assert.match(mainSource, /process\.once\("SIGINT"/);
+  assert.match(mainSource, /process\.once\("SIGTERM"/);
+  assert.match(
+    mainSource,
+    /signalShutdownPromise = stopTrackedBridgeDaemon\(\)/,
+  );
+});
+
 test("download job snapshots never return resolved download URLs", () => {
   const snapshotSource = mainSource.slice(
     mainSource.indexOf("function snapshotDownloadJob"),
@@ -204,6 +213,27 @@ test("desktop development waits for the renderer before launching Electron", () 
     fs.readFileSync(path.join(__dirname, "../scripts/dev.cjs"), "utf8"),
     /waitForRenderer/,
   );
+});
+
+test("desktop chooses a packaged file renderer unless dev override is enabled", () => {
+  assert.match(mainSource, /resolveRendererTarget/);
+  assert.match(mainSource, /rendererTarget\.kind === "dev-url"/);
+  assert.match(mainSource, /mainWindow\.loadFile\(rendererTarget\.path\)/);
+});
+
+test("desktop records renderer load and crash diagnostics with a recovery page", () => {
+  for (const requiredSnippet of [
+    "did-finish-load",
+    "did-fail-load",
+    "render-process-gone",
+    "console-message",
+    "renderer-error.html",
+  ]) {
+    assert.match(
+      mainSource,
+      new RegExp(requiredSnippet.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")),
+    );
+  }
 });
 
 test("desktop-all uses readiness checks instead of a fixed startup sleep", () => {
