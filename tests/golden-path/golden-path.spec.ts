@@ -632,6 +632,7 @@ test("cast eligibility uses a planner action and lists displays", async ({
   await expect(page).toHaveURL(
     new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}$`),
   );
+  const plannerRequestCount = castControls.plannerRequests.length;
   await page.getByRole("button", { name: "Cast to device" }).click();
   const castDialog = page.getByRole("dialog");
   await expect(castDialog.getByText("Cast", { exact: true })).toBeVisible();
@@ -640,7 +641,11 @@ test("cast eligibility uses a planner action and lists displays", async ({
     castDialog.getByText("Source ready. Choose a display."),
   ).toBeVisible();
   await expect(castDialog.getByText("Fixture Living Room")).toBeVisible();
-  expect(castControls.plannerRequests.at(-1)?.action).toBe("cast");
+  // Detail preflight may finish a play request after the cast request.
+  // Require a new cast plan without depending on concurrent request order.
+  expect(castControls.plannerRequests.slice(plannerRequestCount)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ action: "cast" })]),
+  );
 });
 
 test("primary surfaces remain responsive and keyboard accessible", async ({
