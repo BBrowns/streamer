@@ -179,7 +179,11 @@
     "http-proxy-agent": {
       "@tootallnate/once": "3.0.1"
     },
-    "@tootallnate/once": "3.0.1"
+    "@tootallnate/once": "3.0.1",
+    "query-string": {
+      "decode-uri-component": "0.5.0"
+    },
+    "stream-json": "3.6.0"
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,json,md}": [
@@ -190,7 +194,6 @@
   "allowScripts": {
     "@prisma/engines@7.10.0": true,
     "@sentry/cli@2.58.6": true,
-    "@sentry/cli@3.6.2": true,
     "fsevents@2.3.3": true,
     "fsevents@2.3.2": true,
     "ip-set@3.0.0": true,
@@ -205,6 +208,7 @@
     "utf-8-validate": false,
     "esbuild@0.28.2": true,
     "detox@20.51.4": true,
-    "node-datachannel@0.32.3": true
+    "node-datachannel@0.32.3": true,
+    "@sentry/cli@3.7.0": true
   }
 }

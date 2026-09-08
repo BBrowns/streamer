@@ -6,6 +6,24 @@ import test from "node:test";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+test("query-string bounds work on a long malformed percent-encoded value", () => {
+  execFileSync(
+    process.execPath,
+    [
+      "-e",
+      `
+    const assert = require('node:assert/strict');
+    const query = require('query-string');
+    const malformed = '%E0%A4'.repeat(4000);
+    const result = query.parse('value=' + malformed);
+    assert.equal(typeof result.value, 'string');
+    assert.ok(result.value.length > 0);
+  `,
+    ],
+    { cwd: repoRoot, timeout: 3000, stdio: "pipe" },
+  );
+});
+
 function makeUdpAnnounce(ipBytes) {
   const message = Buffer.alloc(98);
   Buffer.from("0000041727101980", "hex").copy(message, 0);

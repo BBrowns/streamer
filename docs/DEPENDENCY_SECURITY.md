@@ -105,19 +105,62 @@ of CI while still producing the checked-in desktop bridge binary. If the
 `node-datachannel` version changes, update the exact allow-list entry and the
 rebuild contract in the same reviewed dependency change.
 
-## Reviewed Transitive Findings
+Vitest and `@vitest/*` version updates are grouped, including majors, because
+coverage providers require the exact Vitest peer version. These updates remain
+manual. The root Compose manifest uses the `docker-compose` updater; the server
+Dockerfile keeps the `docker` updater.
 
-These exceptions do not block the production high/critical audit. Re-evaluate
-them before the next release candidate or by **2026-09-30**, whichever comes
-first. Owners: platform maintainers.
+The obsolete brace-expansion audit exception was removed on 2026-09-07:
+`test-exclude` now resolves the compatible 1.1.18 release, and the full audit no
+longer reports the advisory. Future regressions fail the normal audit policy.
 
-| Dependency path                                                  | Scope                                                        | Current decision                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@hono/node-ws@1.3.1` -> root peer `@hono/node-server@1.19.17`   | Server runtime peer compatibility; moderate finding          | The private root workspace declares an exact 1.19.17 peer so npm installs the adapter required by `@hono/node-ws`, while the server workspace keeps its direct `@hono/node-server@2.1.1` runtime adapter. The lockfile contract test asserts both versions; remove this exception when the WebSocket adapter moves to the 2.x line.                                                                                                                          |
-| Expo/xcode tooling -> older `uuid`                               | Mobile development tooling; moderate finding                 | The root tooling pin is now `uuid@14.0.2`, while `xcode@3.0.1` keeps a scoped nested `uuid@11.1.1` override for its CommonJS helper. Remove the nested override when Expo ships an xcode release that supports the newer UUID API.                                                                                                                                                                                                                           |
-| Vite/tsx -> `esbuild@0.27.x`                                     | Local development server only                                | Direct stream-server builds use patched `esbuild@0.28.x`. Keep dev servers bound to trusted local interfaces and update with the upstream toolchain.                                                                                                                                                                                                                                                                                                         |
-| Testcontainers/node-gyp -> `undici`                              | Test/build tooling only                                      | Track Testcontainers and node-gyp updates; it is not shipped in the application runtime.                                                                                                                                                                                                                                                                                                                                                                     |
-| React Native/Jest tooling -> `test-exclude` -> `brace-expansion` | Transform and test tooling; high resource-exhaustion finding | Advisory `GHSA-mh99-v99m-4gvg` has no patched 1.x release. The audit exception accepts only `node_modules/test-exclude/node_modules/brace-expansion`; a new path still fails CI. Do not force 5.x into legacy `minimatch`, whose CommonJS callable API is incompatible. Inputs are repository-controlled globs, not remote user patterns. Exception expires 2026-09-30 or before the next RC; upgrade the owning Expo toolchain when a compatible fix ships. |
+## September 2026 Maintenance Remediation
+
+The 2026-09-08 full and production dependency audits report no advisories with
+this lockfile. The obsolete brace-expansion exception is removed; no audit
+threshold or exception was added for this maintenance change.
+
+Vitest and its V8 coverage provider now use the same exact 5.0.0 version in
+all three test workspaces. Vite stays on the supported 7.x override and Node
+stays on 26.7.0. The dependency compatibility test rejects divergent workspace
+or coverage peer versions. Review future upgrades as one toolchain change.
+
+The framework update keeps Expo SDK 57 and React Native 0.86.3, updates
+Electron to 44.2.0 and Sentry React Native to 8.25.0, and refreshes compatible
+Expo, Hono, Sentry and TypeScript ESLint patches. Sentry CLI 3.7.0 replaces the
+exact 3.6.2 install-script approval. The published installer and wrapper files
+are unchanged; the platform binary versions and checksums change. The separate
+2.58.6 approval remains for Sentry's bundler plugins. Electron 7.18.0's Sentry
+integration logging defaults are kept; this app did not enable those logs.
+
+Two parser updates require temporary consumer patches rather than a blind
+major override:
+
+- `query-string@7.1.3` resolves `decode-uri-component@0.5.0`. Its patch unwraps
+  the ESM default export for the existing CommonJS caller. This keeps Expo's
+  query parsing API while using the upstream bounded decoder. Mobile Jest also
+  transforms this ESM dependency, with an unmocked query parser regression test.
+  Owner: mobile
+  platform maintainers. Remove the patch and scoped override when Expo Router
+  adopts a query-string release using the repaired decoder directly.
+- `stream-json@3.6.0` replaces the vulnerable 1.x dependency used only by
+  Detox and Bunyamin. Their pinned patches select the new JSONL/array entry
+  points and explicit Node stream adapters. Bunyamin's CommonJS, ESM and
+  TypeScript entry points stay aligned. Node 26 supports the synchronous ESM
+  import used by Detox. Owner: test infrastructure maintainers. Remove these
+  parser patches and the override when Detox/Bunyamin adopt stream-json 3.6+
+  upstream. The compatibility tests cover chunked records, malformed JSONL,
+  stream completion and trace merging in both module formats.
+
+The existing Expo Updates Android dev-client patch is retargeted unchanged to
+57.0.21. Remove it after an upstream update preserves the tested Detox startup
+behavior without the patch. Owner: mobile platform maintainers. Review these
+patches at the next dependency upgrade and before the next release candidate.
+
+Sources: [Vitest 5 migration](https://vitest.dev/guide/migration),
+[Sentry CLI comparison](https://github.com/getsentry/sentry-cli/compare/3.6.2...3.7.0),
+[URI decoder release](https://github.com/SamVerschueren/decode-uri-component/releases/tag/v0.5.0),
+[stream-json source](https://github.com/uhop/stream-json).
 
 ## Compatibility Overrides
 
@@ -210,7 +253,7 @@ nested React test renderer internally; that does not justify a Jest 30
 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
 `@react-native-async-storage/async-storage/jest`. The tested native upgrades
 are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.9.1`, and
-Sentry React Native `8.24.x`; keep them aligned with Expo before changing the
+Sentry React Native `8.25.x`; keep them aligned with Expo before changing the
 SDK major. `expo-modules-core@57` accepts Worklets through the 0.10.x line, so
 Reanimated 4.6/Worklets 0.12 must wait for the next Expo SDK migration. These
 modules require the New Architecture and a fresh native rebuild; CI and
@@ -237,7 +280,7 @@ builds before merging a future RNGH, React Native, or Expo major upgrade.
 
 The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
 retains its nested adapter until an upstream compatible release exists. The
-desktop app uses Electron `44.0.0` and direct `@electron/notarize` `3.1.1`;
+desktop app uses Electron `44.2.0` and direct `@electron/notarize` `3.1.1`;
 electron-builder may retain its own nested notarize 2.x contract. These nested
 paths are compatibility boundaries, not reasons to force global overrides.
 
