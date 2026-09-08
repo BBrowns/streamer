@@ -59,6 +59,11 @@ updates:
         versions:
           - ">=15.0.0"
     groups:
+      npm-vitest-manual:
+        # Coverage providers require the exact Vitest version, including majors.
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       npm-security-runtime:
         applies-to: security-updates
         dependency-type: production
@@ -141,7 +146,7 @@ updates:
         update-types:
           - patch
 
-  - package-ecosystem: docker
+  - package-ecosystem: docker-compose
     directory: /
     target-branch: master
     schedule:

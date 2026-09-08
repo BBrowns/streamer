@@ -1,0 +1,29 @@
+diff --git a/node_modules/bunyamin/dist/index.mjs b/node_modules/bunyamin/dist/index.mjs
+--- a/node_modules/bunyamin/dist/index.mjs
++++ b/node_modules/bunyamin/dist/index.mjs
+@@ -5 +5 @@
+-import StreamArray from 'stream-json/streamers/StreamArray.js';
++import StreamArray from 'stream-json/streamers/stream-array.js';
+@@ -990 +990 @@
+-  }).pipe(StreamArray.withParser()).pipe(new MapValues(filePath));
++  }).pipe(StreamArray.withParserAsStream()).pipe(new MapValues(filePath));
+diff --git a/node_modules/bunyamin/dist/index.umd.js b/node_modules/bunyamin/dist/index.umd.js
+--- a/node_modules/bunyamin/dist/index.umd.js
++++ b/node_modules/bunyamin/dist/index.umd.js
+@@ -2,2 +2,2 @@
+-  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('node:stream'), require('@flatten-js/interval-tree'), require('trace-event-lib'), require('node:fs'), require('stream-json/streamers/StreamArray.js'), require('multi-sort-stream')) :
+-  typeof define === 'function' && define.amd ? define(['exports', 'node:stream', '@flatten-js/interval-tree', 'trace-event-lib', 'node:fs', 'stream-json/streamers/StreamArray.js', 'multi-sort-stream'], factory) :
++  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('node:stream'), require('@flatten-js/interval-tree'), require('trace-event-lib'), require('node:fs'), require('stream-json/streamers/stream-array.js'), require('multi-sort-stream')) :
++  typeof define === 'function' && define.amd ? define(['exports', 'node:stream', '@flatten-js/interval-tree', 'trace-event-lib', 'node:fs', 'stream-json/streamers/stream-array.js', 'multi-sort-stream'], factory) :
+@@ -1014 +1014 @@
+-    }).pipe(StreamArray__default["default"].withParser()).pipe(new MapValues(filePath));
++    }).pipe(StreamArray__default["default"].withParserAsStream()).pipe(new MapValues(filePath));
+diff --git a/node_modules/bunyamin/src/streams/jsonl/jsonlReadFile.ts b/node_modules/bunyamin/src/streams/jsonl/jsonlReadFile.ts
+--- a/node_modules/bunyamin/src/streams/jsonl/jsonlReadFile.ts
++++ b/node_modules/bunyamin/src/streams/jsonl/jsonlReadFile.ts
+@@ -5 +5 @@
+-import StreamArray from 'stream-json/streamers/StreamArray.js';
++import StreamArray from 'stream-json/streamers/stream-array.js';
+@@ -10 +10 @@
+-    .pipe(StreamArray.withParser())
++    .pipe(StreamArray.withParserAsStream())
