@@ -62,7 +62,7 @@ jobs:
             "expo" "@expo/" "react" "react-native" "electron" \
             "prisma" "typescript" "@typescript-eslint/" "@sentry/" \
             "hono" "@hono/" "nativewind" "tailwindcss" "esbuild" \
-            "@rollup/" "sharp" "sqlite"; do
+            "@rollup/" "sharp" "sqlite" "vitest"; do
             if [[ "${dependency_names}" == *"${protected_pattern}"* ]]; then
               echo "eligible=false" >> "${GITHUB_OUTPUT}"
               echo "Skipping auto-merge for protected dependency: ${protected_pattern}"

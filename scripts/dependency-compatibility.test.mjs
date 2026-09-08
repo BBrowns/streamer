@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -13,6 +14,25 @@ function readLockfile() {
     readFileSync(resolve(repoRoot, "package-lock.json"), "utf8"),
   );
 }
+
+test("Vitest workspaces and coverage resolve one exact compatible version", () => {
+  const { packages } = readLockfile();
+  const vitest = packages["node_modules/vitest"];
+  const coverage = packages["node_modules/@vitest/coverage-v8"];
+  assert.equal(coverage.peerDependencies.vitest, vitest.version);
+  for (const workspace of [
+    "server",
+    "packages/shared",
+    "packages/stream-server",
+  ]) {
+    assert.equal(packages[workspace].devDependencies.vitest, vitest.version);
+  }
+  for (const [path, info] of Object.entries(packages)) {
+    if (path.endsWith("/node_modules/vitest")) {
+      assert.equal(info.version, vitest.version);
+    }
+  }
+});
 
 test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
   const xcode = require("xcode");
@@ -31,6 +51,73 @@ test("Detox remains loadable with the workspace glob override", () => {
   const detox = require("detox");
 
   assert.ok(detox);
+});
+
+test("the stream-json override only serves migrated Detox and Bunyamin consumers", () => {
+  const { packages } = readLockfile();
+  const consumers = Object.entries(packages)
+    .filter(([, info]) => info.dependencies?.["stream-json"])
+    .map(([path]) => path)
+    .sort();
+  assert.deepEqual(consumers, ["node_modules/bunyamin", "node_modules/detox"]);
+  assert.equal(packages["node_modules/stream-json"].version, "3.6.0");
+});
+
+test("Expo query parsing preserves Unicode, repeated keys and malformed escapes", () => {
+  const queryString = require("query-string");
+  assert.deepEqual(
+    { ...queryString.parse("title=caf%C3%A9&tag=one&tag=two&bare&bad=%ZZ") },
+    { title: "café", tag: ["one", "two"], bare: null, bad: "%ZZ" },
+  );
+});
+
+test("Detox JSONL parsing preserves records across input chunks", async () => {
+  const Parser = require("detox/src/logger/utils/streams/DetoxJSONLParser");
+  const { readable, writable } = new Parser({ debug() {} }).createTransformer();
+  writable.write('{"message":"fir');
+  writable.end('st"}\n{"message":"second"}\n');
+  const records = [];
+  for await (const record of readable) records.push(record);
+  assert.deepEqual(records, [
+    { key: 0, value: { message: "first" } },
+    { key: 1, value: { message: "second" } },
+  ]);
+});
+
+test(
+  "Detox reports malformed JSONL and closes its readable stream",
+  { timeout: 2000 },
+  async () => {
+    const Parser = require("detox/src/logger/utils/streams/DetoxJSONLParser");
+    const errors = [];
+    const { readable, writable } = new Parser({
+      debug({ err }) {
+        errors.push(err);
+      },
+    }).createTransformer();
+    writable.end('{"message":"before error"}\nnot-json');
+    const records = [];
+    for await (const record of readable) records.push(record);
+    assert.deepEqual(records, [{ key: 0, value: { message: "before error" } }]);
+    assert.equal(errors.length, 1);
+    assert.ok(errors[0] instanceof SyntaxError);
+  },
+);
+
+test("Bunyamin CommonJS and ESM trace merging preserves array records", async () => {
+  const directory = mkdtempSync(resolve(tmpdir(), "streamer-log-parser-"));
+  const filePath = resolve(directory, "logs.json");
+  writeFileSync(filePath, '[{"message":"first"},{"message":"second"}]');
+  try {
+    for (const module of [require("bunyamin"), await import("bunyamin")]) {
+      const records = [];
+      for await (const record of module.uniteTraceEvents([filePath]))
+        records.push(record);
+      assert.deepEqual(records, [{ message: "first" }, { message: "second" }]);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("React Native resolves the supported Metro line without image-size", () => {
@@ -64,7 +151,7 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
   const safeArea =
     lockfile.packages["node_modules/react-native-safe-area-context"];
 
-  assert.equal(expoModulesCore.version, "57.0.14");
+  assert.equal(expoModulesCore.version, "57.0.15");
   assert.equal(reanimated.version, "4.5.5");
   assert.equal(worklets.version, "0.10.4");
   assert.equal(safeArea.version, "5.9.1");
@@ -72,7 +159,10 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
     expoModulesCore.peerDependencies["react-native-worklets"],
     "^0.7.4 || ^0.8.0 || ^0.9.0 || ^0.10.0",
   );
-  assert.match(reanimated.peerDependencies["react-native-worklets"], /0\.10\.x/);
+  assert.match(
+    reanimated.peerDependencies["react-native-worklets"],
+    /0\.10\.x/,
+  );
 });
 
 test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
@@ -92,15 +182,11 @@ test("Hono WebSocket tooling keeps its compatible peer beside the server adapter
   const lockfile = readLockfile();
   const rootPackage = lockfile.packages[""];
   const websocketPackage = lockfile.packages["node_modules/@hono/node-ws"];
-  const rootNodeServer =
-    lockfile.packages["node_modules/@hono/node-server"];
+  const rootNodeServer = lockfile.packages["node_modules/@hono/node-server"];
   const serverNodeServer =
     lockfile.packages["server/node_modules/@hono/node-server"];
 
-  assert.equal(
-    rootPackage.peerDependencies["@hono/node-server"],
-    "1.19.17",
-  );
+  assert.equal(rootPackage.peerDependencies["@hono/node-server"], "1.19.17");
   assert.equal(rootNodeServer.version, "1.19.17");
   assert.equal(rootNodeServer.peer, true);
   assert.equal(

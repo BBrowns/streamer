@@ -3,14 +3,7 @@ import { pathToFileURL } from "node:url";
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
-export const REVIEWED_ADVISORIES = Object.freeze({
-  "GHSA-MH99-V99M-4GVG": {
-    dependency: "brace-expansion",
-    expiresOn: "2026-09-30",
-    scope: "repository-controlled transform, test, and packaging globs",
-    allowedNodes: ["node_modules/test-exclude/node_modules/brace-expansion"],
-  },
-});
+export const REVIEWED_ADVISORIES = Object.freeze({});
 
 function advisoryId(url) {
   if (typeof url !== "string") return null;

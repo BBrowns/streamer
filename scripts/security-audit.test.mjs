@@ -2,6 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { evaluateAuditReport, REVIEWED_ADVISORIES } from "./security-audit.mjs";
 
+const historicalExceptions = {
+  "GHSA-MH99-V99M-4GVG": {
+    dependency: "brace-expansion",
+    expiresOn: "2026-09-30",
+    scope: "repository-controlled transform, test, and packaging globs",
+    allowedNodes: ["node_modules/test-exclude/node_modules/brace-expansion"],
+  },
+};
+
+test("the remediated brace-expansion advisory is no longer exempted", () => {
+  assert.deepEqual(REVIEWED_ADVISORIES, {});
+});
+
 function reportFor({
   name,
   severity = "high",
@@ -35,7 +48,10 @@ test("allows only the exact reviewed brace-expansion advisory before expiry", ()
       url: "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
       nodes: ["node_modules/test-exclude/node_modules/brace-expansion"],
     }),
-    { now: new Date("2026-07-28T00:00:00.000Z") },
+    {
+      exceptions: historicalExceptions,
+      now: new Date("2026-07-28T00:00:00.000Z"),
+    },
   );
 
   assert.equal(result.blocking.length, 0);
@@ -61,7 +77,10 @@ test("blocks the reviewed advisory after its expiry", () => {
       url: "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
       nodes: ["node_modules/test-exclude/node_modules/brace-expansion"],
     }),
-    { now: new Date("2026-10-01T00:00:00.000Z") },
+    {
+      exceptions: historicalExceptions,
+      now: new Date("2026-10-01T00:00:00.000Z"),
+    },
   );
 
   assert.equal(result.blocking.length, 1);
@@ -74,7 +93,10 @@ test("blocks the reviewed advisory on an unexpected dependency path", () => {
       url: "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
       nodes: ["node_modules/runtime-package/node_modules/brace-expansion"],
     }),
-    { now: new Date("2026-07-28T00:00:00.000Z") },
+    {
+      exceptions: historicalExceptions,
+      now: new Date("2026-07-28T00:00:00.000Z"),
+    },
   );
 
   assert.equal(result.blocking.length, 1);
@@ -88,7 +110,7 @@ test("blocks an advisory when the dependency does not match the exception", () =
       url: "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
     }),
     {
-      exceptions: REVIEWED_ADVISORIES,
+      exceptions: historicalExceptions,
       now: new Date("2026-07-28T00:00:00.000Z"),
     },
   );
