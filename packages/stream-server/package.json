@@ -23,7 +23,7 @@
     "express": "^5.2.1",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11",
+    "vitest": "5.0.0",
     "webtorrent": "^3.0.21"
   },
   "dependencies": {
