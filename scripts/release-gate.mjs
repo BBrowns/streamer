@@ -553,10 +553,11 @@ function checkDependencySecurity() {
     "blocking production high/critical audit",
   );
   requireFile("scripts/security-audit.mjs");
+  requireFile("scripts/security-audit.test.mjs");
   requireText(
     "scripts/security-audit.mjs",
-    "GHSA-MH99-V99M-4GVG",
-    "reviewed brace-expansion advisory exception",
+    "REVIEWED_ADVISORIES",
+    "explicit reviewed-advisory registry (which may be empty)",
   );
   requireText(
     "package.json",
@@ -565,13 +566,13 @@ function checkDependencySecurity() {
   );
   requireText(
     "docs/DEPENDENCY_SECURITY.md",
-    "Reviewed Transitive Findings",
-    "reviewed dependency exceptions",
+    "Compatibility Overrides",
+    "documented dependency compatibility controls",
   );
   requireText(
     "docs/DEPENDENCY_SECURITY.md",
-    "2026-09-30",
-    "dependency exception review deadline",
+    "before the next release candidate",
+    "dependency review trigger",
   );
   requireText(
     "server/package.json",
