@@ -114,6 +114,11 @@ The obsolete brace-expansion audit exception was removed on 2026-09-07:
 `test-exclude` now resolves the compatible 1.1.18 release, and the full audit no
 longer reports the advisory. Future regressions fail the normal audit policy.
 
+The root overrides pin `js-yaml@4.3.2` and `nodemailer@9.1.1` while upstream
+consumers catch up with their patched ranges. These versions remove the
+currently blocking production advisories; revisit the overrides when every
+consumer declares a fixed range and keep the production audit as the gate.
+
 ## September 2026 Maintenance Remediation
 
 The 2026-09-08 full and production dependency audits report no advisories with
