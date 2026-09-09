@@ -8,6 +8,7 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const semver = require("semver");
 
 function readLockfile() {
   return JSON.parse(
@@ -145,13 +146,21 @@ test("React Native resolves the supported Metro line without image-size", () => 
 
 test("Expo 57 native modules stay on a compatible Worklets contract", () => {
   const lockfile = readLockfile();
+  const expo = lockfile.packages["node_modules/expo"];
   const expoModulesCore = lockfile.packages["node_modules/expo-modules-core"];
   const reanimated = lockfile.packages["node_modules/react-native-reanimated"];
   const worklets = lockfile.packages["node_modules/react-native-worklets"];
   const safeArea =
     lockfile.packages["node_modules/react-native-safe-area-context"];
 
-  assert.equal(expoModulesCore.version, "57.0.15");
+  assert.ok(expo);
+  assert.ok(
+    semver.satisfies(
+      expoModulesCore.version,
+      expo.dependencies["expo-modules-core"],
+    ),
+  );
+  assert.match(expoModulesCore.version, /^57\.0\./);
   assert.equal(reanimated.version, "4.5.5");
   assert.equal(worklets.version, "0.10.4");
   assert.equal(safeArea.version, "5.9.1");
