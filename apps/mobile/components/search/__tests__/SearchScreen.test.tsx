@@ -346,6 +346,8 @@ describe("SearchScreen keyboard behavior", () => {
     const screen = await render(<SearchScreen />);
 
     expect(screen.getByText("search.states.errorTitle")).toBeTruthy();
+    expect(screen.getByText("Results unavailable")).toBeTruthy();
+    expect(screen.queryByText("0 results")).toBeNull();
     expect(screen.queryByTestId("search-results-grid")).toBeNull();
   });
 

@@ -80,7 +80,16 @@ export function PersonalizationSection() {
           subtitle={t("settings.playbackPreferences.audioDescription")}
         >
           <SegmentedControl
-            options={languageOptions}
+            options={languageOptions.map((option) =>
+              option.value === "none"
+                ? {
+                    ...option,
+                    label: t(
+                      "settings.playbackPreferences.languages.noPreference",
+                    ),
+                  }
+                : option,
+            )}
             value={preferredAudioLang ?? "none"}
             onChange={(language) => {
               hapticImpactLight();

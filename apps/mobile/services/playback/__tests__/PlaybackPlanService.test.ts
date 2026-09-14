@@ -23,6 +23,17 @@ jest.mock("../../api", () => ({
     post: jest.fn(),
   },
 }));
+jest.mock("../../streamEngine/bridgeReadinessRuntime", () => ({
+  ensureBridgeReadiness: jest.fn(async () => {
+    const {
+      streamEngineManager: manager,
+    } = require("../../streamEngine/StreamEngineManager");
+    return {
+      bridgeAvailable:
+        manager.bridgeAvailable || (await manager.detectBridge()),
+    };
+  }),
+}));
 
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
   streamEngineManager: {

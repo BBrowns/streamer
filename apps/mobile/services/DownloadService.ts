@@ -236,17 +236,33 @@ export class DownloadService {
         : typeof error === "string"
           ? error
           : "";
+    const failureReason = classifyDownloadFailure(error);
+    const isRateLimited = failureReason === "rate_limited";
+    const retryAfterMs =
+      error && typeof error === "object"
+        ? (error as { retryAfterMs?: unknown }).retryAfterMs
+        : undefined;
     const code = /cannot be (?:saved|verified)|hls downloads/i.test(rawMessage)
       ? "SOURCE_UNAVAILABLE"
       : inferPlaybackErrorCodeFromMessages([rawMessage]) ||
         "SOURCE_UNAVAILABLE";
     failPlaybackSession(
       playbackSession.sessionId,
-      createPlaybackRuntimeError(code, "Download failed before it was saved.", {
-        retryable: true,
-        shouldFallback: false,
-        debugMessage: rawMessage || undefined,
-      }),
+      createPlaybackRuntimeError(
+        code,
+        isRateLimited
+          ? "Download is temporarily rate-limited. Try again shortly."
+          : "Download failed before it was saved.",
+        {
+          retryable: true,
+          shouldFallback: false,
+          retryAfterMs:
+            typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)
+              ? retryAfterMs
+              : undefined,
+          debugMessage: isRateLimited ? "rate_limited" : undefined,
+        },
+      ),
     );
   }
 
@@ -670,7 +686,11 @@ export class DownloadService {
       existingTask?.status === "Verifying" ||
       existingTask?.status === "Completed"
     ) {
-      if (options.playbackSession) {
+      const isSamePlaybackSession =
+        Boolean(options.playbackSession) &&
+        existingTask.playbackSession?.sessionId ===
+          options.playbackSession?.sessionId;
+      if (options.playbackSession && !isSamePlaybackSession) {
         cancelPlaybackSession(
           options.playbackSession.sessionId,
           "Download is already present in the queue.",

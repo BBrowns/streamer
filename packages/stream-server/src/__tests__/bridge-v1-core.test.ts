@@ -125,6 +125,39 @@ describe("bridge v1 application contract", () => {
     }
   });
 
+  it("negotiates audio preferences without adding a field for legacy clients", async () => {
+    expect(
+      (await buildBridgeCapabilitiesV1()).capabilities.jobs,
+    ).not.toHaveProperty("audioPreferences");
+    expect(
+      (await buildBridgeCapabilitiesV1({ audioPreferences: true })).capabilities
+        .jobs.audioPreferences,
+    ).toBe(true);
+  });
+
+  it("binds the audio preference and Specials to idempotency", async () => {
+    const input = {
+      requestId: REQUEST_ID,
+      source: { kind: "magnet" as const, magnet: "magnet:?xt=urn:btih:abcdef" },
+      delivery: "hls" as const,
+      selection: { season: 0, episode: 1, audioLanguage: "nl" },
+    };
+    await createBridgeJobV1("principal", input);
+    expect(gatewayMocks.createGatewayJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioLanguage: "nl",
+        hints: { season: 0, episode: 1, title: undefined },
+        attemptId: REQUEST_ID,
+      }),
+    );
+    expect(
+      await createBridgeJobV1("principal", {
+        ...input,
+        selection: { ...input.selection, audioLanguage: null },
+      }),
+    ).toEqual({ kind: "conflict" });
+  });
+
   it("maps delivery into the existing gateway lifecycle", async () => {
     const result = await createBridgeJobV1("principal-1", {
       requestId: REQUEST_ID,
@@ -142,6 +175,8 @@ describe("bridge v1 application contract", () => {
 
     expect(result.kind).toBe("job");
     expect(gatewayMocks.createGatewayJob).toHaveBeenCalledWith({
+      attemptId: REQUEST_ID,
+      audioLanguage: undefined,
       magnet: "magnet:?xt=urn:btih:abcdef",
       fileIdx: 0,
       hints: {

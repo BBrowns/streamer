@@ -29,6 +29,32 @@ describe("actionRecovery", () => {
     ).toBe("storage_pressure");
   });
 
+  it("keeps rate limits retryable without routing them to bridge repair", () => {
+    expect(
+      classifyDownloadFailure(
+        new Error("Bridge rate-limited; retry after cooldown"),
+      ),
+    ).toBe("rate_limited");
+    expect(
+      classifyDownloadFailure({
+        code: "SOURCE_UNAVAILABLE",
+        message: "This source is temporarily rate-limited.",
+        debugMessage: "rate_limited",
+      }),
+    ).toBe("rate_limited");
+    expect(
+      getDownloadRecovery({
+        status: "Error",
+        error: "Too many requests; retry after cooldown",
+        failureReason: "rate_limited",
+      }),
+    ).toMatchObject({
+      reason: "rate_limited",
+      action: "retry",
+      title: "Download temporarily paused",
+    });
+  });
+
   it("replans a missing offline file instead of calling it ready", () => {
     expect(
       getDownloadRecovery({

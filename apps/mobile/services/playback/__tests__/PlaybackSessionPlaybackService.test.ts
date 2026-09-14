@@ -33,6 +33,7 @@ import {
   advancePlaybackSessionAfterFailure,
   cancelPlaybackSession,
   getActivePlaybackSourceRuntime,
+  inheritAutomaticPlayAttempts,
   markPlaybackSessionBuffering,
   markPlaybackSessionPlaying,
   resolveCastSession,
@@ -42,6 +43,9 @@ import {
 
 jest.mock("expo-crypto", () => ({
   randomUUID: jest.fn(),
+}));
+jest.mock("../../streamEngine/bridgeReadinessRuntime", () => ({
+  ensureBridgeReadiness: jest.fn().mockResolvedValue({ bridgeAvailable: true }),
 }));
 
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
@@ -329,7 +333,9 @@ describe("PlaybackSessionPlaybackService", () => {
       createJob: jest.fn().mockResolvedValue(readyJob),
       getJob: jest.fn().mockResolvedValue(readyJob),
       cancelJob: jest.fn().mockResolvedValue(null),
-      getCapabilities: jest.fn(),
+      getCapabilities: jest
+        .fn()
+        .mockResolvedValue({ capabilities: { jobs: {} } }),
       getJobMetrics: jest.fn(),
       getTrackCatalog: jest.fn(),
       getSubtitleDocument: jest.fn(),
@@ -419,7 +425,9 @@ describe("PlaybackSessionPlaybackService", () => {
       createJob: jest.fn().mockResolvedValue(readyJob),
       getJob: jest.fn().mockResolvedValue(readyJob),
       cancelJob: jest.fn().mockResolvedValue(null),
-      getCapabilities: jest.fn(),
+      getCapabilities: jest
+        .fn()
+        .mockResolvedValue({ capabilities: { jobs: {} } }),
       getJobMetrics: jest.fn(),
       getTrackCatalog: jest.fn(),
       getSubtitleDocument: jest.fn(),
@@ -493,7 +501,9 @@ describe("PlaybackSessionPlaybackService", () => {
       createJob: jest.fn().mockResolvedValue(readyJob),
       getJob: jest.fn().mockResolvedValue(readyJob),
       cancelJob: jest.fn().mockResolvedValue(null),
-      getCapabilities: jest.fn(),
+      getCapabilities: jest
+        .fn()
+        .mockResolvedValue({ capabilities: { jobs: {} } }),
       getJobMetrics: jest.fn(),
       getTrackCatalog: jest.fn(),
       getSubtitleDocument: jest.fn(),
@@ -566,7 +576,9 @@ describe("PlaybackSessionPlaybackService", () => {
       createJob: jest.fn().mockResolvedValue(readyJob),
       getJob: jest.fn().mockResolvedValue(readyJob),
       cancelJob: jest.fn().mockResolvedValue(null),
-      getCapabilities: jest.fn(),
+      getCapabilities: jest
+        .fn()
+        .mockResolvedValue({ capabilities: { jobs: {} } }),
       getJobMetrics: jest.fn(),
       getTrackCatalog: jest.fn(),
       getSubtitleDocument: jest.fn(),
@@ -1391,6 +1403,111 @@ describe("PlaybackSessionPlaybackService", () => {
     expect(
       new Set(updated.attempts.map((attempt) => attempt.candidateId)).size,
     ).toBe(5);
+  });
+
+  it("bounds automatic download fallback to five unique candidates", async () => {
+    const candidates = Array.from({ length: 6 }, (_, index) =>
+      makePlannedMediaCandidate({
+        id: `00000000-0000-4000-8000-${String(index + 30).padStart(12, "0")}`,
+        rank: index,
+        kind: "direct",
+        stream: {
+          url: `https://cdn.example.test/download-failure-${index}.mp4`,
+          title: `Download failure ${index}`,
+        },
+        actionEligibility: {
+          action: "download",
+          eligible: true,
+        },
+      }),
+    );
+    const plan = makePlaybackPlan({
+      action: "download",
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: candidates[0],
+        fallbackCandidates: candidates.slice(1),
+      },
+    });
+    const engines: Array<ReturnType<typeof makeEngine>> = [];
+    resolveEngine.mockImplementation(() => {
+      const engine = makeEngine(async () => {
+        throw new Error("Source did not return a downloadable URL.");
+      });
+      engines.push(engine);
+      return engine;
+    });
+    const session = usePlaybackSessionStore.getState().createSession({
+      plan,
+      content: { type: "movie", id: "tt123" },
+      deviceProfile,
+      bridge: { status: "available" },
+    });
+
+    const result = await resolveDownloadSession(session.id);
+    const updated = usePlaybackSessionStore.getState().sessions[session.id];
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "NO_PLAYABLE_SOURCE", shouldFallback: false },
+    });
+    expect(engines).toHaveLength(5);
+    expect(updated.attempts).toHaveLength(5);
+    expect(
+      new Set(updated.attempts.map((attempt) => attempt.candidateId)).size,
+    ).toBe(5);
+  });
+
+  it("carries the remaining Play budget across replanning and skips an old source with a new id", async () => {
+    const candidates = Array.from({ length: 4 }, (_, index) =>
+      makePlannedMediaCandidate({
+        id: `00000000-0000-4000-8000-${String(index + 20).padStart(12, "0")}`,
+        rank: index,
+        kind: "direct",
+        stream: { url: `https://cdn.example.test/replanned-${index}.mp4` },
+      }),
+    );
+    const previousCandidate = {
+      ...candidates[0],
+      id: "00000000-0000-4000-8000-000000000010",
+    };
+    const session = usePlaybackSessionStore.getState().createSession({
+      plan: makePlaybackPlan({
+        state: "ready",
+        plan: {
+          mode: "direct",
+          selectedCandidate: candidates[0],
+          fallbackCandidates: candidates.slice(1),
+        },
+      }),
+      content: { type: "movie", id: "tt123" },
+      deviceProfile,
+    });
+    inheritAutomaticPlayAttempts(session.id, 3, [previousCandidate]);
+    resolveEngine.mockImplementation(() =>
+      makeEngine(async () => {
+        throw new Error("Source did not return a playback URL.");
+      }),
+    );
+
+    const result = await resolvePlaybackSession(session.id);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { shouldFallback: false },
+    });
+    const attempts =
+      usePlaybackSessionStore.getState().sessions[session.id].attempts;
+    expect(attempts.map((attempt) => attempt.candidateId)).toEqual([
+      session.candidates[1].id,
+      session.candidates[2].id,
+    ]);
+    expect(resolveEngine).toHaveBeenCalledTimes(2);
+    expect(resolveEngine.mock.calls.map(([stream]) => stream.url)).toEqual([
+      candidates[1].stream.url,
+      candidates[2].stream.url,
+    ]);
   });
 
   it("enforces the planner timeout budget and stops a stalled engine", async () => {

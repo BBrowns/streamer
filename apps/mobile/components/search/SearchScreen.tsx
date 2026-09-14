@@ -713,14 +713,18 @@ export function SearchScreen() {
                         })
                     : resultState === "filter-pagination-limit"
                       ? t("search.states.filterLimitTitle")
-                      : t("search.results.count", {
-                          count:
-                            secondaryFilterCount > 0
-                              ? filteredResults.length
-                              : (fullSearch.data?.total ??
-                                filteredResults.length),
-                          defaultValue: `${secondaryFilterCount > 0 ? filteredResults.length : (fullSearch.data?.total ?? filteredResults.length)} results`,
-                        })}
+                      : resultState === "transport-error"
+                        ? t("search.results.unavailable", {
+                            defaultValue: "Results unavailable",
+                          })
+                        : t("search.results.count", {
+                            count:
+                              secondaryFilterCount > 0
+                                ? filteredResults.length
+                                : (fullSearch.data?.total ??
+                                  filteredResults.length),
+                            defaultValue: `${secondaryFilterCount > 0 ? filteredResults.length : (fullSearch.data?.total ?? filteredResults.length)} results`,
+                          })}
                 </Text>
               </View>
 

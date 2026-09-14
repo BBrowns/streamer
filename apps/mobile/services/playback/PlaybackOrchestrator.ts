@@ -30,6 +30,10 @@ import {
 } from "./PlaybackErrors";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
 import { recordPlaybackDebugEvent } from "./playbackDebug";
+import {
+  DownloadOperationRegistry,
+  getDownloadOperationKey,
+} from "../downloadOperationRegistry";
 
 export interface PlaybackOrchestratorInput {
   type: "movie" | "series";
@@ -66,6 +70,8 @@ export interface PlaybackOrchestratorFailure {
 
 export type PlaybackOrchestratorResult =
   PlaybackOrchestratorSuccess | PlaybackOrchestratorFailure;
+
+const downloadPreparationRegistry = new DownloadOperationRegistry();
 
 export interface DownloadOrchestratorSuccess {
   ok: true;
@@ -290,7 +296,15 @@ export async function playCandidate(
   };
 }
 
-export async function prepareDownload(
+export function prepareDownload(
+  input: PlaybackOrchestratorInput,
+): Promise<DownloadOrchestratorResult> {
+  return downloadPreparationRegistry.run(getDownloadOperationKey(input), () =>
+    prepareDownloadOnce(input),
+  );
+}
+
+async function prepareDownloadOnce(
   input: PlaybackOrchestratorInput,
 ): Promise<DownloadOrchestratorResult> {
   const fallback = "Download is unavailable right now.";

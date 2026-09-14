@@ -15,6 +15,7 @@ const mockRemoveSession = jest.fn();
 jest.mock("../../stores/playbackSessionStore", () => ({
   usePlaybackSessionStore: {
     getState: () => ({
+      sessions: { "session-1": { attempts: [{ status: "failed" }] } },
       getRuntimePlan: mockGetRuntimePlan,
       removeSession: mockRemoveSession,
     }),
@@ -29,6 +30,7 @@ jest.mock("../../services/playback/PlaybackLaunchService", () => ({
 }));
 
 jest.mock("../../services/playback/PlaybackSessionPlaybackService", () => ({
+  inheritAutomaticPlayAttempts: jest.fn(),
   advancePlaybackSessionAfterFailure: jest.fn(),
   cancelPlaybackSession: jest.fn(),
   resolvePlaybackSession: jest.fn(),

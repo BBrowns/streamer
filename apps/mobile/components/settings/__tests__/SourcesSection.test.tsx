@@ -47,6 +47,34 @@ describe("Sources and Advanced ownership", () => {
     jest.spyOn(streamEngineManager, "getBridgeDiagnostics").mockReturnValue({
       status: "unsupported",
       reason: "native-architecture-mismatch",
+      selfTest: {
+        status: "pass",
+        checks: [
+          {
+            name: "gateway-readiness",
+            status: "pass",
+            message: "Gateway waits for first bytes before ready.",
+          },
+        ],
+      },
+      remuxRuntime: {
+        available: false,
+        state: "unavailable",
+        reason: "ffmpeg-not-found",
+      },
+      remuxCache: {
+        entryCount: 2,
+        pendingCount: 1,
+        totalBytes: 1024,
+        maxBytes: 2048,
+      },
+      torrentCache: {
+        rootDir: "/cache/webtorrent",
+        entryCount: 3,
+        totalBytes: 4096,
+        maxBytes: 8192,
+        ttlMs: 86400000,
+      },
     });
     streamEngineManager.bridgeStatus = "unsupported";
     window.desktopBridge = {

@@ -22,6 +22,7 @@ import {
   cancelPlaybackSession,
   advancePlaybackSessionAfterFailure,
   resolvePlaybackSession,
+  inheritAutomaticPlayAttempts,
 } from "../services/playback/PlaybackSessionPlaybackService";
 import { playBest } from "../services/playback/PlaybackOrchestrator";
 import { createPlaybackRuntimeError } from "../services/playback/PlaybackErrors";
@@ -210,6 +211,13 @@ export function usePlaybackSessionBinding({
         .getState()
         .getRuntimePlan(sessionId);
       if (previousPlan?.sourceDiscovery?.status !== "partial") return false;
+      const previousSession =
+        usePlaybackSessionStore.getState().sessions[sessionId];
+      const usedAttempts =
+        previousSession?.attempts.filter(
+          (attempt) => attempt.status !== "pending",
+        ).length ?? 0;
+      if (usedAttempts >= 5) return false;
 
       const replan = (async () => {
         partialReplanAttemptsRef.current.add(replanKey);
@@ -281,6 +289,11 @@ export function usePlaybackSessionBinding({
         );
         usePlaybackSessionStore.getState().removeSession(sessionId);
         launchOwnedSessionIdRef.current = replacement.sessionId;
+        inheritAutomaticPlayAttempts(
+          replacement.sessionId,
+          usedAttempts,
+          previousPlan.orderedCandidates,
+        );
         setPlaybackUri(null);
         setSessionStream(
           replacement.stream,

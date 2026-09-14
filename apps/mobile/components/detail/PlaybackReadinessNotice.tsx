@@ -233,6 +233,16 @@ export function getPlaybackReadinessCopyFromError(
     };
   }
 
+  if (error.debugMessage === "rate_limited") {
+    return {
+      title: readinessCopy(`detail.readiness.rateLimited.${action}`),
+      message: readinessCopy("detail.readiness.rateLimitedMessage"),
+      detail: readinessCopy("detail.readiness.rateLimitedDetail"),
+      tone: "warning",
+      icon: "time-outline",
+    };
+  }
+
   if (error.code === "UNSUPPORTED_CODEC") {
     return {
       title: readinessCopy("detail.readiness.noCompatibleTitle"),

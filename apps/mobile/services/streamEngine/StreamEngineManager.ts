@@ -128,6 +128,12 @@ export interface BridgeDiagnostics {
 
 interface BridgeProbeResult extends BridgeDiagnostics {}
 
+function bridgeAbortError() {
+  const error = new Error("Bridge detection cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
 export class StreamEngineManager {
   private engines: IStreamEngine[] = [];
   public activeStrategy: StreamingStrategy = "debrid";
@@ -139,26 +145,66 @@ export class StreamEngineManager {
     url: this.bridgeUrl,
   };
   private detectBridgeInFlight: Promise<boolean> | null = null;
+  public bridgeRefreshing = false;
+  private bridgeGeneration = 0;
+  private detectionController: AbortController | null = null;
+  private unsubscribeAuth: () => void;
   private bridgeListeners = new Set<() => void>();
 
   constructor() {
     this.registerEngine(new HLSEngine());
     this.registerEngine(new HttpVideoEngine());
     this.registerEngine(new TorrentEngine(this));
+    this.unsubscribeAuth = useAuthStore.subscribe((state, previous) => {
+      if (
+        state.streamServerUrl !== previous.streamServerUrl ||
+        state.streamServerToken !== previous.streamServerToken ||
+        state.backendUrl !== previous.backendUrl ||
+        state.user?.id !== previous.user?.id ||
+        state.isAuthenticated !== previous.isAuthenticated ||
+        state.isHydrated !== previous.isHydrated ||
+        state.credentialsHydrated !== previous.credentialsHydrated
+      ) {
+        this.invalidateBridge();
+      }
+    });
   }
 
-  async detectBridge(): Promise<boolean> {
+  detectBridge(): Promise<boolean> {
     if (this.detectBridgeInFlight) return this.detectBridgeInFlight;
 
-    const detection = this.detectBridgeInternal();
+    const generation = this.bridgeGeneration;
+    const controller = new AbortController();
+    this.detectionController = controller;
+    this.bridgeRefreshing = true;
+    // Register the shared operation before notifying subscribers.
+    const detection = Promise.resolve()
+      .then(() => this.detectBridgeInternal(generation, controller.signal))
+      .finally(() => {
+        if (this.detectBridgeInFlight === detection) {
+          this.detectBridgeInFlight = null;
+          this.detectionController = null;
+          this.bridgeRefreshing = false;
+          this.notifyBridgeListeners();
+        }
+      });
     this.detectBridgeInFlight = detection;
-    try {
-      return await detection;
-    } finally {
-      if (this.detectBridgeInFlight === detection) {
-        this.detectBridgeInFlight = null;
-      }
-    }
+    this.notifyBridgeListeners();
+    return detection;
+  }
+
+  invalidateBridge() {
+    this.bridgeGeneration += 1;
+    this.detectionController?.abort();
+    this.detectionController = null;
+    this.detectBridgeInFlight = null;
+    this.bridgeRefreshing = false;
+    this.bridgeAvailable = false;
+    this.bridgeStatus = "loading";
+    this.activeStrategy = "debrid";
+    this.bridgeUrl = resolveBridgeUrl();
+    this.bridgeDiagnostics = { status: "loading", url: this.getBridgeUrl() };
+    this.notifyBridgeListeners();
   }
 
   subscribeBridge(listener: () => void): () => void {
@@ -172,6 +218,8 @@ export class StreamEngineManager {
       status: this.bridgeStatus,
       diagnostics: this.getBridgeDiagnostics(),
       url: this.bridgeUrl,
+      refreshing: this.bridgeRefreshing,
+      generation: this.bridgeGeneration,
     };
   }
 
@@ -179,20 +227,42 @@ export class StreamEngineManager {
     for (const listener of this.bridgeListeners) listener();
   }
 
-  private async detectBridgeInternal(): Promise<boolean> {
+  private commitBridgeProbe(probe: BridgeProbeResult) {
+    const changed =
+      this.bridgeStatus !== probe.status ||
+      this.bridgeDiagnostics.reason !== probe.reason;
+    this.bridgeAvailable = probe.status === "available";
+    this.bridgeStatus = probe.status;
+    this.bridgeDiagnostics = { ...probe, checkedAt: Date.now() };
+    if (this.bridgeAvailable) {
+      this.bridgeUrl = probe.url!;
+      this.activeStrategy = "local";
+    }
+    if (changed) {
+      console.log(`[StreamEngineManager] Bridge readiness: ${probe.status}`);
+    }
+    return this.bridgeAvailable;
+  }
+
+  private async detectBridgeInternal(
+    generation: number,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    const assertCurrent = () => {
+      if (signal.aborted || generation !== this.bridgeGeneration) {
+        throw bridgeAbortError();
+      }
+    };
+    assertCurrent();
     const urlsToTry = new Set<string>();
     const defaultUrl = this.getBridgeUrl();
     if (!defaultUrl) {
-      this.bridgeAvailable = false;
-      this.bridgeStatus = "wrong-url";
-      this.bridgeDiagnostics = {
+      return this.commitBridgeProbe({
         status: "wrong-url",
         reason: "invalid-url",
         message: "Bridge URL is not trusted.",
         checkedAt: Date.now(),
-      };
-      this.notifyBridgeListeners();
-      return false;
+      });
     }
     urlsToTry.add(defaultUrl);
 
@@ -204,42 +274,19 @@ export class StreamEngineManager {
       urlsToTry.add("http://10.0.2.2:11470");
     }
 
-    console.log(
-      `[StreamEngineManager] Detecting bridge across ${urlsToTry.size} trusted endpoint candidates.`,
-    );
-    this.bridgeStatus = "loading";
-    this.bridgeDiagnostics = {
-      status: "loading",
-      url: defaultUrl,
-      checkedAt: Date.now(),
-    };
-    this.notifyBridgeListeners();
     let unsupportedProbe: BridgeProbeResult | null = null;
     let wrongUrlProbe: BridgeProbeResult | null = null;
 
     for (const url of urlsToTry) {
-      const probe = await this.probeBridge(url);
+      const probe = await this.probeBridge(url, signal);
+      assertCurrent();
       const { status } = probe;
-      console.log(`[StreamEngineManager] Bridge probe result: ${status}`);
 
       if (status === "available") {
-        this.bridgeUrl = url;
-        this.bridgeAvailable = true;
-        this.bridgeStatus = "available";
-        this.bridgeDiagnostics = {
-          ...probe,
-          status,
-          url,
-          checkedAt: Date.now(),
-        };
-        this.activeStrategy = "local";
-
-        this.notifyBridgeListeners();
-        return true;
+        return this.commitBridgeProbe({ ...probe, url });
       }
 
       if (status === "unsupported") {
-        this.bridgeStatus = "unsupported";
         unsupportedProbe = { ...probe, url };
       }
 
@@ -248,32 +295,48 @@ export class StreamEngineManager {
       }
     }
 
-    this.bridgeAvailable = false;
     const finalProbe = unsupportedProbe || wrongUrlProbe;
-    this.bridgeStatus = finalProbe?.status || "unreachable";
-    this.bridgeDiagnostics = finalProbe
-      ? {
-          ...finalProbe,
-          status: this.bridgeStatus,
-          url: finalProbe.url || defaultUrl,
-          checkedAt: Date.now(),
-        }
-      : {
-          status: this.bridgeStatus,
-          url: defaultUrl,
-          checkedAt: Date.now(),
-        };
-    console.warn(
-      this.bridgeStatus === "unsupported"
-        ? "[StreamEngineManager] Bridge is reachable but unsupported."
-        : "[StreamEngineManager] Bridge unreachable after trying all fallbacks.",
+    return this.commitBridgeProbe(
+      finalProbe ?? { status: "unreachable", url: defaultUrl },
     );
-
-    this.notifyBridgeListeners();
-    return false;
   }
 
-  private async probeBridge(url: string): Promise<BridgeProbeResult> {
+  private async requestBridgeStatus(
+    url: string,
+    signal: AbortSignal,
+    health: boolean,
+  ) {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    const timeout = setTimeout(onAbort, 1500);
+    let rejectAbort!: () => void;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      rejectAbort = () => reject(bridgeAbortError());
+      controller.signal.addEventListener("abort", rejectAbort, { once: true });
+    });
+    if (signal.aborted) onAbort();
+    try {
+      return await Promise.race([
+        aborted,
+        (async () => {
+          if (controller.signal.aborted) throw bridgeAbortError();
+          const response = await fetch(url, { signal: controller.signal });
+          const data = health && response.ok ? await response.json() : null;
+          return { ok: response.ok, status: response.status, data };
+        })(),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+      controller.signal.removeEventListener("abort", rejectAbort);
+    }
+  }
+
+  private async probeBridge(
+    url: string,
+    signal: AbortSignal,
+  ): Promise<BridgeProbeResult> {
     try {
       new URL(url);
     } catch {
@@ -285,14 +348,22 @@ export class StreamEngineManager {
     }
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1500);
-      const res = await fetch(`${url}/api/health`, {
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeout));
+      const res = await this.requestBridgeStatus(
+        `${url}/api/health`,
+        signal,
+        true,
+      );
+      if (res.status === 404 || res.status === 405) {
+        const legacy = await this.requestBridgeStatus(
+          `${url}/status`,
+          signal,
+          false,
+        );
+        return { status: legacy.ok ? "available" : "unreachable" };
+      }
 
       if (res.ok) {
-        const data = await res.json().catch(() => null);
+        const data = res.data;
         const torrentEngine = data?.torrentEngine;
         const runtime = data?.runtime;
         const selfTest = data?.selfTest;
@@ -358,17 +429,10 @@ export class StreamEngineManager {
         };
       }
     } catch {
-      // Fallback to legacy status check
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1500);
-        const res = await fetch(`${url}/status`, {
-          signal: controller.signal,
-        }).finally(() => clearTimeout(timeout));
-        return { status: res.ok ? "available" : "unreachable" };
-      } catch {
-        return { status: "unreachable" };
-      }
+      if (signal.aborted) throw bridgeAbortError();
+      // A timed-out/invalid health response must not be masked by /status.
+      // Legacy probing is reserved for an explicitly missing health endpoint.
+      return { status: "unreachable" };
     }
     return { status: "unreachable" };
   }
@@ -390,18 +454,9 @@ export class StreamEngineManager {
         return this.bridgeUrl;
       }
 
-      this.bridgeAvailable = false;
-      this.bridgeStatus = "wrong-url";
-      this.bridgeDiagnostics = {
-        status: "wrong-url",
-        url: streamServerUrl,
-        reason: validation.reason,
-        message: "Configured bridge URL is not a trusted local/LAN URL.",
-        checkedAt: Date.now(),
-      };
+      return resolveBridgeUrl();
     }
 
-    this.bridgeUrl = resolveBridgeUrl();
     return this.bridgeUrl;
   }
 
@@ -423,6 +478,8 @@ export class StreamEngineManager {
   }
 
   destroy(): void {
+    this.unsubscribeAuth();
+    this.invalidateBridge();
     // Any other cleanup for engines that might have timers
     this.engines.forEach((e) => {
       if ("stop" in e && typeof e.stop === "function") {

@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { memo, useState, useMemo } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type {
   PlaybackPlanResponse,
@@ -15,12 +16,18 @@ import {
   useSourceChoicePlan,
 } from "../detail/SourceChoiceList";
 import { TechnicalSourceDisclosure } from "../detail/TechnicalSourceDisclosure";
+import {
+  getInitialSeriesPlaybackEpisode,
+  isValidEpisodeCoordinates,
+  parseEpisodeRouteParams,
+} from "../../services/playback/detailPlaybackPrefetch";
 
 // ─── Episode Row ────────────────────────────────────────────────────────────
 
 function EpisodeRow({
   video,
   isSelected,
+  sourcesExpanded,
   onPress,
   onPlayIntent,
   onDownload,
@@ -28,6 +35,7 @@ function EpisodeRow({
 }: {
   video: VideoEntry;
   isSelected: boolean;
+  sourcesExpanded: boolean;
   onPress: () => void;
   onPlayIntent?: () => void;
   onDownload: () => void;
@@ -84,7 +92,11 @@ function EpisodeRow({
     >
       <Pressable
         {...playProps}
-        style={[styles.episodePlayArea, isPlayFocused && styles.webFocused]}
+        style={[
+          styles.episodePlayArea,
+          isPlayFocused && styles.webFocused,
+          isPlayFocused && { outlineColor: colors.focus },
+        ]}
         onPress={handlePlayPress}
         onFocus={(event) => {
           (playProps as { onFocus?: (event: unknown) => void }).onFocus?.(
@@ -94,6 +106,7 @@ function EpisodeRow({
         }}
         onHoverIn={onPlayIntent}
         accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
         accessibilityLabel={t("detail.episodesList.playA11y", {
           episode: video.episode,
           title: video.title,
@@ -192,9 +205,10 @@ function EpisodeRow({
             episode: video.episode,
             title: video.title,
           })}
+          accessibilityState={{ expanded: sourcesExpanded }}
         >
           <Ionicons
-            name={isSelected ? "chevron-up" : "ellipsis-horizontal"}
+            name={sourcesExpanded ? "chevron-up" : "ellipsis-horizontal"}
             size={18}
             color={isSelected ? colors.tint : colors.textSecondary}
           />
@@ -297,26 +311,50 @@ interface EpisodeSelectorProps {
   ) => void;
 }
 
-export const EpisodeSelector = memo(function EpisodeSelector({
+export const EpisodeSelector = memo(function EpisodeSelector(
+  props: EpisodeSelectorProps,
+) {
+  const { season, episode, sources } = useLocalSearchParams<{
+    season?: string;
+    episode?: string;
+    sources?: string;
+  }>();
+  const initialEpisode = getInitialSeriesPlaybackEpisode(
+    props.videos,
+    parseEpisodeRouteParams(season, episode),
+  );
+
+  return (
+    <EpisodeSelectorContent
+      key={`${props.seriesId}:${season ?? ""}:${episode ?? ""}:${sources ?? ""}:${initialEpisode?.season}:${initialEpisode?.episode}`}
+      {...props}
+      initialEpisode={initialEpisode}
+      initiallyOpenSources={sources === "1"}
+    />
+  );
+});
+
+function EpisodeSelectorContent({
   seriesId,
   videos,
   onPlayStream,
   onPlayIntent,
   onPlayCandidate,
   onDownloadStream,
-}: EpisodeSelectorProps) {
+  initialEpisode,
+  initiallyOpenSources,
+}: EpisodeSelectorProps & {
+  initialEpisode?: VideoEntry;
+  initiallyOpenSources: boolean;
+}) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-
-  // Simple helper for button text contrast
-  function takesInverseColor() {
-    return isDark ? "#000000" : "#ffffff";
-  }
 
   // Group videos by season
   const seasons = useMemo(() => {
     const map = new Map<number, VideoEntry[]>();
     for (const v of videos) {
+      if (!isValidEpisodeCoordinates(v)) continue;
       if (!map.has(v.season)) map.set(v.season, []);
       map.get(v.season)!.push(v);
     }
@@ -327,12 +365,14 @@ export const EpisodeSelector = memo(function EpisodeSelector({
     return [...map.entries()].sort(([a], [b]) => a - b);
   }, [videos]);
 
-  const firstSeason = seasons[0]?.[0] ?? null;
-  const [selectedSeason, setSelectedSeason] = useState<number>(
-    firstSeason ?? 1,
+  const [selectedSeason, setSelectedSeason] = useState<number | undefined>(
+    initialEpisode?.season,
   );
   const [selectedEpisode, setSelectedEpisode] = useState<VideoEntry | null>(
-    null,
+    initialEpisode ?? null,
+  );
+  const [expandedEpisode, setExpandedEpisode] = useState<VideoEntry | null>(
+    initiallyOpenSources ? (initialEpisode ?? null) : null,
   );
 
   const episodesInSeason = useMemo(
@@ -343,7 +383,8 @@ export const EpisodeSelector = memo(function EpisodeSelector({
   const handleSeasonChange = (season: number) => {
     hapticImpactLight();
     setSelectedSeason(season);
-    setSelectedEpisode(null);
+    setSelectedEpisode(seasons.find(([s]) => s === season)?.[1][0] ?? null);
+    setExpandedEpisode(null);
   };
 
   if (seasons.length === 0) {
@@ -383,17 +424,21 @@ export const EpisodeSelector = memo(function EpisodeSelector({
               },
             ]}
             onPress={() => handleSeasonChange(season)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: selectedSeason === season }}
           >
             <Text
               style={[
                 styles.seasonTabText,
                 { color: colors.textSecondary },
                 selectedSeason === season && {
-                  color: takesInverseColor(),
+                  color: colors.onTint,
                 },
               ]}
             >
-              {t("detail.episodesList.season", { season })}
+              {season === 0
+                ? t("detail.episodesList.specials")
+                : t("detail.episodesList.season", { season })}
             </Text>
           </Pressable>
         ))}
@@ -406,9 +451,11 @@ export const EpisodeSelector = memo(function EpisodeSelector({
             <EpisodeRow
               video={video}
               isSelected={selectedEpisode?.id === video.id}
-              onPress={() =>
-                onPlayStream(video.title, video.season, video.episode)
-              }
+              sourcesExpanded={expandedEpisode?.id === video.id}
+              onPress={() => {
+                setSelectedEpisode(video);
+                onPlayStream(video.title, video.season, video.episode);
+              }}
               onPlayIntent={() => onPlayIntent?.(video.season, video.episode)}
               onDownload={() =>
                 onDownloadStream(
@@ -418,13 +465,14 @@ export const EpisodeSelector = memo(function EpisodeSelector({
                   video.episode,
                 )
               }
-              onToggleSources={() =>
-                setSelectedEpisode(
-                  selectedEpisode?.id === video.id ? null : video,
-                )
-              }
+              onToggleSources={() => {
+                setSelectedEpisode(video);
+                setExpandedEpisode(
+                  expandedEpisode?.id === video.id ? null : video,
+                );
+              }}
             />
-            {selectedEpisode?.id === video.id && (
+            {expandedEpisode?.id === video.id && (
               <EpisodeStreamList
                 seriesId={seriesId}
                 season={video.season}
@@ -438,7 +486,7 @@ export const EpisodeSelector = memo(function EpisodeSelector({
       </View>
     </View>
   );
-});
+}
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

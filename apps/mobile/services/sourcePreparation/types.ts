@@ -19,6 +19,8 @@ export interface SourcePreparationRequestBase {
   attemptId: string;
   /** Opaque UUID forwarded as the bridge v1 idempotency key. */
   requestId: string;
+  /** Runtime preference snapshot: undefined is legacy English, null is source default. */
+  audioLanguage?: string | null;
   signal?: AbortSignal;
   onGatewayProgress?: (progress: GatewayJobProgress) => void;
 }
@@ -70,6 +72,7 @@ export type SourcePreparationErrorCode =
   | PlaybackErrorCode
   | "SOURCE_STALLED"
   | "INTERNAL"
+  | "RATE_LIMITED"
   | "TRACKS_UNAVAILABLE"
   | "UNSUPPORTED_ROUTE"
   | "INVALID_SOURCE"
@@ -79,6 +82,7 @@ const retryableCodes = new Set<SourcePreparationErrorCode>([
   "NO_PEERS",
   "SOURCE_STALLED",
   "INTERNAL",
+  "RATE_LIMITED",
   "TRACKS_UNAVAILABLE",
   "BRIDGE_UNAVAILABLE",
   "GATEWAY_TIMEOUT",
@@ -105,6 +109,7 @@ export class SourcePreparationError extends Error {
   readonly retryable: boolean;
   readonly shouldFallback: boolean;
   readonly isCancellation: boolean;
+  readonly retryAfterMs?: number;
 
   constructor(
     code: SourcePreparationErrorCode,
@@ -112,6 +117,7 @@ export class SourcePreparationError extends Error {
     options: {
       retryable?: boolean;
       shouldFallback?: boolean;
+      retryAfterMs?: number;
       cause?: unknown;
     } = {},
   ) {
@@ -121,6 +127,7 @@ export class SourcePreparationError extends Error {
     this.retryable = options.retryable ?? retryableCodes.has(code);
     this.shouldFallback = options.shouldFallback ?? fallbackCodes.has(code);
     this.isCancellation = code === "CANCELLED";
+    this.retryAfterMs = options.retryAfterMs;
   }
 }
 
