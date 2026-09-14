@@ -419,10 +419,8 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
       const hlsBundle = createRequire(import.meta.url).resolve(
         "hls.js/dist/hls.js",
       );
-      app.get(
-        "/fixture/hls.js",
-        fixtureAssetLimiter,
-        (_req, res) => res.sendFile(hlsBundle),
+      app.get("/fixture/hls.js", fixtureAssetLimiter, (_req, res) =>
+        res.sendFile(hlsBundle),
       );
       app.get("/api/gateway/jobs/:id/stream", gateway.serveGatewayJobStream);
       app.get(
