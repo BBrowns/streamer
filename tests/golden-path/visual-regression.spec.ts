@@ -246,8 +246,10 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     });
     await page.keyboard.press("k");
   }
-  const playControl = page.getByRole("button", { name: "Play playback" });
-  await expect(playControl).toBeVisible();
+  const playPauseControl = page.getByRole("button", {
+    name: /^(Play|Pause) playback$/,
+  });
+  await expect(playPauseControl).toBeVisible();
   const settleUnfocusedPlayerFrame = async () => {
     await page.evaluate(() => {
       if (document.activeElement instanceof HTMLElement) {
@@ -255,8 +257,8 @@ test("matches the dark player, timeline preview, and settings baselines", async 
       }
     });
     await settleVisualFrame(page);
-    await expect(playControl).not.toBeFocused();
-    await expect(playControl).toHaveCSS("outline-style", "none");
+    await expect(playPauseControl).not.toBeFocused();
+    await expect(playPauseControl).toHaveCSS("outline-style", "none");
   };
   const video = page.locator("video");
   const timeline = page.getByTestId("player-progress-slider");

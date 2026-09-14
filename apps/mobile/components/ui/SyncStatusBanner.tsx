@@ -4,6 +4,7 @@ import { useSync } from "../../hooks/useSync";
 import { useAuthStore } from "../../stores/authStore";
 import { InlineNotice } from "./InlineNotice";
 import { getNativePointerEvents } from "../../lib/platformStyles";
+import { useWindowClass } from "../../hooks/useWindowClass";
 
 export function SyncStatusBanner() {
   const { t } = useTranslation();
@@ -11,6 +12,7 @@ export function SyncStatusBanner() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const sessionHealth = useAuthStore((state) => state.sessionHealth);
   const sessionIssue = useAuthStore((state) => state.sessionIssue);
+  const { isCompact } = useWindowClass();
 
   const isDegraded =
     status.state === "degraded" ||
@@ -41,7 +43,7 @@ export function SyncStatusBanner() {
       testID="sync-status-banner"
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
-      style={styles.container}
+      style={[styles.container, isCompact ? styles.compact : styles.desktop]}
     >
       <InlineNotice
         tone="warning"
@@ -56,9 +58,10 @@ export function SyncStatusBanner() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 12,
     left: 16,
     right: 16,
     zIndex: 120,
   },
+  compact: { top: 12 },
+  desktop: { top: 84 },
 });

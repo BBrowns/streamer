@@ -1,10 +1,36 @@
 import {
   bridgeCapabilitiesV1Schema,
+  bridgeCreateJobV1Schema,
   bridgeJobResponseV1Schema,
 } from "../schemas/bridge.schema";
 import { describe, expect, it } from "vitest";
 
 describe("bridge v1 delivery contract", () => {
+  it.each([undefined, null, "en", "eng", "nl", "es"])(
+    "accepts bounded optional audio preference %s with Specials",
+    (audioLanguage) => {
+      const selection = {
+        season: 0,
+        episode: 1,
+        ...(audioLanguage !== undefined ? { audioLanguage } : {}),
+      };
+      expect(
+        bridgeCreateJobV1Schema.pick({ selection: true }).parse({ selection }),
+      ).toEqual({ selection });
+    },
+  );
+
+  it.each(["", "English", "en-US", "EN", "http://invalid", 12, false])(
+    "rejects malformed audio preference %s",
+    (audioLanguage) => {
+      expect(
+        bridgeCreateJobV1Schema.pick({ selection: true }).safeParse({
+          selection: { audioLanguage },
+        }).success,
+      ).toBe(false);
+    },
+  );
+
   it("accepts an opt-in HLS delivery alongside the legacy deliveries", () => {
     const result = bridgeCapabilitiesV1Schema.safeParse({
       protocolVersion: 1,

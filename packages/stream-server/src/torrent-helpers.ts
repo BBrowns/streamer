@@ -5,6 +5,10 @@
  */
 import path from "path";
 import type { Request, Response } from "express";
+import {
+  assertTorrentUsable,
+  TorrentPreparationError,
+} from "./torrent-failure.js";
 
 export type ByteRangeResult =
   | { type: "full" }
@@ -182,6 +186,9 @@ export function waitForReady(
   options: TorrentReadinessOptions = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (options.signal?.aborted)
+      return reject(createTorrentReadinessAbortError());
+    assertTorrentUsable(torrent);
     if (torrent.files && torrent.files.length > 0) {
       options.onMetadata?.();
       return resolve();
@@ -225,6 +232,7 @@ export function waitForReady(
       torrent.removeListener("ready", onReady);
       torrent.removeListener("metadata", onMetadata);
       torrent.removeListener("error", onError);
+      torrent.removeListener("close", onClose);
       torrent.removeListener("wire", onWire);
       signal?.removeEventListener("abort", onAbort);
     }
@@ -261,7 +269,10 @@ export function waitForReady(
       settle("resolve");
     }
     function onError(err: Error) {
-      settle("reject", err);
+      settle("reject", new TorrentPreparationError("torrent_error", err));
+    }
+    function onClose() {
+      settle("reject", new TorrentPreparationError("torrent_destroyed"));
     }
     function onAbort() {
       settle("reject", createTorrentReadinessAbortError());
@@ -272,10 +283,7 @@ export function waitForReady(
       }
       metadataAfterPeerTimer = setTimeout(() => {
         metadataAfterPeerTimer = null;
-        settle(
-          "reject",
-          new Error("Torrent metadata timeout after peer connection"),
-        );
+        settle("reject", new TorrentPreparationError("metadata_timeout"));
       }, metadataTimeoutAfterPeerMs);
     }
     function onWire() {
@@ -293,12 +301,13 @@ export function waitForReady(
         startMetadataAfterPeerTimer();
         return;
       }
-      settle("reject", new Error("Torrent peer discovery timeout"));
+      settle("reject", new TorrentPreparationError("peer_timeout"));
     }
 
     torrent.once("metadata", onMetadata);
     torrent.once("ready", onReady);
     torrent.once("error", onError);
+    torrent.once("close", onClose);
     if (hasInitialPeerDeadline || hasMetadataAfterPeerDeadline) {
       torrent.once("wire", onWire);
     }
@@ -306,7 +315,12 @@ export function waitForReady(
 
     readyTimer = setTimeout(() => {
       readyTimer = null;
-      settle("reject", new Error("Torrent ready timeout"));
+      settle(
+        "reject",
+        new TorrentPreparationError(
+          sawInitialPeer ? "metadata_timeout" : "peer_timeout",
+        ),
+      );
     }, timeoutMs);
 
     if (hasInitialPeerDeadline) {

@@ -43,7 +43,7 @@ export const streamSchema = z.object({
   ),
   fileSelectionHints: z
     .object({
-      season: z.number().int().positive().optional(),
+      season: z.number().int().nonnegative().optional(),
       episode: z.number().int().positive().optional(),
       title: z.string().optional(),
     })

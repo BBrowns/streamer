@@ -110,6 +110,7 @@ describe("StreamEngineManager", () => {
 
       const first = manager.detectBridge();
       const second = manager.detectBridge();
+      await Promise.resolve();
 
       expect(global.fetch).toHaveBeenCalledTimes(1);
 

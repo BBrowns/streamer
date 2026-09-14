@@ -71,7 +71,7 @@ export const playbackSessionContentSchema = z
   .object({
     type: z.enum(["movie", "series"]),
     id: z.string().min(1),
-    season: z.number().int().positive().optional(),
+    season: z.number().int().nonnegative().optional(),
     episode: z.number().int().positive().optional(),
   })
   .strict();

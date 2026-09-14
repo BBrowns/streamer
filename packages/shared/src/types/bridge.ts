@@ -99,6 +99,8 @@ export interface BridgeCapabilitiesV1 {
   capabilities: {
     jobs: {
       sourceKinds: ["magnet"];
+      /** Only advertised after audio-preferences feature negotiation. */
+      audioPreferences?: true;
       deliveries: BridgeCapabilityDeliveryV1[];
       cancellation: true;
       tracks: true;
@@ -134,6 +136,8 @@ export interface CreateBridgeJobV1 {
     title?: string;
     season?: number;
     episode?: number;
+    /** undefined preserves legacy English; null selects the source main/default track. */
+    audioLanguage?: string | null;
   };
 }
 

@@ -284,6 +284,88 @@ describe("DownloadService session completion", () => {
     window.desktopBridge = originalDesktopBridge;
   });
 
+  it("treats a duplicate start for the same playback session as idempotent", async () => {
+    const playbackSession = createDownloadSessionContext();
+    useDownloadStore.getState().addTask(
+      "source-1",
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        sourceId: "source-1",
+      } as any,
+      playbackSession,
+      { url: "https://cdn.example.test/movie.mp4" },
+    );
+
+    const service = new DownloadService();
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      {
+        type: "movie",
+        itemId: "tt123",
+        title: "Example Movie",
+        sourceId: "source-1",
+      } as any,
+      { playbackSession },
+    );
+
+    expect(
+      usePlaybackSessionStore.getState().sessions[playbackSession.sessionId]
+        ?.status,
+    ).not.toBe("cancelled");
+  });
+
+  it("keeps a bridge rate-limit cooldown on the playback session", async () => {
+    const playbackSession = createDownloadSessionContext();
+    const rateLimitError = Object.assign(new Error("Too many requests"), {
+      code: "RATE_LIMITED",
+      retryAfterMs: 5_000,
+    });
+    const getPlaybackUri = jest
+      .spyOn(streamEngineManager, "getPlaybackUri")
+      .mockRejectedValue(rateLimitError);
+    const service = new DownloadService();
+
+    try {
+      await service.startDownload(
+        { url: "https://cdn.example.test/movie.mp4" },
+        {
+          type: "movie",
+          itemId: "tt123",
+          title: "Example Movie",
+          sourceId: "source-rate-limited",
+        } as any,
+        {
+          eligibility: {
+            mode: "direct-file",
+            canDownload: true,
+            offlinePlayable: true,
+          },
+          playbackSession,
+        },
+      );
+
+      expect(
+        usePlaybackSessionStore.getState().sessions[playbackSession.sessionId],
+      ).toMatchObject({
+        status: "failed",
+        terminalError: {
+          code: "SOURCE_UNAVAILABLE",
+          message: "Download is temporarily rate-limited. Try again shortly.",
+        },
+      });
+      expect(
+        useDownloadStore.getState().tasks["source-rate-limited"],
+      ).toMatchObject({
+        status: "Error",
+        failureReason: "rate_limited",
+      });
+    } finally {
+      getPlaybackUri.mockRestore();
+    }
+  });
+
   it("marks an Electron download complete only after its local URI is verified", async () => {
     const playbackSession = createDownloadSessionContext();
     window.desktopBridge = {

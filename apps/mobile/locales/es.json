@@ -95,6 +95,7 @@
       "summary_other": "Resultados para «{{query}}» · {{count}} resultados",
       "searching": "Buscando «{{query}}»…",
       "searchingShort": "Buscando…",
+      "unavailable": "Resultados no disponibles",
       "count": "{{count}} resultados",
       "count_one": "{{count}} resultado",
       "count_other": "{{count}} resultados",
@@ -401,6 +402,8 @@
       "storageTitle": "Se necesita más almacenamiento",
       "storageMessage": "Libera espacio en el dispositivo antes de reintentar esta descarga.",
       "freeSpaceAction": "Gestionar almacenamiento",
+      "rateLimitedTitle": "Descarga pausada temporalmente",
+      "rateLimitedMessage": "El puente está enfriándose tras demasiadas solicitudes. Vuelve a intentarlo pronto.",
       "setupTitle": "La configuración necesita atención",
       "setupMessage": "Abre Fuentes y dispositivos y revisa este dispositivo antes de reintentar la descarga.",
       "reviewSetupAction": "Revisar configuración",
@@ -675,6 +678,7 @@
       "autoplay": "Reproducir el siguiente episodio",
       "autoplayDescription": "Continúa una serie cuando se conoce el siguiente episodio.",
       "languages": {
+        "noPreference": "Sin preferencia",
         "off": "Desactivados",
         "english": "Inglés",
         "dutch": "Neerlandés",
@@ -861,6 +865,7 @@
       "none": "No hay flujos para este episodio.",
       "noneData": "No hay datos de episodios disponibles.",
       "season": "Temporada {{season}}",
+      "specials": "Especiales",
       "playA11y": "Reproducir episodio {{episode}}: {{title}}",
       "downloadA11y": "Descargar episodio {{episode}}: {{title}}",
       "moreSourcesA11y": "Más fuentes para el episodio {{episode}}: {{title}}",
@@ -967,7 +972,14 @@
         "play": "Reproducción no disponible",
         "download": "Descarga no disponible",
         "cast": "Transmisión no disponible"
-      }
+      },
+      "rateLimited": {
+        "play": "Reproducción pausada temporalmente",
+        "download": "Descarga pausada temporalmente",
+        "cast": "Transmisión pausada temporalmente"
+      },
+      "rateLimitedMessage": "Se han realizado demasiadas solicitudes. Vuelve a intentarlo pronto.",
+      "rateLimitedDetail": "La acción actual está pausada durante el periodo de espera del puente."
     },
     "loadState": {
       "eyebrow": "Detalles del título",

@@ -43,6 +43,10 @@ import {
   type SearchContentType,
   type SearchMode,
 } from "./search.js";
+import {
+  getUpstreamStatus,
+  isExplicitMetadataNotFound,
+} from "./upstream-status.js";
 
 // Per-addon policy registry is now handled by resilienceRegistry
 
@@ -51,31 +55,6 @@ export class MetadataProvidersUnavailableError extends Error {
     super("No metadata provider completed successfully.");
     this.name = "MetadataProvidersUnavailableError";
   }
-}
-
-function getUpstreamStatus(error: unknown): number | undefined {
-  let candidate: unknown = error;
-
-  // Resilience/transport libraries can retain the original failure as a
-  // cause. Keep this deliberately shallow and never expose the cause to the
-  // client.
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (!candidate || typeof candidate !== "object") return undefined;
-    const current = candidate as {
-      status?: unknown;
-      response?: { status?: unknown };
-      cause?: unknown;
-    };
-    const status = current.response?.status ?? current.status;
-    if (typeof status === "number") return status;
-    candidate = current.cause;
-  }
-
-  return undefined;
-}
-
-function isExplicitMetadataNotFound(error: unknown) {
-  return getUpstreamStatus(error) === 404;
 }
 
 const secureAgent = new https.Agent({
@@ -176,6 +155,9 @@ async function resilientFetch<T>(
           );
         }
         const upstreamStatus = getUpstreamStatus(error);
+        if (upstreamStatus === 403) {
+          throw new NonRetryableUpstreamError("Provider access denied.", error);
+        }
         if (
           options.nonRetryableClientErrors &&
           upstreamStatus !== undefined &&

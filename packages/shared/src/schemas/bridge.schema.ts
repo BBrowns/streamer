@@ -145,6 +145,7 @@ export const bridgeCapabilityDeliveryV1Schema = z
 const bridgeJobsCapabilitiesV1Schema = z
   .object({
     sourceKinds: z.tuple([z.literal("magnet")]),
+    audioPreferences: z.literal(true).optional(),
     deliveries: z.array(bridgeCapabilityDeliveryV1Schema).min(1).max(4),
     cancellation: z.literal(true),
     tracks: z.literal(true),
@@ -204,8 +205,13 @@ const bridgeJobSelectionV1Schema = z
   .object({
     fileIndex: z.number().int().nonnegative().optional(),
     title: z.string().min(1).max(512).optional(),
-    season: z.number().int().positive().optional(),
+    season: z.number().int().nonnegative().optional(),
     episode: z.number().int().positive().optional(),
+    audioLanguage: z
+      .string()
+      .regex(/^[a-z]{2,3}$/)
+      .nullable()
+      .optional(),
   })
   .strict();
 

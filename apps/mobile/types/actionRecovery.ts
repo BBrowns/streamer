@@ -13,6 +13,7 @@ export type DownloadFailureReason =
   | "interrupted"
   | "missing_file"
   | "storage_pressure"
+  | "rate_limited"
   | "bridge_unavailable"
   | "source_expired"
   | "source_unsupported"

@@ -28,6 +28,7 @@ interface DownloadRecoveryTask {
 interface RecoveryErrorShape {
   message?: string;
   code?: string;
+  debugMessage?: string;
   preflight?: ActionPreflightResult;
 }
 
@@ -85,6 +86,13 @@ export function classifyDownloadFailure(
   const preflight = preflightReason ?? shape.preflight?.reason;
   const text = errorText(error);
 
+  if (
+    /rate.?limited|too many requests|retry.?after|cooldown/.test(text) ||
+    shape.code === "RATE_LIMITED" ||
+    shape.debugMessage === "rate_limited"
+  ) {
+    return "rate_limited";
+  }
   if (preflight && BRIDGE_PREFLIGHT_REASONS.has(preflight)) {
     return "bridge_unavailable";
   }
@@ -194,6 +202,13 @@ export function getDownloadRecovery(
       title: recoveryCopy("downloads.recovery.storageTitle"),
       message: recoveryCopy("downloads.recovery.storageMessage"),
       actionLabel: recoveryCopy("downloads.recovery.freeSpaceAction"),
+    },
+    rate_limited: {
+      reason,
+      action: "retry",
+      title: recoveryCopy("downloads.recovery.rateLimitedTitle"),
+      message: recoveryCopy("downloads.recovery.rateLimitedMessage"),
+      actionLabel: recoveryCopy("downloads.recovery.retryAction"),
     },
     bridge_unavailable: {
       reason,

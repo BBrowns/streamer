@@ -7,6 +7,7 @@
  */
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "events";
+import { rememberTorrentFailure } from "../torrent-failure.js";
 import { access, mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
@@ -1036,29 +1037,41 @@ describe("getSelectedFile", () => {
 
 describe("attachTorrentLogging", () => {
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it("reports the current peer count on a fixed interval, including drops", () => {
     vi.useFakeTimers();
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.stubEnv("STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS", "1");
+    const logSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const torrent = makeTorrent();
     torrent.numPeers = 1;
 
     attachTorrentLogging(torrent);
-    expect(logSpy).toHaveBeenLastCalledWith("[stream-server] Peers: 1");
+    attachTorrentLogging(torrent); // A second job must not install a second sampler.
+    expect(logSpy).toHaveBeenLastCalledWith(
+      expect.stringContaining('"peerCount":1'),
+    );
+    expect(logSpy).toHaveBeenLastCalledWith(
+      expect.stringContaining('"torrentRuntimeId":'),
+    );
 
     vi.advanceTimersByTime(5_000);
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     torrent.numPeers = 0;
     vi.advanceTimersByTime(5_000);
-    expect(logSpy).toHaveBeenLastCalledWith("[stream-server] Peers: 0");
+    expect(logSpy).toHaveBeenLastCalledWith(
+      expect.stringContaining('"peerCount":0'),
+    );
 
     torrent.numPeers = 4;
     vi.advanceTimersByTime(5_000);
-    expect(logSpy).toHaveBeenLastCalledWith("[stream-server] Peers: 4");
+    expect(logSpy).toHaveBeenLastCalledWith(
+      expect.stringContaining('"peerCount":4'),
+    );
 
     torrent.emit("close");
     torrent.numPeers = 9;
@@ -1116,16 +1129,38 @@ describe("waitForReady", () => {
       10,
     );
 
-    await expect(waitForReady(torrent, 1000)).rejects.toThrow(
-      "Metadata fetch failed",
-    );
+    await expect(waitForReady(torrent, 1000)).rejects.toMatchObject({
+      reason: "torrent_error",
+      message: "Torrent source failed",
+    });
   });
 
   it("rejects with a timeout error if ready never fires", async () => {
     const torrent = makeTorrent([]); // never emits ready
-    await expect(waitForReady(torrent, 50)).rejects.toThrow(
-      "Torrent ready timeout",
-    );
+    await expect(waitForReady(torrent, 50)).rejects.toMatchObject({
+      reason: "peer_timeout",
+    });
+  });
+
+  it("preserves a source error emitted before readiness starts", async () => {
+    const torrent = makeTorrent([]);
+    rememberTorrentFailure(torrent, new Error("secret-source-details"));
+    await expect(waitForReady(torrent)).rejects.toMatchObject({
+      reason: "torrent_error",
+      message: "Torrent source failed",
+    });
+    expect(torrent.listenerCount("metadata")).toBe(0);
+  });
+
+  it("fails promptly and removes wait listeners when a torrent closes", async () => {
+    const torrent = makeTorrent([]);
+    const waiting = waitForReady(torrent);
+    torrent.emit("close");
+    await expect(waiting).rejects.toMatchObject({
+      reason: "torrent_destroyed",
+    });
+    for (const event of ["ready", "metadata", "wire", "close", "error"])
+      expect(torrent.listenerCount(event)).toBe(0);
   });
 
   it("rejects early when no peer connects before the peer-discovery deadline", async () => {

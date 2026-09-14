@@ -20,7 +20,6 @@ import {
   subscribeBridgeReadiness,
 } from "../services/streamEngine/bridgeReadinessRuntime";
 import { getBridgeStatusPresentation } from "../services/streamEngine/bridgeStatusPresentation";
-import { diagnosticsFromDesktopBridge } from "../services/streamEngine/desktopBridgeDiagnostics";
 import { preflightBridgeAction } from "../services/actionPreflight";
 import { getBridgeAuthHeaders } from "../services/bridgeAuth";
 import { createDebugBundle, exportDebugBundle } from "../services/debugBundle";
@@ -129,9 +128,9 @@ export function usePlaybackEnvironmentStatus() {
   }, []);
 
   const derived = useMemo(() => {
-    const desktopDiagnostics = diagnosticsFromDesktopBridge(bridgeInfo);
-    const effectiveDiagnostics = desktopDiagnostics || bridgeDiagnostics;
-    const effectiveStatus = desktopDiagnostics?.status || bridgeStatus;
+    // Electron metadata supplies discovery information, never health authority.
+    const effectiveDiagnostics = bridgeDiagnostics;
+    const effectiveStatus = bridgeStatus;
     const presentation = getBridgeStatusPresentation(
       effectiveStatus,
       effectiveDiagnostics,

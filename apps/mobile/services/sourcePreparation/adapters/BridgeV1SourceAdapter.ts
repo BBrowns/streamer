@@ -241,6 +241,17 @@ function terminalJobError(job: BridgeJobV1): SourcePreparationError | null {
           },
         );
       }
+      if (job.failure?.code === "RATE_LIMITED") {
+        return new SourcePreparationError(
+          "RATE_LIMITED",
+          "The bridge is temporarily rate-limited.",
+          {
+            retryable: job.failure?.retryable ?? true,
+            shouldFallback: false,
+            retryAfterMs: job.failure?.retryAfterMs,
+          },
+        );
+      }
       return new SourcePreparationError(
         "INTERNAL",
         "The bridge could not prepare this source.",
@@ -352,6 +363,18 @@ function mapBridgeClientError(error: unknown, signal?: AbortSignal) {
       {
         retryable: error.retryable,
         shouldFallback: true,
+        cause: error,
+      },
+    );
+  }
+  if (error.code === "RATE_LIMITED") {
+    return new SourcePreparationError(
+      "RATE_LIMITED",
+      "The bridge is temporarily rate-limited.",
+      {
+        retryable: error.retryable,
+        shouldFallback: false,
+        retryAfterMs: error.retryAfterMs,
         cause: error,
       },
     );
@@ -472,7 +495,28 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
     throwIfPreparationAborted(request.signal);
 
     try {
-      const selection = buildSelection(request.candidate.stream);
+      let selection: CreateBridgeJobV1["selection"] = buildSelection(
+        request.candidate.stream,
+      );
+      if (request.action === "play" && request.audioLanguage !== undefined) {
+        const capabilities = await awaitWithPreparationAbort(
+          this.client.getCapabilities(request.signal),
+          request.signal,
+        );
+        throwIfPreparationAborted(request.signal);
+        if (capabilities.capabilities.jobs.audioPreferences) {
+          selection = { ...selection, audioLanguage: request.audioLanguage };
+        } else if (request.audioLanguage !== "en") {
+          throw new SourcePreparationError(
+            "UNSUPPORTED_ROUTE",
+            "Update the bridge to use this audio preference.",
+            {
+              retryable: false,
+              shouldFallback: false,
+            },
+          );
+        }
+      }
       const createInput: CreateBridgeJobV1 = {
         requestId: request.requestId,
         source: {

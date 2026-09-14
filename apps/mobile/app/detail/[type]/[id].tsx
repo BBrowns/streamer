@@ -50,17 +50,25 @@ import {
 } from "../../../components/detail/PlaybackReadinessNotice";
 import { DetailLoadState } from "../../../components/detail/DetailLoadState";
 import { getSafeTrailerUrl } from "../../../services/trailer";
-import { getInitialSeriesPlaybackEpisode } from "../../../services/playback/detailPlaybackPrefetch";
+import {
+  getInitialSeriesPlaybackEpisode,
+  isValidEpisodeCoordinates,
+  parseEpisodeRouteParams,
+} from "../../../services/playback/detailPlaybackPrefetch";
 
 export default function DetailScreen() {
   const {
     type,
     id,
     sources: sourcesParam,
+    season: seasonParam,
+    episode: episodeParam,
   } = useLocalSearchParams<{
     type: string;
     id: string;
     sources?: string;
+    season?: string;
+    episode?: string;
   }>();
   const castType = type as "movie" | "series";
   const router = useRouter();
@@ -95,9 +103,12 @@ export default function DetailScreen() {
   const initialSeriesEpisode = useMemo(
     () =>
       castType === "series"
-        ? getInitialSeriesPlaybackEpisode(meta?.videos)
+        ? getInitialSeriesPlaybackEpisode(
+            meta?.videos,
+            parseEpisodeRouteParams(seasonParam, episodeParam),
+          )
         : undefined,
-    [castType, meta?.videos],
+    [castType, meta?.videos, seasonParam, episodeParam],
   );
 
   // Detail can remain mounted beneath the player route. The player owns a
@@ -145,7 +156,7 @@ export default function DetailScreen() {
       if (
         !id ||
         (castType === "series" &&
-          (typeof season !== "number" || typeof episode !== "number"))
+          !isValidEpisodeCoordinates({ season, episode }))
       ) {
         return;
       }
@@ -271,6 +282,11 @@ export default function DetailScreen() {
     season?: number,
     episode?: number,
   ) => {
+    if (
+      castType === "series" &&
+      !isValidEpisodeCoordinates({ season, episode })
+    )
+      return;
     setPlaybackNotice(null);
     if (planningAction === "play" || playLaunchInFlightRef.current) return;
 
@@ -373,6 +389,11 @@ export default function DetailScreen() {
     season?: number,
     episode?: number,
   ) => {
+    if (
+      castType === "series" &&
+      !isValidEpisodeCoordinates({ season, episode })
+    )
+      return;
     if (planningAction === "play" || playLaunchInFlightRef.current) return;
     playLaunchInFlightRef.current = true;
     setPlaybackNotice(null);
@@ -422,11 +443,16 @@ export default function DetailScreen() {
     season?: number,
     episode?: number,
   ) => {
+    if (
+      castType === "series" &&
+      !isValidEpisodeCoordinates({ season, episode })
+    )
+      return;
     if (!meta) return;
     setPlaybackNotice(null);
     try {
       let streamToDownload: Stream | undefined = stream;
-      if (streamToDownload && season && episode) {
+      if (streamToDownload && isValidEpisodeCoordinates({ season, episode })) {
         streamToDownload = {
           ...streamToDownload,
           fileSelectionHints: {

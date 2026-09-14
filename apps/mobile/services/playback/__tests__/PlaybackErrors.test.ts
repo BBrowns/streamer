@@ -33,6 +33,21 @@ function makeRejectedCandidate(
 }
 
 describe("PlaybackErrors", () => {
+  it("preserves a safe rate-limit cooldown on runtime errors", () => {
+    expect(
+      createPlaybackRuntimeError("SOURCE_UNAVAILABLE", undefined, {
+        retryable: true,
+        shouldFallback: false,
+        retryAfterMs: 5_000,
+        debugMessage: "rate_limited",
+      }),
+    ).toMatchObject({
+      retryAfterMs: 5_000,
+      shouldFallback: false,
+      debugMessage: "rate_limited",
+    });
+  });
+
   it("maps no playable source to a dedicated terminal runtime state", () => {
     const error = createPlaybackRuntimeError("NO_PLAYABLE_SOURCE");
 

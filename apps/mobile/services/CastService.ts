@@ -166,6 +166,11 @@ class CastService {
   async getDevices(
     options: { forceRefresh?: boolean } = {},
   ): Promise<CastDevice[]> {
+    const initialPreflight = preflightBridgeAction("cast", {
+      sourceKind: "direct",
+    });
+    if (initialPreflight.reason === "bridge_url_invalid")
+      requireActionPreflight(initialPreflight);
     if (!streamEngineManager.bridgeAvailable) {
       // The web cast dialog can open before the app's opportunistic startup
       // probe has completed. Join the same single-flight probe used by Play
@@ -296,6 +301,14 @@ class CastService {
     contentType: CastContentType = "video/mp4",
     options: { bridgeJobId?: string } = {},
   ): Promise<void> {
+    const initialPreflight = preflightStreamAction("cast", { url, title });
+    if (
+      initialPreflight.reason === "cast_source_loopback" ||
+      initialPreflight.reason === "bridge_url_invalid"
+    ) {
+      requireActionPreflight(initialPreflight);
+    }
+    if (!initialPreflight.ready) await detectPlaybackBridgeOnce();
     requireActionPreflight(
       preflightStreamAction("cast", {
         url,

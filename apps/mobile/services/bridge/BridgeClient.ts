@@ -37,6 +37,7 @@ import { isBridgeV1OpaqueId } from "./BridgeV1StreamGuard";
 const NEGOTIATION_TTL_MS = 30_000;
 export const BRIDGE_HLS_FEATURE_HEADER = "X-Streamer-Bridge-Features";
 export const BRIDGE_HLS_FEATURE = "hls-segments";
+export const BRIDGE_AUDIO_FEATURE = "audio-preferences";
 export const BRIDGE_V1_CLIENT_MAX_SUBTITLE_BYTES = 8 * 1024 * 1024;
 export const BRIDGE_V1_CLIENT_MAX_THUMBNAIL_BYTES = 512 * 1024;
 
@@ -336,7 +337,7 @@ export class BridgeClient {
       {
         headers: {
           ...this.authHeaders(),
-          [BRIDGE_HLS_FEATURE_HEADER]: BRIDGE_HLS_FEATURE,
+          [BRIDGE_HLS_FEATURE_HEADER]: `${BRIDGE_HLS_FEATURE}, ${BRIDGE_AUDIO_FEATURE}`,
         },
         signal,
       },

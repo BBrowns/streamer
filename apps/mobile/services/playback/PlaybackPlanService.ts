@@ -13,7 +13,7 @@ import {
 } from "@streamer/shared";
 import { api } from "../api";
 import { streamEngineManager } from "../streamEngine/StreamEngineManager";
-import { refreshBridgeReadiness } from "../streamEngine/bridgeReadinessRuntime";
+import { ensureBridgeReadiness } from "../streamEngine/bridgeReadinessRuntime";
 import {
   normalizePreferredQualities,
   usePlayerStore,
@@ -566,12 +566,8 @@ export function detectPlaybackBridgeOnce(): Promise<boolean> {
   // because a direct plan is being requested. In particular, Cast resolves
   // its source immediately after planning and correctly treats that state as
   // a bridge-not-ready failure.
-  if (streamEngineManager.bridgeAvailable) {
-    return Promise.resolve(true);
-  }
-
   if (!bridgeDetectionInFlight) {
-    bridgeDetectionInFlight = refreshBridgeReadiness()
+    bridgeDetectionInFlight = ensureBridgeReadiness()
       .then((snapshot) => snapshot.bridgeAvailable)
       .catch(() => false)
       .then((available) => {
