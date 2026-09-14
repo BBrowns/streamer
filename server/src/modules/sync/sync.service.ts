@@ -45,6 +45,25 @@ class SyncService {
       return false;
     }
     const userConnections = this.connections.get(userId) ?? new Set();
+
+    // One browser/device has one authoritative sync connection. A renderer
+    // reload or HMR reconnect can leave the old socket alive briefly; keeping
+    // both lets stale sockets consume the per-user cap and causes a valid new
+    // connection to be closed with 1008.
+    if (input.deviceId) {
+      for (const existing of userConnections) {
+        if (existing.deviceId !== input.deviceId) continue;
+        userConnections.delete(existing);
+        try {
+          existing.ws.close(1000, "Replaced by a newer connection");
+        } catch {}
+        logger.debug(
+          { userId, connId: existing.id, deviceId: existing.deviceId },
+          "Replaced stale WebSocket connection",
+        );
+      }
+    }
+
     if (
       userConnections.size >= SECURITY_LIMITS.syncWebSocketConnectionsPerUser
     ) {
