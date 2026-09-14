@@ -1,5 +1,6 @@
 import {
   createHlsPlayerFacade,
+  getPublishedHlsWindow,
   HlsWebVideoAdapter,
 } from "../HlsWebVideoAdapter";
 
@@ -43,6 +44,16 @@ function createFakeVideo(seekableRange = { start: 0, end: 4 }) {
 }
 
 describe("HlsWebVideoAdapter", () => {
+  it("derives the seek window from the fragments still published by HLS", () => {
+    expect(
+      getPublishedHlsWindow([
+        { start: 120, duration: 2 },
+        { start: 122, duration: 2 },
+        { start: 124, duration: 2 },
+      ]),
+    ).toEqual({ start: 120, end: 126 });
+  });
+
   it("exposes HLS media events and controls through the existing player facade", () => {
     const adapter = new HlsWebVideoAdapter();
     const video = createFakeVideo({ start: 0, end: 8 });
@@ -93,6 +104,67 @@ describe("HlsWebVideoAdapter", () => {
       end: 4,
     });
     adapter.unmount();
+  });
+
+  it("clears the old source and invalidates pending HLS work", () => {
+    const adapter = new HlsWebVideoAdapter();
+    const video = createFakeVideo();
+    adapter.mount(video);
+
+    adapter.clearSource();
+
+    expect(adapter.snapshot()).toMatchObject({ status: "idle" });
+    expect(video.removeAttribute).toHaveBeenCalledWith("src");
+    expect(video.load).toHaveBeenCalled();
+    adapter.unmount();
+  });
+
+  it("automatically resumes after a buffer-induced pause while playback is intended", () => {
+    jest.useFakeTimers();
+    try {
+      const adapter = new HlsWebVideoAdapter();
+      const video = createFakeVideo();
+      video.play = jest.fn(async () => {
+        video.paused = false;
+      });
+      adapter.mount(video);
+
+      adapter.play();
+      expect(video.play).toHaveBeenCalledTimes(1);
+
+      video.paused = true;
+      video.dispatch("waiting");
+      video.dispatch("pause");
+      jest.advanceTimersByTime(500);
+
+      expect(video.play).toHaveBeenCalledTimes(2);
+      adapter.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not auto-resume after an explicit pause", () => {
+    jest.useFakeTimers();
+    try {
+      const adapter = new HlsWebVideoAdapter();
+      const video = createFakeVideo();
+      video.play = jest.fn(async () => {
+        video.paused = false;
+      });
+      adapter.mount(video);
+
+      adapter.play();
+      adapter.pause();
+      video.paused = true;
+      video.dispatch("pause");
+      jest.advanceTimersByTime(2_000);
+
+      expect(video.play).toHaveBeenCalledTimes(1);
+      adapter.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("exposes a zero-based timeline for a rolling HLS seek window", () => {

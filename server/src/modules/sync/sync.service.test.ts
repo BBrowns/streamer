@@ -118,6 +118,36 @@ describe("SyncService", () => {
     ).toBe(false);
   });
 
+  it("replaces a stale connection for the same device instead of consuming another slot", () => {
+    const staleSocket = { send: vi.fn(), close: vi.fn() } as any;
+    const currentSocket = { send: vi.fn(), close: vi.fn() } as any;
+
+    expect(
+      syncService.addConnection(userId, {
+        id: "stale",
+        deviceId: device1,
+        ws: staleSocket,
+      }),
+    ).toBe(true);
+    expect(
+      syncService.addConnection(userId, {
+        id: "current",
+        deviceId: device1,
+        ws: currentSocket,
+      }),
+    ).toBe(true);
+
+    expect(staleSocket.close).toHaveBeenCalledWith(
+      1000,
+      "Replaced by a newer connection",
+    );
+    syncService.broadcast(userId, "test_event", { ok: true });
+    expect(staleSocket.send).not.toHaveBeenCalled();
+    expect(currentSocket.send).toHaveBeenCalledWith(
+      JSON.stringify({ event: "test_event", data: { ok: true } }),
+    );
+  });
+
   it("enforces the aggregate per-user message rate across sockets", () => {
     syncService.addConnection(userId, {
       id: "c1",
