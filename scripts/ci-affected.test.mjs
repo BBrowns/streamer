@@ -22,7 +22,15 @@ test("runs full CI for non-pull-request events", () => {
   const result = analyzeChanges({ eventName: "push" });
 
   assert.equal(result.full_ci, true);
+  assert.equal(result.run_install_preflight, false);
   for (const job of ciJobNames) assert.equal(result[`run_${job}`], true);
+});
+
+test("runs the install preflight for merge-group events", () => {
+  const result = analyzeChanges({ eventName: "merge_group" });
+
+  assert.equal(result.full_ci, true);
+  assert.equal(result.run_install_preflight, true);
 });
 
 test("runs only formatting for documentation-only pull requests", () => {
@@ -34,6 +42,7 @@ test("runs only formatting for documentation-only pull requests", () => {
   assert.equal(result.run_server, false);
   assert.equal(result.run_mobile, false);
   assert.equal(result.run_golden_path, false);
+  assert.equal(result.run_install_preflight, false);
 });
 
 test("selects mobile and browser validation for mobile source changes", () => {
@@ -47,6 +56,7 @@ test("selects mobile and browser validation for mobile source changes", () => {
   assert.equal(result.run_visual, true);
   assert.equal(result.run_build, true);
   assert.equal(result.run_server, false);
+  assert.equal(result.run_install_preflight, false);
 });
 
 test("selects server, container, and build validation for server source changes", () => {
@@ -58,6 +68,7 @@ test("selects server, container, and build validation for server source changes"
   assert.equal(result.run_build, true);
   assert.equal(result.run_mobile, false);
   assert.equal(result.run_golden_path, false);
+  assert.equal(result.run_install_preflight, false);
 });
 
 test("uses full CI for shared package changes", () => {
@@ -77,6 +88,7 @@ test("uses draft fast CI until a pull request is ready for review", () => {
   assert.equal(result.run_lint, true);
   assert.equal(result.run_format, true);
   assert.equal(result.run_security, true);
+  assert.equal(result.run_install_preflight, true);
   for (const job of [
     "shared",
     "server",
@@ -97,6 +109,19 @@ test("uses full CI for workflow and lockfile changes", () => {
     const result = pr([path]);
     assert.equal(result.full_ci, true);
     assert.equal(result.run_desktop_package, true);
+    assert.equal(result.run_install_preflight, true, path);
+  }
+});
+
+test("selects the install preflight for workspace manifest changes", () => {
+  for (const path of [
+    "apps/mobile/package.json",
+    "packages/shared/package.json",
+    "server/package.json",
+    "patches/example+1.0.0.patch",
+  ]) {
+    const result = pr([path]);
+    assert.equal(result.run_install_preflight, true, path);
   }
 });
 

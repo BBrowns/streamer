@@ -8,6 +8,12 @@ import {
   parseActionPins,
   summarizeAudit,
   summarizeOutdated,
+  summarizeOpenPullRequests,
+  summarizeCiJobs,
+  compareRequiredCheckContexts,
+  extractRequiredCheckContexts,
+  getOpenPullRequestHeadShas,
+  summarizeWorkflowRuns,
 } from "./maintenance-collect.mjs";
 
 test("rejects remotes with credentials or non-GitHub API path components", () => {
@@ -48,6 +54,219 @@ test("summarizes outdated packages with bounded version data", () => {
     ],
     truncated: false,
   });
+});
+
+test("summarizes workflow failures, cancellations, queue time, and active state", () => {
+  assert.deepEqual(
+    summarizeWorkflowRuns(
+      {
+        workflow_runs: [
+          {
+            workflow_id: 1,
+            head_branch: "feature-success",
+            head_sha: "success-sha",
+            conclusion: "success",
+            created_at: "2026-09-14T09:55:00Z",
+            run_started_at: "2026-09-14T10:00:00Z",
+            updated_at: "2026-09-14T10:05:00Z",
+          },
+          {
+            workflow_id: 1,
+            head_branch: "feature-cancelled",
+            head_sha: "cancelled-sha",
+            conclusion: "cancelled",
+            created_at: "2026-09-14T10:05:00Z",
+            run_started_at: "2026-09-14T10:10:00Z",
+            updated_at: "2026-09-14T10:12:00Z",
+          },
+          {
+            workflow_id: 1,
+            head_branch: "feature-failure",
+            head_sha: "failure-sha",
+            conclusion: "failure",
+            created_at: "2026-09-14T10:15:00Z",
+            run_started_at: "2026-09-14T10:20:00Z",
+            updated_at: "2026-09-14T10:30:00Z",
+          },
+        ],
+      },
+      {
+        openPullRequestHeadShas: [
+          "success-sha",
+          "cancelled-sha",
+          "failure-sha",
+        ],
+        protectedBranches: ["main"],
+      },
+    ),
+    {
+      runs: 3,
+      failures: 1,
+      cancelled: 1,
+      activeFailures: 1,
+      historicalFailures: 0,
+      activeCancelled: 1,
+      historicalCancelled: 0,
+      reruns: 0,
+      queueSeconds: { sampled: 3, median: 300 },
+      durationSeconds: { sampled: 3, median: 300 },
+    },
+  );
+});
+
+test("classifies superseded and closed pull request failures as historical", () => {
+  const summary = summarizeWorkflowRuns(
+    {
+      workflow_runs: [
+        {
+          workflow_id: 9,
+          head_branch: "feature",
+          head_sha: "open-sha",
+          conclusion: "failure",
+          created_at: "2026-09-14T09:00:00Z",
+          run_started_at: "2026-09-14T09:01:00Z",
+          updated_at: "2026-09-14T09:02:00Z",
+        },
+        {
+          workflow_id: 9,
+          head_branch: "feature",
+          head_sha: "open-sha",
+          conclusion: "success",
+          created_at: "2026-09-14T09:03:00Z",
+          run_started_at: "2026-09-14T09:04:00Z",
+          updated_at: "2026-09-14T09:05:00Z",
+          run_attempt: 2,
+        },
+        {
+          workflow_id: 9,
+          head_branch: "feature",
+          head_sha: "open-sha",
+          conclusion: "failure",
+          created_at: "2026-09-14T09:06:00Z",
+          run_started_at: "2026-09-14T09:07:00Z",
+          updated_at: "2026-09-14T09:08:00Z",
+        },
+        {
+          workflow_id: 9,
+          head_branch: "closed-feature",
+          head_sha: "closed-sha",
+          conclusion: "failure",
+          created_at: "2026-09-14T09:09:00Z",
+          run_started_at: "2026-09-14T09:10:00Z",
+          updated_at: "2026-09-14T09:11:00Z",
+        },
+        {
+          workflow_id: 9,
+          head_branch: "master",
+          head_sha: "old-master-sha",
+          conclusion: "cancelled",
+          created_at: "2026-09-14T09:12:00Z",
+          run_started_at: "2026-09-14T09:13:00Z",
+          updated_at: "2026-09-14T09:14:00Z",
+        },
+        {
+          workflow_id: 9,
+          head_branch: "master",
+          head_sha: "new-master-sha",
+          conclusion: "success",
+          created_at: "2026-09-14T09:15:00Z",
+          run_started_at: "2026-09-14T09:16:00Z",
+          updated_at: "2026-09-14T09:17:00Z",
+        },
+      ],
+    },
+    { openPullRequestHeadShas: ["open-sha"], protectedBranches: ["master"] },
+  );
+
+  assert.equal(summary.failures, 3);
+  assert.equal(summary.activeFailures, 1);
+  assert.equal(summary.historicalFailures, 2);
+  assert.equal(summary.cancelled, 1);
+  assert.equal(summary.activeCancelled, 0);
+  assert.equal(summary.historicalCancelled, 1);
+  assert.equal(summary.reruns, 1);
+});
+
+test("summarizes preflight outcomes and skipped downstream jobs", () => {
+  assert.deepEqual(
+    summarizeCiJobs({
+      jobs: [
+        { name: "Dependency Install Preflight", conclusion: "failure" },
+        { name: "Lint & Type Check", conclusion: "skipped" },
+        { name: "Server Tests", conclusion: "skipped" },
+        { name: "workflow-lint", conclusion: "success" },
+        { name: "Release Gate", conclusion: "failure" },
+      ],
+    }),
+    {
+      runs: 1,
+      failures: 1,
+      cancelled: 0,
+      skippedAfterFailure: 2,
+    },
+  );
+});
+
+test("extracts and compares required check contexts without exposing ruleset payloads", () => {
+  const ruleset = {
+    rules: [
+      {
+        type: "required_status_checks",
+        parameters: {
+          required_status_checks: [
+            { context: "Release Gate" },
+            { context: "Release Gate" },
+            { context: "CodeQL" },
+            { context: "Unexpected Check" },
+          ],
+        },
+      },
+    ],
+  };
+
+  assert.deepEqual(extractRequiredCheckContexts(ruleset), [
+    "Release Gate",
+    "Release Gate",
+    "CodeQL",
+    "Unexpected Check",
+  ]);
+  assert.deepEqual(
+    compareRequiredCheckContexts(
+      ["Release Gate", "Review Dependency Changes", "CodeQL"],
+      extractRequiredCheckContexts(ruleset),
+    ),
+    {
+      available: true,
+      missing: ["Review Dependency Changes"],
+      unexpected: ["Unexpected Check"],
+      duplicate: ["Release Gate"],
+    },
+  );
+});
+
+test("summarizes open pull requests without branch or body details", () => {
+  assert.deepEqual(
+    summarizeOpenPullRequests([
+      { draft: false, user: { login: "dependabot[bot]" } },
+      { draft: true, user: { login: "contributor" } },
+    ]),
+    { available: true, open: 2, drafts: 1, dependabot: 1 },
+  );
+});
+
+test("extracts only open pull request head SHAs for run correlation", () => {
+  assert.deepEqual(
+    getOpenPullRequestHeadShas([
+      {
+        head: { sha: "abc123" },
+        headRefName: "feature/secret-name",
+        body: "private description",
+      },
+      { head: { sha: "abc123" } },
+      { head: {} },
+    ]),
+    ["abc123"],
+  );
 });
 
 test("detects tag-pinned workflow actions", () => {

@@ -18,6 +18,7 @@ const scope = (overrides = {}) => ({
     run_build: "true",
     run_server_container: "true",
     run_desktop_package: "true",
+    run_install_preflight: "false",
     ...overrides,
   },
 });
@@ -39,6 +40,17 @@ test("accepts jobs intentionally skipped by affected CI", () => {
       ci_scope: scope({ run_server: "false" }),
       "workflow-lint": { result: "success" },
       "test-server": { result: "skipped" },
+    }),
+    [],
+  );
+});
+
+test("accepts an install preflight that is intentionally out of scope", () => {
+  assert.deepEqual(
+    findCiNeedFailures({
+      ci_scope: scope({ run_install_preflight: "false" }),
+      "dependency-install-preflight": { result: "skipped" },
+      "workflow-lint": { result: "success" },
     }),
     [],
   );
@@ -83,5 +95,36 @@ test("rejects a skipped job without a declared scope mapping", () => {
       "unknown-job": { result: "skipped" },
     }),
     ["unknown-job:skipped"],
+  );
+});
+
+test("reports only the dependency preflight when it blocks downstream jobs", () => {
+  assert.deepEqual(
+    findCiNeedFailures({
+      ci_scope: scope({ full_ci: "true", run_install_preflight: "true" }),
+      "dependency-install-preflight": { result: "failure" },
+      "workflow-lint": { result: "success" },
+      "lint-and-typecheck": { result: "skipped" },
+      "format-check": { result: "skipped" },
+      "test-server": { result: "skipped" },
+      golden_path_gate: { result: "skipped" },
+      "release-gate": { result: "failure" },
+    }),
+    ["dependency-install-preflight:failure", "release-gate:failure"],
+  );
+});
+
+test("reports only a cancelled dependency preflight and the release gate", () => {
+  assert.deepEqual(
+    findCiNeedFailures({
+      ci_scope: scope({ full_ci: "true", run_install_preflight: "true" }),
+      "dependency-install-preflight": { result: "cancelled" },
+      "workflow-lint": { result: "success" },
+      "lint-and-typecheck": { result: "skipped" },
+      "test-server": { result: "skipped" },
+      golden_path_gate: { result: "skipped" },
+      "release-gate": { result: "failure" },
+    }),
+    ["dependency-install-preflight:cancelled", "release-gate:failure"],
   );
 });
