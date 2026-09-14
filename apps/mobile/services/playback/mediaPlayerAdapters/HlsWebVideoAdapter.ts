@@ -14,7 +14,37 @@ import type { ExpoVideoPlayerLike } from "./ExpoVideoAdapterBase";
 type HlsConstructor = typeof import("hls.js").default;
 type HlsInstance = InstanceType<HlsConstructor>;
 
+const HLS_RESUME_RETRY_MS = 500;
+const HLS_MAX_RESUME_ATTEMPTS = 20;
+
 export interface HlsVideoElement extends HTMLVideoElement {}
+
+export interface HlsPublishedFragment {
+  start?: number;
+  duration?: number;
+}
+
+export function getPublishedHlsWindow(
+  fragments: readonly HlsPublishedFragment[] | undefined,
+) {
+  if (!fragments || fragments.length === 0) return null;
+
+  const first = fragments[0];
+  const last = fragments[fragments.length - 1];
+  const start = first?.start;
+  const end =
+    last?.start !== undefined && last.duration !== undefined
+      ? last.start + last.duration
+      : undefined;
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    (end as number) <= (start as number)
+  ) {
+    return null;
+  }
+  return { start: start as number, end: end as number };
+}
 
 export interface HlsWebVideoAdapterOptions {
   document?: WebMediaDocument;
@@ -161,6 +191,10 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   private firstFrameReported = false;
   private destroyed = false;
   private loadGeneration = 0;
+  private publishedWindow: { start: number; end: number } | null = null;
+  private playbackIntent = false;
+  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  private resumeAttempts = 0;
 
   constructor(options: HlsWebVideoAdapterOptions = {}) {
     this.options = options;
@@ -190,6 +224,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     video.addEventListener("canplay", this.onCanPlay);
     video.addEventListener("playing", this.onPlaying);
     video.addEventListener("pause", this.onPause);
+    video.addEventListener("waiting", this.onWaiting);
+    video.addEventListener("stalled", this.onStalled);
     video.addEventListener("timeupdate", this.onTimeUpdate);
     video.addEventListener("progress", this.onTimeUpdate);
     video.addEventListener("volumechange", this.onVolumeChange);
@@ -201,17 +237,43 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   unmount() {
     const video = this.video;
     if (!video) return;
+    this.loadGeneration += 1;
+    this.source = null;
     video.removeEventListener("loadedmetadata", this.onLoadedMetadata);
     video.removeEventListener("canplay", this.onCanPlay);
     video.removeEventListener("playing", this.onPlaying);
     video.removeEventListener("pause", this.onPause);
+    video.removeEventListener("waiting", this.onWaiting);
+    video.removeEventListener("stalled", this.onStalled);
     video.removeEventListener("timeupdate", this.onTimeUpdate);
     video.removeEventListener("progress", this.onTimeUpdate);
     video.removeEventListener("volumechange", this.onVolumeChange);
     video.removeEventListener("ended", this.onEnded);
     video.removeEventListener("error", this.onVideoError);
     this.destroyHls();
+    this.publishedWindow = null;
     this.video = null;
+  }
+
+  /**
+   * Detaches the current HLS source without destroying the adapter. This is
+   * used when fallback releases a gateway lease while the same video surface
+   * remains mounted.
+   */
+  clearSource() {
+    this.loadGeneration += 1;
+    this.source = null;
+    this.playbackIntent = false;
+    this.clearResumeTimer();
+    this.firstFrameReported = false;
+    this.error = undefined;
+    this.status = "idle";
+    this.publishedWindow = null;
+    this.destroyHls();
+    const video = this.video;
+    if (!video) return;
+    video.removeAttribute("src");
+    video.load();
   }
 
   getCapabilities() {
@@ -266,17 +328,14 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   }
 
   play() {
-    void this.video?.play().catch(() => {
-      this.emit({
-        type: "status_changed",
-        status: "error",
-        error: { code: "MEDIA_ERROR", message: "Playback could not start." },
-      });
-      this.options.onError?.();
-    });
+    this.playbackIntent = true;
+    this.resumeAttempts = 0;
+    this.tryResumePlayback();
   }
 
   pause() {
+    this.playbackIntent = false;
+    this.clearResumeTimer();
     this.video?.pause();
   }
 
@@ -301,6 +360,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   }
 
   async replaceSource(source: string) {
+    this.playbackIntent = false;
+    this.clearResumeTimer();
     this.source = source;
     this.firstFrameReported = false;
     this.error = undefined;
@@ -389,6 +450,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.status = "loading";
     this.emit({ type: "status_changed", status: "loading" });
     this.destroyHls();
+    this.publishedWindow = null;
     video.removeAttribute("src");
     video.load();
 
@@ -402,8 +464,34 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
           lowLatencyMode: false,
         });
         this.hls = hls;
+        const updatePublishedWindow = (data: {
+          details?: { fragments?: readonly HlsPublishedFragment[] };
+        }) => {
+          if (generation !== this.loadGeneration) return;
+          const nextWindow = getPublishedHlsWindow(data.details?.fragments);
+          if (!nextWindow) return;
+          this.publishedWindow = nextWindow;
+          this.onTimeUpdate();
+          this.tryResumePlayback();
+        };
+        hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+          updatePublishedWindow(data);
+        });
+        hls.on(Hls.Events.LEVEL_UPDATED, (_event, data) => {
+          updatePublishedWindow(data);
+        });
+        hls.on(Hls.Events.FRAG_BUFFERED, () => {
+          if (generation === this.loadGeneration) this.tryResumePlayback();
+        });
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data?.fatal) return;
+          if (
+            !data?.fatal ||
+            generation !== this.loadGeneration ||
+            this.destroyed ||
+            this.hls !== hls
+          ) {
+            return;
+          }
           this.status = "error";
           this.error = {
             code: "MEDIA_ERROR",
@@ -450,6 +538,55 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.hls = null;
   }
 
+  private clearResumeTimer() {
+    if (!this.resumeTimer) return;
+    clearTimeout(this.resumeTimer);
+    this.resumeTimer = null;
+  }
+
+  /**
+   * A live HLS playlist can briefly exhaust the media element's buffer while
+   * the torrent-backed remux catches up. Browsers may transition the element
+   * to paused in that case instead of resuming it when the next fragment is
+   * appended. Keep the user's play intent and retry only on a bounded timer;
+   * an explicit pause clears the intent and cancels this path.
+   */
+  private tryResumePlayback() {
+    const video = this.video;
+    if (
+      !video ||
+      !this.playbackIntent ||
+      this.destroyed ||
+      video.ended ||
+      !video.paused
+    ) {
+      return;
+    }
+
+    void Promise.resolve(video.play()).catch(() => {
+      this.scheduleResumePlayback();
+    });
+  }
+
+  private scheduleResumePlayback() {
+    if (
+      !this.playbackIntent ||
+      this.resumeTimer ||
+      this.resumeAttempts >= HLS_MAX_RESUME_ATTEMPTS
+    ) {
+      return;
+    }
+    this.resumeAttempts += 1;
+    this.resumeTimer = setTimeout(() => {
+      this.resumeTimer = null;
+      if (!this.playbackIntent) return;
+      this.tryResumePlayback();
+      if (this.video?.paused && this.playbackIntent) {
+        this.scheduleResumePlayback();
+      }
+    }, HLS_RESUME_RETRY_MS);
+  }
+
   private seekableDurationFromRange(
     video: HlsVideoElement,
     range: { start: number; end: number } | null,
@@ -462,6 +599,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   }
 
   private getSeekableRange(video: HlsVideoElement) {
+    if (this.publishedWindow) return this.publishedWindow;
     if (video.seekable.length === 0) return null;
     const start = video.seekable.start(0);
     const end = video.seekable.end(video.seekable.length - 1);
@@ -510,6 +648,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
       this.status = "ready";
       this.emit({ type: "status_changed", status: "ready" });
     }
+    this.tryResumePlayback();
   };
 
   private readonly onPlaying = () => {
@@ -521,7 +660,19 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   };
 
   private readonly onPause = () => {
+    if (this.playbackIntent && !this.video?.ended) {
+      this.scheduleResumePlayback();
+      return;
+    }
     this.emit({ type: "playing_changed", playing: false });
+  };
+
+  private readonly onWaiting = () => {
+    this.scheduleResumePlayback();
+  };
+
+  private readonly onStalled = () => {
+    this.scheduleResumePlayback();
   };
 
   private readonly onTimeUpdate = () => {
@@ -542,9 +693,14 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     });
   };
 
-  private readonly onEnded = () => this.emit({ type: "completed" });
+  private readonly onEnded = () => {
+    this.playbackIntent = false;
+    this.clearResumeTimer();
+    this.emit({ type: "completed" });
+  };
 
   private readonly onVideoError = () => {
+    if (!this.source || this.destroyed) return;
     this.status = "error";
     this.error = {
       code: "MEDIA_ERROR",

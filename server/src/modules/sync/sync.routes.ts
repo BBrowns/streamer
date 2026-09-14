@@ -62,6 +62,10 @@ syncRouter.get(
           ws,
         });
         if (!accepted) {
+          logger.warn(
+            { userId, connId, failureCode: "connection_limit" },
+            "WebSocket connection rejected",
+          );
           ws.close(1008, "Connection limit reached");
           return;
         }
@@ -95,6 +99,10 @@ syncRouter.get(
           revocation === "revoked" ||
           (env.nodeEnv === "production" && revocation !== "active")
         ) {
+          logger.warn(
+            { userId, connId, failureCode: "authentication_expired" },
+            "WebSocket connection closed by authentication guard",
+          );
           try {
             socket?.close(1008, "Authentication expired or revoked");
           } catch {}
@@ -109,6 +117,10 @@ syncRouter.get(
         );
         if (!result.ok) {
           const closeCode = result.code === "payload_too_large" ? 1009 : 1008;
+          logger.warn(
+            { userId, connId, failureCode: result.code },
+            "WebSocket connection closed for invalid input",
+          );
           try {
             socket?.close(closeCode, "Invalid or excessive WebSocket message");
           } catch {}
