@@ -68,7 +68,11 @@ export function createPlaybackRuntimeError(
   overrides: Partial<
     Pick<
       PlaybackRuntimeError,
-      "retryable" | "shouldFallback" | "reasonCode" | "debugMessage"
+      | "retryable"
+      | "shouldFallback"
+      | "retryAfterMs"
+      | "reasonCode"
+      | "debugMessage"
     >
   > = {},
 ): PlaybackRuntimeError {
@@ -77,6 +81,10 @@ export function createPlaybackRuntimeError(
     message,
     retryable: overrides.retryable ?? RETRYABLE_CODES.has(code),
     shouldFallback: overrides.shouldFallback ?? FALLBACK_CODES.has(code),
+    retryAfterMs:
+      overrides.retryAfterMs !== undefined
+        ? Math.max(0, Math.min(Math.round(overrides.retryAfterMs), 5 * 60_000))
+        : undefined,
     reasonCode: overrides.reasonCode,
     debugMessage: overrides.debugMessage,
   };

@@ -118,12 +118,14 @@ function gatewayInputForDelivery(
     title?: string;
     season?: number;
     episode?: number;
+    audioLanguage?: string | null;
   },
 ) {
   const remux = delivery !== "range-http";
   return {
     magnet: source.magnet,
     fileIdx: selection?.fileIndex,
+    audioLanguage: selection?.audioLanguage,
     hints: selection
       ? {
           title: selection.title,
@@ -307,10 +309,12 @@ export function buildBridgeHelloV1() {
 
 export const BRIDGE_HLS_FEATURE_HEADER = "X-Streamer-Bridge-Features";
 export const BRIDGE_HLS_FEATURE = "hls-segments";
+export const BRIDGE_AUDIO_FEATURE = "audio-preferences";
 
 export async function buildBridgeCapabilitiesV1(
   options: {
     hlsSegments?: boolean;
+    audioPreferences?: boolean;
   } = {},
 ) {
   const torrent = getTorrentEngineStatus();
@@ -327,6 +331,7 @@ export async function buildBridgeCapabilitiesV1(
     health,
     capabilities: {
       jobs: {
+        ...(options.audioPreferences ? { audioPreferences: true } : {}),
         sourceKinds: ["magnet"],
         deliveries: [
           {
@@ -415,9 +420,10 @@ export async function createBridgeJobV1(
     idempotencyRecords.delete(idempotencyKey);
   }
 
-  const job = await createGatewayJob(
-    gatewayInputForDelivery(input.delivery, input.source, input.selection),
-  );
+  const job = await createGatewayJob({
+    ...gatewayInputForDelivery(input.delivery, input.source, input.selection),
+    attemptId: input.requestId,
+  });
   idempotencyRecords.set(idempotencyKey, {
     digest,
     jobId: job.id,
@@ -441,6 +447,7 @@ bridgeV1Router.get(
     return res.json(
       await buildBridgeCapabilitiesV1({
         hlsSegments: requestedFeatures.includes(BRIDGE_HLS_FEATURE),
+        audioPreferences: requestedFeatures.includes(BRIDGE_AUDIO_FEATURE),
       }),
     );
   },
@@ -866,10 +873,10 @@ bridgeV1Router.delete(
   "/jobs/:jobId",
   bridgeV1RateLimiter,
   requireBridgeV1Scope("jobs:write"),
-  (req: Request<{ jobId: string }>, res) => {
+  async (req: Request<{ jobId: string }>, res) => {
     const job = getGatewayJob(req.params.jobId);
     if (!job) return res.status(204).send();
-    if (job.state !== "cancelled") cancelGatewayJob(job);
+    await cancelGatewayJob(job);
     mediaIdentitiesByJobId.delete(job.id);
     return res.json(serializeBridgeJobForResponse(job));
   },

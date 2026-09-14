@@ -328,7 +328,7 @@ export const usePlayerStore = create<PlayerState>()(
       _peerTimeout: null,
       playbackRate: 1.0,
       preferredQualities: [...PLAYBACK_QUALITY_OPTIONS],
-      preferredAudioLang: null,
+      preferredAudioLang: "en",
       preferredSubtitleLang: null,
       subtitleMode: "auto",
       subtitleAccessibility: "neutral",

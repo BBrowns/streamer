@@ -60,6 +60,8 @@ export interface PlaybackRuntimeError {
   message: string;
   retryable: boolean;
   shouldFallback: boolean;
+  /** Runtime-only cooldown hint; never copied into persisted session errors. */
+  retryAfterMs?: number;
   /** Optional planner rejection semantics used to choose a focused recovery. */
   reasonCode?: PlaybackRejectReason;
   debugMessage?: string;

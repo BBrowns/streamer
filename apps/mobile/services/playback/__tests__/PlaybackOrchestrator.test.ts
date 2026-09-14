@@ -377,6 +377,57 @@ describe("PlaybackOrchestrator", () => {
     });
   });
 
+  it("single-flights repeated preparation for the same download target", async () => {
+    const plan = makePlaybackPlan({
+      action: "download",
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: makePlannedMediaCandidate({
+          id: "00000000-0000-4000-8000-000000000211",
+          kind: "direct",
+          stream: { url: "https://cdn.example.test/movie.mp4" },
+          actionEligibility: { action: "download", eligible: true },
+        }),
+      },
+    });
+    let resolvePlanPromise!: (value: typeof plan) => void;
+    createPlan.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePlanPromise = resolve;
+      }),
+    );
+    resolveDownload.mockResolvedValue({
+      ok: true,
+      sessionId: "00000000-0000-4000-8000-000000000011",
+      candidateId: "00000000-0000-4000-8000-000000000211",
+      attemptId: "00000000-0000-4000-8000-000000000311",
+      stream: { url: "https://cdn.example.test/movie.mp4" },
+      uri: "https://cdn.example.test/movie.mp4",
+      eligibility: {
+        mode: "direct-file",
+        canDownload: true,
+        offlinePlayable: true,
+      },
+    });
+
+    const input = {
+      type: "movie" as const,
+      id: "tt123",
+      title: "Example Movie",
+    };
+    const first = prepareDownload(input);
+    const second = prepareDownload({ ...input, title: "Updated label" });
+
+    await Promise.resolve();
+    expect(createPlan).toHaveBeenCalledTimes(1);
+    resolvePlanPromise(plan);
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult).toEqual(secondResult);
+    expect(resolveDownload).toHaveBeenCalledTimes(1);
+  });
+
   it("blocks download when the selected source is not offline eligible", async () => {
     createPlan.mockResolvedValueOnce(
       makePlaybackPlan({

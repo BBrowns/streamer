@@ -95,6 +95,7 @@
       "summary_other": "Results for “{{query}}” · {{count}} results",
       "searching": "Searching for “{{query}}”…",
       "searchingShort": "Searching…",
+      "unavailable": "Results unavailable",
       "count": "{{count}} results",
       "count_one": "{{count}} result",
       "count_other": "{{count}} results",
@@ -401,6 +402,8 @@
       "storageTitle": "More storage needed",
       "storageMessage": "Free some device storage before retrying this download.",
       "freeSpaceAction": "Manage storage",
+      "rateLimitedTitle": "Download temporarily paused",
+      "rateLimitedMessage": "The bridge is cooling down after too many requests. Retry shortly.",
       "setupTitle": "Playback setup needs attention",
       "setupMessage": "Open Sources & Devices and review this device before retrying the download.",
       "reviewSetupAction": "Review setup",
@@ -678,6 +681,7 @@
       "autoplay": "Autoplay next episode",
       "autoplayDescription": "Continue a series when the next episode is known.",
       "languages": {
+        "noPreference": "No preference",
         "off": "Off",
         "english": "English",
         "dutch": "Dutch",
@@ -862,6 +866,7 @@
       "none": "No streams for this episode.",
       "noneData": "No episode data available.",
       "season": "Season {{season}}",
+      "specials": "Specials",
       "playA11y": "Play episode {{episode}}: {{title}}",
       "downloadA11y": "Download episode {{episode}}: {{title}}",
       "moreSourcesA11y": "More sources for episode {{episode}}: {{title}}",
@@ -968,7 +973,14 @@
         "play": "Playback unavailable",
         "download": "Download unavailable",
         "cast": "Cast unavailable"
-      }
+      },
+      "rateLimited": {
+        "play": "Playback temporarily paused",
+        "download": "Download temporarily paused",
+        "cast": "Cast temporarily paused"
+      },
+      "rateLimitedMessage": "Too many requests were made. Try again shortly.",
+      "rateLimitedDetail": "The current operation is paused during the bridge cooldown."
     },
     "loadState": {
       "eyebrow": "Title details",

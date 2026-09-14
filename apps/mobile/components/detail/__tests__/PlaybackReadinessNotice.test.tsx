@@ -143,6 +143,26 @@ describe("PlaybackReadinessNotice", () => {
     });
   });
 
+  it("shows cooldown guidance for a rate-limited source", () => {
+    expect(
+      getPlaybackReadinessCopyFromError(
+        {
+          code: "SOURCE_UNAVAILABLE",
+          message: "This source is temporarily rate-limited.",
+          retryable: true,
+          shouldFallback: false,
+          retryAfterMs: 5_000,
+          debugMessage: "rate_limited",
+        },
+        "download",
+      ),
+    ).toMatchObject({
+      title: "Download temporarily paused",
+      message: "Too many requests were made. Try again shortly.",
+      tone: "warning",
+    });
+  });
+
   it("offers Playback settings when every source is outside the quality selection", () => {
     const plan = makePlaybackPlan({
       state: "unsupported",

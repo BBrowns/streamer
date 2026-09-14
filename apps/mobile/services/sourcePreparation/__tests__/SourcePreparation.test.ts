@@ -321,6 +321,69 @@ describe("SourcePreparer route registry", () => {
 });
 
 describe("BridgeV1SourceAdapter", () => {
+  it.each(["en", "nl", null])(
+    "forwards a supported preference %s to the same job",
+    async (audioLanguage) => {
+      const client = bridgeClient({
+        getCapabilities: jest.fn().mockResolvedValue({
+          capabilities: { jobs: { audioPreferences: true } },
+        }),
+      });
+      client.createJob.mockResolvedValue(readyJob());
+      const adapter = new BridgeV1SourceAdapter({
+        executionTarget: "local-sidecar",
+        baseUrl: "http://localhost:11470",
+        client,
+      });
+      const selectedRoute = route("seekable-cache", "local-sidecar");
+      const result = await adapter.prepare({
+        action: "play",
+        audioLanguage,
+        attemptId: REQUEST_ID,
+        requestId: REQUEST_ID,
+        candidate: candidateFor(selectedRoute),
+        route: selectedRoute,
+      });
+      expect(client.createJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selection: expect.objectContaining({ audioLanguage }),
+        }),
+        undefined,
+      );
+      await result.release();
+    },
+  );
+
+  it.each(["nl", null])(
+    "requires a bridge update for unsupported preference %s",
+    async (audioLanguage) => {
+      const client = bridgeClient({
+        getCapabilities: jest
+          .fn()
+          .mockResolvedValue({ capabilities: { jobs: {} } }),
+      });
+      const adapter = new BridgeV1SourceAdapter({
+        executionTarget: "local-sidecar",
+        baseUrl: "http://localhost:11470",
+        client,
+      });
+      const selectedRoute = route("seekable-cache", "local-sidecar");
+      await expect(
+        adapter.prepare({
+          action: "play",
+          audioLanguage,
+          attemptId: REQUEST_ID,
+          requestId: REQUEST_ID,
+          candidate: candidateFor(selectedRoute),
+          route: selectedRoute,
+        }),
+      ).rejects.toMatchObject({
+        code: "UNSUPPORTED_ROUTE",
+        shouldFallback: false,
+      });
+      expect(client.createJob).not.toHaveBeenCalled();
+    },
+  );
   it("adopts a progressive-fmp4 upgrade discovered from the selected torrent file", async () => {
     const client = bridgeClient();
     client.createJob.mockResolvedValue(
@@ -511,6 +574,41 @@ describe("BridgeV1SourceAdapter", () => {
       code: "INTERNAL",
       retryable: true,
       shouldFallback: true,
+    });
+  });
+
+  it("stops candidate fallback on a bridge rate limit and preserves cooldown", async () => {
+    const client = bridgeClient({
+      createJob: jest
+        .fn()
+        .mockRejectedValue(
+          new BridgeClientError(
+            "RATE_LIMITED",
+            "The bridge is temporarily rate-limited.",
+            { status: 429, retryable: true, retryAfterMs: 5_000 },
+          ),
+        ),
+    });
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+    });
+    const selectedRoute = route("seekable-cache", "local-sidecar");
+
+    await expect(
+      adapter.prepare({
+        action: "download",
+        attemptId: "attempt-rate-limited",
+        requestId: REQUEST_ID,
+        candidate: candidateFor(selectedRoute, { kind: "torrent" }),
+        route: selectedRoute,
+      }),
+    ).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      retryable: true,
+      shouldFallback: false,
+      retryAfterMs: 5_000,
     });
   });
 

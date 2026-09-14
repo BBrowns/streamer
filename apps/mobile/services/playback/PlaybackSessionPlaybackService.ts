@@ -10,6 +10,8 @@ import type {
   Stream,
 } from "@streamer/shared";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
+import { usePlayerStore } from "../../stores/playerStore";
+import { ensureBridgeReadiness } from "../streamEngine/bridgeReadinessRuntime";
 import {
   getDownloadEligibility,
   type DownloadEligibility,
@@ -48,6 +50,7 @@ import {
   requireActionPreflight,
 } from "../actionPreflight";
 import { getDeviceProfile } from "./deviceProfile";
+import { getStableCandidateSourceIdentity } from "./partialDiscovery";
 
 const TERMINAL_STATUSES = new Set<PlaybackSessionStatus>([
   "completed",
@@ -68,11 +71,30 @@ const resolutionBySession = new Map<
 // touching the store.
 const resolutionGenerationBySession = new Map<string, number>();
 const lastGatewayBreadcrumbPhaseBySession = new Map<string, string>();
-const MAX_AUTOMATIC_PLAY_CANDIDATES = 5;
+const MAX_AUTOMATIC_CANDIDATES = 5;
 // A post-ready failure can re-enter the resolver after the first attempt has
 // already succeeded. Keep the Play budget session-wide so that recovery does
 // not silently turn five allowed candidates into an unbounded chain.
 const automaticPlayAttemptCountBySession = new Map<string, number>();
+const audioPreferenceBySession = new Map<string, string | null>();
+const excludedRecoverySources = new Map<string, Set<string>>();
+
+/** Runtime-only continuity across a partial-discovery replacement, never persisted. */
+export function inheritAutomaticPlayAttempts(
+  sessionId: string,
+  usedAttempts: number,
+  previous: readonly PlaybackPlanCandidate[],
+) {
+  automaticPlayAttemptCountBySession.set(sessionId, usedAttempts);
+  excludedRecoverySources.set(
+    sessionId,
+    new Set(
+      previous
+        .map(getStableCandidateSourceIdentity)
+        .filter((id): id is string => id !== null),
+    ),
+  );
+}
 
 /**
  * Runtime-only handoff for the active player. Deliberately excludes the
@@ -205,6 +227,7 @@ function isSessionResolutionCurrent(sessionId: string, generation: number) {
 }
 
 function failActiveSession(sessionId: string, error: PlaybackRuntimeError) {
+  audioPreferenceBySession.delete(sessionId);
   const session = getSession(sessionId);
   if (!session || isTerminal(session)) return false;
   usePlaybackSessionStore.getState().failSession(sessionId, error);
@@ -411,12 +434,16 @@ function toSafeRuntimeError(
   }
 
   if (isSourcePreparationError(error)) {
-    const causeMessage = getErrorMessage(error.cause);
-    const inferredCode = causeMessage
-      ? inferPlaybackErrorCodeFromMessages([causeMessage])
-      : undefined;
+    // Only the legacy adapter lacks typed failure categories. Never let text
+    // from a v1 source/FFmpeg failure override its authoritative classification.
+    const legacyCode =
+      candidate &&
+      !isRoutedCandidate(candidate) &&
+      error.code === "SOURCE_UNAVAILABLE"
+        ? inferPlaybackErrorCodeFromMessages([getErrorMessage(error.cause)])
+        : undefined;
     const code =
-      inferredCode ||
+      legacyCode ||
       (error.code === "UNSUPPORTED_ROUTE"
         ? candidate?.requiresBridge
           ? "BRIDGE_UNSUPPORTED"
@@ -425,6 +452,7 @@ function toSafeRuntimeError(
           ? "GATEWAY_TIMEOUT"
           : error.code === "INTERNAL" ||
               error.code === "TRACKS_UNAVAILABLE" ||
+              error.code === "RATE_LIMITED" ||
               error.code === "INVALID_SOURCE" ||
               error.code === "CANCELLED"
             ? "SOURCE_UNAVAILABLE"
@@ -432,17 +460,22 @@ function toSafeRuntimeError(
     const message =
       error.code === "SOURCE_STALLED"
         ? "This source stalled before becoming ready."
-        : error.code === "TRACKS_UNAVAILABLE"
-          ? "English audio is unavailable for this source."
-          : undefined;
+        : error.code === "RATE_LIMITED"
+          ? "This source is temporarily rate-limited. Try again shortly."
+          : error.code === "TRACKS_UNAVAILABLE"
+            ? "The preferred audio is unavailable for this source."
+            : error.code === "UNSUPPORTED_ROUTE"
+              ? error.message
+              : undefined;
     return createPlaybackRuntimeError(code, message, {
       retryable: error.retryable,
+      retryAfterMs: error.retryAfterMs,
       // Preserve the intrinsic fallback policy on the error. Whether there
       // is a next candidate is decided by resolveCandidateChain; collapsing
       // the two here made the final candidate look non-fallbackable and
       // bypassed the aggregate terminal error classification.
       shouldFallback: error.shouldFallback,
-      debugMessage: causeMessage || error.message,
+      debugMessage: error.code,
     });
   }
 
@@ -578,7 +611,7 @@ function createAllCandidatesFailedError(
     errors.every(
       (error) =>
         error.code === "SOURCE_UNAVAILABLE" &&
-        /english audio/i.test(error.message),
+        /preferred audio|english audio/i.test(error.message),
     );
 
   if (allNoPeers) {
@@ -605,7 +638,7 @@ function createAllCandidatesFailedError(
   if (allEnglishTracksUnavailable) {
     return createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",
-      "English audio was not available on the selected sources.",
+      "The preferred audio was not available on the selected sources.",
       { retryable: true, shouldFallback: false, debugMessage },
     );
   }
@@ -779,6 +812,8 @@ function isPreparationLifecycleCurrent(
 }
 
 function clearSessionBreadcrumbState(sessionId: string) {
+  excludedRecoverySources.delete(sessionId);
+  audioPreferenceBySession.delete(sessionId);
   for (const key of lastGatewayBreadcrumbPhaseBySession.keys()) {
     if (key.startsWith(`${sessionId}:`)) {
       lastGatewayBreadcrumbPhaseBySession.delete(key);
@@ -1048,6 +1083,9 @@ async function attemptCandidate(
   preparationAbortBySession.set(sessionId, preparationController);
 
   try {
+    if (candidate.requiresBridge || candidate.kind === "torrent") {
+      await ensureBridgeReadiness({ signal: preparationController.signal });
+    }
     const actionDeviceProfile =
       action === "cast" ? getDeviceProfile() : session.deviceProfile;
     const preflight = preflightStreamAction(action, stream, {
@@ -1093,9 +1131,18 @@ async function attemptCandidate(
       candidate,
       streamForResolution,
     );
+    if (action === "play" && !audioPreferenceBySession.has(sessionId)) {
+      audioPreferenceBySession.set(
+        sessionId,
+        usePlayerStore.getState().preferredAudioLang,
+      );
+    }
+    const audioLanguage =
+      action === "play" ? audioPreferenceBySession.get(sessionId) : undefined;
     const preparation = isRoutedCandidate(preparationCandidate)
       ? sourcePreparer.prepare({
           action,
+          audioLanguage,
           attemptId: attempt.id,
           requestId: attempt.id,
           candidate: preparationCandidate,
@@ -1105,6 +1152,7 @@ async function attemptCandidate(
         })
       : sourcePreparer.prepare({
           action,
+          audioLanguage,
           attemptId: attempt.id,
           requestId: attempt.id,
           candidate: preparationCandidate,
@@ -1370,23 +1418,40 @@ async function resolveCandidateChain(
       .filter((attempt) => attempt.status !== "pending")
       .map((attempt) => attempt.candidateId),
   );
-  const unattemptedCandidates = orderedCandidates.filter(
-    (candidate) => !attemptedCandidateIds.has(candidate.id),
-  );
+  const seenSources = new Set(excludedRecoverySources.get(sessionId));
+  for (const id of attemptedCandidateIds) {
+    const previous = store.getRuntimeCandidate(sessionId, id);
+    const identity = previous && getStableCandidateSourceIdentity(previous);
+    if (identity) seenSources.add(identity);
+  }
+  const unattemptedCandidates = orderedCandidates.filter((candidate) => {
+    if (attemptedCandidateIds.has(candidate.id)) return false;
+    const runtime = store.getRuntimeCandidate(sessionId, candidate.id);
+    const identity = runtime && getStableCandidateSourceIdentity(runtime);
+    if (identity && seenSources.has(identity)) return false;
+    if (identity) seenSources.add(identity);
+    return true;
+  });
   const automaticAttemptsUsed =
     action === "play"
       ? (automaticPlayAttemptCountBySession.get(sessionId) ?? 0)
-      : 0;
+      : action === "download"
+        ? session.attempts.filter((attempt) => attempt.status !== "pending")
+            .length
+        : 0;
   const automaticAttemptsRemaining = Math.max(
     0,
-    MAX_AUTOMATIC_PLAY_CANDIDATES - automaticAttemptsUsed,
+    MAX_AUTOMATIC_CANDIDATES - automaticAttemptsUsed,
   );
   const candidatesToAttempt =
-    action === "play"
+    action === "play" || action === "download"
       ? unattemptedCandidates.slice(0, automaticAttemptsRemaining)
       : unattemptedCandidates;
 
-  if (action === "play" && candidatesToAttempt.length === 0) {
+  if (
+    (action === "play" || action === "download") &&
+    candidatesToAttempt.length === 0
+  ) {
     const terminalError = createAllCandidatesFailedError(
       getSession(sessionId),
       action,
@@ -1613,6 +1678,7 @@ async function advanceSessionAfterFailure(
   const safeError = createPlaybackRuntimeError(error.code, undefined, {
     retryable: error.retryable,
     shouldFallback: error.shouldFallback && Boolean(nextCandidate),
+    retryAfterMs: error.retryAfterMs,
     debugMessage: error.debugMessage || error.message,
   });
 

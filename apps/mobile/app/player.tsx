@@ -608,6 +608,12 @@ export default function PlayerScreen() {
         type: mediaInfo.type,
         id: mediaInfo.itemId,
         sources: "1",
+        ...(mediaInfo.season !== undefined && mediaInfo.episode !== undefined
+          ? {
+              season: String(mediaInfo.season),
+              episode: String(mediaInfo.episode),
+            }
+          : {}),
       },
     } as const;
     clearPlayer();

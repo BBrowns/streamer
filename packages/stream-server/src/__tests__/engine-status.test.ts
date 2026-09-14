@@ -9,6 +9,7 @@ import {
   __setFfmpegSpawnerForTests,
   __setWebTorrentImporterForTests,
   getClient,
+  getTorrentMediaSource,
   getTorrent,
   getTorrentEngineStatus,
   isTorrentEngineUnavailableError,
@@ -155,6 +156,51 @@ describe("torrent lookup", () => {
       await rm(cacheRoot, { recursive: true, force: true });
       cacheRoot = null;
     }
+  });
+
+  it("shares initialization and uses the server returned by createServer", async () => {
+    let finishListening!: () => void;
+    const file = { streamURL: "/webtorrent/fixture/0" };
+    const torrent = { files: [file], destroyed: false };
+    const construct = vi.fn();
+    class FakeWebTorrent {
+      torrents = [torrent];
+      on = vi.fn();
+      constructor() {
+        construct();
+      }
+      createServer = () => ({
+        server: {
+          listen: (_port: number, _host: string, cb: () => void) => {
+            finishListening = cb;
+          },
+          address: () => ({ port: 3210 }),
+          on: vi.fn(),
+        },
+      });
+    }
+    __setWebTorrentImporterForTests(async () => ({
+      default: FakeWebTorrent as any,
+    }));
+    const first = getClient();
+    const second = getClient();
+    await vi.waitFor(() => expect(finishListening).toBeTypeOf("function"));
+    let received = false;
+    void second.then(() => {
+      received = true;
+    });
+    await Promise.resolve();
+    expect(received).toBe(false);
+    finishListening();
+    expect(await second).toBe(await first);
+    expect(construct).toHaveBeenCalledTimes(1);
+    expect((await first).server).toBeUndefined();
+    await expect(getTorrentMediaSource(torrent, file)).resolves.toBe(
+      "http://127.0.0.1:3210/webtorrent/fixture/0",
+    );
+    await expect(
+      getTorrentMediaSource(torrent, { streamURL: "https://example.com" }),
+    ).rejects.toMatchObject({ reason: "file_selection_failed" });
   });
 
   it("matches info hashes case-insensitively for metrics lookups", async () => {

@@ -39,6 +39,17 @@ import type {
 } from "./torrent-helpers.js";
 import { redactSensitiveText } from "./redaction.js";
 import {
+  assertTorrentUsable,
+  rememberTorrentFailure,
+  TorrentPreparationError,
+} from "./torrent-failure.js";
+import {
+  hasTorrentConsumers,
+  retainTorrentConsumer,
+  withTorrentOperation,
+} from "./torrent-ownership.js";
+import { observeTorrentPeers } from "./torrent-observation.js";
+import {
   cleanupTorrentCache,
   getTorrentCacheDirForKey,
   getTorrentCacheStatus,
@@ -66,6 +77,8 @@ type WebTorrentModule = {
 
 // Lazily initialized webtorrent client
 let client: any = null;
+let clientInitialization: Promise<any> | null = null;
+let clientDestruction: Promise<void> | null = null;
 let clientInitError: TorrentEngineError | null = null;
 let importWebTorrent = () => import("webtorrent") as Promise<WebTorrentModule>;
 
@@ -141,7 +154,6 @@ const LEGACY_STREAM_METADATA_TIMEOUT_MS =
 /** Track last access time per infoHash for pruning */
 const lastAccessMap = new Map<string, number>();
 const loggedTorrents = new WeakSet<object>();
-const PEER_LOG_INTERVAL_MS = 5_000;
 
 type FfmpegSpawner = typeof nodeSpawn;
 
@@ -1589,7 +1601,7 @@ export function waitForTorrentFileFirstBytes(
     const stream = file.createReadStream({ start: 0, end: 0 });
     let settled = false;
     const timeout = setTimeout(() => {
-      fail(new Error("Torrent file first byte timeout"));
+      fail(new TorrentPreparationError("first_byte_timeout"));
     }, options.timeoutMs ?? 30_000);
     timeout.unref?.();
 
@@ -1808,7 +1820,7 @@ export function isTorrentEngineUnavailableError(err: unknown) {
 }
 
 export function getTorrentEngineStatus(): TorrentEngineStatus {
-  if (client) {
+  if (client && serverPort > 0) {
     return {
       available: true,
       state: "ready",
@@ -1841,6 +1853,7 @@ export function __setWebTorrentImporterForTests(
 ) {
   importWebTorrent = importer;
   client = null;
+  clientInitialization = null;
   clientInitError = null;
   serverInstance = null;
   serverPort = 0;
@@ -1851,6 +1864,7 @@ export function __setWebTorrentImporterForTests(
 export function __resetTorrentEngineForTests() {
   importWebTorrent = () => import("webtorrent") as Promise<WebTorrentModule>;
   client = null;
+  clientInitialization = null;
   clientInitError = null;
   serverInstance = null;
   serverPort = 0;
@@ -1907,11 +1921,13 @@ export async function pruneTorrents(client: any) {
   if (torrents.length < MAX_ACTIVE_TORRENTS) return;
 
   // Sort by last access time (ascending)
-  const sorted = [...torrents].sort((a, b) => {
-    const timeA = lastAccessMap.get(a.infoHash) || 0;
-    const timeB = lastAccessMap.get(b.infoHash) || 0;
-    return timeA - timeB;
-  });
+  const sorted = [...torrents]
+    .filter((torrent) => !hasTorrentConsumers(torrent))
+    .sort((a, b) => {
+      const timeA = lastAccessMap.get(a.infoHash) || 0;
+      const timeB = lastAccessMap.get(b.infoHash) || 0;
+      return timeA - timeB;
+    });
 
   // Remove oldest torrents until we are below the limit
   const toRemove = sorted.slice(0, torrents.length - MAX_ACTIVE_TORRENTS + 1);
@@ -1941,7 +1957,21 @@ export async function pruneTorrents(client: any) {
   await cleanupInactiveTorrentCache();
 }
 
-export async function getClient(): Promise<any> {
+export function getClient(): Promise<any> {
+  if (clientDestruction) return clientDestruction.then(() => getClient());
+  if (clientInitialization) return clientInitialization;
+  if (client && serverPort > 0) return Promise.resolve(client);
+  const initialization = initializeClient();
+  clientInitialization = initialization;
+  void initialization
+    .finally(() => {
+      if (clientInitialization === initialization) clientInitialization = null;
+    })
+    .catch(() => undefined);
+  return initialization;
+}
+
+async function initializeClient(): Promise<any> {
   if (clientInitError) {
     throw clientInitError;
   }
@@ -1949,11 +1979,8 @@ export async function getClient(): Promise<any> {
   if (!client) {
     try {
       const WebTorrent = (await importWebTorrent()).default;
-      const torrentCache = resolveTorrentCacheConfig();
       await cleanupTorrentCache();
-      console.log(
-        `[stream-server] WebTorrent cache directory: ${torrentCache.rootDir}`,
-      );
+      console.log("[stream-server] WebTorrent cache configured");
       client = new WebTorrent({
         maxConns: MAX_CONNS,
         utp: false, // Disable UTP to prevent "address not available" bind errors
@@ -1962,11 +1989,8 @@ export async function getClient(): Promise<any> {
         },
       });
 
-      client.on("error", (err: Error) => {
-        console.error(
-          "[stream-server] WebTorrent client error:",
-          redactSensitiveText(err.message),
-        );
+      client.on("error", () => {
+        console.error("[stream-server] WebTorrent client error");
       });
 
       if (typeof client.createServer !== "function") {
@@ -1992,6 +2016,22 @@ export async function getClient(): Promise<any> {
         serverInstance.server.on("error", reject);
       });
     } catch (err) {
+      // An HTTP bind failure happens after construction: dispose that client
+      // before permitting another initialization attempt.
+      try {
+        serverInstance?.close();
+      } catch {
+        /* already closed */
+      }
+      if (typeof client?.destroy === "function") {
+        await new Promise<void>((resolve) => {
+          try {
+            client.destroy(() => resolve());
+          } catch {
+            resolve();
+          }
+        });
+      }
       client = null;
       serverInstance = null;
       serverPort = 0;
@@ -2006,10 +2046,52 @@ export async function getClient(): Promise<any> {
   return client;
 }
 
+/** Internal loopback source for FFprobe/subtitles; never serialize or log it. */
+export async function getTorrentMediaSource(
+  torrent: any,
+  file: any,
+): Promise<string> {
+  await getClient();
+  assertTorrentUsable(torrent);
+  if (!client.torrents?.includes(torrent) || !torrent.files?.includes(file)) {
+    throw new TorrentPreparationError("file_selection_failed");
+  }
+  const address = serverInstance?.server?.address?.();
+  if (!address || typeof address === "string" || !address.port) {
+    throw new TorrentPreparationError("media_server_unavailable");
+  }
+  const route = file.streamURL;
+  if (
+    typeof route !== "string" ||
+    !route.startsWith("/webtorrent/") ||
+    route.startsWith("//")
+  ) {
+    throw new TorrentPreparationError("file_selection_failed");
+  }
+  const origin = `http://127.0.0.1:${address.port}`;
+  const url = new URL(route, origin);
+  if (url.origin !== origin)
+    throw new TorrentPreparationError("file_selection_failed");
+  return url.href;
+}
+
 /**
  * Gracefully destroy the webtorrent client and shared HTTP server.
  */
-export async function destroyClient(): Promise<void> {
+export function destroyClient(): Promise<void> {
+  if (clientDestruction) return clientDestruction;
+  const destruction = Promise.resolve().then(destroyClientInternal);
+  clientDestruction = destruction;
+  void destruction
+    .finally(() => {
+      if (clientDestruction === destruction) clientDestruction = null;
+    })
+    .catch(() => undefined);
+  return destruction;
+}
+
+async function destroyClientInternal(): Promise<void> {
+  await clientInitialization?.catch(() => undefined);
   await clearRemuxCache();
 
   if (!client) return;
@@ -2107,23 +2189,7 @@ export function attachTorrentLogging(torrent: any) {
   if (!torrent || loggedTorrents.has(torrent)) return;
   loggedTorrents.add(torrent);
 
-  let lastPeerCount: number | undefined;
-  const logPeerCount = () => {
-    const count = Number(torrent.numPeers);
-    const peers = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
-    if (peers === lastPeerCount) return;
-    lastPeerCount = peers;
-    console.log(`[stream-server] Peers: ${peers}`);
-  };
-  logPeerCount();
-  const peerLogTimer = setInterval(logPeerCount, PEER_LOG_INTERVAL_MS);
-  peerLogTimer.unref?.();
-  const stopPeerLogging = () => clearInterval(peerLogTimer);
-  if (typeof torrent.once === "function") {
-    torrent.once("close", stopPeerLogging);
-  } else if (typeof torrent.on === "function") {
-    torrent.on("close", stopPeerLogging);
-  }
+  observeTorrentPeers(torrent);
 
   const transientPatterns = [
     "ENOTFOUND",
@@ -2138,16 +2204,22 @@ export function attachTorrentLogging(torrent: any) {
     if (isTransient) return;
     console.warn("[stream-server] Torrent warning");
   });
-  torrent.on("error", () => {
+  torrent.on("error", (error: unknown) => {
+    rememberTorrentFailure(torrent, error);
     console.error("[stream-server] Torrent runtime error");
   });
 }
 
 export async function prepareTorrent(magnet: string): Promise<any> {
+  return withTorrentOperation(magnet, () => prepareTorrentInternal(magnet));
+}
+
+async function prepareTorrentInternal(magnet: string): Promise<any> {
   const torrentClient = await getClient();
 
   const existing = await torrentClient.get(magnet);
-  if (existing) {
+  if (existing && !existing.destroyed) {
+    assertTorrentUsable(existing);
     lastAccessMap.set(existing.infoHash, Date.now());
     const existingCacheDir =
       torrentCacheDirs.get(existing) ||
@@ -2166,26 +2238,43 @@ export async function prepareTorrent(magnet: string): Promise<any> {
   const enhancedMagnet = enhanceMagnetWithTrackers(magnet);
   const cacheDir = await getTorrentCacheDirForKey(enhancedMagnet);
   const torrent = torrentClient.add(enhancedMagnet, { path: cacheDir });
+  attachTorrentLogging(torrent);
   registerTorrentCacheDir(torrent, cacheDir);
   if (torrent.infoHash) {
     lastAccessMap.set(torrent.infoHash, Date.now());
     registerTorrentCacheDir(torrent, cacheDir);
   }
-  attachTorrentLogging(torrent);
-
   console.log("[stream-server] Added new torrent");
   await cleanupInactiveTorrentCache();
-
+  assertTorrentUsable(torrent);
   return torrent;
 }
 
-export async function destroyTorrentByInfoHash(infoHash?: string) {
+export async function destroyTorrentByInfoHash(
+  infoHash?: string,
+  expectedTorrent?: object,
+) {
+  if (!infoHash) return false;
+  return withTorrentOperation(infoHash, () =>
+    destroyTorrentInternal(infoHash, expectedTorrent),
+  );
+}
+
+async function destroyTorrentInternal(
+  infoHash: string,
+  expectedTorrent?: object,
+) {
   if (!client || !infoHash) return false;
   const normalizedInfoHash = infoHash.toLowerCase();
   const torrent = client.torrents?.find(
     (t: any) => String(t.infoHash || "").toLowerCase() === normalizedInfoHash,
   );
-  if (!torrent) return false;
+  if (
+    !torrent ||
+    (expectedTorrent && torrent !== expectedTorrent) ||
+    hasTorrentConsumers(torrent)
+  )
+    return false;
   const cacheDir =
     torrentCacheDirs.get(torrent) ||
     torrentCacheDirsByInfoHash.get(normalizedInfoHash);
@@ -2241,6 +2330,9 @@ export async function serveTorrentFile(
   }
 
   const file = getSelectedFile(torrent, options.fileIdx, options.hints);
+  const releaseConsumer = retainTorrentConsumer(torrent);
+  res.once("finish", releaseConsumer);
+  res.once("close", releaseConsumer);
   // Strategy:
   // 1. Force remuxing for MKV as browsers don't support it natively
   // 2. Proxy directly for MP4/WebM/etc to avoid 302 redirect CORS/port issues

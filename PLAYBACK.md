@@ -211,6 +211,15 @@ user copy. It does not detect or start the bridge, resolve a source, or create a
 gateway job. Direct and HLS playback intentionally remain available when only
 the torrent runtime is broken.
 
+Bridge-dependent actions first join `bridgeReadinessRuntime.ensureBridgeReadiness`.
+The shared owner waits for hydrated authenticated state and, on Electron, the
+effective short-lived renderer credential as well as real bridge health. IPC
+metadata does not override an unhealthy runtime. Concurrent checks share work;
+periodic refresh retains the last confirmed health and exposes `refreshing`
+separately. Background polling pauses when the app is inactive. Auth, endpoint,
+or credential changes invalidate the snapshot and abort obsolete probes. Cancelling
+one action only detaches its readiness waiter, not other consumers' shared work.
+
 `apps/mobile/services/actionRecovery.ts` maps those typed preflight/runtime
 failures into one user-facing next action. Download tasks persist only a small
 failure reason and can offer resume, fresh replan, file verification, storage
@@ -295,6 +304,24 @@ the first peer connects, it gets up to 20 seconds to provide metadata, with a
 32-second hard cap for the full discovery-and-metadata phase. The selected
 torrent file—not an add-on label—then decides whether the gateway can bridge it
 directly or needs an MP4 remux.
+
+The local torrent owner retains the object returned by `WebTorrent.createServer()`;
+it never assumes that WebTorrent populates `client.server`. Initialization and
+destruction are single-flight, and runtime readiness includes an actually listening
+media server. Probes and remuxing obtain their process-local source from that owned
+server. A ready job reuses its selected torrent without another metadata lifecycle.
+Add/remove operations for the same torrent are serialized, and consumer leases
+prevent one job's cancellation from destroying another job's torrent. Cancellation
+closes active responses and pipelines before releasing the job's lease; only the
+last consumer may remove the matching torrent instance.
+
+Source failures are typed at the torrent boundary: no peers is `NO_PEERS`, peers
+without metadata is `SOURCE_STALLED`, selection/remux failures are `INTERNAL`,
+and only an unavailable engine is `RUNTIME_UNAVAILABLE`. Raw exceptions are not
+used as user copy or diagnostic payloads. Peer samples are emitted once per active
+torrent, at most every five seconds and only on change, including decreases. An
+opaque process-local `runtimeId` correlates these samples with gateway job and
+attempt events without revealing the torrent identity.
 
 If a legacy or generic `range-http` request discovers at runtime that its
 selected file requires remuxing, the gateway promotes that same job to
@@ -400,6 +427,13 @@ without moving the playhead. The client accepts and adopts only these exact
 delivery upgrades, including the bridge's authoritative seek capability. Any
 other delivery drift or downgrade remains a bridge contract failure.
 
+Automatic Play is limited to five unique source attempts across initial resolution,
+post-ready fallback, and the one partial-discovery replan. That replan inherits the
+consumed budget and excludes previously discovered source identities even when a
+provider assigns a new candidate id. These identities remain process-local. More
+Sources remains an explicit advanced action; provider HTTP 403 errors are not
+immediately retried and do not discard another provider's successful results.
+
 For bridge playback, the gateway inspects embedded audio tracks after selecting
 the actual media file. An explicitly selected track wins; otherwise an English
 main track wins when English is preferred. Language metadata is authoritative,
@@ -412,6 +446,27 @@ opens a new signed variant for the same candidate; the original
 playback-session identity remains unchanged. A live non-default audio variant
 is not silently replaced by the default-audio seekable cache during the later
 handoff.
+
+New playback sessions snapshot the user's audio language at runtime: an absent
+preference defaults to `en`, while explicit `null` means **No preference**, not
+audio off. With no preference, an eligible main/default track may be selected.
+The bridge feature header negotiates `audio-preferences`; supporting bridges
+advertise `jobs.audioPreferences: true` and accept optional
+`selection.audioLanguage`. Old clients omit the field and retain legacy English
+selection. A new client can still use an old bridge for English, but must request
+a bridge update for another language or explicit no-preference: silently reverting
+either to English would violate the preference. No persisted session field is added.
+
+Series episode context accepts season zero as **Specials**, with episode numbers
+starting at one. Without an explicit selection the first regular season wins;
+Specials is the default only when no regular season exists. Explicit episode
+context survives prefetch, preparation, playback, and More Sources recovery.
+
+The opt-in `real-playback-runtime.test.ts` fixture exercises the installed native
+WebTorrent media server, FFprobe, FFmpeg, signed HLS, Chromium first-frame/seek,
+audio selection, direct MP4 ranges, and cleanup using only synthetic media.
+Run it through the runtime guard with `STREAMER_TEST_REAL_TORRENT=1`; see
+`docs/qa-runs/2026-09-11/runtime-fixture.md` for reproduction and evidence limits.
 Remaining work is reliability and productization: real-device
 download/cast/gateway tests, release evidence, and a more polished player
 readiness UI.

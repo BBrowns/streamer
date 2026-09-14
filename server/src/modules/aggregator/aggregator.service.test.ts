@@ -1800,6 +1800,40 @@ describe("AggregatorService", () => {
       } as any;
     }
 
+    it("does not retry provider 403s and preserves working providers", async () => {
+      const denied = streamAddon("denied-streams"),
+        working = streamAddon("working-streams");
+      vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
+        denied,
+        working,
+      ]);
+      vi.mocked(axios.get).mockImplementation(async (url) => {
+        if (String(url).includes("denied-streams"))
+          throw Object.assign(new Error("Rejected"), {
+            response: { status: 403 },
+          });
+        return {
+          data: {
+            streams: [
+              { url: "https://example.test/fixture.mp4", title: "Fixture" },
+            ],
+          },
+        };
+      });
+      const streams = await service.getStreams(
+        "user-1",
+        "movie",
+        "fixture-denied",
+        "request-denied",
+      );
+      expect(streams).toHaveLength(1);
+      expect(
+        vi
+          .mocked(axios.get)
+          .mock.calls.filter(([url]) => String(url).includes("denied-streams")),
+      ).toHaveLength(1);
+    });
+
     it("attaches type and id context to streams returned from add-ons", async () => {
       vi.mocked(prisma.installedAddon.findMany).mockResolvedValue([
         {

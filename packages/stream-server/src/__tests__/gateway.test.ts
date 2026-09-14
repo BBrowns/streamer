@@ -14,7 +14,6 @@ import { createSignedGatewayStreamPath } from "../security.js";
 import {
   ensureTorrentReady,
   evaluateSeekableRemuxPreparation,
-  getClient,
   getRetainedSeekableRemuxSource,
   getSelectedFile,
   createHlsRemuxSession,
@@ -39,7 +38,9 @@ import {
 vi.mock("../torrent.js", () => ({
   ensureTorrentReady: vi.fn(),
   evaluateSeekableRemuxPreparation: vi.fn(),
-  getClient: vi.fn(),
+  getTorrentMediaSource: vi.fn(
+    async () => "http://127.0.0.1:11470/webtorrent/movie",
+  ),
   getRetainedSeekableRemuxSource: vi.fn(),
   getSelectedFile: vi.fn(
     (torrent: { files: unknown[] }, fileIdx?: number) =>
@@ -66,7 +67,8 @@ vi.mock("../seek-thumbnail.js", () => ({
   },
 }));
 
-vi.mock("../media-probe.js", () => ({
+vi.mock("../media-probe.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../media-probe.js")>()),
   createMediaProbeCache: vi.fn(() => ({
     getOrCreate: vi.fn((_key: string, factory: () => Promise<unknown>) =>
       factory(),
@@ -104,9 +106,6 @@ describe("gateway jobs", () => {
       files: [{ name: "movie.mp4", streamURL: "/webtorrent/file" }],
     });
     (ensureTorrentReady as any).mockResolvedValue(undefined);
-    (getClient as any).mockResolvedValue({
-      server: { address: () => ({ port: 11470 }) },
-    });
     (evaluateSeekableRemuxPreparation as any).mockResolvedValue({
       eligible: true,
       sourceBytes: 1024,

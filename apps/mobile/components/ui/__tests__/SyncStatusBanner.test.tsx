@@ -3,6 +3,10 @@ import { SyncStatusBanner } from "../SyncStatusBanner";
 import { useSync } from "../../../hooks/useSync";
 import { useAuthStore } from "../../../stores/authStore";
 
+jest.mock("../../../hooks/useWindowClass", () => ({
+  useWindowClass: () => ({ isCompact: false }),
+}));
+
 jest.mock("../../../hooks/useSync", () => ({
   useSync: jest.fn(),
 }));
@@ -87,6 +91,28 @@ describe("SyncStatusBanner", () => {
     const screen = await render(<SyncStatusBanner />);
 
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the desktop notice below the 72px top bar", async () => {
+    mockedUseSync.mockReturnValue({
+      status: {
+        state: "degraded",
+        reason: "transport",
+        attempt: 1,
+        retryAt: null,
+        retryDelayMs: null,
+      },
+      retry: jest.fn(),
+      sendMessage: jest.fn(),
+    });
+
+    const screen = await render(<SyncStatusBanner />);
+    const style = screen.getByTestId("sync-status-banner").props.style;
+    const flattened = Array.isArray(style)
+      ? Object.assign({}, ...style.filter(Boolean))
+      : style;
+
+    expect(flattened.top).toBe(84);
   });
 
   it("shows refresh attention while keeping the account authenticated", async () => {

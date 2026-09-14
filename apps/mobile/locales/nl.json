@@ -95,6 +95,7 @@
       "summary_other": "Resultaten voor ‘{{query}}’ · {{count}} resultaten",
       "searching": "Zoeken naar ‘{{query}}’…",
       "searchingShort": "Zoeken…",
+      "unavailable": "Resultaten niet beschikbaar",
       "count": "{{count}} resultaten",
       "count_one": "{{count}} resultaat",
       "count_other": "{{count}} resultaten",
@@ -401,6 +402,8 @@
       "storageTitle": "Meer opslagruimte nodig",
       "storageMessage": "Maak opslagruimte vrij voordat je deze download opnieuw probeert.",
       "freeSpaceAction": "Opslag beheren",
+      "rateLimitedTitle": "Download tijdelijk gepauzeerd",
+      "rateLimitedMessage": "De bridge koelt af na te veel verzoeken. Probeer het zo opnieuw.",
       "setupTitle": "Afspeelconfiguratie vraagt aandacht",
       "setupMessage": "Open Bronnen & apparaten en controleer dit apparaat voordat je de download opnieuw probeert.",
       "reviewSetupAction": "Configuratie bekijken",
@@ -672,6 +675,7 @@
       "autoplay": "Volgende aflevering automatisch afspelen",
       "autoplayDescription": "Ga door met een serie wanneer de volgende aflevering bekend is.",
       "languages": {
+        "noPreference": "Geen voorkeur",
         "off": "Uit",
         "english": "Engels",
         "dutch": "Nederlands",
@@ -858,6 +862,7 @@
       "none": "Geen streams voor deze aflevering.",
       "noneData": "Geen afleveringsgegevens beschikbaar.",
       "season": "Seizoen {{season}}",
+      "specials": "Specials",
       "playA11y": "Aflevering {{episode}} afspelen: {{title}}",
       "downloadA11y": "Aflevering {{episode}} downloaden: {{title}}",
       "moreSourcesA11y": "Meer bronnen voor aflevering {{episode}}: {{title}}",
@@ -964,7 +969,14 @@
         "play": "Afspelen niet beschikbaar",
         "download": "Download niet beschikbaar",
         "cast": "Casten niet beschikbaar"
-      }
+      },
+      "rateLimited": {
+        "play": "Afspelen tijdelijk gepauzeerd",
+        "download": "Download tijdelijk gepauzeerd",
+        "cast": "Casten tijdelijk gepauzeerd"
+      },
+      "rateLimitedMessage": "Er zijn te veel verzoeken gedaan. Probeer het zo opnieuw.",
+      "rateLimitedDetail": "De huidige actie is gepauzeerd tijdens de bridge-cooldown."
     },
     "loadState": {
       "eyebrow": "Titeldetails",

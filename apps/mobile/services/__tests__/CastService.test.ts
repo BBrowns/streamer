@@ -58,6 +58,9 @@ describe("CastService", () => {
     });
     installLegacyBridgeMock();
     useAuthStore.setState({
+      isAuthenticated: true,
+      isHydrated: true,
+      credentialsHydrated: true,
       streamServerUrl: "http://192.168.1.25:11470",
       streamServerToken: null,
     });
