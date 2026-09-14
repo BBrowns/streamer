@@ -19,6 +19,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import {
   afterAll,
   afterEach,
@@ -408,11 +409,21 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         default: LocalWebTorrent,
       }));
       const app = express();
+      const fixtureAssetLimiter = rateLimit({
+        windowMs: 60 * 1000,
+        max: 120,
+        standardHeaders: true,
+        legacyHeaders: false,
+      });
       app.get("/fixture", (_req, res) => res.type("html").send(browserHarness));
       const hlsBundle = createRequire(import.meta.url).resolve(
         "hls.js/dist/hls.js",
       );
-      app.get("/fixture/hls.js", (_req, res) => res.sendFile(hlsBundle));
+      app.get(
+        "/fixture/hls.js",
+        fixtureAssetLimiter,
+        (_req, res) => res.sendFile(hlsBundle),
+      );
       app.get("/api/gateway/jobs/:id/stream", gateway.serveGatewayJobStream);
       app.get(
         "/api/bridge/v1/jobs/:id/segments/:segment",
