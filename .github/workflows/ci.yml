@@ -41,6 +41,7 @@ jobs:
       run_build: ${{ steps.scope.outputs.run_build }}
       run_server_container: ${{ steps.scope.outputs.run_server_container }}
       run_desktop_package: ${{ steps.scope.outputs.run_desktop_package }}
+      run_install_preflight: ${{ steps.scope.outputs.run_install_preflight }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,47 +55,45 @@ jobs:
           CI_IS_DRAFT: ${{ github.event.pull_request.draft || false }}
         run: |
           if [[ "${CI_EVENT_NAME}" != "pull_request" ]]; then
-            echo "full_ci=true" >> "${GITHUB_OUTPUT}"
-            for output in run_lint run_format run_security run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
-              echo "${output}=true" >> "${GITHUB_OUTPUT}"
-            done
-            echo "scope_reason=event:${CI_EVENT_NAME}" >> "${GITHUB_OUTPUT}"
-            echo "changed_file_count=0" >> "${GITHUB_OUTPUT}"
+            {
+              echo "full_ci=true"
+              for output in run_lint run_format run_security run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
+                echo "${output}=true"
+              done
+              if [[ "${CI_EVENT_NAME}" == "merge_group" ]]; then
+                echo "run_install_preflight=true"
+              else
+                echo "run_install_preflight=false"
+              fi
+              echo "scope_reason=event:${CI_EVENT_NAME}"
+              echo "changed_file_count=0"
+            } >> "${GITHUB_OUTPUT}"
             {
               echo "## CI scope"
               echo ""
               echo "- Mode: full CI"
               echo "- Reason: event:${CI_EVENT_NAME}"
             } >> "${GITHUB_STEP_SUMMARY}"
-          elif [[ "${CI_IS_DRAFT}" == "true" ]]; then
-            {
-              echo "full_ci=false"
-              for output in run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
-                echo "${output}=false"
-              done
-              echo "run_lint=true"
-              echo "run_format=true"
-              echo "run_security=true"
-              echo "scope_reason=draft-pull-request"
-              echo "changed_file_count=0"
-            } >> "${GITHUB_OUTPUT}"
-            {
-              echo "## CI scope"
-              echo ""
-              echo "- Mode: draft fast CI"
-              echo "- Reason: draft-pull-request"
-              echo "- Extended jobs run when the pull request is marked ready for review."
-            } >> "${GITHUB_STEP_SUMMARY}"
           elif git cat-file -e "${CI_BASE_SHA}:scripts/ci-affected.mjs" 2>/dev/null; then
             git show "${CI_BASE_SHA}:scripts/ci-affected.mjs" > "${RUNNER_TEMP}/ci-affected.mjs"
             node "${RUNNER_TEMP}/ci-affected.mjs"
+            # The first PR that introduces this output may run against a base
+            # branch whose trusted detector predates it. Fail closed for that
+            # transition by paying for one preflight instead of silently
+            # skipping the install contract.
+            if ! grep -q '^run_install_preflight=' "${GITHUB_OUTPUT}"; then
+              echo "run_install_preflight=true" >> "${GITHUB_OUTPUT}"
+            fi
           else
-            echo "full_ci=true" >> "${GITHUB_OUTPUT}"
-            for output in run_lint run_format run_security run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
-              echo "${output}=true" >> "${GITHUB_OUTPUT}"
-            done
-            echo "scope_reason=detector-not-present-at-base" >> "${GITHUB_OUTPUT}"
-            echo "changed_file_count=0" >> "${GITHUB_OUTPUT}"
+            {
+              echo "full_ci=true"
+              for output in run_lint run_format run_security run_shared run_server run_stream_server run_mobile run_golden_path run_visual run_build run_server_container run_desktop_package; do
+                echo "${output}=true"
+              done
+              echo "run_install_preflight=true"
+              echo "scope_reason=detector-not-present-at-base"
+              echo "changed_file_count=0"
+            } >> "${GITHUB_OUTPUT}"
             {
               echo "## CI scope"
               echo ""
@@ -109,6 +108,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - name: Install workflow checker dependencies
+        run: >-
+          npx --yes "npm@${NPM_VERSION}" ci
+          --ignore-scripts
+          --no-audit
+          --no-fund
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.25.0"
@@ -121,18 +130,67 @@ jobs:
           "${actionlint_path}"
       - name: Check full commit pin policy
         run: npm run workflows:check
+      - name: Test workflow policy checker
+        run: npm run workflows:check:test
       - name: Test affected CI scope detector
         run: node --test scripts/ci-affected.test.mjs
       - name: Test release gate skip policy
         run: node --test scripts/ci-needs-check.test.mjs
 
+  dependency-install-preflight:
+    name: Dependency Install Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ci_scope
+    if: >-
+      always() &&
+      needs.ci_scope.result == 'success' &&
+      needs.ci_scope.outputs.run_install_preflight == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - name: Check dependency install-script policy
+        run: npx --yes "npm@${NPM_VERSION}" run security:install-scripts
+      - name: Validate package manifest and lockfile contract
+        run: >-
+          npx --yes "npm@${NPM_VERSION}" ci
+          --dry-run
+          --ignore-scripts
+          --no-audit
+          --no-fund
+          --loglevel=error
+      - name: Write preflight summary
+        if: always()
+        run: |
+          mkdir -p artifacts/ci-summaries
+          cat > artifacts/ci-summaries/dependency-install-preflight.md <<'EOF'
+          # Dependency Install Preflight
+
+          - Status: ${{ job.status }}
+          - Scope: pinned npm install-script policy and non-mutating lockfile validation.
+          - Downstream behavior: dependency-sensitive CI jobs are skipped when this contract fails.
+          EOF
+      - name: Upload preflight summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-summary-dependency-install-preflight
+          path: artifacts/ci-summaries/dependency-install-preflight.md
+          retention-days: 14
+
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_lint == 'true')
@@ -172,9 +230,12 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_format == 'true')
@@ -193,9 +254,12 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_security == 'true')
@@ -216,9 +280,12 @@ jobs:
     name: Shared Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_shared == 'true')
@@ -255,9 +322,12 @@ jobs:
     name: Server Tests
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_server == 'true')
@@ -337,9 +407,12 @@ jobs:
     name: Stream Server Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_stream_server == 'true')
@@ -378,9 +451,12 @@ jobs:
     name: Mobile Tests
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_mobile == 'true')
@@ -419,9 +495,12 @@ jobs:
     name: Golden Path Browser Matrix (${{ matrix.project }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_golden_path == 'true')
@@ -491,9 +570,12 @@ jobs:
     name: Visual Regression (Committed Linux Baselines)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_visual == 'true')
@@ -539,8 +621,12 @@ jobs:
     name: Golden Path Browser Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: always()
-    needs: [ci_scope, test-golden-path]
+    if: >-
+      always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true'))
+    needs: [ci_scope, dependency-install-preflight, test-golden-path]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -565,6 +651,9 @@ jobs:
     # merge to the default branch; GitHub cannot dispatch it from a new PR.
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       (needs.ci_scope.result != 'success' ||
@@ -572,7 +661,7 @@ jobs:
       needs.ci_scope.outputs.run_visual == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -612,9 +701,12 @@ jobs:
     name: Build Check
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_build == 'true')
@@ -687,9 +779,12 @@ jobs:
     name: Server Production Container
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_server_container == 'true')
@@ -702,9 +797,12 @@ jobs:
     name: Desktop Package Artifact
     runs-on: macos-latest
     timeout-minutes: 35
-    needs: ci_scope
+    needs: [ci_scope, dependency-install-preflight]
     if: >-
       always() &&
+      (needs.dependency-install-preflight.result == 'success' ||
+      (needs.dependency-install-preflight.result == 'skipped' &&
+      needs.ci_scope.outputs.run_install_preflight != 'true')) &&
       (needs.ci_scope.result != 'success' ||
       needs.ci_scope.outputs.full_ci == 'true' ||
       needs.ci_scope.outputs.run_desktop_package == 'true')
@@ -754,6 +852,7 @@ jobs:
     if: always()
     needs:
       - ci_scope
+      - dependency-install-preflight
       - workflow-lint
       - lint-and-typecheck
       - format-check

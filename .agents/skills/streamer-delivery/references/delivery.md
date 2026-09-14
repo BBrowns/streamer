@@ -24,6 +24,33 @@ Repository rulesets, protected branches, required checks, code owner review, and
 security checks are controls. Do not bypass them to achieve a nominal green
 state.
 
+## PR Maintenance Protocol
+
+For a batch of open pull requests, begin with one compact inventory containing
+the PR number, head/base revision, required-check state, and changed-file class.
+Classify dependency updates before opening detailed logs: routine semver,
+security, native/toolchain, or process/workflow. Use the repository maintenance
+report for aggregate evidence and fetch only the first root failure from a
+failed CI run.
+
+Keep the base branch current before the final verification cycle. When several
+PRs target the same protected branch, update and verify them serially so a merge
+does not invalidate another PR's latest-SHA evidence. Stop once the required
+checks pass on the latest revision and the open-PR inventory is empty. Never
+store raw logs, credentials, resolved media URLs, or model transcripts in a
+repository artifact.
+
+## Token-Efficient Triage
+
+Batch GitHub metadata reads and request only stable fields needed for routing:
+number, revision, base, check conclusion, and changed-file class. Fetch a job
+log only after a failed check is classified, and stop at the first reproducible
+root step. Reuse the inventory across PRs, keep maintenance artifacts aggregate,
+and avoid repeating unchanged status or log output. Prefer the maintenance
+report's active versus historical outcome, queue-time, rerun, and preflight
+fields before opening detailed logs; a historical failure without a current
+blocking revision is trend evidence rather than a new repair queue item.
+
 ## Release Quality
 
 Before a release claim, verify:

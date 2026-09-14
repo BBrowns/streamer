@@ -1,6 +1,16 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import yaml from "js-yaml";
+
+export const REQUIRED_CHECK_CONTRACT = Object.freeze([
+  Object.freeze({ name: "Release Gate", source: "ci" }),
+  Object.freeze({
+    name: "Review Dependency Changes",
+    source: "dependency-review",
+  }),
+  Object.freeze({ name: "CodeQL", source: "external" }),
+]);
 
 function workflowFiles(root) {
   const directory = join(root, ".github", "workflows");
@@ -8,6 +18,84 @@ function workflowFiles(root) {
   return readdirSync(directory)
     .filter((file) => /\.ya?ml$/.test(file))
     .map((file) => join(directory, file));
+}
+
+function workflowJobNames(root) {
+  const jobs = [];
+  for (const file of workflowFiles(root)) {
+    let document;
+    try {
+      document = yaml.load(readFileSync(file, "utf8"));
+    } catch {
+      continue;
+    }
+    for (const [jobId, job] of Object.entries(document?.jobs ?? {})) {
+      const name = typeof job?.name === "string" ? job.name : jobId;
+      jobs.push({ name, file: relative(root, file), jobId });
+    }
+  }
+  return jobs;
+}
+
+export function findRequiredCheckContractViolations(root = process.cwd()) {
+  const contractPath = join(root, ".github", "required-checks.json");
+  if (!existsSync(contractPath)) {
+    return [".github/required-checks.json: missing required-check contract"];
+  }
+
+  let configured;
+  try {
+    configured = JSON.parse(readFileSync(contractPath, "utf8"));
+  } catch {
+    return [".github/required-checks.json: invalid JSON"];
+  }
+
+  const expected = REQUIRED_CHECK_CONTRACT.map(({ name, source }) => ({
+    name,
+    source,
+  }));
+  const actual = Array.isArray(configured?.requiredContexts)
+    ? configured.requiredContexts.map(({ name, source }) => ({ name, source }))
+    : null;
+  const errors = [];
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    errors.push(
+      ".github/required-checks.json: requiredContexts must match the canonical required-check contract",
+    );
+  }
+
+  const jobs = workflowJobNames(root);
+  const byName = new Map();
+  for (const job of jobs) {
+    const entries = byName.get(job.name) ?? [];
+    entries.push(job);
+    byName.set(job.name, entries);
+  }
+
+  for (const { name, source } of expected) {
+    const matches = byName.get(name) ?? [];
+    if (source === "external") {
+      if (matches.length > 0) {
+        errors.push(
+          `required check ${name}: external context collides with local job ${matches[0].file}#${matches[0].jobId}`,
+        );
+      }
+    } else if (matches.length === 0) {
+      errors.push(
+        `required check ${name}: no workflow job publishes the contracted context`,
+      );
+    }
+  }
+
+  for (const [name, matches] of byName) {
+    if (matches.length > 1 && expected.some((check) => check.name === name)) {
+      errors.push(
+        `required check ${name}: local job name is ambiguous (${matches.map(({ file, jobId }) => `${file}#${jobId}`).join(", ")})`,
+      );
+    }
+  }
+
+  return errors;
 }
 
 export function findUnpinnedActions(root = process.cwd()) {
@@ -95,6 +183,7 @@ export function main() {
   const findings = findUnpinnedActions();
   const missingMergeQueueTriggers = findMissingMergeQueueTriggers();
   const jobsWithoutTimeout = findJobsWithoutTimeout();
+  const requiredCheckContractErrors = findRequiredCheckContractViolations();
   if (findings.length > 0) {
     console.error("Every external GitHub Action must use a full commit SHA:");
     for (const finding of findings) {
@@ -117,10 +206,16 @@ export function main() {
       console.error(`- ${finding.file} job ${finding.job}`);
     }
   }
+  if (requiredCheckContractErrors.length > 0) {
+    console.error("Required check contract is invalid:");
+    for (const error of requiredCheckContractErrors)
+      console.error(`- ${error}`);
+  }
   if (
     findings.length > 0 ||
     missingMergeQueueTriggers.length > 0 ||
-    jobsWithoutTimeout.length > 0
+    jobsWithoutTimeout.length > 0 ||
+    requiredCheckContractErrors.length > 0
   ) {
     return 1;
   }

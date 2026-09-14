@@ -67,9 +67,12 @@ function checkCiWorkflow() {
   requireFile("scripts/ci-affected.test.mjs");
   requireFile("scripts/ci-needs-check.mjs");
   requireFile("scripts/ci-needs-check.test.mjs");
+  requireFile("scripts/check-github-actions.test.mjs");
 
   const requiredSnippets = [
     ["ci_scope:", "fail-closed CI scope detector"],
+    ["run_install_preflight", "dependency install preflight scope output"],
+    ["dependency-install-preflight:", "dependency install preflight job"],
     ["CI_BASE_SHA", "pull-request base SHA for affected CI"],
     ["fetch-depth: 0", "complete history for affected CI"],
     [
@@ -119,10 +122,7 @@ function checkCiWorkflow() {
       "lifecycle-safe reproducible dependency install",
     ],
     ["security:install-scripts", "dependency install-script policy"],
-    [
-      "npm run db:migrate:deploy",
-      "committed Prisma migration deployment",
-    ],
+    ["npm run db:migrate:deploy", "committed Prisma migration deployment"],
     ["--schema=prisma/schema.prisma", "workspace-relative Prisma schema path"],
     ["security:audit", "production dependency audit"],
     [
@@ -139,6 +139,7 @@ function checkCiWorkflow() {
     ["npm run maintenance:report:test", "maintenance report classifier tests"],
     ["actionlint@v1.7.12", "pinned GitHub Actions lint"],
     ["npm run workflows:check", "full GitHub Actions SHA policy"],
+    ["npm run workflows:check:test", "GitHub Actions policy checker tests"],
     [
       "node --test scripts/ci-affected.test.mjs",
       "affected CI scope detector tests",
@@ -148,6 +149,10 @@ function checkCiWorkflow() {
       "release gate skip policy tests",
     ],
     ["merge_group:", "merge queue CI trigger"],
+    [
+      "ci-summary-dependency-install-preflight",
+      "dependency install preflight summary artifact",
+    ],
     ["npm run rc:evidence:test", "RC evidence generator test"],
     ["npm run rc:evidence", "RC evidence generation"],
     ["npm run release:sbom:test", "lockfile SBOM generator test"],
@@ -223,6 +228,7 @@ function checkCiWorkflow() {
 
   const dependencyReviewWorkflow = ".github/workflows/dependency-review.yml";
   requireFile(dependencyReviewWorkflow);
+  requireFile(".github/required-checks.json");
   const dependabotWorkflow = ".github/workflows/dependabot-auto-merge.yml";
   requireFile(dependabotWorkflow);
   requireText(
@@ -245,8 +251,13 @@ function checkCiWorkflow() {
     "always() && steps.policy.outputs.eligible != 'true'",
     "stale auto-merge fail-closed cleanup",
   );
-  if (exists(dependabotWorkflow) && /continue-on-error:\s*true/.test(read(dependabotWorkflow))) {
-    fail(`${dependabotWorkflow} must not hide stale auto-merge cleanup failures`);
+  if (
+    exists(dependabotWorkflow) &&
+    /continue-on-error:\s*true/.test(read(dependabotWorkflow))
+  ) {
+    fail(
+      `${dependabotWorkflow} must not hide stale auto-merge cleanup failures`,
+    );
   } else {
     pass(`${dependabotWorkflow} surfaces stale auto-merge cleanup failures`);
   }
@@ -292,6 +303,16 @@ function checkDocs() {
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
   requireFile("docs/ARCHITECTURE_MAINTENANCE.md");
+  requireText(
+    "docs/CI_RELEASE_GATES.md",
+    "Dependency Install Preflight",
+    "dependency install preflight documentation",
+  );
+  requireText(
+    "docs/CI_RELEASE_GATES.md",
+    ".github/required-checks.json",
+    "required-check contract documentation",
+  );
   requireText(
     "docs/DEPENDENCY_SECURITY.md",
     "secret scanning and push protection",
@@ -481,8 +502,12 @@ function checkDependencySecurity() {
   requireFile(".github/CODEOWNERS");
   requireFile("server/prisma/migrations/migration_lock.toml");
   requireFile("server/prisma/migrations/20260101000000_init/migration.sql");
-  requireFile("server/prisma/migrations/20260727154500_add_watch_progress_duration_source/migration.sql");
-  requireFile("server/prisma/migrations/20260814213000_add_watch_progress_background/migration.sql");
+  requireFile(
+    "server/prisma/migrations/20260727154500_add_watch_progress_duration_source/migration.sql",
+  );
+  requireFile(
+    "server/prisma/migrations/20260814213000_add_watch_progress_background/migration.sql",
+  );
   requireText(
     "server/package.json",
     '"db:migrate:deploy": "prisma migrate deploy"',
@@ -512,7 +537,9 @@ function checkDependencySecurity() {
     "server/tests/trakt.integration.test.ts",
   ]) {
     if (exists(testFile) && /prisma\s+db\s+push/.test(read(testFile))) {
-      fail(`${testFile} must use committed migrations instead of prisma db push`);
+      fail(
+        `${testFile} must use committed migrations instead of prisma db push`,
+      );
     } else {
       pass(`${testFile} uses committed migrations for integration setup`);
     }

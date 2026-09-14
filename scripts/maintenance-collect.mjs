@@ -5,6 +5,31 @@ import { pathToFileURL } from "node:url";
 
 const MAX_OUTPUT = 4 * 1024 * 1024;
 const WORKFLOW_EXTENSIONS = new Set([".yml", ".yaml"]);
+const DEFAULT_PROTECTED_BRANCHES = Object.freeze(["main", "master"]);
+const MAX_CI_JOB_RUNS = 20;
+const CI_WORKFLOW_FILE = "ci.yml";
+const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
+const PREFLIGHT_JOB_NAME = "Dependency Install Preflight";
+const PREFLIGHT_DOWNSTREAM_JOB_PATTERNS = Object.freeze([
+  /^Lint & Type Check$/,
+  /^Format Check$/,
+  /^Security Audit$/,
+  /^Shared Tests$/,
+  /^Server Tests$/,
+  /^Stream Server Tests$/,
+  /^Mobile Tests$/,
+  /^Golden Path Browser Matrix/,
+  /^Visual Regression/,
+  /^Golden Path Browser Tests$/,
+  /^Build Check$/,
+  /^Server Production Container$/,
+  /^Desktop Package Artifact$/,
+]);
+const DEFAULT_REQUIRED_CHECK_NAMES = Object.freeze([
+  "Release Gate",
+  "Review Dependency Changes",
+  "CodeQL",
+]);
 const IGNORED_DIRS = new Set([
   ".git",
   ".turbo",
@@ -176,6 +201,220 @@ function countTrackedFiles(root) {
   };
 }
 
+function parseTimestamp(value) {
+  const timestamp = Date.parse(value ?? "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function medianDuration(entries, startField, endField) {
+  const durations = entries
+    .map((entry) => {
+      const start = parseTimestamp(entry?.[startField]);
+      const end = parseTimestamp(entry?.[endField]);
+      return start !== null && end !== null && end >= start
+        ? Math.round((end - start) / 1000)
+        : null;
+    })
+    .filter((value) => value !== null);
+  return { sampled: durations.length, median: median(durations) };
+}
+
+function normalizeBranch(value) {
+  return String(value ?? "").replace(/^refs\/heads\//, "");
+}
+
+function workflowRunKey(
+  entry,
+  { openPullRequestHeadShas = new Set(), protectedBranches = new Set() } = {},
+) {
+  const workflow =
+    entry?.workflow_id ?? entry?.workflow_name ?? entry?.name ?? "unknown";
+  const headSha = entry?.head_sha;
+  const branch = normalizeBranch(entry?.head_branch ?? entry?.ref);
+  const ref =
+    headSha && openPullRequestHeadShas.has(headSha)
+      ? `sha:${headSha}`
+      : branch && protectedBranches.has(branch)
+        ? `branch:${branch}`
+        : headSha
+          ? `sha:${headSha}`
+          : `branch:${branch}`;
+  return `${workflow}|${ref}`;
+}
+
+function isTrackedWorkflowRun(
+  entry,
+  openPullRequestHeadShas,
+  protectedBranches,
+) {
+  const headSha = entry?.head_sha;
+  const branch = normalizeBranch(entry?.head_branch ?? entry?.ref);
+  return (
+    (headSha && openPullRequestHeadShas.has(headSha)) ||
+    (branch && protectedBranches.has(branch))
+  );
+}
+
+function activeWorkflowRunSet(
+  entries,
+  { openPullRequestHeadShas, protectedBranches },
+) {
+  const latestByKey = new Map();
+  entries.forEach((entry) => {
+    if (
+      !isTrackedWorkflowRun(entry, openPullRequestHeadShas, protectedBranches)
+    ) {
+      return;
+    }
+    const key = workflowRunKey(entry, {
+      openPullRequestHeadShas,
+      protectedBranches,
+    });
+    const current = latestByKey.get(key);
+    const currentTimestamp = parseTimestamp(
+      current?.updated_at ?? current?.created_at,
+    );
+    const entryTimestamp = parseTimestamp(
+      entry?.updated_at ?? entry?.created_at,
+    );
+    if (
+      !current ||
+      (entryTimestamp !== null &&
+        (currentTimestamp === null || entryTimestamp >= currentTimestamp))
+    ) {
+      latestByKey.set(key, entry);
+    }
+  });
+  return new Set(latestByKey.values());
+}
+
+export function getOpenPullRequestHeadShas(data) {
+  const entries = Array.isArray(data) ? data : [];
+  return [
+    ...new Set(
+      entries
+        .map((entry) => entry?.head?.sha)
+        .filter((sha) => typeof sha === "string" && sha.length > 0),
+    ),
+  ];
+}
+
+export function summarizeCiJobs(data) {
+  const entries = Array.isArray(data?.jobs)
+    ? data.jobs
+    : Array.isArray(data)
+      ? data
+      : [];
+  const preflight = entries.find((job) => job?.name === PREFLIGHT_JOB_NAME);
+  if (!preflight) {
+    return { runs: 0, failures: 0, cancelled: 0, skippedAfterFailure: 0 };
+  }
+  const failed = preflight.conclusion === "failure";
+  const cancelled = preflight.conclusion === "cancelled";
+  const skippedAfterFailure =
+    failed || cancelled
+      ? entries.filter(
+          (job) =>
+            job?.conclusion === "skipped" &&
+            PREFLIGHT_DOWNSTREAM_JOB_PATTERNS.some((pattern) =>
+              pattern.test(String(job?.name ?? "")),
+            ),
+        ).length
+      : 0;
+  return {
+    runs: preflight.conclusion === "skipped" ? 0 : 1,
+    failures: failed ? 1 : 0,
+    cancelled: cancelled ? 1 : 0,
+    skippedAfterFailure,
+  };
+}
+
+function combineCiJobSummaries(summaries) {
+  return summaries.reduce(
+    (total, summary) => ({
+      runs: total.runs + summary.runs,
+      failures: total.failures + summary.failures,
+      cancelled: total.cancelled + summary.cancelled,
+      skippedAfterFailure:
+        total.skippedAfterFailure + summary.skippedAfterFailure,
+    }),
+    { runs: 0, failures: 0, cancelled: 0, skippedAfterFailure: 0 },
+  );
+}
+
+export function extractRequiredCheckContexts(ruleset) {
+  const rules = Array.isArray(ruleset?.rules) ? ruleset.rules : [];
+  const contexts = [];
+  for (const rule of rules) {
+    if (rule?.type !== "required_status_checks") continue;
+    const checks =
+      rule?.parameters?.required_status_checks ??
+      rule?.parameters?.requiredStatusChecks ??
+      [];
+    for (const check of Array.isArray(checks) ? checks : []) {
+      const context =
+        typeof check === "string"
+          ? check
+          : (check?.context ?? check?.context_name ?? check?.name);
+      if (typeof context === "string" && context.length > 0) {
+        contexts.push(context);
+      }
+    }
+  }
+  return contexts;
+}
+
+export function compareRequiredCheckContexts(expected, actual) {
+  const expectedNames = [
+    ...new Set(
+      (Array.isArray(expected) ? expected : [])
+        .map((entry) => (typeof entry === "string" ? entry : entry?.name))
+        .filter((name) => typeof name === "string" && name.length > 0),
+    ),
+  ];
+  const actualNames = (Array.isArray(actual) ? actual : []).filter(
+    (name) => typeof name === "string" && name.length > 0,
+  );
+  const counts = new Map();
+  for (const name of actualNames) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return {
+    available: actualNames.length > 0,
+    missing: expectedNames.filter((name) => !actualNames.includes(name)),
+    unexpected: [
+      ...new Set(actualNames.filter((name) => !expectedNames.includes(name))),
+    ],
+    duplicate: [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name),
+  };
+}
+
+function readRequiredCheckNames(root) {
+  const file = join(root, ".github", "required-checks.json");
+  if (!existsSync(file)) return DEFAULT_REQUIRED_CHECK_NAMES;
+  try {
+    const configured = JSON.parse(readFileSync(file, "utf8"));
+    const names = (
+      Array.isArray(configured?.requiredContexts)
+        ? configured.requiredContexts
+        : []
+    )
+      .map((entry) => entry?.name)
+      .filter((name) => typeof name === "string" && name.length > 0);
+    return names.length > 0 ? names : DEFAULT_REQUIRED_CHECK_NAMES;
+  } catch {
+    return DEFAULT_REQUIRED_CHECK_NAMES;
+  }
+}
+
+function isCiWorkflowRun(entry) {
+  return (
+    entry?.name === "CI" ||
+    entry?.workflow_name === "CI" ||
+    entry?.path === ".github/workflows/ci.yml"
+  );
+}
+
 function collectRemote(repo, since, root) {
   if (!repo)
     return { available: false, reason: "GitHub origin is unavailable" };
@@ -185,15 +424,42 @@ function collectRemote(repo, since, root) {
   const result = {
     available: true,
     repository: repo,
-    ci: { runs: 0, failures: 0, cancelled: 0 },
+    ci: {
+      runs: 0,
+      failures: 0,
+      cancelled: 0,
+      activeFailures: 0,
+      historicalFailures: 0,
+      activeCancelled: 0,
+      historicalCancelled: 0,
+      reruns: 0,
+      queueSeconds: { sampled: 0, median: null },
+      durationSeconds: { sampled: 0, median: null },
+      preflight: {
+        available: false,
+        runs: 0,
+        failures: 0,
+        cancelled: 0,
+        skippedAfterFailure: 0,
+      },
+    },
+    prs: { available: false, open: 0, drafts: 0, dependabot: 0 },
     codeql: { available: false, open: 0, bySeverity: {} },
     dependabot: { available: false, open: 0, bySeverity: {} },
     permissions: null,
     rulesets: null,
   };
 
+  const pulls = call("pulls?state=open&per_page=100");
+  let pullData = null;
+  if (pulls.ok) {
+    successfulSources += 1;
+    pullData = parseJsonOutput(pulls);
+    result.prs = summarizeOpenPullRequests(pullData);
+  }
+
   const runs = call(
-    `actions/runs?per_page=50&created=>=${encodeURIComponent(since)}`,
+    `actions/workflows/${CI_WORKFLOW_FILE}/runs?per_page=50&created=>=${encodeURIComponent(since)}`,
   );
   if (runs.ok) {
     successfulSources += 1;
@@ -201,13 +467,26 @@ function collectRemote(repo, since, root) {
     const entries = Array.isArray(data?.workflow_runs)
       ? data.workflow_runs
       : [];
-    result.ci.runs = entries.length;
-    result.ci.failures = entries.filter(
-      (entry) => entry.conclusion === "failure",
-    ).length;
-    result.ci.cancelled = entries.filter(
-      (entry) => entry.conclusion === "cancelled",
-    ).length;
+    result.ci = summarizeWorkflowRuns(data, {
+      openPullRequestHeadShas: getOpenPullRequestHeadShas(pullData),
+      protectedBranches: DEFAULT_PROTECTED_BRANCHES,
+    });
+
+    const jobSummaries = [];
+    for (const entry of entries.slice(0, MAX_CI_JOB_RUNS)) {
+      if (!entry?.id || !isCiWorkflowRun(entry)) continue;
+      const jobs = call(
+        `actions/runs/${encodeURIComponent(entry.id)}/jobs?per_page=100`,
+      );
+      if (jobs.ok) jobSummaries.push(summarizeCiJobs(parseJsonOutput(jobs)));
+    }
+    if (jobSummaries.length > 0) {
+      result.ci.preflight = {
+        available: true,
+        sampledRuns: jobSummaries.length,
+        ...combineCiJobSummaries(jobSummaries),
+      };
+    }
   } else {
     result.ci = { available: false };
   }
@@ -255,11 +534,36 @@ function collectRemote(repo, since, root) {
   if (rulesets.ok) {
     successfulSources += 1;
     const data = parseJsonOutput(rulesets);
+    const entries = Array.isArray(data) ? data : [];
+    const activeEntries = entries.filter(
+      (entry) => entry?.enforcement === "active",
+    );
+    const detailedEntries = [];
+    for (const entry of activeEntries.slice(0, 10)) {
+      if (Array.isArray(entry?.rules)) {
+        detailedEntries.push(entry);
+        continue;
+      }
+      if (!entry?.id) continue;
+      const detail = call(`rulesets/${encodeURIComponent(entry.id)}`);
+      if (detail.ok) {
+        const detailData = parseJsonOutput(detail);
+        if (detailData && typeof detailData === "object") {
+          detailedEntries.push(detailData);
+        }
+      }
+    }
+    const actualContexts = detailedEntries.flatMap(
+      extractRequiredCheckContexts,
+    );
+    const contract = compareRequiredCheckContexts(
+      readRequiredCheckNames(root),
+      actualContexts,
+    );
     result.rulesets = {
-      count: Array.isArray(data) ? data.length : null,
-      active: Array.isArray(data)
-        ? data.filter((entry) => entry?.enforcement === "active").length
-        : null,
+      count: entries.length,
+      active: activeEntries.length,
+      contract,
     };
   }
   if (successfulSources === 0) {
@@ -267,6 +571,63 @@ function collectRemote(repo, since, root) {
     result.reason = "GitHub API sources were unavailable";
   }
   return result;
+}
+
+function median(values) {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round((sorted[middle - 1] + sorted[middle]) / 2)
+    : sorted[middle];
+}
+
+export function summarizeWorkflowRuns(data, options = {}) {
+  const entries = Array.isArray(data?.workflow_runs) ? data.workflow_runs : [];
+  const outcomes = entries.filter((entry) =>
+    ["failure", "cancelled"].includes(entry?.conclusion),
+  );
+  const hasTrackingContext =
+    Object.hasOwn(options, "openPullRequestHeadShas") ||
+    Object.hasOwn(options, "protectedBranches");
+  const activeSet = hasTrackingContext
+    ? activeWorkflowRunSet(entries, {
+        openPullRequestHeadShas: new Set(options.openPullRequestHeadShas ?? []),
+        protectedBranches: new Set(
+          options.protectedBranches ?? DEFAULT_PROTECTED_BRANCHES,
+        ),
+      })
+    : new Set(outcomes);
+  const failures = entries.filter((entry) => entry?.conclusion === "failure");
+  const cancelled = entries.filter(
+    (entry) => entry?.conclusion === "cancelled",
+  );
+  return {
+    runs: entries.length,
+    failures: failures.length,
+    cancelled: cancelled.length,
+    activeFailures: failures.filter((entry) => activeSet.has(entry)).length,
+    historicalFailures: failures.filter((entry) => !activeSet.has(entry))
+      .length,
+    activeCancelled: cancelled.filter((entry) => activeSet.has(entry)).length,
+    historicalCancelled: cancelled.filter((entry) => !activeSet.has(entry))
+      .length,
+    reruns: entries.filter((entry) => Number(entry?.run_attempt) > 1).length,
+    queueSeconds: medianDuration(entries, "created_at", "run_started_at"),
+    durationSeconds: medianDuration(entries, "run_started_at", "updated_at"),
+  };
+}
+
+export function summarizeOpenPullRequests(data) {
+  const entries = Array.isArray(data) ? data : [];
+  return {
+    available: true,
+    open: entries.length,
+    drafts: entries.filter((entry) => entry?.draft === true).length,
+    dependabot: entries.filter(
+      (entry) => entry?.user?.login === "dependabot[bot]",
+    ).length,
+  };
 }
 
 function collectLocal(root, now, sinceDays) {
@@ -325,6 +686,7 @@ function printHuman(evidence) {
   );
   console.log(
     `CI runs: ${remote.ci.runs ?? "unavailable"}; failures: ${remote.ci.failures ?? "unavailable"}; ` +
+      `cancelled: ${remote.ci.cancelled ?? "unavailable"}; open PRs: ${remote.prs?.open ?? "unavailable"}; ` +
       `open CodeQL: ${remote.codeql.open ?? "unavailable"}; outdated packages: ${local.outdated.count ?? "unavailable"}`,
   );
   console.log(

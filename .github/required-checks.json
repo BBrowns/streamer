@@ -1,0 +1,16 @@
+{
+  "requiredContexts": [
+    {
+      "name": "Release Gate",
+      "source": "ci"
+    },
+    {
+      "name": "Review Dependency Changes",
+      "source": "dependency-review"
+    },
+    {
+      "name": "CodeQL",
+      "source": "external"
+    }
+  ]
+}

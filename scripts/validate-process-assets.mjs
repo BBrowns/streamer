@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -35,6 +35,22 @@ const HANDOFF_REQUIRED_SOURCES = Object.freeze([
   "docs/AUTOMATED_GOLDEN_PATHS.md",
 ]);
 
+const MAINTENANCE_SKILL_NAME = "streamer-" + "maintenance-radar";
+const STALE_PROCESS_REFERENCE = new RegExp(
+  `(?:\\$${MAINTENANCE_SKILL_NAME}|\\.agents/skills/${MAINTENANCE_SKILL_NAME})`,
+);
+const PROCESS_REFERENCE_ROOTS = Object.freeze([
+  ".agents",
+  ".codex",
+  ".github",
+  "docs",
+  "scripts",
+  "AGENTS.md",
+  "AGENT_HANDOFF.md",
+  "README.md",
+]);
+const PROCESS_TEXT_EXTENSIONS = /\.(json|md|mjs|js|py|toml|ya?ml)$/;
+
 export function validateAgentHandoff(root = process.cwd()) {
   const path = join(root, "AGENT_HANDOFF.md");
   if (!existsSync(path)) return ["AGENT_HANDOFF.md: missing"];
@@ -69,6 +85,35 @@ function readFrontmatter(source) {
     .match(/^description:\s*([\s\S]*?)(?=\r?\n[a-zA-Z_-]+:|$)/m)?.[1]
     ?.trim();
   return { name, description };
+}
+
+function processFiles(root, relativePath) {
+  const absolutePath = join(root, relativePath);
+  if (!existsSync(absolutePath)) return [];
+  const entry = statSync(absolutePath);
+  if (entry.isFile()) return [absolutePath];
+  const files = [];
+  for (const child of readdirSync(absolutePath, { withFileTypes: true })) {
+    if (child.name === ".git" || child.name === "node_modules") continue;
+    files.push(...processFiles(root, join(relativePath, child.name)));
+  }
+  return files;
+}
+
+export function findStaleProcessReferences(root = process.cwd()) {
+  const errors = [];
+  for (const relativePath of PROCESS_REFERENCE_ROOTS) {
+    for (const file of processFiles(root, relativePath)) {
+      if (!PROCESS_TEXT_EXTENSIONS.test(file)) continue;
+      const source = readFileSync(file, "utf8");
+      if (STALE_PROCESS_REFERENCE.test(source)) {
+        errors.push(
+          `${relative(root, file)}: contains a stale reference to the removed streamer-maintenance-radar skill`,
+        );
+      }
+    }
+  }
+  return errors;
 }
 
 function validateLocalMarkdownLinks(source, directory, label) {
@@ -411,6 +456,7 @@ export function validateProcessAssets(root = process.cwd()) {
   }
   errors.push(...validateRuntimePolicy(root));
   errors.push(...validateAgentHandoff(root));
+  errors.push(...findStaleProcessReferences(root));
 
   const codexRoot = join(root, ".codex");
   if (existsSync(codexRoot)) {
