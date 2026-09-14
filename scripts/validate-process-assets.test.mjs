@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   validateHooks,
   validateAgentHandoff,
+  findStaleProcessReferences,
   validateMarkdownTreeLinks,
   validateProcessAssets,
   validateRuntimePolicy,
@@ -55,6 +56,22 @@ test("rejects broken links in nested skill references", () => {
 
 test("project process assets have valid metadata and portable hooks", () => {
   assert.deepEqual(validateProcessAssets(), []);
+});
+
+test("detects references to the removed maintenance skill", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-stale-process-"));
+  try {
+    mkdirSync(join(root, ".agents"), { recursive: true });
+    writeFileSync(
+      join(root, ".agents", "automation.md"),
+      `Load $${"streamer-" + "maintenance-radar"} before running maintenance.\n`,
+    );
+    assert.deepEqual(findStaleProcessReferences(root), [
+      ".agents/automation.md: contains a stale reference to the removed streamer-maintenance-radar skill",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("rejects a valid JSON hook file that disables required controls", () => {

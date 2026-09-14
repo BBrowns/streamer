@@ -22,6 +22,19 @@ function addFinding(findings, finding) {
 export function classifyEvidence(evidence) {
   const findings = [];
   const { local, remote } = evidence;
+  const ci = remote.ci ?? {};
+  const hasActiveFailureMetric = Object.hasOwn(ci, "activeFailures");
+  const hasActiveCancellationMetric = Object.hasOwn(ci, "activeCancelled");
+  const activeFailures = hasActiveFailureMetric
+    ? ci.activeFailures
+    : ci.failures;
+  const historicalFailures = hasActiveFailureMetric ? ci.historicalFailures : 0;
+  const activeCancelled = hasActiveCancellationMetric
+    ? ci.activeCancelled
+    : ci.cancelled;
+  const historicalCancelled = hasActiveCancellationMetric
+    ? ci.historicalCancelled
+    : 0;
 
   const rawAuditHasBlockingSeverity = hasBlockingSeverity(local.audit?.counts);
   const auditPolicyFailed =
@@ -56,17 +69,31 @@ export function classifyEvidence(evidence) {
     });
   }
 
-  if ((remote.ci?.failures ?? 0) > 0) {
+  if ((activeFailures ?? 0) > 0) {
     addFinding(findings, {
       priority: "Now",
       key: "ci-failures",
       title: "Recent required CI runs failed",
-      evidence: `${remote.ci.failures} failed run(s) in the selected lookback.`,
+      evidence: `${activeFailures} active failed run(s) in the selected lookback.`,
       owner: "Change owner of the failing workflow",
       nextAction:
         "Open the latest failing run and repair the first reproducible failure.",
       closeWhen:
         "A fresh run passes all required jobs without bypassing a gate.",
+    });
+  }
+
+  if ((historicalFailures ?? 0) > 0) {
+    addFinding(findings, {
+      priority: "Watch",
+      key: "historical-ci-failures",
+      title: "Historical CI failures remain as trend evidence",
+      evidence: `${historicalFailures} failed run(s) were not associated with a current open pull request or latest protected-branch run and remain outside the active repair queue.`,
+      owner: "Delivery maintainer",
+      nextAction:
+        "Retain the count for trend analysis and investigate only if the same root recurs.",
+      closeWhen:
+        "The historical failure count is explained by later successful runs or closed changes.",
     });
   }
 
@@ -111,17 +138,63 @@ export function classifyEvidence(evidence) {
     });
   }
 
-  if ((remote.ci?.cancelled ?? 0) > 0) {
+  if ((activeCancelled ?? 0) > 0) {
     addFinding(findings, {
       priority: "Next",
       key: "cancelled-ci",
       title: "CI runs were cancelled in the lookback",
-      evidence: `${remote.ci.cancelled} cancelled run(s) were observed.`,
+      evidence: `${activeCancelled} active cancellation(s) were observed.`,
       owner: "Delivery maintainer",
       nextAction:
         "Confirm cancellations are superseded PR runs and not timeout or capacity symptoms.",
       closeWhen:
         "Cancellations are explained or the workflow no longer cancels unexpectedly.",
+    });
+  }
+
+  if ((historicalCancelled ?? 0) > 0) {
+    addFinding(findings, {
+      priority: "Watch",
+      key: "historical-ci-cancellations",
+      title: "Historical CI cancellations remain as trend evidence",
+      evidence: `${historicalCancelled} cancellation(s) were not associated with a current open pull request or latest protected-branch run and remain outside the active repair queue.`,
+      owner: "Delivery maintainer",
+      nextAction:
+        "Keep the count as a trend signal and check only recurring unexplained cancellations.",
+      closeWhen:
+        "Historical cancellations are explained by newer runs or closed changes.",
+    });
+  }
+
+  const requiredCheckContract = remote.rulesets?.contract;
+  if (
+    requiredCheckContract?.available &&
+    (requiredCheckContract.missing?.length > 0 ||
+      requiredCheckContract.unexpected?.length > 0 ||
+      requiredCheckContract.duplicate?.length > 0)
+  ) {
+    addFinding(findings, {
+      priority: "Now",
+      key: "required-check-drift",
+      title: "Remote required-check contract has drifted",
+      evidence: [
+        requiredCheckContract.missing?.length > 0
+          ? `missing: ${requiredCheckContract.missing.join(", ")}`
+          : null,
+        requiredCheckContract.unexpected?.length > 0
+          ? `unexpected: ${requiredCheckContract.unexpected.join(", ")}`
+          : null,
+        requiredCheckContract.duplicate?.length > 0
+          ? `duplicate: ${requiredCheckContract.duplicate.join(", ")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("; "),
+      owner: "Repository administrator plus delivery maintainer",
+      nextAction:
+        "Compare the protected ruleset with the canonical required-check contract before merging.",
+      closeWhen:
+        "The active remote ruleset matches the canonical required-check contract.",
     });
   }
 
@@ -197,6 +270,36 @@ function formatFinding(finding) {
   ].join("\n");
 }
 
+function metric(value) {
+  return value === null || value === undefined ? "unavailable" : value;
+}
+
+function renderProcessMetrics(evidence) {
+  const ci = evidence.remote?.ci ?? {};
+  const prs = evidence.remote?.prs ?? {};
+  const duration = ci.durationSeconds?.median;
+  const queue = ci.queueSeconds?.median;
+  const preflight = ci.preflight ?? {};
+  return [
+    "## Process Metrics",
+    "",
+    `- Open PRs: ${metric(prs.open)}`,
+    `- Draft PRs: ${metric(prs.drafts)}`,
+    `- Dependabot PRs: ${metric(prs.dependabot)}`,
+    `- CI runs: ${metric(ci.runs)}; failures: ${metric(ci.failures)}; cancellations: ${metric(ci.cancelled)}`,
+    `- Active CI failures: ${metric(ci.activeFailures ?? ci.failures)}`,
+    `- Historical CI failures: ${metric(ci.historicalFailures ?? 0)}`,
+    `- Active CI cancellations: ${metric(ci.activeCancelled ?? ci.cancelled)}`,
+    `- Historical CI cancellations: ${metric(ci.historicalCancelled ?? 0)}`,
+    `- CI reruns: ${metric(ci.reruns)}`,
+    `- Median CI queue time (sampled runs): ${queue === null || queue === undefined ? "unavailable" : `${queue}s`}`,
+    `- Preflight job sample: ${metric(preflight.sampledRuns)} CI run(s)`,
+    `- Preflight runs: ${preflight.available === false ? "unavailable" : metric(preflight.runs)}; failures: ${preflight.available === false ? "unavailable" : metric(preflight.failures)}; cancellations: ${preflight.available === false ? "unavailable" : metric(preflight.cancelled)}`,
+    `- Downstream jobs skipped after preflight failure: ${preflight.available === false ? "unavailable" : metric(preflight.skippedAfterFailure)}`,
+    `- Median CI duration (sampled runs): ${duration === null || duration === undefined ? "unavailable" : `${duration}s`}`,
+  ].join("\n");
+}
+
 export function renderMarkdown(evidence) {
   const findings = classifyEvidence(evidence);
   const byPriority = (priority) =>
@@ -223,6 +326,8 @@ export function renderMarkdown(evidence) {
   }
 
   sections.push(
+    "",
+    renderProcessMetrics(evidence),
     "",
     "## Evidence Boundaries",
     "",

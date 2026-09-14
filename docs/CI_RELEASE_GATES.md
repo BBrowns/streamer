@@ -47,6 +47,19 @@ detector itself and rejects a detector failure or an unexpected skipped job.
 The detector writes its mode, reason, changed-file count, and selected jobs to
 the CI job summary.
 
+Dependency-sensitive pull requests also run `Dependency Install Preflight`
+before the installer-bearing matrix. It checks the pinned install-script policy
+and performs a non-mutating npm lockfile/manifest install validation. When it
+fails or is cancelled, dependent jobs are intentionally skipped and `Release
+Gate` reports the preflight as the root outcome; a successful preflight leaves
+each runner's isolated install unchanged. A skipped preflight is accepted only
+when the trusted scope detector explicitly marks the install contract out of
+scope.
+
+During the rollout, if the trusted base-branch scope detector does not yet
+publish the preflight output, the workflow fails closed by enabling one
+preflight rather than silently skipping the install contract.
+
 Draft pull requests use an explicit fast lane: workflow linting, lint/typecheck,
 formatting, and the dependency security checks still run, while the expensive
 mobile, browser, server, container, build, and desktop jobs remain skipped.
@@ -134,6 +147,30 @@ Queue policy:
 
 The dependency review workflow supplies the merge group's base and head SHAs
 explicitly because a merge-group event has no pull-request base/head context.
+
+## Required Check Contract
+
+`.github/required-checks.json` records the protected contexts that must remain
+stable: `Release Gate`, `Review Dependency Changes`, and the external aggregate
+`CodeQL` context. `npm run workflows:check` verifies that repository-owned
+contexts still have one unambiguous workflow publisher and that the external
+CodeQL context is not shadowed by a local job. The maintenance collector also
+reconciles the active remote ruleset when its details are available; the static
+check remains useful for local changes but cannot observe a manual remote edit.
+
+The read-only maintenance artifact records only bounded aggregate evidence:
+open PRs, Dependabot PRs, active and historical CI outcomes, reruns, sampled
+queue and execution duration, preflight outcomes, and skipped downstream jobs.
+Preflight job outcomes are sampled from at most 20 recent CI runs so the weekly
+radar remains bounded when the repository has a large run history; every such
+metric is labeled as sampled in the report.
+Failures are considered active only when they belong to an open pull request's
+head revision or the latest protected-branch run; superseded failures remain
+available for trend analysis under `Watch`. The maintenance protocol reduces
+analysis cost by batching metadata reads, fetching only the first root failure,
+and reusing the compact PR inventory. It does not restore the removed
+`streamer-maintenance-radar` skill; the collector, report, and recurring
+read-only automation are the authoritative maintenance path.
 
 ## Gate Policy
 

@@ -15,13 +15,38 @@ export const scopeKeyByJob = Object.freeze({
   "desktop-package": "run_desktop_package",
 });
 
+const PREFLIGHT_BLOCKED_JOBS = new Set([
+  ...Object.keys(scopeKeyByJob),
+  "golden_path_gate",
+]);
+
 export function findCiNeedFailures(needs) {
   const scope = needs.ci_scope?.outputs ?? {};
+  const preflightResult = needs["dependency-install-preflight"]?.result;
+  const preflightBlocked = ["failure", "cancelled"].includes(preflightResult);
 
   return Object.entries(needs)
     .filter(([name, value]) => {
       if (name === "ci_scope") return value.result !== "success";
+      if (
+        name === "dependency-install-preflight" &&
+        value.result === "skipped" &&
+        scope.run_install_preflight !== "true"
+      ) {
+        return false;
+      }
       if (value.result === "success") return false;
+
+      // A failed or cancelled dependency preflight is the root failure. Jobs
+      // that depend on it are intentionally skipped so the release gate does
+      // not fan out the same install error into secondary failures.
+      if (
+        preflightBlocked &&
+        value.result === "skipped" &&
+        PREFLIGHT_BLOCKED_JOBS.has(name)
+      ) {
+        return false;
+      }
 
       const scopeKey = scopeKeyByJob[name];
       return !(

@@ -30,6 +30,15 @@ Popularity is context, not proof. Latest is a candidate, not a decision.
 - Scale the platform matrix to the delivery stage: representative runtime plus
   CI for development, complete affected shipping coverage for release evidence.
 
+## Maintenance Triage
+
+Treat package manifests, lockfiles, patches, and install-script policy as one
+install contract. Run the dependency install preflight before interpreting
+downstream CI failures. Routine compatible patch/minor updates may remain
+grouped; Expo, React Native, Worklets, Reanimated, Jest, NativeWind, Electron,
+and other native/toolchain changes require an explicit compatibility decision
+because semver grouping cannot model their coordinated runtime graph.
+
 ## Primary References
 
 - [npm audit documentation](https://docs.npmjs.com/cli/v11/commands/npm-audit/)

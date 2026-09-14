@@ -22,6 +22,7 @@
       "id": "workflow-policy",
       "patterns": [
         "^\\.github/workflows/",
+        "^\\.github/required-checks\\.json$",
         "^scripts/(check-github-actions|ci-affected|ci-install|ci-needs-check|change-scope-parity)"
       ],
       "focusedCommands": [
