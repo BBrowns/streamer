@@ -38,4 +38,28 @@ describe("progressive playback end policy", () => {
       }),
     ).toBe(false);
   });
+
+  it("treats an HLS end far before the metadata duration as a candidate failure", () => {
+    expect(
+      shouldTreatPlaybackEndAsPremature({
+        isProgressiveRemux: false,
+        hasSeekableHandoff: false,
+        currentTime: 71,
+        duration: 71,
+        expectedDuration: 53 * 60,
+      }),
+    ).toBe(true);
+  });
+
+  it("allows an HLS source to complete near its metadata duration", () => {
+    expect(
+      shouldTreatPlaybackEndAsPremature({
+        isProgressiveRemux: false,
+        hasSeekableHandoff: false,
+        currentTime: 52 * 60 + 40,
+        duration: 52 * 60 + 40,
+        expectedDuration: 53 * 60,
+      }),
+    ).toBe(false);
+  });
 });

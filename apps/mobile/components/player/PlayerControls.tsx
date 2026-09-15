@@ -530,6 +530,7 @@ export function PlayerControls({
                   onPress={handleVolumePress}
                   {...((Platform.OS === "web"
                     ? {
+                        role: "slider",
                         onKeyDown: handleVolumeKeyDown,
                         "aria-valuemin": 0,
                         "aria-valuemax": 100,

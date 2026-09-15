@@ -1,8 +1,42 @@
 import {
+  classifyHlsFatalError,
   createHlsPlayerFacade,
   getPublishedHlsWindow,
   HlsWebVideoAdapter,
+  isHlsMediaRecoveryExhausted,
+  shouldCountHlsMediaReset,
 } from "../HlsWebVideoAdapter";
+
+describe("HLS fatal error classification", () => {
+  it("treats a MediaSource reset as recoverable", () => {
+    expect(
+      classifyHlsFatalError({
+        type: "mediaError",
+        details: "mediaSourceRequiresReset",
+      }),
+    ).toBe("recover");
+  });
+
+  it("keeps manifest failures terminal for the current source", () => {
+    expect(
+      classifyHlsFatalError({
+        type: "networkError",
+        details: "manifestLoadError",
+      }),
+    ).toBe("fail");
+  });
+
+  it("allows one media reset recovery and then fails the source", () => {
+    expect(isHlsMediaRecoveryExhausted(1)).toBe(false);
+    expect(isHlsMediaRecoveryExhausted(2)).toBe(true);
+  });
+
+  it("coalesces duplicate reset callbacks from one HLS recovery cycle", () => {
+    expect(shouldCountHlsMediaReset(0, 1_000)).toBe(true);
+    expect(shouldCountHlsMediaReset(1_000, 1_100)).toBe(false);
+    expect(shouldCountHlsMediaReset(1_000, 1_250)).toBe(true);
+  });
+});
 
 function createFakeVideo(seekableRange = { start: 0, end: 4 }) {
   const listeners = new Map<string, Set<() => void>>();

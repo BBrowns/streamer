@@ -2,6 +2,8 @@ import {
   bridgeCapabilitiesV1Schema,
   bridgeCreateJobV1Schema,
   bridgeJobResponseV1Schema,
+  bridgeNetworkProbeRequestV1Schema,
+  bridgeNetworkProbeResponseV1Schema,
 } from "../schemas/bridge.schema";
 import { describe, expect, it } from "vitest";
 
@@ -93,5 +95,71 @@ describe("bridge v1 delivery contract", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("keeps diagnostics optional for older capability documents", () => {
+    const legacy = bridgeCapabilitiesV1Schema.safeParse({
+      protocolVersion: 1,
+      owner: "standalone",
+      health: "ready",
+      capabilities: {
+        jobs: {
+          sourceKinds: ["magnet"],
+          deliveries: [
+            { delivery: "range-http", available: true },
+            { delivery: "progressive-fmp4", available: true },
+            { delivery: "seekable-cache", available: true },
+          ],
+          cancellation: true,
+          tracks: true,
+          subtitles: true,
+          thumbnails: true,
+          metrics: true,
+        },
+        cast: {
+          available: true,
+          controls: ["play", "pause", "resume", "seek", "stop"],
+        },
+      },
+      limits: {
+        maxRequestBytes: 16 * 1024,
+        maxSubtitleBytes: 8 * 1024 * 1024,
+        thumbnailBucketSeconds: 10,
+        maxThumbnailBucket: 864,
+        maxThumbnailBytes: 512 * 1024,
+      },
+    });
+
+    expect(legacy.success).toBe(true);
+    expect(
+      bridgeCapabilitiesV1Schema.parse(legacy.data).capabilities.diagnostics,
+    ).toBeUndefined();
+  });
+
+  it("accepts only bounded, source-free network probe contracts", () => {
+    expect(
+      bridgeNetworkProbeRequestV1Schema.safeParse({
+        requestId: "11111111-1111-4111-8111-111111111111",
+        profile: "torrent-playback",
+      }).success,
+    ).toBe(true);
+    expect(
+      bridgeNetworkProbeRequestV1Schema.safeParse({
+        requestId: "11111111-1111-4111-8111-111111111111",
+        profile: "torrent-playback",
+        magnet: "magnet:?xt=urn:btih:secret",
+      }).success,
+    ).toBe(false);
+    expect(
+      bridgeNetworkProbeResponseV1Schema.parse({
+        protocolVersion: 1,
+        probeId: "22222222-2222-4222-8222-222222222222",
+        status: "degraded",
+        phase: "metadata",
+        elapsedMs: 1_200,
+        peerCount: 1,
+        failureCode: "METADATA_UNAVAILABLE",
+      }),
+    ).toMatchObject({ status: "degraded", phase: "metadata" });
   });
 });

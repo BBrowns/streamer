@@ -416,6 +416,56 @@ describe("gateway jobs", () => {
     expect(shouldRemuxTorrentFile).toHaveBeenCalledWith("actual-video.mkv");
   });
 
+  it("waits for the first torrent bytes before probing audio tracks", async () => {
+    const phases: string[] = [];
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+    (waitForTorrentFileFirstBytes as any).mockImplementationOnce(async () => {
+      phases.push("first-byte");
+      return { fileName: "actual-video.mkv", bytesRead: 1 };
+    });
+    (probeMediaTracksAtUrl as any).mockImplementation(async () => {
+      phases.push("audio-probe");
+      return [
+        {
+          id: "audio:1",
+          streamIndex: 1,
+          kind: "audio",
+          language: "en",
+          title: "English",
+          codec: "aac",
+          channelCount: 2,
+          channelLayout: "stereo",
+          default: true,
+          forced: false,
+          hearingImpaired: false,
+          audioDescription: false,
+          commentary: false,
+          source: "embedded",
+          supported: true,
+        },
+      ];
+    });
+
+    const created = await request(app)
+      .post("/api/gateway/jobs")
+      .send({ magnet: "magnet:?xt=urn:btih:abcdef123456" });
+
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    expect(phases[0]).toBe("first-byte");
+    expect(phases).toContain("audio-probe");
+    expect(probeMediaTracksAtUrl).toHaveBeenCalledTimes(1);
+  });
+
   it("binds later track and subtitle work to the exact inferred video file", async () => {
     const files = [
       { name: "sample.mp4", streamURL: "/webtorrent/sample" },

@@ -20,6 +20,7 @@ const gatewayMocks = vi.hoisted(() => {
 const torrentMocks = vi.hoisted(() => ({
   getTorrentEngineStatus: vi.fn(),
   getRemuxRuntimeStatus: vi.fn(),
+  isTorrentNetworkProbeConfigured: vi.fn(() => false),
 }));
 
 vi.mock("../gateway.js", () => ({
@@ -36,6 +37,7 @@ vi.mock("../gateway.js", () => ({
 vi.mock("../torrent.js", () => ({
   getTorrentEngineStatus: torrentMocks.getTorrentEngineStatus,
   getRemuxRuntimeStatus: torrentMocks.getRemuxRuntimeStatus,
+  isTorrentNetworkProbeConfigured: torrentMocks.isTorrentNetworkProbeConfigured,
   isTorrentEngineUnavailableError: vi.fn(() => false),
 }));
 

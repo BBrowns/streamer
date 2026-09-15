@@ -44,6 +44,7 @@ import type {
   SeekableRemuxUnavailableReason,
 } from "./torrent.js";
 import { addStreamServerBreadcrumb } from "./sentry.js";
+import { getTorrentMetadataDiagnosticSnapshot } from "./torrent-observation.js";
 import {
   createMediaProbeCache,
   discoverExternalSubtitleCandidates,
@@ -736,6 +737,16 @@ function getTerminalStreamResponse(job: GatewayJob) {
   return null;
 }
 
+function logTerminalStreamResponse(
+  job: GatewayJob,
+  response: { status: number; body: { state?: string } },
+) {
+  addGatewayJobBreadcrumb(job, "gateway.stream_terminal", "warning", {
+    responseStatus: response.status,
+    terminalState: response.body.state,
+  });
+}
+
 function addGatewayJobBreadcrumb(
   job: GatewayJob,
   message: string,
@@ -1078,6 +1089,7 @@ function startGatewaySeekableCachePreparation(job: GatewayJob, torrent: any) {
 
 async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
   let stopProgressTracking: (() => void) | null = null;
+  let firstByteProbeReady = false;
   try {
     const torrent = preparedTorrent ?? (await prepareTorrent(job.magnet));
     bindGatewayTorrent(job, torrent);
@@ -1127,6 +1139,76 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
       selectedContainer,
     });
 
+    const needsContainerRemux = shouldRemuxTorrentFile(selectedFile.name);
+
+    // FFprobe reads from the WebTorrent-backed HTTP source. Metadata tells us
+    // which file to inspect, but it does not guarantee that the selected
+    // file's first piece is readable yet. Prove that byte is available before
+    // starting any media probe so a healthy torrent is not misclassified as
+    // an audio-probe failure.
+    if (job.mode !== "remux" && needsContainerRemux) {
+      const previousDelivery = getBridgeDelivery(job);
+      job.mode = "remux";
+      job.remuxStrategy =
+        job.requestedDelivery === "hls" ? "hls" : "progressive-fmp4";
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.delivery_promoted", "info", {
+        fromDelivery: previousDelivery,
+        toDelivery: job.remuxStrategy,
+        selectedContainer,
+      });
+    }
+
+    const markRemuxStarted = () => {
+      if (job.remuxStartedAt) return;
+      job.remuxStartedAt = Date.now();
+      job.retryable = true;
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
+    };
+
+    // A runtime-probed MP4 may later be downgraded back to range-http. Keep
+    // that path in the piece-checking phase until audio selection confirms
+    // that no remux is needed. All other remux paths can expose remuxing while
+    // the first-byte probe is pending.
+    if (
+      job.mode === "remux" &&
+      (selectedContainer !== "mp4" || job.remuxStrategy === "seekable-cache")
+    ) {
+      markRemuxStarted();
+    }
+
+    const runFirstByteProbe = async () => {
+      if (firstByteProbeReady) return;
+
+      job.firstByteProbeStartedAt = job.remuxStartedAt ?? Date.now();
+      job.retryable = true;
+      job.updatedAt = Date.now();
+      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
+      addGatewayJobBreadcrumb(job, "gateway.first_byte_probe_started", "info");
+
+      const abortController = new AbortController();
+      job.abortController = abortController;
+      try {
+        const firstByte = await waitForTorrentFileFirstBytes(torrent, {
+          fileIdx: job.fileIdx,
+          hints: job.hints,
+          signal: abortController.signal,
+          timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
+        });
+        firstByteProbeReady = true;
+        addGatewayJobBreadcrumb(job, "gateway.first_byte_probe_ready", "info", {
+          bytesRead: firstByte.bytesRead,
+        });
+      } finally {
+        if (job.abortController === abortController) {
+          job.abortController = undefined;
+        }
+      }
+    };
+
+    await runFirstByteProbe();
+
     // FFprobe is authoritative for Play audio, including sources whose
     // provider label says MP4 but whose default track is Spanish. A direct
     // range response can remain cheap only when its current default already
@@ -1159,7 +1241,6 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     const directAudioIsCompatible =
       availableAudioTracks.length === 1 ||
       sourceDefaultAudioTrack?.id === selectedAudioTrackId;
-    const needsContainerRemux = shouldRemuxTorrentFile(selectedFile.name);
     const needsAudioRemux = !directAudioIsCompatible;
 
     if (job.mode !== "remux" && (needsContainerRemux || needsAudioRemux)) {
@@ -1173,6 +1254,10 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
         toDelivery: job.remuxStrategy,
         selectedContainer,
       });
+    }
+
+    if (job.mode === "remux") {
+      markRemuxStarted();
     }
 
     // Runtime probing can prove that a planner's unknown/mislabeled candidate
@@ -1196,11 +1281,6 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     }
 
     if (job.mode === "remux") {
-      job.remuxStartedAt = Date.now();
-      job.retryable = true;
-      job.updatedAt = Date.now();
-      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
-
       const abortController = new AbortController();
       job.abortController = abortController;
       try {
@@ -1208,8 +1288,10 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
           job.remuxStrategy === "progressive-fmp4" ||
           job.remuxStrategy === "hls"
         ) {
-          const { tracks } = await getGatewayTrackRows(job, torrent);
-          const availableAudioTracks = tracks.filter(
+          // Reuse the catalog that was needed for the initial selection. A
+          // second FFprobe here is both redundant and another opportunity to
+          // race the torrent-backed HTTP source.
+          const availableAudioTracks = audioTracksForSelection.tracks.filter(
             (track) => track.kind === "audio" && track.supported,
           );
           if (availableAudioTracks.length === 0) {
@@ -1229,30 +1311,6 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
             selection: "preferred",
           });
 
-          // Primary Play remuxes are fragmented MP4 streams. Proving the
-          // first torrent byte is readable is the last preflight we need;
-          // FFmpeg starts when the player connects, so we do not wait for the
-          // whole movie just to relocate an MP4 index.
-          job.firstByteProbeStartedAt = job.remuxStartedAt;
-          addGatewayJobBreadcrumb(
-            job,
-            "gateway.first_byte_probe_started",
-            "info",
-          );
-          const firstByte = await waitForTorrentFileFirstBytes(torrent, {
-            fileIdx: job.fileIdx,
-            hints: job.hints,
-            signal: abortController.signal,
-            timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
-          });
-          addGatewayJobBreadcrumb(
-            job,
-            "gateway.first_byte_probe_ready",
-            "info",
-            {
-              bytesRead: firstByte.bytesRead,
-            },
-          );
           if (job.remuxStrategy === "hls") {
             const session = await createHlsRemuxSession(selectedFile, {
               signal: abortController.signal,
@@ -1307,29 +1365,8 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
       }
       if (isGatewayJobCancelled(job)) return;
     } else {
-      job.firstByteProbeStartedAt = Date.now();
-      job.retryable = true;
-      job.updatedAt = Date.now();
-      addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "info");
-      addGatewayJobBreadcrumb(job, "gateway.first_byte_probe_started", "info");
-
-      const abortController = new AbortController();
-      job.abortController = abortController;
-      try {
-        const firstByte = await waitForTorrentFileFirstBytes(torrent, {
-          fileIdx: job.fileIdx,
-          hints: job.hints,
-          signal: abortController.signal,
-          timeoutMs: GATEWAY_FIRST_BYTE_TIMEOUT_MS,
-        });
-        addGatewayJobBreadcrumb(job, "gateway.first_byte_probe_ready", "info", {
-          bytesRead: firstByte.bytesRead,
-        });
-      } finally {
-        if (job.abortController === abortController) {
-          job.abortController = undefined;
-        }
-      }
+      // The first-byte probe runs before FFprobe for every delivery mode. It
+      // is intentionally not repeated after audio/container selection.
       if (isGatewayJobCancelled(job)) return;
     }
 
@@ -1343,11 +1380,20 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     job.failureReason =
       torrentFailureReason(err) ??
       (job.remuxStartedAt ? "remux_failed" : "torrent_error");
-    job.state = isNoPeersGatewayError(err)
-      ? "no_peers"
-      : isStalledGatewayError(err)
-        ? "stalled"
-        : "error";
+    const runtimeTorrent = gatewayJobRuntimes.get(job.id)?.torrent;
+    const metadataDiagnostics = runtimeTorrent
+      ? getTorrentMetadataDiagnosticSnapshot(runtimeTorrent)
+      : undefined;
+    const peerActivity =
+      metadataDiagnostics?.observed === true &&
+      ((metadataDiagnostics.discoveredPeerCount ?? 0) > 0 ||
+        (metadataDiagnostics.connectedPeerCount ?? 0) > 0);
+    job.state =
+      isNoPeersGatewayError(err) && !peerActivity
+        ? "no_peers"
+        : isStalledGatewayError(err) || isNoPeersGatewayError(err)
+          ? "stalled"
+          : "error";
     job.failureCode =
       job.state === "error" ? getGatewayFailureCode(err) : undefined;
     job.retryable =
@@ -1357,6 +1403,11 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
       error: job.error,
+      ...(metadataDiagnostics
+        ? {
+            metadataDiagnostics,
+          }
+        : {}),
     });
     await releaseGatewayJobRuntime(job);
   } finally {
@@ -2099,6 +2150,9 @@ export async function serveGatewayJobStream(
     activeSignature: job.activeStreamSignature,
   });
   if (!signature.ok) {
+    addGatewayJobBreadcrumb(job, "gateway.stream_request_rejected", "warning", {
+      reason: signature.reason,
+    });
     return res.status(403).json({
       error:
         signature.reason === "expired"
@@ -2111,6 +2165,7 @@ export async function serveGatewayJobStream(
 
   const terminalResponse = getTerminalStreamResponse(job);
   if (terminalResponse) {
+    logTerminalStreamResponse(job, terminalResponse);
     return res.status(terminalResponse.status).json(terminalResponse.body);
   }
   // The job preflight owns metadata, first-byte, and remux readiness. Serving
@@ -2136,6 +2191,10 @@ export async function serveGatewayJobStream(
   }
 
   trackGatewayStream(job, res);
+  addGatewayJobBreadcrumb(job, "gateway.stream_request_started", "info", {
+    method: req.method,
+    streamKind: job.remuxStrategy === "hls" ? "hls-manifest" : "media",
+  });
 
   try {
     let torrent = gatewayJobRuntimes.get(job.id)?.torrent;
@@ -2234,6 +2293,7 @@ export async function serveGatewayJobStream(
     }
     if (job.mode === "remux") {
       if (job.remuxStrategy === "hls") {
+        addGatewayJobBreadcrumb(job, "gateway.hls_manifest_requested", "info");
         const hlsSession = await getOrCreateHlsSession(
           job,
           torrent,
@@ -2246,7 +2306,12 @@ export async function serveGatewayJobStream(
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Expose-Headers": "Content-Type",
         });
-        return res.status(200).send(rewriteHlsManifest(job, req, manifest));
+        const rewrittenManifest = rewriteHlsManifest(job, req, manifest);
+        addGatewayJobBreadcrumb(job, "gateway.hls_manifest_served", "info", {
+          byteLength: Buffer.byteLength(rewrittenManifest),
+          ...hlsSession.getPublishedWindow(),
+        });
+        return res.status(200).send(rewrittenManifest);
       }
 
       const abortController = new AbortController();
@@ -2352,6 +2417,7 @@ export async function serveGatewayJobStream(
   } catch (err) {
     const terminalResponse = getTerminalStreamResponse(job);
     if (terminalResponse) {
+      logTerminalStreamResponse(job, terminalResponse);
       if (!res.headersSent) {
         return res.status(terminalResponse.status).json(terminalResponse.body);
       }
@@ -2367,6 +2433,7 @@ export async function serveGatewayJobStream(
     job.updatedAt = Date.now();
     addGatewayJobBreadcrumb(job, "gateway.job_phase_changed", "error", {
       error,
+      streamRequest: true,
     });
     if (!res.headersSent) {
       return res.status(503).json({ error, retryable: job.retryable });

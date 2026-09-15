@@ -17,6 +17,7 @@ import {
 } from "../../bridge/BridgeV1PlaybackRuntime";
 import { bindBridgeV1StreamUri } from "../../bridge/BridgeV1StreamGuard";
 import type { GatewayJobProgress } from "../../streamEngine/IStreamEngine";
+import { buildRuntimeTorrentMagnet } from "../../torrentMagnet";
 import { recordPlaybackDebugEvent } from "../../playback/playbackDebug";
 import {
   PreparedSourceLease,
@@ -37,16 +38,6 @@ const BRIDGE_DELIVERIES = [
   "hls",
 ] as const satisfies readonly BridgeDelivery[];
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
-const DEFAULT_TRACKERS = [
-  "http://tracker.opentrackr.org:1337/announce",
-  "http://tracker.renhas.cl:6969/announce",
-  "udp://tracker.opentrackr.org:1337/announce",
-  "udp://tracker.internetwarriors.net:1337/announce",
-  "udp://tracker.leechers-paradise.org:6969/announce",
-  "wss://tracker.openwebtorrent.com",
-  "wss://tracker.btorrent.xyz",
-  "wss://tracker.fastcast.nz",
-] as const;
 const NON_FALLBACKABLE_BRIDGE_ERROR_CODES = new Set<BridgeClientErrorCode>([
   "INVALID_REQUEST",
   "PROTOCOL_UNSUPPORTED",
@@ -141,21 +132,6 @@ function notifyGatewayProgress(
   } catch {
     // Observers are not allowed to interrupt or own preparation.
   }
-}
-
-function buildMagnet(infoHash: string | undefined) {
-  const normalized = infoHash?.trim();
-  if (!normalized || !/^(?:[a-f0-9]{40}|[a-z2-7]{32})$/i.test(normalized)) {
-    throw new SourcePreparationError(
-      "INVALID_SOURCE",
-      "The torrent source does not contain a valid source identity.",
-    );
-  }
-
-  const trackers = DEFAULT_TRACKERS.map(
-    (tracker) => `tr=${encodeURIComponent(tracker)}`,
-  ).join("&");
-  return `magnet:?xt=urn:btih:${normalized.toLowerCase()}&${trackers}`;
 }
 
 function buildSelection(
@@ -521,7 +497,16 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
         requestId: request.requestId,
         source: {
           kind: "magnet",
-          magnet: buildMagnet(request.candidate.stream.infoHash),
+          magnet: (() => {
+            const magnet = buildRuntimeTorrentMagnet(request.candidate.stream);
+            if (!magnet) {
+              throw new SourcePreparationError(
+                "INVALID_SOURCE",
+                "The torrent source does not contain a valid source identity.",
+              );
+            }
+            return magnet;
+          })(),
         },
         delivery,
         ...(selection ? { selection } : {}),

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Stream } from "@streamer/shared";
 
 import type { MediaInfo, StreamLoadState } from "../stores/playerStore";
@@ -30,6 +30,9 @@ export interface UsePlaybackUriBindingOptions {
   playbackSessionId: string | null;
   playbackCandidateId: string | null;
   playbackAttemptId: string | null;
+  playbackUri: string | null;
+  playbackSessionActive?: boolean;
+  allowPreparedUriBinding?: boolean;
   resolveAttempt: number;
   setPlaybackUri: (uri: string | null) => void;
   setStreamStatus: (state: StreamLoadState) => void;
@@ -56,6 +59,9 @@ export function usePlaybackUriBinding({
   playbackSessionId,
   playbackCandidateId,
   playbackAttemptId,
+  playbackUri,
+  playbackSessionActive = true,
+  allowPreparedUriBinding = true,
   resolveAttempt,
   setPlaybackUri,
   setStreamStatus,
@@ -65,12 +71,83 @@ export function usePlaybackUriBinding({
   tryReplanPartialPlayback,
   tryAdvanceToFallback,
 }: UsePlaybackUriBindingOptions) {
+  const playbackUriRef = useRef(playbackUri);
+  playbackUriRef.current = playbackUri;
+
   useEffect(() => {
     let isMounted = true;
 
     const resolve = async () => {
       if (!currentStream) {
-        setPlaybackUri(null);
+        if (playbackUriRef.current !== null) setPlaybackUri(null);
+        return;
+      }
+
+      // Fallback publishes the next prepared URI before the session state
+      // leaves `trying_fallback`. Preserve that URI when it already belongs
+      // to the current stream; only block a stale URI from being rebound
+      // while the fallback transition is still selecting its owner.
+      const hasPreparedCurrentUri =
+        playbackUriRef.current !== null &&
+        currentStream.url === playbackUriRef.current;
+
+      // A terminal session or an attempt whose fallback transition owns the
+      // source must not re-enter session resolution. This also covers torrent
+      // candidates that have no prepared URI yet; otherwise a terminal
+      // NO_PEERS/SOURCE_UNAVAILABLE result can trigger an unbounded resolve
+      // loop while the player route remains mounted.
+      if (playbackSessionId && !playbackSessionActive) {
+        if (playbackUriRef.current !== null) setPlaybackUri(null);
+        return;
+      }
+      if (
+        playbackSessionId &&
+        !allowPreparedUriBinding &&
+        !hasPreparedCurrentUri
+      ) {
+        if (playbackUriRef.current !== null) setPlaybackUri(null);
+        return;
+      }
+
+      if (
+        playbackSessionId &&
+        playbackCandidateId &&
+        playbackAttemptId &&
+        currentStream.url
+      ) {
+        if (
+          !playbackSessionActive ||
+          (!allowPreparedUriBinding && !hasPreparedCurrentUri)
+        ) {
+          if (playbackUriRef.current !== null) setPlaybackUri(null);
+          return;
+        }
+
+        // setSessionStream publishes a prepared stream and the URI binding
+        // can be re-run by the resulting state update. Do not rebind or emit
+        // another resolve breadcrumb for the same in-memory URI.
+        if (playbackUriRef.current === currentStream.url) return;
+
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "playback.resolve_started",
+          data: {
+            hasSession: true,
+            hasCandidate: true,
+            hasAttempt: true,
+            sourceKind: currentStream.infoHash ? "torrent" : "url",
+          },
+        });
+        setPlaybackUri(currentStream.url);
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "playback.resolve_ready",
+          data: {
+            path: "prepared",
+            candidateId: playbackCandidateId,
+            attemptId: playbackAttemptId,
+          },
+        });
         return;
       }
 
@@ -88,25 +165,6 @@ export function usePlaybackUriBinding({
               : "unknown",
         },
       });
-
-      if (
-        playbackSessionId &&
-        playbackCandidateId &&
-        playbackAttemptId &&
-        currentStream.url
-      ) {
-        setPlaybackUri(currentStream.url);
-        recordPlaybackDebugEvent({
-          category: "playback",
-          message: "playback.resolve_ready",
-          data: {
-            path: "prepared",
-            candidateId: playbackCandidateId,
-            attemptId: playbackAttemptId,
-          },
-        });
-        return;
-      }
 
       setStreamStatus("loading_metrics");
 
@@ -129,6 +187,7 @@ export function usePlaybackUriBinding({
             },
           });
           if (await tryReplanPartialPlayback(playbackSessionId)) return;
+          if (!isMounted) return;
           setPlaybackUri(null);
           setRuntimeFailure(result.error);
           return;
@@ -200,6 +259,7 @@ export function usePlaybackUriBinding({
           { retryable: true, shouldFallback: false },
         );
         if (await tryAdvanceToFallback(error, message)) return;
+        if (!isMounted) return;
 
         setPlaybackUri(null);
         setRuntimeFailure(error);
@@ -225,6 +285,7 @@ export function usePlaybackUriBinding({
           { retryable: true, shouldFallback: false },
         ).error;
         if (await tryAdvanceToFallback(runtimeFailure, message)) return;
+        if (!isMounted) return;
 
         setPlaybackUri(null);
         setRuntimeFailure(runtimeFailure);
@@ -246,12 +307,14 @@ export function usePlaybackUriBinding({
       isMounted = false;
     };
   }, [
+    allowPreparedUriBinding,
     currentStream,
     getErrorMessage,
     mediaInfo,
     playbackAttemptId,
     playbackCandidateId,
     playbackSessionId,
+    playbackSessionActive,
     resolveAttempt,
     setPlaybackUri,
     setRuntimeFailure,

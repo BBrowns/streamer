@@ -321,6 +321,83 @@ describe("SourcePreparer route registry", () => {
 });
 
 describe("BridgeV1SourceAdapter", () => {
+  it("preserves a validated source magnet and its tracker hints", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(readyJob());
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+    });
+    const selectedRoute = route("seekable-cache", "local-sidecar");
+    const infoHash = "0123456789abcdef0123456789abcdef01234567";
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: "attempt-preserve-magnet",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(selectedRoute, {
+        stream: {
+          infoHash,
+          url: `magnet:?xt=urn:btih:${infoHash}&tr=${encodeURIComponent(
+            "https://tracker.example.test/announce",
+          )}&dn=Episode%20title`,
+        },
+      }),
+      route: selectedRoute,
+    });
+
+    expect(client.createJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: {
+          kind: "magnet",
+          magnet: expect.stringContaining(
+            "tr=https%3A%2F%2Ftracker.example.test%2Fannounce",
+          ),
+        },
+      }),
+      undefined,
+    );
+    expect(client.createJob.mock.calls[0]?.[0].source.magnet).not.toContain(
+      "dn=Episode",
+    );
+    await prepared.release();
+  });
+
+  it("drops private tracker hints before sending a magnet to the bridge", async () => {
+    const client = bridgeClient();
+    client.createJob.mockResolvedValue(readyJob());
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+    });
+    const selectedRoute = route("seekable-cache", "local-sidecar");
+    const infoHash = "0123456789abcdef0123456789abcdef01234567";
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: "attempt-filter-private-tracker",
+      requestId: REQUEST_ID,
+      candidate: candidateFor(selectedRoute, {
+        stream: {
+          infoHash,
+          url: `magnet:?xt=urn:btih:${infoHash}&tr=${encodeURIComponent(
+            "http://127.0.0.1:6969/announce",
+          )}&tr=${encodeURIComponent("https://tracker.example.test/announce")}`,
+        },
+      }),
+      route: selectedRoute,
+    });
+
+    const magnet = client.createJob.mock.calls[0]?.[0].source.magnet as string;
+    expect(magnet).not.toContain("127.0.0.1");
+    expect(magnet).toContain(
+      "tr=https%3A%2F%2Ftracker.example.test%2Fannounce",
+    );
+    await prepared.release();
+  });
+
   it.each(["en", "nl", null])(
     "forwards a supported preference %s to the same job",
     async (audioLanguage) => {

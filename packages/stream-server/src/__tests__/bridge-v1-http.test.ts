@@ -5,6 +5,7 @@ import {
   bridgeCommandResponseV1Schema,
   bridgeErrorResponseV1Schema,
   bridgeOperationalMetricsV1Schema,
+  bridgeNetworkProbeResponseV1Schema,
 } from "@streamer/shared";
 import { createStreamServerApp } from "../index.js";
 import {
@@ -65,6 +66,26 @@ describe("bridge v1 HTTP contract", () => {
 
     expect(response.status).toBe(200);
     expect(() => bridgeCapabilitiesV1Schema.parse(response.body)).not.toThrow();
+  });
+
+  it("exposes a bounded authenticated network probe response", async () => {
+    const response = await request(createStreamServerApp())
+      .post("/api/bridge/v1/network-probe")
+      .set("Authorization", "Bearer bridge-http-test-token")
+      .send({
+        requestId: "11111111-1111-4111-8111-111111111111",
+        profile: "torrent-playback",
+      });
+
+    expect(response.status).toBe(200);
+    expect(
+      bridgeNetworkProbeResponseV1Schema.parse(response.body),
+    ).toMatchObject({
+      protocolVersion: 1,
+      status: "unknown",
+      failureCode: "UNSUPPORTED",
+    });
+    expect(JSON.stringify(response.body)).not.toContain("magnet");
   });
 
   it("revokes renderer access with loopback master auth", async () => {

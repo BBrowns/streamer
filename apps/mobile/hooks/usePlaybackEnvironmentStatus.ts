@@ -16,6 +16,7 @@ import {
 } from "../services/streamEngine/StreamEngineManager";
 import {
   getBridgeReadinessSnapshot,
+  ensureTorrentNetworkReadiness,
   refreshBridgeReadiness,
   subscribeBridgeReadiness,
 } from "../services/streamEngine/bridgeReadinessRuntime";
@@ -81,7 +82,13 @@ export function usePlaybackEnvironmentStatus() {
     getBridgeReadinessSnapshot,
     getBridgeReadinessSnapshot,
   );
-  const { bridgeInfo, bridgeStatus, bridgeDiagnostics } = readiness;
+  const {
+    bridgeInfo,
+    bridgeStatus,
+    bridgeDiagnostics,
+    torrentNetworkProbe,
+    networkContext,
+  } = readiness;
   const [isRestarting, setIsRestarting] = useState(false);
   const [isCleaningCache, setIsCleaningCache] = useState(false);
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
@@ -118,6 +125,9 @@ export function usePlaybackEnvironmentStatus() {
     if (withProgress) setIsChecking(true);
     try {
       const refreshed = await refreshBridgeReadiness();
+      await ensureTorrentNetworkReadiness({ force: true }).catch(
+        () => undefined,
+      );
       const lanUrl = refreshed.bridgeInfo?.lanUrl;
       if (lanUrl && !streamInputDirty.current) {
         setStreamInputState((current) => current || lanUrl);
@@ -179,8 +189,18 @@ export function usePlaybackEnvironmentStatus() {
         effectiveDiagnostics.torrentCache,
         t,
       ),
+      torrentNetworkProbe,
+      networkContext,
     };
-  }, [bridgeDiagnostics, bridgeInfo, bridgeStatus, streamServerUrl, t]);
+  }, [
+    bridgeDiagnostics,
+    bridgeInfo,
+    bridgeStatus,
+    networkContext,
+    streamServerUrl,
+    t,
+    torrentNetworkProbe,
+  ]);
 
   const saveConnections = useCallback(async () => {
     setServerUrls(backendInput.trim() || null, streamInput.trim() || null);

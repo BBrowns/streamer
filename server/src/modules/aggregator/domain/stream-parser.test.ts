@@ -23,12 +23,26 @@ describe("StreamParser", () => {
       const streams = [
         { title: "Movie [S: 500 P: 10]", infoHash: "1" },
         { title: "Movie 120 seeders", infoHash: "2" },
+        { title: "Movie  👤 2081", infoHash: "3" },
+        { title: "Movie 👥 1,204", infoHash: "4" },
       ] as any[];
 
       const enriched = streams.map((s) => StreamParser.enrich(s));
 
       expect(enriched[0].seeders).toBe(500);
       expect(enriched[1].seeders).toBe(120);
+      expect(enriched[2].seeders).toBe(2081);
+      expect(enriched[3].seeders).toBe(1204);
+    });
+
+    it("does not replace an explicit seeder count with a title hint", () => {
+      const enriched = StreamParser.enrich({
+        title: "Movie 👤 2081",
+        infoHash: "1",
+        seeders: 7,
+      } as any);
+
+      expect(enriched.seeders).toBe(7);
     });
   });
 

@@ -284,6 +284,17 @@ export default function PlayerScreen() {
     initialPlaybackRuntimeViewState,
   );
   const visibleFallbackReason = fallbackReason || fallbackStatusMessage;
+  const hasTerminalPlaybackError = Boolean(
+    effectivePlaybackError || streamState === "error",
+  );
+  const playerChromeEnabled =
+    previewControls && currentStream
+      ? true
+      : Boolean(
+          currentStream &&
+          streamState !== "error" &&
+          activeSession?.status !== "failed",
+        );
   const controlsAutoHideAllowed = shouldAutoHidePlayerChrome({
     isPlaying,
     isScrubbing: runtimeViewState.kind === "scrubbing",
@@ -414,6 +425,13 @@ export default function PlayerScreen() {
     playbackSessionId,
     playbackCandidateId,
     playbackAttemptId,
+    playbackUri,
+    playbackSessionActive: Boolean(
+      activeSession &&
+      !["failed", "cancelled", "completed"].includes(activeSession.status),
+    ),
+    allowPreparedUriBinding:
+      streamState !== "error" && runtimeState !== "trying_fallback",
     resolveAttempt,
     setPlaybackUri,
     setStreamStatus,
@@ -635,10 +653,12 @@ export default function PlayerScreen() {
     setFallbackStatusMessage(null);
     seekableHandoffControllerRef.current?.abort();
     seekableHandoffControllerRef.current = null;
-    if (!currentStream && planningLaunchId && mediaInfo) {
-      cancelOwnedPlayback("User retried playback planning.", {
-        removeSession: true,
-      });
+    if (!currentStream && mediaInfo) {
+      if (planningLaunchId || playbackSessionId) {
+        cancelOwnedPlayback("User retried playback planning.", {
+          removeSession: true,
+        });
+      }
       const launchId = beginPlaybackLaunch({
         type: mediaInfo.type,
         id: mediaInfo.itemId,
@@ -743,6 +763,26 @@ export default function PlayerScreen() {
     (activeSourceRoute?.delivery === "hls" ||
       (!activeSourceRoute &&
         currentStream?.behaviorHints?.remuxStrategy === "hls"));
+
+  useEffect(() => {
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.surface_selected",
+      data: {
+        platform: Platform.OS,
+        hlsRequested: hlsPlaybackRequested,
+        routeDelivery: activeSourceRoute?.delivery,
+        hasPlaybackUri: Boolean(playbackUri),
+        hasCurrentStream: Boolean(currentStream),
+      },
+    });
+  }, [
+    activeSourceRoute?.delivery,
+    currentStream,
+    hlsPlaybackRequested,
+    playbackUri,
+  ]);
+
   const player = useVideoPlayer(
     hlsPlaybackRequested ? "" : playbackUri || "",
     (p) => {
@@ -1273,9 +1313,13 @@ export default function PlayerScreen() {
     );
     recordPlaybackDebugEvent({
       category: "playback",
-      message: "playback.progressive_source_ended_before_handoff",
+      message: "playback.source_ended_before_completion",
       level: "warning",
-      data: { hasSeekableHandoff: false },
+      data: {
+        isProgressiveRemux:
+          currentStream?.behaviorHints?.remuxStrategy === "progressive-fmp4",
+        hasSeekableHandoff: false,
+      },
     });
     void tryAdvanceToFallback(failure, fallbackMessage).then((advanced) => {
       if (advanced) return;
@@ -1283,7 +1327,14 @@ export default function PlayerScreen() {
       setPlaying(false);
       setRuntimeFailure(failure);
     });
-  }, [setBuffering, setPlaying, setRuntimeFailure, t, tryAdvanceToFallback]);
+  }, [
+    currentStream,
+    setBuffering,
+    setPlaying,
+    setRuntimeFailure,
+    t,
+    tryAdvanceToFallback,
+  ]);
 
   const {
     audioTracks,
@@ -2064,6 +2115,35 @@ export default function PlayerScreen() {
     );
   }
 
+  // A terminal session can clear the active stream before the route is
+  // closed. Keep the actionable error visible instead of replacing it with
+  // the generic "nothing is queued" state.
+  if (!currentStream && !activeCast && hasTerminalPlaybackError) {
+    return (
+      <View style={styles.errorContainer} testID="player-error-screen">
+        <StatusBar style="light" />
+        <PlayerStatusOverlay
+          streamState="error"
+          runtimeState={runtimeState}
+          streamMetrics={streamMetrics}
+          isBuffering={isBuffering}
+          errorMessage={errorMessage}
+          runtimeError={effectivePlaybackError}
+          fallbackReason={visibleFallbackReason}
+          session={activeSession}
+          onBack={handleClose}
+          onRetry={mediaInfo ? handleRetryPlayback : undefined}
+          onChooseSource={mediaInfo ? handleChooseSource : undefined}
+          onOpenSourcesDevices={
+            shouldOfferSourcesDevicesRecovery
+              ? handleOpenSourcesDevices
+              : undefined
+          }
+        />
+      </View>
+    );
+  }
+
   if (!currentStream && !activeCast) {
     return (
       <View style={styles.errorContainer}>
@@ -2213,24 +2293,27 @@ export default function PlayerScreen() {
             }
           />
 
-          {controlsVisible && !activeCast && currentStream && (
-            <PlayerOverlay
-              currentStream={currentStream}
-              engineType={engine?.getEngineType() ?? "Unknown"}
-              stats={stats}
-              onClose={handleClose}
-              onOpenSettings={() => {
-                setShowNextEpisodeOverlay(false);
-                setSettingsOpen(true);
-              }}
-              onWebCast={openCastModal}
-              onTogglePiP={handleTogglePiP}
-              isPiPSupported={isPiPSupported}
-              showInfoBar={false}
-              focusColor={cinematicTheme.focus}
-              onControlFocusChange={setControlsFocused}
-            />
-          )}
+          {controlsVisible &&
+            !activeCast &&
+            playerChromeEnabled &&
+            currentStream && (
+              <PlayerOverlay
+                currentStream={currentStream}
+                engineType={engine?.getEngineType() ?? "Unknown"}
+                stats={stats}
+                onClose={handleClose}
+                onOpenSettings={() => {
+                  setShowNextEpisodeOverlay(false);
+                  setSettingsOpen(true);
+                }}
+                onWebCast={openCastModal}
+                onTogglePiP={handleTogglePiP}
+                isPiPSupported={isPiPSupported}
+                showInfoBar={false}
+                focusColor={cinematicTheme.focus}
+                onControlFocusChange={setControlsFocused}
+              />
+            )}
 
           <PlayerControls
             player={controllerPlayer}
@@ -2239,7 +2322,8 @@ export default function PlayerScreen() {
             bufferedPosition={mediaSnapshot.bufferedPosition}
             isVisible={
               (controlsVisible || runtimeViewState.kind === "scrubbing") &&
-              !activeCast
+              !activeCast &&
+              playerChromeEnabled
             }
             isPlaying={isPlaying}
             capabilities={

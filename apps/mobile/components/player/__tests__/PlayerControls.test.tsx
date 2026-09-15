@@ -205,6 +205,12 @@ describe("PlayerControls", () => {
       );
       const volume = screen.getByTestId("player-volume-slider");
 
+      expect(volume.props.role).toBe("slider");
+      expect(volume.props.accessibilityRole).toBe("adjustable");
+      expect(volume.props["aria-valuemin"]).toBe(0);
+      expect(volume.props["aria-valuemax"]).toBe(100);
+      expect(volume.props["aria-valuenow"]).toBe(60);
+
       for (const key of [
         "ArrowLeft",
         "ArrowDown",

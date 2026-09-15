@@ -89,6 +89,51 @@ describe("shared bridge readiness", () => {
     expect(getBridgeReadinessSnapshot().refreshing).toBe(false);
   });
 
+  it("does not mark an authenticated bridge ready in an unpaired browser", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        torrentEngine: { available: true },
+        auth: { required: true, configured: true },
+      }),
+    } as Response);
+
+    await refreshBridgeReadiness();
+
+    expect(getBridgeReadinessSnapshot()).toMatchObject({
+      bridgeStatus: "available",
+      bridgeAvailable: false,
+    });
+    expect(buildActionBridgeHint()).toMatchObject({
+      auth: {
+        required: true,
+        bridgeConfigured: true,
+        clientConfigured: false,
+      },
+    });
+  });
+
+  it("marks a paired browser ready when bridge authentication is configured", async () => {
+    useAuthStore.setState({ streamServerToken: "paired-browser-token" });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        torrentEngine: { available: true },
+        auth: { required: true, configured: true },
+      }),
+    } as Response);
+
+    await refreshBridgeReadiness();
+
+    expect(getBridgeReadinessSnapshot()).toMatchObject({
+      bridgeStatus: "available",
+      bridgeAvailable: true,
+    });
+    expect(buildActionBridgeHint()).toMatchObject({
+      auth: { clientConfigured: true },
+    });
+  });
+
   it("shares initial/full detection and waits for both health and the effective Electron credential", async () => {
     const metadata = deferred<any>();
     window.desktopBridge = {

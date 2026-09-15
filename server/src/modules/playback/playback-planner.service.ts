@@ -563,12 +563,16 @@ export class PlaybackPlannerService {
     options: { signal?: AbortSignal } = {},
   ): Promise<PlaybackPlan> {
     const contentId = episodeAwareId(request);
+    const discoveryOptions =
+      request.action === "play"
+        ? { ...options, requireComplete: true as const }
+        : options;
     const discovery = await aggregatorService.getStreamDiscovery(
       userId,
       request.type,
       contentId,
       requestId,
-      options,
+      discoveryOptions,
     );
     const streams = discovery.streams;
 

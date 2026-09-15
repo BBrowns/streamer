@@ -224,7 +224,13 @@ export function inferPlaybackErrorCodeFromMessages(
 export function mapPlaybackPlanToRuntimeFailure(
   plan: PlaybackPlanResponse | null,
   fallback: string,
+  preflight?: ActionPreflightResult,
 ): PlaybackRuntimeFailure {
+  if (preflight && !preflight.ready) {
+    const error = runtimeErrorFromActionPreflight(preflight);
+    return { error, runtimeState: getPlaybackRuntimeState(error.code) };
+  }
+
   if (!plan) {
     const error = createPlaybackRuntimeError("UNKNOWN", fallback);
     return { error, runtimeState: getPlaybackRuntimeState(error.code) };

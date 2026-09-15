@@ -13,12 +13,20 @@ export const StreamParser = {
       else if (/480p/i.test(title)) stream.resolution = "480p";
     }
 
-    // Parse seeders if present in title (e.g. "S: 120 P: 5" or "120 seeders")
+    // Parse seeders if present in title. Providers use several labels for the
+    // same value, including the person icons used by Torrentio/Comet. Keep
+    // this as a title hint only: an explicit structured value remains
+    // authoritative.
     if (stream.seeders === undefined) {
       const seederMatch =
-        title.match(/S:\s*(\d+)/i) || title.match(/(\d+)\s*seeders/i);
+        title.match(/S:\s*([\d,]+)/i) ||
+        title.match(/([\d,]+)\s*seeders/i) ||
+        title.match(/[👤👥]\s*([\d,]+)/u);
       if (seederMatch) {
-        stream.seeders = parseInt(seederMatch[1], 10);
+        const parsed = Number.parseInt(seederMatch[1].replaceAll(",", ""), 10);
+        if (Number.isSafeInteger(parsed) && parsed >= 0) {
+          stream.seeders = parsed;
+        }
       }
     }
 

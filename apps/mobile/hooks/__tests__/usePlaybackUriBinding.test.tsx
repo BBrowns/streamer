@@ -41,6 +41,7 @@ function createOptions(overrides: Record<string, unknown> = {}) {
     playbackSessionId: null,
     playbackCandidateId: null,
     playbackAttemptId: null,
+    playbackUri: null,
     resolveAttempt: 0,
     setPlaybackUri: jest.fn(),
     setStreamStatus: jest.fn(),
@@ -110,6 +111,70 @@ describe("usePlaybackUriBinding", () => {
       "attempt-2",
       null,
     );
+  });
+
+  it("does not restore a prepared URI after its session became terminal", async () => {
+    const options = createOptions({
+      currentStream: { url: "cancelled-source", title: "Example" },
+      playbackSessionId: "session-1",
+      playbackCandidateId: "candidate-1",
+      playbackAttemptId: "attempt-1",
+      playbackUri: null,
+      playbackSessionActive: false,
+    });
+
+    await renderHook(() => usePlaybackUriBinding(options));
+
+    await waitFor(() => expect(options.setPlaybackUri).not.toHaveBeenCalled());
+    expect(mockedResolvePlaybackSession).not.toHaveBeenCalled();
+  });
+
+  it("does not restore the old URI while fallback owns the transition", async () => {
+    const options = createOptions({
+      currentStream: { url: "fallback-source", title: "Example" },
+      playbackSessionId: "session-1",
+      playbackCandidateId: "candidate-1",
+      playbackAttemptId: "attempt-1",
+      playbackUri: null,
+      allowPreparedUriBinding: false,
+    });
+
+    await renderHook(() => usePlaybackUriBinding(options));
+
+    await waitFor(() => expect(options.setPlaybackUri).not.toHaveBeenCalled());
+    expect(mockedResolvePlaybackSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps a prepared URI that already belongs to the fallback candidate", async () => {
+    const options = createOptions({
+      currentStream: { url: "fallback-source", title: "Example" },
+      playbackSessionId: "session-1",
+      playbackCandidateId: "candidate-1",
+      playbackAttemptId: "attempt-1",
+      playbackUri: "fallback-source",
+      allowPreparedUriBinding: false,
+    });
+
+    await renderHook(() => usePlaybackUriBinding(options));
+
+    await waitFor(() => expect(options.setPlaybackUri).not.toHaveBeenCalled());
+    expect(mockedResolvePlaybackSession).not.toHaveBeenCalled();
+  });
+
+  it("does not re-resolve a terminal session without a prepared URI", async () => {
+    const options = createOptions({
+      currentStream: { title: "Example torrent" },
+      playbackSessionId: "session-1",
+      playbackCandidateId: "candidate-1",
+      playbackAttemptId: null,
+      playbackUri: null,
+      playbackSessionActive: false,
+    });
+
+    await renderHook(() => usePlaybackUriBinding(options));
+
+    await waitFor(() => expect(options.setPlaybackUri).not.toHaveBeenCalled());
+    expect(mockedResolvePlaybackSession).not.toHaveBeenCalled();
   });
 
   it("delegates an unavailable legacy URI to fallback coordination", async () => {

@@ -298,6 +298,50 @@ describe("TorrentEngine", () => {
     expect(uri).toBe("");
   });
 
+  it("preserves tracker hints from the source magnet for local playback", async () => {
+    engine = new TorrentEngine({
+      activeStrategy: "local",
+      bridgeAvailable: true,
+      bridgeStatus: "available",
+      bridgeUrl: "http://bridge.test",
+    } as any);
+    const infoHash = "0123456789abcdef0123456789abcdef01234567";
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "preparing",
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "job-1",
+          state: "ready",
+          playbackUrl: "/api/gateway/jobs/job-1/stream",
+        }),
+      });
+
+    await expect(
+      engine.getPlaybackUri({
+        infoHash,
+        url: `magnet:?xt=urn:btih:${infoHash}&tr=${encodeURIComponent(
+          "https://tracker.example.test/announce",
+        )}`,
+      }),
+    ).resolves.toBe("http://bridge.test/api/gateway/jobs/job-1/stream");
+
+    const body = JSON.parse(
+      (global.fetch as jest.Mock).mock.calls[0]?.[1].body as string,
+    );
+    expect(body.magnet).toContain(
+      "tr=https%3A%2F%2Ftracker.example.test%2Fannounce",
+    );
+    expect(body.magnet).not.toContain("tracker.opentrackr.org");
+  });
+
   it("creates a gateway job for local bridge torrent playback", async () => {
     engine = new TorrentEngine({
       activeStrategy: "local",

@@ -112,6 +112,9 @@ export interface BridgeCapabilitiesV1 {
       available: boolean;
       controls: ["play", "pause", "resume", "seek", "stop"];
     };
+    diagnostics?: {
+      torrentNetworkProbe: boolean;
+    };
   };
   limits: {
     maxRequestBytes: number;
@@ -120,6 +123,43 @@ export interface BridgeCapabilitiesV1 {
     maxThumbnailBucket: number;
     maxThumbnailBytes: number;
   };
+}
+
+export type BridgeNetworkProbeStatus =
+  "passed" | "degraded" | "blocked" | "unknown";
+
+export type BridgeNetworkProbePhase =
+  | "bridge"
+  | "discovery"
+  | "peer"
+  | "wire"
+  | "metadata"
+  | "first_byte"
+  | "complete";
+
+export type BridgeNetworkProbeFailureCode =
+  | "BRIDGE_UNAVAILABLE"
+  | "TRACKER_UNREACHABLE"
+  | "NO_PEERS"
+  | "WIRE_TIMEOUT"
+  | "METADATA_UNAVAILABLE"
+  | "FIRST_BYTE_TIMEOUT"
+  | "UNSUPPORTED"
+  | "CANCELLED";
+
+export interface BridgeNetworkProbeRequestV1 {
+  requestId: string;
+  profile: "torrent-playback";
+}
+
+export interface BridgeNetworkProbeResponseV1 {
+  protocolVersion: 1;
+  probeId: string;
+  status: BridgeNetworkProbeStatus;
+  phase: BridgeNetworkProbePhase;
+  elapsedMs: number;
+  peerCount?: number;
+  failureCode?: BridgeNetworkProbeFailureCode;
 }
 
 export interface CreateBridgeJobV1 {

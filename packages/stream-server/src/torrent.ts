@@ -24,6 +24,7 @@ import {
   statfs,
 } from "fs/promises";
 import { tmpdir } from "os";
+import net from "net";
 import path from "path";
 import { Request, Response } from "express";
 import {
@@ -48,7 +49,10 @@ import {
   retainTorrentConsumer,
   withTorrentOperation,
 } from "./torrent-ownership.js";
-import { observeTorrentPeers } from "./torrent-observation.js";
+import {
+  observeTorrentMetadata,
+  observeTorrentPeers,
+} from "./torrent-observation.js";
 import {
   cleanupTorrentCache,
   getTorrentCacheDirForKey,
@@ -226,6 +230,28 @@ let spawnFfmpeg: FfmpegSpawner = nodeSpawn;
 function readPositiveIntegerEnv(name: string, fallback: number) {
   const parsed = Number.parseInt(process.env[name] || "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readBooleanEnv(name: string, fallback: boolean) {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (value === "1" || value === "true" || value === "yes" || value === "on") {
+    return true;
+  }
+  if (value === "0" || value === "false" || value === "no" || value === "off") {
+    return false;
+  }
+  return fallback;
+}
+
+export function webTorrentUtpEnabled(
+  platform: NodeJS.Platform = process.platform,
+) {
+  // WebTorrent retries failed UTP connections before it promotes a peer to
+  // TCP. On macOS that promotion can outlive the gateway's metadata window,
+  // leaving a source with discovered peers but no connected wires. Keep the
+  // reliable TCP path as the desktop default; UTP remains an explicit opt-in
+  // for environments where it is known to work.
+  return readBooleanEnv("STREAMER_WEBTORRENT_UTP", platform !== "darwin");
 }
 
 function getFfmpegBinaryPath() {
@@ -1302,6 +1328,10 @@ export async function createHlsRemuxSession(
     "-hide_banner",
     "-loglevel",
     "warning",
+    // HLS is a live rolling window. Pace the file-backed input so FFmpeg
+    // cannot publish the whole torrent faster than the player can consume it,
+    // which would delete the player's current segment from the window.
+    "-re",
     "-i",
     "pipe:0",
     "-map",
@@ -1317,6 +1347,12 @@ export async function createHlsRemuxSession(
     "copy",
     "-c:a",
     "aac",
+    // Chromium's MSE pipeline rejects some multi-channel AAC-in-fMP4
+    // variants even when the codec itself is supported. Keep the selected
+    // language/track, but publish a predictable stereo representation for
+    // browser/Electron HLS playback.
+    "-ac",
+    "2",
     "-movflags",
     "+frag_keyframe+empty_moov+default_base_moof",
     "-f",
@@ -1981,13 +2017,24 @@ async function initializeClient(): Promise<any> {
       const WebTorrent = (await importWebTorrent()).default;
       await cleanupTorrentCache();
       console.log("[stream-server] WebTorrent cache configured");
-      client = new WebTorrent({
+      const webTorrentOptions = {
         maxConns: MAX_CONNS,
-        utp: false, // Disable UTP to prevent "address not available" bind errors
+        // UTP remains an explicit opt-in on macOS because failed UTP peers
+        // are promoted to TCP only after the metadata window has elapsed.
+        utp: webTorrentUtpEnabled(),
         tracker: {
           announce: DEFAULT_TRACKERS,
         },
-      });
+      };
+      try {
+        client = new WebTorrent(webTorrentOptions);
+      } catch (error) {
+        if (webTorrentOptions.utp !== true) throw error;
+        console.warn(
+          "[stream-server] WebTorrent UTP unavailable; using TCP-only",
+        );
+        client = new WebTorrent({ ...webTorrentOptions, utp: false });
+      }
 
       client.on("error", () => {
         console.error("[stream-server] WebTorrent client error");
@@ -2174,15 +2221,117 @@ export function shouldRemuxTorrentFile(
   );
 }
 
-function enhanceMagnetWithTrackers(magnet: string) {
-  let enhancedMagnet = magnet;
-  for (const tr of DEFAULT_TRACKERS) {
-    const encodedTr = `&tr=${encodeURIComponent(tr)}`;
-    if (!enhancedMagnet.includes(encodedTr)) {
-      enhancedMagnet += encodedTr;
-    }
+const ALLOWED_TRACKER_PROTOCOLS = new Set([
+  "http:",
+  "https:",
+  "udp:",
+  "ws:",
+  "wss:",
+]);
+
+function isPrivateOrReservedTrackerHost(hostname: string) {
+  const host = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host === "metadata.google.internal"
+  ) {
+    return true;
   }
-  return enhancedMagnet;
+
+  const ipVersion = net.isIP(host);
+  if (ipVersion === 4) {
+    const parts = host.split(".").map(Number);
+    const [first, second] = parts;
+    return (
+      first === 0 ||
+      first === 10 ||
+      first === 127 ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      (first === 192 && second === 0) ||
+      (first === 198 && (second === 18 || second === 19)) ||
+      first >= 224
+    );
+  }
+
+  if (ipVersion === 6) {
+    return (
+      host === "::" ||
+      host === "::1" ||
+      host.startsWith("fc") ||
+      host.startsWith("fd") ||
+      host.startsWith("fe80:") ||
+      host.startsWith("ff")
+    );
+  }
+
+  return false;
+}
+
+function isSafeTrackerUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return (
+      ALLOWED_TRACKER_PROTOCOLS.has(parsed.protocol) &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.hostname.length > 0 &&
+      !isPrivateOrReservedTrackerHost(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keep only the runtime-relevant, validated parts of an incoming magnet.
+ * Provider display metadata is not needed by WebTorrent and may contain
+ * sensitive or unbounded values. Fallback trackers are owned here so clients
+ * do not need to duplicate this policy.
+ */
+export function normalizeTorrentMagnetForRuntime(magnet: string) {
+  const trimmed = magnet.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return trimmed;
+  }
+
+  const infoHash = parsed.searchParams
+    .getAll("xt")
+    .map((value) =>
+      value
+        .replace(/^urn:btih:/i, "")
+        .trim()
+        .toLowerCase(),
+    )
+    .find((value) => /^(?:[a-f0-9]{40}|[a-z2-7]{32})$/.test(value));
+  if (!infoHash) return trimmed;
+
+  const trackers = [
+    ...parsed.searchParams.getAll("tr").filter(isSafeTrackerUrl),
+    ...DEFAULT_TRACKERS.filter(isSafeTrackerUrl),
+  ];
+  const uniqueTrackers = [...new Set(trackers)];
+  // WebTorrent's magnet-uri parser intentionally decodes tracker/source
+  // parameters but reads `xt` verbatim. Encoding the urn here turns a valid
+  // hash-only magnet into an "Invalid torrent identifier" at client.add().
+  // Keep the validated info-hash in its protocol form and encode only the
+  // provider-controlled tracker values below.
+  const params = [`xt=urn:btih:${infoHash}`];
+  params.push(
+    ...uniqueTrackers.map((tracker) => `tr=${encodeURIComponent(tracker)}`),
+  );
+  return `magnet:?${params.join("&")}`;
 }
 
 export function attachTorrentLogging(torrent: any) {
@@ -2190,20 +2339,7 @@ export function attachTorrentLogging(torrent: any) {
   loggedTorrents.add(torrent);
 
   observeTorrentPeers(torrent);
-
-  const transientPatterns = [
-    "ENOTFOUND",
-    "fetch failed",
-    "Error connecting",
-    "timed out",
-    "ECONNREFUSED",
-  ];
-  torrent.on("warning", (msg: string) => {
-    const msgStr = String(msg);
-    const isTransient = transientPatterns.some((p) => msgStr.includes(p));
-    if (isTransient) return;
-    console.warn("[stream-server] Torrent warning");
-  });
+  observeTorrentMetadata(torrent);
   torrent.on("error", (error: unknown) => {
     rememberTorrentFailure(torrent, error);
     console.error("[stream-server] Torrent runtime error");
@@ -2211,13 +2347,17 @@ export function attachTorrentLogging(torrent: any) {
 }
 
 export async function prepareTorrent(magnet: string): Promise<any> {
-  return withTorrentOperation(magnet, () => prepareTorrentInternal(magnet));
+  const runtimeMagnet = normalizeTorrentMagnetForRuntime(magnet);
+  return withTorrentOperation(runtimeMagnet, () =>
+    prepareTorrentInternal(runtimeMagnet),
+  );
 }
 
 async function prepareTorrentInternal(magnet: string): Promise<any> {
   const torrentClient = await getClient();
+  const runtimeMagnet = normalizeTorrentMagnetForRuntime(magnet);
 
-  const existing = await torrentClient.get(magnet);
+  const existing = await torrentClient.get(runtimeMagnet);
   if (existing && !existing.destroyed) {
     assertTorrentUsable(existing);
     lastAccessMap.set(existing.infoHash, Date.now());
@@ -2235,9 +2375,8 @@ async function prepareTorrentInternal(magnet: string): Promise<any> {
 
   await pruneTorrents(torrentClient);
 
-  const enhancedMagnet = enhanceMagnetWithTrackers(magnet);
-  const cacheDir = await getTorrentCacheDirForKey(enhancedMagnet);
-  const torrent = torrentClient.add(enhancedMagnet, { path: cacheDir });
+  const cacheDir = await getTorrentCacheDirForKey(runtimeMagnet);
+  const torrent = torrentClient.add(runtimeMagnet, { path: cacheDir });
   attachTorrentLogging(torrent);
   registerTorrentCacheDir(torrent, cacheDir);
   if (torrent.infoHash) {

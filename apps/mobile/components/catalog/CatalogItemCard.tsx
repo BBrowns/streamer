@@ -62,6 +62,7 @@ function CatalogCardInner({
       mediaOverlay={
         <WatchProgressBar
           itemId={item.id}
+          type={item.type}
           progressColor={cinematicPalette.progressColor}
         />
       }

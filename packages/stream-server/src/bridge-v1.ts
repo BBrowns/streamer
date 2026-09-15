@@ -14,6 +14,8 @@ import {
   bridgeErrorResponseV1Schema,
   bridgeHelloV1Schema,
   bridgeJobMetricsV1Schema,
+  bridgeNetworkProbeRequestV1Schema,
+  bridgeNetworkProbeResponseV1Schema,
   bridgeOperationalMetricsV1Schema,
   bridgeTrackCatalogV1Schema,
   BRIDGE_V1_MAX_REQUEST_BYTES,
@@ -59,6 +61,10 @@ import { streamServerBuildMetadata } from "./build-metadata.js";
 import { MAX_SUBTITLE_DOCUMENT_BYTES } from "./subtitle-normalizer.js";
 import { MAX_SEEK_THUMBNAIL_BYTES } from "./seek-thumbnail.js";
 import { getTorrentMetricsSnapshot } from "./metrics.js";
+import {
+  isTorrentNetworkProbeConfigured,
+  runTorrentNetworkProbe,
+} from "./network-probe.js";
 import {
   controlBridgeCastDevice,
   getBridgeCastDevices,
@@ -273,6 +279,7 @@ const bridgeV1RateLimitHandler = (_req: unknown, res: Response) => {
 
 const bridgeV1RateLimitStore = new MemoryStore();
 const bridgeV1PairingRateLimitStore = new MemoryStore();
+const bridgeNetworkProbeRateLimitStore = new MemoryStore();
 
 const bridgeV1RateLimiter = rateLimit({
   windowMs: 60_000,
@@ -287,6 +294,15 @@ const bridgeV1PairingRateLimiter = rateLimit({
   windowMs: 60_000,
   limit: 20,
   store: bridgeV1PairingRateLimitStore,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  handler: bridgeV1RateLimitHandler,
+});
+
+const bridgeNetworkProbeRateLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  limit: 6,
+  store: bridgeNetworkProbeRateLimitStore,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: bridgeV1RateLimitHandler,
@@ -389,6 +405,10 @@ export async function buildBridgeCapabilitiesV1(
         available: true,
         controls: ["play", "pause", "resume", "seek", "stop"],
       },
+      diagnostics: {
+        torrentNetworkProbe:
+          torrent.available && isTorrentNetworkProbeConfigured(),
+      },
     },
     limits: {
       maxRequestBytes: BRIDGE_V1_MAX_REQUEST_BYTES,
@@ -450,6 +470,35 @@ bridgeV1Router.get(
         audioPreferences: requestedFeatures.includes(BRIDGE_AUDIO_FEATURE),
       }),
     );
+  },
+);
+
+bridgeV1Router.post(
+  "/network-probe",
+  bridgeNetworkProbeRateLimiter,
+  requireBridgeV1Scope("capabilities:read"),
+  async (req, res) => {
+    const parsed = bridgeNetworkProbeRequestV1Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendBridgeV1Error(
+        res,
+        400,
+        "INVALID_REQUEST",
+        "The network probe request is invalid.",
+      );
+    }
+
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    req.once("aborted", abort);
+    res.once("close", abort);
+    try {
+      const result = await runTorrentNetworkProbe(controller.signal);
+      return res.json(bridgeNetworkProbeResponseV1Schema.parse(result));
+    } finally {
+      req.off("aborted", abort);
+      res.off("close", abort);
+    }
   },
 );
 
@@ -1077,5 +1126,6 @@ export async function __resetBridgeV1RateLimitersForTests() {
   await Promise.all([
     bridgeV1RateLimitStore.resetAll(),
     bridgeV1PairingRateLimitStore.resetAll(),
+    bridgeNetworkProbeRateLimitStore.resetAll(),
   ]);
 }
