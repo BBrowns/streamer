@@ -16,6 +16,7 @@ import type {
 import { mapPlaybackMessageToRuntimeFailure } from "../services/playback/PlaybackErrors";
 import {
   PlaybackProgressClock,
+  parseRuntimeSeconds,
   resolveProgressDuration,
 } from "../services/playback/PlaybackProgressClock";
 import { beginPlaybackLaunch } from "../services/playback/PlaybackLaunchService";
@@ -527,6 +528,7 @@ export function usePlayerController({
           hasSeekableHandoff,
           currentTime: player.currentTime,
           duration: player.duration,
+          expectedDuration: parseRuntimeSeconds(meta?.runtime),
         })
       ) {
         onPrematureEnd?.();
@@ -584,6 +586,7 @@ export function usePlayerController({
     showNextEpisodeOverlay,
     effectiveIsProgressiveRemux,
     hasSeekableHandoff,
+    meta?.runtime,
   ]);
 
   // 5. Sync Event Handlers

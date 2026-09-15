@@ -715,12 +715,16 @@ export class PlaybackPlannerV3Service {
     requestId: string,
     options: { signal?: AbortSignal } = {},
   ): Promise<PlaybackPlanV3> {
+    const discoveryOptions =
+      request.action === "play"
+        ? { ...options, requireComplete: true as const }
+        : options;
     const discovery = await aggregatorService.getStreamDiscovery(
       userId,
       request.type,
       episodeAwareId(request),
       requestId,
-      options,
+      discoveryOptions,
     );
     const candidates = dedupeCandidates(
       discovery.streams.map((stream) =>

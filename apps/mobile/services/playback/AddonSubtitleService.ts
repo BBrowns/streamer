@@ -23,7 +23,7 @@ export async function getAddonSubtitles(
 ): Promise<SubtitleTrack[]> {
   const contentId = contentIdForMedia(media);
   const { data } = await api.get(
-    `/api/aggregator/subtitles/${encodeURIComponent(
+    `/api/subtitles/${encodeURIComponent(
       media.type,
     )}/${encodeURIComponent(contentId)}`,
     { signal },
@@ -53,9 +53,7 @@ export async function loadAddonSubtitleDocument(
     throw new Error("Add-on subtitle identity is unavailable");
   }
   const { data } = await api.get(
-    `/api/aggregator/subtitles/document/${encodeURIComponent(
-      track.fetchIdentity,
-    )}`,
+    `/api/subtitles/document/${encodeURIComponent(track.fetchIdentity)}`,
     {
       signal,
       responseType: "text",

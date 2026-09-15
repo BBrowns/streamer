@@ -46,6 +46,9 @@ jest.mock("expo-crypto", () => ({
 }));
 jest.mock("../../streamEngine/bridgeReadinessRuntime", () => ({
   ensureBridgeReadiness: jest.fn().mockResolvedValue({ bridgeAvailable: true }),
+  ensureTorrentNetworkReadiness: jest.fn().mockResolvedValue({
+    torrentNetworkProbe: { status: "unknown" },
+  }),
 }));
 
 jest.mock("../../streamEngine/StreamEngineManager", () => ({
@@ -304,6 +307,31 @@ describe("PlaybackSessionPlaybackService", () => {
       expect(resolveEngine).not.toHaveBeenCalled();
     },
   );
+
+  it("reuses a ready source lease when a second observer resolves the session", async () => {
+    const stream = {
+      url: "https://cdn.example.test/movie.mp4",
+      title: "Direct",
+    } as Stream;
+    const engine = makeEngine(async () => stream.url!);
+    resolveEngine.mockReturnValue(engine);
+    const session = createSession(stream);
+
+    const first = await resolvePlaybackSession(session.id);
+    const second = await resolvePlaybackSession(session.id);
+
+    expect(first).toMatchObject({ ok: true, uri: stream.url });
+    expect(second).toMatchObject({
+      ok: true,
+      uri: stream.url,
+      candidateId: first.ok ? first.candidateId : undefined,
+      attemptId: first.ok ? first.attemptId : undefined,
+    });
+    expect(engine.getPlaybackUri).toHaveBeenCalledTimes(1);
+    expect(
+      usePlaybackSessionStore.getState().sessions[session.id].attempts,
+    ).toHaveLength(1);
+  });
 
   it("adopts one Planner v3 bridge job as the session-owned playback runtime", async () => {
     const readyJob: BridgeJobResponseV1 = {

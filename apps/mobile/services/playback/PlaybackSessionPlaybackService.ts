@@ -11,7 +11,10 @@ import type {
 } from "@streamer/shared";
 import { usePlaybackSessionStore } from "../../stores/playbackSessionStore";
 import { usePlayerStore } from "../../stores/playerStore";
-import { ensureBridgeReadiness } from "../streamEngine/bridgeReadinessRuntime";
+import {
+  ensureBridgeReadiness,
+  ensureTorrentNetworkReadiness,
+} from "../streamEngine/bridgeReadinessRuntime";
 import {
   getDownloadEligibility,
   type DownloadEligibility,
@@ -141,6 +144,68 @@ export function getActivePlaybackSourceRuntime(
   };
 }
 
+/**
+ * Reuses the lease that already won the current attempt.
+ *
+ * The player route has two legitimate observers of a launch: the launch
+ * binding joins the resolver to publish the attempt id, while the URI binding
+ * resolves the opaque media location for the surface. Once the first resolver
+ * has completed, the single-flight promise is gone. Without this guard a
+ * second observer would treat the ready candidate as unattempted, cancel its
+ * live HLS job and start the next candidate. The browser then receives a 410
+ * for a URL that had just been reported ready.
+ */
+function getActiveSourceResolution(
+  sessionId: string,
+  action: SessionResolutionAction,
+  startCandidateId?: string,
+): PlaybackSessionInternalResolutionSuccess | null {
+  const source = activeSourceBySession.get(sessionId);
+  const session = getSession(sessionId);
+  if (
+    !source ||
+    source.released ||
+    !session ||
+    isTerminal(session) ||
+    session.action !== action
+  ) {
+    return null;
+  }
+
+  const attempt = session.attempts.find(
+    (item) => item.id === source.attemptId && item.status === "ready",
+  );
+  if (
+    !attempt ||
+    session.selectedCandidateId !== attempt.candidateId ||
+    (startCandidateId && startCandidateId !== attempt.candidateId)
+  ) {
+    return null;
+  }
+
+  let eligibility: DownloadEligibility | undefined;
+  if (action === "download") {
+    try {
+      eligibility = requireOfflineDownloadEligibility(source.stream);
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    ok: true,
+    sessionId,
+    candidateId: attempt.candidateId,
+    attemptId: attempt.id,
+    stream: source.stream,
+    uri: source.uri,
+    route: source.route,
+    bridgeJobId: source.bridgeJobId,
+    runtime: source.runtime,
+    ...(eligibility ? { eligibility } : {}),
+  };
+}
+
 export interface PlaybackSessionResolutionSuccess {
   ok: true;
   sessionId: string;
@@ -183,6 +248,15 @@ class PlaybackResolutionTimeoutError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PlaybackResolutionTimeoutError";
+  }
+}
+
+class TorrentNetworkBlockedError extends Error {
+  constructor() {
+    super(
+      "This network may restrict torrent playback. Try another network or another source.",
+    );
+    this.name = "TorrentNetworkBlockedError";
   }
 }
 
@@ -422,6 +496,14 @@ function toSafeRuntimeError(
     return runtimeErrorFromActionPreflight(error.preflight, fallbackAvailable);
   }
 
+  if (error instanceof TorrentNetworkBlockedError) {
+    return createPlaybackRuntimeError("NETWORK_OFFLINE", error.message, {
+      retryable: true,
+      shouldFallback: fallbackAvailable,
+      debugMessage: "torrent-network-probe:blocked",
+    });
+  }
+
   if (error instanceof DownloadEligibilityError) {
     const code =
       error.eligibility.mode === "bridge-torrent"
@@ -597,6 +679,13 @@ function createAllCandidatesFailedError(
   const errors = failedAttempts
     .map((attempt) => attempt.error)
     .filter((error): error is NonNullable<typeof error> => Boolean(error));
+  const allTorrentNetworkBlocked =
+    errors.length > 0 &&
+    errors.every(
+      (error) =>
+        error.code === "NETWORK_OFFLINE" &&
+        /network may restrict torrent playback/i.test(error.message),
+    );
   const allNoPeers =
     errors.length > 0 && errors.every((error) => error.code === "NO_PEERS");
   const allMetadataStalled =
@@ -622,6 +711,19 @@ function createAllCandidatesFailedError(
         download:
           "None of the selected sources had peers available for download.",
         cast: "None of the selected sources had peers available for casting.",
+      }),
+      { retryable: true, shouldFallback: false, debugMessage },
+    );
+  }
+
+  if (allTorrentNetworkBlocked) {
+    return createPlaybackRuntimeError(
+      "NETWORK_OFFLINE",
+      getActionMessage(action, {
+        play: "This network may restrict torrent playback. Try another network or choose another source.",
+        download:
+          "This network may restrict torrent downloads. Try another network or another source.",
+        cast: "This network may restrict torrent casting. Try another network or another source.",
       }),
       { retryable: true, shouldFallback: false, debugMessage },
     );
@@ -1086,6 +1188,14 @@ async function attemptCandidate(
     if (candidate.requiresBridge || candidate.kind === "torrent") {
       await ensureBridgeReadiness({ signal: preparationController.signal });
     }
+    if (action === "play" && candidate.kind === "torrent") {
+      const networkProbe = await ensureTorrentNetworkReadiness({
+        signal: preparationController.signal,
+      });
+      if (networkProbe.torrentNetworkProbe.status === "blocked") {
+        throw new TorrentNetworkBlockedError();
+      }
+    }
     const actionDeviceProfile =
       action === "cast" ? getDeviceProfile() : session.deviceProfile;
     const preflight = preflightStreamAction(action, stream, {
@@ -1389,6 +1499,14 @@ async function resolveCandidateChain(
   if (isTerminal(session)) {
     return { ok: false, sessionId, error: runtimeErrorFromSession(session) };
   }
+
+  const activeSourceResolution = getActiveSourceResolution(
+    sessionId,
+    action,
+    startCandidateId,
+  );
+  if (activeSourceResolution) return activeSourceResolution;
+
   if (!store.hasRuntimeCandidates(sessionId)) {
     const error = createPlaybackRuntimeError(
       "SOURCE_UNAVAILABLE",

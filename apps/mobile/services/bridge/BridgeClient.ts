@@ -10,6 +10,7 @@ import {
   bridgeCreateJobV1Schema,
   bridgeJobMetricsV1Schema,
   bridgeJobResponseV1Schema,
+  bridgeNetworkProbeResponseV1Schema,
   bridgeOperationalMetricsV1Schema,
   bridgeTrackCatalogV1Schema,
   type BridgeCapabilitiesV1,
@@ -21,6 +22,7 @@ import {
   type BridgeHelloV1,
   type BridgeJobMetricsV1,
   type BridgeJobResponseV1,
+  type BridgeNetworkProbeResponseV1,
   type BridgeOperationalCounterName,
   type BridgeOperationalMetricsV1,
   type BridgeTrackCatalogV1,
@@ -40,6 +42,37 @@ export const BRIDGE_HLS_FEATURE = "hls-segments";
 export const BRIDGE_AUDIO_FEATURE = "audio-preferences";
 export const BRIDGE_V1_CLIENT_MAX_SUBTITLE_BYTES = 8 * 1024 * 1024;
 export const BRIDGE_V1_CLIENT_MAX_THUMBNAIL_BYTES = 512 * 1024;
+
+let fallbackRequestIdCounter = 0;
+
+function createOpaqueRequestId(): string {
+  const cryptoApi = globalThis.crypto as
+    | {
+        randomUUID?: () => string;
+        getRandomValues?: (array: Uint8Array) => Uint8Array;
+      }
+    | undefined;
+
+  if (typeof cryptoApi?.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  if (typeof cryptoApi?.getRandomValues === "function") {
+    cryptoApi.getRandomValues(bytes);
+  } else {
+    const now = Date.now();
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = (now + index + fallbackRequestIdCounter) & 0xff;
+    }
+    fallbackRequestIdCounter += 1;
+  }
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+}
 
 export type BridgeProtocolSelection =
   { kind: "v1"; hello: BridgeHelloV1 } | { kind: "legacy" };
@@ -341,6 +374,25 @@ export class BridgeClient {
         },
         signal,
       },
+    );
+  }
+
+  async probeTorrentNetwork(
+    signal?: AbortSignal,
+  ): Promise<BridgeNetworkProbeResponseV1> {
+    return this.requestJson(
+      "/api/bridge/v1/network-probe",
+      bridgeNetworkProbeResponseV1Schema,
+      {
+        method: "POST",
+        headers: this.jsonHeaders(),
+        body: JSON.stringify({
+          requestId: createOpaqueRequestId(),
+          profile: "torrent-playback",
+        }),
+        signal,
+      },
+      { retryOnAuth: true },
     );
   }
 

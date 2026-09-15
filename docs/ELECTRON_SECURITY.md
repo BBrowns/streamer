@@ -50,6 +50,12 @@ passing the external URL allowlist; currently this allows `https://` URLs only.
 WebViews are blocked. If WebViews are ever needed, add an explicit design and
 test plan before enabling them.
 
+The optional torrent network capability probe uses the existing authenticated
+bridge HTTP boundary and `capabilities:read` scope. It does not add an Electron
+IPC channel or expose bridge URLs, torrent identifiers, peer addresses, or
+probe source configuration to the renderer. A missing probe capability is a
+supported legacy-bridge state and must remain non-blocking for playback.
+
 ## Local Files
 
 Offline media uses the `streamer://` protocol and

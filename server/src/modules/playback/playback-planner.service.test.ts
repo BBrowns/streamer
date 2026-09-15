@@ -114,6 +114,38 @@ describe("PlaybackPlannerService", () => {
     expect(playbackPlanSchema.safeParse(plan).success).toBe(true);
   });
 
+  it("waits for complete provider discovery for Play plans", async () => {
+    vi.mocked(aggregatorService.getStreamDiscovery).mockResolvedValueOnce({
+      streams: [
+        {
+          url: "https://cdn.example.test/complete.1080p.h264.mp4",
+          title: "Complete source",
+          resolution: "1080p",
+        },
+      ],
+      status: "complete",
+    });
+
+    await service.createPlan(
+      "user-1",
+      {
+        type: "movie",
+        id: "tt1",
+        action: "play",
+        deviceProfile: webProfile,
+      },
+      "req-complete-discovery",
+    );
+
+    expect(aggregatorService.getStreamDiscovery).toHaveBeenCalledWith(
+      "user-1",
+      "movie",
+      "tt1",
+      "req-complete-discovery",
+      { requireComplete: true },
+    );
+  });
+
   it("keeps a partial discovery result explicit without exposing provider details", async () => {
     vi.mocked(aggregatorService.getStreamDiscovery).mockResolvedValue({
       status: "partial",

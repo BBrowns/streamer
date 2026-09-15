@@ -220,6 +220,26 @@ separately. Background polling pauses when the app is inactive. Auth, endpoint,
 or credential changes invalidate the snapshot and abort obsolete probes. Cancelling
 one action only detaches its readiness waiter, not other consumers' shared work.
 
+Torrent transport readiness is a separate, runtime-only diagnostic owned by
+`bridgeReadinessRuntime`. When the bridge advertises the optional
+`diagnostics.torrentNetworkProbe` capability, the owner can call the
+authenticated `POST /api/bridge/v1/network-probe` endpoint for the selected
+execution target. The probe uses server-owned synthetic torrent configuration
+and checks discovery, peer/wire traffic, metadata, and a bounded first-byte
+read. It never sends a magnet, hash, tracker URL, peer address, or media URL to
+the renderer. Concurrent checks share one in-flight probe and short-lived
+results are scoped to that bridge runtime.
+
+The probe status is `unknown`, `checking`, `passed`, `degraded`, or `blocked`.
+Missing capability or missing server probe configuration is `unknown` and does
+not block playback. One failed probe is `degraded`; two matching failures in
+the same bridge runtime may become `blocked`. A blocked torrent route is a
+scoped playback hint: direct, HLS, debrid, and other eligible routes remain
+available, while a torrent-only flow shows an explicit recovery action. Network
+type and browser online state are display-only hints, never proof of torrent
+reachability. No firewall, NAT, VPN, or private-network workaround is inferred
+or added by this diagnostic.
+
 `apps/mobile/services/actionRecovery.ts` maps those typed preflight/runtime
 failures into one user-facing next action. Download tasks persist only a small
 failure reason and can offer resume, fresh replan, file verification, storage
@@ -338,6 +358,15 @@ header and subsequent media fragments. That live response intentionally has no
 arbitrary byte-range or seek support. Its initial `media` metadata reports
 `seekable: false`, `cacheStatus: "streaming"`, and
 `seekableCache.status: "not_started"`.
+
+Torrent runtime preparation preserves validated tracker hints from the source
+magnet while discarding provider display metadata. The stream-server appends
+its own safe public tracker set and rejects tracker URLs that target private,
+loopback, link-local, or metadata-service addresses. Node-side WebTorrent uses
+UTP by default for peer reachability; set `STREAMER_WEBTORRENT_UTP=false` only
+as a scoped rollback when a target runtime cannot initialize UTP. A failed UTP
+initialization falls back to TCP-only for that process and remains visible as a
+safe runtime diagnostic.
 
 Only after the first real signed `GET` consumer has attached does the gateway
 start one process-local background `+faststart` cache materialization for that

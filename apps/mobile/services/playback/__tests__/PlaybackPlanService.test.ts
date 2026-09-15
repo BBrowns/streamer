@@ -2,6 +2,7 @@ import { api } from "../../api";
 import { streamEngineManager } from "../../streamEngine/StreamEngineManager";
 import { getBridgeClient } from "../../bridge/BridgeClient";
 import { usePlayerStore } from "../../../stores/playerStore";
+import { useAuthStore } from "../../../stores/authStore";
 import {
   makePlaybackPlan,
   makePlannedMediaCandidate,
@@ -72,6 +73,12 @@ describe("PlaybackPlanService", () => {
   beforeEach(() => {
     resetPlaybackPlanCacheForTests();
     jest.clearAllMocks();
+    useAuthStore.setState({
+      isAuthenticated: true,
+      isHydrated: true,
+      credentialsHydrated: true,
+      streamServerToken: null,
+    });
     (streamEngineManager as any).bridgeAvailable = false;
     (streamEngineManager as any).bridgeStatus = "available";
     (
@@ -237,6 +244,32 @@ describe("PlaybackPlanService", () => {
     expect((api.post as jest.Mock).mock.calls[0][1]).not.toHaveProperty(
       "bridge",
     );
+  });
+
+  it("does not probe bridge capabilities before browser pairing", async () => {
+    useAuthStore.setState({ streamServerToken: null });
+    (
+      streamEngineManager.getBridgeDiagnostics as jest.MockedFunction<
+        typeof streamEngineManager.getBridgeDiagnostics
+      >
+    ).mockReturnValue({
+      status: "available",
+      url: "http://192.168.1.25:11470",
+      auth: { required: true, configured: true },
+    });
+    (api.post as jest.Mock).mockResolvedValueOnce({
+      data: makePlaybackPlan({
+        state: "needsBridge",
+        userMessage: "Pair the browser with the desktop bridge.",
+      }),
+    });
+
+    await createPlaybackPlan({ type: "movie", id: "tt-auth", action: "play" });
+
+    expect(getBridgeClient).not.toHaveBeenCalled();
+    expect((api.post as jest.Mock).mock.calls[0][1].executionNodes).toEqual([
+      expect.objectContaining({ executionTarget: "on-device" }),
+    ]);
   });
 
   it("includes the local audio language preference when requesting a playback plan", async () => {
@@ -425,6 +458,30 @@ describe("PlaybackPlanService", () => {
     ]);
 
     expect(streamEngineManager.detectBridge).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses a complete prefetched plan for Play Best", async () => {
+    const plan = makePlaybackPlan({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: makePlannedMediaCandidate(),
+        fallbackCandidates: [],
+      },
+    });
+    (api.post as jest.Mock).mockResolvedValue({ data: plan });
+    const input = {
+      type: "movie" as const,
+      id: "tt-prefetched-complete",
+      action: "play" as const,
+    };
+
+    await expect(prefetchPlaybackPlan(input)).resolves.toEqual(plan);
+    await expect(getPlaybackPlanAfterPartialDiscovery(input)).resolves.toEqual(
+      plan,
+    );
+
+    expect(api.post).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a confirmed bridge ready while a direct plan is requested", async () => {

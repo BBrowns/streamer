@@ -42,6 +42,28 @@ tests alone.
 | Android physical device    | Unknown        | No run recorded yet.                                                                                                                                                                                                                                                                                             |
 | Browser web                | Partial        | Deterministic responsive renderer and recovery flows passed. Reviewed Darwin and Linux Home/Settings/Search baselines now pass in CI; no real-source first-frame claim. See the [July 15 run](./qa-runs/2026-07-15-adaptive-correctness.md) and [July 18 visual run](./qa-runs/2026-07-18-visual-regression.md). |
 
+## Torrent Network Capability Probe
+
+The network type shown by the app is a hint only. A target-specific result is
+valid only when the selected bridge runs the authenticated synthetic probe and
+records discovery, peer/wire, metadata, and first-byte phases. The probe is
+scoped to that bridge runtime; it does not establish that every torrent source
+or every network path will work.
+
+Record home and work/guest-network runs separately, without SSIDs, IP
+addresses, peer addresses, magnets, hashes, URLs, or credentials. At minimum,
+record the network hint category, whether the bridge advertised the probe,
+the final probe status/failure category, the furthest phase reached, and the
+actual playback route selected. Do not mark a network blocked because one
+source lacks peers or metadata.
+
+| Scenario                                         | Required result                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Home network with configured probe fixture       | Probe reaches metadata and first byte, then playback outcome is recorded                    |
+| Work/guest network with configured probe fixture | Any transport restriction is shown as `degraded`/`blocked` without exposing network details |
+| Old bridge or missing probe configuration        | Result is `unknown`; existing playback remains available                                    |
+| One failing torrent source with a healthy probe  | Source failure remains source-scoped; the network is not marked blocked                     |
+
 ## Reference Fixtures
 
 | ID  | Source shape                 | Purpose                | Required observations                                                  |

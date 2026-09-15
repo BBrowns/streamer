@@ -14,7 +14,7 @@ function ciPlan(files) {
 }
 
 test("workflow policy changes receive focused local checks while CI stays fail-closed", () => {
-  const files = [".github/workflows/ci.yml"];
+  const files = [".github/workflows/ci.yml", ".github/required-checks.json"];
   const local = buildVerificationPlan(files);
   const ci = ciPlan(files);
 

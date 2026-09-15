@@ -297,11 +297,16 @@ async function preparePlaybackPlanV3Request(
   signal?: AbortSignal,
 ): Promise<PlaybackPlanV3Request | null> {
   const bridge = payload.bridge;
+  const bridgeAuthMissing =
+    bridge?.auth?.required === true &&
+    (bridge.auth.bridgeConfigured !== true ||
+      bridge.auth.clientConfigured !== true);
   let bridgeProtocolVersion: 1 | undefined;
   let bridgeDeliveries: BridgeDelivery[] | undefined;
   let bridgeCastAvailable = false;
 
   if (
+    !bridgeAuthMissing &&
     bridge?.url &&
     bridge.configured === true &&
     bridge.endpoint?.deviceReachable === true &&
@@ -361,6 +366,13 @@ async function preparePlaybackPlanV3Request(
       // and therefore fails closed for bridge-only candidates.
       if (!(error instanceof BridgeClientError)) throw error;
     }
+  } else if (bridgeAuthMissing) {
+    recordPlaybackDebugEvent({
+      category: "gateway",
+      message: "bridge.capability_probe_skipped",
+      level: "warning",
+      data: { errorCode: "AUTH_REQUIRED" },
+    });
   }
 
   const { bridge: _legacyBridge, ...request } = payload;
@@ -618,10 +630,10 @@ export async function getPlaybackPlanAfterPartialDiscovery(
   input: PlaybackPlanInput,
   options: PlaybackPlanRequestOptions = {},
 ): Promise<PlaybackPlanResponse> {
-  let plan = await getPlaybackPlanWithBridgeRetry(input, {
-    ...options,
-    forceRefresh: true,
-  });
+  // Reuse a complete plan warmed by Detail. Only bypass the cache when the
+  // plan we actually received is partial; this prevents Play Best from
+  // issuing a duplicate planner request for an already complete prefetch.
+  let plan = await getPlaybackPlanWithBridgeRetry(input, options);
   if (plan.sourceDiscovery?.status !== "partial") return plan;
 
   for (const delayMs of PARTIAL_DISCOVERY_RETRY_DELAYS_MS) {

@@ -1,43 +1,48 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../services/api";
-import { useAuthStore } from "../../stores/authStore";
 import type { WatchProgress } from "@streamer/shared";
 import { useTheme } from "../../hooks/useTheme";
+import { useContinueWatching } from "../../hooks/useContinueWatching";
+
+export function selectCatalogProgress(
+  items: WatchProgress[] | undefined,
+  itemId: string,
+  type: WatchProgress["type"],
+): WatchProgress | null {
+  return (
+    items
+      ?.filter((item) => item.itemId === itemId && item.type === type)
+      .reduce<WatchProgress | null>((latest, item) => {
+        if (!latest) return item;
+        const latestTime = Date.parse(latest.lastWatched) || 0;
+        const itemTime = Date.parse(item.lastWatched) || 0;
+        return itemTime > latestTime ? item : latest;
+      }, null) ?? null
+  );
+}
 
 /**
- * Fetches watch progress for a specific item and renders a thin progress bar
- * overlaid at the bottom of a card when progress is between 3% and 95%.
+ * Reads the shared continue-watching cache for an item and renders a thin
+ * progress bar overlaid at the bottom of a card when progress is between 3%
+ * and 95%.
  */
 export function WatchProgressBar({
   itemId,
+  type,
   progressColor,
   style,
 }: {
   itemId: string;
+  type: WatchProgress["type"];
   progressColor?: string;
   style?: object;
 }) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { colors } = useTheme();
-
-  const { data } = useQuery<WatchProgress | null>({
-    queryKey: ["progress", "item", itemId],
-    queryFn: async () => {
-      try {
-        const { data } = await api.get<WatchProgress>(
-          `/api/library/progress/${itemId}`,
-        );
-        return data;
-      } catch {
-        return null;
-      }
-    },
-    enabled: isAuthenticated && !!itemId,
-    staleTime: 60 * 1000,
-    retry: false, // Prevents N+1 exponential retry bursts when progress is expectedly missing (404)
-  });
+  const { data: continueWatching } = useContinueWatching();
+  const data = React.useMemo(
+    () => selectCatalogProgress(continueWatching, itemId, type),
+    [continueWatching, itemId, type],
+  );
 
   const progress =
     data && data.duration > 0 ? data.currentTime / data.duration : 0;

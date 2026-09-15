@@ -28,6 +28,7 @@ import {
   getPlaybackRuntimeState,
   mapPlaybackPlanToRuntimeFailure,
 } from "./PlaybackErrors";
+import { preflightBridgeAction } from "../actionPreflight";
 import { addMobileBreadcrumb } from "../sentryBreadcrumbs";
 import { recordPlaybackDebugEvent } from "./playbackDebug";
 import {
@@ -72,6 +73,28 @@ export type PlaybackOrchestratorResult =
   PlaybackOrchestratorSuccess | PlaybackOrchestratorFailure;
 
 const downloadPreparationRegistry = new DownloadOperationRegistry();
+
+function planPreflight(
+  action: "play" | "download" | "cast",
+  plan: PlaybackPlanResponse,
+  bridgeDiagnostics: ReturnType<
+    typeof streamEngineManager.getBridgeDiagnostics
+  >,
+) {
+  if (plan.state !== "needsBridge" && plan.state !== "bridgeUnavailable") {
+    return undefined;
+  }
+
+  const preflight = preflightBridgeAction(action, {
+    diagnostics: bridgeDiagnostics,
+    sourceKind: "torrent",
+  });
+
+  // Only replace the planner's terminal classification when we have the
+  // specific browser-pairing signal. Unsupported runtimes and other bridge
+  // failures retain the planner's existing, more precise mapping.
+  return preflight.reason === "bridge_auth_required" ? preflight : undefined;
+}
 
 export interface DownloadOrchestratorSuccess {
   ok: true;
@@ -119,7 +142,11 @@ export interface PlayBestOptions {
   signal?: AbortSignal;
   /** Bypass a partial/cached plan after every candidate in it has failed. */
   forceRefresh?: boolean;
-  /** Wait briefly for the server's in-flight partial discovery to complete. */
+  /**
+   * Wait briefly for the server's in-flight partial discovery to complete.
+   * Play Best defaults to complete discovery so a late direct/HLS provider
+   * can be ranked before a torrent-only partial result is selected.
+   */
   awaitCompleteDiscovery?: boolean;
 }
 
@@ -139,11 +166,12 @@ export async function playBest(
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.forceRefresh ? { forceRefresh: true } : {}),
   };
-  const plan = options.awaitCompleteDiscovery
-    ? await getPlaybackPlanAfterPartialDiscovery(planInput, planOptions)
-    : Object.keys(planOptions).length > 0
-      ? await createPlaybackPlanWithBridgeRetry(planInput, planOptions)
-      : await createPlaybackPlanWithBridgeRetry(planInput);
+  const plan =
+    options.awaitCompleteDiscovery !== false
+      ? await getPlaybackPlanAfterPartialDiscovery(planInput, planOptions)
+      : Object.keys(planOptions).length > 0
+        ? await createPlaybackPlanWithBridgeRetry(planInput, planOptions)
+        : await createPlaybackPlanWithBridgeRetry(planInput);
   const bridgeDiagnostics = streamEngineManager.getBridgeDiagnostics();
   const session = usePlaybackSessionStore.getState().createSession({
     plan,
@@ -162,7 +190,11 @@ export async function playBest(
   recordSessionStarted("play", input, session.id, plan, bridgeDiagnostics);
 
   if (plan.state !== "ready" || !plan.selectedCandidate) {
-    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
+    const failure = mapPlaybackPlanToRuntimeFailure(
+      plan,
+      fallback,
+      planPreflight("play", plan, bridgeDiagnostics),
+    );
     usePlaybackSessionStore.getState().failSession(session.id, failure.error);
     return {
       ok: false,
@@ -333,7 +365,11 @@ async function prepareDownloadOnce(
   recordSessionStarted("download", input, session.id, plan, bridgeDiagnostics);
 
   if (plan.state !== "ready" || !plan.selectedCandidate) {
-    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
+    const failure = mapPlaybackPlanToRuntimeFailure(
+      plan,
+      fallback,
+      planPreflight("download", plan, bridgeDiagnostics),
+    );
     usePlaybackSessionStore.getState().failSession(session.id, failure.error);
     return {
       ok: false,
@@ -432,7 +468,11 @@ export async function prepareCast(
   recordSessionStarted("cast", input, session.id, plan, bridgeDiagnostics);
 
   if (plan.state !== "ready" || !plan.selectedCandidate) {
-    const failure = mapPlaybackPlanToRuntimeFailure(plan, fallback);
+    const failure = mapPlaybackPlanToRuntimeFailure(
+      plan,
+      fallback,
+      planPreflight("cast", plan, bridgeDiagnostics),
+    );
     usePlaybackSessionStore.getState().failSession(session.id, failure.error);
     return {
       ok: false,

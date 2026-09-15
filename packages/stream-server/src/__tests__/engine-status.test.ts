@@ -14,6 +14,7 @@ import {
   getTorrentEngineStatus,
   isTorrentEngineUnavailableError,
   streamRequest,
+  webTorrentUtpEnabled,
 } from "../torrent.js";
 
 const previousTorrentCacheDir = process.env.STREAMER_TORRENT_CACHE_DIR;
@@ -63,6 +64,7 @@ describe("torrent engine native load failures", () => {
   beforeEach(() => {
     __resetTorrentEngineForTests();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("normalizes node-datachannel architecture errors", async () => {
@@ -89,6 +91,67 @@ describe("torrent engine native load failures", () => {
       state: "unavailable",
       reason: "native-architecture-mismatch",
     });
+  });
+
+  it("allows UTP when explicitly enabled while keeping the transport configurable", async () => {
+    let receivedOptions: Record<string, unknown> | undefined;
+    class FakeWebTorrent {
+      torrents: unknown[] = [];
+      on = vi.fn();
+      constructor(options: Record<string, unknown>) {
+        receivedOptions = options;
+      }
+      createServer = () => ({
+        server: {
+          listen: (_port: number, _host: string, cb: () => void) => cb(),
+          address: () => ({ port: 3210 }),
+          on: vi.fn(),
+        },
+      });
+    }
+
+    vi.stubEnv("STREAMER_WEBTORRENT_UTP", "true");
+    __setWebTorrentImporterForTests(async () => ({
+      default: FakeWebTorrent as any,
+    }));
+
+    await getClient();
+
+    expect(receivedOptions).toMatchObject({ utp: true });
+  });
+
+  it("defaults macOS to TCP so UTP retries cannot outlive metadata readiness", () => {
+    vi.stubEnv("STREAMER_WEBTORRENT_UTP", "");
+
+    expect(webTorrentUtpEnabled("darwin")).toBe(false);
+    expect(webTorrentUtpEnabled("linux")).toBe(true);
+  });
+
+  it("can disable UTP for a runtime-specific rollback", async () => {
+    let receivedOptions: Record<string, unknown> | undefined;
+    class FakeWebTorrent {
+      torrents: unknown[] = [];
+      on = vi.fn();
+      constructor(options: Record<string, unknown>) {
+        receivedOptions = options;
+      }
+      createServer = () => ({
+        server: {
+          listen: (_port: number, _host: string, cb: () => void) => cb(),
+          address: () => ({ port: 3211 }),
+          on: vi.fn(),
+        },
+      });
+    }
+
+    vi.stubEnv("STREAMER_WEBTORRENT_UTP", "false");
+    __setWebTorrentImporterForTests(async () => ({
+      default: FakeWebTorrent as any,
+    }));
+
+    await getClient();
+
+    expect(receivedOptions).toMatchObject({ utp: false });
   });
 
   it("returns a sanitized 503 instead of leaking the dlopen stack", async () => {

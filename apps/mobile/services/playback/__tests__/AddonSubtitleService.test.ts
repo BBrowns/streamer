@@ -50,7 +50,7 @@ describe("AddonSubtitleService", () => {
     });
 
     expect(api.get).toHaveBeenCalledWith(
-      "/api/aggregator/subtitles/series/tt123%3A2%3A3",
+      "/api/subtitles/series/tt123%3A2%3A3",
       { signal: undefined },
     );
     expect(tracks).toEqual([
@@ -79,7 +79,7 @@ describe("AddonSubtitleService", () => {
 
     await expect(loadAddonSubtitleDocument(track)).resolves.toContain("Hallo");
     expect(api.get).toHaveBeenCalledWith(
-      "/api/aggregator/subtitles/document/123e4567-e89b-42d3-a456-426614174000",
+      "/api/subtitles/document/123e4567-e89b-42d3-a456-426614174000",
       expect.objectContaining({
         responseType: "text",
         signal: undefined,

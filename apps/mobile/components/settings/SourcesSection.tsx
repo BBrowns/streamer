@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { BridgeDiagnostics } from "../../services/streamEngine/StreamEngineManager";
+import type { NetworkContextHint } from "../../services/streamEngine/networkContext";
+import type { TorrentNetworkProbeSnapshot } from "../../services/streamEngine/bridgeReadinessRuntime";
 import { usePlaybackEnvironmentStatus } from "../../hooks/usePlaybackEnvironmentStatus";
 import { useTheme } from "../../hooks/useTheme";
 import { useWindowClass } from "../../hooks/useWindowClass";
@@ -86,6 +88,94 @@ function Divider() {
   return <View style={[styles.divider, { backgroundColor: colors.border }]} />;
 }
 
+function TorrentNetworkStatusCard({
+  probe,
+  network,
+  checking,
+  onCheck,
+}: {
+  probe: TorrentNetworkProbeSnapshot;
+  network: NetworkContextHint;
+  checking: boolean;
+  onCheck: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const statusCopy = {
+    checking: t("settings.networkProbe.checking", {
+      defaultValue: "Checking torrent connectivity…",
+    }),
+    passed: t("settings.networkProbe.passed", {
+      defaultValue: "Torrent metadata and first-byte traffic are reachable.",
+    }),
+    degraded: t("settings.networkProbe.degraded", {
+      defaultValue: "Torrent traffic is reachable only intermittently.",
+    }),
+    blocked: t("settings.networkProbe.blocked", {
+      defaultValue:
+        "This network may restrict torrent playback. Try another network or another source.",
+    }),
+    unknown: t("settings.networkProbe.unknown", {
+      defaultValue: "This bridge does not provide a torrent network test yet.",
+    }),
+  } as const;
+  const status = checking ? "checking" : probe.status;
+  const tone: CapabilityTone =
+    status === "passed"
+      ? "success"
+      : status === "blocked"
+        ? "error"
+        : status === "degraded" || status === "checking"
+          ? "warning"
+          : "neutral";
+  const networkLabel =
+    network.online === false
+      ? t("settings.networkProbe.offline", { defaultValue: "Offline" })
+      : t(`settings.networkProbe.network.${network.kind}`, {
+          defaultValue: network.kind === "unknown" ? "Unknown" : network.kind,
+        });
+  const statusLabel = t(`settings.networkProbe.status.${status}`, {
+    defaultValue: status === "checking" ? "Checking" : status,
+  });
+
+  return (
+    <Surface
+      testID="torrent-network-status"
+      style={styles.networkProbeCard}
+      accessibilityLiveRegion="polite"
+    >
+      <CapabilityRow
+        icon="wifi-outline"
+        title={t("settings.networkProbe.title", {
+          defaultValue: "Torrent playback test",
+        })}
+        subtitle={`${t("settings.networkProbe.networkHint", {
+          defaultValue: "Network hint",
+        })}: ${networkLabel}. ${statusCopy[status]}`}
+        status={statusLabel}
+        tone={tone}
+      />
+      <AppButton
+        label={t("settings.networkProbe.checkAgain", {
+          defaultValue: "Check again",
+        })}
+        icon="refresh-outline"
+        variant="ghost"
+        size="small"
+        loading={checking}
+        disabled={checking}
+        onPress={onCheck}
+      />
+      <Text style={[styles.networkProbeHint, { color: colors.textSecondary }]}>
+        {t("settings.networkProbe.hintOnly", {
+          defaultValue:
+            "The network type is only a hint; the torrent test checks the connected bridge itself.",
+        })}
+      </Text>
+    </Surface>
+  );
+}
+
 export function SourcesSection({
   showHeader = true,
 }: {
@@ -163,6 +253,13 @@ export function SourcesSection({
           />
         </View>
       </Surface>
+
+      <TorrentNetworkStatusCard
+        probe={environment.torrentNetworkProbe}
+        network={environment.networkContext}
+        checking={environment.isChecking}
+        onCheck={() => void environment.refreshEnvironment()}
+      />
 
       <SettingsSubheading
         title={t("settings.sourcesSection.contentAddonsTitle", {
@@ -295,6 +392,12 @@ export function AdvancedSourcesSection({
           defaultValue: "Server & pairing",
         })}
         subtitle={t("settings.advancedSection.connectionDescription")}
+      />
+      <TorrentNetworkStatusCard
+        probe={environment.torrentNetworkProbe}
+        network={environment.networkContext}
+        checking={environment.isChecking}
+        onCheck={() => void environment.refreshEnvironment()}
       />
       <Surface style={styles.formCard}>
         <TextField
@@ -607,6 +710,14 @@ const styles = StyleSheet.create({
   readinessCopy: {
     fontSize: 13,
     lineHeight: 19,
+  },
+  networkProbeCard: {
+    gap: 12,
+    padding: 16,
+  },
+  networkProbeHint: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   actions: {
     flexDirection: "row",

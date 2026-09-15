@@ -139,4 +139,36 @@ describe("PlaybackErrors", () => {
     expect(result.error.reasonCode).toBeUndefined();
     expect(result.runtimeState).toBe("failed_unsupported_codec");
   });
+
+  it("prefers bridge pairing recovery over a generic needs-bridge message", () => {
+    const plan = makePlaybackPlan({
+      state: "needsBridge",
+      userMessage:
+        "Available execution targets do not accept this source kind.",
+    });
+
+    const result = mapPlaybackPlanToRuntimeFailure(
+      plan,
+      "Playback unavailable.",
+      {
+        action: "play",
+        ready: false,
+        reason: "bridge_auth_required",
+        message: "Pair this browser with the desktop bridge first.",
+        requiresBridge: true,
+        retryable: true,
+      },
+    );
+
+    expect(result).toMatchObject({
+      runtimeState: "failed_bridge_unavailable",
+      error: {
+        code: "BRIDGE_UNAVAILABLE",
+        message: "Pair this browser with the desktop bridge first.",
+        retryable: true,
+        shouldFallback: false,
+        debugMessage: "preflight:bridge_auth_required",
+      },
+    });
+  });
 });

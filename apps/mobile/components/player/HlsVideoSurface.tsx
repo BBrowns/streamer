@@ -19,11 +19,26 @@ export function HlsVideoSurface({
   useEffect(() => {
     if (Platform.OS !== "web" || !videoRef.current) return;
     adapter.mount(videoRef.current);
-    return () => adapter.unmount();
+    return () => {
+      adapter.clearSource();
+      adapter.unmount();
+    };
   }, [adapter]);
 
   useEffect(() => {
-    if (source) void adapter.replaceSource(source);
+    if (source) {
+      void adapter.replaceSource(source);
+    } else {
+      adapter.clearSource();
+    }
+
+    return () => {
+      // A fallback or route change can remove the URI while an earlier
+      // dynamic HLS import/request is still unwinding. Clear the generation
+      // before the next source is attached so stale events cannot fail the
+      // replacement candidate.
+      adapter.clearSource();
+    };
   }, [adapter, source]);
 
   if (Platform.OS !== "web") return <View style={style as any} />;

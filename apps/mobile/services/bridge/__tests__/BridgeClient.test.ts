@@ -77,6 +77,39 @@ function binaryResponse(options: {
 }
 
 describe("BridgeClient protocol negotiation", () => {
+  it("requests the optional torrent network probe without source data", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(response(200, HELLO))
+      .mockResolvedValueOnce(
+        response(200, {
+          protocolVersion: 1,
+          probeId: "55555555-5555-4555-8555-555555555555",
+          status: "passed",
+          phase: "complete",
+          elapsedMs: 120,
+          peerCount: 1,
+        }),
+      );
+    const client = new BridgeClient({
+      baseUrl: "http://bridge.test:11470",
+      fetchImpl,
+    });
+
+    await expect(client.probeTorrentNetwork()).resolves.toMatchObject({
+      status: "passed",
+      phase: "complete",
+    });
+    expect(fetchImpl).toHaveBeenLastCalledWith(
+      "http://bridge.test:11470/api/bridge/v1/network-probe",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringMatching(/"profile":"torrent-playback"/),
+      }),
+    );
+    expect(fetchImpl.mock.calls.at(-1)?.[1].body).not.toContain("magnet");
+  });
+
   it.each([
     "http://user:pass@bridge.test:11470",
     "http://bridge.test:11470?token=source",

@@ -16,6 +16,7 @@ import {
 } from "./IStreamEngine";
 import { api } from "../api";
 import { getBridgeAuthHeaders, withBridgeJsonHeaders } from "../bridgeAuth";
+import { buildRuntimeTorrentMagnet } from "../torrentMagnet";
 
 type GatewayJobState =
   | "preparing"
@@ -161,23 +162,11 @@ export class TorrentEngine implements IStreamEngine {
         this.bridge.bridgeAvailable &&
         canAttemptLocalGateway
       ) {
-        // Build the magnet link or infohash to send to the bridge
-        let magnet = `magnet:?xt=urn:btih:${stream.infoHash}`;
-
-        // Append default trackers directly to the magnet link
-        const trackers = [
-          "http://tracker.opentrackr.org:1337/announce",
-          "http://tracker.renhas.cl:6969/announce",
-          "udp://tracker.opentrackr.org:1337/announce",
-          "udp://tracker.internetwarriors.net:1337/announce",
-          "udp://tracker.leechers-paradise.org:6969/announce",
-          "wss://tracker.openwebtorrent.com",
-          "wss://tracker.btorrent.xyz",
-          "wss://tracker.fastcast.nz",
-        ];
-        for (const tr of trackers) {
-          magnet += `&tr=${encodeURIComponent(tr)}`;
-        }
+        // Preserve provider tracker hints when available. The stream-server
+        // owns fallback trackers for identity-only sources.
+        const magnet =
+          buildRuntimeTorrentMagnet(stream) ??
+          `magnet:?xt=urn:btih:${stream.infoHash}`;
 
         this.startStatsPolling();
         await this.awaitOperation(operation, previousGatewayCancellation);

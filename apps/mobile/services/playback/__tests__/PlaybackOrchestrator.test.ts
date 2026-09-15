@@ -12,6 +12,7 @@ import {
 } from "../PlaybackOrchestrator";
 import {
   createPlaybackPlanWithBridgeRetry,
+  getPlaybackPlanAfterPartialDiscovery,
   resolvePlaybackPlan,
 } from "../PlaybackPlanService";
 import {
@@ -21,6 +22,7 @@ import {
 
 jest.mock("../PlaybackPlanService", () => ({
   createPlaybackPlanWithBridgeRetry: jest.fn(),
+  getPlaybackPlanAfterPartialDiscovery: jest.fn(),
   resolvePlaybackPlan: jest.fn(),
 }));
 
@@ -37,6 +39,10 @@ describe("PlaybackOrchestrator", () => {
   const createPlan = createPlaybackPlanWithBridgeRetry as jest.MockedFunction<
     typeof createPlaybackPlanWithBridgeRetry
   >;
+  const getCompletePlan =
+    getPlaybackPlanAfterPartialDiscovery as jest.MockedFunction<
+      typeof getPlaybackPlanAfterPartialDiscovery
+    >;
   const resolvePlan = resolvePlaybackPlan as jest.MockedFunction<
     typeof resolvePlaybackPlan
   >;
@@ -56,6 +62,7 @@ describe("PlaybackOrchestrator", () => {
           `00000000-0000-4000-8000-${String(value++).padStart(12, "0")}` as `${string}-${string}-${string}-${string}-${string}`,
       );
     jest.clearAllMocks();
+    getCompletePlan.mockImplementation((input) => createPlan(input));
     usePlaybackSessionStore.getState().clearAllSessions();
   });
 
@@ -135,6 +142,46 @@ describe("PlaybackOrchestrator", () => {
       status: "selecting_candidate",
       content: { type: "movie", id: "tt123" },
       candidates: [{ rank: 0 }, { rank: 1 }],
+    });
+  });
+
+  it("waits for complete source discovery before selecting Play Best", async () => {
+    const plan = makePlaybackPlan({
+      state: "ready",
+      plan: {
+        mode: "direct",
+        selectedCandidate: makePlannedMediaCandidate({
+          id: "00000000-0000-4000-8000-000000000121",
+          kind: "direct",
+          stream: {
+            url: "https://cdn.example.test/complete.mp4",
+            title: "Complete discovery source",
+          },
+        }),
+      },
+    });
+    getCompletePlan.mockResolvedValueOnce(plan);
+
+    const result = await playBest({
+      type: "movie",
+      id: "tt123",
+      title: "Example Movie",
+    });
+
+    expect(getCompletePlan).toHaveBeenCalledWith(
+      {
+        type: "movie",
+        id: "tt123",
+        season: undefined,
+        episode: undefined,
+        action: "play",
+      },
+      {},
+    );
+    expect(createPlan).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ok: true,
+      stream: { url: "https://cdn.example.test/complete.mp4" },
     });
   });
 

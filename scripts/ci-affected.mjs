@@ -18,6 +18,18 @@ export const ciJobNames = Object.freeze([
   "desktop_package",
 ]);
 
+const INSTALL_PREFLIGHT_PATH_PATTERNS = [
+  /^\.github\/dependabot\.(yml|yaml)$/,
+  /^\.github\/workflows\//,
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^patches\//,
+  /^scripts\/(ci-install|check-install-script-policy|dependency-)/,
+  /^apps\/[^/]+\/package\.json$/,
+  /^packages\/[^/]+\/package\.json$/,
+  /^server\/package\.json$/,
+];
+
 const allJobs = () =>
   Object.fromEntries(ciJobNames.map((name) => [`run_${name}`, true]));
 
@@ -30,6 +42,10 @@ const draftJobs = () => {
   jobs.run_security = true;
   return jobs;
 };
+
+function isInstallPreflightPath(path) {
+  return matchesAny(path, INSTALL_PREFLIGHT_PATH_PATTERNS);
+}
 
 const fullCiPathPatterns = [
   /^\.github\//,
@@ -173,6 +189,7 @@ export function analyzeChanges({
       full_ci: true,
       scope_reason: `event:${eventName || "unknown"}`,
       changed_file_count: 0,
+      run_install_preflight: eventName === "merge_group",
       ...allJobs(),
     };
   }
@@ -182,6 +199,7 @@ export function analyzeChanges({
       full_ci: true,
       scope_reason: "missing-pr-base-or-head",
       changed_file_count: 0,
+      run_install_preflight: true,
       ...allJobs(),
     };
   }
@@ -192,6 +210,7 @@ export function analyzeChanges({
       full_ci: true,
       scope_reason: "no-changed-files",
       changed_file_count: 0,
+      run_install_preflight: true,
       ...allJobs(),
     };
   }
@@ -201,6 +220,7 @@ export function analyzeChanges({
       full_ci: false,
       scope_reason: "draft-pull-request",
       changed_file_count: paths.length,
+      run_install_preflight: paths.some(isInstallPreflightPath),
       ...draftJobs(),
     };
   }
@@ -212,6 +232,7 @@ export function analyzeChanges({
       full_ci: true,
       scope_reason: unknownPath ? "unknown-path" : "full-ci-path",
       changed_file_count: paths.length,
+      run_install_preflight: paths.some(isInstallPreflightPath),
       ...allJobs(),
     };
   }
@@ -220,6 +241,7 @@ export function analyzeChanges({
     full_ci: false,
     scope_reason: "affected-paths",
     changed_file_count: paths.length,
+    run_install_preflight: paths.some(isInstallPreflightPath),
     ...createScopedJobs(paths),
   };
 }
@@ -262,8 +284,10 @@ function writeSummary(outputs, summaryPath) {
       `- Reason: \`${outputs.scope_reason}\``,
       `- Changed files considered: ${outputs.changed_file_count}`,
       "- Selected jobs: " +
-        ciJobNames
-          .filter((name) => outputs[`run_${name}`])
+        [
+          ...ciJobNames.filter((name) => outputs[`run_${name}`]),
+          ...(outputs.run_install_preflight ? ["install_preflight"] : []),
+        ]
           .map((name) => `\`${name}\``)
           .join(", "),
       "",

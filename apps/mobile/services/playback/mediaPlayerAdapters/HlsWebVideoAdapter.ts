@@ -10,14 +10,46 @@ import type {
 } from "../MediaPlayerAdapter";
 import type { WebMediaDocument } from "./WebVideoAdapter";
 import type { ExpoVideoPlayerLike } from "./ExpoVideoAdapterBase";
+import { recordPlaybackDebugEvent } from "../playbackDebug";
 
 type HlsConstructor = typeof import("hls.js").default;
 type HlsInstance = InstanceType<HlsConstructor>;
 
 const HLS_RESUME_RETRY_MS = 500;
 const HLS_MAX_RESUME_ATTEMPTS = 20;
+const HLS_MEDIA_RESET_DEDUP_MS = 250;
 
 export interface HlsVideoElement extends HTMLVideoElement {}
+
+export type HlsFatalErrorAction = "recover" | "fail";
+
+/**
+ * HLS.js uses this media error when a MediaSource needs to be detached and
+ * attached again. It is a bounded player recovery, not evidence that the
+ * selected source is unavailable. Network/manifest failures remain terminal
+ * for the current source and are allowed to enter normal fallback.
+ */
+export function classifyHlsFatalError(data: {
+  type?: string;
+  details?: string;
+}): HlsFatalErrorAction {
+  return data.type === "mediaError" &&
+    data.details === "mediaSourceRequiresReset"
+    ? "recover"
+    : "fail";
+}
+
+export function isHlsMediaRecoveryExhausted(resetAttempts: number) {
+  return resetAttempts >= 2;
+}
+
+export function shouldCountHlsMediaReset(
+  lastResetAt: number,
+  now: number,
+  dedupWindowMs = HLS_MEDIA_RESET_DEDUP_MS,
+) {
+  return lastResetAt <= 0 || now - lastResetAt >= dedupWindowMs;
+}
 
 export interface HlsPublishedFragment {
   start?: number;
@@ -195,6 +227,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   private playbackIntent = false;
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
   private resumeAttempts = 0;
+  private mediaResetAttempts = 0;
+  private lastMediaResetAt = 0;
 
   constructor(options: HlsWebVideoAdapterOptions = {}) {
     this.options = options;
@@ -265,6 +299,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.source = null;
     this.playbackIntent = false;
     this.clearResumeTimer();
+    this.mediaResetAttempts = 0;
+    this.lastMediaResetAt = 0;
     this.firstFrameReported = false;
     this.error = undefined;
     this.status = "idle";
@@ -365,6 +401,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.source = source;
     this.firstFrameReported = false;
     this.error = undefined;
+    this.mediaResetAttempts = 0;
+    this.lastMediaResetAt = 0;
     if (!this.video) return;
     await this.loadSource(source);
   }
@@ -447,9 +485,16 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     const video = this.video;
     if (!video || this.destroyed) return;
     const generation = ++this.loadGeneration;
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.hls_load_started",
+      data: { hasVideo: true },
+    });
     this.status = "loading";
     this.emit({ type: "status_changed", status: "loading" });
     this.destroyHls();
+    this.mediaResetAttempts = 0;
+    this.lastMediaResetAt = 0;
     this.publishedWindow = null;
     video.removeAttribute("src");
     video.load();
@@ -458,12 +503,23 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
       const hlsModule = await import("hls.js");
       if (generation !== this.loadGeneration || this.destroyed) return;
       const Hls = hlsModule.default;
-      if (Hls.isSupported()) {
+      const hlsSupported = Hls.isSupported();
+      recordPlaybackDebugEvent({
+        category: "playback",
+        message: "player.hls_support_checked",
+        data: { supported: hlsSupported },
+      });
+      if (hlsSupported) {
         const hls = new Hls({
           enableWorker: false,
           lowLatencyMode: false,
         });
         this.hls = hls;
+        recordPlaybackDebugEvent({
+          category: "playback",
+          message: "player.hls_instance_attached",
+          data: { generation },
+        });
         const updatePublishedWindow = (data: {
           details?: { fragments?: readonly HlsPublishedFragment[] };
         }) => {
@@ -475,21 +531,183 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
           this.tryResumePlayback();
         };
         hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_level_loaded",
+            data: {
+              generation,
+              fragmentCount: Array.isArray(data?.details?.fragments)
+                ? data.details.fragments.length
+                : 0,
+              durationSeconds:
+                typeof data?.details?.totalduration === "number"
+                  ? Math.max(0, Math.min(86_400, data.details.totalduration))
+                  : undefined,
+              live: data?.details?.live === true,
+            },
+          });
           updatePublishedWindow(data);
         });
         hls.on(Hls.Events.LEVEL_UPDATED, (_event, data) => {
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_level_updated",
+            data: {
+              generation,
+              fragmentCount: Array.isArray(data?.details?.fragments)
+                ? data.details.fragments.length
+                : 0,
+              durationSeconds:
+                typeof data?.details?.totalduration === "number"
+                  ? Math.max(0, Math.min(86_400, data.details.totalduration))
+                  : undefined,
+              live: data?.details?.live === true,
+            },
+          });
           updatePublishedWindow(data);
         });
-        hls.on(Hls.Events.FRAG_BUFFERED, () => {
-          if (generation === this.loadGeneration) this.tryResumePlayback();
+        hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+          if (generation !== this.loadGeneration) return;
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_fragment_loaded",
+            data: {
+              generation,
+              sequence:
+                typeof data?.frag?.sn === "number" ? data.frag.sn : undefined,
+              durationSeconds:
+                typeof data?.frag?.duration === "number"
+                  ? Math.max(0, Math.min(86_400, data.frag.duration))
+                  : undefined,
+            },
+          });
+        });
+        hls.on(Hls.Events.FRAG_BUFFERED, (_event, data) => {
+          if (generation !== this.loadGeneration) return;
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_fragment_buffered",
+            data: {
+              generation,
+              sequence:
+                typeof data?.frag?.sn === "number" ? data.frag.sn : undefined,
+            },
+          });
+          this.tryResumePlayback();
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
+          const hlsError =
+            data && typeof data.error === "object" && data.error !== null
+              ? (data.error as { code?: unknown })
+              : undefined;
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_error_observed",
+            level: data?.fatal ? "warning" : "info",
+            data: {
+              generation,
+              fatal: data?.fatal === true,
+              sourceBuffer:
+                typeof data?.sourceBufferName === "string"
+                  ? data.sourceBufferName.slice(0, 20)
+                  : undefined,
+              errorType:
+                typeof data?.type === "string"
+                  ? data.type.slice(0, 40)
+                  : undefined,
+              errorDetails:
+                typeof data?.details === "string"
+                  ? data.details.slice(0, 60)
+                  : undefined,
+              errorCode:
+                typeof hlsError?.code === "number"
+                  ? Math.max(0, Math.min(10_000, hlsError.code))
+                  : undefined,
+              errorName:
+                typeof data?.error?.name === "string"
+                  ? data.error.name.slice(0, 40)
+                  : undefined,
+              errorMessage:
+                typeof data?.error?.message === "string"
+                  ? data.error.message
+                      .replace(/https?:\/\/\S+/gi, "[redacted]")
+                      .slice(0, 120)
+                  : undefined,
+              responseCode:
+                typeof data?.response?.code === "number"
+                  ? data.response.code
+                  : undefined,
+            },
+          });
           if (
             !data?.fatal ||
             generation !== this.loadGeneration ||
             this.destroyed ||
             this.hls !== hls
           ) {
+            return;
+          }
+          const action = classifyHlsFatalError({
+            type: typeof data?.type === "string" ? data.type : undefined,
+            details:
+              typeof data?.details === "string" ? data.details : undefined,
+          });
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_fatal_error",
+            level: "warning",
+            data: {
+              generation,
+              errorType:
+                typeof data?.type === "string"
+                  ? data.type.slice(0, 40)
+                  : undefined,
+              errorDetails:
+                typeof data?.details === "string"
+                  ? data.details.slice(0, 60)
+                  : undefined,
+              responseCode:
+                typeof data?.response?.code === "number"
+                  ? data.response.code
+                  : undefined,
+              action,
+            },
+          });
+          // HLS.js already owns the bounded detach/attach recovery for this
+          // error. Calling recoverMediaError here as well races its internal
+          // recovery and can invalidate the signed manifest, which then
+          // appears to the app as a misleading 410 fallback.
+          if (action === "recover") {
+            const resetAt = Date.now();
+            const countReset = shouldCountHlsMediaReset(
+              this.lastMediaResetAt,
+              resetAt,
+            );
+            recordPlaybackDebugEvent({
+              category: "playback",
+              message: "player.hls_media_reset_observed",
+              data: {
+                generation,
+                countReset,
+              },
+            });
+            if (!countReset) return;
+            this.lastMediaResetAt = resetAt;
+            this.mediaResetAttempts += 1;
+            if (!isHlsMediaRecoveryExhausted(this.mediaResetAttempts)) {
+              return;
+            }
+            this.status = "error";
+            this.error = {
+              code: "MEDIA_ERROR",
+              message: "The HLS media source could not be recovered.",
+            };
+            this.emit({
+              type: "status_changed",
+              status: "error",
+              error: this.error,
+            });
+            this.options.onError?.();
             return;
           }
           this.status = "error";
@@ -506,6 +724,11 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
         });
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (generation !== this.loadGeneration) return;
+          recordPlaybackDebugEvent({
+            category: "playback",
+            message: "player.hls_manifest_parsed",
+            data: { generation },
+          });
           this.emit({ type: "source_loaded" });
         });
         hls.loadSource(source);
@@ -513,6 +736,12 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
         return;
       }
     } catch {
+      recordPlaybackDebugEvent({
+        category: "playback",
+        message: "player.hls_module_unavailable",
+        level: "warning",
+        data: { reason: "module_or_runtime_error" },
+      });
       // Native Safari HLS is attempted below. Failure is reported by the
       // element's own error event if the target cannot play the source.
     }
@@ -524,6 +753,12 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
       return;
     }
     this.status = "error";
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.hls_unsupported",
+      level: "warning",
+      data: { nativeSupport: false },
+    });
     this.error = {
       code: "MEDIA_ERROR",
       message: "HLS playback is not supported by this browser.",
@@ -638,12 +873,36 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   }
 
   private readonly onLoadedMetadata = () => {
+    const video = this.video;
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.video_loaded_metadata",
+      data: {
+        readyState: video?.readyState,
+        durationSeconds:
+          typeof video?.duration === "number" && Number.isFinite(video.duration)
+            ? Math.max(0, Math.min(86_400, video.duration))
+            : undefined,
+        videoWidth: video?.videoWidth,
+        videoHeight: video?.videoHeight,
+      },
+    });
     this.status = "ready";
     this.emit({ type: "status_changed", status: "ready" });
     this.emit({ type: "source_loaded" });
   };
 
   private readonly onCanPlay = () => {
+    const video = this.video;
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.video_can_play",
+      data: {
+        readyState: video?.readyState,
+        videoWidth: video?.videoWidth,
+        videoHeight: video?.videoHeight,
+      },
+    });
     if (this.status !== "ready") {
       this.status = "ready";
       this.emit({ type: "status_changed", status: "ready" });
@@ -652,6 +911,11 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   };
 
   private readonly onPlaying = () => {
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.video_playing",
+      data: { readyState: this.video?.readyState },
+    });
     if (!this.firstFrameReported) {
       this.firstFrameReported = true;
       this.emit({ type: "first_frame_rendered" });
@@ -668,10 +932,21 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   };
 
   private readonly onWaiting = () => {
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.video_waiting",
+      data: { readyState: this.video?.readyState },
+    });
     this.scheduleResumePlayback();
   };
 
   private readonly onStalled = () => {
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.video_stalled",
+      level: "warning",
+      data: { readyState: this.video?.readyState },
+    });
     this.scheduleResumePlayback();
   };
 
@@ -701,6 +976,29 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
 
   private readonly onVideoError = () => {
     if (!this.source || this.destroyed) return;
+    recordPlaybackDebugEvent({
+      category: "playback",
+      message: "player.video_error",
+      level: "warning",
+      data: {
+        readyState: this.video?.readyState,
+        errorCode: this.video?.error?.code,
+      },
+    });
+    // When HLS.js owns the MediaSource, Chromium may emit a video-element
+    // error while HLS.js is still applying its own level/recovery action. The
+    // HLS error event is the authoritative lifecycle signal in that mode;
+    // turning this transient DOM event into a source failure races recovery
+    // and releases the signed gateway job too early.
+    if (this.hls) {
+      recordPlaybackDebugEvent({
+        category: "playback",
+        message: "player.hls_video_error_deferred",
+        level: "warning",
+        data: { reason: "hls_controller_active" },
+      });
+      return;
+    }
     this.status = "error";
     this.error = {
       code: "MEDIA_ERROR",

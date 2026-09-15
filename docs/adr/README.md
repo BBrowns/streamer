@@ -11,6 +11,7 @@ claimed only where the repository has corresponding evidence.
 - [ADR-0005: Access the media bridge through a versioned contract](./0005-versioned-bridge-contract.md)
 - [ADR-0006: Plan explicit execution targets and delivery modes](./0006-explicit-playback-routes.md)
 - [ADR-0007: Keep authentication and sync failures separate](./0007-auth-sync-degraded-mode.md)
+- [ADR-0008: Diagnose torrent network capability before playback](./0008-torrent-network-capability-probe.md)
 
 New records are additive. Superseded records stay in this directory with an
 updated status and a link to their replacement.

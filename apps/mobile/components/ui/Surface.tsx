@@ -1,5 +1,11 @@
 import React from "react";
-import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import {
+  StyleProp,
+  StyleSheet,
+  View,
+  ViewProps,
+  ViewStyle,
+} from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { getSurfaceColors, uiRadii, uiSpacing } from "./designSystem";
 
@@ -10,19 +16,23 @@ type SurfaceProps = {
   variant?: SurfaceVariant;
   padded?: boolean;
   style?: StyleProp<ViewStyle>;
-};
+} & Pick<ViewProps, "testID" | "accessibilityLiveRegion">;
 
 export function Surface({
   children,
   variant = "default",
   padded = true,
   style,
+  testID,
+  accessibilityLiveRegion,
 }: SurfaceProps) {
   const { colors, isDark } = useTheme();
   const surfaceColors = getSurfaceColors(colors, isDark, variant);
 
   return (
     <View
+      testID={testID}
+      accessibilityLiveRegion={accessibilityLiveRegion}
       style={[styles.surface, padded && styles.padded, surfaceColors, style]}
     >
       {children}

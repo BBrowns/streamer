@@ -121,6 +121,33 @@ describe("PlaybackPlannerV3Service", () => {
     expect(playbackPlanV3Schema.safeParse(plan).success).toBe(true);
   });
 
+  it("waits for complete provider discovery for Play plans", async () => {
+    vi.mocked(aggregatorService.getStreamDiscovery).mockResolvedValueOnce({
+      streams: [
+        {
+          url: "https://cdn.example.test/complete.1080p.h264.mp4",
+          title: "Complete source",
+          resolution: "1080p",
+        },
+      ],
+      status: "complete",
+    });
+
+    await service.createPlanV3(
+      "user-1",
+      request([node()]),
+      "req-complete-discovery",
+    );
+
+    expect(aggregatorService.getStreamDiscovery).toHaveBeenCalledWith(
+      "user-1",
+      "movie",
+      "tt1",
+      "req-complete-discovery",
+      { requireComplete: true },
+    );
+  });
+
   it("keeps a direct download on a direct preparation route", async () => {
     vi.mocked(aggregatorService.getStreams).mockResolvedValue([
       {

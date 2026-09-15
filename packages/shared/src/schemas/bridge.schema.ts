@@ -187,6 +187,12 @@ export const bridgeCapabilitiesV1Schema = z
             ]),
           })
           .strict(),
+        diagnostics: z
+          .object({
+            torrentNetworkProbe: z.boolean(),
+          })
+          .strict()
+          .optional(),
       })
       .strict(),
     limits: z
@@ -198,6 +204,44 @@ export const bridgeCapabilitiesV1Schema = z
         maxThumbnailBytes: z.number().int().positive(),
       })
       .strict(),
+  })
+  .strict();
+
+export const bridgeNetworkProbeRequestV1Schema = z
+  .object({
+    requestId: z.string().uuid(),
+    profile: z.literal("torrent-playback"),
+  })
+  .strict();
+
+export const bridgeNetworkProbeResponseV1Schema = z
+  .object({
+    protocolVersion: bridgeProtocolVersionSchema,
+    probeId: z.string().uuid(),
+    status: z.enum(["passed", "degraded", "blocked", "unknown"]),
+    phase: z.enum([
+      "bridge",
+      "discovery",
+      "peer",
+      "wire",
+      "metadata",
+      "first_byte",
+      "complete",
+    ]),
+    elapsedMs: z.number().int().nonnegative(),
+    peerCount: z.number().int().nonnegative().optional(),
+    failureCode: z
+      .enum([
+        "BRIDGE_UNAVAILABLE",
+        "TRACKER_UNREACHABLE",
+        "NO_PEERS",
+        "WIRE_TIMEOUT",
+        "METADATA_UNAVAILABLE",
+        "FIRST_BYTE_TIMEOUT",
+        "UNSUPPORTED",
+        "CANCELLED",
+      ])
+      .optional(),
   })
   .strict();
 

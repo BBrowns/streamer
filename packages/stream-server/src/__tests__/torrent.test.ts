@@ -18,6 +18,7 @@ import {
   waitForReady,
   selectBestVideoFile,
 } from "../torrent-helpers.js";
+import { getTorrentMetadataDiagnosticSnapshot } from "../torrent-observation.js";
 import {
   __resetRemuxCacheForTests,
   __setFfmpegSpawnerForTests,
@@ -26,8 +27,10 @@ import {
   getRetainedSeekableRemuxSource,
   getSelectedFile,
   attachTorrentLogging,
+  createHlsRemuxSession,
   prepareSeekableRemux,
   retainSeekableRemux,
+  normalizeTorrentMagnetForRuntime,
   serveTorrentFile,
   shouldRemuxTorrentFile,
   validateTorrentFiles,
@@ -679,6 +682,23 @@ describe("serveTorrentFile", () => {
     expect(res.end).toHaveBeenCalled();
   });
 
+  it("paces HLS remux output so a live player cannot outrun its rolling window", async () => {
+    const { child, spawner } = makeHangingFfmpegSpawner();
+    __setFfmpegSpawnerForTests(spawner);
+
+    const file = makeFakeFile("film.mkv", 5_000_000);
+    const session = await createHlsRemuxSession(file);
+
+    const args = spawner.mock.calls[0][1] as string[];
+    expect(args.indexOf("-re")).toBeGreaterThanOrEqual(0);
+    expect(args.indexOf("-re")).toBeLessThan(args.indexOf("-i"));
+    expect(args).toContain("-ac");
+    expect(args).toContain("2");
+
+    session.close();
+    child.emit("close", null);
+  });
+
   it("maps the requested embedded audio stream for progressive playback", async () => {
     const { child, spawner } = makeProgressiveFfmpegSpawner();
     __setFfmpegSpawnerForTests(spawner);
@@ -1077,6 +1097,74 @@ describe("attachTorrentLogging", () => {
     torrent.numPeers = 9;
     vi.advanceTimersByTime(5_000);
     expect(logSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("classifies metadata and discovery warnings without logging source details", () => {
+    vi.stubEnv("STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS", "1");
+    const logSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const torrent = makeTorrent();
+    torrent.numPeers = 3;
+    const wire = new EventEmitter() as any;
+    wire.ut_metadata = new EventEmitter();
+
+    attachTorrentLogging(torrent);
+    torrent.emit("wire", wire);
+    wire.ut_metadata.emit(
+      "warning",
+      new Error("Peer does not support ut_metadata for secret-source"),
+    );
+    torrent.emit(
+      "warning",
+      "tracker request failed for http://private.example/announce",
+    );
+    wire.emit("timeout");
+
+    const snapshot = getTorrentMetadataDiagnosticSnapshot(torrent);
+    expect(snapshot.categories).toEqual(
+      expect.arrayContaining([
+        "metadata_unsupported",
+        "tracker_warning",
+        "wire_timeout",
+      ]),
+    );
+    expect(logSpy.mock.calls.flat().join(" ")).not.toContain("secret-source");
+    expect(logSpy.mock.calls.flat().join(" ")).not.toContain("private.example");
+  });
+
+  it("keeps discovered peers separate from connected peers", () => {
+    const torrent = makeTorrent();
+    torrent.numPeers = 0;
+
+    attachTorrentLogging(torrent);
+    torrent.emit("peer", "opaque-peer-1");
+    torrent.emit("peer", "opaque-peer-2");
+    torrent.numPeers = 1;
+
+    expect(getTorrentMetadataDiagnosticSnapshot(torrent)).toMatchObject({
+      discoveredPeerCount: 2,
+      connectedPeerCount: 1,
+    });
+  });
+});
+
+describe("torrent source normalization", () => {
+  it("keeps safe matching trackers and removes provider-only magnet metadata", () => {
+    const infoHash = "0123456789abcdef0123456789abcdef01234567";
+    const normalized = normalizeTorrentMagnetForRuntime(
+      `magnet:?xt=urn:btih:${infoHash}&tr=${encodeURIComponent(
+        "https://tracker.example.test/announce",
+      )}&tr=${encodeURIComponent(
+        "udp://127.0.0.1:6969/announce",
+      )}&dn=${encodeURIComponent("private provider title")}`,
+    );
+
+    expect(normalized).toContain(
+      "tr=https%3A%2F%2Ftracker.example.test%2Fannounce",
+    );
+    expect(normalized).toContain(`xt=urn:btih:${infoHash}`);
+    expect(normalized).not.toContain("xt=urn%3Abtih%3A");
+    expect(normalized).not.toContain("127.0.0.1");
+    expect(normalized).not.toContain("provider%20title");
   });
 });
 
