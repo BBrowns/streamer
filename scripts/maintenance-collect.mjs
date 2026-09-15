@@ -7,6 +7,8 @@ const MAX_OUTPUT = 4 * 1024 * 1024;
 const WORKFLOW_EXTENSIONS = new Set([".yml", ".yaml"]);
 const DEFAULT_PROTECTED_BRANCHES = Object.freeze(["main", "master"]);
 const MAX_CI_JOB_RUNS = 20;
+const CI_WORKFLOW_FILE = "ci.yml";
+const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 const PREFLIGHT_JOB_NAME = "Dependency Install Preflight";
 const PREFLIGHT_DOWNSTREAM_JOB_PATTERNS = Object.freeze([
   /^Lint & Type Check$/,
@@ -457,7 +459,7 @@ function collectRemote(repo, since, root) {
   }
 
   const runs = call(
-    `actions/runs?per_page=50&created=>=${encodeURIComponent(since)}`,
+    `actions/workflows/${CI_WORKFLOW_FILE}/runs?per_page=50&created=>=${encodeURIComponent(since)}`,
   );
   if (runs.ok) {
     successfulSources += 1;
