@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page, Route } from "@playwright/test";
 import {
+  bridgeCapabilitiesV1Schema,
   playbackPlanRequestSchema,
   playbackPlanSchema,
   type InAppNotification,
@@ -42,6 +43,55 @@ const VISUAL_MEDIA_FIXTURE = resolve(__dirname, "assets/golden-path.webm");
 const GATEWAY_JOB_ID = "00000000-0000-4000-8000-000000000099";
 const FIXTURE_DISPLAY_ID = "00000000-0000-4000-8000-000000000010";
 export const FIXTURE_USER_ID = "00000000-0000-4000-8000-000000000001";
+
+function fixtureBridgeCapabilities(featuresHeader: string) {
+  const requestedFeatures = new Set(
+    featuresHeader
+      .split(",")
+      .map((feature) => feature.trim())
+      .filter(Boolean),
+  );
+
+  return bridgeCapabilitiesV1Schema.parse({
+    protocolVersion: 1,
+    owner: "desktop",
+    health: "ready",
+    capabilities: {
+      jobs: {
+        ...(requestedFeatures.has("audio-preferences")
+          ? { audioPreferences: true }
+          : {}),
+        sourceKinds: ["magnet"],
+        deliveries: [
+          { delivery: "range-http", available: true },
+          { delivery: "progressive-fmp4", available: true },
+          { delivery: "seekable-cache", available: true },
+          ...(requestedFeatures.has("hls-segments")
+            ? [{ delivery: "hls" as const, available: true }]
+            : []),
+        ],
+        cancellation: true,
+        tracks: true,
+        subtitles: true,
+        thumbnails: true,
+        metrics: true,
+      },
+      cast: {
+        available: true,
+        controls: ["play", "pause", "resume", "seek", "stop"],
+      },
+      // Deliberately omit diagnostics to model an older bridge. The client
+      // must treat the torrent probe as unknown and keep playback available.
+    },
+    limits: {
+      maxRequestBytes: 16 * 1024,
+      maxSubtitleBytes: 8 * 1024 * 1024,
+      thumbnailBucketSeconds: 10,
+      maxThumbnailBucket: 864,
+      maxThumbnailBytes: 512 * 1024,
+    },
+  });
+}
 
 export type GoldenPathFixtureOptions = {
   notifications?: "empty" | "populated" | "mark-read-fails-once";
@@ -800,6 +850,15 @@ export async function installGoldenPathRoutes(
             methods: ["bearer", "x-streamer-bridge-token"],
           },
         });
+        return;
+      }
+      if (url.pathname === "/api/bridge/v1/capabilities") {
+        await json(
+          route,
+          fixtureBridgeCapabilities(
+            request.headers()["x-streamer-bridge-features"] ?? "",
+          ),
+        );
         return;
       }
       if (url.pathname === "/api/bridge/v1/cast/devices") {

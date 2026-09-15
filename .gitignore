@@ -32,6 +32,7 @@ Thumbs.db
 # Testing
 coverage/
 *.lcov
+/.playwright-cli/
 
 # Logs
 *.log
@@ -115,6 +116,8 @@ expo-env.d.ts
 # generated native folders
 /ios
 /android
+/apps/mobile/ios/
+/apps/mobile/android/
 
 # Stream server
 packages/stream-server/downloads/
