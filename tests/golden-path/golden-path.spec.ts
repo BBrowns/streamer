@@ -27,6 +27,25 @@ async function loginAndOpenFixture(page: Page, scenario: GoldenPathScenario) {
   return controls;
 }
 
+async function keepBrowserFixtureMediaAlive(page: Page) {
+  await page.addInitScript(() => {
+    const keepVideoAlive = (element: Element) => {
+      if (element instanceof HTMLVideoElement) element.loop = true;
+      element.querySelectorAll("video").forEach(keepVideoAlive);
+    };
+
+    document.querySelectorAll("video").forEach(keepVideoAlive);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof Element) keepVideoAlive(node);
+        }
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true });
+  });
+}
+
 async function settleVisualTheme(
   page: Page,
   scheme: "dark" | "light",
@@ -505,6 +524,10 @@ test("player volume owns its browser keyboard controls", async ({
     "Player keyboard ownership is a desktop browser contract.",
   );
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  // The direct fixture is only 520ms long. Keep this browser-only keyboard
+  // contract alive long enough to exercise every control without the source
+  // ending and triggering the normal fallback teardown.
+  await keepBrowserFixtureMediaAlive(page);
   await loginAndOpenFixture(page, "direct");
   await page.getByRole("button", { name: "Play" }).click();
 
