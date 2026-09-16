@@ -137,6 +137,32 @@ jobs:
       - name: Test release gate skip policy
         run: node --test scripts/ci-needs-check.test.mjs
 
+  process-evidence:
+    name: Process Evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+      - name: Validate process assets
+        run: npm run process:check
+      - name: Test process assets and receipts
+        run: npm run process:check:test
+      - name: Generate process verification receipt
+        run: npm run verify:change -- --focused --files scripts/validate-process-assets.mjs,scripts/verify-change.mjs,scripts/runtime-preflight.mjs,scripts/qa-run.mjs --output artifacts/verification/process-evidence.json
+      - name: Upload process evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: process-evidence
+          path: artifacts/verification/process-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
   dependency-install-preflight:
     name: Dependency Install Preflight
     runs-on: ubuntu-latest
@@ -853,6 +879,7 @@ jobs:
     needs:
       - ci_scope
       - dependency-install-preflight
+      - process-evidence
       - workflow-lint
       - lint-and-typecheck
       - format-check
@@ -879,6 +906,8 @@ jobs:
           if [[ "${CI_EVENT_NAME}" == "pull_request" ]] && git cat-file -e "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" 2>/dev/null; then
             git show "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" > "${RUNNER_TEMP}/ci-needs-check.mjs"
             node "${RUNNER_TEMP}/ci-needs-check.mjs"
+          elif [[ -f scripts/ci-needs-check.mjs ]]; then
+            node scripts/ci-needs-check.mjs
           else
             node --input-type=module -e 'const needs = JSON.parse(process.env.CI_NEEDS); const failures = Object.entries(needs).filter(([, value]) => value.result !== "success").map(([name, value]) => name + ":" + value.result); if (failures.length > 0) { console.error("Required CI jobs did not succeed: " + failures.join(", ")); process.exit(1); } console.log("All CI jobs succeeded; no trusted scope verifier was available.");'
           fi

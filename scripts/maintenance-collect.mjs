@@ -201,6 +201,42 @@ function countTrackedFiles(root) {
   };
 }
 
+function collectVerificationEvidence(root) {
+  const candidates = [
+    join(root, "artifacts", "verification", "process-evidence.json"),
+    join(root, "artifacts", "verification", "verify-change-final.json"),
+    join(root, "artifacts", "verification", "verify-change-focused.json"),
+  ];
+  for (const file of candidates) {
+    if (!existsSync(file)) continue;
+    try {
+      const receipt = JSON.parse(readFileSync(file, "utf8"));
+      return {
+        available: true,
+        source: relative(root, file),
+        status: receipt.status ?? "unknown",
+        generatedAt: receipt.generatedAt ?? null,
+        notRun: Array.isArray(receipt.notRun) ? receipt.notRun.length : 0,
+      };
+    } catch {
+      return {
+        available: true,
+        source: relative(root, file),
+        status: "invalid",
+        generatedAt: null,
+        notRun: 0,
+      };
+    }
+  }
+  return {
+    available: false,
+    source: null,
+    status: "unknown",
+    generatedAt: null,
+    notRun: 0,
+  };
+}
+
 function parseTimestamp(value) {
   const timestamp = Date.parse(value ?? "");
   return Number.isFinite(timestamp) ? timestamp : null;
@@ -650,6 +686,7 @@ function collectLocal(root, now, sinceDays) {
     audit: summarizeAudit(auditReport),
     auditPolicy: { available: true, passed: auditPolicy.ok },
     outdated: summarizeOutdated(outdatedReport),
+    verification: collectVerificationEvidence(root),
     recentCommits: recent.ok
       ? recent.stdout.split(/\r?\n/).filter(Boolean).length
       : null,

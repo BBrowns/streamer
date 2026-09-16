@@ -17,6 +17,10 @@ import {
 
 const validHandoff = `# Streamer Agent Handoff
 
+> Last updated: 2026-08-11.
+> Handoff branch: codex/test.
+> Handoff revision: ${"a".repeat(40)}
+
 ## Current Project Phase
 Current phase.
 
@@ -159,6 +163,22 @@ test("accepts a compact handoff with current sections and canonical sources", ()
   try {
     writeFileSync(join(root, "AGENT_HANDOFF.md"), validHandoff);
     assert.deepEqual(validateAgentHandoff(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a handoff with stale machine-readable context", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-handoff-stale-context-"));
+  try {
+    writeFileSync(
+      join(root, "AGENT_HANDOFF.md"),
+      validHandoff.replace("2026-08-11", "2025-01-01"),
+    );
+    const errors = validateAgentHandoff(root, {
+      now: new Date("2026-09-16T00:00:00.000Z"),
+    });
+    assert.ok(errors.some((error) => error.includes("older than")));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

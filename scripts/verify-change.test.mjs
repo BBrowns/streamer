@@ -152,7 +152,8 @@ test("execution stops after the first failed command and records evidence", () =
   );
 
   assert.deepEqual(calls, ["first", "second"]);
-  assert.equal(receipt.version, 2);
+  assert.equal(receipt.version, 3);
+  assert.equal(receipt.kind, "streamer-verification-receipt");
   assert.equal(receipt.mode, "focused");
   assert.match(receipt.verificationMapFingerprint, /^[a-f0-9]{64}$/);
   assert.match(receipt.runtime.node, /^v\d+/);
@@ -160,6 +161,7 @@ test("execution stops after the first failed command and records evidence", () =
   assert.equal(typeof receipt.runtime.platform, "string");
   assert.equal(typeof receipt.durationMs, "number");
   assert.equal(receipt.status, "failed");
+  assert.equal(receipt.notRun[0].reason, "stopped-after-failure");
   assert.deepEqual(
     receipt.results.map(({ command, status }) => ({ command, status })),
     [
@@ -184,10 +186,36 @@ test("writes a failed receipt atomically before returning a failing status", () 
     assert.equal(status, 1);
     assert.equal(existsSync(`${output}.tmp`), false);
     const receipt = JSON.parse(readFileSync(output, "utf8"));
-    assert.equal(receipt.version, 2);
+    assert.equal(receipt.version, 3);
     assert.equal(receipt.status, "failed");
     assert.equal(receipt.results.length, 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("records an explicit not-run reason for every command after a failure", () => {
+  const receipt = runVerificationPlan(
+    {
+      files: ["scripts/example.mjs"],
+      rules: ["process"],
+      focusedCommands: ["first", "second", "third"],
+      finalCommands: [],
+    },
+    "focused",
+    (command) => ({ status: command === "first" ? 1 : 0, signal: null }),
+  );
+
+  assert.deepEqual(receipt.notRun, [
+    {
+      command: "second",
+      reason: "stopped-after-failure",
+      failedCommand: "first",
+    },
+    {
+      command: "third",
+      reason: "stopped-after-failure",
+      failedCommand: "first",
+    },
+  ]);
 });

@@ -470,6 +470,9 @@ test("player timeline preview and adaptive settings remain usable", async ({
     "Focused player visual evidence is captured at compact and large widths.",
   );
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  // Keep the short direct fixture alive while the desktop settings flow
+  // exercises diagnostics and subtitle controls.
+  await keepBrowserFixtureMediaAlive(page);
   await loginAndOpenFixture(page, "direct");
   await page.getByRole("button", { name: "Play" }).click();
 

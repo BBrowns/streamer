@@ -50,13 +50,43 @@ const PROCESS_REFERENCE_ROOTS = Object.freeze([
   "README.md",
 ]);
 const PROCESS_TEXT_EXTENSIONS = /\.(json|md|mjs|js|py|toml|ya?ml)$/;
+const HANDOFF_MAX_AGE_DAYS = 45;
 
-export function validateAgentHandoff(root = process.cwd()) {
+export function validateAgentHandoff(
+  root = process.cwd(),
+  { now = new Date(), maxAgeDays = HANDOFF_MAX_AGE_DAYS } = {},
+) {
   const path = join(root, "AGENT_HANDOFF.md");
   if (!existsSync(path)) return ["AGENT_HANDOFF.md: missing"];
 
   const source = readFileSync(path, "utf8");
   const errors = [];
+  const updated = source.match(
+    /^> Last updated:\s*(\d{4}-\d{2}-\d{2})\.?$/m,
+  )?.[1];
+  const handoffBranch = source
+    .match(/^> Handoff branch:\s*(.+)$/m)?.[1]
+    ?.trim();
+  const handoffRevision = source.match(
+    /^> Handoff revision:\s*([0-9a-f]{40})$/im,
+  )?.[1];
+  if (!updated) {
+    errors.push("AGENT_HANDOFF.md: missing machine-readable Last updated date");
+  } else {
+    const updatedAt = new Date(`${updated}T23:59:59.999Z`);
+    const ageMs = now.getTime() - updatedAt.getTime();
+    if (!Number.isFinite(updatedAt.getTime())) {
+      errors.push("AGENT_HANDOFF.md: Last updated is not a valid date");
+    } else if (ageMs > maxAgeDays * 24 * 60 * 60 * 1000) {
+      errors.push(
+        `AGENT_HANDOFF.md: Last updated is older than ${maxAgeDays} days`,
+      );
+    }
+  }
+  if (!handoffBranch) errors.push("AGENT_HANDOFF.md: missing Handoff branch");
+  if (!handoffRevision) {
+    errors.push("AGENT_HANDOFF.md: missing 40-character Handoff revision");
+  }
   for (const section of HANDOFF_REQUIRED_SECTIONS) {
     if (!source.includes(section)) {
       errors.push(`AGENT_HANDOFF.md: missing ${section}`);
