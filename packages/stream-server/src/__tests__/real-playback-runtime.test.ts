@@ -53,7 +53,7 @@ type BrowserSnapshot = {
 };
 type HarnessWindow = Window & {
   fixture: {
-    start(source: string): void;
+    start(source: string, mode?: "hls" | "direct"): void;
     seek(target: number): void;
     stop(): void;
     snapshot(): BrowserSnapshot;
@@ -70,7 +70,9 @@ const browserHarness = `<!doctype html><html lang="en"><meta charset="utf-8">
 const video = document.getElementById('video');
 let hls, started = 0, firstFrameMs = null, frames = 0, mediaTime = 0;
 let fatalErrors = 0, seeked = 0, windowStart = 0, windowEnd = 0, callback;
-const supported = Hls.isSupported() && typeof video.requestVideoFrameCallback === 'function';
+const hlsSupported = Hls.isSupported();
+const nativeSupported = video.canPlayType('video/mp4') !== '';
+const supported = (hlsSupported || nativeSupported) && typeof video.requestVideoFrameCallback === 'function';
 const frame = (now, metadata) => {
   if (firstFrameMs === null) firstFrameMs = Math.round(performance.now() - started);
   frames += 1;
@@ -80,22 +82,34 @@ const frame = (now, metadata) => {
 video.addEventListener('seeked', () => seeked += 1);
 document.getElementById('play').onclick = () => video.play().catch(() => fatalErrors += 1);
 window.fixture = {
-  start(source) {
+  start(source, mode = 'hls') {
     started = performance.now();
+    firstFrameMs = null;
+    frames = 0;
+    mediaTime = 0;
+    fatalErrors = 0;
+    windowStart = 0;
+    windowEnd = 0;
     if (!supported) { fatalErrors += 1; return; }
     callback = video.requestVideoFrameCallback(frame);
-    hls = new Hls({ startPosition: 0, lowLatencyMode: false });
-    hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) fatalErrors += 1; });
-    hls.on(Hls.Events.LEVEL_UPDATED, (_, data) => {
-      const fragments = data.details.fragments;
-      if (fragments.length) {
-        windowStart = fragments[0].start;
-        const last = fragments[fragments.length - 1];
-        windowEnd = last.start + last.duration;
-      }
-    });
-    hls.attachMedia(video);
-    hls.loadSource(source);
+    if (mode === 'hls') {
+      if (!hlsSupported) { fatalErrors += 1; return; }
+      hls = new Hls({ startPosition: 0, lowLatencyMode: false });
+      hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) fatalErrors += 1; });
+      hls.on(Hls.Events.LEVEL_UPDATED, (_, data) => {
+        const fragments = data.details.fragments;
+        if (fragments.length) {
+          windowStart = fragments[0].start;
+          const last = fragments[fragments.length - 1];
+          windowEnd = last.start + last.duration;
+        }
+      });
+      hls.attachMedia(video);
+      hls.loadSource(source);
+      return;
+    }
+    if (!nativeSupported) { fatalErrors += 1; return; }
+    video.src = source;
   },
   seek(target) { video.currentTime = target; },
   stop() {
@@ -236,7 +250,7 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         .filter((name) => name === "ProcessWrap").length;
       root = await mkdtemp(path.join(tmpdir(), "streamer-real-playback-"));
       await Promise.all(
-        ["seed", "torrent", "remux", "hls"].map((name) =>
+        ["seed", "torrent", "remux", "hls", "origin-hls"].map((name) =>
           mkdir(path.join(root, name)),
         ),
       );
@@ -330,6 +344,31 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         "+faststart",
         path.join(root, "seed", mp4Name),
       ]);
+      await mediaCommand(ffmpeg, [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        path.join(root, "seed", mp4Name),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0",
+        "-c",
+        "copy",
+        "-f",
+        "hls",
+        "-hls_time",
+        "2",
+        "-hls_playlist_type",
+        "vod",
+        "-hls_segment_type",
+        "fmp4",
+        "-hls_segment_filename",
+        path.join(root, "origin-hls", "segment-%03d.m4s"),
+        path.join(root, "origin-hls", "master.m3u8"),
+      ]);
       const { default: RealWebTorrent } = await bounded(
         import("webtorrent"),
         "Native WebTorrent import",
@@ -422,6 +461,8 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
       app.get("/fixture/hls.js", fixtureAssetLimiter, (_req, res) =>
         res.sendFile(hlsBundle),
       );
+      app.use("/origin-media", express.static(path.join(root, "seed")));
+      app.use("/origin-hls", express.static(path.join(root, "origin-hls")));
       app.get("/api/gateway/jobs/:id/stream", gateway.serveGatewayJobStream);
       app.get(
         "/api/bridge/v1/jobs/:id/segments/:segment",
@@ -663,6 +704,119 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
       await hlsFragment(job);
       await hlsFragment(job, 2);
     }, 60_000);
+
+    it("plays direct MP4 and HLS-origin fixtures in Chromium", async () => {
+      const manifest = await http("/origin-hls/master.m3u8");
+      expect(manifest.status).toBe(200);
+      expect((await bytes(manifest)).toString()).toMatch(/^#EXTM3U/m);
+
+      const direct = await http(`/origin-media/${mp4Name}`, {
+        headers: { Range: "bytes=0-1023" },
+      });
+      expect(direct.status).toBe(206);
+      expect((await bytes(direct)).length).toBe(1024);
+
+      const { chromium } = await bounded(
+        import("playwright"),
+        "Installed Playwright import",
+      );
+      const browser = await bounded(
+        chromium.launch({ headless: true, timeout: 15_000 }),
+        "Installed Chromium launch",
+        20_000,
+      );
+      let stage = "browser setup";
+      let last: BrowserSnapshot | undefined;
+      let pageErrors = 0;
+      let externalRequests = 0;
+      try {
+        const context = await browser.newContext({
+          viewport: { width: 800, height: 600 },
+          serviceWorkers: "block",
+        });
+        context.setDefaultTimeout(12_000);
+        await context.route("**/*", (route) => {
+          if (new URL(route.request().url()).origin === origin)
+            return route.continue();
+          externalRequests += 1;
+          return route.abort();
+        });
+        const page = await context.newPage();
+        page.on("pageerror", () => {
+          pageErrors += 1;
+        });
+        await page.goto(`${origin}/fixture`, { waitUntil: "load" });
+
+        const snapshot = async () => {
+          last = await page.evaluate(() =>
+            (window as unknown as HarnessWindow).fixture.snapshot(),
+          );
+          check(
+            last.fatalErrors === 0 && last.mediaError === 0 && pageErrors === 0,
+            "Origin fixture media reported an error",
+          );
+          return last;
+        };
+        const playSource = async (
+          source: string,
+          label: string,
+          mode: "hls" | "direct",
+        ) => {
+          stage = `${label} start`;
+          await page.evaluate(
+            ({ value, playbackMode }) =>
+              (window as unknown as HarnessWindow).fixture.start(
+                value,
+                playbackMode,
+              ),
+            { value: source, playbackMode: mode },
+          );
+          await page.getByRole("button", { name: "Play fixture" }).click();
+          await until(
+            async () => {
+              const state = await snapshot();
+              return (
+                state.firstFrameMs !== null &&
+                state.frames > 0 &&
+                state.width === 160 &&
+                state.height === 90 &&
+                !state.paused
+              );
+            },
+            `${label} first frame`,
+            12_000,
+          );
+          const state = await snapshot();
+          await page.evaluate(() =>
+            (window as unknown as HarnessWindow).fixture.stop(),
+          );
+          return state;
+        };
+
+        const directFrame = await playSource(
+          `${origin}/origin-media/${mp4Name}`,
+          "Direct origin",
+          "direct",
+        );
+        const hlsFrame = await playSource(
+          `${origin}/origin-hls/master.m3u8`,
+          "HLS origin",
+          "hls",
+        );
+        expect([externalRequests, pageErrors]).toEqual([0, 0]);
+        process.stdout.write(
+          `[real-fixture] originDirect=passed; originHls=passed; directFirstFrameMs=${directFrame.firstFrameMs}; hlsFirstFrameMs=${hlsFrame.firstFrameMs}\n`,
+        );
+        await context.close();
+      } catch {
+        throw new Error(
+          `Origin fixture failed at ${stage}; safeState=${JSON.stringify(last ?? {})}`,
+        );
+      } finally {
+        await bounded(browser.close(), "Chromium shutdown", 10_000);
+      }
+      expect(browser.isConnected()).toBe(false);
+    }, 75_000);
 
     it("downgrades compatible MP4 to real direct delivery with correct HEAD and byte ranges", async () => {
       const { job } = await readyJob(3);

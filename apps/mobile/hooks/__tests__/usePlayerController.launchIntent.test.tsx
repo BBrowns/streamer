@@ -5,6 +5,8 @@ import { usePlayerController } from "../usePlayerController";
 
 let mockContinueWatchingItems: Array<Record<string, unknown>> = [];
 const mockUpdateProgress = jest.fn();
+const mockBeginPlaybackLaunch = jest.fn(() => "planning-launch");
+let mockMeta: Record<string, unknown> | null = null;
 const originalSubscribeToStreamMetrics =
   usePlayerStore.getState().subscribeToStreamMetrics;
 const mockSubscribeToStreamMetrics = jest.fn();
@@ -52,6 +54,10 @@ jest.mock("../../services/playback/PlaybackSessionPlaybackService", () => ({
     mockGetActivePlaybackSourceRuntime(sessionId, attemptId),
 }));
 
+jest.mock("../../services/playback/PlaybackLaunchService", () => ({
+  beginPlaybackLaunch: (...args: unknown[]) => mockBeginPlaybackLaunch(...args),
+}));
+
 jest.mock("../useSync", () => ({
   useSync: () => ({ sendMessage: jest.fn() }),
 }));
@@ -70,7 +76,7 @@ jest.mock("../useContinueWatching", () => ({
 }));
 
 jest.mock("../useMeta", () => ({
-  useMeta: () => ({ data: null }),
+  useMeta: () => ({ data: mockMeta }),
 }));
 
 jest.mock("../../services/api", () => ({
@@ -130,6 +136,7 @@ function startSession(
 describe("usePlayerController playback launch intent", () => {
   beforeEach(() => {
     mockContinueWatchingItems = [];
+    mockMeta = null;
     mockActivePlaybackSourceRuntime = null;
     jest.clearAllMocks();
     usePlayerStore.getState().clearPlayer();
@@ -268,6 +275,47 @@ describe("usePlayerController playback launch intent", () => {
       expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
     });
     expect(screen.result.current.showResumePrompt).toBe(false);
+    await screen.unmount();
+  });
+
+  it("does not consume a next-episode planning intent while the old URI is still mounted", async () => {
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    mockMeta = {
+      videos: [
+        { id: "episode-2", season: 1, episode: 2, title: "Second episode" },
+      ],
+    };
+    usePlayerStore.getState().setPlaybackPlanning(
+      {
+        type: "series",
+        itemId: "series-1",
+        title: "Example series - First episode",
+        season: 1,
+        episode: 1,
+      },
+      "planning-launch",
+    );
+
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        // This simulates the previous HLS/direct URI surviving for one render
+        // while the next episode launch is being installed.
+        playbackUri: "https://cdn.example.test/previous.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(usePlayerStore.getState().playbackLaunchIntent).toEqual({
+        type: "planning",
+        launchId: "planning-launch",
+      });
+    });
+    expect(player.play).not.toHaveBeenCalled();
+    expect(mockBeginPlaybackLaunch).not.toHaveBeenCalled();
     await screen.unmount();
   });
 

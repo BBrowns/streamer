@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { stripSubtitleMarkup } from "@streamer/shared";
+import { getFfmpegBinaryPath } from "./media-runtime.js";
 
 export const MAX_SUBTITLE_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const SUBTITLE_EXTRACTION_TIMEOUT_MS = 15_000;
@@ -261,7 +262,7 @@ export async function extractEmbeddedSubtitleToVtt({
   try {
     return await new Promise<string>((resolve, reject) => {
       const child = spawn(
-        process.env.STREAMER_FFMPEG_PATH?.trim() || "ffmpeg",
+        getFfmpegBinaryPath(),
         [
           "-hide_banner",
           "-loglevel",

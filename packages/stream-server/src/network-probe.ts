@@ -45,7 +45,9 @@ function probeMagnet() {
       .map((value) => value.replace(/^urn:btih:/i, "").trim())
       .find((value) => /^(?:[a-f0-9]{40}|[a-z2-7]{32})$/i.test(value));
     if (!infoHash) return null;
-    return normalizeTorrentMagnetForRuntime(configured);
+    return normalizeTorrentMagnetForRuntime(configured, {
+      preservePublicWebSeeds: true,
+    });
   } catch {
     return null;
   }

@@ -17,7 +17,7 @@ import { downloadService } from "../../../services/DownloadService";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../../../stores/toastStore";
 import { hapticImpactLight, hapticSuccess } from "../../../lib/haptics";
-import { goBackOrReplace } from "../../../lib/navigation";
+import { blurWebFocus, goBackOrReplace } from "../../../lib/navigation";
 import type {
   PlaybackAction,
   PlaybackPlanResponse,
@@ -317,6 +317,7 @@ export default function DetailScreen() {
         },
         launchId,
       );
+      blurWebFocus();
       router.push("/player");
     } catch (error) {
       playLaunchInFlightRef.current = false;
@@ -430,6 +431,7 @@ export default function DetailScreen() {
         result.sessionId,
         result.candidateId,
       );
+      blurWebFocus();
       router.push("/player");
     } finally {
       playLaunchInFlightRef.current = false;
@@ -464,6 +466,17 @@ export default function DetailScreen() {
       }
       if (!streamToDownload) {
         setPlanningAction("download");
+        const preparationMediaInfo = {
+          type: castType,
+          itemId: id || "unknown",
+          title: episodeTitle ? `${meta.name} - ${episodeTitle}` : meta.name,
+          poster: meta.poster,
+          background: meta.background,
+          season,
+          episode,
+        };
+        const preparationId =
+          downloadService.beginPreparingDownload(preparationMediaInfo);
         try {
           const result = await prepareDownload({
             type: castType,
@@ -476,6 +489,7 @@ export default function DetailScreen() {
             episodeTitle,
           });
           if (!result.ok) {
+            downloadService.failPreparingDownload(preparationId, result.error);
             setPlaybackNotice(
               getPlaybackReadinessCopyFromError(
                 result.error,
@@ -500,6 +514,16 @@ export default function DetailScreen() {
             season,
             episode,
             result.plan.selectedCandidate?.sizeBytes,
+          );
+          return;
+        } catch (error) {
+          downloadService.failPreparingDownload(preparationId, error);
+          setPlaybackNotice(
+            getPlaybackReadinessCopy(
+              null,
+              "Download is unavailable right now.",
+              "download",
+            ),
           );
           return;
         } finally {
@@ -605,6 +629,7 @@ export default function DetailScreen() {
               sessionId: details.sessionId,
             });
             setCastModalOpen(false);
+            blurWebFocus();
             router.push("/player");
           }}
         />

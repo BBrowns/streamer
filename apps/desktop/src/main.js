@@ -1804,6 +1804,11 @@ async function startBridgeDaemon() {
       STREAMER_BUILD_ENVIRONMENT: desktopBuildMetadata.environment,
       STREAMER_BRIDGE_RUNTIME_ARCH: nodeArch || "",
       STREAMER_BRIDGE_NATIVE_ARCH: runtimeDiagnostics.nativeArch || "",
+      // Keep safe stream-server breadcrumbs visible in development Electron.
+      // Packaged apps remain quiet unless the operator opts in explicitly.
+      STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS:
+        process.env.STREAMER_STREAM_SERVER_CONSOLE_BREADCRUMBS ||
+        (electron_1.app.isPackaged ? "0" : "1"),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

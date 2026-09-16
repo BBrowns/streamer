@@ -30,6 +30,7 @@ import { useTranslation } from "react-i18next";
 import { MoreSourcesPanel } from "./MoreSourcesPanel";
 import { MediaArtwork } from "../ui/MediaArtwork";
 import { useDesktopTopBarScroll } from "../ui/DesktopLayout";
+import { getDetailCountMetadataKey } from "./detailMetadata";
 
 function MetadataItem({
   label,
@@ -341,7 +342,9 @@ export function DesktopDetailLayout({
                 value={availableResolutions.join(" · ")}
               />
               <MetadataItem
-                label={t("detail.metadata.sources")}
+                label={t(
+                  `detail.metadata.${getDetailCountMetadataKey(castType)}`,
+                )}
                 value={sourceCount ? String(sourceCount) : undefined}
               />
             </View>

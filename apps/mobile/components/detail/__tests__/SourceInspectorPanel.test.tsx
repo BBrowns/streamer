@@ -105,6 +105,7 @@ describe("SourceInspectorPanel", () => {
     expect(screen.getByText("Selected")).toBeTruthy();
     expect(screen.getAllByText("Bridge").length).toBeGreaterThan(0);
     expect(screen.getByText("Remux")).toBeTruthy();
+    expect(screen.getByText(/12 reported seeders/)).toBeTruthy();
     expect(screen.getByText("Blocked source")).toBeTruthy();
     expect(screen.getByText("Play blocked")).toBeTruthy();
     expect(screen.getByText("Copy safe debug bundle")).toBeTruthy();

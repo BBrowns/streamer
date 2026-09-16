@@ -316,6 +316,75 @@ describe("DownloadService session completion", () => {
     ).not.toBe("cancelled");
   });
 
+  it("keeps a visible preparation task and adopts it when the source resolves", async () => {
+    window.desktopBridge = {
+      startDownloadJob: jest.fn().mockResolvedValue({
+        id: "download-preparing-movie",
+        status: "Downloading",
+        downloadUrl: "https://cdn.example.test/movie.mp4",
+        filename: "download_preparing_movie.mp4",
+        totalBytesWritten: 0,
+        totalBytesExpectedToWrite: 1000,
+      }),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+
+    const service = new DownloadService();
+    const mediaInfo = {
+      type: "movie" as const,
+      itemId: "tt-preparing-movie",
+      title: "Preparing Movie",
+    };
+    const preparationId = service.beginPreparingDownload(mediaInfo);
+
+    expect(useDownloadStore.getState().tasks[preparationId]).toMatchObject({
+      status: "Preparing",
+      mediaInfo: expect.objectContaining(mediaInfo),
+    });
+
+    await service.startDownload(
+      { url: "https://cdn.example.test/movie.mp4" },
+      mediaInfo,
+      {
+        resolvedUrl: "https://cdn.example.test/movie.mp4",
+        eligibility: {
+          mode: "direct-file",
+          canDownload: true,
+          offlinePlayable: true,
+        },
+      },
+    );
+
+    expect(window.desktopBridge!.startDownloadJob).toHaveBeenCalledWith(
+      preparationId,
+      "https://cdn.example.test/movie.mp4",
+      `${preparationId.replace(/[^a-z0-9]/gi, "_")}.mp4`,
+    );
+    expect(useDownloadStore.getState().tasks[preparationId]).toMatchObject({
+      status: "Downloading",
+    });
+  });
+
+  it("does not pause an active planner preparation when Downloads refreshes", async () => {
+    window.desktopBridge = {
+      getDownloadJob: jest.fn().mockResolvedValue(null),
+      onDownloadProgress: jest.fn(() => () => {}),
+    } as any;
+
+    const service = new DownloadService();
+    const preparationId = service.beginPreparingDownload({
+      type: "movie",
+      itemId: "tt-refresh-preparation",
+      title: "Refresh Preparation",
+    });
+
+    await service.refreshQueue();
+
+    expect(useDownloadStore.getState().tasks[preparationId]).toMatchObject({
+      status: "Preparing",
+    });
+  });
+
   it("keeps a bridge rate-limit cooldown on the playback session", async () => {
     const playbackSession = createDownloadSessionContext();
     const rateLimitError = Object.assign(new Error("Too many requests"), {

@@ -61,6 +61,10 @@ import {
   removeTorrentCacheDir,
   resolveTorrentCacheConfig,
 } from "./torrent-cache.js";
+import {
+  formatMediaRuntimeError,
+  getFfmpegBinaryPath,
+} from "./media-runtime.js";
 
 // Re-export pure helpers for stats.ts and tests
 export {
@@ -252,10 +256,6 @@ export function webTorrentUtpEnabled(
   // reliable TCP path as the desktop default; UTP remains an explicit opt-in
   // for environments where it is known to work.
   return readBooleanEnv("STREAMER_WEBTORRENT_UTP", platform !== "darwin");
-}
-
-function getFfmpegBinaryPath() {
-  return process.env.STREAMER_FFMPEG_PATH?.trim() || "ffmpeg";
 }
 
 function getRemuxCacheTtlMs() {
@@ -1768,7 +1768,7 @@ export async function getRemuxRuntimeStatus(
           state: "unavailable",
           binaryPath,
           reason: "ffmpeg-unavailable",
-          message: err.message || "FFmpeg executable is unavailable.",
+          message: formatMediaRuntimeError(err),
           processArch: process.arch,
           platform: process.platform,
         });
@@ -1810,7 +1810,7 @@ export async function getRemuxRuntimeStatus(
         state: "unavailable",
         binaryPath,
         reason: "ffmpeg-unavailable",
-        message: (err as Error | undefined)?.message || String(err),
+        message: formatMediaRuntimeError(err),
         processArch: process.arch,
         platform: process.platform,
       });
@@ -2291,13 +2291,31 @@ function isSafeTrackerUrl(value: string) {
   }
 }
 
+function isSafePublicWebSeedUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "https:" &&
+      !parsed.username &&
+      !parsed.password &&
+      parsed.hostname.length > 0 &&
+      !isPrivateOrReservedTrackerHost(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Keep only the runtime-relevant, validated parts of an incoming magnet.
  * Provider display metadata is not needed by WebTorrent and may contain
  * sensitive or unbounded values. Fallback trackers are owned here so clients
  * do not need to duplicate this policy.
  */
-export function normalizeTorrentMagnetForRuntime(magnet: string) {
+export function normalizeTorrentMagnetForRuntime(
+  magnet: string,
+  options: { preservePublicWebSeeds?: boolean } = {},
+) {
   const trimmed = magnet.trim();
   let parsed: URL;
   try {
@@ -2331,6 +2349,19 @@ export function normalizeTorrentMagnetForRuntime(magnet: string) {
   params.push(
     ...uniqueTrackers.map((tracker) => `tr=${encodeURIComponent(tracker)}`),
   );
+  if (options.preservePublicWebSeeds) {
+    // This is reserved for the server-owned diagnostic fixture. User/provider
+    // magnets remain webseed-free so arbitrary source URLs cannot become
+    // runtime fetch destinations.
+    const webSeeds = [
+      ...new Set(
+        parsed.searchParams.getAll("xs").filter(isSafePublicWebSeedUrl),
+      ),
+    ];
+    params.push(
+      ...webSeeds.map((webSeed) => `xs=${encodeURIComponent(webSeed)}`),
+    );
+  }
   return `magnet:?${params.join("&")}`;
 }
 

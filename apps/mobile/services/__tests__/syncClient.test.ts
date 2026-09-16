@@ -319,6 +319,38 @@ describe("SyncClient", () => {
     client.stop();
   });
 
+  it("refreshes before reconnecting when the server closes an expired-auth socket", async () => {
+    auth.tokenExpiresAt = Date.now() + 60_000;
+    const refreshAuth = jest.fn(async () => {
+      auth.accessToken = "rotated-after-server-expiry";
+      auth.tokenExpiresAt = Date.now() + 60_000;
+      return auth.accessToken;
+    });
+    const client = new SyncClient({
+      getAuth: () => auth,
+      createSocket,
+      refreshAuth,
+    });
+
+    client.start();
+    await flushAsyncWork();
+    const firstSocket = sockets[0];
+
+    firstSocket.onclose?.({
+      code: 1008,
+      reason: "Authentication expired or revoked",
+    });
+    await flushAsyncWork();
+
+    expect(refreshAuth).toHaveBeenCalledTimes(1);
+    expect(createSocket).toHaveBeenCalledTimes(2);
+    expect(createSocket).toHaveBeenLastCalledWith(
+      "rotated-after-server-expiry",
+      "device-id",
+    );
+    client.stop();
+  });
+
   it("does not let an old refresh block a new lifecycle", async () => {
     auth.tokenExpiresAt = Date.now() - 1;
     const refreshAuth = jest.fn(() => new Promise<string>(() => {}));

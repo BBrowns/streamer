@@ -850,7 +850,8 @@
       "language": "Taal",
       "runtime": "Speelduur",
       "quality": "Kwaliteit",
-      "sources": "Bronnen"
+      "sources": "Bronnen",
+      "episodes": "Afleveringen"
     },
     "play": "Afspelen",
     "download": "Downloaden",
@@ -908,7 +909,7 @@
       "compatibility": {
         "ready": "Gereed op dit apparaat",
         "localService": "Gebruikt Lokale afspeelservice",
-        "conversion": "Wordt automatisch voorbereid"
+        "conversion": "Wordt bij selecteren omgezet"
       },
       "language": {
         "notListed": "Taal niet vermeld",

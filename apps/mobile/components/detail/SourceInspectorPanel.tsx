@@ -102,7 +102,9 @@ function CandidateRow({
             Score {Math.round(candidate.score)} ·{" "}
             {formatCandidateLabel(candidate) || "Unknown media profile"}
             {size ? ` · ${size}` : ""}
-            {candidate.seeders != null ? ` · ${candidate.seeders} peers` : ""}
+            {candidate.seeders != null
+              ? ` · ${candidate.seeders} reported seeders`
+              : ""}
           </Text>
         </View>
       </View>
