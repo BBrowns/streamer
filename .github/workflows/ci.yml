@@ -879,6 +879,8 @@ jobs:
           if [[ "${CI_EVENT_NAME}" == "pull_request" ]] && git cat-file -e "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" 2>/dev/null; then
             git show "${CI_BASE_SHA}:scripts/ci-needs-check.mjs" > "${RUNNER_TEMP}/ci-needs-check.mjs"
             node "${RUNNER_TEMP}/ci-needs-check.mjs"
+          elif [[ -f scripts/ci-needs-check.mjs ]]; then
+            node scripts/ci-needs-check.mjs
           else
             node --input-type=module -e 'const needs = JSON.parse(process.env.CI_NEEDS); const failures = Object.entries(needs).filter(([, value]) => value.result !== "success").map(([name, value]) => name + ":" + value.result); if (failures.length > 0) { console.error("Required CI jobs did not succeed: " + failures.join(", ")); process.exit(1); } console.log("All CI jobs succeeded; no trusted scope verifier was available.");'
           fi

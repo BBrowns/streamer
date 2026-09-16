@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { findCiNeedFailures } from "./ci-needs-check.mjs";
@@ -53,6 +54,30 @@ test("accepts an install preflight that is intentionally out of scope", () => {
       "workflow-lint": { result: "success" },
     }),
     [],
+  );
+});
+
+test("accepts push-style full CI when install preflight is intentionally skipped", () => {
+  assert.deepEqual(
+    findCiNeedFailures({
+      ci_scope: scope({ full_ci: "true", run_install_preflight: "false" }),
+      "dependency-install-preflight": { result: "skipped" },
+      "workflow-lint": { result: "success" },
+      "golden_path_gate": { result: "success" },
+    }),
+    [],
+  );
+});
+
+test("uses the shared CI needs checker for push release gates", () => {
+  const workflow = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /elif \[\[ -f scripts\/ci-needs-check\.mjs \]\]; then[\s\S]*?node scripts\/ci-needs-check\.mjs/,
   );
 });
 
