@@ -8,7 +8,7 @@
         "^\\.codex/",
         "^AGENTS\\.md$",
         "^config/verification-map\\.json$",
-        "^scripts/(validate-process-assets|validate-skill-evals|evaluate-skill-outcomes|verify-change|maintenance-collect|maintenance-report|dev-runtime)"
+        "^scripts/(validate-process-assets|validate-skill-evals|evaluate-skill-outcomes|verify-change|runtime-preflight|qa-run|maintenance-collect|maintenance-report|dev-runtime)"
       ],
       "focusedCommands": [
         "npm run process:check",

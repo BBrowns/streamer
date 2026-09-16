@@ -129,6 +129,17 @@ function revision() {
   }
 }
 
+function gitValue(args) {
+  try {
+    return execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 function defaultRunner(command) {
   return spawnSync(command, {
     cwd: root,
@@ -158,7 +169,7 @@ export function runVerificationPlan(
   plan,
   mode,
   runner = defaultRunner,
-  { mapPath = defaultMapPath, now = () => Date.now() } = {},
+  { mapPath = defaultMapPath, now = () => Date.now(), base = null } = {},
 ) {
   const commands =
     mode === "final"
@@ -166,6 +177,7 @@ export function runVerificationPlan(
       : plan.focusedCommands;
   const results = [];
   const startedAtMs = now();
+  let failedCommand = null;
 
   for (const command of commands) {
     const commandStartedAtMs = now();
@@ -178,23 +190,34 @@ export function runVerificationPlan(
       signal: result.signal ?? null,
       durationMs: Math.max(0, commandFinishedAtMs - commandStartedAtMs),
     });
-    if (status !== 0) break;
+    if (status !== 0) {
+      failedCommand = command;
+      break;
+    }
   }
 
   const finishedAtMs = now();
 
   return {
-    version: 2,
+    version: 3,
+    kind: "streamer-verification-receipt",
     mode,
     generatedAt: new Date(startedAtMs).toISOString(),
     finishedAt: new Date(finishedAtMs).toISOString(),
     durationMs: Math.max(0, finishedAtMs - startedAtMs),
     revision: revision(),
+    branch: gitValue(["branch", "--show-current"]),
+    base,
     fingerprint: fingerprintFiles(plan.files),
     verificationMapFingerprint: fingerprintPath(mapPath),
     runtime: runtimeEvidence(),
     ...plan,
     results,
+    notRun: commands.slice(results.length).map((command) => ({
+      command,
+      reason: "stopped-after-failure",
+      failedCommand,
+    })),
     status:
       results.length === commands.length &&
       results.every(({ status }) => status === 0)
@@ -248,8 +271,13 @@ export function main(
     return 0;
   }
 
-  const receipt = runVerificationPlan(plan, options.mode, runner);
-  if (options.output) writeJsonAtomically(options.output, receipt);
+  const receipt = runVerificationPlan(plan, options.mode, runner, {
+    base: options.base,
+  });
+  const outputPath =
+    options.output ??
+    `artifacts/verification/verify-change-${options.mode}.json`;
+  writeJsonAtomically(outputPath, receipt);
   writeStdout(
     options.json ? JSON.stringify(receipt, null, 2) : JSON.stringify(receipt),
   );

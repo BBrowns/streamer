@@ -152,6 +152,38 @@ export function classifyEvidence(evidence) {
     });
   }
 
+  const verification = local.verification ?? {};
+  if (verification.status === "failed" || verification.status === "invalid") {
+    addFinding(findings, {
+      priority: "Now",
+      key: "verification-receipt-failed",
+      title: "Latest change verification receipt is not passing",
+      evidence: `The latest recorded receipt is ${verification.status} (${verification.source ?? "unknown source"}).`,
+      owner: "Change owner",
+      nextAction:
+        "Re-run the focused verification against the final file set and repair the first root failure.",
+      closeWhen:
+        "The latest receipt is passed for the current change revision.",
+    });
+  }
+
+  if (
+    verification.available &&
+    verification.notRun > 0 &&
+    verification.status === "passed"
+  ) {
+    addFinding(findings, {
+      priority: "Watch",
+      key: "verification-not-run",
+      title: "Verification receipt contains not-run commands",
+      evidence: `${verification.notRun} command(s) were recorded as not-run in ${verification.source ?? "the latest receipt"}.`,
+      owner: "Change owner",
+      nextAction:
+        "Confirm each skipped command has an explicit scope or environment reason before review.",
+      closeWhen: "The receipt has no unexplained not-run commands.",
+    });
+  }
+
   if ((historicalCancelled ?? 0) > 0) {
     addFinding(findings, {
       priority: "Watch",
@@ -297,6 +329,7 @@ function renderProcessMetrics(evidence) {
     `- Preflight runs: ${preflight.available === false ? "unavailable" : metric(preflight.runs)}; failures: ${preflight.available === false ? "unavailable" : metric(preflight.failures)}; cancellations: ${preflight.available === false ? "unavailable" : metric(preflight.cancelled)}`,
     `- Downstream jobs skipped after preflight failure: ${preflight.available === false ? "unavailable" : metric(preflight.skippedAfterFailure)}`,
     `- Median CI duration (sampled runs): ${duration === null || duration === undefined ? "unavailable" : `${duration}s`}`,
+    `- Latest verification receipt: ${metric(evidence.local?.verification?.status)} (${evidence.local?.verification?.source ?? "unavailable"})`,
   ].join("\n");
 }
 

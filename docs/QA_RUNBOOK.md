@@ -4,6 +4,18 @@ This document provides step-by-step instructions for performing manual playback 
 
 ## Preparation
 
+Before a playback or QA run, execute the read-only runtime preflight for the
+surface under test:
+
+```bash
+npm run preflight:runtime -- --surface playback
+npm run qa:run -- --surface electron --scenario playback --label local
+```
+
+The preflight identifies toolchain, FFmpeg/FFprobe, API, database, and bridge
+problems before a click round begins. A passing preflight is startup/runtime
+evidence only; the QA manifest keeps playback and device claims separate.
+
 1.  **Environment:** Ensure you have access to:
     - iPhone (Real device or Simulator)
     - Android (Real device or Emulator)

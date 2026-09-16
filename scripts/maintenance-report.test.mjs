@@ -13,6 +13,7 @@ function evidence(overrides = {}) {
       exceptions: { expired: [], expiring: [] },
       workflows: { unpinnedCount: 0, actionCount: 12 },
       outdated: { count: 0 },
+      verification: { available: false, status: "unknown", notRun: 0 },
     },
     remote: {
       available: true,
@@ -191,5 +192,32 @@ test("reports raw findings as Watch when the project policy reviews them", () =>
   assert.deepEqual(
     findings.map(({ key, priority }) => ({ key, priority })),
     [{ key: "reviewed-audit-exceptions", priority: "Watch" }],
+  );
+});
+
+test("reports a failed verification receipt as an active finding", () => {
+  const findings = classifyEvidence(
+    evidence({
+      local: {
+        audit: { counts: { critical: 0, high: 0 } },
+        auditPolicy: { available: true, passed: true },
+        exceptions: { expired: [], expiring: [] },
+        workflows: { unpinnedCount: 0, actionCount: 12 },
+        outdated: { count: 0 },
+        verification: {
+          available: true,
+          source: "artifacts/verification/verify-change-focused.json",
+          status: "failed",
+          notRun: 2,
+        },
+      },
+    }),
+  );
+
+  assert.deepEqual(
+    findings
+      .filter(({ key }) => key === "verification-receipt-failed")
+      .map(({ priority }) => priority),
+    ["Now"],
   );
 });

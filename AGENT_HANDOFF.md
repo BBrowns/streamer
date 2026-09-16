@@ -1,6 +1,8 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-08-26.
+> Last updated: 2026-09-16.
+> Handoff branch: codex/fix-push-release-gate.
+> Handoff revision: 67e0c3ab66d02aa6f1c7581f4baef4346296724f
 > Audience: humans and agents continuing Streamer product, playback, release,
 > or process work.
 

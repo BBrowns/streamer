@@ -73,6 +73,7 @@ function checkCiWorkflow() {
     ["ci_scope:", "fail-closed CI scope detector"],
     ["run_install_preflight", "dependency install preflight scope output"],
     ["dependency-install-preflight:", "dependency install preflight job"],
+    ["process-evidence:", "process evidence job"],
     ["CI_BASE_SHA", "pull-request base SHA for affected CI"],
     ["fetch-depth: 0", "complete history for affected CI"],
     [
@@ -131,6 +132,11 @@ function checkCiWorkflow() {
     ],
     ["npm run process:check", "agent process asset validation"],
     ["npm run process:check:test", "agent process validator tests"],
+    ["npm run verify:change", "change verification receipt generation"],
+    [
+      "artifacts/verification/process-evidence.json",
+      "process evidence artifact",
+    ],
     [
       "npm run architecture:check",
       "architecture boundary and budget validation",
@@ -299,6 +305,7 @@ function checkDocs() {
   requireFile("docs/QA_RUNBOOK.md");
   requireFile("docs/RC_CHECKLIST.md");
   requireFile("docs/RELEASE_NOTES_TEMPLATE.md");
+  requireFile("docs/ENGINEERING_PROCESS.md");
   requireFile("AGENT_HANDOFF.md");
   requireFile("ROADMAP.md");
   requireFile("docs/DEPENDENCY_SECURITY.md");
@@ -351,6 +358,16 @@ function checkDocs() {
     "package.json",
     '"native:evidence:preflight": "node scripts/native-evidence-preflight.mjs"',
     "native evidence preflight command",
+  );
+  requireText(
+    "package.json",
+    '"preflight:runtime": "node scripts/runtime-preflight.mjs"',
+    "runtime preflight command",
+  );
+  requireText(
+    "package.json",
+    '"qa:run": "node scripts/qa-run.mjs"',
+    "QA run manifest command",
   );
   requireText(
     "package.json",

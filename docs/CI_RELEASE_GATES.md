@@ -5,6 +5,11 @@ agent memory.
 
 ## Required Checks
 
+Every CI event also runs the process-evidence job. It validates process assets,
+their tests, workflow policy, runtime selection, and the change-verification
+receipt contract. Release Gate depends on that job, so a missing or failed
+process check cannot be hidden behind a skipped downstream job.
+
 The release gate expects the workflow to run:
 
 - formatting: `npm run format:check`
@@ -80,6 +85,12 @@ The repository distinguishes three states:
 
 The verification receipt must name the latest commit SHA. Checks from an earlier
 commit do not establish readiness for the current PR revision.
+
+`verify:change` writes a JSON receipt under `artifacts/verification/` for every
+focused or final run. The receipt records the exact files, selected rules,
+commands that ran, and every command that was not run after a failure. QA runs
+use a JSON manifest with a generated Markdown view under the same artifact
+boundary; manual network/device records remain under `docs/qa-runs/`.
 
 For a failed run, inspect the first root job failure before interpreting a
 downstream or dependent failure. For visual failures, use the platform-matched
