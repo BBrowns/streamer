@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn } from "child_process";
+import { getFfmpegBinaryPath } from "./media-runtime.js";
 
 const DEFAULT_MAX_ENTRIES = 96;
 const DEFAULT_MAX_CACHE_BYTES = 24 * 1024 * 1024;
@@ -54,10 +55,6 @@ function abortReason(signal: AbortSignal) {
   return signal.reason instanceof Error
     ? signal.reason
     : new Error("Thumbnail generation cancelled");
-}
-
-function getFfmpegBinaryPath() {
-  return process.env.STREAMER_FFMPEG_PATH?.trim() || "ffmpeg";
 }
 
 async function generateSeekThumbnail(

@@ -398,6 +398,12 @@ export function usePlayerController({
       return;
     }
 
+    // Planning launches are owned by usePlaybackSessionBinding. During a
+    // source replacement the previous URI can still be present for one
+    // render; consuming the planning intent here would make the binding lose
+    // its launch id and leave the player on the empty-state screen.
+    if (playbackLaunchIntent?.type === "planning") return;
+
     if (playbackLaunchIntent) {
       setHasPromptedResume(true);
       setShowResumePrompt(false);

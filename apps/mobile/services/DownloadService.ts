@@ -134,12 +134,13 @@ export class DownloadService {
   private desktopProgressUnsubscribe: (() => void) | null = null;
   private lastSessionProgressBucket: Record<string, number> = {};
   private finalizingTasks = new Set<string>();
+  private preparingTaskIds = new Set<string>();
 
   private getDownloadFilename(id: string) {
     return `${id.replace(/[^a-z0-9]/gi, "_")}.mp4`;
   }
 
-  private getDownloadTaskId(stream: Stream, mediaInfo: MediaInfo) {
+  private getDownloadTaskId(mediaInfo: MediaInfo) {
     const item = mediaInfo as DownloadMediaItem;
     const explicitSafeId = safeDownloadTaskId(item.sourceId, item);
     if (explicitSafeId) return explicitSafeId;
@@ -148,6 +149,53 @@ export class DownloadService {
     if (contentSafeId) return contentSafeId;
 
     return Crypto.randomUUID();
+  }
+
+  /**
+   * Make a planner-owned download visible before source resolution completes.
+   * The id is content-stable so startDownload can adopt this queue item after
+   * the planner has resolved a concrete source.
+   */
+  beginPreparingDownload(mediaInfo: MediaInfo) {
+    const id = this.getDownloadTaskId(mediaInfo);
+    const existingTask = useDownloadStore.getState().tasks[id];
+    if (
+      existingTask?.status === "Pending" ||
+      existingTask?.status === "Preparing" ||
+      existingTask?.status === "Downloading" ||
+      existingTask?.status === "Verifying" ||
+      existingTask?.status === "Completed"
+    ) {
+      return id;
+    }
+
+    const taskMediaInfo = {
+      ...mediaInfo,
+      sourceId: id,
+      downloadUrl: "",
+    } as DownloadMediaItem;
+    const store = useDownloadStore.getState();
+    store.addTask(
+      id,
+      taskMediaInfo,
+      undefined,
+      undefined,
+      buildDownloadReplanContext(taskMediaInfo),
+    );
+    store.setStatus(id, "Preparing");
+    this.preparingTaskIds.add(id);
+    return id;
+  }
+
+  failPreparingDownload(id: string, error: unknown) {
+    if (!this.preparingTaskIds.delete(id)) return;
+    const message = toSafeDownloadErrorMessage(
+      error,
+      "Download source could not be prepared.",
+    );
+    useDownloadStore
+      .getState()
+      .markFailed(id, message, classifyDownloadFailure(error));
   }
 
   private getSessionContext(
@@ -672,19 +720,21 @@ export class DownloadService {
       removeTask,
     } = useDownloadStore.getState();
 
-    const id = this.getDownloadTaskId(stream, mediaInfo);
+    const id = this.getDownloadTaskId(mediaInfo);
     const taskMediaInfo = {
       ...mediaInfo,
       sourceId: id,
     } as DownloadMediaItem;
 
     const existingTask = useDownloadStore.getState().tasks[id];
+    const ownsPreparation = this.preparingTaskIds.has(id);
     if (
-      existingTask?.status === "Pending" ||
-      existingTask?.status === "Preparing" ||
-      existingTask?.status === "Downloading" ||
-      existingTask?.status === "Verifying" ||
-      existingTask?.status === "Completed"
+      !ownsPreparation &&
+      (existingTask?.status === "Pending" ||
+        existingTask?.status === "Preparing" ||
+        existingTask?.status === "Downloading" ||
+        existingTask?.status === "Verifying" ||
+        existingTask?.status === "Completed")
     ) {
       const isSamePlaybackSession =
         Boolean(options.playbackSession) &&
@@ -711,6 +761,13 @@ export class DownloadService {
     }
 
     if (!eligibility.canDownload) {
+      if (ownsPreparation) {
+        this.failPreparingDownload(
+          id,
+          eligibility.reason ||
+            "This source cannot be saved for offline playback yet.",
+        );
+      }
       this.failSession(
         id,
         eligibility.reason ||
@@ -730,6 +787,13 @@ export class DownloadService {
     }
 
     if (eligibility.mode === "browser-external" && stream.externalUrl) {
+      if (ownsPreparation) {
+        this.failPreparingDownload(
+          id,
+          eligibility.reason ||
+            "External browser downloads cannot be verified offline.",
+        );
+      }
       this.failSession(
         id,
         eligibility.reason ||
@@ -754,6 +818,7 @@ export class DownloadService {
 
     const initialDownloadUrl =
       options.resolvedUrl || stream.url || stream.externalUrl || "";
+    this.preparingTaskIds.delete(id);
     addTask(
       id,
       {
@@ -1207,6 +1272,13 @@ export class DownloadService {
       const desktopBridge = window.desktopBridge;
 
       for (const task of interruptedTasks) {
+        // Source planning owns this short-lived state until startDownload
+        // adopts the task. A route change must not turn it into a paused
+        // recovery item merely because no desktop transfer job exists yet.
+        if (task.status === "Preparing" && this.preparingTaskIds.has(task.id)) {
+          continue;
+        }
+
         if (desktopBridge?.getDownloadJob) {
           try {
             const job = await desktopBridge.getDownloadJob(task.id);

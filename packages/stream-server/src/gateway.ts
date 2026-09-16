@@ -1384,6 +1384,18 @@ async function warmGatewayJob(job: GatewayJob, preparedTorrent?: any) {
     const metadataDiagnostics = runtimeTorrent
       ? getTorrentMetadataDiagnosticSnapshot(runtimeTorrent)
       : undefined;
+    if (metadataDiagnostics) {
+      // Keep the terminal reason actionable without echoing raw WebTorrent
+      // warnings, tracker URLs, peer addresses, filenames, or source IDs.
+      addGatewayJobBreadcrumb(job, "gateway.metadata_diagnostics", "warning", {
+        diagnosticCategories: metadataDiagnostics.categories,
+        diagnosticCounts: metadataDiagnostics.counts,
+        metadataReceived: metadataDiagnostics.metadataReceived,
+        observed: metadataDiagnostics.observed,
+        discoveredPeerCount: metadataDiagnostics.discoveredPeerCount,
+        connectedPeerCount: metadataDiagnostics.connectedPeerCount,
+      });
+    }
     const peerActivity =
       metadataDiagnostics?.observed === true &&
       ((metadataDiagnostics.discoveredPeerCount ?? 0) > 0 ||

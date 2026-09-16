@@ -434,6 +434,22 @@ export class SyncClient {
       this.socketDeviceId = null;
       this.activeSocketSequence = 0;
       this.clearTokenRefreshTimer();
+
+      // The server uses this bounded reason when the JWT expires while the
+      // socket is still open. Treat it as an auth lifecycle event instead of
+      // a generic transport failure so a stale-but-not-yet-locally-expired
+      // token cannot be retried until the normal backoff window.
+      if (
+        event.code === 1008 &&
+        event.reason === "Authentication expired or revoked"
+      ) {
+        this.retryCount = 0;
+        this.clearRetryTimer();
+        this.setStatus("connecting", "auth-refresh");
+        void this.refreshToken(true);
+        return;
+      }
+
       this.scheduleRetry(undefined, "transport");
     };
   }
@@ -493,7 +509,7 @@ export class SyncClient {
     }, delay);
   }
 
-  private async refreshToken(): Promise<void> {
+  private async refreshToken(force = false): Promise<void> {
     if (!this.started) return;
 
     const auth = this.getAuth();
@@ -503,6 +519,7 @@ export class SyncClient {
     }
 
     if (
+      !force &&
       auth.tokenExpiresAt &&
       this.now() < auth.tokenExpiresAt - TOKEN_REFRESH_SKEW_MS
     ) {
@@ -514,8 +531,13 @@ export class SyncClient {
     try {
       await this.refreshAuth();
       if (this.started) {
-        if (this.socket?.readyState === 1) this.setStatus("connected");
         this.scheduleTokenRefresh();
+        if (this.socket?.readyState === 1) {
+          this.setStatus("connected");
+        } else {
+          this.setStatus("connecting", "auth-refresh");
+          void this.connectIfNeeded();
+        }
       }
     } catch (error) {
       if (!this.started) return;

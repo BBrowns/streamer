@@ -1166,6 +1166,21 @@ describe("torrent source normalization", () => {
     expect(normalized).not.toContain("127.0.0.1");
     expect(normalized).not.toContain("provider%20title");
   });
+
+  it("preserves only public HTTPS web seeds for the server-owned probe", () => {
+    const infoHash = "0123456789abcdef0123456789abcdef01234567";
+    const normalized = normalizeTorrentMagnetForRuntime(
+      `magnet:?xt=urn:btih:${infoHash}&xs=${encodeURIComponent(
+        "https://webtorrent.example.test/torrents/probe.torrent",
+      )}&xs=${encodeURIComponent("http://127.0.0.1/probe.torrent")}`,
+      { preservePublicWebSeeds: true },
+    );
+
+    expect(normalized).toContain(
+      "xs=https%3A%2F%2Fwebtorrent.example.test%2Ftorrents%2Fprobe.torrent",
+    );
+    expect(normalized).not.toContain("127.0.0.1");
+  });
 });
 
 // ─── waitForReady ─────────────────────────────────────────────────────────────

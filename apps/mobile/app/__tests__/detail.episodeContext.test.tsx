@@ -17,6 +17,8 @@ const mockPush = jest.fn();
 const mockPlanning = jest.fn();
 const mockDownload = jest.fn().mockResolvedValue(undefined);
 const mockPrepareDownload = jest.fn();
+const mockBeginPreparingDownload = jest.fn(() => "preparing-download");
+const mockFailPreparingDownload = jest.fn();
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -59,6 +61,10 @@ jest.mock("../../stores/smartDownloadStore", () => ({
 jest.mock("../../services/DownloadService", () => ({
   downloadService: {
     startDownload: (...args: unknown[]) => mockDownload(...args),
+    beginPreparingDownload: (...args: unknown[]) =>
+      mockBeginPreparingDownload(...args),
+    failPreparingDownload: (...args: unknown[]) =>
+      mockFailPreparingDownload(...args),
   },
 }));
 jest.mock("../../services/SmartDownloadPlanner", () => ({}));

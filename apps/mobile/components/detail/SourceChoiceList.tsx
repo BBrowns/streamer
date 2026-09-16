@@ -251,7 +251,7 @@ function ChoiceRow({
             defaultValue: "Uses Local Playback Service",
           })
         : t("detail.sources.compatibility.conversion", {
-            defaultValue: "Prepared automatically",
+            defaultValue: "Converted when selected",
           });
   const language =
     choice.language.kind === "not-listed"

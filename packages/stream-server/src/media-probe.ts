@@ -5,6 +5,7 @@ import type {
   SubtitleCandidate,
   SubtitleCandidateFormat,
 } from "@streamer/shared";
+import { getFfprobeBinaryPath } from "./media-runtime.js";
 
 interface FfprobeStream {
   index?: unknown;
@@ -247,7 +248,7 @@ export async function probeMediaTracksAtUrl({
   try {
     return await new Promise<NormalizedMediaTrack[]>((resolve, reject) => {
       const child = spawn(
-        process.env.STREAMER_FFPROBE_PATH?.trim() || "ffprobe",
+        getFfprobeBinaryPath(),
         [
           "-v",
           "error",

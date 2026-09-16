@@ -43,11 +43,24 @@ export function HlsVideoSurface({
 
   if (Platform.OS !== "web") return <View style={style as any} />;
 
-  return React.createElement("video", {
-    ref: videoRef,
-    style,
-    playsInline: true,
-    preload: "auto",
-    "aria-label": "Video player",
-  });
+  // Chromium can retain a transient HTMLMediaElement error in its
+  // accessibility tree after HLS.js has recovered and playback is already
+  // progressing. The custom player controls and status surface own the
+  // accessible interaction, so keep the raw media element out of the tree and
+  // expose one stable, named surface instead.
+  return React.createElement(
+    "div",
+    {
+      style,
+      role: "group",
+      "aria-label": "Video player",
+    },
+    React.createElement("video", {
+      ref: videoRef,
+      style: { width: "100%", height: "100%", display: "block" },
+      playsInline: true,
+      preload: "auto",
+      "aria-hidden": true,
+    }),
+  );
 }

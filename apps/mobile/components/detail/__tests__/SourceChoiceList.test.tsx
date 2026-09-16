@@ -111,4 +111,33 @@ describe("SourceChoiceList", () => {
 
     expect(onSelect).toHaveBeenCalledWith(plan, "candidate-en");
   });
+
+  it("does not claim that conversion is already prepared", async () => {
+    const plan = { action: "play" } as PlaybackPlan;
+    const screen = await render(
+      <SourceChoiceList
+        state={{
+          plan,
+          loading: false,
+          error: null,
+          retry: jest.fn(),
+          choices: [
+            {
+              candidateId: "candidate-mkv",
+              quality: { kind: "label", value: "1080P" },
+              language: { kind: "code", code: "en" },
+              compatibility: "conversion",
+            },
+          ],
+        }}
+        onSelect={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText(
+        "Best available, 1080P, EN, Converted when selected",
+      ),
+    ).toBeTruthy();
+  });
 });

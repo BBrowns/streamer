@@ -854,7 +854,8 @@
       "language": "Language",
       "runtime": "Runtime",
       "quality": "Quality",
-      "sources": "Sources"
+      "sources": "Sources",
+      "episodes": "Episodes"
     },
     "play": "Play",
     "download": "Download",
@@ -912,7 +913,7 @@
       "compatibility": {
         "ready": "Ready on this device",
         "localService": "Uses Local Playback Service",
-        "conversion": "Prepared automatically"
+        "conversion": "Converted when selected"
       },
       "language": {
         "notListed": "Language not listed",

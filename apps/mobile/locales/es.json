@@ -853,7 +853,8 @@
       "language": "Idioma",
       "runtime": "Duración",
       "quality": "Calidad",
-      "sources": "Fuentes"
+      "sources": "Fuentes",
+      "episodes": "Episodios"
     },
     "play": "Reproducir",
     "download": "Descargar",
