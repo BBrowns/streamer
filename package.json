@@ -84,7 +84,7 @@
     "@prisma/config": "^7.8.0",
     "@react-native/jest-preset": "0.86.3",
     "@react-native/metro-config": "0.86.3",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.0",
     "electron": "^44.0.0",
     "expo": "~57.0.18",
     "expo-constants": "~57.0.16",
