@@ -136,12 +136,14 @@ stays on 26.7.0. The dependency compatibility test rejects divergent workspace
 or coverage peer versions. Review future upgrades as one toolchain change.
 
 The framework update keeps Expo SDK 57 and React Native 0.86.3, updates
-Electron to 44.2.0 and Sentry React Native to 8.25.0, and refreshes compatible
-Expo, Hono, Sentry and TypeScript ESLint patches. Sentry CLI 3.7.0 replaces the
-exact 3.6.2 install-script approval. The published installer and wrapper files
-are unchanged; the platform binary versions and checksums change. The separate
-2.58.6 approval remains for Sentry's bundler plugins. Electron 7.18.0's Sentry
-integration logging defaults are kept; this app did not enable those logs.
+Electron to 44.4.2 and Sentry React Native to 8.27.0, and refreshes compatible
+Expo, Hono, Sentry and TypeScript ESLint patches. Sentry CLI advances from
+3.7.0 to 3.8.0, and the exact install-script approval follows that version.
+Its `postinstall` command and installer file are unchanged; platform payloads
+remain integrity-pinned in the lockfile. The separate 2.58.6 approval remains
+for Sentry's bundler plugins. Sentry Electron 7.19.0's integration logging
+defaults are kept; this app did not enable those logs. Review this exact
+approval at the next Sentry CLI upgrade.
 
 Two parser updates require temporary consumer patches rather than a blind
 major override:
@@ -163,12 +165,12 @@ major override:
   stream completion and trace merging in both module formats.
 
 The existing Expo Updates Android dev-client patch is retargeted unchanged to
-57.0.21. Remove it after an upstream update preserves the tested Detox startup
+57.0.22. Remove it after an upstream update preserves the tested Detox startup
 behavior without the patch. Owner: mobile platform maintainers. Review these
 patches at the next dependency upgrade and before the next release candidate.
 
 Sources: [Vitest 5 migration](https://vitest.dev/guide/migration),
-[Sentry CLI comparison](https://github.com/getsentry/sentry-cli/compare/3.6.2...3.7.0),
+[Sentry CLI 3.8 update](https://github.com/getsentry/sentry-cli/compare/3.7.0...3.8.0),
 [URI decoder release](https://github.com/SamVerschueren/decode-uri-component/releases/tag/v0.5.0),
 [stream-json source](https://github.com/uhop/stream-json).
 
@@ -239,9 +241,10 @@ Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
 pins `tailwindcss@3.4.19`; keep the compatibility test in place and review the
 NativeWind migration before accepting a Tailwind 4 major bump.
 
-The mobile app intentionally tracks React `19.2.8`, React Native `0.86.3`,
-Reanimated `4.5.5`, Worklets `0.10.4`, and safe-area-context `5.9.1` ahead of
-Expo SDK 57's bundled patch versions. The corresponding `expo.install.exclude`
+The mobile app intentionally tracks React `19.3.0`, React Native `0.86.3`,
+Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`,
+react-native-screens `4.28.0`, and Sentry React Native `8.27.x` ahead of Expo
+SDK 57's bundled patch versions. The corresponding `expo.install.exclude`
 entries are reviewed
 exceptions, not permission to skip native validation; revisit them with the
 next Expo SDK upgrade and rebuild native projects after changing these modules.
@@ -252,7 +255,7 @@ mobile suite are covered, while native-device validation remains deferred.
 repository tracks its tested release above the SDK 57 bundled version.
 
 The current native/tooling migration keeps the Expo SDK 57 contract on React
-`19.2.8` and React Native `0.86.3`. The root and mobile workspaces both pin
+`19.3.0` and React Native `0.86.3`. The root and mobile workspaces both pin
 React Native and `@react-native/jest-preset` to `0.86.3` so npm's hoisted Expo
 peer dependencies cannot resolve an older RN patch line. React Native Testing
 Library `14.0.1`
@@ -262,8 +265,8 @@ aligns with the React Native `0.86.3` Jest preset, but may still retain a
 nested React test renderer internally; that does not justify a Jest 30
 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
 `@react-native-async-storage/async-storage/jest`. The tested native upgrades
-are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.9.1`, and
-Sentry React Native `8.25.x`; keep them aligned with Expo before changing the
+are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`, react-native-screens `4.28.0`, and
+Sentry React Native `8.27.x`; keep them aligned with Expo before changing the
 SDK major. `expo-modules-core@57` accepts Worklets through the 0.10.x line, so
 Reanimated 4.6/Worklets 0.12 must wait for the next Expo SDK migration. These
 modules require the New Architecture and a fresh native rebuild; CI and
@@ -281,7 +284,8 @@ inputs no longer occur.
 React Native Gesture Handler follows the same native-module boundary. The
 mobile app and root override must stay on the same exact major/minor line; a
 Dependabot bump is incomplete until `package.json`, the root override, and
-`package-lock.json` agree. The current RNGH 3 migration uses the hooks API
+`package-lock.json` agree. The current app request and root override resolve
+to `3.3.0`. The RNGH 3 migration uses the hooks API
 (`usePanGesture`/`GestureDetector`) and keeps the player timeline's keyboard,
 accessibility, and web pointer contracts intact. Keep
 `GestureHandlerRootView` around gesture consumers in native and Jest renders,
@@ -290,7 +294,7 @@ builds before merging a future RNGH, React Native, or Expo major upgrade.
 
 The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
 retains its nested adapter until an upstream compatible release exists. The
-desktop app uses Electron `44.2.0` and direct `@electron/notarize` `3.1.1`;
+desktop app uses Electron `44.4.2` and direct `@electron/notarize` `3.1.1`;
 electron-builder may retain its own nested notarize 2.x contract. These nested
 paths are compatibility boundaries, not reasons to force global overrides.
 
