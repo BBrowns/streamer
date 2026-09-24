@@ -114,12 +114,17 @@ The obsolete brace-expansion audit exception was removed on 2026-09-07:
 `test-exclude` now resolves the compatible 1.1.18 release, and the full audit no
 longer reports the advisory. Future regressions fail the normal audit policy.
 
-The root overrides pin `js-yaml@4.3.2` and `nodemailer@9.1.1` while upstream
-consumers catch up with their patched ranges. These versions remove the
-currently blocking production advisories; revisit the overrides when every
-consumer declares a fixed range and keep the production audit as the gate.
+The root override keeps `js-yaml@4.3.2` for Hono consumers. Nodemailer is
+pinned to `10.0.10` in the root workspace and root override, while the server
+workspace declares `^10.0.10`. Nodemailer 10 requires Node.js 20 or newer and
+ships its own TypeScript declarations; the server imports its named
+`Transporter` type from that package, so `@types/nodemailer` is removed. The
+repository runtime is Node.js 26.7.0. Revisit the override when every consumer
+declares a compatible range and keep the production audit as the gate.
 
 ## September 2026 Maintenance Remediation
+
+Nodemailer 10 changes are recorded in the [official changelog](https://github.com/nodemailer/nodemailer/blob/master/CHANGELOG.md) and [README](https://github.com/nodemailer/nodemailer).
 
 The 2026-09-08 full and production dependency audits report no advisories with
 this lockfile. The obsolete brace-expansion exception is removed; no audit

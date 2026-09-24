@@ -97,7 +97,8 @@
     "tailwindcss": "3.4.19",
     "turbo": "^2.4.0",
     "typescript": "^6.0.3",
-    "uuid": "14.0.2"
+    "uuid": "14.0.2",
+    "nodemailer": "10.0.10"
   },
   "engines": {
     "node": ">=26.7.0 <27",
@@ -112,7 +113,7 @@
     "form-data": "^4.0.6",
     "hono": "~4.13.2",
     "js-yaml": "4.3.2",
-    "nodemailer": "9.1.1",
+    "nodemailer": "10.0.10",
     "zod": "^4.5.4",
     "rimraf": "^6.0.1",
     "glob": "^13.0.6",
