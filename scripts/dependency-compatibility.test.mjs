@@ -150,8 +150,11 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
   const expoModulesCore = lockfile.packages["node_modules/expo-modules-core"];
   const reanimated = lockfile.packages["node_modules/react-native-reanimated"];
   const worklets = lockfile.packages["node_modules/react-native-worklets"];
+  const gestureHandler =
+    lockfile.packages["node_modules/react-native-gesture-handler"];
   const safeArea =
     lockfile.packages["node_modules/react-native-safe-area-context"];
+  const mobilePackage = lockfile.packages["apps/mobile"];
 
   assert.ok(expo);
   assert.ok(
@@ -163,7 +166,12 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
   assert.match(expoModulesCore.version, /^57\.0\./);
   assert.equal(reanimated.version, "4.5.5");
   assert.equal(worklets.version, "0.10.4");
-  assert.equal(safeArea.version, "5.9.1");
+  assert.equal(gestureHandler.version, "3.3.0");
+  assert.equal(
+    mobilePackage.dependencies["react-native-gesture-handler"],
+    "~3.3.0",
+  );
+  assert.equal(safeArea.version, "5.10.0");
   assert.equal(
     expoModulesCore.peerDependencies["react-native-worklets"],
     "^0.7.4 || ^0.8.0 || ^0.9.0 || ^0.10.0",
