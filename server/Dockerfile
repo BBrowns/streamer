@@ -1,4 +1,4 @@
-FROM node:26.9.0-alpine@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS base
+FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS base
 WORKDIR /app
 
 # Install dependencies
@@ -33,7 +33,7 @@ RUN npm run build --workspace=server
 RUN npx --yes npm@12.0.2 prune --omit=dev --ignore-scripts \
     --workspace=server --workspace=packages/shared
 
-FROM node:26.9.0-alpine@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS production
+FROM node:26.10.0-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS production
 WORKDIR /app
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/package.json ./server/
