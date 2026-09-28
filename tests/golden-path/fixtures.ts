@@ -328,6 +328,7 @@ function candidate(
 function readyPlan(
   action: PlaybackAction,
   scenario: GoldenPathScenario,
+  includeDirectFallback = false,
 ): PlaybackPlan {
   const selected = candidate(
     action,
@@ -352,7 +353,10 @@ function readyPlan(
     selected.videoCodec = "unknown";
   }
   const fallbacks =
-    scenario === "torrent-fallback" ? [candidate(action, 1, "direct")] : [];
+    scenario === "torrent-fallback" ||
+    (scenario === "no-peers" && includeDirectFallback)
+      ? [candidate(action, 1, "direct")]
+      : [];
   return playbackPlanSchema.parse({
     version: 2,
     action,
@@ -421,7 +425,11 @@ function responsePlan(
     scenario === "no-peers" ||
     scenario === "progressive-nonseekable" ||
     scenario === "preparing-cancellable";
-  if (needsTorrentBridge && request.bridge?.status !== "available") {
+  if (
+    needsTorrentBridge &&
+    request.bridge?.status !== "available" &&
+    request.bridge?.status !== "no-peers"
+  ) {
     return unavailablePlan(request.action, "bridge-unavailable");
   }
 
@@ -431,7 +439,11 @@ function responsePlan(
   ) {
     return unavailablePlan(request.action, scenario);
   }
-  return readyPlan(request.action, scenario);
+  return readyPlan(
+    request.action,
+    scenario,
+    scenario === "no-peers" && request.bridge?.status === "no-peers",
+  );
 }
 
 const corsHeaders = {

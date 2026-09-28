@@ -24,6 +24,7 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useTranslation } from "react-i18next";
+import type { PlaybackPlanResponse } from "@streamer/shared";
 
 import { useTheme } from "../hooks/useTheme";
 import { usePlayerStore } from "../stores/playerStore";
@@ -51,6 +52,7 @@ import { usePlayerTrackCatalog } from "../hooks/usePlayerTrackCatalog";
 // UI Components
 import { PlayerOverlay } from "../components/player/PlayerOverlay";
 import { PlayerSettingsModal } from "../components/player/PlayerSettingsModal";
+import { MoreSourcesPanel } from "../components/detail/MoreSourcesPanel";
 import { MediaArtwork } from "../components/ui/MediaArtwork";
 import { PlayerStatusOverlay } from "../components/player/PlayerStatusOverlay";
 import { PlayerControls } from "../components/player/PlayerControls";
@@ -69,7 +71,10 @@ import {
   findPreferredPlayerTrack,
   normalizeTrackLanguage,
 } from "../services/playback/trackSelection";
-import { playBest } from "../services/playback/PlaybackOrchestrator";
+import {
+  playBest,
+  playCandidate,
+} from "../services/playback/PlaybackOrchestrator";
 import { beginPlaybackLaunch } from "../services/playback/PlaybackLaunchService";
 import {
   cancelPlaybackSession,
@@ -265,6 +270,7 @@ export default function PlayerScreen() {
   const playbackSessionTimeoutBudgetMs = activeSession?.timeoutBudgetMs;
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sourceSelectionOpen, setSourceSelectionOpen] = useState(false);
   const [playbackUri, setPlaybackUri] = useState<string | null>(null);
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -336,6 +342,7 @@ export default function PlayerScreen() {
   );
   const playbackDiagnosticBreadcrumbCountRef = useRef(0);
   const planObservedKeyRef = useRef<string | null>(null);
+  const sourceSelectionInFlightRef = useRef(false);
 
   const recordDiagnostic = useCallback((event: PlaybackDiagnosticEvent) => {
     playbackDiagnosticsRecorderRef.current.record(event);
@@ -617,26 +624,67 @@ export default function PlayerScreen() {
 
   const handleChooseSource = useCallback(() => {
     if (!mediaInfo) return;
-    cancelOwnedPlayback("User chose advanced source selection.");
-    seekableHandoffControllerRef.current?.abort();
-    seekableHandoffControllerRef.current = null;
-    const target = {
-      pathname: "/detail/[type]/[id]",
-      params: {
-        type: mediaInfo.type,
-        id: mediaInfo.itemId,
-        sources: "1",
-        ...(mediaInfo.season !== undefined && mediaInfo.episode !== undefined
-          ? {
-              season: String(mediaInfo.season),
-              episode: String(mediaInfo.episode),
-            }
-          : {}),
-      },
-    } as const;
-    clearPlayer();
-    router.replace(target as any);
-  }, [cancelOwnedPlayback, clearPlayer, mediaInfo, router]);
+    setSourceSelectionOpen(true);
+  }, [mediaInfo]);
+
+  const handlePlayerSourceSelected = useCallback(
+    async (plan: PlaybackPlanResponse, candidateId: string) => {
+      if (!mediaInfo || sourceSelectionInFlightRef.current) return;
+      sourceSelectionInFlightRef.current = true;
+      setFallbackStatusMessage(null);
+      seekableHandoffControllerRef.current?.abort();
+      seekableHandoffControllerRef.current = null;
+      cancelOwnedPlayback("User selected an advanced playback source.");
+      setPlaybackUri(null);
+      setStreamStatus("loading_metrics");
+      setRuntimeState("planning");
+
+      try {
+        const result = await playCandidate(
+          {
+            type: mediaInfo.type,
+            id: mediaInfo.itemId,
+            title: mediaInfo.title,
+            poster: mediaInfo.poster,
+            background: mediaInfo.background,
+            season: mediaInfo.season,
+            episode: mediaInfo.episode,
+          },
+          plan,
+          candidateId,
+        );
+
+        if (!result.ok) {
+          if ("sessionId" in result && result.sessionId) {
+            launchOwnedSessionIdRef.current = result.sessionId;
+          }
+          setRuntimeFailure(result.error);
+          return;
+        }
+
+        launchOwnedSessionIdRef.current = result.sessionId;
+        setSessionStream(
+          result.stream,
+          result.mediaInfo,
+          result.sessionId,
+          result.candidateId,
+        );
+      } finally {
+        sourceSelectionInFlightRef.current = false;
+      }
+    },
+    [
+      cancelOwnedPlayback,
+      launchOwnedSessionIdRef,
+      mediaInfo,
+      setFallbackStatusMessage,
+      setPlaybackUri,
+      setRuntimeFailure,
+      setRuntimeState,
+      setSessionStream,
+      setStreamStatus,
+    ],
+  );
 
   useEffect(
     () => () => {
@@ -2055,6 +2103,19 @@ export default function PlayerScreen() {
     () => createPlayerScreenStyles(colors, isDark),
     [colors, isDark],
   );
+  const playerSourceSelection = mediaInfo ? (
+    <MoreSourcesPanel
+      contentId={mediaInfo.itemId}
+      contentType={mediaInfo.type}
+      season={mediaInfo.season}
+      episode={mediaInfo.episode}
+      title={mediaInfo.title}
+      visible={sourceSelectionOpen}
+      showTrigger={false}
+      onOpenChange={setSourceSelectionOpen}
+      onSelect={handlePlayerSourceSelected}
+    />
+  ) : null;
 
   if (currentStream && !playbackUri && !previewControls) {
     return (
@@ -2082,6 +2143,7 @@ export default function PlayerScreen() {
               : undefined
           }
         />
+        {playerSourceSelection}
       </View>
     );
   }
@@ -2111,6 +2173,7 @@ export default function PlayerScreen() {
               : undefined
           }
         />
+        {playerSourceSelection}
       </View>
     );
   }
@@ -2140,6 +2203,7 @@ export default function PlayerScreen() {
               : undefined
           }
         />
+        {playerSourceSelection}
       </View>
     );
   }
@@ -2487,6 +2551,7 @@ export default function PlayerScreen() {
             }}
           />
         )}
+        {playerSourceSelection}
       </View>
     </GestureHandlerRootView>
   );

@@ -249,11 +249,11 @@ test("Continue Watching keeps cinematic landscape geometry and a contained legac
   }
 });
 
-test("desktop cinematic navigation strengthens without leaving the viewport", async ({
+test("horizontal topbar indicator follows each active label without widening the navigation", async ({
   page,
 }, testInfo) => {
   test.skip(
-    testInfo.project.name !== "desktop-renderer",
+    testInfo.project.name === "phone-web",
     "The compact shell uses native-style tab navigation.",
   );
   await loginToFixtureShell(page);
@@ -276,6 +276,138 @@ test("desktop cinematic navigation strengthens without leaving the viewport", as
   const topbarBox = await topbar.boundingBox();
   expect(topbarBox).not.toBeNull();
   expect(topbarBox!.y).toBe(0);
+
+  const tabs = [
+    { label: "Home", href: "/" },
+    { label: "Library", href: "/library" },
+    { label: "Downloads", href: "/downloads" },
+  ];
+  const measureNaturalNavigationWidth = async () => {
+    const links = await Promise.all(
+      tabs.map(({ label }) =>
+        topbar.getByRole("link", { name: label, exact: true }).boundingBox(),
+      ),
+    );
+    const labels = await Promise.all(
+      tabs.map(({ label }) =>
+        topbar
+          .getByRole("link", { name: label, exact: true })
+          .getByText(label, { exact: true })
+          .boundingBox(),
+      ),
+    );
+    expect(links.every(Boolean)).toBe(true);
+    expect(labels.every(Boolean)).toBe(true);
+    const gap = await topbar
+      .getByRole("link", { name: "Home", exact: true })
+      .evaluate((element) => {
+        const navigation = element.parentElement;
+        return navigation
+          ? Number.parseFloat(getComputedStyle(navigation).columnGap) || 0
+          : 0;
+      });
+    const groupWidth =
+      links[links.length - 1]!.x + links[links.length - 1]!.width - links[0]!.x;
+    const naturalWidth =
+      labels.reduce((total, box) => total + box!.width, 0) + gap * 2;
+
+    expect(
+      Math.abs(groupWidth - naturalWidth),
+      `navigation group ${groupWidth}px should contain only ${naturalWidth}px of labels and existing gaps`,
+    ).toBeLessThanOrEqual(2);
+    return groupWidth;
+  };
+
+  let homeNavigationWidth: number | null = null;
+  for (const [index, { label, href }] of [...tabs].entries()) {
+    const tab = topbar.getByRole("link", { name: label, exact: true });
+    if (index > 0) {
+      await tab.click();
+      await expect(page).toHaveURL(
+        href === "/" ? /\/$/ : new RegExp(`${href}/?$`),
+      );
+    }
+
+    const labelElement = tab.getByText(label, { exact: true });
+    const indicator = tab.getByTestId("topbar-active-indicator");
+    await expect(indicator).toBeVisible();
+    await expect(topbar.getByTestId("topbar-active-indicator")).toHaveCount(1);
+    const [labelBox, indicatorBox] = await Promise.all([
+      labelElement.boundingBox(),
+      indicator.boundingBox(),
+    ]);
+    expect(labelBox).not.toBeNull();
+    expect(indicatorBox).not.toBeNull();
+    expect(Math.abs(indicatorBox!.width - labelBox!.width)).toBeLessThanOrEqual(
+      1,
+    );
+    expect(
+      Math.abs(
+        indicatorBox!.x +
+          indicatorBox!.width / 2 -
+          (labelBox!.x + labelBox!.width / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(indicatorBox!.y).toBeGreaterThanOrEqual(
+      labelBox!.y + labelBox!.height - 1,
+    );
+    const navigationWidth = await measureNaturalNavigationWidth();
+    if (homeNavigationWidth === null) homeNavigationWidth = navigationWidth;
+    else expect(navigationWidth).toBeCloseTo(homeNavigationWidth, 0);
+
+    const hoverTarget = tabs[(index + 1) % tabs.length];
+    const hoverTab = topbar.getByRole("link", {
+      name: hoverTarget.label,
+      exact: true,
+    });
+    const hoverLabel = hoverTab.getByText(hoverTarget.label, { exact: true });
+    const activeLabelColor = await labelElement.evaluate(
+      (element) => getComputedStyle(element).color,
+    );
+    const inactiveLabelColor = await hoverLabel.evaluate(
+      (element) => getComputedStyle(element).color,
+    );
+    const idleBackground = await hoverTab.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    expect(inactiveLabelColor).not.toBe(activeLabelColor);
+    await hoverTab.hover();
+    await expect
+      .poll(() =>
+        hoverLabel.evaluate((element) => getComputedStyle(element).color),
+      )
+      .toBe(activeLabelColor);
+    expect(
+      await hoverTab.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      ),
+    ).toBe(idleBackground);
+    if (index === 0) {
+      await page.screenshot({
+        path: testInfo.outputPath("topbar-navigation-hover.png"),
+        animations: "disabled",
+      });
+    }
+    await page.mouse.move(0, 0);
+
+    await page.screenshot({
+      path: testInfo.outputPath(
+        `topbar-${href === "/" ? "home" : href.slice(1)}.png`,
+      ),
+      animations: "disabled",
+    });
+  }
+
+  await page.goto("/notifications");
+  await expect(topbar).toBeVisible();
+  await expect(topbar.getByTestId("topbar-active-indicator")).toHaveCount(0);
+  await expect
+    .poll(() => measureNaturalNavigationWidth())
+    .toBeCloseTo(homeNavigationWidth!, 0);
+  await page.screenshot({
+    path: testInfo.outputPath("topbar-notifications.png"),
+    animations: "disabled",
+  });
 });
 
 test("desktop notification bell opens a compact popover and restores focus", async ({
@@ -335,7 +467,7 @@ test("a no-peers torrent automatically falls back to a direct candidate", async 
   expect(controls.plannerRequests[0]?.action).toBe("play");
 });
 
-test("no peers is recoverable through advanced source selection", async ({
+test("no peers is recoverable through in-player source selection", async ({
   page,
 }, testInfo) => {
   const controls = await loginAndOpenFixture(page, "no-peers");
@@ -355,12 +487,56 @@ test("no peers is recoverable through advanced source selection", async ({
     animations: "disabled",
   });
   await chooseSource.click();
-  await expect(page).toHaveURL(
-    new RegExp(`/detail/movie/${FIXTURE_MOVIE_ID}\\?sources=1$`),
-  );
-  await expect(
-    page.getByRole("button", { name: "Hide more sources" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/player$/);
+  const sourceOverlay = page.getByTestId("more-sources-overlay");
+  await expect(sourceOverlay).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(sourceOverlay).toBeHidden();
+  await expect(page.getByText("No Peers Found")).toBeVisible();
+  await expect(page).toHaveURL(/\/player$/);
+
+  await chooseSource.click();
+  await expect(sourceOverlay).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sourceOverlay).toBeHidden();
+  await expect(page.getByText("No Peers Found")).toBeVisible();
+  await expect(page).toHaveURL(/\/player$/);
+
+  await chooseSource.click();
+  await expect(sourceOverlay).toBeVisible();
+  const sourceChoice = page.getByRole("button", {
+    name: /1080P, EN, Ready on this device/,
+  });
+  await expect(sourceChoice).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(
+      `player-source-overlay-${testInfo.project.name}.png`,
+    ),
+    animations: "disabled",
+  });
+  await sourceChoice.click();
+
+  await expect(sourceOverlay).toBeHidden();
+  await expect(page).toHaveURL(/\/player$/);
+  await expect(page.locator("video")).toBeVisible();
+  await expect(page.getByText("No Peers Found")).toHaveCount(0);
+  expect(controls.gatewayJobsCreated()).toBe(1);
+});
+
+test("selecting a source from regular Detail opens Player", async ({
+  page,
+}) => {
+  await loginAndOpenFixture(page, "direct");
+
+  await page.getByRole("button", { name: "Show more sources" }).click();
+  const sourceChoice = page.getByRole("button", {
+    name: /Best available, 1080P, EN, Ready on this device/,
+  });
+  await expect(sourceChoice).toBeVisible();
+  await sourceChoice.click();
+
+  await expect(page).toHaveURL(/\/player$/);
+  await expect(page.getByTestId("player-screen")).toBeVisible();
 });
 
 test("player launch exposes the real control chrome", async ({

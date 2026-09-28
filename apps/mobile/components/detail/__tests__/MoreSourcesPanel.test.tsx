@@ -1,7 +1,7 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import { MoreSourcesPanel } from "../MoreSourcesPanel";
 
-const mockUseSourceChoicePlan = jest.fn(() => ({
+const mockUseSourceChoicePlan = jest.fn((..._args: unknown[]) => ({
   plan: null,
   choices: [{ candidateId: "1" }, { candidateId: "2" }, { candidateId: "3" }],
   loading: false,
@@ -44,6 +44,9 @@ jest.mock("react-i18next", () => ({
         "detail.sources.hide": "Hide more sources",
         "detail.sources.showAll": "Show all sources",
         "detail.sources.bestAvailableLabel": "Best available",
+        "detail.sources.technical": "Show technical details",
+        "detail.sources.hideTechnical": "Hide technical details",
+        "common.close": "Close",
       };
       if (key === "detail.sources.bestAvailable") {
         return `Best available · ${options?.count ?? 0} sources`;
@@ -54,7 +57,7 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("../SourceChoiceList", () => ({
-  useSourceChoicePlan: () => mockUseSourceChoicePlan(),
+  useSourceChoicePlan: (...args: unknown[]) => mockUseSourceChoicePlan(...args),
   SourceChoiceList: ({ onSelect }: any) => {
     const { Pressable, Text } = require("react-native");
     return (
@@ -68,10 +71,12 @@ jest.mock("../SourceChoiceList", () => ({
   },
 }));
 
-jest.mock("../TechnicalSourceDisclosure", () => ({
-  TechnicalSourceDisclosure: () => {
+jest.mock("../SourceInspectorPanel", () => ({
+  SourceInspectorPanel: ({ contentType, contentId, season, episode }: any) => {
     const { Text } = require("react-native");
-    return <Text>Technical disclosure</Text>;
+    return (
+      <Text>{`Inspecting ${contentType}:${contentId}:${season}:${episode}`}</Text>
+    );
   },
 }));
 
@@ -80,6 +85,40 @@ jest.mock("../../ui/AdaptiveOverlay", () => ({
 }));
 
 describe("MoreSourcesPanel", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("shows a controlled player source chooser and closes with its close button", async () => {
+    const onClose = jest.fn();
+    const screen = await render(
+      <MoreSourcesPanel
+        contentId="series"
+        contentType="series"
+        title="Series"
+        season={0}
+        episode={2}
+        visible
+        showTrigger={false}
+        onOpenChange={onClose}
+        onSelect={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Playback source")).toBeNull();
+    expect(screen.getByText("Consumer source choices")).toBeTruthy();
+    expect(mockUseSourceChoicePlan).toHaveBeenCalledWith({
+      contentType: "series",
+      contentId: "series",
+      season: 0,
+      episode: 2,
+    });
+
+    await fireEvent.press(screen.getByLabelText("Close"));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("plans lazily, then shows the eligible source count once", async () => {
     const screen = await render(
       <MoreSourcesPanel
@@ -95,15 +134,34 @@ describe("MoreSourcesPanel", () => {
     expect(screen.queryByText("3 available")).toBeNull();
     expect(mockUseSourceChoicePlan).not.toHaveBeenCalled();
     expect(screen.queryByText("Consumer source choices")).toBeNull();
-    expect(screen.queryByText("Technical disclosure")).toBeNull();
+    expect(screen.queryByText("Show technical details")).toBeNull();
 
     await fireEvent.press(screen.getByLabelText("Show more sources"));
 
     expect(mockUseSourceChoicePlan).toHaveBeenCalled();
     expect(screen.getByText("Best available · 3 sources")).toBeTruthy();
     expect(screen.getByText("Consumer source choices")).toBeTruthy();
-    expect(screen.getByText("Technical disclosure")).toBeTruthy();
+    expect(screen.getByText("Show technical details")).toBeTruthy();
     expect(screen.getByLabelText("Hide more sources")).toBeTruthy();
+  });
+
+  it("inspects the selected series episode, including season-zero specials", async () => {
+    const screen = await render(
+      <MoreSourcesPanel
+        contentId="series"
+        contentType="series"
+        title="Series"
+        season={0}
+        episode={2}
+        visible
+        showTrigger={false}
+        onSelect={jest.fn()}
+      />,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Show technical details"));
+
+    expect(screen.getByText("Inspecting series:series:0:2")).toBeTruthy();
   });
 
   it("closes before handing a selected source to playback", async () => {
@@ -121,6 +179,6 @@ describe("MoreSourcesPanel", () => {
 
     expect(onSelect).toHaveBeenCalledWith({}, "candidate-1");
     expect(screen.queryByText("Consumer source choices")).toBeNull();
-    expect(screen.queryByText("Technical disclosure")).toBeNull();
+    expect(screen.queryByText("Show technical details")).toBeNull();
   });
 });

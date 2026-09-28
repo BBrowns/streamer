@@ -313,7 +313,9 @@ sits below the global topbar at that class. Utility routes
 start opaque. Player, auth, and
 onboarding remain immersive. Electron uses real macOS hidden-inset traffic
 lights and an explicit drag/no-drag region; browser never imitates window
-controls and Windows/Linux retain the system frame.
+controls and Windows/Linux retain the system frame. The selected topbar
+underline tracks the rendered label width and stays centered inside its own
+navigation item, including when translations change label lengths.
 
 Content boundaries use semantic roles rather than route-local max widths:
 
@@ -814,6 +816,13 @@ Important visible states:
 | `failed_timeout`            | Gateway or video startup timed out.                                                         |
 
 `PlayerStatusOverlay` uses these states for titles, retry visibility, and Sources & Devices guidance. Keep future player work in this typed model rather than adding raw alert strings.
+
+Advanced source selection opened from Player stays in an adaptive overlay over
+the Player. Its Close button, Escape key on web, and native modal back request
+close only the chooser and preserve the active Player context. Choosing a
+source closes the chooser and tries that candidate through the existing
+playback flow on the same Player route. A normal source selection from Detail
+still opens Player as usual.
 
 During gateway preparation, the status message must describe a concrete phase
 or peer state (for example, finding peers, reading metadata, checking whether

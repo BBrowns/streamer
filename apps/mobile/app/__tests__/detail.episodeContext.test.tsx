@@ -15,6 +15,8 @@ const mockPrefetch = jest.fn();
 const mockLaunch = jest.fn(() => "launch");
 const mockPush = jest.fn();
 const mockPlanning = jest.fn();
+const mockSetSessionStream = jest.fn();
+const mockPlayCandidate = jest.fn();
 const mockDownload = jest.fn().mockResolvedValue(undefined);
 const mockPrepareDownload = jest.fn();
 const mockBeginPreparingDownload = jest.fn(() => "preparing-download");
@@ -45,7 +47,7 @@ jest.mock("../../stores/playerStore", () => ({
   usePlayerStore: (selector: any) =>
     selector({
       setPlaybackPlanning: mockPlanning,
-      setSessionStream: jest.fn(),
+      setSessionStream: mockSetSessionStream,
     }),
 }));
 jest.mock("../../stores/downloadStore", () => ({}));
@@ -75,6 +77,7 @@ jest.mock("../../services/playback/PlaybackPlanService", () => ({
   prefetchPlaybackPlan: (...args: unknown[]) => mockPrefetch(...args),
 }));
 jest.mock("../../services/playback/PlaybackOrchestrator", () => ({
+  playCandidate: (...args: unknown[]) => mockPlayCandidate(...args),
   prepareDownload: (...args: unknown[]) => mockPrepareDownload(...args),
 }));
 jest.mock("../../components/DesktopCastModal", () => ({
@@ -170,6 +173,50 @@ describe("Detail episode context", () => {
     expect(mockPlanning).toHaveBeenCalledWith(
       expect.objectContaining({ season: 0, episode: 2 }),
       "launch",
+    );
+    expect(mockPush).toHaveBeenCalledWith("/player");
+  });
+
+  it("opens Player after a source is selected from regular Detail", async () => {
+    mockParams = {
+      type: "series",
+      id: "series",
+      sources: "1",
+      season: "0",
+      episode: "2",
+    };
+    const result = {
+      ok: true,
+      stream: { url: "https://example.test/video" },
+      mediaInfo: {
+        type: "series",
+        itemId: "series",
+        season: 0,
+        episode: 2,
+      },
+      sessionId: "session",
+      candidateId: "candidate",
+      attemptId: "attempt",
+      plan: {},
+    };
+    mockPlayCandidate.mockResolvedValue(result);
+    await render(<DetailScreen />);
+
+    await act(async () => {
+      await mockLayoutProps.handlePlayCandidate(
+        result.plan,
+        "candidate",
+        "Second special",
+        0,
+        2,
+      );
+    });
+
+    expect(mockSetSessionStream).toHaveBeenCalledWith(
+      result.stream,
+      result.mediaInfo,
+      "session",
+      "candidate",
     );
     expect(mockPush).toHaveBeenCalledWith("/player");
   });
