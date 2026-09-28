@@ -25,12 +25,15 @@ Bind completion evidence to the exact task-owned files and run the smallest repo
 
 5. For cross-workspace, shared contract, native, security, dependency, or release-level work, run `--final`. The generated receipt fingerprints the supplied files and records every command result.
 6. Add environment-dependent evidence only when actually run. Browser/simulator/preflight output does not prove real-device playback, casting, downloads, accessibility, signing, or packaged release behavior.
+7. For a development task in the Gauntlet workflow, have Codex snapshot the task-owned files before checks and build the review package from the plan, each receipt/attempt, available structured runner output, and required checks. Keep failed, skipped, planned, and not-run checks in the inventory. Annotate mock-handler, real browser interaction, native, and external evidence separately, with the source and whether the classification was inferred or manually observed. Take the independent source-first review before exposing draft delivery or Gauntlet labels; bind its final disposition to the current candidate, task, evidence, and claims. A missing reviewer is `not-run`. Preserve old candidate reports and allow no more than one review-driven repair round.
 
 ## Claims
 
 - Do not infer broader success from a focused check.
 - A pass for an old fingerprint does not cover changed content.
 - A skipped check stays skipped with a reason and residual risk.
+- A completed review is not a project-check pass and may still have open findings.
+- A mock callback does not establish an end-to-end browser, native, or external flow, regardless of a broad scope label.
 - Tests prove behavior only when the relevant failure was observed or a characterization contract was established before refactoring.
 
 ## Completion

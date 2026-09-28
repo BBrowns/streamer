@@ -2,6 +2,19 @@
   "version": 1,
   "rules": [
     {
+      "id": "gauntlet-process",
+      "patterns": [
+        "^scripts/gauntlet(?:-[^/]*)?\\.mjs$",
+        "^scripts/gauntlet(?:-[^/]*)?\\.test\\.mjs$",
+        "^docs/gauntlet/"
+      ],
+      "focusedCommands": [
+        "node --test scripts/gauntlet.test.mjs scripts/gauntlet-package.test.mjs",
+        "npm run process:check"
+      ],
+      "finalCommands": []
+    },
+    {
       "id": "process",
       "patterns": [
         "^\\.agents/",
