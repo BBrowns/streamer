@@ -19,7 +19,7 @@ describe("server Sentry config", () => {
     ).toBe(false);
   });
 
-  it("uses conservative production tracing and disables default PII", () => {
+  it("uses conservative production tracing and restrictive data collection", () => {
     const options = createServerSentryOptionsFromInput({
       dsn: "https://public@example.ingest.sentry.io/1",
       nodeEnv: "production",
@@ -29,7 +29,20 @@ describe("server Sentry config", () => {
     expect(options.enabled).toBe(true);
     expect(options.environment).toBe("production");
     expect(options.release).toBe("streamer-server@1.2.3");
-    expect(options.sendDefaultPii).toBe(false);
+    expect(options.dataCollection).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: {
+        request: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+        response: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+      },
+      httpBodies: [],
+      urlQueryParams: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      graphQL: { document: false, variables: false },
+    });
     expect(options.tracesSampleRate).toBe(0.05);
     expect(options.sampleRate).toBe(1);
   });
