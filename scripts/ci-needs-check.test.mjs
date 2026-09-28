@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import yaml from "js-yaml";
 import { findCiNeedFailures } from "./ci-needs-check.mjs";
 
 const scope = (overrides = {}) => ({
@@ -67,6 +70,39 @@ test("accepts push-style full CI when install preflight is intentionally skipped
     }),
     [],
   );
+});
+
+test("accepts an intentionally skipped preflight in the push golden-path gate", () => {
+  const workflow = yaml.load(
+    readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"),
+  );
+  const verifyStep = workflow.jobs.golden_path_gate.steps.find(
+    ({ name }) => name === "Verify golden path matrix succeeded",
+  );
+  assert.ok(verifyStep?.run);
+
+  const needs = {
+    ci_scope: scope({ full_ci: "true", run_install_preflight: "false" }),
+    "dependency-install-preflight": { result: "skipped", outputs: {} },
+    "test-golden-path": { result: "success", outputs: {} },
+  };
+  const result = spawnSync(
+    "bash",
+    ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", verifyStep.run],
+    {
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
+      env: {
+        ...process.env,
+        CI_EVENT_NAME: "push",
+        CI_BASE_SHA: "",
+        CI_NEEDS: JSON.stringify(needs),
+      },
+      encoding: "utf8",
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /All selected CI jobs succeeded/);
 });
 
 test("uses the shared CI needs checker for push release gates", () => {
