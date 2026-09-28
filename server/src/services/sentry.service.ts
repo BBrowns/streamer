@@ -11,6 +11,23 @@ import { redactSensitiveLogValue } from "../utils/redaction.js";
 
 type SentryRecord = Record<string, unknown>;
 
+const restrictiveDataCollection: NonNullable<
+  Sentry.NodeOptions["dataCollection"]
+> = {
+  userInfo: false,
+  cookies: false,
+  httpHeaders: {
+    request: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+    response: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+  },
+  httpBodies: [],
+  urlQueryParams: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+  genAI: { inputs: false, outputs: false },
+  databaseQueryData: false,
+  queues: false,
+  graphQL: { document: false, variables: false },
+};
+
 export interface ServerSentryConfigInput {
   dsn?: string;
   nodeEnv: "development" | "production" | "test";
@@ -85,7 +102,7 @@ export function createServerSentryOptionsFromInput(
     environment: input.environment || buildMetadata.environment,
     release: input.release || buildMetadata.release,
     debug: false,
-    sendDefaultPii: false,
+    dataCollection: restrictiveDataCollection,
     maxBreadcrumbs: 50,
     sampleRate: parseSampleRate(input.errorSampleRate, 1),
     tracesSampleRate: parseSampleRate(
