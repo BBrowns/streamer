@@ -162,7 +162,10 @@ test("accepts a compact handoff with current sections and canonical sources", ()
   const root = mkdtempSync(join(tmpdir(), "streamer-handoff-valid-"));
   try {
     writeFileSync(join(root, "AGENT_HANDOFF.md"), validHandoff);
-    assert.deepEqual(validateAgentHandoff(root), []);
+    assert.deepEqual(
+      validateAgentHandoff(root, { now: new Date("2026-08-12T00:00:00.000Z") }),
+      [],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
