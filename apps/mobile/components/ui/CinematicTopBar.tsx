@@ -39,10 +39,13 @@ type TopBarLayout = {
   rightPadding: number;
   brandWidth: number;
   actionsWidth: number;
-  navItemMinWidth: number;
-  navItemPaddingHorizontal: number;
   navGap: number;
   navFontSize: number;
+};
+
+type TopBarNavigationMeasurement = {
+  labelWidth?: number;
+  tabWidth?: number;
 };
 
 export function resolveTopBarLayout(
@@ -55,11 +58,16 @@ export function resolveTopBarLayout(
     rightPadding: medium ? 16 : 24,
     brandWidth: medium ? 48 : 220,
     actionsWidth: medium ? 152 : 220,
-    navItemMinWidth: medium ? 72 : 72,
-    navItemPaddingHorizontal: medium ? 8 : 12,
     navGap: medium ? 4 : 8,
     navFontSize: medium ? 13 : 14,
   };
+}
+
+export function resolveTopBarUnderlineLayout(
+  labelWidth: number,
+  tabWidth: number,
+) {
+  return { left: (tabWidth - labelWidth) / 2, width: labelWidth };
 }
 
 export function resolveTopBarPalette(
@@ -354,6 +362,12 @@ export function CinematicTopBar({
   const user = useAuthStore((state) => state.user);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [hoveredNavHref, setHoveredNavHref] = useState<string | null>(null);
+  const [pressedNavHref, setPressedNavHref] = useState<string | null>(null);
+  const [focusedNavHref, setFocusedNavHref] = useState<string | null>(null);
+  const [navigationMeasurements, setNavigationMeasurements] = useState<
+    Record<string, TopBarNavigationMeasurement>
+  >({});
   const macDesktop = isMacDesktopShell();
   const topBarLayout = resolveTopBarLayout(windowClass, macDesktop);
   const shortcut = getSearchShortcutLabel(
@@ -369,6 +383,20 @@ export function CinematicTopBar({
   const palette = {
     ...basePalette,
     focus: mode === "overlay" ? cinematicTheme.focus : basePalette.focus,
+  };
+  const recordNavigationMeasurement = (
+    href: string,
+    dimension: keyof TopBarNavigationMeasurement,
+    value: number,
+  ) => {
+    setNavigationMeasurements((current) => {
+      const currentTab = current[href];
+      if (currentTab?.[dimension] === value) return current;
+      return {
+        ...current,
+        [href]: { ...currentTab, [dimension]: value },
+      };
+    });
   };
 
   return (
@@ -421,40 +449,69 @@ export function CinematicTopBar({
               item.href === "/"
                 ? pathname === "/" || pathname === "/index"
                 : pathname.startsWith(item.href);
+            const measurement = navigationMeasurements[item.href];
+            const underlineLayout =
+              measurement?.labelWidth !== undefined &&
+              measurement.tabWidth !== undefined
+                ? resolveTopBarUnderlineLayout(
+                    measurement.labelWidth,
+                    measurement.tabWidth,
+                  )
+                : null;
             return (
               <Link key={item.href} href={item.href as never} asChild>
                 <Pressable
                   accessibilityRole="link"
                   accessibilityLabel={t(item.labelKey)}
                   accessibilityState={{ selected: active }}
-                  style={({ hovered, pressed, focused }: any) => [
+                  onHoverIn={() => setHoveredNavHref(item.href)}
+                  onHoverOut={() => setHoveredNavHref(null)}
+                  onPressIn={() => setPressedNavHref(item.href)}
+                  onPressOut={() => setPressedNavHref(null)}
+                  onFocus={() => setFocusedNavHref(item.href)}
+                  onBlur={() => setFocusedNavHref(null)}
+                  onLayout={(event) =>
+                    recordNavigationMeasurement(
+                      item.href,
+                      "tabWidth",
+                      event.nativeEvent.layout.width,
+                    )
+                  }
+                  style={StyleSheet.flatten([
                     styles.navLink,
-                    {
-                      minWidth: topBarLayout.navItemMinWidth,
-                      paddingHorizontal: topBarLayout.navItemPaddingHorizontal,
-                    },
-                    hovered && { backgroundColor: palette.hover },
-                    pressed && { opacity: 0.62 },
+                    pressedNavHref === item.href && { opacity: 0.62 },
                     Platform.OS === "web" &&
-                      focused &&
+                      focusedNavHref === item.href &&
                       getWebFocusStyle(palette.focus),
-                  ]}
+                  ])}
                 >
                   <Text
+                    onLayout={(event) =>
+                      recordNavigationMeasurement(
+                        item.href,
+                        "labelWidth",
+                        event.nativeEvent.layout.width,
+                      )
+                    }
                     style={[
                       styles.navText,
                       {
-                        color: active ? palette.foreground : palette.secondary,
+                        color:
+                          active || hoveredNavHref === item.href
+                            ? palette.foreground
+                            : palette.secondary,
                         fontSize: topBarLayout.navFontSize,
                       },
                     ]}
                   >
                     {t(item.labelKey)}
                   </Text>
-                  {active ? (
+                  {active && underlineLayout ? (
                     <View
+                      testID="topbar-active-indicator"
                       style={[
                         styles.activeUnderline,
+                        underlineLayout,
                         { backgroundColor: palette.foreground },
                       ]}
                     />
@@ -580,9 +637,9 @@ const styles = StyleSheet.create({
   brandName: { ...uiTypography.control, fontSize: 16, letterSpacing: -0.2 },
   nav: { flex: 1, flexDirection: "row", justifyContent: "center", gap: 8 },
   navLink: {
+    position: "relative",
+    display: "flex",
     minHeight: 44,
-    minWidth: 72,
-    paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: uiRadii.control,
@@ -591,7 +648,6 @@ const styles = StyleSheet.create({
   activeUnderline: {
     position: "absolute",
     bottom: 5,
-    width: 18,
     height: 2,
     borderRadius: uiRadii.pill,
   },

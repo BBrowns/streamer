@@ -46,7 +46,7 @@
     "visual:baseline:manifest": "node scripts/visual-baseline-manifest.mjs",
     "visual:baseline:manifest:test": "node --test scripts/visual-baseline-manifest.test.mjs",
     "process:check": "node scripts/validate-process-assets.mjs",
-    "process:check:test": "node --test scripts/validate-process-assets.test.mjs scripts/bootstrap-external-skills.test.mjs scripts/change-scope-parity.test.mjs scripts/ci-install.test.mjs scripts/evaluate-skill-outcomes.test.mjs scripts/maintenance-collect.test.mjs scripts/maintenance-report.test.mjs scripts/qa-run.test.mjs scripts/runtime-preflight.test.mjs scripts/validate-skill-evals.test.mjs scripts/verify-change.test.mjs",
+    "process:check:test": "node --test scripts/validate-process-assets.test.mjs scripts/bootstrap-external-skills.test.mjs scripts/change-scope-parity.test.mjs scripts/ci-install.test.mjs scripts/evaluate-skill-outcomes.test.mjs scripts/maintenance-collect.test.mjs scripts/maintenance-report.test.mjs scripts/qa-run.test.mjs scripts/runtime-preflight.test.mjs scripts/validate-skill-evals.test.mjs scripts/verify-change.test.mjs scripts/gauntlet.test.mjs scripts/gauntlet-package.test.mjs",
     "skills:eval:ab": "node scripts/evaluate-skill-outcomes.mjs",
     "agents:bootstrap": "node scripts/bootstrap-external-skills.mjs",
     "agents:check": "node scripts/bootstrap-external-skills.mjs --check",

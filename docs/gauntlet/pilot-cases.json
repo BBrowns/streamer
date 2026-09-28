@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "task": {
+    "outcome": "Synthetic examples for checking evidence boundaries; no values are derived from real user activity.",
+    "requirements": [
+      {
+        "id": "guest-confirmation",
+        "text": "Support the guest-network context for the new synthetic run.",
+        "runId": "synthetic-unconfirmed",
+        "scope": "active-probe",
+        "network": "guest",
+        "evidence": ["probe-observation"]
+      },
+      {
+        "id": "external-network",
+        "text": "Support external network access.",
+        "runId": "synthetic-unconfirmed",
+        "scope": "external-network",
+        "evidence": ["local-five-passed"]
+      },
+      {
+        "id": "required-scenarios",
+        "text": "Run the required playback scenario; disclosing a skip does not complete this requirement.",
+        "runId": "synthetic-skipped",
+        "scope": "local-fixture",
+        "scenarios": ["real-runtime"],
+        "evidence": ["four-skipped"]
+      },
+      {
+        "id": "corrected-context",
+        "text": "Apply the synthetic context correction to the run record and its direct references.",
+        "runId": "synthetic-corrected",
+        "scope": "local-fixture",
+        "evidence": ["corrected-fixture"]
+      },
+      {
+        "id": "bounded-fixture",
+        "text": "Support only the local Chromium fixture pass.",
+        "runId": "synthetic-unconfirmed",
+        "scope": "local-fixture",
+        "evidence": ["local-five-passed"]
+      },
+      {
+        "id": "prior-context",
+        "text": "Keep the separately confirmed guest context of the prior synthetic run.",
+        "runId": "synthetic-prior-guest",
+        "scope": "context-observation",
+        "network": "guest",
+        "evidence": ["prior-context"]
+      }
+    ]
+  },
+  "runs": [
+    {
+      "id": "synthetic-unconfirmed",
+      "target": "desktop Chromium",
+      "runtime": "synthetic fixture",
+      "documents": []
+    },
+    {
+      "id": "synthetic-skipped",
+      "target": "stream-server test runner",
+      "runtime": "synthetic fixture",
+      "documents": []
+    },
+    {
+      "id": "synthetic-corrected",
+      "target": "desktop Chromium",
+      "runtime": "synthetic fixture",
+      "context": {
+        "runId": "synthetic-corrected",
+        "category": "hotspot",
+        "source": "Synthetic example confirmation; fabricated documentation data.",
+        "confirmedAt": "2000-01-01T00:00:00Z"
+      },
+      "documents": ["docs/gauntlet/fixtures/guest-network-source-coverage.md"]
+    },
+    {
+      "id": "synthetic-prior-guest",
+      "target": "context-only",
+      "runtime": "synthetic fixture",
+      "context": {
+        "runId": "synthetic-prior-guest",
+        "category": "guest",
+        "source": "Synthetic example context; fabricated documentation data.",
+        "confirmedAt": "2000-01-01T00:00:00Z"
+      },
+      "documents": ["docs/gauntlet/fixtures/prior-guest-run.md"]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "probe-observation",
+      "runId": "synthetic-unconfirmed",
+      "kind": "observation",
+      "scope": "active-probe",
+      "status": "passed",
+      "source": "Synthetic UI metadata and first-byte observation.",
+      "observedAt": "2000-01-01T00:00:00Z",
+      "revision": "unknown",
+      "fingerprint": "unknown",
+      "provenance": "synthetic"
+    },
+    {
+      "id": "local-five-passed",
+      "runId": "synthetic-unconfirmed",
+      "kind": "observation",
+      "scope": "local-fixture",
+      "status": "passed",
+      "exitCode": 0,
+      "counts": { "passed": 5, "failed": 0, "skipped": 0 },
+      "source": "Synthetic local browser fixture observations.",
+      "observedAt": "2000-01-01T00:00:00Z",
+      "revision": "unknown",
+      "fingerprint": "unknown",
+      "provenance": "synthetic"
+    },
+    {
+      "id": "four-skipped",
+      "runId": "synthetic-skipped",
+      "kind": "observation",
+      "scope": "local-fixture",
+      "status": "passed",
+      "exitCode": 0,
+      "counts": { "passed": 0, "failed": 0, "skipped": 4 },
+      "scenarios": { "real-runtime": "skipped" },
+      "source": "Synthetic example: a passing command with four skipped cases.",
+      "observedAt": "2000-01-01T00:00:00Z",
+      "revision": "unknown",
+      "fingerprint": "unknown",
+      "provenance": "synthetic"
+    },
+    {
+      "id": "corrected-fixture",
+      "runId": "synthetic-corrected",
+      "kind": "observation",
+      "scope": "local-fixture",
+      "status": "passed",
+      "exitCode": 0,
+      "counts": { "passed": 5, "failed": 0, "skipped": 0 },
+      "source": "Synthetic local browser fixture observation.",
+      "observedAt": "2000-01-01T00:00:00Z",
+      "revision": "unknown",
+      "fingerprint": "unknown",
+      "provenance": "synthetic"
+    },
+    {
+      "id": "prior-context",
+      "runId": "synthetic-prior-guest",
+      "kind": "observation",
+      "scope": "context-observation",
+      "status": "passed",
+      "source": "Synthetic context-only observation; no playback claim.",
+      "observedAt": "2000-01-01T00:00:00Z",
+      "revision": "unknown",
+      "fingerprint": "unknown",
+      "provenance": "synthetic"
+    }
+  ],
+  "conclusions": [
+    {
+      "id": "guest-claim",
+      "text": "The new synthetic run supports guest-network reachability.",
+      "runId": "synthetic-unconfirmed",
+      "scope": "active-probe",
+      "network": "guest",
+      "evidence": ["probe-observation"]
+    },
+    {
+      "id": "external-claim",
+      "text": "The local fixture pass proves external network access.",
+      "runId": "synthetic-unconfirmed",
+      "scope": "external-network",
+      "evidence": ["local-five-passed"]
+    },
+    {
+      "id": "skipped-disclosed",
+      "text": "Exit 0; all four playback scenarios were skipped. The requirement remains open.",
+      "runId": "synthetic-skipped",
+      "scope": "local-fixture",
+      "scenarios": ["real-runtime"],
+      "evidence": ["four-skipped"],
+      "expectedStatus": "skipped"
+    },
+    {
+      "id": "partial-correction",
+      "text": "The synthetic hotspot correction is recorded; the document label and matrix reference still need review.",
+      "runId": "synthetic-corrected",
+      "scope": "local-fixture",
+      "network": "hotspot",
+      "evidence": ["corrected-fixture"]
+    },
+    {
+      "id": "bounded-fixture-pass",
+      "text": "Five synthetic local Chromium fixture tests passed; external network access remains unproven.",
+      "runId": "synthetic-unconfirmed",
+      "scope": "local-fixture",
+      "evidence": ["local-five-passed"]
+    },
+    {
+      "id": "prior-guest-context",
+      "text": "The separate prior synthetic run has guest context.",
+      "runId": "synthetic-prior-guest",
+      "scope": "context-observation",
+      "network": "guest",
+      "evidence": ["prior-context"]
+    }
+  ],
+  "corrections": [
+    {
+      "id": "synthetic-context-correction",
+      "runId": "synthetic-corrected",
+      "from": "guest",
+      "to": "hotspot",
+      "source": "Synthetic example correction; fabricated documentation data.",
+      "confirmedAt": "2000-01-01T00:00:00Z"
+    }
+  ],
+  "documentRoots": ["docs/gauntlet/fixtures"]
+}

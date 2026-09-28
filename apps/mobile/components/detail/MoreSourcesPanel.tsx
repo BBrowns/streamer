@@ -14,22 +14,39 @@ import { AppIconButton } from "../ui/AppIconButton";
 
 type MoreSourcesPanelProps = {
   contentId: string;
+  contentType?: "movie" | "series";
+  season?: number;
+  episode?: number;
   title: string;
   sourceCount?: number;
   initiallyOpen?: boolean;
+  visible?: boolean;
+  showTrigger?: boolean;
+  onOpenChange?: (visible: boolean) => void;
   onSelect: (plan: PlaybackPlanResponse, candidateId: string) => void;
 };
 
 export function MoreSourcesPanel({
   contentId,
+  contentType = "movie",
+  season,
+  episode,
   title,
   initiallyOpen = false,
+  visible,
+  showTrigger = true,
+  onOpenChange,
   onSelect,
 }: MoreSourcesPanelProps) {
   const { colors } = useTheme();
   const { theme: cinematicTheme } = useCinematicTheme();
   const { t } = useTranslation();
-  const [open, setOpen] = useState(initiallyOpen);
+  const [internalOpen, setInternalOpen] = useState(initiallyOpen);
+  const open = visible ?? internalOpen;
+  const setOpen = (nextVisible: boolean) => {
+    if (visible === undefined) setInternalOpen(nextVisible);
+    onOpenChange?.(nextVisible);
+  };
   const [eligibleSourceCount, setEligibleSourceCount] = useState<number | null>(
     null,
   );
@@ -54,57 +71,60 @@ export function MoreSourcesPanel({
       : sourceSummary;
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          borderTopColor: colors.borderSubtle,
-          borderBottomColor: colors.borderSubtle,
-        },
-      ]}
-    >
-      <Pressable
-        onPress={() => {
-          hapticImpactLight();
-          setOpen((value) => !value);
-        }}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={
-          open ? t("detail.sources.hide") : t("detail.sources.show")
-        }
-        style={({ pressed, focused }: any) => [
-          styles.header,
-          pressed && { backgroundColor: colors.statePressed },
-          Platform.OS === "web" &&
-            focused &&
-            getWebFocusStyle(cinematicTheme.focus),
-        ]}
-      >
-        <View style={styles.heading}>
-          <Ionicons
-            name="layers-outline"
-            size={17}
-            color={colors.textSecondary}
-          />
-          <View style={styles.headingCopy}>
-            <Text style={[styles.title, { color: colors.text }]}>
-              {t("detail.sources.playbackSource", {
-                defaultValue: "Playback source",
-              })}
-            </Text>
-            <Text style={[styles.summary, { color: colors.textSecondary }]}>
-              {sourceSummary}
-            </Text>
-          </View>
+    <>
+      {showTrigger ? (
+        <View
+          style={[
+            styles.container,
+            {
+              borderTopColor: colors.borderSubtle,
+              borderBottomColor: colors.borderSubtle,
+            },
+          ]}
+        >
+          <Pressable
+            onPress={() => {
+              hapticImpactLight();
+              setOpen(!open);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLabel={
+              open ? t("detail.sources.hide") : t("detail.sources.show")
+            }
+            style={({ pressed, focused }: any) => [
+              styles.header,
+              pressed && { backgroundColor: colors.statePressed },
+              Platform.OS === "web" &&
+                focused &&
+                getWebFocusStyle(cinematicTheme.focus),
+            ]}
+          >
+            <View style={styles.heading}>
+              <Ionicons
+                name="layers-outline"
+                size={17}
+                color={colors.textSecondary}
+              />
+              <View style={styles.headingCopy}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {t("detail.sources.playbackSource", {
+                    defaultValue: "Playback source",
+                  })}
+                </Text>
+                <Text style={[styles.summary, { color: colors.textSecondary }]}>
+                  {sourceSummary}
+                </Text>
+              </View>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
         </View>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.textSecondary}
-        />
-      </Pressable>
-
+      ) : null}
       <AdaptiveOverlay
         visible={open}
         onClose={() => setOpen(false)}
@@ -134,7 +154,10 @@ export function MoreSourcesPanel({
         </View>
         {open ? (
           <MoreSourcesBody
+            contentType={contentType}
             contentId={contentId}
+            season={season}
+            episode={episode}
             title={title}
             onSelect={(plan, candidateId) => {
               // Close the advanced source modal before playback preparation
@@ -147,21 +170,29 @@ export function MoreSourcesPanel({
           />
         ) : null}
       </AdaptiveOverlay>
-    </View>
+    </>
   );
 }
 
 function MoreSourcesBody({
+  contentType,
   contentId,
+  season,
+  episode,
   title,
   onSelect,
   onAvailableCount,
-}: Pick<MoreSourcesPanelProps, "contentId" | "title" | "onSelect"> & {
+}: Pick<
+  MoreSourcesPanelProps,
+  "contentType" | "contentId" | "season" | "episode" | "title" | "onSelect"
+> & {
   onAvailableCount: (count: number | null) => void;
 }) {
   const sourceState = useSourceChoicePlan({
-    contentType: "movie",
+    contentType: contentType ?? "movie",
     contentId,
+    season,
+    episode,
   });
   const [showAll, setShowAll] = useState(false);
 
@@ -188,8 +219,10 @@ function MoreSourcesBody({
         onShowAll={() => setShowAll(true)}
       />
       <TechnicalSourceDisclosure
-        contentType="movie"
+        contentType={contentType ?? "movie"}
         contentId={contentId}
+        season={season}
+        episode={episode}
         title={title}
       />
     </View>

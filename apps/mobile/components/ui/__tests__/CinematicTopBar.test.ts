@@ -1,24 +1,25 @@
 import { PALETTE } from "../../../constants/theme";
-import { resolveTopBarLayout, resolveTopBarPalette } from "../CinematicTopBar";
+import {
+  resolveTopBarLayout,
+  resolveTopBarPalette,
+  resolveTopBarUnderlineLayout,
+} from "../CinematicTopBar";
 
 jest.mock("../../../contexts/CinematicThemeContext", () => ({
   useCinematicTheme: () => ({ theme: { focus: "#C89B6D" } }),
 }));
 
 describe("resolveTopBarLayout", () => {
-  it("keeps the medium navigation inside the narrowest desktop viewport", () => {
+  it("keeps the fixed medium top bar regions inside the narrow desktop viewport", () => {
     const layout = resolveTopBarLayout("medium");
-    const requiredWidth =
+    const fixedRegionsWidth =
       layout.leftPadding +
       layout.rightPadding +
       layout.brandWidth +
-      layout.actionsWidth +
-      layout.navItemMinWidth * 3 +
-      layout.navGap * 2;
+      layout.actionsWidth;
 
-    expect(requiredWidth).toBeLessThanOrEqual(600);
+    expect(fixedRegionsWidth).toBeLessThanOrEqual(600);
     expect(layout.brandWidth).toBeLessThan(layout.actionsWidth);
-    expect(layout.navItemMinWidth).toBeGreaterThanOrEqual(72);
     expect(layout.navGap).toBeGreaterThan(0);
   });
 });
@@ -38,4 +39,20 @@ describe("resolveTopBarPalette", () => {
     expect(palette.foreground).toBe(PALETTE.light.text);
     expect(palette.mark).toBe(PALETTE.light.primary);
   });
+});
+
+describe("resolveTopBarUnderlineLayout", () => {
+  it.each([
+    [30, 72, 21],
+    [54, 96, 21],
+    [86, 118, 16],
+  ])(
+    "centers a measured label (%i px) in its tab (%i px)",
+    (labelWidth, tabWidth, expectedLeft) => {
+      expect(resolveTopBarUnderlineLayout(labelWidth, tabWidth)).toEqual({
+        left: expectedLeft,
+        width: labelWidth,
+      });
+    },
+  );
 });
