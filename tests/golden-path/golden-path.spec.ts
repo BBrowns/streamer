@@ -977,10 +977,17 @@ test("Library grid uses bounded fixed cards at every window class", async ({
       "tablet-landscape-web": { minimum: 4, maximum: 5 },
       "desktop-renderer": { minimum: 5, maximum: 7 },
     };
+  const expectedGutters: Record<string, number> = {
+    "phone-web": 20,
+    "tablet-portrait-web": 24,
+    "tablet-landscape-web": 40,
+    "desktop-renderer": 56,
+  };
   const expected = expectedColumns[testInfo.project.name];
 
   expect(firstRow.length).toBeGreaterThanOrEqual(expected.minimum);
   expect(firstRow.length).toBeLessThanOrEqual(expected.maximum);
+  expect(firstRow[0].x).toBe(expectedGutters[testInfo.project.name]);
   for (const box of firstRow) {
     expect(Math.abs(box.width - firstRow[0].width)).toBeLessThanOrEqual(1);
     expect(box.width).toBeGreaterThanOrEqual(112);

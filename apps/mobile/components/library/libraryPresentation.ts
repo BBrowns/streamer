@@ -1,5 +1,6 @@
 import type { LibraryItem, WatchProgress } from "@streamer/shared";
 import type { WindowClass } from "../../hooks/useWindowClass";
+import { getWindowGutter } from "../ui/designSystem";
 
 export type LibraryFilter = "all" | "movie" | "series" | "history";
 
@@ -84,14 +85,7 @@ export function getLibraryGridMetrics(
   containerWidth: number,
   windowClass: WindowClass,
 ): LibraryGridMetrics {
-  const horizontalGutter =
-    windowClass === "compact"
-      ? 16
-      : windowClass === "medium"
-        ? 24
-        : windowClass === "expanded"
-          ? 32
-          : 40;
+  const horizontalGutter = getWindowGutter(windowClass);
   const gap = 16;
   const contentWidth = Math.max(0, Math.min(containerWidth, 1600));
   const available = Math.max(0, contentWidth - horizontalGutter * 2);
