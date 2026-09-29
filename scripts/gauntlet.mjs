@@ -701,9 +701,11 @@ function summarizeReview(input, bindings, evidence, visualContractValid) {
           reviewId: review.id,
           reviewerRole: review.reviewer?.role ?? "unknown",
           repairRequired:
-            review.reviewer?.role === "visual_reviewer"
-              ? finding.severity === "P1"
-              : null,
+            finding.severity === "P1"
+              ? true
+              : review.reviewer?.role === "visual_reviewer"
+                ? false
+                : null,
           status: isCurrentVisualFinding
             ? finding.severity === "P2"
               ? "informational"

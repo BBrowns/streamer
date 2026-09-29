@@ -456,7 +456,13 @@ function attachCurrentVisualP1Review(root, pkg, gauntletInputPath) {
       bindings: { draft: bindings.draft, gauntlet: bindings.gauntlet },
       comparison: "Compared the delivery claims with the candidate evidence.",
     },
-    findings: [],
+    findings: [
+      {
+        id: "candidate-risk-p1",
+        severity: "P1",
+        text: "The repair limit must span package attempts.",
+      },
+    ],
   };
   const screenshot = input.evidence.find(
     (item) => item.kind === "visual-screenshot",
@@ -536,7 +542,12 @@ test("visual P1 repair is recorded and cannot create a second repair candidate",
   assert.deepEqual(repaired.package.gauntletInput.repairRounds, [
     {
       id: "repair-1",
-      fromReviewId: `visual-${first.package.candidate.fingerprint.slice(0, 8)}`,
+      fromReviewId: `risk-${first.package.candidate.fingerprint.slice(0, 8)}`,
+      fromReviewIds: [
+        `risk-${first.package.candidate.fingerprint.slice(0, 8)}`,
+        `visual-${first.package.candidate.fingerprint.slice(0, 8)}`,
+      ],
+      findingIds: ["candidate-risk-p1", "library-density-p1"],
       retests: ["library-phone", "playwright-1-1", "verify-1", "verify-2"],
     },
   ]);

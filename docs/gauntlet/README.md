@@ -85,8 +85,8 @@ tegen de meegeleverde kopieën van `UI.md` en
 `design/streamer-visual-contract.md`. De risk- en visual-reviewrecords blijven
 onderdelen van dezelfde bestaande `reviews`-lijst. Beide rollen moeten actueel
 zijn voor dezelfde candidate identity voordat de reviewstatus `completed` is.
-Een visuele review zonder findings is geldig; P1 vereist reparatie en P2 is
-informatief.
+Een visuele review zonder findings is geldig; actuele P1-bevindingen van risk-
+of visual-review vereisen reparatie, en visual P2 is informatief.
 
 Na review is hoogstens één gebundelde herstelronde toegestaan: verzamel alle
 relevante findings op dezelfde kandidaat, voer één bounded repair uit, maak een
@@ -99,13 +99,13 @@ reparatie. Het definitieve oordeel moet passen bij de laatste kandidaat,
 opdracht, bewijsinventaris en opleverclaims. Gauntlet blijft adviserend.
 
 De packagebouwer leest eerdere `gauntlet-input.json`-bestanden in dezelfde
-run. Een nieuwe candidate na een complete visual review met open P1-findings
-krijgt automatisch één `repairRounds`-record dat naar die review verwijst en de
-geraakte visual cases plus eerdere check-inventory als retests noemt. Een nieuwe
-candidate na die ronde wordt geweigerd. Een onvolledige visual P1-review blokkeert
-ook voortgang totdat de review op dezelfde candidate is voltooid. Pakketten
-zonder actuele open visual P1-findings blijven afzonderlijke candidate
-snapshots en verbruiken de repairronde niet.
+run. Een nieuwe candidate na een complete risk- of visual review met actuele,
+open P1-findings krijgt automatisch één `repairRounds`-record dat de reviews en
+findings koppelt en de geraakte visual cases plus eerdere check-inventory als
+retests noemt. Een nieuwe candidate na die ronde wordt geweigerd. Een
+onvolledige P1-review blokkeert ook voortgang totdat de review op dezelfde
+candidate is voltooid. Candidates zonder actuele open P1-findings blijven
+afzonderlijke snapshots en verbruiken de repairronde niet.
 
 Registreer beschikbare tijden voor pakketvoorbereiding, review en herstel
 apart, plus het aantal handmatige gebruikersinterventies. De pakketbouwer meet

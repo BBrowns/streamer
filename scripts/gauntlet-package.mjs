@@ -2,16 +2,20 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
+  cpSync,
   copyFileSync,
   existsSync,
   lstatSync,
+  mkdtempSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { scopes } from "./gauntlet-evidence.mjs";
 import { evaluate, reviewBindings } from "./gauntlet.mjs";
@@ -388,6 +392,33 @@ function nextPackageDirectory(runDirectory) {
   return { directory, index };
 }
 
+function evaluatePackageSnapshot(root, directory, input) {
+  const snapshotRoot = mkdtempSync(join(tmpdir(), "gauntlet-review-candidate-"));
+  try {
+    const candidateDirectory = join(directory, "candidate-files");
+    for (const file of input.candidate?.selectedFiles ?? []) {
+      const source = join(candidateDirectory, file);
+      if (!within(candidateDirectory, source))
+        throw new Error(`Invalid candidate snapshot path: ${file}`);
+      if (!existsSync(source)) continue;
+      const target = local(snapshotRoot, file);
+      mkdirSync(dirname(target), { recursive: true });
+      copyFileSync(source, target);
+    }
+
+    const packagePath = relative(realpathSync(root), directory).replaceAll(
+      sep,
+      "/",
+    );
+    const targetDirectory = join(snapshotRoot, packagePath);
+    mkdirSync(dirname(targetDirectory), { recursive: true });
+    cpSync(directory, targetDirectory, { recursive: true });
+    return evaluate(input, { root: snapshotRoot });
+  } finally {
+    rmSync(snapshotRoot, { recursive: true, force: true });
+  }
+}
+
 function repairRoundsForCandidate(root, runDirectory, fingerprint) {
   const packagesDirectory = join(runDirectory, "packages");
   if (!existsSync(packagesDirectory)) return [];
@@ -400,7 +431,7 @@ function repairRoundsForCandidate(root, runDirectory, fingerprint) {
     .sort((a, b) => a.index - b.index);
 
   let repairUsed = false;
-  let pendingVisualRepair = null;
+  let pendingRepair = null;
   for (const attempt of attempts) {
     const directory = join(packagesDirectory, attempt.name);
     const packagePath = join(directory, "package.json");
@@ -419,8 +450,8 @@ function repairRoundsForCandidate(root, runDirectory, fingerprint) {
     if (input.repairRounds.length > 0) repairUsed = true;
 
     if (
-      pendingVisualRepair &&
-      input.candidate?.fingerprint !== pendingVisualRepair.fingerprint
+      pendingRepair &&
+      input.candidate?.fingerprint !== pendingRepair.fingerprint
     ) {
       // A later candidate after a completed P1 review consumed the one round,
       // including packages produced before task-wide tracking was added.
@@ -432,37 +463,45 @@ function repairRoundsForCandidate(root, runDirectory, fingerprint) {
 
     let report;
     try {
-      report = evaluate(input, { root });
+      report = evaluatePackageSnapshot(root, directory, input);
     } catch (error) {
       throw new Error(
         `Cannot verify prior review state in ${attempt.name}: ${error.message}`,
       );
     }
-    const hasVisualP1 = reviews.some(
+    const hasP1 = reviews.some(
       (review) =>
-        review.reviewer?.role === "visual_reviewer" &&
+        ["risk_reviewer", "visual_reviewer"].includes(
+          review.reviewer?.role,
+        ) &&
         review.findings?.some((finding) => finding.severity === "P1"),
     );
-    if (hasVisualP1 && report.review.state !== "completed")
+    if (hasP1 && report.review.state !== "completed")
       throw new Error(
-        `Cannot start a repair candidate: ${attempt.name} has an incomplete visual P1 review`,
+        `Cannot start a repair candidate: ${attempt.name} has an incomplete P1 review`,
       );
 
-    const reviewId = report.review.currentReviewIds?.visual_reviewer;
+    const currentReviewIds = report.review.currentReviewIds ?? {};
     const findings = report.review.findings.filter(
       (finding) =>
-        finding.reviewId === reviewId &&
-        finding.reviewerRole === "visual_reviewer" &&
+        finding.reviewId === currentReviewIds[finding.reviewerRole] &&
+        ["risk_reviewer", "visual_reviewer"].includes(
+          finding.reviewerRole,
+        ) &&
+        finding.severity === "P1" &&
         finding.repairRequired === true &&
         finding.status === "open",
     );
-    if (report.review.state === "completed" && reviewId && findings.length) {
-      pendingVisualRepair = {
+    if (report.review.state === "completed" && findings.length) {
+      pendingRepair = {
         fingerprint: input.candidate?.fingerprint,
-        reviewId,
+        reviewIds: [...new Set(findings.map((finding) => finding.reviewId))],
+        findingIds: [...new Set(findings.map((finding) => finding.id))],
         retests: [
           ...(input.visualImpact?.cases ?? []),
-          ...(input.checkInventory ?? []).map((item) => item.id),
+          ...(input.checkInventory ?? [])
+            .filter((item) => item.status !== "skipped")
+            .map((item) => item.id),
         ],
       };
     }
@@ -472,17 +511,19 @@ function repairRoundsForCandidate(root, runDirectory, fingerprint) {
     throw new Error(
       "This Gauntlet task already used its one review-driven repair round",
     );
-  if (!pendingVisualRepair) return [];
-  if (pendingVisualRepair.fingerprint === fingerprint)
+  if (!pendingRepair) return [];
+  if (pendingRepair.fingerprint === fingerprint)
     throw new Error(
-      "A visual P1 repair requires a changed candidate before packaging",
+      "A P1 repair requires a changed candidate before packaging",
     );
 
   return [
     {
       id: "repair-1",
-      fromReviewId: pendingVisualRepair.reviewId,
-      retests: [...new Set(pendingVisualRepair.retests)].sort(),
+      fromReviewId: pendingRepair.reviewIds[0],
+      fromReviewIds: pendingRepair.reviewIds,
+      findingIds: pendingRepair.findingIds,
+      retests: [...new Set(pendingRepair.retests)].sort(),
     },
   ];
 }

@@ -1328,6 +1328,22 @@ test("completed review and open findings remain separate from project controls",
   assert.equal(hasFinding(result, "SEMANTIC_REVIEW"), false);
 });
 
+test("P1 risk findings require repair while P2 risk findings remain advisory", () => {
+  const input = reviewableInput();
+  input.reviews = [
+    completedReview(input, {
+      findings: [
+        { id: "risk-p1", severity: "P1", text: "Repair a candidate risk." },
+        { id: "risk-p2", severity: "P2", text: "Review an advisory risk." },
+      ],
+    }),
+  ];
+
+  const findings = evaluate(input).review.findings;
+  assert.equal(findings.find(({ id }) => id === "risk-p1").repairRequired, true);
+  assert.equal(findings.find(({ id }) => id === "risk-p2").repairRequired, null);
+});
+
 test("a subsequent current review retains history and records disposition", () => {
   const input = reviewableInput();
   const first = completedReview(input, {
