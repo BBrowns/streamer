@@ -129,6 +129,27 @@ For a UI change, include the relevant browser golden paths, visual regression,
 and Electron smoke evidence. Keep browser, Electron, emulator, simulator, and
 physical-device evidence as separate claims.
 
+For local Gauntlet review, first inspect `npm run verify:change -- --plan` for
+the changed files. It returns `visualImpact` and stable case IDs such as
+`library-phone` and `library-desktop`. Resolve every `unknown` at
+`gauntlet-package.mjs start` with `--visual-impact 'path|no'` or
+`--visual-impact 'path|yes|case-id,case-id'`, before a task candidate is made.
+The stable case IDs belong to the Streamer contract; Playwright project names,
+routes, tests, and viewport settings remain implementation details in the
+Streamer mapping.
+
+For `yes`, capture the requested case PNGs from the same candidate-bound
+Playwright attempt. Pair `check-start` and `check-end` markers with the report
+imported by `finish --playwright-attempt-id`; Gauntlet binds each screenshot to
+the existing revision, fingerprint, fingerprint algorithm and selected files.
+The record also keeps the screenshot SHA-256 and capture context. Do not run
+source edits between markers. The reviewer receives the copied `UI.md`, copied
+`design/streamer-visual-contract.md`, their exact-byte contract hash and the
+case-bound screenshots. Visual P1 findings require one bounded, bundled repair
+round. After fresh candidate checks, screenshots and visual review, unresolved
+P1 findings remain in the report; the workflow does not start a second round.
+Zero visual findings is a valid result.
+
 For visual baseline changes:
 
 1. Compare the actual output against the correct platform baseline.

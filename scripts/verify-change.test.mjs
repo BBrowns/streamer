@@ -8,8 +8,123 @@ import {
   buildVerificationPlan,
   main,
   parseArguments,
+  resolveVisualImpact,
   runVerificationPlan,
 } from "./verify-change.mjs";
+
+test("verification planning returns stable cases for known visual impact", () => {
+  const plan = buildVerificationPlan(["apps/mobile/app/(tabs)/library.tsx"], {
+    rules: [
+      {
+        id: "mobile-ui",
+        patterns: ["^apps/mobile/"],
+        visualImpact: "yes",
+        focusedCommands: [],
+        finalCommands: [],
+      },
+    ],
+    fallback: {
+      id: "fallback",
+      visualImpact: "unknown",
+      focusedCommands: [],
+      finalCommands: [],
+    },
+    visualCaseMappings: [
+      {
+        patterns: ["^apps/mobile/app/\\(tabs\\)/library\\.tsx$"],
+        cases: ["library-phone", "library-desktop"],
+      },
+    ],
+  });
+
+  assert.equal(plan.visualImpact, "yes");
+  assert.deepEqual(plan.visualCases, ["library-desktop", "library-phone"]);
+  assert.deepEqual(plan.visualImpactByFile, [
+    {
+      file: "apps/mobile/app/(tabs)/library.tsx",
+      impact: "yes",
+      cases: ["library-desktop", "library-phone"],
+    },
+  ]);
+  assert.deepEqual(plan.unknownVisualFiles, []);
+});
+
+test("verification planning keeps unclassified visual impact explicit", () => {
+  const plan = buildVerificationPlan(
+    ["apps/mobile/components/shared/UnmappedWidget.tsx"],
+    {
+      rules: [
+        {
+          id: "mobile-ui",
+          patterns: ["^apps/mobile/"],
+          visualImpact: "yes",
+          focusedCommands: [],
+          finalCommands: [],
+        },
+      ],
+      fallback: {
+        id: "fallback",
+        visualImpact: "unknown",
+        focusedCommands: [],
+        finalCommands: [],
+      },
+      visualCaseMappings: [],
+    },
+  );
+
+  assert.equal(plan.visualImpact, "unknown");
+  assert.deepEqual(plan.visualCases, []);
+  assert.deepEqual(plan.unknownVisualFiles, [
+    "apps/mobile/components/shared/UnmappedWidget.tsx",
+  ]);
+  assert.throws(() => resolveVisualImpact(plan), /classif/i);
+  assert.throws(
+    () =>
+      resolveVisualImpact(plan, [
+        {
+          file: "apps/mobile/components/shared/UnmappedWidget.tsx",
+          impact: "no",
+        },
+      ]),
+    /resolvedBy.*rationale/i,
+  );
+  assert.deepEqual(
+    resolveVisualImpact(plan, [
+      {
+        file: "apps/mobile/components/shared/UnmappedWidget.tsx",
+        impact: "no",
+        resolvedBy: "Codex pre-candidate visual-impact triage",
+        rationale:
+          "The changed module owns test-only presentation data and does not render UI or styles.",
+      },
+    ]),
+    {
+      visualImpact: "no",
+      visualCases: [],
+      visualImpactByFile: [
+        {
+          file: "apps/mobile/components/shared/UnmappedWidget.tsx",
+          impact: "no",
+          cases: [],
+          resolvedBy: "Codex pre-candidate visual-impact triage",
+          rationale:
+            "The changed module owns test-only presentation data and does not render UI or styles.",
+        },
+      ],
+      unknownVisualFiles: [],
+      visualImpactResolutions: [
+        {
+          file: "apps/mobile/components/shared/UnmappedWidget.tsx",
+          impact: "no",
+          cases: [],
+          resolvedBy: "Codex pre-candidate visual-impact triage",
+          rationale:
+            "The changed module owns test-only presentation data and does not render UI or styles.",
+        },
+      ],
+    },
+  );
+});
 
 test("process changes select process checks without release gates", () => {
   const plan = buildVerificationPlan([
@@ -26,6 +141,27 @@ test("process changes select process checks without release gates", () => {
     "npm run hooks:runtime:test",
   ]);
   assert.deepEqual(plan.finalCommands, []);
+  assert.equal(plan.visualImpact, "no");
+});
+
+test("the Streamer surface map returns stable library cases", () => {
+  const plan = buildVerificationPlan(["apps/mobile/app/(tabs)/library.tsx"]);
+
+  assert.equal(plan.visualImpact, "yes");
+  assert.deepEqual(plan.visualCases, ["library-desktop", "library-phone"]);
+  assert.deepEqual(plan.unknownVisualFiles, []);
+});
+
+test("golden-path test infrastructure does not imply UI visual impact", () => {
+  const plan = buildVerificationPlan([
+    "tests/golden-path/ui-test-helpers.ts",
+    "tests/golden-path/visual-regression.spec.ts",
+  ]);
+
+  assert.deepEqual(plan.rules, ["golden-path-test-support"]);
+  assert.equal(plan.visualImpact, "no");
+  assert.deepEqual(plan.visualCases, []);
+  assert.deepEqual(plan.focusedCommands, ["npm run test:golden-path"]);
 });
 
 test("outcome evaluator changes stay on the focused process path", () => {
@@ -50,6 +186,7 @@ test("shared contract changes select consumers and cross-workspace verification"
   );
   assert.ok(plan.focusedCommands.includes("npm run typecheck:all"));
   assert.deepEqual(plan.finalCommands, ["npm run verify:quick"]);
+  assert.equal(plan.visualImpact, "no");
 });
 
 test("mobile UI changes select interaction and visual evidence", () => {
@@ -64,6 +201,8 @@ test("mobile UI changes select interaction and visual evidence", () => {
   assert.ok(plan.focusedCommands.includes("npm run test:golden-path"));
   assert.ok(plan.focusedCommands.includes("npm run test:visual"));
   assert.deepEqual(plan.finalCommands, ["npm run verify:quick"]);
+  assert.equal(plan.visualImpact, "yes");
+  assert.deepEqual(plan.visualCases, ["player-desktop", "player-phone"]);
 });
 
 test("workspace manifests keep workspace and dependency security checks", () => {

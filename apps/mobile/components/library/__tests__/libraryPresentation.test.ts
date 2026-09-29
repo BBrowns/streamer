@@ -67,6 +67,20 @@ describe("libraryPresentation", () => {
     expect(getLibraryGridMetrics(390, "compact").columns).toBe(2);
   });
 
+  it.each([
+    ["compact", 390, 20],
+    ["medium", 768, 24],
+    ["expanded", 1024, 40],
+    ["large", 1440, 56],
+  ] as const)(
+    "uses the shared %s content gutter for its header and grid boundary",
+    (windowClass, width, gutter) => {
+      expect(getLibraryGridMetrics(width, windowClass).horizontalGutter).toBe(
+        gutter,
+      );
+    },
+  );
+
   it("keeps the same fixed card metrics for 0, 1, 2, and many items", () => {
     const metrics = [0, 1, 2, 24].map(() =>
       getLibraryGridMetrics(1440, "large"),

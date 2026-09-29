@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { evaluate, reviewBindings } from "./gauntlet.mjs";
+import { evaluate, renderReport, reviewBindings } from "./gauntlet.mjs";
 import { createQaRunManifest } from "./qa-run.mjs";
 
 const cases = JSON.parse(
@@ -102,6 +108,391 @@ function completedReview(input, overrides = {}) {
     ...overrides,
   };
 }
+
+const pngFixture = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9ioAAAAASUVORK5CYII=",
+  "base64",
+);
+
+function visualReviewableInput(root) {
+  const input = reviewableInput();
+  const fingerprint = "a".repeat(64);
+  const contractSources = [
+    {
+      path: "UI.md",
+      copiedPath: "review-contract/UI.md",
+      content: "UI rules\n",
+    },
+    {
+      path: "design/streamer-visual-contract.md",
+      copiedPath: "review-contract/streamer-visual-contract.md",
+      content: "Typography before containers.\n",
+    },
+  ];
+  const contractHashBuilder = createHash("sha256");
+  const contractFiles = contractSources.map((file) => {
+    const target = join(root, file.copiedPath);
+    mkdirSync(join(root, "review-contract"), { recursive: true });
+    writeFileSync(target, file.content);
+    const bytes = Buffer.from(file.content);
+    const fileHash = createHash("sha256").update(bytes).digest("hex");
+    contractHashBuilder
+      .update(file.path)
+      .update("\0")
+      .update(bytes)
+      .update("\0");
+    return {
+      path: file.path,
+      copiedPath: file.copiedPath,
+      sha256: fileHash,
+      size: bytes.length,
+    };
+  });
+  const contractHash = contractHashBuilder.digest("hex");
+  const files = ["owner.mjs"];
+  input.candidate = {
+    revision: "revision-a",
+    fingerprint,
+    fingerprintAlgorithm: "sha256-path-nul-content-nul-v1",
+    selectedFiles: files,
+    files,
+  };
+  input.visualImpact = {
+    status: "yes",
+    cases: ["library-phone"],
+    resolutions: [],
+  };
+  input.visualReview = {
+    contractVersion: {
+      algorithm: "sha256-path-nul-content-nul-v1",
+      sha256: contractHash,
+      files: contractFiles,
+    },
+  };
+  mkdirSync(join(root, "visual"), { recursive: true });
+  writeFileSync(join(root, "visual/library-phone.png"), pngFixture);
+  input.evidence.push({
+    id: "visual-library-phone",
+    runId: "run",
+    kind: "visual-screenshot",
+    provenance: "recorded",
+    path: "visual/library-phone.png",
+    screenshotHash: createHash("sha256").update(pngFixture).digest("hex"),
+    candidateIdentity: {
+      revision: "revision-a",
+      fingerprint,
+      fingerprintAlgorithm: "sha256-path-nul-content-nul-v1",
+      files,
+    },
+    markerBinding: "paired",
+    candidateBinding: "current",
+    captureContext: {
+      caseId: "library-phone",
+      project: "phone-web",
+      viewport: { width: 390, height: 844 },
+      colorScheme: "dark",
+      capturedAt: "2026-09-26T09:59:30.000Z",
+    },
+  });
+  return input;
+}
+
+function completedVisualReview(input, root, overrides = {}) {
+  const bindings = reviewBindings(input, { root });
+  return {
+    id: "visual-review-a",
+    reviewer: {
+      role: "visual_reviewer",
+      context: "fresh",
+      independent: true,
+    },
+    phase1: {
+      recordedAt: "2026-09-26T10:00:00Z",
+      bindings: {
+        task: bindings.task,
+        candidate: bindings.candidate,
+        evidence: bindings.evidence,
+        checkInventory: bindings.checkInventory,
+        visualContract: bindings.visualContract,
+        visualCases: bindings.visualCases,
+      },
+      assessment: "Compared candidate, screenshot and contract before draft.",
+    },
+    phase2: {
+      recordedAt: "2026-09-26T10:01:00Z",
+      bindings: { draft: bindings.draft, gauntlet: bindings.gauntlet },
+      comparison: "Compared visual findings against the bounded delivery.",
+    },
+    visual: {
+      contractVersion: input.visualReview.contractVersion.sha256,
+      cases: [...input.visualImpact.cases],
+    },
+    findings: [],
+    ...overrides,
+  };
+}
+
+function completedVisualRiskReview(input, root, overrides = {}) {
+  const bindings = reviewBindings(input, { root });
+  return {
+    id: "risk-review-visual-a",
+    reviewer: {
+      role: "risk_reviewer",
+      context: "fresh",
+      independent: true,
+    },
+    phase1: {
+      recordedAt: "2026-09-26T09:58:00Z",
+      bindings: {
+        task: bindings.task,
+        candidate: bindings.candidate,
+        evidence: bindings.evidence,
+        checkInventory: bindings.checkInventory,
+      },
+      assessment: "Compared source, candidate and check evidence.",
+    },
+    phase2: {
+      recordedAt: "2026-09-26T09:59:00Z",
+      bindings: { draft: bindings.draft, gauntlet: bindings.gauntlet },
+      comparison: "Compared the draft with the reviewed candidate.",
+    },
+    findings: [],
+    ...overrides,
+  };
+}
+
+function withTempRoot(callback) {
+  const root = mkdtempSync(join(tmpdir(), "streamer-gauntlet-visual-"));
+  try {
+    callback(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("a fresh visual review with zero findings is a valid current review", () => {
+  withTempRoot((root) => {
+    const input = visualReviewableInput(root);
+    input.reviews = [
+      completedVisualRiskReview(input, root),
+      completedVisualReview(input, root),
+    ];
+
+    const result = evaluate(input, { root });
+
+    assert.equal(result.review.state, "completed");
+    assert.equal(result.review.findings.length, 0);
+    assert.equal(result.review.openFindingCount, 0);
+    assert.equal(hasFinding(result, "SEMANTIC_REVIEW"), false);
+    const visualEvidence = result.evidence.find(
+      (item) => item.kind === "visual-screenshot",
+    );
+    assert.equal(
+      visualEvidence.observedAt,
+      input.evidence.find((item) => item.kind === "visual-screenshot")
+        .captureContext.capturedAt,
+    );
+    assert.equal(visualEvidence.issues.includes("PROVENANCE_UNKNOWN"), false);
+  });
+});
+
+test("visual findings use P1 for repair and P2 for information", () => {
+  withTempRoot((root) => {
+    const input = visualReviewableInput(root);
+    const finding = {
+      id: "library-density",
+      severity: "P1",
+      category: "density",
+      location: "Library grid, first row",
+      observation: "Metadata competes with poster titles.",
+      violatedPrinciple: "Typography before containers.",
+      smallestAppropriateRepair:
+        "Reduce the secondary metadata emphasis in LibraryCard.",
+      evidenceReference: { screenshotId: "visual-library-phone" },
+    };
+    input.reviews = [
+      completedVisualRiskReview(input, root),
+      completedVisualReview(input, root, { findings: [finding] }),
+    ];
+    let result = evaluate(input, { root });
+    assert.equal(result.review.findings[0].status, "open");
+    assert.equal(result.review.findings[0].repairRequired, true);
+    assert.equal(result.review.openFindingCount, 1);
+
+    input.reviews = [
+      completedVisualRiskReview(input, root),
+      completedVisualReview(input, root, {
+        findings: [finding],
+        dispositions: [
+          {
+            reviewId: "visual-review-a",
+            findingId: finding.id,
+            status: "resolved",
+            source: "Same review record",
+          },
+        ],
+      }),
+    ];
+    result = evaluate(input, { root });
+    assert.equal(result.review.findings.at(-1).status, "open");
+    assert.equal(result.review.openFindingCount, 1);
+
+    input.reviews = [
+      completedVisualRiskReview(input, root),
+      completedVisualReview(input, root, {
+        findings: [{ ...finding, severity: "P2" }],
+      }),
+    ];
+    result = evaluate(input, { root });
+    assert.equal(result.review.state, "completed");
+    assert.equal(result.review.findings[0].status, "informational");
+    assert.equal(result.review.findings[0].repairRequired, false);
+    assert.equal(result.review.openFindingCount, 0);
+  });
+});
+
+test("visual review becomes stale when the exact contract hash changes", () => {
+  withTempRoot((root) => {
+    const input = visualReviewableInput(root);
+    input.reviews = [
+      completedVisualRiskReview(input, root),
+      completedVisualReview(input, root),
+    ];
+    input.visualReview.contractVersion.sha256 = "c".repeat(64);
+
+    const result = evaluate(input, { root });
+    assert.equal(result.reviewHistory[0].state, "stale");
+    assert.equal(hasFinding(result, "SEMANTIC_REVIEW"), true);
+  });
+});
+
+test("visual review binds the resolved impact and stable case plan", () => {
+  withTempRoot((root) => {
+    const input = visualReviewableInput(root);
+    input.visualImpact.resolutions = [
+      {
+        file: "apps/mobile/app/(tabs)/library.tsx",
+        impact: "yes",
+        cases: ["library-phone"],
+        resolvedBy: "Codex pre-candidate visual-impact triage",
+        rationale:
+          "This file changes the Library surface, and the existing Streamer mapping identifies the phone case.",
+      },
+    ];
+    input.reviews = [
+      completedVisualRiskReview(input, root),
+      completedVisualReview(input, root),
+    ];
+    const resolvedReport = evaluate(input, { root });
+    const rendered = renderReport(resolvedReport);
+    assert.match(rendered, /Codex pre-candidate visual-impact triage/);
+    assert.match(
+      rendered,
+      /existing Streamer mapping identifies the phone case/,
+    );
+
+    input.visualImpact.resolutions[0].cases = ["library-desktop"];
+    let result = evaluate(input, { root });
+    assert.equal(result.reviewHistory[1].state, "stale");
+    assert.equal(result.review.state, "stale");
+
+    input.visualImpact.resolutions[0].cases = ["library-phone"];
+    input.visualImpact.resolutions[0].rationale =
+      "A different recorded planning reason.";
+    result = evaluate(input, { root });
+    assert.equal(result.reviewHistory[1].state, "stale");
+    assert.equal(result.review.state, "stale");
+  });
+});
+
+test("P1 findings remain open after the single bounded visual repair review", () => {
+  withTempRoot((root) => {
+    const input = visualReviewableInput(root);
+    const initial = completedVisualReview(input, root, {
+      findings: [
+        {
+          id: "library-density",
+          severity: "P1",
+          category: "density",
+          location: "Library grid",
+          observation: "The metadata row overwhelms the titles.",
+          violatedPrinciple: "Typography before containers.",
+          smallestAppropriateRepair: "Lower the secondary metadata contrast.",
+          evidenceReference: { screenshotId: "visual-library-phone" },
+        },
+      ],
+    });
+    const initialRisk = completedVisualRiskReview(input, root);
+    input.reviews = [initialRisk, initial];
+
+    input.candidate.fingerprint = "d".repeat(64);
+    input.candidate.revision = "revision-b";
+    const png = Buffer.from(pngFixture);
+    writeFileSync(join(root, "visual/library-phone.png"), png);
+    input.evidence[1].candidateIdentity.fingerprint =
+      input.candidate.fingerprint;
+    input.evidence[1].candidateIdentity.revision = input.candidate.revision;
+    input.evidence[1].screenshotHash = createHash("sha256")
+      .update(png)
+      .digest("hex");
+    input.repairRounds = [
+      {
+        id: "visual-repair-1",
+        fromReviewId: initial.id,
+        retests: ["library-phone"],
+      },
+    ];
+    const followUp = completedVisualReview(input, root, {
+      id: "visual-review-b",
+      phase1: {
+        ...completedVisualReview(input, root).phase1,
+        recordedAt: "2026-09-26T11:00:00Z",
+      },
+      phase2: {
+        ...completedVisualReview(input, root).phase2,
+        recordedAt: "2026-09-26T11:01:00Z",
+      },
+      findings: initial.findings,
+    });
+    const followUpRisk = completedVisualRiskReview(input, root, {
+      id: "risk-review-visual-b",
+      phase1: {
+        ...completedVisualRiskReview(input, root).phase1,
+        recordedAt: "2026-09-26T10:58:00Z",
+      },
+      phase2: {
+        ...completedVisualRiskReview(input, root).phase2,
+        recordedAt: "2026-09-26T10:59:00Z",
+      },
+    });
+    input.reviews.push(followUpRisk, followUp);
+
+    const result = evaluate(input, { root });
+    assert.equal(result.review.state, "completed");
+    assert.equal(result.review.repairRoundCount, 1);
+    assert.equal(result.review.openFindingCount, 1);
+    assert.equal(result.review.findings.at(-1).status, "open");
+    assert.equal(result.review.findings.at(-1).repairRequired, true);
+    assert.match(renderReport(result), /unresolved/);
+  });
+});
+
+test("visual impact requires a fresh risk review as well as a visual review", () => {
+  withTempRoot((root) => {
+    const input = visualReviewableInput(root);
+    input.reviews = [completedVisualReview(input, root)];
+
+    const result = evaluate(input, { root });
+
+    assert.equal(result.review.state, "incomplete");
+    assert.equal(
+      result.review.currentReviewIds.visual_reviewer,
+      "visual-review-a",
+    );
+    assert.equal(result.review.currentReviewIds.risk_reviewer, null);
+    assert.equal(hasFinding(result, "SEMANTIC_REVIEW"), true);
+  });
+});
 
 test("review: failed scenario contradicts a pass even without required scenario names", () => {
   const input = minimal(observed({ scenarios: { playback: "failed" } }));
@@ -935,6 +1326,22 @@ test("completed review and open findings remain separate from project controls",
   assert.equal(result.review.findings[0].status, "open");
   assert.equal(result.checkInventory[1].status, "not-run");
   assert.equal(hasFinding(result, "SEMANTIC_REVIEW"), false);
+});
+
+test("P1 risk findings require repair while P2 risk findings remain advisory", () => {
+  const input = reviewableInput();
+  input.reviews = [
+    completedReview(input, {
+      findings: [
+        { id: "risk-p1", severity: "P1", text: "Repair a candidate risk." },
+        { id: "risk-p2", severity: "P2", text: "Review an advisory risk." },
+      ],
+    }),
+  ];
+
+  const findings = evaluate(input).review.findings;
+  assert.equal(findings.find(({ id }) => id === "risk-p1").repairRequired, true);
+  assert.equal(findings.find(({ id }) => id === "risk-p2").repairRequired, null);
 });
 
 test("a subsequent current review retains history and records disposition", () => {
