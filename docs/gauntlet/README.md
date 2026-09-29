@@ -98,6 +98,15 @@ ronde nog bestaat blijft unresolved in het eindrapport; start geen tweede
 reparatie. Het definitieve oordeel moet passen bij de laatste kandidaat,
 opdracht, bewijsinventaris en opleverclaims. Gauntlet blijft adviserend.
 
+De packagebouwer leest eerdere `gauntlet-input.json`-bestanden in dezelfde
+run. Een nieuwe candidate na een complete visual review met open P1-findings
+krijgt automatisch één `repairRounds`-record dat naar die review verwijst en de
+geraakte visual cases plus eerdere check-inventory als retests noemt. Een nieuwe
+candidate na die ronde wordt geweigerd. Een onvolledige visual P1-review blokkeert
+ook voortgang totdat de review op dezelfde candidate is voltooid. Pakketten
+zonder actuele open visual P1-findings blijven afzonderlijke candidate
+snapshots en verbruiken de repairronde niet.
+
 Registreer beschikbare tijden voor pakketvoorbereiding, review en herstel
 apart, plus het aantal handmatige gebruikersinterventies. De pakketbouwer meet
 zijn eigen generatieduur; tijd tussen taaksnapshot en pakket is geen zuivere

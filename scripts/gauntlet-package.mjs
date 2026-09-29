@@ -14,7 +14,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { scopes } from "./gauntlet-evidence.mjs";
-import { reviewBindings } from "./gauntlet.mjs";
+import { evaluate, reviewBindings } from "./gauntlet.mjs";
 import {
   buildVerificationPlan,
   resolveVisualImpact,
@@ -386,6 +386,105 @@ function nextPackageDirectory(runDirectory) {
   const directory = join(base, `attempt-${String(index).padStart(3, "0")}`);
   mkdirSync(directory, { recursive: false });
   return { directory, index };
+}
+
+function repairRoundsForCandidate(root, runDirectory, fingerprint) {
+  const packagesDirectory = join(runDirectory, "packages");
+  if (!existsSync(packagesDirectory)) return [];
+  const attempts = readdirSync(packagesDirectory)
+    .map((name) => {
+      const match = /^attempt-(\d+)$/.exec(name);
+      return match ? { name, index: Number(match[1]) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.index - b.index);
+
+  let repairUsed = false;
+  let pendingVisualRepair = null;
+  for (const attempt of attempts) {
+    const directory = join(packagesDirectory, attempt.name);
+    const packagePath = join(directory, "package.json");
+    const inputPath = join(directory, "gauntlet-input.json");
+    if (!existsSync(packagePath)) continue;
+    if (!existsSync(inputPath))
+      throw new Error(
+        `Cannot verify the repair limit: ${attempt.name} has no Gauntlet input`,
+      );
+
+    const input = readJson(inputPath);
+    if (!Array.isArray(input.repairRounds))
+      throw new Error(
+        `Cannot verify the repair limit: ${attempt.name} has no repair-round history`,
+      );
+    if (input.repairRounds.length > 0) repairUsed = true;
+
+    if (
+      pendingVisualRepair &&
+      input.candidate?.fingerprint !== pendingVisualRepair.fingerprint
+    ) {
+      // A later candidate after a completed P1 review consumed the one round,
+      // including packages produced before task-wide tracking was added.
+      repairUsed = true;
+    }
+
+    const reviews = input.reviews ?? (input.review ? [input.review] : []);
+    if (!reviews.length) continue;
+
+    let report;
+    try {
+      report = evaluate(input, { root });
+    } catch (error) {
+      throw new Error(
+        `Cannot verify prior review state in ${attempt.name}: ${error.message}`,
+      );
+    }
+    const hasVisualP1 = reviews.some(
+      (review) =>
+        review.reviewer?.role === "visual_reviewer" &&
+        review.findings?.some((finding) => finding.severity === "P1"),
+    );
+    if (hasVisualP1 && report.review.state !== "completed")
+      throw new Error(
+        `Cannot start a repair candidate: ${attempt.name} has an incomplete visual P1 review`,
+      );
+
+    const reviewId = report.review.currentReviewIds?.visual_reviewer;
+    const findings = report.review.findings.filter(
+      (finding) =>
+        finding.reviewId === reviewId &&
+        finding.reviewerRole === "visual_reviewer" &&
+        finding.repairRequired === true &&
+        finding.status === "open",
+    );
+    if (report.review.state === "completed" && reviewId && findings.length) {
+      pendingVisualRepair = {
+        fingerprint: input.candidate?.fingerprint,
+        reviewId,
+        retests: [
+          ...(input.visualImpact?.cases ?? []),
+          ...(input.checkInventory ?? []).map((item) => item.id),
+        ],
+      };
+    }
+  }
+
+  if (repairUsed)
+    throw new Error(
+      "This Gauntlet task already used its one review-driven repair round",
+    );
+  if (!pendingVisualRepair) return [];
+  if (pendingVisualRepair.fingerprint === fingerprint)
+    throw new Error(
+      "A visual P1 repair requires a changed candidate before packaging",
+    );
+
+  return [
+    {
+      id: "repair-1",
+      fromReviewId: pendingVisualRepair.reviewId,
+      retests: [...new Set(pendingVisualRepair.retests)].sort(),
+    },
+  ];
 }
 
 function candidateDiff(root, directory, baseline, current) {
@@ -900,8 +999,13 @@ export function finishPackage({
     );
   if (plan.visualImpact === "yes" && plan.visualCases.length === 0)
     throw new Error("Visual impact requires at least one stable visual case");
-  const { directory, index } = nextPackageDirectory(run);
   const current = identity(root, baseline.files);
+  const repairRounds = repairRoundsForCandidate(
+    root,
+    run,
+    current.fingerprint,
+  );
+  const { directory, index } = nextPackageDirectory(run);
   const diff = candidateDiff(root, directory, baseline, current);
   for (const file of current.files.filter((item) => item.exists)) {
     const target = join(directory, "candidate-files", file.path);
@@ -1437,7 +1541,7 @@ export function finishPackage({
     checkInventory: rows,
     draft,
     reviews: [],
-    repairRounds: [],
+    repairRounds,
   };
   const finishedMs = Date.now();
   const metrics = {

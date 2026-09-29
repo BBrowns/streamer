@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  realpathSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -349,6 +350,204 @@ function receipt(
   writeFileSync(join(root, path), JSON.stringify(value));
   return value;
 }
+
+function startVisualRun(root, put) {
+  const map = read(join(root, "config/verification-map.json"));
+  map.rules[0].visualImpact = "yes";
+  map.visualCaseMappings = [
+    { patterns: ["^a\\.txt$"], cases: ["library-phone"] },
+  ];
+  put("config/verification-map.json", JSON.stringify(map));
+  return startPackage({
+    root,
+    taskId: "bounded-visual-repair",
+    files: ["a.txt"],
+    task: {
+      request: "Review and repair the Library phone surface once",
+      requirements: [
+        {
+          id: "focused-requirement",
+          text: "Focused verification is recorded.",
+          runId: "bounded-visual-repair",
+          scope: "command",
+          evidence: ["verify-1"],
+        },
+      ],
+    },
+  }).runDirectory;
+}
+
+function captureVisual(root, runDirectory, attemptId) {
+  const marker = recordCheckStart({ root, runDirectory, attemptId });
+  const screenshot = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9ioAAAAASUVORK5CYII=",
+    "base64",
+  );
+  const screenshotPath = `visual/${attemptId}.png`;
+  mkdirSync(join(root, "visual"), { recursive: true });
+  writeFileSync(join(root, screenshotPath), screenshot);
+  const startTime = new Date(Date.parse(marker.recordedAt) + 1).toISOString();
+  const reportPath = `visual/${attemptId}.json`;
+  writeFileSync(
+    join(root, reportPath),
+    JSON.stringify({
+      stats: { startTime, duration: 1 },
+      suites: [
+        {
+          title: "visual-regression",
+          specs: [
+            {
+              title: "library capture",
+              tests: [
+                {
+                  projectName: "phone-web",
+                  status: "expected",
+                  expectedStatus: "passed",
+                  results: [
+                    {
+                      status: "passed",
+                      duration: 1,
+                      startTime: new Date(
+                        Date.parse(startTime) + 1,
+                      ).toISOString(),
+                      attachments: [
+                        {
+                          name: "gauntlet-visual:library-phone:dark:390x844",
+                          contentType: "image/png",
+                          path: screenshotPath,
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  recordCheckEnd({ root, runDirectory, attemptId });
+  return reportPath;
+}
+
+function attachCurrentVisualP1Review(root, pkg, gauntletInputPath) {
+  const input = pkg.gauntletInput;
+  const bindings = reviewBindings(input, { root });
+  const risk = {
+    id: `risk-${input.candidate.fingerprint.slice(0, 8)}`,
+    reviewer: {
+      role: "risk_reviewer",
+      context: "fresh",
+      independent: true,
+    },
+    phase1: {
+      recordedAt: "2026-09-29T10:00:00Z",
+      bindings: {
+        task: bindings.task,
+        candidate: bindings.candidate,
+        evidence: bindings.evidence,
+        checkInventory: bindings.checkInventory,
+      },
+      assessment: "Reviewed source and evidence before the delivery draft.",
+    },
+    phase2: {
+      recordedAt: "2026-09-29T10:01:00Z",
+      bindings: { draft: bindings.draft, gauntlet: bindings.gauntlet },
+      comparison: "Compared the delivery claims with the candidate evidence.",
+    },
+    findings: [],
+  };
+  const screenshot = input.evidence.find(
+    (item) => item.kind === "visual-screenshot",
+  );
+  const visual = {
+    id: `visual-${input.candidate.fingerprint.slice(0, 8)}`,
+    reviewer: {
+      role: "visual_reviewer",
+      context: "fresh",
+      independent: true,
+    },
+    phase1: {
+      recordedAt: "2026-09-29T10:02:00Z",
+      bindings: {
+        task: bindings.task,
+        candidate: bindings.candidate,
+        evidence: bindings.evidence,
+        checkInventory: bindings.checkInventory,
+        visualContract: bindings.visualContract,
+        visualCases: bindings.visualCases,
+      },
+      assessment: "Compared the bound screenshot with the visual contract.",
+    },
+    phase2: {
+      recordedAt: "2026-09-29T10:03:00Z",
+      bindings: { draft: bindings.draft, gauntlet: bindings.gauntlet },
+      comparison: "Compared the finding with the bounded delivery.",
+    },
+    visual: {
+      contractVersion: input.visualReview.contractVersion.sha256,
+      cases: [...input.visualImpact.cases],
+    },
+    findings: [
+      {
+        id: "library-density-p1",
+        severity: "P1",
+        category: "density",
+        location: "Library phone results",
+        observation: "Secondary metadata competes with titles.",
+        violatedPrinciple: "Typography before containers.",
+        smallestAppropriateRepair: "Reduce secondary metadata contrast.",
+        evidenceReference: { screenshotId: screenshot.id },
+      },
+    ],
+  };
+  input.reviews = [risk, visual];
+  const report = evaluate(input, { root });
+  assert.equal(report.review.state, "completed");
+  writeFileSync(gauntletInputPath, `${JSON.stringify(input, null, 2)}\n`);
+}
+
+test("visual P1 repair is recorded and cannot create a second repair candidate", (t) => {
+  const { root: fixtureRoot, put } = fixture(t);
+  const root = realpathSync(fixtureRoot);
+  const runDirectory = startVisualRun(root, put);
+  const firstReport = captureVisual(root, runDirectory, "visual-before-repair");
+  const first = finishPackage({
+    root,
+    runDirectory,
+    playwrightReports: [
+      { path: firstReport, attemptId: "visual-before-repair" },
+    ],
+    draft: "Initial candidate with a visual P1 finding.",
+  });
+  attachCurrentVisualP1Review(root, first.package, first.gauntletInputPath);
+
+  put("a.txt", "first bounded visual repair\n");
+  const repairReport = captureVisual(root, runDirectory, "visual-repair-1");
+  const repaired = finishPackage({
+    root,
+    runDirectory,
+    playwrightReports: [
+      { path: repairReport, attemptId: "visual-repair-1" },
+    ],
+    draft: "Candidate after the single bounded repair.",
+  });
+  assert.deepEqual(repaired.package.gauntletInput.repairRounds, [
+    {
+      id: "repair-1",
+      fromReviewId: `visual-${first.package.candidate.fingerprint.slice(0, 8)}`,
+      retests: ["library-phone", "playwright-1-1", "verify-1", "verify-2"],
+    },
+  ]);
+
+  put("a.txt", "second repair must be blocked\n");
+  assert.throws(
+    () => finishPackage({ root, runDirectory }),
+    /one.*repair|repair.*round/i,
+  );
+  assert.equal(readdirSync(join(runDirectory, "packages")).length, 2);
+});
 
 test("scopes candidate to task changes after a dirty baseline, including new and deleted files", (t) => {
   const { root, put } = fixture(t);
