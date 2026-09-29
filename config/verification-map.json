@@ -1,8 +1,117 @@
 {
   "version": 1,
+  "visualCaseMappings": [
+    {
+      "patterns": [
+        "^apps/mobile/app/\\(tabs\\)/index\\.tsx$",
+        "^apps/mobile/components/catalog/"
+      ],
+      "cases": ["home-desktop", "home-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/\\(tabs\\)/library\\.tsx$",
+        "^apps/mobile/components/library/"
+      ],
+      "cases": ["library-desktop", "library-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/\\(tabs\\)/settings\\.tsx$",
+        "^apps/mobile/app/settings/",
+        "^apps/mobile/components/settings/"
+      ],
+      "cases": ["settings-desktop", "settings-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/\\(tabs\\)/search\\.tsx$",
+        "^apps/mobile/app/search/",
+        "^apps/mobile/components/search/"
+      ],
+      "cases": ["search-desktop", "search-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/detail/",
+        "^apps/mobile/components/detail/"
+      ],
+      "cases": ["detail-desktop", "detail-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/\\(tabs\\)/downloads\\.tsx$",
+        "^apps/mobile/components/downloads/"
+      ],
+      "cases": ["downloads-desktop", "downloads-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/player\\.tsx$",
+        "^apps/mobile/components/player/"
+      ],
+      "cases": ["player-desktop", "player-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/addons/",
+        "^apps/mobile/components/addons/"
+      ],
+      "cases": ["addons-desktop", "addons-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/app/notifications/",
+        "^apps/mobile/app/\\(tabs\\)/notifications\\.tsx$",
+        "^apps/mobile/components/notifications/"
+      ],
+      "cases": ["notifications-desktop", "notifications-phone"]
+    },
+    {
+      "patterns": ["^apps/mobile/app/login\\.tsx$"],
+      "cases": ["login-desktop", "login-phone"]
+    },
+    {
+      "patterns": ["^apps/mobile/app/onboarding/"],
+      "cases": ["onboarding-desktop", "onboarding-phone"]
+    },
+    {
+      "patterns": [
+        "^apps/mobile/components/ui/",
+        "^apps/mobile/constants/theme\\.ts$",
+        "^apps/mobile/components/navigation/",
+        "^apps/mobile/app/_layout\\.tsx$"
+      ],
+      "cases": [
+        "addons-desktop",
+        "addons-phone",
+        "detail-desktop",
+        "detail-phone",
+        "downloads-desktop",
+        "downloads-phone",
+        "home-desktop",
+        "home-phone",
+        "library-desktop",
+        "library-phone",
+        "login-desktop",
+        "login-phone",
+        "notifications-desktop",
+        "notifications-phone",
+        "onboarding-desktop",
+        "onboarding-phone",
+        "player-desktop",
+        "player-phone",
+        "search-desktop",
+        "search-phone",
+        "settings-desktop",
+        "settings-phone"
+      ]
+    }
+  ],
   "rules": [
     {
       "id": "gauntlet-process",
+      "visualImpact": "no",
       "patterns": [
         "^scripts/gauntlet(?:-[^/]*)?\\.mjs$",
         "^scripts/gauntlet(?:-[^/]*)?\\.test\\.mjs$",
@@ -16,6 +125,7 @@
     },
     {
       "id": "process",
+      "visualImpact": "no",
       "patterns": [
         "^\\.agents/",
         "^\\.codex/",
@@ -33,6 +143,7 @@
     },
     {
       "id": "workflow-policy",
+      "visualImpact": "no",
       "patterns": [
         "^\\.github/workflows/",
         "^\\.github/required-checks\\.json$",
@@ -48,6 +159,7 @@
     },
     {
       "id": "shared-contract",
+      "visualImpact": "no",
       "patterns": ["^packages/shared/"],
       "focusedCommands": [
         "npm run test --workspace=@streamer/shared",
@@ -56,7 +168,15 @@
       "finalCommands": ["npm run verify:quick"]
     },
     {
+      "id": "golden-path-test-support",
+      "visualImpact": "no",
+      "patterns": ["^tests/golden-path/"],
+      "focusedCommands": ["npm run test:golden-path"],
+      "finalCommands": []
+    },
+    {
       "id": "mobile-ui",
+      "visualImpact": "yes",
       "patterns": ["^apps/mobile/.*\\.(tsx|jsx|css)$"],
       "focusedCommands": [
         "npm run test --workspace=apps/mobile",
@@ -68,6 +188,7 @@
     },
     {
       "id": "mobile",
+      "visualImpact": "no",
       "patterns": ["^apps/mobile/"],
       "focusedCommands": [
         "npm run test --workspace=apps/mobile",
@@ -77,6 +198,7 @@
     },
     {
       "id": "server",
+      "visualImpact": "no",
       "patterns": ["^server/"],
       "focusedCommands": [
         "npm run test --workspace=server",
@@ -86,6 +208,7 @@
     },
     {
       "id": "stream-server",
+      "visualImpact": "no",
       "patterns": ["^packages/stream-server/"],
       "focusedCommands": [
         "npm run test --workspace=@streamer/stream-server",
@@ -95,6 +218,7 @@
     },
     {
       "id": "desktop",
+      "visualImpact": "unknown",
       "patterns": ["^apps/desktop/"],
       "focusedCommands": [
         "npm run test --workspace=@streamer/desktop",
@@ -104,12 +228,14 @@
     },
     {
       "id": "release-tooling",
+      "visualImpact": "no",
       "patterns": ["^scripts/(release-gate|release-sbom|rc-evidence)"],
       "focusedCommands": ["npm run release:gate"],
       "finalCommands": ["npm run verify:quick"]
     },
     {
       "id": "dependency",
+      "visualImpact": "unknown",
       "patterns": [
         "(^|/)package\\.json$",
         "^package-lock\\.json$",
@@ -125,8 +251,10 @@
     },
     {
       "id": "documentation",
+      "visualImpact": "no",
       "patterns": [
         "^docs/",
+        "^design/",
         "^(README|ARCHITECTURE|PLAYBACK|UI|AGENT_HANDOFF|ROADMAP)\\.md$"
       ],
       "focusedCommands": ["npm run format:check"],
@@ -135,6 +263,7 @@
   ],
   "fallback": {
     "id": "repository-code",
+    "visualImpact": "unknown",
     "focusedCommands": ["npm run verify:quick"],
     "finalCommands": []
   }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -16,6 +16,16 @@ import {
 } from "./gauntlet-evidence.mjs";
 
 const networks = new Set(["home", "work", "guest", "hotspot", "unknown"]);
+const visualFindingCategories = new Set([
+  "hierarchy",
+  "cardification",
+  "density",
+  "spacing-alignment",
+  "typography",
+  "nested-surfaces",
+  "decoration",
+  "generic-pattern",
+]);
 const oldWords = {
   home: /\b(home|thuis\w*)\b/i,
   work: /\b(work|werk\w*)\b/i,
@@ -334,6 +344,32 @@ function evaluateBase(input, { root = process.cwd() } = {}) {
   const evidence = (input.evidence ?? []).map((item) =>
     loadEvidence(item, root),
   );
+  const visualContractValid = input.visualReview
+    ? visualContractMatches(input.visualReview.contractVersion, root)
+    : null;
+  for (const item of evidence.filter(
+    (entry) => entry.kind === "visual-screenshot",
+  )) {
+    const identity = item.candidateIdentity;
+    const currentFiles =
+      input.candidate?.selectedFiles ??
+      (Array.isArray(input.candidate?.files) &&
+      input.candidate.files.every((file) => typeof file === "string")
+        ? input.candidate.files
+        : []);
+    const candidateMatches =
+      identity &&
+      identity.revision === input.candidate?.revision &&
+      identity.fingerprint === input.candidate?.fingerprint &&
+      identity.fingerprintAlgorithm === input.candidate?.fingerprintAlgorithm &&
+      JSON.stringify(identity.files) === JSON.stringify(currentFiles);
+    item.currentFingerprint = candidateMatches ? "match" : "mismatch";
+    if (!candidateMatches) {
+      item.candidateBinding = "stale";
+      item.status = "unknown";
+      item.issues.push("VISUAL_CANDIDATE_MISMATCH");
+    }
+  }
   const contexts = (input.runs ?? []).map((run) =>
     contextFor(run, input.corrections ?? []),
   );
@@ -413,6 +449,7 @@ function evaluateBase(input, { root = process.cwd() } = {}) {
     contexts,
     corrections: input.corrections ?? [],
     affected,
+    visualContractValid,
     findings,
   };
 }
@@ -435,8 +472,36 @@ function digest(value) {
     .digest("hex");
 }
 
+function visualContractMatches(contract, root) {
+  const expectedPaths = ["UI.md", "design/streamer-visual-contract.md"];
+  if (
+    contract?.algorithm !== "sha256-path-nul-content-nul-v1" ||
+    !/^[a-f\d]{64}$/i.test(contract.sha256 ?? "") ||
+    !Array.isArray(contract.files) ||
+    JSON.stringify(contract.files.map((file) => file.path)) !==
+      JSON.stringify(expectedPaths)
+  )
+    return false;
+  const hash = createHash("sha256");
+  try {
+    for (const file of contract.files) {
+      const bytes = readFileSync(localPath(root, file.copiedPath));
+      if (
+        !/^[a-f\d]{64}$/i.test(file.sha256 ?? "") ||
+        createHash("sha256").update(bytes).digest("hex") !== file.sha256 ||
+        bytes.length !== file.size
+      )
+        return false;
+      hash.update(file.path).update("\0").update(bytes).update("\0");
+    }
+  } catch {
+    return false;
+  }
+  return hash.digest("hex") === contract.sha256;
+}
+
 function bindingsFor(input, base) {
-  return {
+  const bindings = {
     task: digest(input.task ?? null),
     candidate: digest(input.candidate ?? null),
     evidence: digest(base.evidence),
@@ -447,6 +512,27 @@ function bindingsFor(input, base) {
     }),
     gauntlet: digest(base),
   };
+  if (input.visualReview?.contractVersion?.sha256)
+    bindings.visualContract = input.visualReview.contractVersion.sha256;
+  const visualCases =
+    input.visualImpact?.cases ?? input.visualReview?.requiredCases;
+  if (visualCases) {
+    const resolutions = input.visualImpact?.resolutions ?? [];
+    bindings.visualCases = digest({
+      status: input.visualImpact?.status ?? input.visualReview?.impact,
+      cases: [...visualCases].sort(),
+      resolutions: resolutions
+        .map((item) => ({
+          file: item.file ?? item.path,
+          impact: item.impact ?? item.status,
+          cases: [...(item.cases ?? [])].sort(),
+          resolvedBy: item.resolvedBy ?? null,
+          rationale: item.rationale ?? null,
+        }))
+        .sort((a, b) => String(a.file).localeCompare(String(b.file))),
+    });
+  }
+  return bindings;
 }
 
 // The review recorder can call this before either phase. The evidence binding
@@ -455,14 +541,33 @@ export function reviewBindings(input, options = {}) {
   return bindingsFor(input, evaluateBase(input, options));
 }
 
-function reviewState(review, bindings, input) {
+function validVisualFinding(finding, evidence) {
+  const referenced = evidence.find(
+    (item) => item.id === finding.evidenceReference?.screenshotId,
+  );
+  return (
+    known(finding.id) &&
+    ["P1", "P2"].includes(finding.severity) &&
+    visualFindingCategories.has(finding.category) &&
+    known(finding.location) &&
+    known(finding.observation) &&
+    known(finding.violatedPrinciple) &&
+    known(finding.smallestAppropriateRepair) &&
+    referenced?.kind === "visual-screenshot" &&
+    referenced.status === "passed" &&
+    referenced.currentFingerprint === "match"
+  );
+}
+
+function reviewState(review, bindings, input, evidence, visualContractValid) {
   const phase1 = review.phase1;
   const phase2 = review.phase2;
   const reviewer = review.reviewer;
+  const visual = reviewer?.role === "visual_reviewer";
   if (
     !reviewer?.independent ||
     reviewer.context !== "fresh" ||
-    reviewer.role !== "risk_reviewer" ||
+    !["risk_reviewer", "visual_reviewer"].includes(reviewer.role) ||
     !timestamp(phase1?.recordedAt) ||
     !timestamp(phase2?.recordedAt) ||
     Date.parse(phase1.recordedAt) >= Date.parse(phase2.recordedAt) ||
@@ -483,28 +588,91 @@ function reviewState(review, bindings, input) {
   )
     return "incomplete";
   const phase1Keys = ["task", "candidate", "evidence", "checkInventory"];
+  if (visual) phase1Keys.push("visualContract", "visualCases");
   const phase2Keys = ["draft", "gauntlet"];
   if (
     phase1Keys.some((key) => !known(phase1.bindings?.[key])) ||
     phase2Keys.some((key) => !known(phase2.bindings?.[key]))
   )
     return "incomplete";
-  return phase1Keys.every((key) => phase1.bindings[key] === bindings[key]) &&
-    phase2Keys.every((key) => phase2.bindings[key] === bindings[key])
+  const currentBindings =
+    phase1Keys.every((key) => phase1.bindings[key] === bindings[key]) &&
+    phase2Keys.every((key) => phase2.bindings[key] === bindings[key]);
+  if (!currentBindings) return "stale";
+  if (!visual) return "current";
+
+  const visualContractHash = input.visualReview?.contractVersion?.sha256;
+  const visualCases =
+    input.visualImpact?.cases ?? input.visualReview?.requiredCases;
+  const visualImpact = input.visualImpact?.status ?? input.visualReview?.impact;
+  if (
+    visualImpact !== "yes" ||
+    visualContractValid !== true ||
+    !/^[a-f\d]{64}$/i.test(visualContractHash ?? "") ||
+    !Array.isArray(visualCases) ||
+    visualCases.length === 0 ||
+    review.visual?.contractVersion !== visualContractHash ||
+    !Array.isArray(review.visual?.cases) ||
+    JSON.stringify([...review.visual.cases].sort()) !==
+      JSON.stringify([...visualCases].sort()) ||
+    !review.findings.every((finding) => validVisualFinding(finding, evidence))
+  )
+    return "incomplete";
+  const availableCases = new Set(
+    evidence
+      .filter(
+        (item) =>
+          item.kind === "visual-screenshot" &&
+          item.status === "passed" &&
+          item.currentFingerprint === "match",
+      )
+      .map((item) => item.visualCaseId),
+  );
+  return visualCases.every((caseId) => availableCases.has(caseId))
     ? "current"
-    : "stale";
+    : "incomplete";
 }
 
-function summarizeReview(input, bindings) {
+function summarizeReview(input, bindings, evidence, visualContractValid) {
   const reviews = input.reviews ?? (input.review ? [input.review] : []);
   const reviewHistory = reviews.map((item) => ({
     ...item,
-    state: reviewState(item, bindings, input),
+    state: reviewState(item, bindings, input, evidence, visualContractValid),
   }));
+  const requiredRoles =
+    (input.visualImpact?.status ?? input.visualReview?.impact) === "yes"
+      ? ["risk_reviewer", "visual_reviewer"]
+      : ["risk_reviewer"];
+  const latestByRole = new Map();
+  for (const review of reviewHistory)
+    if (["risk_reviewer", "visual_reviewer"].includes(review.reviewer?.role))
+      latestByRole.set(review.reviewer.role, review);
+  const currentByRole = new Map(
+    [...latestByRole].filter(([, review]) => review.state === "current"),
+  );
   const latest = reviewHistory.at(-1);
-  const current = latest?.state === "current" ? latest : null;
+  const current =
+    latest?.state === "current" &&
+    currentByRole.get(latest.reviewer?.role) === latest
+      ? latest
+      : null;
+  const missingRole = requiredRoles.some((role) => !latestByRole.has(role));
+  const requiredStates = requiredRoles.map(
+    (role) => latestByRole.get(role)?.state,
+  );
+  const aggregateState =
+    reviewHistory.length === 0
+      ? "not-run"
+      : missingRole || requiredStates.includes("incomplete")
+        ? "incomplete"
+        : requiredStates.includes("stale")
+          ? "stale"
+          : requiredStates.every((state) => state === "current")
+            ? "completed"
+            : "incomplete";
   const dispositionIndex = new Map(
-    (current?.dispositions ?? [])
+    [...currentByRole.values()]
+      .flatMap((review) => review.dispositions ?? [])
       .filter(
         (item) =>
           known(item.reviewId) &&
@@ -521,26 +689,62 @@ function summarizeReview(input, bindings) {
       .filter((finding) => known(finding.id))
       .map((finding) => {
         const disposition = dispositionIndex.get(`${review.id}/${finding.id}`);
+        const state = reviewHistory.find(
+          (item) => item.id === review.id,
+        )?.state;
+        const currentRoleReview = currentByRole.get(review.reviewer?.role);
+        const isCurrentVisualFinding =
+          review.reviewer?.role === "visual_reviewer" &&
+          currentRoleReview?.id === review.id;
         return {
           ...finding,
           reviewId: review.id,
-          status: disposition?.status ?? "open",
+          reviewerRole: review.reviewer?.role ?? "unknown",
+          repairRequired:
+            review.reviewer?.role === "visual_reviewer"
+              ? finding.severity === "P1"
+              : null,
+          status: isCurrentVisualFinding
+            ? finding.severity === "P2"
+              ? "informational"
+              : "open"
+            : (disposition?.status ??
+              (review.reviewer?.role === "visual_reviewer"
+                ? state !== "current"
+                  ? "stale"
+                  : finding.severity === "P2"
+                    ? "informational"
+                    : "open"
+                : "open")),
           dispositionSource: disposition?.source ?? "unknown",
         };
       }),
   );
+  const currentReviewIds = Object.fromEntries(
+    ["risk_reviewer", "visual_reviewer"].map((role) => [
+      role,
+      currentByRole.get(role)?.id ?? null,
+    ]),
+  );
+  const currentIds = new Set(Object.values(currentReviewIds).filter(Boolean));
+  const openFindingCount = findings.filter(
+    (item) =>
+      currentIds.has(item.reviewId) &&
+      (item.reviewerRole === "visual_reviewer"
+        ? item.repairRequired === true && item.status !== "resolved"
+        : item.status !== "resolved" && item.status !== "informational"),
+  ).length;
   return {
     review: {
-      state: !latest
-        ? "not-run"
-        : latest.state === "current"
-          ? "completed"
-          : latest.state,
+      state: aggregateState,
       currentReviewId: current?.id ?? null,
-      reviewerRole: current?.reviewer?.role ?? "unknown",
+      reviewerRole:
+        currentByRole.size > 1
+          ? "multiple"
+          : (current?.reviewer?.role ?? "unknown"),
+      currentReviewIds,
       findings,
-      openFindingCount: findings.filter((item) => item.status !== "resolved")
-        .length,
+      openFindingCount,
       repairRoundCount: input.repairRounds?.length ?? 0,
     },
     reviewHistory,
@@ -550,7 +754,12 @@ function summarizeReview(input, bindings) {
 export function evaluate(input, options = {}) {
   const base = evaluateBase(input, options);
   const bindings = bindingsFor(input, base);
-  const { review, reviewHistory } = summarizeReview(input, bindings);
+  const { review, reviewHistory } = summarizeReview(
+    input,
+    bindings,
+    base.evidence,
+    base.visualContractValid,
+  );
   const findings = [...base.findings];
   if (review.state !== "completed")
     findings.push({
@@ -579,6 +788,8 @@ export function evaluate(input, options = {}) {
     review,
     reviewHistory,
     repairRounds: input.repairRounds ?? [],
+    visualImpact: input.visualImpact ?? null,
+    visualReview: input.visualReview ?? null,
     findings,
   };
 }
@@ -722,13 +933,67 @@ ${table(
 )}
 
 ${table(
-  ["Bevinding", "Review", "Status", "Omschrijving"],
+  [
+    "Bevinding",
+    "Review",
+    "Reviewer",
+    "Severity",
+    "Categorie",
+    "Locatie",
+    "Status",
+    "Reparatie vereist",
+    "Observatie / bevinding",
+    "Contractprincipe",
+    "Kleinste reparatie",
+    "Evidence",
+  ],
   (report.review?.findings ?? []).map((f) => [
     f.id,
     f.reviewId,
+    f.reviewerRole,
+    f.severity,
+    f.category,
+    f.location,
     f.status,
-    f.text,
+    f.repairRequired === true
+      ? "yes"
+      : f.repairRequired === false
+        ? "no"
+        : "unknown",
+    f.observation ?? f.text,
+    f.violatedPrinciple,
+    f.smallestAppropriateRepair,
+    f.evidenceReference?.screenshotId,
   ]),
+)}
+
+## Visuele verificatie
+
+${report.visualImpact ? `Impact: **${cell(report.visualImpact.status)}**. Vereiste cases: ${cell((report.visualImpact.cases ?? []).join(", ") || "—")}. Classificatiebesluiten: ${cell((report.visualImpact.resolutions ?? []).map((item) => `${item.file ?? item.path} → ${item.impact ?? item.status}${item.cases?.length ? ` (${item.cases.join(", ")})` : ""}; resolver: ${item.resolvedBy ?? "niet vastgelegd"}; onderbouwing: ${item.rationale ?? "niet vastgelegd"}`).join("; ") || "—")}. Contractversie: ${cell(report.visualReview?.contractVersion?.sha256 ?? "—")}.` : "Geen visuele impactclassificatie beschikbaar."}
+
+Visuele P1-bevindingen vereisen één gebundelde reparatieronde. P2 is informatief. Een actuele review zonder findings is een geldige uitkomst. Na de enige reparatieronde blijven eventuele nieuwe P1-bevindingen open/unresolved in het eindresultaat.
+
+${table(
+  [
+    "Case",
+    "Evidence",
+    "Status",
+    "Candidate match",
+    "Screenshot SHA-256",
+    "Capture context",
+  ],
+  report.evidence
+    .filter((item) => item.kind === "visual-screenshot")
+    .map((item) => [
+      item.visualCaseId,
+      item.id,
+      item.status,
+      item.currentFingerprint,
+      item.screenshotHash,
+      item.captureContext
+        ? `${item.captureContext.project}; ${item.captureContext.viewport.width}×${item.captureContext.viewport.height}; ${item.captureContext.colorScheme}; ${item.captureContext.attemptId ?? "unknown attempt"}`
+        : "unknown",
+    ]),
 )}
 
 ## Projectcontroles

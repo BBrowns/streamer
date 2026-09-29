@@ -15,7 +15,10 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { scopes } from "./gauntlet-evidence.mjs";
 import { reviewBindings } from "./gauntlet.mjs";
-import { buildVerificationPlan } from "./verify-change.mjs";
+import {
+  buildVerificationPlan,
+  resolveVisualImpact,
+} from "./verify-change.mjs";
 
 const gitBinary = existsSync("/usr/bin/git") ? "/usr/bin/git" : "git";
 const executionKinds = new Set([
@@ -148,6 +151,7 @@ export function startPackage({
   files,
   task,
   amendments = [],
+  visualImpactResolutions = [],
   outputRoot = "artifacts/gauntlet",
 }) {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,59}$/.test(taskId ?? ""))
@@ -160,6 +164,26 @@ export function startPackage({
     !taskRecord.request.trim()
   )
     throw new Error("Task request text is required");
+  const verificationMapPath = local(root, "config/verification-map.json");
+  const verificationMapBytes = readFileSync(verificationMapPath);
+  const initialPlan = buildVerificationPlan(
+    normalized,
+    JSON.parse(verificationMapBytes.toString("utf8")),
+  );
+  let verificationPlan;
+  try {
+    verificationPlan = {
+      ...initialPlan,
+      ...resolveVisualImpact(initialPlan, visualImpactResolutions),
+      verificationMapFingerprint: sha256(verificationMapBytes),
+    };
+  } catch (error) {
+    const files = initialPlan.unknownVisualFiles.join(", ");
+    throw new Error(
+      `Visual impact classification is unresolved before candidate creation${files ? `: ${files}` : ""} (${error instanceof Error ? error.message : String(error)})`,
+      { cause: error },
+    );
+  }
   const output = local(root, outputRoot);
   const artifactRoot = local(root, "artifacts/gauntlet");
   if (!within(artifactRoot, output))
@@ -186,6 +210,9 @@ export function startPackage({
     amendments,
     startedAt: new Date().toISOString(),
     files: normalized,
+    verificationPlan,
+    visualImpactResolutions: verificationPlan.visualImpactResolutions,
+    verificationMapFingerprint: verificationPlan.verificationMapFingerprint,
     identity: initialIdentity,
     worktreeStatus: git(root, ["status", "--short", "--untracked-files=all"]),
     selectedHeadDiff: git(root, [
@@ -269,6 +296,8 @@ function checkMarkers(directory, attemptId, receipt) {
     finishedAt: end?.recordedAt ?? "unknown",
     startFingerprint: start?.identity?.fingerprint ?? "unknown",
     endFingerprint: end?.identity?.fingerprint ?? "unknown",
+    startRevision: start?.identity?.revision ?? "unknown",
+    endRevision: end?.identity?.revision ?? "unknown",
   };
   if (
     start?.attemptId !== attemptId ||
@@ -310,6 +339,40 @@ function checkMarkers(directory, attemptId, receipt) {
     receiptTimeRelation: "within-markers",
     ...metadata,
   };
+}
+
+function playwrightRunTimes(stats) {
+  const startedAt = Date.parse(stats?.startTime ?? "");
+  const duration = stats?.duration;
+  if (!Number.isFinite(startedAt) || !Number.isFinite(duration) || duration < 0)
+    return null;
+  return {
+    generatedAt: new Date(startedAt).toISOString(),
+    finishedAt: new Date(startedAt + duration).toISOString(),
+  };
+}
+
+function candidateMatchesMarkers(marker, current) {
+  if (marker.markerBinding !== "paired") return "unknown";
+  if (
+    !marker.startFingerprint ||
+    !marker.endFingerprint ||
+    !marker.startRevision ||
+    !marker.endRevision ||
+    marker.startFingerprint === "unknown" ||
+    marker.endFingerprint === "unknown" ||
+    marker.startRevision === "unknown" ||
+    marker.endRevision === "unknown" ||
+    current.revision === "unknown"
+  )
+    return "unknown";
+  return marker.startFingerprint === current.fingerprint &&
+    marker.endFingerprint === current.fingerprint &&
+    marker.startRevision === current.revision &&
+    marker.endRevision === current.revision &&
+    marker.codeChangedDuringControl === false
+    ? true
+    : false;
 }
 
 function nextPackageDirectory(runDirectory) {
@@ -539,6 +602,23 @@ function sourceSummary(kind, data) {
           results: test.results?.map((result) => ({
             status: result.status,
             duration: result.duration,
+            startTime: Number.isFinite(Date.parse(result.startTime ?? ""))
+              ? new Date(Date.parse(result.startTime)).toISOString()
+              : null,
+            attachments: result.attachments
+              ?.filter(
+                (attachment) =>
+                  attachment.contentType === "image/png" &&
+                  /^gauntlet-visual:[a-z0-9]+(?:-[a-z0-9]+)*:(?:dark|light):\d+x\d+$/.test(
+                    attachment.name ?? "",
+                  ) &&
+                  typeof attachment.path === "string",
+              )
+              .map(({ name, contentType, path }) => ({
+                name,
+                contentType,
+                path,
+              })),
           })),
         })),
       })),
@@ -653,6 +733,138 @@ function playwrightStatus(test) {
   return "unknown";
 }
 
+function snapshotVisualContract(root, directory) {
+  const files = ["UI.md", "design/streamer-visual-contract.md"].sort();
+  const contractIdentity = identity(root, files);
+  const contextDirectory = join(directory, "visual-contract");
+  const contextFiles = contractIdentity.files.map((file) => {
+    const target = join(contextDirectory, file.path);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(local(root, file.path), target);
+    return {
+      path: file.path,
+      sha256: file.sha256,
+      size: file.size,
+      copiedPath: relative(root, target).replaceAll(sep, "/"),
+    };
+  });
+  return {
+    algorithm: fingerprintAlgorithm,
+    sha256: contractIdentity.fingerprint,
+    files: contextFiles,
+    contextPath: relative(root, contextDirectory).replaceAll(sep, "/"),
+  };
+}
+
+function importVisualAttachment({
+  root,
+  directory,
+  attachment,
+  candidate,
+  attemptId,
+  marker,
+  caseIds,
+  project,
+  capturedAt,
+  status,
+  index,
+  runId,
+  missingEvidence,
+}) {
+  const match =
+    /^gauntlet-visual:([a-z0-9]+(?:-[a-z0-9]+)*):(dark|light):(\d+)x(\d+)$/.exec(
+      attachment.name ?? "",
+    );
+  if (!match) return null;
+  const [, caseId, colorScheme, widthText, heightText] = match;
+  if (!caseIds.includes(caseId)) return null;
+  if (status !== "passed") {
+    missingEvidence.push({
+      source: attachment.name,
+      reason: "visual-screenshot-test-not-passed",
+    });
+    return null;
+  }
+  if (candidateMatchesMarkers(marker, candidate) !== true) {
+    missingEvidence.push({
+      source: attachment.name,
+      reason: "visual-screenshot-candidate-unbound",
+      markerBinding: marker.markerBinding,
+    });
+    return null;
+  }
+  let bytes;
+  try {
+    bytes = readFileSync(local(root, attachment.path));
+  } catch {
+    missingEvidence.push({
+      source: attachment.name,
+      reason: "visual-screenshot-unavailable-or-outside-repository",
+    });
+    return null;
+  }
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (
+    bytes.length > 2_000_000 ||
+    bytes.length < 24 ||
+    !bytes.subarray(0, 8).equals(signature) ||
+    bytes.toString("ascii", 12, 16) !== "IHDR"
+  ) {
+    missingEvidence.push({
+      source: attachment.name,
+      reason: "visual-screenshot-invalid-or-exceeds-2mb",
+    });
+    return null;
+  }
+  const viewport = {
+    width: Number(widthText),
+    height: Number(heightText),
+  };
+  if (
+    !Number.isInteger(viewport.width) ||
+    !Number.isInteger(viewport.height) ||
+    viewport.width <= 0 ||
+    viewport.height <= 0
+  ) {
+    missingEvidence.push({
+      source: attachment.name,
+      reason: "visual-capture-context-invalid",
+    });
+    return null;
+  }
+  const relativePath = `sources/visual-${caseId}-${colorScheme}-${viewport.width}x${viewport.height}-${String(index + 1).padStart(2, "0")}.png`;
+  const target = join(directory, relativePath);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, bytes, { flag: "wx" });
+  const screenshotHash = sha256(bytes);
+  return {
+    id: `visual-${caseId}-${colorScheme}-${viewport.width}x${viewport.height}-${String(index + 1).padStart(2, "0")}`,
+    runId,
+    kind: "visual-screenshot",
+    provenance: "recorded",
+    path: relative(root, target).replaceAll(sep, "/"),
+    screenshotHash,
+    candidateIdentity: {
+      revision: candidate.revision,
+      fingerprint: candidate.fingerprint,
+      fingerprintAlgorithm: candidate.fingerprintAlgorithm,
+      files: candidate.selectedFiles,
+    },
+    markerBinding: marker.markerBinding,
+    candidateBinding: "current",
+    captureContext: {
+      caseId,
+      project: safeLabel(project),
+      viewport,
+      colorScheme,
+      attemptId,
+      ...(typeof capturedAt === "string" && utcTime(capturedAt) !== null
+        ? { capturedAt: new Date(utcTime(capturedAt)).toISOString() }
+        : {}),
+    },
+  };
+}
+
 export function finishPackage({
   root = process.cwd(),
   runDirectory,
@@ -669,6 +881,25 @@ export function finishPackage({
   const preparationStartedMs = Date.now();
   const run = runPath(root, runDirectory);
   const baseline = readBaseline(run);
+  const planned = baseline.verificationPlan ?? findPlan(root, baseline, null);
+  const suppliedPlan = planPath ? findPlan(root, baseline, planPath) : planned;
+  const plan = {
+    ...suppliedPlan,
+    visualImpact: planned.visualImpact,
+    visualCases: planned.visualCases,
+    visualImpactByFile: planned.visualImpactByFile,
+    unknownVisualFiles: planned.unknownVisualFiles,
+    availableVisualCases: planned.availableVisualCases,
+    visualImpactResolutions: planned.visualImpactResolutions ?? [],
+    verificationMapFingerprint:
+      planned.verificationMapFingerprint ?? baseline.verificationMapFingerprint,
+  };
+  if (plan.visualImpact === "unknown" || plan.unknownVisualFiles?.length)
+    throw new Error(
+      "Visual impact classification is unresolved before candidate creation",
+    );
+  if (plan.visualImpact === "yes" && plan.visualCases.length === 0)
+    throw new Error("Visual impact requires at least one stable visual case");
   const { directory, index } = nextPackageDirectory(run);
   const current = identity(root, baseline.files);
   const diff = candidateDiff(root, directory, baseline, current);
@@ -713,7 +944,10 @@ export function finishPackage({
     ]),
     checksMatchCandidate: "unknown",
   };
-  const plan = findPlan(root, baseline, planPath);
+  const visualContractVersion =
+    plan.visualImpact === "yes"
+      ? snapshotVisualContract(root, directory)
+      : null;
   const rows = [];
   const commands = [
     ...new Set([...plan.focusedCommands, ...plan.finalCommands]),
@@ -736,6 +970,7 @@ export function finishPackage({
     );
   const missingEvidence = [];
   const sources = [];
+  const visualEvidence = [];
   const attach = (row, source, attempt) => {
     row.attempts.push(attempt);
     row.status = attempt.status;
@@ -922,6 +1157,21 @@ export function finishPackage({
       });
       return;
     }
+    const runTimes = playwrightRunTimes(source.data.stats);
+    const marker = runTimes
+      ? checkMarkers(run, source.attemptId, runTimes)
+      : {
+          markerBinding: "invalid",
+          codeChangedDuringControl: "unknown",
+          receiptTimeRelation: "unknown",
+        };
+    if (marker.markerBinding !== "paired")
+      missingEvidence.push({
+        source: source.source,
+        reason: "playwright-run-marker-unbound",
+        markerBinding: marker.markerBinding,
+      });
+    const candidateMatch = candidateMatchesMarkers(marker, current);
     for (const [number, item] of playwrightTests(
       source.data.suites,
     ).entries()) {
@@ -947,10 +1197,11 @@ export function finishPackage({
         retryStatuses: (item.test.results ?? []).map((result) => result.status),
         receipt: source.copiedPath,
         receiptSha256: source.sha256,
-        receiptRevision: "unknown",
-        matchesCandidate: "unknown",
-        codeChangedDuringControl: "unknown",
-        markerBinding: "missing",
+        receiptRevision: marker.startRevision ?? "unknown",
+        receiptFingerprint: marker.startFingerprint ?? "unknown",
+        receiptFiles: baseline.files,
+        matchesCandidate: candidateMatch,
+        ...marker,
         durationMs:
           item.test.results?.reduce(
             (total, result) =>
@@ -958,8 +1209,55 @@ export function finishPackage({
             0,
           ) ?? null,
       });
+      if (plan.visualImpact === "yes") {
+        for (const result of item.test.results ?? []) {
+          const resultStartedAt = Date.parse(result.startTime ?? "");
+          const capturedAt =
+            Number.isFinite(resultStartedAt) &&
+            Number.isFinite(result.duration) &&
+            result.duration >= 0
+              ? new Date(resultStartedAt + result.duration).toISOString()
+              : undefined;
+          for (const [attachmentIndex, attachment] of (
+            result.attachments ?? []
+          ).entries()) {
+            const visual = importVisualAttachment({
+              root,
+              directory,
+              attachment,
+              candidate,
+              attemptId: source.attemptId,
+              marker,
+              caseIds: plan.visualCases,
+              project: item.test.projectName,
+              capturedAt,
+              status:
+                playwrightStatus(item.test) === "passed" &&
+                result.status === "passed"
+                  ? "passed"
+                  : "failed",
+              index: number * 10 + attachmentIndex,
+              runId: baseline.taskId,
+              missingEvidence,
+            });
+            if (visual) visualEvidence.push(visual);
+          }
+        }
+      }
     }
   });
+  if (plan.visualImpact === "yes") {
+    const capturedCases = new Set(
+      visualEvidence.map((item) => item.captureContext.caseId),
+    );
+    for (const caseId of plan.visualCases) {
+      if (!capturedCases.has(caseId))
+        missingEvidence.push({
+          visualCaseId: caseId,
+          reason: "required-visual-case-not-captured-for-current-candidate",
+        });
+    }
+  }
   for (const required of requiredChecks) {
     if (!required || typeof required.id !== "string" || !required.id)
       throw new Error("Required check needs an id");
@@ -1034,49 +1332,51 @@ export function finishPackage({
     labelProvenance: "user-request-and-codex-transcription",
   };
   const generatedAt = new Date().toISOString();
-  const gauntletEvidence = rows.map((row) => {
-    const attempt = row.attempts.at(-1);
-    const currentVerifyReceipt =
-      row.sourceKind === "verify-change" &&
-      attempt?.receipt &&
-      attempt?.selector &&
-      attempt.markerBinding === "paired" &&
-      attempt.matchesCandidate === true &&
-      attempt.codeChangedDuringControl === false;
-    const kind = currentVerifyReceipt
-      ? "verify-change"
-      : row.sourceKind === "qa-run" && attempt?.receipt
-        ? "qa-run"
-        : "observation";
-    return {
-      id: row.id,
-      runId: row.runId ?? baseline.taskId,
-      kind,
-      ...(kind === "observation"
-        ? {
-            scope: row.scope ?? "unknown",
-            status:
-              row.sourceKind === "verify-change" && row.status === "passed"
-                ? "unknown"
-                : row.status,
-            source: attempt?.receipt ?? "package/checkInventory",
-            observedAt: generatedAt,
-            revision: "unknown",
-            fingerprint: "unknown",
-          }
-        : { path: attempt.receipt, selector: attempt.selector }),
-      provenance:
-        attempt?.receiptTimeRelation === "historical" ||
-        attempt?.matchesCandidate === false
-          ? "historical"
-          : "recorded",
-      candidateBinding: currentVerifyReceipt ? "current" : "unbound",
-      receiptTimeRelation: attempt?.receiptTimeRelation ?? "unknown",
-      executionKind: row.executionKind,
-      executionKindSource: row.executionKindSource ?? null,
-      labelProvenance: row.labelProvenance,
-    };
-  });
+  const gauntletEvidence = rows
+    .map((row) => {
+      const attempt = row.attempts.at(-1);
+      const currentVerifyReceipt =
+        row.sourceKind === "verify-change" &&
+        attempt?.receipt &&
+        attempt?.selector &&
+        attempt.markerBinding === "paired" &&
+        attempt.matchesCandidate === true &&
+        attempt.codeChangedDuringControl === false;
+      const kind = currentVerifyReceipt
+        ? "verify-change"
+        : row.sourceKind === "qa-run" && attempt?.receipt
+          ? "qa-run"
+          : "observation";
+      return {
+        id: row.id,
+        runId: row.runId ?? baseline.taskId,
+        kind,
+        ...(kind === "observation"
+          ? {
+              scope: row.scope ?? "unknown",
+              status:
+                row.sourceKind === "verify-change" && row.status === "passed"
+                  ? "unknown"
+                  : row.status,
+              source: attempt?.receipt ?? "package/checkInventory",
+              observedAt: generatedAt,
+              revision: "unknown",
+              fingerprint: "unknown",
+            }
+          : { path: attempt.receipt, selector: attempt.selector }),
+        provenance:
+          attempt?.receiptTimeRelation === "historical" ||
+          attempt?.matchesCandidate === false
+            ? "historical"
+            : "recorded",
+        candidateBinding: currentVerifyReceipt ? "current" : "unbound",
+        receiptTimeRelation: attempt?.receiptTimeRelation ?? "unknown",
+        executionKind: row.executionKind,
+        executionKindSource: row.executionKindSource ?? null,
+        labelProvenance: row.labelProvenance,
+      };
+    })
+    .concat(visualEvidence);
   const requirements = task.requirements?.length
     ? task.requirements
     : rows
@@ -1121,6 +1421,17 @@ export function finishPackage({
         })),
     ],
     evidence: gauntletEvidence,
+    visualImpact: {
+      status: plan.visualImpact,
+      cases: plan.visualCases,
+      resolutions: plan.visualImpactResolutions ?? [],
+    },
+    visualReview:
+      plan.visualImpact === "yes"
+        ? {
+            contractVersion: visualContractVersion,
+          }
+        : null,
     conclusions: [],
     candidate,
     checkInventory: rows,
@@ -1167,6 +1478,7 @@ export function finishPackage({
     task,
     candidate,
     verificationPlan: plan,
+    visualContractVersion,
     checkInventory: rows,
     evidenceSources: sources,
     missingEvidence,
@@ -1184,6 +1496,12 @@ export function finishPackage({
       candidate: bindings.candidate,
       evidence: bindings.evidence,
       checkInventory: bindings.checkInventory,
+      ...(plan.visualImpact === "yes"
+        ? {
+            visualContract: bindings.visualContract,
+            visualCases: bindings.visualCases,
+          }
+        : {}),
     },
     source: "package-generated-before-review",
   };
@@ -1198,7 +1516,7 @@ export function finishPackage({
   };
 }
 
-function parseCli(argv) {
+export function parseCli(argv) {
   const [command, ...parts] = argv;
   const values = new Map();
   for (let i = 0; i < parts.length; i += 1) {
@@ -1228,6 +1546,38 @@ function parseCli(argv) {
         files: many("--file"),
         task,
         amendments: many("--amendment-file").map(textFile),
+        visualImpactResolutions: many("--visual-impact").map((value) => {
+          const parts = value.split("|");
+          const [file, impact] = parts;
+          if (
+            !file ||
+            !["yes", "no"].includes(impact) ||
+            (impact === "no" && ![2, 4].includes(parts.length)) ||
+            (impact === "yes" && ![3, 5].includes(parts.length))
+          )
+            throw new Error(
+              "--visual-impact expects path|no|resolved-by|rationale or path|yes|case-id,case-id|resolved-by|rationale",
+            );
+          const hasResolutionMetadata =
+            parts.length === (impact === "no" ? 4 : 5);
+          const caseList = impact === "yes" ? parts[2] : "";
+          const resolvedBy = hasResolutionMetadata
+            ? parts[impact === "no" ? 2 : 3]
+            : undefined;
+          const rationale = hasResolutionMetadata
+            ? parts
+                .slice(impact === "no" ? 3 : 4)
+                .join("|")
+                .trim()
+            : "";
+          return {
+            file,
+            impact,
+            cases: caseList ? caseList.split(",").filter(Boolean) : [],
+            resolvedBy,
+            rationale,
+          };
+        }),
         outputRoot: one("--output-root") ?? "artifacts/gauntlet",
       },
     };
@@ -1256,6 +1606,15 @@ function parseCli(argv) {
       throw new Error(
         "Provide one --receipt-attempt-id for every --receipt, in matching order",
       );
+    const playwrightPaths = many("--playwright");
+    const playwrightAttemptIds = many("--playwright-attempt-id");
+    if (
+      playwrightAttemptIds.length > 0 &&
+      playwrightAttemptIds.length !== playwrightPaths.length
+    )
+      throw new Error(
+        "Provide one --playwright-attempt-id for every --playwright, in matching order",
+      );
     return {
       command,
       options: {
@@ -1264,7 +1623,11 @@ function parseCli(argv) {
           attemptIds.length > 0 ? { path, attemptId: attemptIds[index] } : path,
         ),
         qaRuns: many("--qa"),
-        playwrightReports: many("--playwright"),
+        playwrightReports: playwrightPaths.map((path, index) =>
+          playwrightAttemptIds.length > 0
+            ? { path, attemptId: playwrightAttemptIds[index] }
+            : path,
+        ),
         planPath: one("--plan"),
         requiredChecks: many("--required-check").map((text, i) => ({
           id: `required-${i + 1}`,

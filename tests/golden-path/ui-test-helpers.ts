@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 import {
   installGoldenPathRoutes,
   type GoldenPathFixtureOptions,
@@ -159,6 +159,55 @@ export async function settleVisualFrame(page: Page) {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
   });
+}
+
+/**
+ * Attach only task-requested, stable visual case IDs for local Gauntlet review.
+ * The mapping from stable phone/desktop IDs to Playwright projects stays here.
+ */
+export async function attachGauntletVisualCase(
+  page: Page,
+  testInfo: TestInfo,
+  surface: string,
+  colorScheme: "dark" | "light",
+) {
+  const requested = new Set(
+    (process.env.STREAMER_GAUNTLET_VISUAL_CASES ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  if (requested.size === 0) return false;
+
+  const viewportTarget = {
+    "phone-web": "phone",
+    "desktop-renderer": "desktop",
+  }[testInfo.project.name];
+  const viewport = page.viewportSize();
+  if (
+    !viewportTarget ||
+    !viewport ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(surface)
+  )
+    return false;
+  const caseId = `${surface}-${viewportTarget}`;
+  if (!requested.has(caseId)) return false;
+
+  const screenshotPath = testInfo.outputPath(
+    `gauntlet-${caseId}-${colorScheme}-${viewport.width}x${viewport.height}.png`,
+  );
+  await page.screenshot({
+    ...deterministicScreenshotOptions,
+    path: screenshotPath,
+  });
+  await testInfo.attach(
+    `gauntlet-visual:${caseId}:${colorScheme}:${viewport.width}x${viewport.height}`,
+    {
+      path: screenshotPath,
+      contentType: "image/png",
+    },
+  );
+  return true;
 }
 
 export async function loginToFixtureShell(

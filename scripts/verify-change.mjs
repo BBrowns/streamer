@@ -84,6 +84,116 @@ function ruleMatches(rule, files) {
   return files.some((file) => patterns.some((pattern) => pattern.test(file)));
 }
 
+function patternsMatch(patterns = [], file) {
+  return patterns.some((pattern) => new RegExp(pattern).test(file));
+}
+
+function visualImpactForFile(file, map) {
+  const cases = unique(
+    (map.visualCaseMappings ?? [])
+      .filter((mapping) => patternsMatch(mapping.patterns ?? [], file))
+      .flatMap((mapping) => mapping.cases ?? []),
+  ).sort();
+  const matches = map.rules.filter((rule) => ruleMatches(rule, [file]));
+  const selected = matches.length > 0 ? matches : [map.fallback];
+  const ruleImpacts = selected.map((rule) => rule.visualImpact ?? "unknown");
+  const impact =
+    cases.length > 0
+      ? "yes"
+      : ruleImpacts.every((value) => value === "no")
+        ? "no"
+        : "unknown";
+  return { file, impact, cases };
+}
+
+export function resolveVisualImpact(plan, resolutions = []) {
+  const unresolved = new Set(plan.unknownVisualFiles ?? []);
+  const byFile = new Map(
+    (plan.visualImpactByFile ?? []).map((item) => [item.file, { ...item }]),
+  );
+  const seen = new Set();
+  const availableCases = new Set(plan.availableVisualCases ?? []);
+
+  for (const resolution of resolutions) {
+    if (!resolution || !unresolved.has(resolution.file))
+      throw new Error(
+        "Visual impact resolution must target an unclassified file",
+      );
+    if (seen.has(resolution.file))
+      throw new Error(
+        `Duplicate visual impact classification: ${resolution.file}`,
+      );
+    if (!new Set(["yes", "no"]).has(resolution.impact))
+      throw new Error(
+        `Invalid visual impact classification: ${resolution.file}`,
+      );
+    const resolvedBy =
+      typeof resolution.resolvedBy === "string"
+        ? resolution.resolvedBy.trim()
+        : "";
+    const rationale =
+      typeof resolution.rationale === "string"
+        ? resolution.rationale.trim()
+        : "";
+    if (!resolvedBy || !rationale)
+      throw new Error(
+        `Visual impact resolution for ${resolution.file} requires resolvedBy and rationale`,
+      );
+    const cases = unique(resolution.cases ?? []).sort();
+    if (
+      resolution.impact === "yes" &&
+      (cases.length === 0 || cases.some((id) => !availableCases.has(id)))
+    )
+      throw new Error(
+        `Visual case classification is required for ${resolution.file}`,
+      );
+    if (resolution.impact === "no" && cases.length > 0)
+      throw new Error(
+        `Non-visual classification cannot name cases: ${resolution.file}`,
+      );
+    byFile.set(resolution.file, {
+      file: resolution.file,
+      impact: resolution.impact,
+      cases,
+      resolvedBy,
+      rationale,
+    });
+    seen.add(resolution.file);
+  }
+
+  if ([...unresolved].some((file) => !seen.has(file)))
+    throw new Error("Visual impact classification is unresolved");
+
+  const visualImpactByFile = [...byFile.values()].sort((a, b) =>
+    a.file.localeCompare(b.file),
+  );
+  const remaining = visualImpactByFile.filter(
+    (item) => item.impact === "unknown",
+  );
+  return {
+    visualImpact:
+      remaining.length > 0
+        ? "unknown"
+        : visualImpactByFile.some((item) => item.impact === "yes")
+          ? "yes"
+          : "no",
+    visualCases: unique(
+      visualImpactByFile.flatMap((item) => item.cases),
+    ).sort(),
+    visualImpactByFile,
+    unknownVisualFiles: remaining.map((item) => item.file),
+    visualImpactResolutions: [...resolutions]
+      .map((item) => ({
+        file: item.file,
+        impact: item.impact,
+        cases: unique(item.cases ?? []).sort(),
+        resolvedBy: item.resolvedBy.trim(),
+        rationale: item.rationale.trim(),
+      }))
+      .sort((a, b) => a.file.localeCompare(b.file)),
+  };
+}
+
 export function buildVerificationPlan(files, map = readMap()) {
   const normalizedFiles = normalizeFiles(files);
   const matched = unique(
@@ -93,12 +203,32 @@ export function buildVerificationPlan(files, map = readMap()) {
     }),
   );
   const selected = matched.length > 0 ? matched : [map.fallback];
+  const visualImpactByFile = normalizedFiles.map((file) =>
+    visualImpactForFile(file, map),
+  );
+  const unknownVisualFiles = visualImpactByFile
+    .filter((item) => item.impact === "unknown")
+    .map((item) => item.file);
 
   return {
     files: normalizedFiles,
     rules: selected.map((rule) => rule.id),
     focusedCommands: unique(selected.flatMap((rule) => rule.focusedCommands)),
     finalCommands: unique(selected.flatMap((rule) => rule.finalCommands)),
+    visualImpact:
+      unknownVisualFiles.length > 0
+        ? "unknown"
+        : visualImpactByFile.some((item) => item.impact === "yes")
+          ? "yes"
+          : "no",
+    visualCases: unique(
+      visualImpactByFile.flatMap((item) => item.cases),
+    ).sort(),
+    visualImpactByFile,
+    unknownVisualFiles,
+    availableVisualCases: unique(
+      (map.visualCaseMappings ?? []).flatMap((mapping) => mapping.cases ?? []),
+    ).sort(),
   };
 }
 
@@ -249,6 +379,14 @@ function renderPlan(plan) {
     ...(plan.finalCommands.length > 0
       ? plan.finalCommands.map((command) => `- ${command}`)
       : ["- none"]),
+    `Visual impact: ${plan.visualImpact}`,
+    `Visual cases: ${plan.visualCases.length ? plan.visualCases.join(", ") : "none"}`,
+    ...(plan.unknownVisualFiles.length > 0
+      ? [
+          "Unclassified visual impact:",
+          ...plan.unknownVisualFiles.map((file) => `- ${file}`),
+        ]
+      : []),
   ].join("\n");
 }
 

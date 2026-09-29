@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -18,9 +19,11 @@ import {
   main,
   recordCheckEnd,
   recordCheckStart,
+  parseCli,
   startPackage,
 } from "./gauntlet-package.mjs";
 import { evaluate, reviewBindings } from "./gauntlet.mjs";
+import { buildVerificationPlan } from "./verify-change.mjs";
 
 function git(root, ...args) {
   return execFileSync("/usr/bin/git", args, {
@@ -43,6 +46,8 @@ function fixture(t) {
   put("a.txt", "HEAD a\n");
   put("b.txt", "HEAD b\n");
   put("unrelated.txt", "keep\n");
+  put("UI.md", "Stable UI review context\n");
+  put("design/streamer-visual-contract.md", "Typography before containers\n");
   git(root, "add", ".");
   git(root, "commit", "-qm", "base");
   put(
@@ -52,15 +57,263 @@ function fixture(t) {
         {
           id: "test",
           patterns: [".*"],
+          visualImpact: "no",
           focusedCommands: ["focused"],
           finalCommands: ["final"],
         },
       ],
-      fallback: { id: "fallback", focusedCommands: [], finalCommands: [] },
+      fallback: {
+        id: "fallback",
+        visualImpact: "no",
+        focusedCommands: [],
+        finalCommands: [],
+      },
+      visualCaseMappings: [],
     }),
   );
   return { root, put };
 }
+
+test("start resolves visual unknowns before creating the task candidate", (t) => {
+  const { root, put } = fixture(t);
+  const mapPath = join(root, "config/verification-map.json");
+  const map = read(mapPath);
+  map.rules[0].visualImpact = "yes";
+  map.visualCaseMappings = [
+    { patterns: ["^b\\.txt$"], cases: ["library-phone", "library-desktop"] },
+  ];
+  put("config/verification-map.json", JSON.stringify(map));
+
+  assert.throws(
+    () =>
+      startPackage({
+        root,
+        taskId: "needs-classification",
+        files: ["a.txt"],
+        task: "Classify before candidate creation",
+      }),
+    /unresolved/i,
+  );
+  assert.equal(existsSync(join(root, "artifacts/gauntlet")), false);
+
+  const started = startPackage({
+    root,
+    taskId: "classified",
+    files: ["a.txt"],
+    task: "Classify before candidate creation",
+    visualImpactResolutions: [
+      {
+        file: "a.txt",
+        impact: "yes",
+        cases: ["library-phone", "library-desktop"],
+        resolvedBy: "Codex pre-candidate visual-impact triage",
+        rationale:
+          "This file changes rendered Library layout and has stable phone and desktop cases in the Streamer surface map.",
+      },
+    ],
+  });
+  const baseline = read(join(started.runDirectory, "baseline.json"));
+  assert.equal(baseline.verificationPlan.visualImpact, "yes");
+  assert.deepEqual(baseline.verificationPlan.visualCases, [
+    "library-desktop",
+    "library-phone",
+  ]);
+  assert.deepEqual(baseline.verificationPlan.unknownVisualFiles, []);
+  assert.deepEqual(baseline.verificationPlan.visualImpactResolutions, [
+    {
+      file: "a.txt",
+      impact: "yes",
+      cases: ["library-desktop", "library-phone"],
+      resolvedBy: "Codex pre-candidate visual-impact triage",
+      rationale:
+        "This file changes rendered Library layout and has stable phone and desktop cases in the Streamer surface map.",
+    },
+  ]);
+  assert.deepEqual(
+    baseline.verificationPlan.visualImpactByFile.find(
+      (item) => item.file === "a.txt",
+    ),
+    {
+      file: "a.txt",
+      impact: "yes",
+      cases: ["library-desktop", "library-phone"],
+      resolvedBy: "Codex pre-candidate visual-impact triage",
+      rationale:
+        "This file changes rendered Library layout and has stable phone and desktop cases in the Streamer surface map.",
+    },
+  );
+});
+
+test("CLI accepts explicit non-visual resolution metadata before candidate creation", (t) => {
+  const { root, put } = fixture(t);
+  const mapPath = join(root, "config/verification-map.json");
+  const map = read(mapPath);
+  map.rules[0].visualImpact = "unknown";
+  put("config/verification-map.json", JSON.stringify(map));
+  assert.equal(read(mapPath).rules[0].visualImpact, "unknown");
+  assert.deepEqual(
+    buildVerificationPlan(["a.txt"], read(mapPath)).unknownVisualFiles,
+    ["a.txt"],
+  );
+
+  const { options } = parseCli([
+    "start",
+    "--task-id",
+    "cli-classification",
+    "--task-text",
+    "Classify visual impact from the command line",
+    "--file",
+    "a.txt",
+    "--visual-impact",
+    "a.txt|no|Codex pre-candidate visual-impact triage|The changed file is a test-only fixture and contains no rendered UI or styles.",
+    "--output-root",
+    "artifacts/gauntlet",
+  ]);
+  const { runDirectory } = startPackage({ root, ...options });
+  const baseline = read(join(runDirectory, "baseline.json"));
+  assert.deepEqual(baseline.verificationPlan.visualImpactResolutions, [
+    {
+      file: "a.txt",
+      impact: "no",
+      cases: [],
+      resolvedBy: "Codex pre-candidate visual-impact triage",
+      rationale:
+        "The changed file is a test-only fixture and contains no rendered UI or styles.",
+    },
+  ]);
+  assert.equal(baseline.verificationPlan.visualImpact, "no");
+});
+
+test("visual screenshot evidence reuses candidate identity and hashes contract bytes", (t) => {
+  const { root, put } = fixture(t);
+  const mapPath = join(root, "config/verification-map.json");
+  const map = read(mapPath);
+  map.visualCaseMappings = [
+    { patterns: ["^a\\.txt$"], cases: ["library-desktop", "library-phone"] },
+  ];
+  put("config/verification-map.json", JSON.stringify(map));
+  assert.deepEqual(buildVerificationPlan(["a.txt"], map).visualCases, [
+    "library-desktop",
+    "library-phone",
+  ]);
+  const { runDirectory } = startPackage({
+    root,
+    taskId: "visual-evidence",
+    files: ["a.txt"],
+    task: "Capture the library visual surfaces",
+  });
+  assert.deepEqual(
+    read(join(runDirectory, "baseline.json")).verificationPlan.visualCases,
+    ["library-desktop", "library-phone"],
+  );
+  const marker = recordCheckStart({
+    root,
+    runDirectory,
+    attemptId: "visual-browser",
+  });
+  const screenshot = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9ioAAAAASUVORK5CYII=",
+    "base64",
+  );
+  put("visual/library.png", screenshot);
+  const startTime = new Date(Date.parse(marker.recordedAt) + 1).toISOString();
+  put(
+    "visual/results.json",
+    JSON.stringify({
+      stats: { startTime, duration: 1 },
+      suites: [
+        {
+          title: "visual-regression",
+          specs: [
+            {
+              title: "library capture",
+              tests: [
+                {
+                  projectName: "phone-web",
+                  status: "expected",
+                  expectedStatus: "passed",
+                  results: [
+                    {
+                      status: "passed",
+                      duration: 1,
+                      startTime: new Date(
+                        Date.parse(startTime) + 1,
+                      ).toISOString(),
+                      attachments: [
+                        {
+                          name: "gauntlet-visual:library-phone:dark:390x844",
+                          contentType: "image/png",
+                          path: "visual/library.png",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  recordCheckEnd({ root, runDirectory, attemptId: "visual-browser" });
+
+  const { package: pkg } = finishPackage({
+    root,
+    runDirectory,
+    playwrightReports: [
+      { path: "visual/results.json", attemptId: "visual-browser" },
+    ],
+  });
+
+  assert.deepEqual(pkg.verificationPlan.visualCases, [
+    "library-desktop",
+    "library-phone",
+  ]);
+  assert.equal(
+    pkg.visualContractVersion.algorithm,
+    "sha256-path-nul-content-nul-v1",
+  );
+  assert.deepEqual(
+    pkg.visualContractVersion.files.map((file) => file.path),
+    ["UI.md", "design/streamer-visual-contract.md"],
+  );
+  const expectedContractHash = createHash("sha256")
+    .update("UI.md\0Stable UI review context\n\0")
+    .update(
+      "design/streamer-visual-contract.md\0Typography before containers\n\0",
+    )
+    .digest("hex");
+  assert.equal(pkg.visualContractVersion.sha256, expectedContractHash);
+  const evidence = pkg.gauntletInput.evidence.find(
+    (item) => item.kind === "visual-screenshot",
+  );
+  assert.equal(evidence.captureContext.caseId, "library-phone");
+  assert.equal(evidence.captureContext.viewport.width, 390);
+  assert.equal(evidence.markerBinding, "paired");
+  assert.equal(evidence.candidateBinding, "current");
+  assert.equal(
+    evidence.candidateIdentity.fingerprint,
+    pkg.candidate.fingerprint,
+  );
+  assert.equal(
+    evidence.screenshotHash,
+    createHash("sha256").update(screenshot).digest("hex"),
+  );
+  assert.equal(
+    pkg.gauntletInput.visualReview.contractVersion.sha256,
+    expectedContractHash,
+  );
+  assert.equal(
+    evidence.captureContext.capturedAt,
+    new Date(Date.parse(startTime) + 2).toISOString(),
+  );
+  assert.deepEqual(pkg.gauntletInput.visualImpact, {
+    status: "yes",
+    cases: ["library-desktop", "library-phone"],
+    resolutions: [],
+  });
+});
 
 function read(path) {
   return JSON.parse(readFileSync(path, "utf8"));

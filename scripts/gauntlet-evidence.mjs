@@ -114,7 +114,71 @@ export function loadEvidence(item, root) {
     runtime: null,
     issues: [],
   };
-  if (item.kind === "observation") {
+  if (item.kind === "visual-screenshot") {
+    let bytes;
+    try {
+      bytes = readBytes(root, item.path);
+      result.source = item.path;
+    } catch {
+      result.issues.push("VISUAL_EVIDENCE_UNAVAILABLE");
+      return result;
+    }
+    const computedHash = createHash("sha256").update(bytes).digest("hex");
+    const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    if (
+      bytes.length < 24 ||
+      !bytes.subarray(0, 8).equals(pngSignature) ||
+      bytes.toString("ascii", 12, 16) !== "IHDR"
+    )
+      result.issues.push("VISUAL_IMAGE_INVALID");
+    if (
+      !/^[a-f\d]{64}$/i.test(item.screenshotHash ?? "") ||
+      item.screenshotHash !== computedHash
+    )
+      result.issues.push("VISUAL_HASH_MISMATCH");
+    const identity = item.candidateIdentity;
+    const validIdentity =
+      record(identity) &&
+      known(identity.revision) &&
+      /^[a-f\d]{64}$/i.test(identity.fingerprint ?? "") &&
+      identity.fingerprintAlgorithm === verificationFingerprintAlgorithm &&
+      fileSelection(identity.files);
+    const context = item.captureContext;
+    const validContext =
+      record(context) &&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(context.caseId ?? "") &&
+      known(context.project) &&
+      record(context.viewport) &&
+      Number.isInteger(context.viewport.width) &&
+      Number.isInteger(context.viewport.height) &&
+      ["dark", "light"].includes(context.colorScheme);
+    if (!validIdentity) result.issues.push("VISUAL_CANDIDATE_IDENTITY_INVALID");
+    if (!validContext) result.issues.push("VISUAL_CAPTURE_CONTEXT_INVALID");
+    if (item.markerBinding !== "paired" || item.candidateBinding !== "current")
+      result.issues.push("VISUAL_CANDIDATE_BINDING_MISSING");
+    Object.assign(result, {
+      status: result.issues.length === 0 ? "passed" : "unknown",
+      scope: "local-fixture",
+      observedAt: timestamp(context?.capturedAt)
+        ? context.capturedAt
+        : "unknown",
+      revision: validIdentity ? identity.revision : "unknown",
+      fingerprint: validIdentity ? identity.fingerprint : "unknown",
+      fingerprintAlgorithm: validIdentity
+        ? identity.fingerprintAlgorithm
+        : "unknown",
+      files: validIdentity ? [...identity.files] : [],
+      executionKind: "browser-interaction",
+      executionKindSource: "Playwright screenshot attachment",
+      labelProvenance: "receipt",
+      screenshotHash: computedHash,
+      candidateIdentity: validIdentity ? identity : null,
+      candidateBinding: item.candidateBinding ?? "unknown",
+      markerBinding: item.markerBinding ?? "unknown",
+      captureContext: validContext ? context : null,
+      visualCaseId: validContext ? context.caseId : "unknown",
+    });
+  } else if (item.kind === "observation") {
     Object.assign(result, {
       status: statuses.has(item.status) ? item.status : "unknown",
       scope: scopes.has(item.scope) ? item.scope : "unknown",

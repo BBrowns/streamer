@@ -3,6 +3,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { FIXTURE_MOVIE_ID, type GoldenPathScenario } from "./fixtures";
 import {
   deterministicScreenshotOptions,
+  attachGauntletVisualCase,
   loginToFixtureShell,
   settleVisualFrame,
 } from "./ui-test-helpers";
@@ -69,8 +70,31 @@ function skipUnsupportedVisualEnvironment(
     "Visual baselines cover the compact and large window classes; semantic golden paths cover the intermediate layouts.",
   );
   test.skip(
-    !visualBaselineUpdateEnabled && process.platform !== "linux",
+    !visualBaselineUpdateEnabled &&
+      process.platform !== "linux" &&
+      !process.env.STREAMER_GAUNTLET_VISUAL_CASES,
     "Run platform-specific visual baselines deliberately with STREAMER_VISUAL_BASELINES=1 outside Linux CI.",
+  );
+}
+
+function skipUnlessRequestedVisualCase(testInfo: TestInfo, surfaces: string[]) {
+  const requested = new Set(
+    (process.env.STREAMER_GAUNTLET_VISUAL_CASES ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  if (requested.size === 0) return;
+  const target =
+    testInfo.project.name === "phone-web"
+      ? "phone"
+      : testInfo.project.name === "desktop-renderer"
+        ? "desktop"
+        : null;
+  test.skip(
+    !target ||
+      !surfaces.some((surface) => requested.has(`${surface}-${target}`)),
+    "This Playwright case does not provide a requested stable visual case ID.",
   );
 }
 
@@ -95,6 +119,7 @@ for (const scheme of ["dark", "light"] as const) {
     page,
   }, testInfo) => {
     skipUnsupportedVisualEnvironment(testInfo, scheme);
+    skipUnlessRequestedVisualCase(testInfo, ["home", "settings", "search"]);
 
     requireLinuxBaselines(testInfo, scheme);
 
@@ -105,6 +130,7 @@ for (const scheme of ["dark", "light"] as const) {
       `home-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "home", scheme);
 
     await page.goto("/settings");
     await expect(page.getByTestId("settings-screen")).toBeVisible();
@@ -113,6 +139,7 @@ for (const scheme of ["dark", "light"] as const) {
       `settings-overview-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "settings", scheme);
 
     await page.goto("/search?q=Golden");
     await expect(page.getByTestId("search-results-grid")).toBeVisible();
@@ -121,12 +148,14 @@ for (const scheme of ["dark", "light"] as const) {
       `search-results-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "search", scheme);
   });
 
   test(`matches the ${scheme} Login and onboarding visual baselines`, async ({
     page,
   }, testInfo) => {
     skipUnsupportedVisualEnvironment(testInfo, scheme);
+    skipUnlessRequestedVisualCase(testInfo, ["login", "onboarding"]);
     requireLinuxBaselines(testInfo, scheme);
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     await page.goto("/login");
@@ -136,6 +165,7 @@ for (const scheme of ["dark", "light"] as const) {
       `login-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "login", scheme);
     await page.goto("/onboarding/setup");
     await expect(page.getByText("Personalize", { exact: true })).toBeVisible();
     await settleVisualFrame(page);
@@ -143,12 +173,18 @@ for (const scheme of ["dark", "light"] as const) {
       `onboarding-setup-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "onboarding", scheme);
   });
 
   test(`matches the ${scheme} populated Notifications, installed Add-ons, and Detail actions`, async ({
     page,
   }, testInfo) => {
     skipUnsupportedVisualEnvironment(testInfo, scheme);
+    skipUnlessRequestedVisualCase(testInfo, [
+      "notifications",
+      "addons",
+      "detail",
+    ]);
     requireLinuxBaselines(testInfo, scheme);
     await loginToFixtureShell(page, {
       colorScheme: scheme,
@@ -162,6 +198,7 @@ for (const scheme of ["dark", "light"] as const) {
       `notifications-populated-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "notifications", scheme);
     await page.goto("/addons");
     await expect(page.getByTestId("addons-screen")).toBeVisible();
     await page
@@ -178,6 +215,7 @@ for (const scheme of ["dark", "light"] as const) {
       `addons-install-success-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "addons", scheme);
     await page.goto("/");
     await expect(page.getByTestId("home-hero")).toBeVisible();
     await page
@@ -202,12 +240,14 @@ for (const scheme of ["dark", "light"] as const) {
       `detail-actions-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "detail", scheme);
   });
 
   test(`matches the ${scheme} mixed Downloads visual baseline`, async ({
     page,
   }, testInfo) => {
     skipUnsupportedVisualEnvironment(testInfo, scheme);
+    skipUnlessRequestedVisualCase(testInfo, ["downloads"]);
     requireLinuxBaselines(testInfo, scheme);
     await loginToFixtureShell(page, {
       colorScheme: scheme,
@@ -225,13 +265,29 @@ for (const scheme of ["dark", "light"] as const) {
       `downloads-mixed-${scheme}-${testInfo.project.name}.png`,
       deterministicScreenshotOptions,
     );
+    await attachGauntletVisualCase(page, testInfo, "downloads", scheme);
   });
 }
+
+test("captures Library evidence for its stable visual case IDs", async ({
+  page,
+}, testInfo) => {
+  skipUnsupportedVisualEnvironment(testInfo, "dark");
+  skipUnlessRequestedVisualCase(testInfo, ["library"]);
+  await loginToFixtureShell(page, { colorScheme: "dark" });
+  await page.goto("/library");
+  await expect(
+    page.locator('[data-testid^="library-card-library:"]'),
+  ).toHaveCount(9);
+  await settleVisualFrame(page);
+  await attachGauntletVisualCase(page, testInfo, "library", "dark");
+});
 
 test("matches the dark player, timeline preview, and settings baselines", async ({
   page,
 }, testInfo) => {
   skipUnsupportedVisualEnvironment(testInfo, "dark");
+  skipUnlessRequestedVisualCase(testInfo, ["player"]);
   requireLinuxBaselines(testInfo, "dark");
 
   await openFixturePlayer(page);
@@ -292,6 +348,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     `player-dark-${testInfo.project.name}.png`,
     deterministicScreenshotOptions,
   );
+  await attachGauntletVisualCase(page, testInfo, "player", "dark");
 
   const timelineBox = await timeline.boundingBox();
   expect(timelineBox).not.toBeNull();
@@ -329,12 +386,14 @@ test("matches the dark player, timeline preview, and settings baselines", async 
       : "player-settings-popover-dark-desktop-renderer.png",
     deterministicScreenshotOptions,
   );
+  await attachGauntletVisualCase(page, testInfo, "player", "dark");
 });
 
 test("matches the dark player recovery and non-seekable baselines", async ({
   page,
 }, testInfo) => {
   skipUnsupportedVisualEnvironment(testInfo, "dark");
+  skipUnlessRequestedVisualCase(testInfo, ["player"]);
   requireLinuxBaselines(testInfo, "dark");
 
   if (testInfo.project.name === "phone-web") {
