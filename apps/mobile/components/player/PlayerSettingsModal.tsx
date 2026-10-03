@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Platform,
   Pressable,
@@ -15,6 +16,7 @@ import type {
   SubtitleTrack,
 } from "../../services/streamEngine/IStreamEngine";
 import type { PlaybackDiagnosticRow } from "../../services/playback/PlaybackDiagnostics";
+import { useWindowClass, type WindowClass } from "../../hooks/useWindowClass";
 import {
   PLAYBACK_QUALITY_OPTIONS,
   togglePreferredQuality,
@@ -78,6 +80,15 @@ interface Choice {
   value: string;
   label: string;
   accessibilityLabel?: string;
+}
+
+export function resolvePlayerSettingsBottomClearance(
+  windowClass: WindowClass,
+  bottomInset: number,
+) {
+  return windowClass === "compact"
+    ? Math.max(bottomInset + uiSpacing.sm, uiSpacing.xxl)
+    : 0;
 }
 
 function ChoiceGrid({
@@ -229,8 +240,14 @@ export function PlayerSettingsModal({
   focusColor = playerChrome.focus,
 }: PlayerSettingsModalProps) {
   const { t } = useTranslation();
+  const { windowClass } = useWindowClass();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("playback");
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const bottomClearance = resolvePlayerSettingsBottomClearance(
+    windowClass,
+    bottomInset,
+  );
 
   useEffect(() => {
     if (!visible) {
@@ -257,6 +274,7 @@ export function PlayerSettingsModal({
           backgroundColor: playerChrome.surfaceStrong,
           borderColor: playerChrome.border,
         },
+        bottomClearance > 0 ? { paddingBottom: bottomClearance } : null,
       ]}
     >
       <View style={styles.header}>

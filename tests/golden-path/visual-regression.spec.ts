@@ -459,6 +459,15 @@ test("matches the dark player, timeline preview, and settings baselines", async 
       settingsBounds!.y + settingsBounds!.height,
     );
   }
+  if (testInfo.project.name === "phone-web") {
+    const lastOpacityBounds = await opacityOptions.last().boundingBox();
+    expect(lastOpacityBounds).not.toBeNull();
+    expect(
+      settingsBounds!.y +
+        settingsBounds!.height -
+        (lastOpacityBounds!.y + lastOpacityBounds!.height),
+    ).toBeGreaterThanOrEqual(24);
+  }
   await settleVisualFrame(page);
   await expect(page).toHaveScreenshot(
     testInfo.project.name === "phone-web"
@@ -467,6 +476,13 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     deterministicScreenshotOptions,
   );
   await attachGauntletVisualCase(page, testInfo, "player", "dark");
+  if (testInfo.project.name === "phone-web") {
+    const resetButton = page.getByRole("button", {
+      name: "Reset subtitle style",
+    });
+    await resetButton.scrollIntoViewIfNeeded();
+    await expect(resetButton).toBeInViewport();
+  }
 });
 
 test("matches the dark player recovery and non-seekable baselines", async ({
