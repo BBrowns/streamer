@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState, type Dispatch } from "react";
 import type { ExpoVideoPlayerLike } from "../services/playback/mediaPlayerAdapters/ExpoVideoAdapterBase";
 import type { MediaPlayerAdapter } from "../services/playback/MediaPlayerAdapter";
+import {
+  isMediaPositionSeekable,
+  type MediaSeekOptions,
+} from "../services/playback/MediaPlayerAdapter";
 import type { PlaybackDiagnosticEvent } from "../services/playback/PlaybackDiagnostics";
 import type { PlaybackRuntimeViewEvent } from "../services/playback/PlaybackRuntimeCoordinator";
 import type { TimelineScrubbingChange } from "../services/playback/TimelineController";
@@ -9,8 +13,11 @@ import type { IStreamEngine } from "../services/streamEngine/IStreamEngine";
 interface UsePlayerMediaControlsOptions {
   player: ExpoVideoPlayerLike | null;
   mediaAdapter: MediaPlayerAdapter;
+  commitSeek: (position: number, options?: MediaSeekOptions) => Promise<number>;
   engine: IStreamEngine | null;
   canSeek: boolean;
+  seekableOnRequest?: boolean;
+  durationSeconds: number;
   markIntentionalSeek: () => void;
   recordDiagnostic: (event: PlaybackDiagnosticEvent) => void;
   recordExplicitSeek: (position: number) => void;
@@ -26,8 +33,11 @@ interface UsePlayerMediaControlsOptions {
 export function usePlayerMediaControls({
   player,
   mediaAdapter,
+  commitSeek,
   engine,
   canSeek,
+  seekableOnRequest = false,
+  durationSeconds,
   markIntentionalSeek,
   recordDiagnostic,
   recordExplicitSeek,
@@ -63,55 +73,88 @@ export function usePlayerMediaControls({
   }, [player]);
 
   const handleSeekBy = useCallback(
-    (seconds: number) => {
-      if (!canSeek) return;
+    async (seconds: number) => {
+      if (!canSeek || !Number.isFinite(seconds)) return false;
+      const snapshot = mediaAdapter.snapshot();
+      const target = Math.max(
+        0,
+        Math.min(durationSeconds, snapshot.currentTime + seconds),
+      );
+      if (
+        !isMediaPositionSeekable(
+          target,
+          snapshot.seekableRanges,
+          seekableOnRequest || snapshot.seekableOnRequest,
+        )
+      ) {
+        return false;
+      }
       setShowNextEpisodeOverlay(false);
       markIntentionalSeek();
       recordDiagnostic({ type: "seek", outcome: "requested" });
-      recordExplicitSeek(
-        Math.max(0, mediaAdapter.snapshot().currentTime + seconds),
-      );
       try {
-        mediaAdapter.seekBy(seconds);
+        const actualPosition = await commitSeek(target);
+        recordExplicitSeek(actualPosition);
         recordDiagnostic({ type: "seek", outcome: "accepted" });
+        return true;
       } catch {
         recordDiagnostic({ type: "seek", outcome: "failed" });
+        return false;
+      } finally {
+        showControls();
       }
-      showControls();
     },
     [
       canSeek,
+      commitSeek,
+      durationSeconds,
       markIntentionalSeek,
-      mediaAdapter,
       recordDiagnostic,
       recordExplicitSeek,
       setShowNextEpisodeOverlay,
+      seekableOnRequest,
       showControls,
     ],
   );
 
   const handleSeekTo = useCallback(
-    (seconds: number) => {
-      if (!canSeek) return;
+    async (seconds: number) => {
+      if (!canSeek || !Number.isFinite(seconds)) return false;
+      const target = Math.max(0, Math.min(durationSeconds, seconds));
+      const snapshot = mediaAdapter.snapshot();
+      if (
+        !isMediaPositionSeekable(
+          target,
+          snapshot.seekableRanges,
+          seekableOnRequest || snapshot.seekableOnRequest,
+        )
+      ) {
+        return false;
+      }
       setShowNextEpisodeOverlay(false);
       markIntentionalSeek();
       recordDiagnostic({ type: "seek", outcome: "requested" });
-      recordExplicitSeek(seconds);
       try {
-        mediaAdapter.commitSeek(seconds);
+        const actualPosition = await commitSeek(target);
+        recordExplicitSeek(actualPosition);
         recordDiagnostic({ type: "seek", outcome: "accepted" });
+        return true;
       } catch {
         recordDiagnostic({ type: "seek", outcome: "failed" });
+        return false;
+      } finally {
+        showControls();
       }
-      showControls();
     },
     [
       canSeek,
+      commitSeek,
+      durationSeconds,
       markIntentionalSeek,
-      mediaAdapter,
       recordDiagnostic,
       recordExplicitSeek,
       setShowNextEpisodeOverlay,
+      seekableOnRequest,
       showControls,
     ],
   );
@@ -119,21 +162,13 @@ export function usePlayerMediaControls({
   const handlePreviewSeek = useCallback(
     (seconds: number) => {
       if (!canSeek) return;
-      markIntentionalSeek();
-      mediaAdapter.previewSeek(seconds);
       dispatchRuntimeViewEvent({
         type: "scrubbing_previewed",
         previewPosition: seconds,
       });
       showControls();
     },
-    [
-      canSeek,
-      dispatchRuntimeViewEvent,
-      markIntentionalSeek,
-      mediaAdapter,
-      showControls,
-    ],
+    [canSeek, dispatchRuntimeViewEvent, showControls],
   );
 
   const handleScrubbingChange = useCallback(
@@ -146,9 +181,6 @@ export function usePlayerMediaControls({
           previewPosition: mediaAdapter.snapshot().currentTime,
         });
       } else {
-        if (change.state === "cancelled") {
-          mediaAdapter.commitSeek(change.restorePosition);
-        }
         mediaAdapter.endScrubbing({ shouldResume: change.shouldResume });
         dispatchRuntimeViewEvent({
           type:
@@ -180,28 +212,46 @@ export function usePlayerMediaControls({
   );
 
   const handleSeekPercent = useCallback(
-    (percent: number) => {
-      if (!canSeek || !player || !player.duration) return;
+    async (percent: number) => {
+      if (!canSeek || durationSeconds <= 0 || !Number.isFinite(percent)) {
+        return false;
+      }
+      const target =
+        (durationSeconds * Math.max(0, Math.min(100, percent))) / 100;
+      const snapshot = mediaAdapter.snapshot();
+      if (
+        !isMediaPositionSeekable(
+          target,
+          snapshot.seekableRanges,
+          seekableOnRequest || snapshot.seekableOnRequest,
+        )
+      ) {
+        return false;
+      }
       setShowNextEpisodeOverlay(false);
       markIntentionalSeek();
       recordDiagnostic({ type: "seek", outcome: "requested" });
-      const target = (player.duration * percent) / 100;
-      recordExplicitSeek(target);
       try {
-        player.currentTime = target;
+        const actualPosition = await commitSeek(target);
+        recordExplicitSeek(actualPosition);
         recordDiagnostic({ type: "seek", outcome: "accepted" });
+        return true;
       } catch {
         recordDiagnostic({ type: "seek", outcome: "failed" });
+        return false;
+      } finally {
+        showControls();
       }
-      showControls();
     },
     [
       canSeek,
+      commitSeek,
+      durationSeconds,
       markIntentionalSeek,
-      player,
       recordDiagnostic,
       recordExplicitSeek,
       setShowNextEpisodeOverlay,
+      seekableOnRequest,
       showControls,
     ],
   );

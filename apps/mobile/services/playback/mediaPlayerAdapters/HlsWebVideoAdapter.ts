@@ -3,7 +3,9 @@ import type {
   MediaPlayerCapabilities,
   MediaPlayerEvent,
   MediaPlayerEventListener,
+  MediaSeekOptions,
   MediaPlayerSnapshot,
+  MediaTimeRange,
   MediaPlayerThumbnail,
   MediaThumbnailOptions,
   NormalizedMediaTrack,
@@ -11,6 +13,7 @@ import type {
 import type { WebMediaDocument } from "./WebVideoAdapter";
 import type { ExpoVideoPlayerLike } from "./ExpoVideoAdapterBase";
 import { recordPlaybackDebugEvent } from "../playbackDebug";
+import { confirmMediaSeek } from "../ConfirmedMediaSeek";
 
 type HlsConstructor = typeof import("hls.js").default;
 type HlsInstance = InstanceType<HlsConstructor>;
@@ -18,6 +21,28 @@ type HlsInstance = InstanceType<HlsConstructor>;
 const HLS_RESUME_RETRY_MS = 500;
 const HLS_MAX_RESUME_ATTEMPTS = 20;
 const HLS_MEDIA_RESET_DEDUP_MS = 250;
+const HLS_FRAGMENT_LOAD_TIMEOUT_MS = 45_000;
+
+export function getHlsFragmentLoaderConfig() {
+  return {
+    fragLoadPolicy: {
+      default: {
+        maxTimeToFirstByteMs: HLS_FRAGMENT_LOAD_TIMEOUT_MS,
+        maxLoadTimeMs: HLS_FRAGMENT_LOAD_TIMEOUT_MS,
+        timeoutRetry: {
+          maxNumRetry: 1,
+          retryDelayMs: 1_000,
+          maxRetryDelayMs: 1_000,
+        },
+        errorRetry: {
+          maxNumRetry: 1,
+          retryDelayMs: 1_000,
+          maxRetryDelayMs: 1_000,
+        },
+      },
+    },
+  };
+}
 
 export interface HlsVideoElement extends HTMLVideoElement {}
 
@@ -81,6 +106,7 @@ export function getPublishedHlsWindow(
 export interface HlsWebVideoAdapterOptions {
   document?: WebMediaDocument;
   onError?: () => void;
+  timeOriginSeconds?: number;
 }
 
 function toExpoStatus(status: MediaPlayerSnapshot["status"]) {
@@ -112,7 +138,7 @@ export function createHlsPlayerFacade(
       return adapter.snapshot().currentTime;
     },
     set currentTime(value: number) {
-      adapter.commitSeek(value);
+      void adapter.commitSeek(value).catch(() => undefined);
     },
     get duration() {
       return adapter.snapshot().duration;
@@ -143,7 +169,9 @@ export function createHlsPlayerFacade(
     },
     play: () => adapter.play(),
     pause: () => adapter.pause(),
-    seekBy: (seconds: number) => adapter.seekBy(seconds),
+    seekBy: (seconds: number) => {
+      void adapter.seekBy(seconds).catch(() => undefined);
+    },
     replaceAsync: (source: string) => adapter.replaceSource(source),
     addListener: (event, listener) => {
       const unsubscribe = adapter.subscribe((mediaEvent) => {
@@ -215,6 +243,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   private readonly listeners = new Set<MediaPlayerEventListener>();
   private readonly options: HlsWebVideoAdapterOptions;
   private readonly hlsVideoCapabilities: MediaPlayerCapabilities;
+  private readonly timeOriginSeconds: number;
   private video: HlsVideoElement | null = null;
   private hls: HlsInstance | null = null;
   private source: string | null = null;
@@ -223,7 +252,10 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   private firstFrameReported = false;
   private destroyed = false;
   private loadGeneration = 0;
+  private seekRevision = 0;
   private publishedWindow: { start: number; end: number } | null = null;
+  private vodDurationSeconds = 0;
+  private isVodPlaylist = false;
   private playbackIntent = false;
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
   private resumeAttempts = 0;
@@ -232,6 +264,11 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
 
   constructor(options: HlsWebVideoAdapterOptions = {}) {
     this.options = options;
+    this.timeOriginSeconds =
+      Number.isFinite(options.timeOriginSeconds) &&
+      (options.timeOriginSeconds ?? 0) > 0
+        ? options.timeOriginSeconds!
+        : 0;
     this.hlsVideoCapabilities = {
       target:
         typeof window !== "undefined" && Boolean(window.desktopBridge)
@@ -272,6 +309,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     const video = this.video;
     if (!video) return;
     this.loadGeneration += 1;
+    this.seekRevision += 1;
     this.source = null;
     video.removeEventListener("loadedmetadata", this.onLoadedMetadata);
     video.removeEventListener("canplay", this.onCanPlay);
@@ -286,6 +324,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     video.removeEventListener("error", this.onVideoError);
     this.destroyHls();
     this.publishedWindow = null;
+    this.vodDurationSeconds = 0;
+    this.isVodPlaylist = false;
     this.video = null;
   }
 
@@ -305,6 +345,9 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.error = undefined;
     this.status = "idle";
     this.publishedWindow = null;
+    this.vodDurationSeconds = 0;
+    this.isVodPlaylist = false;
+    this.seekRevision += 1;
     this.destroyHls();
     const video = this.video;
     if (!video) return;
@@ -318,41 +361,57 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
 
   snapshot(): MediaPlayerSnapshot {
     const video = this.video;
-    const range = video ? this.getSeekableRange(video) : null;
-    const duration = video ? this.seekableDurationFromRange(video, range) : 0;
-    // HLS live/event playlists expose media time on an absolute timeline. The
-    // player UI, however, works with a zero-based published window. Keeping
-    // that translation here makes scrubbing continue to work after the
-    // rolling playlist drops its earliest segments.
-    const currentTime = video
-      ? range
-        ? Math.max(0, Math.min(duration, video.currentTime - range.start))
-        : video.currentTime
-      : 0;
-    const bufferedPosition =
-      video && video.buffered.length > 0
-        ? range
-          ? Math.max(
-              0,
-              Math.min(
-                duration,
-                video.buffered.end(video.buffered.length - 1) - range.start,
-              ),
-            )
-          : video.buffered.end(video.buffered.length - 1)
+    const sourceSeekableRanges = video ? this.readRanges(video.seekable) : [];
+    const sourceVisibleSeekableRanges =
+      sourceSeekableRanges.length > 0
+        ? sourceSeekableRanges
+        : !this.isVodPlaylist && this.publishedWindow
+          ? [this.publishedWindow]
+          : [];
+    const toTitleRanges = (ranges: MediaTimeRange[]) =>
+      ranges.flatMap(({ start, end }) => {
+        const titleRange = {
+          start: Math.max(0, start - this.timeOriginSeconds),
+          end: Math.max(0, end - this.timeOriginSeconds),
+        };
+        return titleRange.end > titleRange.start ? [titleRange] : [];
+      });
+    const visibleSeekableRanges = toTitleRanges(sourceVisibleSeekableRanges);
+    const bufferedRanges = toTitleRanges(
+      video ? this.readRanges(video.buffered) : [],
+    );
+    const mediaDuration =
+      video && Number.isFinite(video.duration) && video.duration > 0
+        ? Math.max(0, video.duration - this.timeOriginSeconds)
         : 0;
+    const duration = Math.max(
+      mediaDuration,
+      this.vodDurationSeconds,
+      ...visibleSeekableRanges.map((range) => range.end),
+    );
+    const currentTime = video
+      ? Math.max(0, video.currentTime - this.timeOriginSeconds)
+      : 0;
+    const bufferedPosition = bufferedRanges.reduce(
+      (latest, range) => Math.max(latest, range.end),
+      0,
+    );
     return {
       status: this.status,
       currentTime: Number.isFinite(currentTime) ? currentTime : 0,
+      timeOriginSeconds: this.timeOriginSeconds,
       duration,
-      bufferedPosition: Number.isFinite(bufferedPosition)
-        ? bufferedPosition
-        : 0,
+      bufferedPosition,
+      bufferedRanges,
+      seekableRanges: visibleSeekableRanges,
+      seekableOnRequest: this.isVodPlaylist,
       playing: Boolean(video && !video.paused && !video.ended),
       muted: Boolean(video?.muted),
       volume: video ? Math.min(1, Math.max(0, video.volume)) : 1,
       playbackRate: video?.playbackRate || 1,
-      canSeek: duration > 0 && Boolean(video?.seekable.length),
+      canSeek:
+        duration > 0 &&
+        (visibleSeekableRanges.length > 0 || this.isVodPlaylist),
     };
   }
 
@@ -375,17 +434,39 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.video?.pause();
   }
 
-  seekBy(seconds: number) {
-    if (!Number.isFinite(seconds)) return;
-    this.commitSeek(this.snapshot().currentTime + seconds);
+  seekBy(seconds: number, options?: MediaSeekOptions) {
+    if (!Number.isFinite(seconds)) {
+      return Promise.reject(new RangeError("Seek offset must be finite."));
+    }
+    return this.commitSeek(this.snapshot().currentTime + seconds, options);
   }
 
-  previewSeek(position: number) {
-    this.setTime(position);
-  }
+  previewSeek(_position: number) {}
 
-  commitSeek(position: number) {
-    this.setTime(position);
+  commitSeek(position: number, options?: MediaSeekOptions) {
+    const revision = ++this.seekRevision;
+    return confirmMediaSeek({
+      target: position,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+      request: () => {
+        if (!this.setTime(position)) {
+          throw new Error(
+            "The requested time is outside the seekable media range.",
+          );
+        }
+      },
+      observe: () => {
+        const snapshot = this.snapshot();
+        return {
+          currentTime: snapshot.currentTime,
+          duration: snapshot.duration,
+          status: snapshot.status,
+          bufferedRanges: snapshot.bufferedRanges,
+        };
+      },
+      isCurrent: () => revision === this.seekRevision,
+    });
   }
 
   beginScrubbing() {}
@@ -396,6 +477,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
   }
 
   async replaceSource(source: string) {
+    this.seekRevision += 1;
     this.playbackIntent = false;
     this.clearResumeTimer();
     this.source = source;
@@ -496,6 +578,8 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     this.mediaResetAttempts = 0;
     this.lastMediaResetAt = 0;
     this.publishedWindow = null;
+    this.vodDurationSeconds = 0;
+    this.isVodPlaylist = false;
     video.removeAttribute("src");
     video.load();
 
@@ -513,6 +597,7 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
         const hls = new Hls({
           enableWorker: false,
           lowLatencyMode: false,
+          ...getHlsFragmentLoaderConfig(),
         });
         this.hls = hls;
         recordPlaybackDebugEvent({
@@ -521,12 +606,26 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
           data: { generation },
         });
         const updatePublishedWindow = (data: {
-          details?: { fragments?: readonly HlsPublishedFragment[] };
+          details?: {
+            fragments?: readonly HlsPublishedFragment[];
+            live?: boolean;
+            totalduration?: number;
+          };
         }) => {
           if (generation !== this.loadGeneration) return;
           const nextWindow = getPublishedHlsWindow(data.details?.fragments);
           if (!nextWindow) return;
           this.publishedWindow = nextWindow;
+          if (data.details?.live === false) {
+            this.isVodPlaylist = true;
+            if (
+              typeof data.details.totalduration === "number" &&
+              Number.isFinite(data.details.totalduration) &&
+              data.details.totalduration > 0
+            ) {
+              this.vodDurationSeconds = data.details.totalduration;
+            }
+          }
           this.onTimeUpdate();
           this.tryResumePlayback();
         };
@@ -822,44 +921,42 @@ export class HlsWebVideoAdapter implements MediaPlayerAdapter {
     }, HLS_RESUME_RETRY_MS);
   }
 
-  private seekableDurationFromRange(
-    video: HlsVideoElement,
-    range: { start: number; end: number } | null,
-  ) {
-    if (range) return Math.max(0, range.end - range.start);
-    if (Number.isFinite(video.duration) && video.duration > 0) {
-      return video.duration;
+  private readRanges(source: TimeRanges): MediaTimeRange[] {
+    const ranges: MediaTimeRange[] = [];
+    for (let index = 0; index < source.length; index += 1) {
+      const start = source.start(index);
+      const end = source.end(index);
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        ranges.push({ start, end });
+      }
     }
-    return 0;
-  }
-
-  private getSeekableRange(video: HlsVideoElement) {
-    if (this.publishedWindow) return this.publishedWindow;
-    if (video.seekable.length === 0) return null;
-    const start = video.seekable.start(0);
-    const end = video.seekable.end(video.seekable.length - 1);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
-      return null;
-    }
-    return { start, end };
+    return ranges;
   }
 
   private setTime(position: number) {
     const video = this.video;
-    if (!video || !Number.isFinite(position)) return;
-    const range = this.getSeekableRange(video);
-    if (!range) return;
-    const duration = this.seekableDurationFromRange(video, range);
-    if (position < 0 || position > duration) {
+    if (!video || !Number.isFinite(position)) return false;
+    const snapshot = this.snapshot();
+    const inPublishedRange = snapshot.seekableRanges.some(
+      ({ start, end }) => position >= start && position <= end,
+    );
+    if (
+      position < 0 ||
+      position > snapshot.duration ||
+      (!inPublishedRange && !this.isVodPlaylist)
+    ) {
       this.emit({
         type: "seek_rejected",
         position,
-        start: 0,
-        end: duration,
+        start: snapshot.seekableRanges[0]?.start ?? 0,
+        end:
+          snapshot.seekableRanges[snapshot.seekableRanges.length - 1]?.end ??
+          snapshot.duration,
       });
-      return;
+      return false;
     }
-    video.currentTime = range.start + position;
+    video.currentTime = position + this.timeOriginSeconds;
+    return true;
   }
 
   private emit(event: MediaPlayerEvent) {

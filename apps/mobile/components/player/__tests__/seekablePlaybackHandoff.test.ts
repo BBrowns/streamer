@@ -53,6 +53,13 @@ function createPlayer({
   };
 }
 
+function commitPosition(player: SeekableHandoffVideoPlayer) {
+  return async (position: number) => {
+    player.currentTime = position;
+    return position;
+  };
+}
+
 describe("replaceWithSeekableSource", () => {
   const source = "http://bridge.local/jobs/job-1/stream?token=runtime-only";
 
@@ -66,6 +73,7 @@ describe("replaceWithSeekableSource", () => {
       resumeAt: 96.5,
       shouldResume: true,
       signal: controller.signal,
+      commitSeek: commitPosition(player),
     });
 
     expect(player.replaceAsync).toHaveBeenCalledWith(source);
@@ -90,6 +98,7 @@ describe("replaceWithSeekableSource", () => {
       resumeAt: 42,
       shouldResume: false,
       signal: controller.signal,
+      commitSeek: commitPosition(player),
     });
 
     emit("statusChange", { status: "readyToPlay" });
@@ -115,6 +124,7 @@ describe("replaceWithSeekableSource", () => {
       resumeAt: 52,
       shouldResume: true,
       signal: controller.signal,
+      commitSeek: commitPosition(player),
     });
     emit("sourceLoad");
     await handoff;
@@ -137,6 +147,7 @@ describe("replaceWithSeekableSource", () => {
       resumeAt: 24,
       shouldResume: true,
       signal: controller.signal,
+      commitSeek: commitPosition(player),
     });
 
     expect(player.currentTime).toBe(24);
@@ -153,6 +164,7 @@ describe("replaceWithSeekableSource", () => {
       resumeAt: 24,
       shouldResume: true,
       signal: controller.signal,
+      commitSeek: commitPosition(player),
     });
 
     await Promise.resolve();
@@ -175,6 +187,7 @@ describe("replaceWithSeekableSource", () => {
       resumeAt: 66,
       shouldResume: true,
       signal: controller.signal,
+      commitSeek: commitPosition(player),
     });
 
     controller.abort();
@@ -197,6 +210,7 @@ describe("replaceWithSeekableSource", () => {
         shouldResume: true,
         signal: controller.signal,
         timeoutMs: 20,
+        commitSeek: commitPosition(player),
       });
       const rejection = expect(handoff).rejects.toThrow(
         "Seekable playback handoff timed out.",
@@ -229,6 +243,7 @@ describe("replaceWithSeekableSource", () => {
         resumeAt: 77,
         shouldResume: true,
         signal: controller.signal,
+        commitSeek: commitPosition(player),
       }),
     ).rejects.toBe(failure);
 

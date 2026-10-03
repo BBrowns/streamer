@@ -1,4 +1,8 @@
-import type { MediaPlayerCapabilities } from "../MediaPlayerAdapter";
+import type {
+  MediaPlayerCapabilities,
+  MediaPlayerSnapshot,
+  MediaTimeRange,
+} from "../MediaPlayerAdapter";
 import {
   ExpoVideoAdapterBase,
   type ExpoVideoPlayerLike,
@@ -6,10 +10,20 @@ import {
 
 export interface WebVideoElement {
   readyState?: number;
+  currentTime?: number;
+  duration?: number;
+  buffered?: WebTimeRangeList;
+  seekable?: WebTimeRangeList;
   requestFullscreen?: () => Promise<void> | void;
   requestPictureInPicture?: () => Promise<unknown> | unknown;
   webkitSupportsPresentationMode?: (mode: string) => boolean;
   webkitSetPresentationMode?: (mode: string) => void;
+}
+
+export interface WebTimeRangeList {
+  length: number;
+  start(index: number): number;
+  end(index: number): number;
 }
 
 export interface WebMediaDocument {
@@ -24,13 +38,82 @@ export interface WebVideoAdapterOptions {
   document?: WebMediaDocument;
 }
 
+function readElementRanges(
+  ranges: WebTimeRangeList | undefined,
+  timeOriginSeconds: number,
+): MediaTimeRange[] | undefined {
+  if (!ranges || !Number.isFinite(ranges.length)) return undefined;
+  const rangeCount = Math.max(0, Math.min(1_000, Math.floor(ranges.length)));
+  const result: MediaTimeRange[] = [];
+  for (let index = 0; index < rangeCount; index += 1) {
+    try {
+      const rawStart = ranges.start(index);
+      const rawEnd = ranges.end(index);
+      if (
+        !Number.isFinite(rawStart) ||
+        !Number.isFinite(rawEnd) ||
+        rawEnd <= rawStart
+      )
+        continue;
+      const start = Math.max(0, rawStart - timeOriginSeconds);
+      const end = Math.max(0, rawEnd - timeOriginSeconds);
+      if (end > start) result.push({ start, end });
+    } catch {
+      // A media range can disappear between reading its length and its edges.
+    }
+  }
+  return result;
+}
+
 export class WebVideoAdapter extends ExpoVideoAdapterBase {
   constructor(
     player: ExpoVideoPlayerLike,
     protected readonly options: WebVideoAdapterOptions = {},
     target: "web" | "electron" = "web",
+    timeOriginSeconds = 0,
   ) {
-    super(player, target);
+    super(player, target, timeOriginSeconds);
+  }
+
+  override snapshot(): MediaPlayerSnapshot {
+    const snapshot = super.snapshot();
+    const video = this.options.resolveVideoElement?.();
+    if (!video) return snapshot;
+
+    const timeOriginSeconds = snapshot.timeOriginSeconds;
+    const elementDuration = video.duration;
+    const duration =
+      typeof elementDuration === "number" &&
+      Number.isFinite(elementDuration) &&
+      elementDuration > 0
+        ? Math.max(0, elementDuration - timeOriginSeconds)
+        : snapshot.duration;
+    const elementCurrentTime = video.currentTime;
+    const currentTime =
+      typeof elementCurrentTime === "number" &&
+      Number.isFinite(elementCurrentTime)
+        ? Math.max(0, elementCurrentTime - timeOriginSeconds)
+        : snapshot.currentTime;
+    const bufferedRanges =
+      readElementRanges(video.buffered, timeOriginSeconds) ??
+      snapshot.bufferedRanges;
+    const seekableRanges =
+      readElementRanges(video.seekable, timeOriginSeconds) ??
+      snapshot.seekableRanges;
+    const bufferedPosition = bufferedRanges.reduce(
+      (latest, range) => Math.max(latest, range.end),
+      0,
+    );
+
+    return {
+      ...snapshot,
+      currentTime,
+      duration,
+      bufferedPosition,
+      bufferedRanges,
+      seekableRanges,
+      canSeek: duration > 0 && seekableRanges.length > 0,
+    };
   }
 
   protected platformCapabilities(): Omit<

@@ -4,12 +4,14 @@ import type {
   MediaPlayerCapabilities,
   MediaPlayerEvent,
   MediaPlayerEventListener,
+  MediaSeekOptions,
   MediaPlayerSnapshot,
   MediaPlayerTarget,
   MediaPlayerThumbnail,
   MediaThumbnailOptions,
   NormalizedMediaTrack,
 } from "../MediaPlayerAdapter";
+import { confirmMediaSeek } from "../ConfirmedMediaSeek";
 
 export interface ExpoMediaTrackLike {
   id?: string | null;
@@ -20,11 +22,18 @@ export interface ExpoMediaTrackLike {
   autoSelect?: boolean;
 }
 
+export interface ExpoMediaTimeRangeLike {
+  start?: number;
+  end?: number;
+}
+
 export interface ExpoVideoPlayerLike {
   status?: string;
   currentTime: number;
   duration?: number;
   bufferedPosition?: number;
+  bufferedRanges?: ExpoMediaTimeRangeLike[];
+  seekableTimeRanges?: ExpoMediaTimeRangeLike[];
   playing?: boolean;
   muted?: boolean;
   volume?: number;
@@ -125,10 +134,19 @@ function toMediaEventError(payload?: Record<string, unknown>) {
 }
 
 export abstract class ExpoVideoAdapterBase implements MediaPlayerAdapter {
+  private seekRevision = 0;
+  private readonly timeOriginSeconds: number;
+
   protected constructor(
     protected readonly player: ExpoVideoPlayerLike,
     private readonly target: MediaPlayerTarget,
-  ) {}
+    timeOriginSeconds = 0,
+  ) {
+    this.timeOriginSeconds =
+      Number.isFinite(timeOriginSeconds) && timeOriginSeconds > 0
+        ? timeOriginSeconds
+        : 0;
+  }
 
   protected abstract platformCapabilities(): Omit<
     MediaPlayerCapabilities,
@@ -145,16 +163,58 @@ export abstract class ExpoVideoAdapterBase implements MediaPlayerAdapter {
 
   snapshot(): MediaPlayerSnapshot {
     const duration = normalizedNumber(this.player.duration);
+    const toTitleTime = (value: unknown) =>
+      Math.max(0, normalizedNumber(value) - this.timeOriginSeconds);
+    const currentTime = toTitleTime(this.player.currentTime);
+    const rawBufferedPosition = normalizedNumber(this.player.bufferedPosition);
+    const bufferedPosition =
+      rawBufferedPosition > 0
+        ? toTitleTime(rawBufferedPosition)
+        : rawBufferedPosition;
+    const normalizeRanges = (value: ExpoMediaTimeRangeLike[] | undefined) =>
+      (value || []).flatMap(({ start, end }) =>
+        typeof start === "number" &&
+        Number.isFinite(start) &&
+        typeof end === "number" &&
+        Number.isFinite(end) &&
+        end > start
+          ? [
+              {
+                start: Math.max(0, start - this.timeOriginSeconds),
+                end: Math.max(0, end - this.timeOriginSeconds),
+              },
+            ].filter((range) => range.end > range.start)
+          : [],
+      );
+    const reportedBuffer = normalizeRanges(this.player.bufferedRanges);
+    const bufferedRanges =
+      this.player.bufferedRanges !== undefined
+        ? reportedBuffer
+        : bufferedPosition > currentTime
+          ? [{ start: currentTime, end: bufferedPosition }]
+          : [];
+    const reportedSeekableRanges = normalizeRanges(
+      this.player.seekableTimeRanges,
+    );
+    const seekableRanges =
+      this.player.seekableTimeRanges !== undefined
+        ? reportedSeekableRanges
+        : duration > 0
+          ? [{ start: 0, end: duration }]
+          : [];
     return {
       status: normalizeStatus(this.player.status),
-      currentTime: normalizedNumber(this.player.currentTime),
+      currentTime,
+      timeOriginSeconds: this.timeOriginSeconds,
       duration,
-      bufferedPosition: normalizedNumber(this.player.bufferedPosition),
+      bufferedPosition,
+      bufferedRanges,
+      seekableRanges,
       playing: Boolean(this.player.playing),
       muted: Boolean(this.player.muted),
       volume: Math.min(1, Math.max(0, normalizedNumber(this.player.volume, 1))),
       playbackRate: normalizedNumber(this.player.playbackRate, 1),
-      canSeek: duration > 0,
+      canSeek: duration > 0 && seekableRanges.length > 0,
     };
   }
 
@@ -189,11 +249,16 @@ export abstract class ExpoVideoAdapterBase implements MediaPlayerAdapter {
     }));
     add("timeUpdate", (payload) => ({
       type: "time_updated",
-      currentTime: normalizedNumber(
-        payload?.currentTime,
-        this.snapshot().currentTime,
-      ),
-      bufferedPosition: this.snapshot().bufferedPosition,
+      currentTime:
+        normalizedNumber(
+          payload?.currentTime,
+          this.snapshot().currentTime + this.timeOriginSeconds,
+        ) - this.timeOriginSeconds,
+      bufferedPosition:
+        typeof payload?.bufferedPosition === "number" &&
+        Number.isFinite(payload.bufferedPosition)
+          ? Math.max(0, payload.bufferedPosition - this.timeOriginSeconds)
+          : this.snapshot().bufferedPosition,
     }));
     add("sourceLoad", () => ({ type: "source_loaded" }));
     for (const event of [
@@ -229,19 +294,35 @@ export abstract class ExpoVideoAdapterBase implements MediaPlayerAdapter {
     this.player.pause();
   }
 
-  seekBy(seconds: number) {
-    if (!Number.isFinite(seconds)) return;
-    this.player.seekBy(seconds);
+  seekBy(seconds: number, options?: MediaSeekOptions) {
+    if (!Number.isFinite(seconds)) {
+      return Promise.reject(new RangeError("Seek offset must be finite."));
+    }
+    return this.commitSeek(this.snapshot().currentTime + seconds, options);
   }
 
-  previewSeek(position: number) {
-    if (!Number.isFinite(position) || position < 0) return;
-    this.player.currentTime = position;
-  }
+  previewSeek(_position: number) {}
 
-  commitSeek(position: number) {
-    if (!Number.isFinite(position) || position < 0) return;
-    this.player.currentTime = position;
+  commitSeek(position: number, options?: MediaSeekOptions) {
+    const revision = ++this.seekRevision;
+    return confirmMediaSeek({
+      target: position,
+      signal: options?.signal,
+      timeoutMs: options?.timeoutMs,
+      request: () => {
+        this.player.currentTime = position + this.timeOriginSeconds;
+      },
+      observe: () => {
+        const snapshot = this.snapshot();
+        return {
+          currentTime: snapshot.currentTime,
+          duration: snapshot.duration,
+          status: snapshot.status,
+          bufferedRanges: snapshot.bufferedRanges,
+        };
+      },
+      isCurrent: () => revision === this.seekRevision,
+    });
   }
 
   beginScrubbing() {}
@@ -252,6 +333,7 @@ export abstract class ExpoVideoAdapterBase implements MediaPlayerAdapter {
   }
 
   replaceSource(source: string) {
+    this.seekRevision += 1;
     return this.player.replaceAsync(source);
   }
 

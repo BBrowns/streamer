@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
     color: playerChrome.textMuted,
   },
   activeText: { color: playerChrome.text },
-  scroll: { maxHeight: 540 },
+  scroll: { maxHeight: 580 },
   scrollContent: {
     padding: uiSpacing.lg,
     paddingBottom: uiSpacing.xxl,

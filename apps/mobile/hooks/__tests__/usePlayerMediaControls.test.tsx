@@ -8,6 +8,9 @@ function makeMediaAdapter() {
       currentTime: 30,
       duration: 120,
       bufferedPosition: 45,
+      bufferedRanges: [{ start: 30, end: 45 }],
+      seekableRanges: [{ start: 0, end: 120 }],
+      seekableOnRequest: false,
       playing: true,
       muted: false,
       volume: 1,
@@ -18,7 +21,7 @@ function makeMediaAdapter() {
     pause: jest.fn(),
     seekBy: jest.fn(),
     previewSeek: jest.fn(),
-    commitSeek: jest.fn(),
+    commitSeek: jest.fn(async (position: number) => position),
     beginScrubbing: jest.fn(),
     endScrubbing: jest.fn(),
     replaceSource: jest.fn(),
@@ -42,8 +45,10 @@ async function setup(overrides: Record<string, unknown> = {}) {
   const options = {
     player,
     mediaAdapter,
+    commitSeek: mediaAdapter.commitSeek,
     engine: null,
     canSeek: true,
+    durationSeconds: 120,
     markIntentionalSeek: jest.fn(),
     recordDiagnostic: jest.fn(),
     recordExplicitSeek: jest.fn(),
@@ -65,11 +70,61 @@ describe("usePlayerMediaControls", () => {
     expect(options.setShowNextEpisodeOverlay).toHaveBeenCalledWith(false);
     expect(options.markIntentionalSeek).toHaveBeenCalledTimes(1);
     expect(options.recordExplicitSeek).toHaveBeenCalledWith(20);
-    expect(mediaAdapter.seekBy).toHaveBeenCalledWith(-10);
+    expect(mediaAdapter.commitSeek).toHaveBeenCalledWith(20);
     expect(options.recordDiagnostic.mock.calls).toEqual([
       [{ type: "seek", outcome: "requested" }],
       [{ type: "seek", outcome: "accepted" }],
     ]);
+  });
+
+  it("rejects direct seek controls outside source-published ranges before recording intent", async () => {
+    const { result, mediaAdapter, options } = await setup();
+    mediaAdapter.snapshot.mockReturnValue({
+      status: "ready",
+      currentTime: 30,
+      duration: 120,
+      bufferedPosition: 45,
+      bufferedRanges: [{ start: 30, end: 45 }],
+      seekableRanges: [{ start: 0, end: 35 }],
+      seekableOnRequest: false,
+      playing: true,
+      muted: false,
+      volume: 1,
+      playbackRate: 1,
+      canSeek: true,
+    });
+
+    await act(async () => {
+      await result.current.handleSeekBy(10);
+      await result.current.handleSeekTo(60);
+      await result.current.handleSeekPercent(90);
+    });
+
+    expect(mediaAdapter.commitSeek).not.toHaveBeenCalled();
+    expect(options.markIntentionalSeek).not.toHaveBeenCalled();
+    expect(options.recordDiagnostic).not.toHaveBeenCalled();
+  });
+
+  it("permits full-title direct seeks when the source generates targets on demand", async () => {
+    const { result, mediaAdapter } = await setup();
+    mediaAdapter.snapshot.mockReturnValue({
+      status: "ready",
+      currentTime: 30,
+      duration: 120,
+      bufferedPosition: 45,
+      bufferedRanges: [{ start: 30, end: 45 }],
+      seekableRanges: [{ start: 0, end: 35 }],
+      seekableOnRequest: true,
+      playing: true,
+      muted: false,
+      volume: 1,
+      playbackRate: 1,
+      canSeek: true,
+    });
+
+    await act(async () => result.current.handleSeekTo(100));
+
+    expect(mediaAdapter.commitSeek).toHaveBeenCalledWith(100);
   });
 
   it("keeps scrubbing state transitions and adapter lifecycle together", async () => {
@@ -90,7 +145,7 @@ describe("usePlayerMediaControls", () => {
     );
 
     expect(mediaAdapter.beginScrubbing).toHaveBeenCalledTimes(1);
-    expect(mediaAdapter.previewSeek).toHaveBeenCalledWith(42);
+    expect(mediaAdapter.previewSeek).not.toHaveBeenCalled();
     expect(mediaAdapter.endScrubbing).toHaveBeenCalledWith({
       shouldResume: true,
     });
@@ -119,7 +174,7 @@ describe("usePlayerMediaControls", () => {
       }),
     );
 
-    expect(mediaAdapter.commitSeek).toHaveBeenCalledWith(30);
+    expect(mediaAdapter.commitSeek).not.toHaveBeenCalled();
     expect(mediaAdapter.endScrubbing).toHaveBeenCalledWith({
       shouldResume: true,
     });

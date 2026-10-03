@@ -1,3 +1,5 @@
+import type { MediaSeekOptions } from "../../services/playback/MediaPlayerAdapter";
+
 export interface SeekableHandoffVideoPlayer {
   status?: string;
   currentTime: number;
@@ -38,6 +40,7 @@ export async function replaceWithSeekableSource({
   shouldResume,
   signal,
   timeoutMs = SEEKABLE_HANDOFF_READY_TIMEOUT_MS,
+  commitSeek,
 }: {
   player: SeekableHandoffVideoPlayer;
   source: string;
@@ -45,6 +48,7 @@ export async function replaceWithSeekableSource({
   shouldResume: boolean;
   signal: AbortSignal;
   timeoutMs?: number;
+  commitSeek: (position: number, options?: MediaSeekOptions) => Promise<number>;
 }) {
   if (signal.aborted) throw createAbortError();
 
@@ -124,9 +128,8 @@ export async function replaceWithSeekableSource({
     }
     if (signal.aborted) throw createAbortError();
 
-    if (Number.isFinite(resumeAt) && resumeAt > 0) {
-      player.currentTime = resumeAt;
-    }
+    const actualPosition = await commitSeek(resumeAt, { signal, timeoutMs });
+    if (signal.aborted) throw createAbortError();
     if (typeof playbackRate === "number" && Number.isFinite(playbackRate)) {
       player.playbackRate = playbackRate;
     }
@@ -136,6 +139,7 @@ export async function replaceWithSeekableSource({
     }
     if (shouldResume) player.play();
     else player.pause();
+    return actualPosition;
   } finally {
     sourceLoadSubscription?.remove?.();
     statusSubscription?.remove?.();

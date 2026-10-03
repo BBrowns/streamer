@@ -48,19 +48,21 @@ function installCurrentOwnership() {
 
 function createOptions() {
   const player = {
-    currentTime: 42,
+    currentTime: 142,
     playing: true,
     play: jest.fn(),
     pause: jest.fn(),
     replaceAsync: jest.fn(),
   };
   const getSeekablePlaybackHandoff = jest.fn();
+  const getCurrentTime = jest.fn(() => 42);
   const controllerRef = { current: null as AbortController | null };
   const handoffInFlightRef = { current: false };
   const handoffShouldResumeRef = { current: null as boolean | null };
   const pausedAfterHandoffRef = { current: false };
   const options = {
     player,
+    getCurrentTime,
     playbackUri: "runtime-source",
     engine: { getSeekablePlaybackHandoff } as any,
     isProgressiveRemuxPlayback: true,
@@ -94,7 +96,7 @@ function createOptions() {
 describe("useSeekableCacheHandoff", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedReplaceWithSeekableSource.mockResolvedValue(undefined);
+    mockedReplaceWithSeekableSource.mockResolvedValue(42);
     installCurrentOwnership();
   });
 

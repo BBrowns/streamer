@@ -448,13 +448,59 @@ remux allowance until metadata makes the container decision authoritative.
 When that inspection proves a requested `range-http` file requires an MKV
 remux, primary Play uses negotiated `hls` when the target advertises
 `hls-segments`; otherwise it uses `progressive-fmp4`. Downloads, cast, and
-explicit seekable handoffs continue to use `seekable-cache`. HLS publishes an
-event playlist, init segment, and media fragments as soon as the first fragment
-is ready, so the timeline can seek inside the published window while the
-episode continues to materialize. A seek beyond that window is rejected
-without moving the playhead. The client accepts and adopts only these exact
-delivery upgrades, including the bridge's authoritative seek capability. Any
-other delivery drift or downgrade remains a bridge contract failure.
+explicit seekable handoffs continue to use `seekable-cache`. The original HLS
+mode publishes an event playlist as fragments arrive and supports seeking
+within its rolling published window.
+
+Random HLS seeking is a separate opt-in capability (`hls-random-seek`) and an
+explicit `seekMode: "random"` on job creation. A provider's runtime is sent as
+`expectedDurationSeconds` only as a provisional UI hint. The bridge probes the
+selected file's duration and verifies a far seek before it marks that job's
+random seek mode ready. Capability negotiation means the bridge can attempt
+random seeking; the job's status means that this particular source passed its
+probe. A failed probe keeps the existing windowed HLS path available.
+
+The process-wide FFprobe pool runs at most two probes at once and keeps at most
+16 requests waiting. Duration, random-seek, and track-probe deadlines start when
+the request enters this pool, so time spent waiting uses the same budget as
+FFprobe execution. Cancelling a queued probe removes it immediately. An active
+cancel or timeout rejects the request immediately and sends SIGTERM to its
+FFprobe child; if the process has not exited after 500 ms, the bridge escalates
+to SIGKILL. The process slot remains occupied until the child's `close` event,
+so a signalled but still-live FFprobe cannot make the pool exceed its process
+limit. A full queue rejects new probe work instead of retaining unbounded
+gateway-job requests. If random HLS preparation cannot obtain a probe slot, the
+gateway keeps its existing windowed HLS fallback available.
+
+After the selected-file duration is known, the bridge publishes one full-title
+static VOD playlist. That playlist and its segment identities do not change
+for the life of the job. It uses a two-second logical segment grid; each
+eight-second chunk is generated only when requested. FFmpeg seeks the
+range-readable input to the chunk, then encodes aligned video keyframes and AAC
+audio into fMP4. This lets distant chunks be generated without downloading or
+remuxing every earlier minute. The provider hint never sets duration, segment
+count, segment boundaries, or resume limits. A hint that differs from the
+selected file therefore cannot shift already-published segment identities.
+
+Player time and seekable/buffered ranges use seconds from the title start.
+Player adapters convert to/from any media timestamp origin. Seekable ranges may
+include time whose segments have not been generated yet; buffered ranges report
+only ranges the active player has actually buffered and can contain gaps. A
+single buffered-edge value must not be treated as proof that all earlier time
+is buffered. Dragging changes only the preview. Releasing, resuming, seeking by
+ten seconds, percentage seeks, remote-control seeks, and source/audio changes
+all use the same confirmed-seek operation. The operation waits for the active
+player to reach and buffer the requested time, and only its actual reached
+position is accepted as watch progress. A native seek-discontinuity event on
+its own is not confirmation that playback is available at that position.
+
+Shared chunk renders are single-flight. Cancelling one HTTP request releases
+only that request's interest; the render stops when no request still needs it,
+or when the gateway job is cancelled. Render concurrency, queued requests,
+temporary chunk output, cached output, and render time are bounded across jobs.
+The negotiated capability and job status fields are returned only to clients
+that request `hls-random-seek`, so older strict-schema clients keep the existing
+bridge response shape.
 
 Automatic Play is limited to five unique source attempts across initial resolution,
 post-ready fallback, and the one partial-discovery replan. That replan inherits the
@@ -525,7 +571,8 @@ the shared lifecycle understandable and testable.
 Gateway track discovery is bound to the exact selected file of an active
 gateway job. The protected `GET /api/gateway/jobs/:id/tracks` response contains
 normalized, URL-free audio and subtitle descriptors. Concurrent probes are
-coalesced behind bounded concurrency, output, timeout and cache limits.
+coalesced behind the process-wide two-active/16-waiting FFprobe pool and bounded
+output, request-inclusive timeout and cache limits.
 
 The gateway exposes catalog-approved subtitle documents through
 `GET /api/gateway/jobs/:id/subtitles/:identity`. The identity is meaningful
@@ -591,5 +638,7 @@ Every progress record carries `durationSource`: `metadata`, `media`, `unknown`,
 or migrated `legacy`. A progressive fMP4 player's temporary, growing duration
 is never stored as a title duration. Catalog runtime is used as `metadata`
 where available; otherwise the position is stored with `duration: 0` and
-`unknown`. Server precedence prevents lower-trust updates from replacing a
-known duration and clamps positions only when a trusted duration exists.
+`unknown`. For random HLS, the selected file's probed duration is `media` and
+replaces the provider hint for the active title timeline. Server precedence
+prevents lower-trust updates from replacing a known duration and clamps
+positions only when a trusted duration exists.

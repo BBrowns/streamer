@@ -35,6 +35,7 @@ import {
   SourcePreparer,
   isSourcePreparationError,
   type PreparedSource,
+  type PreparedMediaTimeline,
   type SourcePreparationAdapter,
 } from "../sourcePreparation";
 import { getUnsupportedWebCodecReason } from "../streamEngine/codecSupport";
@@ -108,6 +109,7 @@ export interface ActivePlaybackSourceRuntime {
   route?: PlaybackRoute;
   bridgeJobId?: string;
   runtime?: IStreamEngine;
+  timeline?: PreparedMediaTimeline;
 }
 
 export function getActivePlaybackSourceRuntime(
@@ -141,6 +143,7 @@ export function getActivePlaybackSourceRuntime(
       : {}),
     ...(source.bridgeJobId ? { bridgeJobId: source.bridgeJobId } : {}),
     ...(source.runtime ? { runtime: source.runtime } : {}),
+    ...(source.timeline ? { timeline: { ...source.timeline } } : {}),
   };
 }
 
@@ -1041,6 +1044,7 @@ async function attemptCandidate(
   hasFallback: boolean,
   action: SessionResolutionAction,
   resolutionGeneration: number,
+  durationHintSeconds?: number,
 ): Promise<PlaybackSessionInternalResolutionResult> {
   const store = usePlaybackSessionStore.getState();
   const session = getSession(sessionId);
@@ -1253,6 +1257,7 @@ async function attemptCandidate(
       ? sourcePreparer.prepare({
           action,
           audioLanguage,
+          durationHintSeconds,
           attemptId: attempt.id,
           requestId: attempt.id,
           candidate: preparationCandidate,
@@ -1263,6 +1268,7 @@ async function attemptCandidate(
       : sourcePreparer.prepare({
           action,
           audioLanguage,
+          durationHintSeconds,
           attemptId: attempt.id,
           requestId: attempt.id,
           candidate: preparationCandidate,
@@ -1474,6 +1480,7 @@ async function resolveCandidateChain(
   resolutionGeneration: number,
   startCandidateId?: string,
   initialFallbackReason?: string,
+  durationHintSeconds?: number,
 ): Promise<PlaybackSessionInternalResolutionResult> {
   const store = usePlaybackSessionStore.getState();
   const session = getSession(sessionId);
@@ -1622,6 +1629,7 @@ async function resolveCandidateChain(
       hasFallback,
       action,
       resolutionGeneration,
+      durationHintSeconds,
     );
     if (result.ok) {
       return {
@@ -1678,6 +1686,7 @@ function runSessionResolutionSingleFlight(
 export function resolvePlaybackSession(
   sessionId: string,
   startCandidateId?: string,
+  durationHintSeconds?: number,
 ): Promise<PlaybackSessionResolutionResult> {
   return runSessionResolutionSingleFlight(sessionId, (resolutionGeneration) =>
     resolveCandidateChain(
@@ -1685,6 +1694,8 @@ export function resolvePlaybackSession(
       "play",
       resolutionGeneration,
       startCandidateId,
+      undefined,
+      durationHintSeconds,
     ),
   );
 }

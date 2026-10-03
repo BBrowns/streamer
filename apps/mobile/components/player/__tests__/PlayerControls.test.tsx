@@ -65,6 +65,7 @@ describe("PlayerControls", () => {
   it("exposes play/pause and skip controls", async () => {
     const player = createPlayer();
     const onPlayPause = jest.fn();
+    const onSeekBy = jest.fn();
     const screen = await renderControls(
       <PlayerControls
         player={player}
@@ -73,6 +74,7 @@ describe("PlayerControls", () => {
         isVisible
         isPlaying={false}
         onPlayPause={onPlayPause}
+        onSeekBy={onSeekBy}
       />,
     );
 
@@ -81,12 +83,13 @@ describe("PlayerControls", () => {
     await fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
 
     expect(onPlayPause).toHaveBeenCalledTimes(1);
-    expect(player.seekBy).toHaveBeenCalledWith(-10);
-    expect(player.seekBy).toHaveBeenCalledWith(10);
+    expect(onSeekBy).toHaveBeenCalledWith(-10);
+    expect(onSeekBy).toHaveBeenCalledWith(10);
   });
 
   it("supports accessibility seek actions on the progress control", async () => {
     const player = createPlayer();
+    const onSeekBy = jest.fn();
     const screen = await renderControls(
       <PlayerControls
         player={player}
@@ -95,6 +98,7 @@ describe("PlayerControls", () => {
         isVisible
         isPlaying
         onPlayPause={jest.fn()}
+        onSeekBy={onSeekBy}
       />,
     );
 
@@ -107,8 +111,8 @@ describe("PlayerControls", () => {
       nativeEvent: { actionName: "decrement" },
     });
 
-    expect(player.seekBy).toHaveBeenCalledWith(10);
-    expect(player.seekBy).toHaveBeenCalledWith(-10);
+    expect(onSeekBy).toHaveBeenCalledWith(10);
+    expect(onSeekBy).toHaveBeenCalledWith(-10);
   });
 
   it("supports web keyboard controls on the progress slider", async () => {
@@ -287,6 +291,7 @@ describe("PlayerControls", () => {
 
   it("reports background seek preparation and enables controls after handoff", async () => {
     const player = createPlayer();
+    const onSeekBy = jest.fn();
     const screen = await renderControls(
       <PlayerControls
         player={player}
@@ -295,6 +300,7 @@ describe("PlayerControls", () => {
         isVisible
         isPlaying
         onPlayPause={jest.fn()}
+        onSeekBy={onSeekBy}
         capabilities={{
           canSeek: false,
           isRemux: true,
@@ -320,13 +326,14 @@ describe("PlayerControls", () => {
           isVisible
           isPlaying
           onPlayPause={jest.fn()}
+          onSeekBy={onSeekBy}
           capabilities={{ canSeek: true, isRemux: true }}
         />
       </GestureHandlerRootView>,
     );
 
     await fireEvent.press(screen.getByLabelText("Seek forward 10 seconds"));
-    expect(player.seekBy).toHaveBeenCalledWith(10);
+    expect(onSeekBy).toHaveBeenCalledWith(10);
     expect(screen.queryByText("Preparing compatible stream")).toBeNull();
   });
 
@@ -352,6 +359,58 @@ describe("PlayerControls", () => {
     expect(onSeekBy).toHaveBeenCalledWith(-10);
     expect(onSeekBy).toHaveBeenCalledWith(10);
     expect(player.seekBy).not.toHaveBeenCalled();
+  });
+
+  it("disables a step seek when its target is outside the published range", async () => {
+    const onSeekBy = jest.fn();
+    const screen = await renderControls(
+      <PlayerControls
+        player={createPlayer()}
+        currentTime={95}
+        duration={120}
+        seekableRanges={[{ start: 85, end: 100 }]}
+        seekableOnRequest={false}
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        onSeekBy={onSeekBy}
+        capabilities={{ canSeek: true }}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText("Seek back 10 seconds").props.accessibilityState
+        .disabled,
+    ).toBe(false);
+    expect(
+      screen.getByLabelText("Seek forward unavailable").props.accessibilityState
+        .disabled,
+    ).toBe(true);
+    await fireEvent.press(screen.getByLabelText("Seek forward unavailable"));
+    expect(onSeekBy).not.toHaveBeenCalled();
+  });
+
+  it("keeps step seeks enabled when the source can generate missing ranges on demand", async () => {
+    const onSeekBy = jest.fn();
+    const screen = await renderControls(
+      <PlayerControls
+        player={createPlayer()}
+        currentTime={95}
+        duration={120}
+        seekableRanges={[{ start: 85, end: 100 }]}
+        seekableOnRequest
+        isVisible
+        isPlaying
+        onPlayPause={jest.fn()}
+        onSeekBy={onSeekBy}
+        capabilities={{ canSeek: true }}
+      />,
+    );
+
+    const forward = screen.getByLabelText("Seek forward 10 seconds");
+    expect(forward.props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(forward);
+    expect(onSeekBy).toHaveBeenCalledWith(10);
   });
 
   it("renders desktop playback actions when callbacks are available", async () => {

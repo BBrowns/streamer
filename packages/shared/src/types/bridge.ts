@@ -8,6 +8,9 @@ export const BRIDGE_V1_MAX_REQUEST_BYTES = 16 * 1024;
 export type BridgeDelivery =
   "range-http" | "progressive-fmp4" | "seekable-cache" | "hls";
 
+export type BridgeSeekMode = "windowed" | "random";
+export type BridgeRandomSeekStatus = "preparing" | "ready" | "unavailable";
+
 export type BridgeJobState =
   | "preparing"
   | "ready"
@@ -101,6 +104,8 @@ export interface BridgeCapabilitiesV1 {
       sourceKinds: ["magnet"];
       /** Only advertised after audio-preferences feature negotiation. */
       audioPreferences?: true;
+      /** Only advertised after random-HLS feature negotiation. */
+      randomHlsSeeking?: true;
       deliveries: BridgeCapabilityDeliveryV1[];
       cancellation: true;
       tracks: true;
@@ -171,6 +176,10 @@ export interface CreateBridgeJobV1 {
     magnet: string;
   };
   delivery: BridgeDelivery;
+  /** Optional for compatibility with clients predating seek-mode negotiation. */
+  seekMode?: BridgeSeekMode;
+  /** Provider duration is a UI hint only; it never defines segment boundaries. */
+  expectedDurationSeconds?: number;
   selection?: {
     fileIndex?: number;
     title?: string;
@@ -196,6 +205,13 @@ export interface BridgeJobMediaV1 {
   container: "mp4" | "webm" | "mkv" | "unknown";
   remuxed: boolean;
   seek: "immediate" | "preparing" | "unavailable";
+  /** Present only when the client negotiated random HLS seeking. */
+  randomSeek?: {
+    status: BridgeRandomSeekStatus;
+    durationSeconds?: number;
+    /** Provisional provider metadata; never used for segment indexing. */
+    durationHintSeconds?: number;
+  };
   seekableCache?: {
     status: BridgeSeekableCacheStatus;
     unavailableReason?: BridgeSeekableCacheUnavailableReason;

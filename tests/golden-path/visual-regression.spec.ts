@@ -114,6 +114,51 @@ async function openFixturePlayer(
   await expect(page).toHaveURL(/\/player$/);
 }
 
+async function emulatePublishedTimelineRanges(page: Page) {
+  await page.addInitScript(() => {
+    const ranges = (values: Array<[number, number]>) =>
+      ({
+        length: values.length,
+        start(index: number) {
+          if (!values[index]) throw new DOMException("Invalid range index");
+          return values[index][0];
+        },
+        end(index: number) {
+          if (!values[index]) throw new DOMException("Invalid range index");
+          return values[index][1];
+        },
+      }) as TimeRanges;
+    const buffered = Object.getOwnPropertyDescriptor(
+      HTMLMediaElement.prototype,
+      "buffered",
+    );
+    const seekable = Object.getOwnPropertyDescriptor(
+      HTMLMediaElement.prototype,
+      "seekable",
+    );
+    if (!buffered?.get || !seekable?.get) return;
+
+    Object.defineProperty(HTMLMediaElement.prototype, "buffered", {
+      configurable: true,
+      get() {
+        if (this.currentSrc.endsWith("/golden-path.webm")) {
+          return ranges([[0, 300]]);
+        }
+        return buffered.get?.call(this);
+      },
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "seekable", {
+      configurable: true,
+      get() {
+        if (this.currentSrc.endsWith("/golden-path.webm")) {
+          return ranges([[0, 7_200]]);
+        }
+        return seekable.get?.call(this);
+      },
+    });
+  });
+}
+
 for (const scheme of ["dark", "light"] as const) {
   test(`matches the ${scheme} Home, Settings, and Search visual baselines`, async ({
     page,
@@ -290,6 +335,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   skipUnlessRequestedVisualCase(testInfo, ["player"]);
   requireLinuxBaselines(testInfo, "dark");
 
+  await emulatePublishedTimelineRanges(page);
   await openFixturePlayer(page);
   await expect(page.getByTestId("player-screen")).toBeVisible();
   await expect(page.locator("video")).toBeVisible();
@@ -324,10 +370,29 @@ test("matches the dark player, timeline preview, and settings baselines", async 
       video.evaluate((element) => (element as HTMLVideoElement).paused),
     )
     .toBe(true);
+  await expect
+    .poll(() =>
+      video.evaluate((element) => (element as HTMLVideoElement).duration),
+    )
+    .toBe(7_200);
+  await expect(page.getByText("2:00:00", { exact: true })).toBeVisible();
+  await expect(
+    page.locator('[data-testid^="player-timeline-seekable-"]'),
+  ).toHaveCount(1);
+  await expect(
+    page.locator('[data-testid^="player-timeline-buffered"]'),
+  ).toHaveCount(1);
+  const seekableWidth = await page
+    .getByTestId("player-timeline-seekable-0")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  const bufferedWidth = await page
+    .getByTestId("player-timeline-buffered")
+    .evaluate((element) => element.getBoundingClientRect().width);
+  expect(seekableWidth).toBeGreaterThan(bufferedWidth * 10);
 
   // Drive the same seek boundary as a keyboard user. Mutating the DOM video
   // directly can leave expo-video's accepted clock (and therefore the rendered
-  // playhead) on an older value, which made this short fixture nondeterministic
+  // playhead) on an older value, which makes the rendered state nondeterministic
   // across otherwise identical Linux jobs.
   await timeline.focus();
   await timeline.press("Home");
@@ -357,6 +422,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     timelineBox!.y + timelineBox!.height / 2,
   );
   await expect(page.getByTestId("player-timeline-preview")).toBeVisible();
+  await expect(page.getByText(/^1:16:\d{2}$/).first()).toBeVisible();
   await settleUnfocusedPlayerFrame();
   const previewSnapshotName =
     testInfo.project.name === "phone-web"
@@ -372,6 +438,7 @@ test("matches the dark player, timeline preview, and settings baselines", async 
       threshold: 0.1,
     },
   );
+  await attachGauntletVisualCase(page, testInfo, "player", "dark");
 
   await page.getByRole("button", { name: "Playback settings" }).click();
   await expect(page.getByTestId("player-settings-sheet")).toBeVisible();
@@ -379,6 +446,19 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   await expect(
     page.getByRole("button", { name: "Reset subtitle style" }),
   ).toBeVisible();
+  const settingsSheet = page.getByTestId("player-settings-sheet");
+  const settingsBounds = await settingsSheet.boundingBox();
+  expect(settingsBounds).not.toBeNull();
+  const opacityOptions = page.locator('[aria-label^="Background opacity:"]');
+  await expect(opacityOptions).toHaveCount(4);
+  for (const option of await opacityOptions.all()) {
+    const optionBounds = await option.boundingBox();
+    expect(optionBounds).not.toBeNull();
+    expect(optionBounds!.y).toBeGreaterThanOrEqual(settingsBounds!.y);
+    expect(optionBounds!.y + optionBounds!.height).toBeLessThanOrEqual(
+      settingsBounds!.y + settingsBounds!.height,
+    );
+  }
   await settleVisualFrame(page);
   await expect(page).toHaveScreenshot(
     testInfo.project.name === "phone-web"
