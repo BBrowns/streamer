@@ -146,6 +146,7 @@ const bridgeJobsCapabilitiesV1Schema = z
   .object({
     sourceKinds: z.tuple([z.literal("magnet")]),
     audioPreferences: z.literal(true).optional(),
+    randomHlsSeeking: z.literal(true).optional(),
     deliveries: z.array(bridgeCapabilityDeliveryV1Schema).min(1).max(4),
     cancellation: z.literal(true),
     tracks: z.literal(true),
@@ -275,9 +276,36 @@ export const bridgeCreateJobV1Schema = z
       })
       .strict(),
     delivery: bridgeDeliverySchema,
+    seekMode: z.enum(["windowed", "random"]).optional(),
+    expectedDurationSeconds: z
+      .number()
+      .finite()
+      .positive()
+      .max(86_400)
+      .optional(),
     selection: bridgeJobSelectionV1Schema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((request, ctx) => {
+    if (request.seekMode === "random" && request.delivery !== "hls") {
+      ctx.addIssue({
+        code: "custom",
+        message: "Random seeking is only valid for HLS delivery.",
+        path: ["seekMode"],
+      });
+    }
+    if (
+      request.expectedDurationSeconds !== undefined &&
+      request.seekMode !== "random"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Provider duration hints may only accompany an explicit random seek request.",
+        path: ["expectedDurationSeconds"],
+      });
+    }
+  });
 
 export const bridgeSeekableCacheStatusSchema = z.enum([
   "not_started",
@@ -301,6 +329,19 @@ export const bridgeJobMediaV1Schema = z
     container: z.enum(["mp4", "webm", "mkv", "unknown"]),
     remuxed: z.boolean(),
     seek: z.enum(["immediate", "preparing", "unavailable"]),
+    randomSeek: z
+      .object({
+        status: z.enum(["preparing", "ready", "unavailable"]),
+        durationSeconds: z.number().finite().positive().max(86_400).optional(),
+        durationHintSeconds: z
+          .number()
+          .finite()
+          .positive()
+          .max(86_400)
+          .optional(),
+      })
+      .strict()
+      .optional(),
     seekableCache: z
       .object({
         status: bridgeSeekableCacheStatusSchema,

@@ -45,6 +45,8 @@ export interface PlaybackOrchestratorInput {
   season?: number;
   episode?: number;
   episodeTitle?: string;
+  /** Provider runtime in seconds; provisional until the selected media is probed. */
+  durationHintSeconds?: number;
 }
 
 export interface PlaybackOrchestratorSuccess {
@@ -608,5 +610,10 @@ function buildMediaInfo(
     background: input.background,
     season: input.season,
     episode: input.episode,
+    ...(Number.isFinite(input.durationHintSeconds) &&
+    (input.durationHintSeconds ?? 0) > 0 &&
+    (input.durationHintSeconds ?? 0) <= 86_400
+      ? { durationHintSeconds: input.durationHintSeconds }
+      : {}),
   };
 }

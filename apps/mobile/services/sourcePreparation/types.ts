@@ -19,6 +19,8 @@ export interface SourcePreparationRequestBase {
   attemptId: string;
   /** Opaque UUID forwarded as the bridge v1 idempotency key. */
   requestId: string;
+  /** Provider runtime in seconds; provisional display metadata only. */
+  durationHintSeconds?: number;
   /** Runtime preference snapshot: undefined is legacy English, null is source default. */
   audioLanguage?: string | null;
   signal?: AbortSignal;
@@ -54,9 +56,18 @@ export interface PreparedSource {
   readonly bridgeJobId?: string;
   /** Transitional engine handle for tracks and player handoff. */
   readonly runtime?: IStreamEngine;
+  readonly timeline?: PreparedMediaTimeline;
   readonly released: boolean;
   /** Idempotently releases every resource owned by this prepared source. */
   release(): Promise<void>;
+}
+
+export interface PreparedMediaTimeline {
+  durationSeconds: number;
+  durationSource: "media" | "metadata";
+  seekableOnRequest: boolean;
+  /** Raw player timestamp that corresponds to title time zero. */
+  timeOriginSeconds: number;
 }
 
 export interface SourcePreparationAdapter {
@@ -215,6 +226,7 @@ export interface PreparedSourceLeaseInput {
   route?: PlaybackRoute;
   bridgeJobId?: string;
   runtime?: IStreamEngine;
+  timeline?: PreparedMediaTimeline;
   release?: () => void | Promise<void>;
 }
 
@@ -226,6 +238,7 @@ export class PreparedSourceLease implements PreparedSource {
   readonly route?: PlaybackRoute;
   readonly bridgeJobId?: string;
   readonly runtime?: IStreamEngine;
+  readonly timeline?: PreparedMediaTimeline;
   private readonly releaseOwnedResources: () => void | Promise<void>;
   private releasePromise: Promise<void> | null = null;
 
@@ -236,6 +249,7 @@ export class PreparedSourceLease implements PreparedSource {
     this.route = input.route;
     this.bridgeJobId = input.bridgeJobId;
     this.runtime = input.runtime;
+    this.timeline = input.timeline ? { ...input.timeline } : undefined;
     this.releaseOwnedResources = input.release ?? (() => undefined);
   }
 

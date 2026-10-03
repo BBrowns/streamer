@@ -13,7 +13,8 @@ export class ElectronVideoAdapter extends WebVideoAdapter {
   constructor(
     player: ExpoVideoPlayerLike,
     options: WebVideoAdapterOptions = {},
+    timeOriginSeconds = 0,
   ) {
-    super(player, options, "electron");
+    super(player, options, "electron", timeOriginSeconds);
   }
 }

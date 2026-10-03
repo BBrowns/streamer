@@ -12,6 +12,7 @@ import {
 import type { SeekablePlaybackHandoff } from "../services/streamEngine/IStreamEngine";
 import type { PlaybackDiagnosticEvent } from "../services/playback/PlaybackDiagnostics";
 import type { PlaybackRuntimeViewEvent } from "../services/playback/PlaybackRuntimeCoordinator";
+import type { MediaSeekOptions } from "../services/playback/MediaPlayerAdapter";
 
 const SEEKABLE_CACHE_POLL_INTERVAL_MS = 2_000;
 
@@ -27,6 +28,8 @@ type SeekableCacheEngine = {
 
 interface UseSeekableCacheHandoffOptions {
   player: SeekableHandoffVideoPlayer | null;
+  commitSeek: (position: number, options?: MediaSeekOptions) => Promise<number>;
+  getCurrentTime: () => number;
   playbackUri: string | null;
   engine: SeekableCacheEngine | null;
   isProgressiveRemuxPlayback: boolean;
@@ -79,6 +82,8 @@ function waitForSeekableCachePoll(signal: AbortSignal) {
  */
 export function useSeekableCacheHandoff({
   player,
+  commitSeek,
+  getCurrentTime,
   playbackUri,
   engine,
   isProgressiveRemuxPlayback,
@@ -216,8 +221,9 @@ export function useSeekableCacheHandoff({
         }
         recordDiagnostic({ type: "seekable_handoff", state: "ready" });
 
-        const resumeAt = Number.isFinite(player.currentTime)
-          ? Math.max(0, player.currentTime)
+        const currentTime = getCurrentTime();
+        const resumeAt = Number.isFinite(currentTime)
+          ? Math.max(0, currentTime)
           : 0;
         const shouldResume = Boolean(player.playing);
         handoffInFlightRef.current = true;
@@ -234,15 +240,16 @@ export function useSeekableCacheHandoff({
         beginProgressSourceReplacement();
         let replacementCompleted = false;
         try {
-          await replaceWithSeekableSource({
+          const actualPosition = await replaceWithSeekableSource({
             player,
             source: handoff.uri,
             resumeAt,
             shouldResume,
             signal: controller.signal,
+            commitSeek,
           });
           if (controller.signal.aborted || !isCurrentAttempt()) return;
-          completeProgressSourceReplacement(resumeAt);
+          completeProgressSourceReplacement(actualPosition);
           replacementCompleted = true;
           dispatchRuntimeViewEvent({
             type: "source_replacement_completed",
@@ -286,6 +293,8 @@ export function useSeekableCacheHandoff({
     activeCast,
     activeGatewayJobId,
     beginProgressSourceReplacement,
+    commitSeek,
+    getCurrentTime,
     completeProgressSourceReplacement,
     controllerRef,
     dispatchRuntimeViewEvent,

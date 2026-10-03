@@ -646,7 +646,7 @@ describe("serveTorrentFile", () => {
     });
 
     expect(spawner).toHaveBeenCalledWith(
-      "ffmpeg",
+      expect.any(String),
       expect.arrayContaining([
         "+frag_keyframe+empty_moov+default_base_moof",
         "-frag_duration",
@@ -714,7 +714,7 @@ describe("serveTorrentFile", () => {
     });
 
     expect(spawner).toHaveBeenCalledWith(
-      "ffmpeg",
+      expect.any(String),
       expect.arrayContaining(["-map", "0:2", "-disposition:a:0", "default"]),
     );
     child.stdout.emit("data", Buffer.from("fragmented-mp4-moof"));

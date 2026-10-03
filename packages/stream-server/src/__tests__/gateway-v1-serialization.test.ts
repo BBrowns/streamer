@@ -56,6 +56,25 @@ describe("bridge v1 gateway serialization", () => {
     expect(response.job.stream?.expiresAt).toMatch(/Z$/);
   });
 
+  it("reports actual random-HLS readiness and duration for an opted-in job", () => {
+    const response = serializeBridgeJobV1(
+      makeJob({
+        mode: "remux",
+        remuxStrategy: "hls",
+        requestedDelivery: "hls",
+        seekMode: "random",
+        randomSeekStatus: "ready",
+        randomSeekDurationSeconds: 7_125.5,
+        state: "ready",
+      }),
+    );
+
+    expect(response.job.media.randomSeek).toEqual({
+      status: "ready",
+      durationSeconds: 7_125.5,
+    });
+  });
+
   it("maps terminal failures to stable redacted codes", () => {
     const response = serializeBridgeJobV1(
       makeJob({

@@ -321,6 +321,95 @@ describe("SourcePreparer route registry", () => {
 });
 
 describe("BridgeV1SourceAdapter", () => {
+  it("lets a new client use random HLS with a feature-capable bridge", async () => {
+    const client = bridgeClient({
+      getCapabilities: jest.fn().mockResolvedValue({
+        capabilities: { jobs: { randomHlsSeeking: true } },
+      }),
+      createJob: jest.fn().mockResolvedValue(
+        readyJobFor("hls", {
+          container: "mp4",
+          remuxed: true,
+          seek: "immediate",
+          randomSeek: { status: "ready", durationSeconds: 7_125 },
+        }),
+      ),
+    });
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+    });
+    const selectedRoute = route("hls", "local-sidecar");
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: REQUEST_ID,
+      requestId: REQUEST_ID,
+      durationHintSeconds: 7_200,
+      candidate: candidateFor(selectedRoute, { kind: "torrent" }),
+      route: selectedRoute,
+    });
+
+    expect(client.getCapabilities).toHaveBeenCalled();
+    expect(client.createJob.mock.calls[0]?.[0]).toMatchObject({
+      delivery: "hls",
+      seekMode: "random",
+      expectedDurationSeconds: 7_200,
+    });
+    expect(prepared.timeline).toEqual({
+      durationSeconds: 7_125,
+      durationSource: "media",
+      seekableOnRequest: true,
+      timeOriginSeconds: 0,
+    });
+    await prepared.release();
+  });
+
+  it("keeps a new client compatible with an older bridge", async () => {
+    const client = bridgeClient({
+      getCapabilities: jest.fn().mockResolvedValue({
+        capabilities: {
+          jobs: { deliveries: [{ delivery: "hls", available: true }] },
+        },
+      }),
+      createJob: jest.fn().mockResolvedValue(
+        readyJobFor("hls", {
+          container: "mp4",
+          remuxed: true,
+          seek: "immediate",
+        }),
+      ),
+    });
+    const adapter = new BridgeV1SourceAdapter({
+      executionTarget: "local-sidecar",
+      baseUrl: "http://localhost:11470",
+      client,
+    });
+    const selectedRoute = route("hls", "local-sidecar");
+
+    const prepared = await adapter.prepare({
+      action: "play",
+      attemptId: REQUEST_ID,
+      requestId: REQUEST_ID,
+      durationHintSeconds: 7_200,
+      candidate: candidateFor(selectedRoute, { kind: "torrent" }),
+      route: selectedRoute,
+    });
+
+    expect(client.createJob.mock.calls[0]?.[0]).not.toHaveProperty("seekMode");
+    expect(client.createJob.mock.calls[0]?.[0]).not.toHaveProperty(
+      "expectedDurationSeconds",
+    );
+    expect(prepared.timeline).toEqual({
+      durationSeconds: 7_200,
+      durationSource: "metadata",
+      seekableOnRequest: false,
+      timeOriginSeconds: 0,
+    });
+    await prepared.release();
+  });
+
   it("preserves a validated source magnet and its tracker hints", async () => {
     const client = bridgeClient();
     client.createJob.mockResolvedValue(readyJob());
@@ -510,7 +599,13 @@ describe("BridgeV1SourceAdapter", () => {
   });
 
   it("adopts a direct range-http route when an HLS probe proves the file is MP4", async () => {
-    const client = bridgeClient();
+    const client = bridgeClient({
+      getCapabilities: jest.fn().mockResolvedValue({
+        capabilities: {
+          jobs: { deliveries: [{ delivery: "hls", available: true }] },
+        },
+      }),
+    });
     client.createJob.mockResolvedValue(
       jobResponse({
         delivery: "hls",

@@ -1,5 +1,6 @@
 import type {
   MediaPlayerCapabilities,
+  MediaSeekOptions,
   MediaPlayerThumbnail,
   MediaThumbnailOptions,
 } from "../MediaPlayerAdapter";
@@ -26,8 +27,13 @@ export class NativeExpoVideoAdapter extends ExpoVideoAdapterBase {
     player: ExpoVideoPlayerLike,
     private readonly platform: NativeMediaPlatform,
     private readonly options: NativeExpoVideoAdapterOptions = {},
+    timeOriginSeconds = 0,
   ) {
-    super(player, platform === "ios" ? "native-ios" : "native-android");
+    super(
+      player,
+      platform === "ios" ? "native-ios" : "native-android",
+      timeOriginSeconds,
+    );
   }
 
   protected platformCapabilities(): Omit<
@@ -62,13 +68,17 @@ export class NativeExpoVideoAdapter extends ExpoVideoAdapterBase {
     };
   }
 
-  override commitSeek(position: number) {
-    if (!Number.isFinite(position) || position < 0) return;
+  override commitSeek(position: number, options?: MediaSeekOptions) {
+    if (!Number.isFinite(position) || position < 0) {
+      return Promise.reject(
+        new RangeError("Seek position must be non-negative."),
+      );
+    }
     this.player.seekTolerance = {
       toleranceBefore: 0,
       toleranceAfter: 0,
     };
-    this.player.currentTime = position;
+    return super.commitSeek(position, options);
   }
 
   override endScrubbing({ shouldResume }: { shouldResume: boolean }) {

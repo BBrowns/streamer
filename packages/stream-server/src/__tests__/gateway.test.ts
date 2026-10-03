@@ -912,7 +912,10 @@ describe("gateway jobs", () => {
     const segment = await request(app).get(segmentPath!);
     expect(segment.status).toBe(200);
     expect(segment.body).toEqual(Buffer.from("fragment"));
-    expect(hlsSession.readSegment).toHaveBeenCalledWith("segment-000000.m4s");
+    expect(hlsSession.readSegment).toHaveBeenCalledWith(
+      "segment-000000.m4s",
+      expect.any(AbortSignal),
+    );
     expect(serveTorrentFile).not.toHaveBeenCalled();
   });
 

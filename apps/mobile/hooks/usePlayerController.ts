@@ -32,9 +32,16 @@ import {
   type PlaybackSegment,
 } from "../services/playback/PlaybackSegmentsProvider";
 import type { PlaybackDiagnosticEvent } from "../services/playback/PlaybackDiagnostics";
+import type { MediaSeekOptions } from "../services/playback/MediaPlayerAdapter";
+import type { MediaPlayerSnapshot } from "../services/playback/MediaPlayerAdapter";
 
 interface UsePlayerControllerProps {
   player: any; // Expo Video Player instance
+  commitSeek?: (
+    position: number,
+    options?: MediaSeekOptions,
+  ) => Promise<number>;
+  readMediaSnapshot?: () => MediaPlayerSnapshot;
   playbackUri: string | null;
   onClose: () => void;
   showControls: () => void;
@@ -62,6 +69,8 @@ function getPersistableArtworkUri(uri?: string) {
 
 export function usePlayerController({
   player,
+  commitSeek,
+  readMediaSnapshot,
   playbackUri,
   onClose,
   showControls,
@@ -113,6 +122,7 @@ export function usePlayerController({
 
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressClockRef = useRef(new PlaybackProgressClock());
+  const seekAbortRef = useRef<AbortController | null>(null);
   const nextEpisodePreplanKeyRef = useRef<string | null>(null);
   const nextEpisodePreplanControllerRef = useRef<AbortController | null>(null);
   const lastReportedProgressRef = useRef<{
@@ -281,6 +291,29 @@ export function usePlayerController({
     ? `${mediaInfo.type}:${mediaInfo.itemId}:${mediaInfo.season ?? 0}:${mediaInfo.episode ?? 0}`
     : null;
 
+  const getCurrentTime = useCallback(
+    (fallback?: unknown) => {
+      const snapshotTime = readMediaSnapshot?.().currentTime;
+      if (typeof snapshotTime === "number" && Number.isFinite(snapshotTime)) {
+        return Math.max(0, snapshotTime);
+      }
+      return typeof fallback === "number" && Number.isFinite(fallback)
+        ? Math.max(0, fallback)
+        : Math.max(0, Number(player?.currentTime) || 0);
+    },
+    [player, readMediaSnapshot],
+  );
+  const getCurrentDuration = useCallback(() => {
+    const snapshotDuration = readMediaSnapshot?.().duration;
+    if (
+      typeof snapshotDuration === "number" &&
+      Number.isFinite(snapshotDuration)
+    ) {
+      return Math.max(0, snapshotDuration);
+    }
+    return Math.max(0, Number(player?.duration) || 0);
+  }, [player, readMediaSnapshot]);
+
   useEffect(() => {
     setHasPromptedResume(false);
     setShowResumePrompt(false);
@@ -290,7 +323,7 @@ export function usePlayerController({
 
   const getProgressSnapshot = useCallback(() => {
     const duration = resolveProgressDuration({
-      observedDuration: Number(player?.duration) || 0,
+      observedDuration: getCurrentDuration(),
       metadataRuntime: meta?.runtime,
       isProgressiveRemux: effectiveIsProgressiveRemux,
       hasSeekableHandoff,
@@ -299,7 +332,12 @@ export function usePlayerController({
       duration.duration,
       duration.durationSource,
     );
-  }, [effectiveIsProgressiveRemux, hasSeekableHandoff, meta?.runtime, player]);
+  }, [
+    effectiveIsProgressiveRemux,
+    getCurrentDuration,
+    hasSeekableHandoff,
+    meta?.runtime,
+  ]);
 
   const reportProgress = useCallback(
     (force = false) => {
@@ -349,6 +387,35 @@ export function usePlayerController({
   const recordExplicitSeek = useCallback((position: number) => {
     progressClockRef.current.recordExplicitSeek(position);
   }, []);
+  const performConfirmedSeek = useCallback(
+    async (position: number) => {
+      seekAbortRef.current?.abort();
+      const controller = new AbortController();
+      seekAbortRef.current = controller;
+      try {
+        if (!commitSeek) {
+          throw new Error("A confirmed media seek operation is unavailable.");
+        }
+        return await commitSeek(position, { signal: controller.signal });
+      } finally {
+        if (seekAbortRef.current === controller) seekAbortRef.current = null;
+      }
+    },
+    [commitSeek],
+  );
+
+  useEffect(
+    () => () => {
+      seekAbortRef.current?.abort();
+      seekAbortRef.current = null;
+    },
+    [performConfirmedSeek],
+  );
+
+  useEffect(() => {
+    seekAbortRef.current?.abort();
+    seekAbortRef.current = null;
+  }, [playbackUri]);
   const beginProgressSourceReplacement = useCallback(() => {
     progressClockRef.current.beginSourceReplacement();
   }, []);
@@ -412,8 +479,14 @@ export function usePlayerController({
         Number.isFinite(playbackLaunchIntent.positionSeconds) &&
         playbackLaunchIntent.positionSeconds >= 15
       ) {
-        recordExplicitSeek(playbackLaunchIntent.positionSeconds);
-        player.currentTime = playbackLaunchIntent.positionSeconds;
+        void performConfirmedSeek(playbackLaunchIntent.positionSeconds)
+          .then((actualPosition) => {
+            recordExplicitSeek(actualPosition);
+            player.play();
+          })
+          .catch(() => undefined);
+        consumePlaybackLaunchIntent();
+        return;
       }
       consumePlaybackLaunchIntent();
       player.play();
@@ -431,6 +504,7 @@ export function usePlayerController({
     playbackLaunchIntent,
     playbackUri,
     player,
+    performConfirmedSeek,
     previousProgress,
     readyPlaybackUri,
     recordExplicitSeek,
@@ -440,12 +514,17 @@ export function usePlayerController({
     (resume: boolean) => {
       setShowResumePrompt(false);
       if (resume && previousProgress && player) {
-        recordExplicitSeek(previousProgress.currentTime);
-        player.currentTime = previousProgress.currentTime;
+        void performConfirmedSeek(previousProgress.currentTime)
+          .then((actualPosition) => {
+            recordExplicitSeek(actualPosition);
+            player.play();
+          })
+          .catch(() => undefined);
+        return;
       }
       player?.play();
     },
-    [player, previousProgress, recordExplicitSeek],
+    [performConfirmedSeek, player, previousProgress, recordExplicitSeek],
   );
 
   // 4. Progress Reporting & Sync intervals
@@ -455,9 +534,10 @@ export function usePlayerController({
     const timeSubscription = player.addListener?.(
       "timeUpdate",
       ({ currentTime }: { currentTime?: number }) => {
+        const acceptedPosition = getCurrentTime(currentTime);
         if (
-          typeof currentTime !== "number" ||
-          !progressClockRef.current.acceptTimeUpdate(currentTime)
+          !Number.isFinite(acceptedPosition) ||
+          !progressClockRef.current.acceptTimeUpdate(acceptedPosition)
         ) {
           return;
         }
@@ -532,8 +612,8 @@ export function usePlayerController({
         shouldTreatPlaybackEndAsPremature({
           isProgressiveRemux: effectiveIsProgressiveRemux,
           hasSeekableHandoff,
-          currentTime: player.currentTime,
-          duration: player.duration,
+          currentTime: getCurrentTime(),
+          duration: getCurrentDuration(),
           expectedDuration: parseRuntimeSeconds(meta?.runtime),
         })
       ) {
@@ -561,8 +641,8 @@ export function usePlayerController({
         status: player.playing ? "playing" : "paused",
         itemId: mediaInfo.itemId,
         itemTitle: mediaInfo.title,
-        position: player.currentTime,
-        duration: player.duration,
+        position: getCurrentTime(),
+        duration: getCurrentDuration(),
       });
     }, 5000);
 
@@ -580,6 +660,8 @@ export function usePlayerController({
     mediaInfo,
     player,
     getProgressSnapshot,
+    getCurrentDuration,
+    getCurrentTime,
     reportProgress,
     setProgress,
     updateStatus,
@@ -610,8 +692,9 @@ export function usePlayerController({
           break;
         case "seek":
           if (cmd.data?.position !== undefined) {
-            recordExplicitSeek(cmd.data.position);
-            player.currentTime = cmd.data.position;
+            void performConfirmedSeek(cmd.data.position)
+              .then(recordExplicitSeek)
+              .catch(() => undefined);
           }
           break;
         case "stop":
@@ -622,12 +705,13 @@ export function usePlayerController({
 
     const handlePlaybackSync = (data: any) => {
       if (!player || data.itemId !== mediaInfo?.itemId) return;
-      const diff = Math.abs((player.currentTime || 0) - data.position);
+      const diff = Math.abs(getCurrentTime() - data.position);
       if (data.status === "playing" && !player.playing) player.play();
       else if (data.status === "paused" && player.playing) player.pause();
       if (diff > 3) {
-        recordExplicitSeek(data.position);
-        player.currentTime = data.position;
+        void performConfirmedSeek(data.position)
+          .then(recordExplicitSeek)
+          .catch(() => undefined);
       }
     };
 
@@ -644,17 +728,26 @@ export function usePlayerController({
       remoteSub.remove();
       syncSub.remove();
     };
-  }, [player, onClose, showControls, mediaInfo?.itemId, recordExplicitSeek]);
+  }, [
+    commitSeek,
+    mediaInfo?.itemId,
+    onClose,
+    performConfirmedSeek,
+    player,
+    getCurrentTime,
+    recordExplicitSeek,
+    showControls,
+  ]);
 
   // 6. Broadcast local changes
   useEffect(() => {
     if (!player || !mediaInfo) return;
     let lastStatus = player.playing ? "playing" : "paused";
-    let lastPosition = player.currentTime;
+    let lastPosition = getCurrentTime();
 
     const interval = setInterval(() => {
       const currentStatus = player.playing ? "playing" : "paused";
-      const currentPosition = player.currentTime;
+      const currentPosition = getCurrentTime();
       const statusChanged = currentStatus !== lastStatus;
       const positionJumped = Math.abs(currentPosition - lastPosition) > 2;
 
@@ -663,7 +756,7 @@ export function usePlayerController({
           itemId: mediaInfo.itemId,
           status: currentStatus,
           position: currentPosition,
-          duration: player.duration,
+          duration: getCurrentDuration(),
           timestamp: Date.now(),
         });
         lastStatus = currentStatus;
@@ -672,7 +765,7 @@ export function usePlayerController({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [player, mediaInfo, sendMessage]);
+  }, [getCurrentDuration, getCurrentTime, player, mediaInfo, sendMessage]);
 
   const handleNextEpisode = useCallback(async () => {
     if (!nextEpisode || !mediaInfo) return;

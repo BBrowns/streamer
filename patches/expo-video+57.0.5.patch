@@ -1,0 +1,114 @@
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/VideoModule.kt
+@@ -241,6 +241,20 @@
+           // Same as currentTime
+           runBlocking(appContext.mainQueue.coroutineContext) {
+             ref.bufferedPosition
++          }
++        }
++
++      Property("seekableTimeRanges")
++        .get { ref: VideoPlayer ->
++          runBlocking(appContext.mainQueue.coroutineContext) {
++            ref.seekableTimeRanges
++          }
++        }
++
++      Property("bufferedRanges")
++        .get { ref: VideoPlayer ->
++          runBlocking(appContext.mainQueue.coroutineContext) {
++            ref.bufferedRanges
+           }
+         }
+ 
+diff --git a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
+--- a/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
++++ b/node_modules/expo-video/android/src/main/java/expo/modules/video/player/VideoPlayer.kt
+@@ -192,6 +192,34 @@
+         return 0.0
+       }
+       return player.bufferedPosition / 1000.0
++    }
++
++  val seekableTimeRanges: List<Map<String, Double>>
++    get() {
++      val timeline = player.currentTimeline
++      if (timeline.isEmpty) return emptyList()
++      val window = Timeline.Window()
++      timeline.getWindow(player.currentMediaItemIndex, window)
++      if (!window.isSeekable || window.durationMs == C.TIME_UNSET || window.durationMs <= 0) {
++        return emptyList()
++      }
++      return listOf(mapOf("start" to 0.0, "end" to window.durationMs / 1000.0))
++    }
++
++  /**
++   * Media3 exposes one contiguous buffered position for the active playback
++   * position. Anchor it at currentPosition so a distant seek never paints all
++   * earlier timeline positions as buffered.
++   */
++  val bufferedRanges: List<Map<String, Double>>
++    get() {
++      if (player.currentMediaItem == null || player.playbackState == STATE_BUFFERING) {
++        return emptyList()
++      }
++      val start = player.currentPosition / 1000.0
++      val end = player.bufferedPosition / 1000.0
++      if (!start.isFinite() || !end.isFinite() || end <= start) return emptyList()
++      return listOf(mapOf("start" to start, "end" to end))
+     }
+ 
+   var audioMixingMode: AudioMixingMode = AudioMixingMode.AUTO
+diff --git a/node_modules/expo-video/ios/VideoModule.swift b/node_modules/expo-video/ios/VideoModule.swift
+--- a/node_modules/expo-video/ios/VideoModule.swift
++++ b/node_modules/expo-video/ios/VideoModule.swift
+@@ -215,6 +215,14 @@
+       Property("duration") { player -> Double in
+         let duration = player.ref.currentItem?.duration.seconds ?? 0
+         return duration.isNaN ? 0 : duration
++      }
++
++      Property("seekableTimeRanges") { player -> [[String: Double]] in
++        return player.seekableTimeRanges
++      }
++
++      Property("bufferedRanges") { player -> [[String: Double]] in
++        return player.bufferedTimeRanges
+       }
+ 
+       Property("playbackRate") { player -> Float in
+diff --git a/node_modules/expo-video/ios/VideoPlayer.swift b/node_modules/expo-video/ios/VideoPlayer.swift
+--- a/node_modules/expo-video/ios/VideoPlayer.swift
++++ b/node_modules/expo-video/ios/VideoPlayer.swift
+@@ -365,8 +365,30 @@
+       }
+     }
+     return 0
++  }
++
++  private func mapTimeRanges(_ timeRanges: [NSValue]) -> [[String: Double]] {
++    timeRanges.compactMap { value in
++      let range = value.timeRangeValue
++      let start = CMTimeGetSeconds(range.start)
++      let end = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
++      guard start.isFinite && end.isFinite && end > start else {
++        return nil
++      }
++      return ["start": start, "end": end]
++    }
+   }
+ 
++  var seekableTimeRanges: [[String: Double]] {
++    guard let currentItem = ref.currentItem else { return [] }
++    return mapTimeRanges(currentItem.seekableTimeRanges)
++  }
++
++  var bufferedTimeRanges: [[String: Double]] {
++    guard let currentItem = ref.currentItem else { return [] }
++    return mapTimeRanges(currentItem.loadedTimeRanges)
++  }
++
+   // MARK: - VideoPlayerObserverDelegate
+ 
+   func onStatusChanged(player: AVPlayer, oldStatus: PlayerStatus?, newStatus: PlayerStatus, error: Exception?) {

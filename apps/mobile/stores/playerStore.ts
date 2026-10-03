@@ -26,6 +26,8 @@ export interface MediaInfo {
   background?: string;
   season?: number;
   episode?: number;
+  /** Provider runtime in seconds; shown only until the selected media is probed. */
+  durationHintSeconds?: number;
 }
 
 export type PlaybackLaunchIntent =

@@ -90,6 +90,7 @@ import {
   shouldAdvanceAfterPlaybackStall,
 } from "../components/player/playbackStallWatchdog";
 import { createMediaPlayerAdapter } from "../services/playback/mediaPlayerAdapters";
+import type { MediaSeekOptions } from "../services/playback/MediaPlayerAdapter";
 import {
   createHlsPlayerFacade,
   HlsWebVideoAdapter,
@@ -649,6 +650,7 @@ export default function PlayerScreen() {
             background: mediaInfo.background,
             season: mediaInfo.season,
             episode: mediaInfo.episode,
+            durationHintSeconds: mediaInfo.durationHintSeconds,
           },
           plan,
           candidateId,
@@ -715,6 +717,7 @@ export default function PlayerScreen() {
         background: mediaInfo.background,
         season: mediaInfo.season,
         episode: mediaInfo.episode,
+        durationHintSeconds: mediaInfo.durationHintSeconds,
       });
       setPlaybackPlanning(mediaInfo, launchId);
       return;
@@ -735,6 +738,7 @@ export default function PlayerScreen() {
           background: mediaInfo.background,
           season: mediaInfo.season,
           episode: mediaInfo.episode,
+          durationHintSeconds: mediaInfo.durationHintSeconds,
         },
         { forceRefresh: true },
       );
@@ -801,11 +805,13 @@ export default function PlayerScreen() {
   // important for an unknown torrent: the planner may request HLS, while the
   // gateway can safely demote the same job to range-http after proving the
   // selected file is already an MP4.
-  const activeSourceRoute =
+  const activeSourcePlayback =
     playbackSessionId && playbackAttemptId
       ? getActivePlaybackSourceRuntime(playbackSessionId, playbackAttemptId)
-          ?.route
       : undefined;
+  const activeSourceRoute = activeSourcePlayback?.route;
+  const activeSourceTimeOriginSeconds =
+    activeSourcePlayback?.timeline?.timeOriginSeconds ?? 0;
   const hlsPlaybackRequested =
     Platform.OS === "web" &&
     (activeSourceRoute?.delivery === "hls" ||
@@ -867,14 +873,72 @@ export default function PlayerScreen() {
             resolveOwnedWebVideoElement(videoViewRef.current),
         },
         hls: hlsPlaybackRequested,
+        timeOriginSeconds: activeSourceTimeOriginSeconds,
       }),
-    [hlsPlaybackRequested, platformPiPSupported, player],
+    [
+      activeSourceTimeOriginSeconds,
+      hlsPlaybackRequested,
+      platformPiPSupported,
+      player,
+    ],
   );
   const hlsAdapter =
     mediaAdapter instanceof HlsWebVideoAdapter ? mediaAdapter : null;
   const controllerPlayer = useMemo(
     () => (hlsAdapter ? createHlsPlayerFacade(hlsAdapter) : player),
     [hlsAdapter, player],
+  );
+  const mediaSeekControllerRef = useRef<AbortController | null>(null);
+  const commitMediaSeek = useCallback(
+    async (position: number, options?: MediaSeekOptions) => {
+      mediaSeekControllerRef.current?.abort();
+      const controller = new AbortController();
+      mediaSeekControllerRef.current = controller;
+      const forwardAbort = () => controller.abort(options?.signal?.reason);
+      if (options?.signal?.aborted) {
+        forwardAbort();
+      } else {
+        options?.signal?.addEventListener("abort", forwardAbort, {
+          once: true,
+        });
+      }
+      try {
+        const actualPosition = await mediaAdapter.commitSeek(position, {
+          signal: controller.signal,
+          timeoutMs: options?.timeoutMs,
+        });
+        if (
+          controller.signal.aborted ||
+          mediaSeekControllerRef.current !== controller
+        ) {
+          const error = new Error("The seek was cancelled.");
+          error.name = "AbortError";
+          throw error;
+        }
+        return actualPosition;
+      } finally {
+        options?.signal?.removeEventListener("abort", forwardAbort);
+        if (mediaSeekControllerRef.current === controller) {
+          mediaSeekControllerRef.current = null;
+        }
+      }
+    },
+    [mediaAdapter],
+  );
+  useEffect(
+    () => () => {
+      mediaSeekControllerRef.current?.abort();
+      mediaSeekControllerRef.current = null;
+    },
+    [mediaAdapter, playbackUri],
+  );
+  const readMediaSnapshot = useCallback(
+    () => mediaAdapter.snapshot(),
+    [mediaAdapter],
+  );
+  const readCurrentMediaTime = useCallback(
+    () => readMediaSnapshot().currentTime,
+    [readMediaSnapshot],
   );
   const audioReplacementInFlightRef = useRef(false);
 
@@ -1407,6 +1471,8 @@ export default function PlayerScreen() {
     originalLanguage,
   } = usePlayerController({
     player: controllerPlayer,
+    commitSeek: commitMediaSeek,
+    readMediaSnapshot,
     playbackUri,
     onClose: handleClose,
     showControls,
@@ -1425,15 +1491,34 @@ export default function PlayerScreen() {
     if (sourceKey === pending.sourceUri) return;
 
     let restored = false;
-    const restore = (status: string | undefined = player.status) => {
-      if (restored || status !== "readyToPlay") return;
+    let restoring = false;
+    const controller = new AbortController();
+    const restore = async (status: string | undefined = player.status) => {
+      if (restored || restoring || status !== "readyToPlay") return;
+      restoring = true;
       restored = true;
-      const resumeAt = resolveFallbackResumePosition(
-        pending,
-        mediaAdapter.snapshot().duration,
-      );
-      recordExplicitSeek(resumeAt);
-      mediaAdapter.commitSeek(resumeAt);
+      const sourceDuration =
+        (playbackSessionId && playbackAttemptId
+          ? getActivePlaybackSourceRuntime(playbackSessionId, playbackAttemptId)
+              ?.timeline?.durationSeconds
+          : undefined) ||
+        mediaInfo?.durationHintSeconds ||
+        mediaAdapter.snapshot().duration;
+      const resumeAt = resolveFallbackResumePosition(pending, sourceDuration);
+      let actualPosition: number;
+      try {
+        actualPosition = await commitMediaSeek(resumeAt, {
+          signal: controller.signal,
+        });
+      } catch {
+        if (!controller.signal.aborted) {
+          recordDiagnostic({ type: "seek", outcome: "failed" });
+        }
+        pendingFallbackRestoreRef.current = null;
+        return;
+      }
+      if (controller.signal.aborted) return;
+      recordExplicitSeek(actualPosition);
       dispatchRuntimeViewEvent({ type: "fallback_media_ready" });
       if (pending.shouldPlay) {
         mediaAdapter.play();
@@ -1447,13 +1532,20 @@ export default function PlayerScreen() {
       ({ status }: { status?: string }) => restore(status),
     );
     restore();
-    return () => statusSubscription?.remove?.();
+    return () => {
+      controller.abort();
+      statusSubscription?.remove?.();
+    };
   }, [
     mediaAdapter,
     playbackCandidateId,
     playbackUri,
     player,
+    playbackAttemptId,
+    playbackSessionId,
+    mediaInfo?.durationHintSeconds,
     recordExplicitSeek,
+    recordDiagnostic,
   ]);
 
   const {
@@ -1547,9 +1639,19 @@ export default function PlayerScreen() {
           if (!previousUri || previousUri === nextUri) return Promise.resolve();
           return new Promise<void>((resolveRestore) => {
             let restored = false;
+            let restoring = false;
             let restoreTimer: ReturnType<typeof setTimeout> | null = null;
             let restoreSubscription: (() => void) | undefined;
-            const completeRestore = () => {
+            const completeRestore = async () => {
+              if (restored || restoring) return;
+              restoring = true;
+              try {
+                await commitMediaSeek(position, {
+                  timeoutMs: AUDIO_TRACK_SWITCH_TIMEOUT_MS,
+                });
+              } catch {
+                // The old position remains the last trusted progress value.
+              }
               if (restored) return;
               restored = true;
               if (restoreTimer) clearTimeout(restoreTimer);
@@ -1576,21 +1678,33 @@ export default function PlayerScreen() {
               .then(completeRestore, completeRestore);
           });
         };
+        let finishing = false;
         const finish = async (success: boolean) => {
-          if (settled) return;
+          if (settled || finishing) return;
+          finishing = true;
+          if (replacementTimer) {
+            clearTimeout(replacementTimer);
+            replacementTimer = null;
+          }
+          let actualPosition = position;
+          if (success) {
+            const resumeAt = progressiveAudioReplacement ? 0 : position;
+            try {
+              actualPosition = await commitMediaSeek(resumeAt, {
+                timeoutMs: AUDIO_TRACK_SWITCH_TIMEOUT_MS,
+              });
+            } catch {
+              success = false;
+            }
+          }
           settled = true;
           cleanup();
           if (!success) await restorePreviousSource();
           audioReplacementInFlightRef.current = false;
           if (success) {
-            // A live progressive remux is intentionally non-seekable until a
-            // cache handoff exists. Keep the replacement deterministic rather
-            // than issuing a non-zero Range request that the gateway rejects.
-            const resumeAt = progressiveAudioReplacement ? 0 : position;
             engine?.commitAudioTrackSelection?.(id, nextUri);
-            recordExplicitSeek(resumeAt);
-            completeProgressSourceReplacement(resumeAt);
-            mediaAdapter.commitSeek(resumeAt);
+            recordExplicitSeek(actualPosition);
+            completeProgressSourceReplacement(actualPosition);
             if (wasPlaying) mediaAdapter.play();
             else mediaAdapter.pause();
           } else {
@@ -1657,8 +1771,10 @@ export default function PlayerScreen() {
     },
     [
       beginProgressSourceReplacement,
+      commitMediaSeek,
       completeProgressSourceReplacement,
       progressiveAudioReplacement,
+      recordExplicitSeek,
       engine,
       mediaAdapter,
       player,
@@ -1769,7 +1885,22 @@ export default function PlayerScreen() {
   }, [activeSession, playbackCandidateId]);
 
   const mediaSnapshot = mediaAdapter.snapshot();
-  const playerDuration = mediaSnapshot.duration || player?.duration || 0;
+  const preparedTimeline = activeSourcePlayback?.timeline;
+  const timelineDuration =
+    preparedTimeline?.durationSeconds || mediaInfo?.durationHintSeconds || 0;
+  const playerDuration =
+    preparedTimeline?.durationSource === "media"
+      ? preparedTimeline.durationSeconds
+      : activeSourceRoute?.delivery === "hls" &&
+          !mediaSnapshot.seekableOnRequest
+        ? timelineDuration || mediaSnapshot.duration || player?.duration || 0
+        : mediaSnapshot.duration || player?.duration || timelineDuration;
+  const timelineSeekableOnRequest = Boolean(
+    preparedTimeline?.seekableOnRequest || mediaSnapshot.seekableOnRequest,
+  );
+  const timelineSeekableRanges = timelineSeekableOnRequest
+    ? [{ start: 0, end: playerDuration }]
+    : mediaSnapshot.seekableRanges;
   const hasKnownDuration =
     Number.isFinite(playerDuration) && playerDuration > 0;
   const isProgressiveRemuxPlayback = playbackRoute
@@ -1947,6 +2078,8 @@ export default function PlayerScreen() {
   // owns the in-attempt source handoff without planning a second torrent.
   useSeekableCacheHandoff({
     player,
+    commitSeek: commitMediaSeek,
+    getCurrentTime: readCurrentMediaTime,
     playbackUri,
     engine,
     isProgressiveRemuxPlayback,
@@ -1995,8 +2128,11 @@ export default function PlayerScreen() {
   } = usePlayerMediaControls({
     player: controllerPlayer,
     mediaAdapter,
+    commitSeek: commitMediaSeek,
     engine,
     canSeek: canSeekPlayback,
+    seekableOnRequest: timelineSeekableOnRequest,
+    durationSeconds: playerDuration,
     markIntentionalSeek,
     recordDiagnostic,
     recordExplicitSeek,
@@ -2053,6 +2189,10 @@ export default function PlayerScreen() {
     seekFeedbackTimer,
     SEEK_SECONDS,
     canSeek: canSeekPlayback,
+    currentTime: mediaSnapshot.currentTime,
+    duration: playerDuration,
+    seekableRanges: timelineSeekableRanges,
+    seekableOnRequest: timelineSeekableOnRequest,
     onToggleFullscreen: handleToggleFullscreen,
     onToggleMute: handleToggleMute,
     onSeekBy: handleSeekBy,
@@ -2384,6 +2524,9 @@ export default function PlayerScreen() {
             currentTime={mediaSnapshot.currentTime}
             duration={playerDuration}
             bufferedPosition={mediaSnapshot.bufferedPosition}
+            bufferedRanges={mediaSnapshot.bufferedRanges}
+            seekableRanges={timelineSeekableRanges}
+            seekableOnRequest={timelineSeekableOnRequest}
             isVisible={
               (controlsVisible || runtimeViewState.kind === "scrubbing") &&
               !activeCast &&
