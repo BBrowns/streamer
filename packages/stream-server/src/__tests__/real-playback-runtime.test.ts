@@ -520,11 +520,11 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         legacyHeaders: false,
       });
       app.get("/fixture", (_req, res) => res.type("html").send(browserHarness));
-      const hlsBundle = createRequire(import.meta.url).resolve(
-        "hls.js/dist/hls.js",
+      const hlsBundle = await readFile(
+        createRequire(import.meta.url).resolve("hls.js/dist/hls.js"),
       );
       app.get("/fixture/hls.js", fixtureAssetLimiter, (_req, res) =>
-        res.sendFile(hlsBundle),
+        res.type("application/javascript").send(hlsBundle),
       );
       app.use("/origin-media", express.static(path.join(root, "seed")));
       app.use("/origin-hls", express.static(path.join(root, "origin-hls")));
