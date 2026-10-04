@@ -1,5 +1,5 @@
 import path from "path";
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import type {
   NormalizedMediaTrack,
   SubtitleCandidate,
@@ -17,11 +17,14 @@ interface FfprobeStream {
     language?: unknown;
     title?: unknown;
   };
+  duration?: unknown;
   disposition?: Record<string, unknown>;
 }
 
 interface FfprobeDocument {
   streams?: FfprobeStream[];
+  format?: { duration?: unknown };
+  frames?: Array<{ best_effort_timestamp_time?: unknown }>;
 }
 
 const BITMAP_SUBTITLE_CODECS = new Set([
@@ -205,26 +208,72 @@ interface ProbeCacheEntry {
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const MAX_PROBE_OUTPUT_BYTES = 256 * 1024;
 const MAX_CONCURRENT_PROBES = 2;
+const MAX_PENDING_PROBES = 16;
+const PROBE_TERMINATION_GRACE_MS = 500;
 let activeProbeCount = 0;
-const pendingProbeStarts: Array<() => void> = [];
+const pendingProbeStarts: Array<{ start: () => void }> = [];
 
-async function acquireProbeSlot(signal?: AbortSignal) {
+async function acquireProbeSlot(
+  signal: AbortSignal | undefined,
+  deadlineAt: number,
+  timeoutMessage: string,
+) {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new Error("Media probe cancelled");
+  }
+  if (deadlineAt <= Date.now()) throw new Error(timeoutMessage);
   if (activeProbeCount < MAX_CONCURRENT_PROBES) {
     activeProbeCount += 1;
     return;
   }
+  if (pendingProbeStarts.length >= MAX_PENDING_PROBES) {
+    throw new Error("Media probe queue is full");
+  }
   await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let timeout: NodeJS.Timeout | undefined;
     const start = () => {
-      signal?.removeEventListener("abort", onAbort);
+      if (settled) return;
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      settled = true;
+      cleanup();
       activeProbeCount += 1;
       resolve();
     };
-    const onAbort = () => {
-      const index = pendingProbeStarts.indexOf(start);
+    const removeFromQueue = () => {
+      const index = pendingProbeStarts.findIndex(
+        (pending) => pending.start === start,
+      );
       if (index >= 0) pendingProbeStarts.splice(index, 1);
-      reject(signal?.reason || new Error("Media probe cancelled"));
     };
-    pendingProbeStarts.push(start);
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      removeFromQueue();
+      reject(error);
+    };
+    const onAbort = () =>
+      fail(
+        signal?.reason instanceof Error
+          ? signal.reason
+          : new Error("Media probe cancelled"),
+      );
+    pendingProbeStarts.push({ start });
+    timeout = setTimeout(
+      () => fail(new Error(timeoutMessage)),
+      Math.max(0, deadlineAt - Date.now()),
+    );
+    timeout.unref?.();
     signal?.addEventListener("abort", onAbort, { once: true });
     if (signal?.aborted) onAbort();
   });
@@ -232,7 +281,52 @@ async function acquireProbeSlot(signal?: AbortSignal) {
 
 function releaseProbeSlot() {
   activeProbeCount = Math.max(0, activeProbeCount - 1);
-  pendingProbeStarts.shift()?.();
+  while (
+    activeProbeCount < MAX_CONCURRENT_PROBES &&
+    pendingProbeStarts.length > 0
+  ) {
+    pendingProbeStarts.shift()?.start();
+  }
+}
+
+function monitorProbeChild(child: ChildProcess) {
+  let processExited = false;
+  let closed = false;
+  let terminationTimer: NodeJS.Timeout | undefined;
+  let slotReleased = false;
+
+  child.once("exit", () => {
+    processExited = true;
+    if (terminationTimer) clearTimeout(terminationTimer);
+    terminationTimer = undefined;
+  });
+
+  child.once("close", () => {
+    closed = true;
+    if (terminationTimer) clearTimeout(terminationTimer);
+    terminationTimer = undefined;
+    if (slotReleased) return;
+    slotReleased = true;
+    releaseProbeSlot();
+  });
+
+  return {
+    terminate() {
+      if (closed || processExited) return;
+      try {
+        child.kill("SIGTERM");
+      } catch {}
+      if (closed || processExited || terminationTimer) return;
+      terminationTimer = setTimeout(() => {
+        terminationTimer = undefined;
+        if (closed || processExited) return;
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+      }, PROBE_TERMINATION_GRACE_MS);
+      terminationTimer.unref?.();
+    },
+  };
 }
 
 export async function probeMediaTracksAtUrl({
@@ -244,8 +338,13 @@ export async function probeMediaTracksAtUrl({
   signal?: AbortSignal;
   timeoutMs?: number;
 }) {
-  await acquireProbeSlot(signal);
+  const deadlineAt = Date.now() + Math.max(0, timeoutMs);
+  const timeoutMessage = "Media probe timed out";
+  await acquireProbeSlot(signal, deadlineAt, timeoutMessage);
+  let childOwnsProbeSlot = false;
   try {
+    const remainingTimeoutMs = deadlineAt - Date.now();
+    if (remainingTimeoutMs <= 0) throw new Error(timeoutMessage);
     return await new Promise<NormalizedMediaTrack[]>((resolve, reject) => {
       const child = spawn(
         getFfprobeBinaryPath(),
@@ -264,6 +363,8 @@ export async function probeMediaTracksAtUrl({
         ],
         { stdio: ["ignore", "pipe", "pipe"] },
       );
+      const processLifecycle = monitorProbeChild(child);
+      childOwnsProbeSlot = true;
       let output = "";
       let stderr = "";
       let settled = false;
@@ -276,10 +377,10 @@ export async function probeMediaTracksAtUrl({
         callback();
       };
       const stop = (error: Error) => {
-        try {
-          child.kill("SIGTERM");
-        } catch {}
-        finish(() => reject(error));
+        finish(() => {
+          processLifecycle.terminate();
+          reject(error);
+        });
       };
       const onAbort = () =>
         stop(
@@ -288,8 +389,8 @@ export async function probeMediaTracksAtUrl({
             : new Error("Media probe cancelled"),
         );
       const timeout = setTimeout(
-        () => stop(new Error("Media probe timed out")),
-        timeoutMs,
+        () => stop(new Error(timeoutMessage)),
+        remainingTimeoutMs,
       );
       timeout.unref?.();
 
@@ -332,8 +433,164 @@ export async function probeMediaTracksAtUrl({
       if (signal?.aborted) onAbort();
     });
   } finally {
-    releaseProbeSlot();
+    if (!childOwnsProbeSlot) releaseProbeSlot();
   }
+}
+
+async function probeDocumentAtUrl({
+  streamUrl,
+  entries,
+  args = [],
+  signal,
+  timeoutMs,
+  operation,
+}: {
+  streamUrl: string;
+  entries: string[];
+  args?: string[];
+  signal?: AbortSignal;
+  timeoutMs: number;
+  operation: string;
+}) {
+  const deadlineAt = Date.now() + Math.max(0, timeoutMs);
+  const timeoutMessage = `${operation} timed out`;
+  await acquireProbeSlot(signal, deadlineAt, timeoutMessage);
+  let childOwnsProbeSlot = false;
+  try {
+    const remainingTimeoutMs = deadlineAt - Date.now();
+    if (remainingTimeoutMs <= 0) throw new Error(timeoutMessage);
+    return await new Promise<FfprobeDocument>((resolve, reject) => {
+      const child = spawn(
+        getFfprobeBinaryPath(),
+        [
+          "-v",
+          "error",
+          ...args,
+          "-show_entries",
+          entries.join(":"),
+          "-of",
+          "json",
+          streamUrl,
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] },
+      );
+      const processLifecycle = monitorProbeChild(child);
+      childOwnsProbeSlot = true;
+      let output = "";
+      let settled = false;
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
+        callback();
+      };
+      const stop = (error: Error) => {
+        finish(() => {
+          processLifecycle.terminate();
+          reject(error);
+        });
+      };
+      const onAbort = () =>
+        stop(
+          signal?.reason instanceof Error
+            ? signal.reason
+            : new Error("Media probe cancelled"),
+        );
+      const timeout = setTimeout(
+        () => stop(new Error(timeoutMessage)),
+        remainingTimeoutMs,
+      );
+      timeout.unref?.();
+
+      child.stdout?.on("data", (data: Buffer) => {
+        if (Buffer.byteLength(output) + data.length > MAX_PROBE_OUTPUT_BYTES) {
+          stop(new Error("Media probe output exceeded its size limit"));
+          return;
+        }
+        output += data.toString("utf8");
+      });
+      child.stderr?.on("data", () => undefined);
+      child.on("error", (error) => stop(error));
+      child.on("close", (code) => {
+        if (settled) return;
+        if (code !== 0) {
+          finish(() => reject(new Error(`${operation} failed`)));
+          return;
+        }
+        try {
+          finish(() => resolve(JSON.parse(output) as FfprobeDocument));
+        } catch {
+          finish(() => reject(new Error(`${operation} returned invalid data`)));
+        }
+      });
+
+      signal?.addEventListener("abort", onAbort, { once: true });
+      if (signal?.aborted) onAbort();
+    });
+  } finally {
+    if (!childOwnsProbeSlot) releaseProbeSlot();
+  }
+}
+
+export async function probeMediaDurationAtUrl({
+  streamUrl,
+  signal,
+  timeoutMs = 15_000,
+}: {
+  streamUrl: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}) {
+  const document = await probeDocumentAtUrl({
+    streamUrl,
+    signal,
+    timeoutMs,
+    operation: "Media duration probe",
+    entries: ["format=duration", "stream=codec_type,duration"],
+  });
+  const formatDuration = Number(document.format?.duration);
+  if (Number.isFinite(formatDuration) && formatDuration > 0) {
+    return formatDuration;
+  }
+  const streamDurations = (document.streams ?? [])
+    .filter((stream) => stream.codec_type === "video")
+    .map((stream) => Number(stream.duration))
+    .filter((duration) => Number.isFinite(duration) && duration > 0);
+  const duration = Math.max(...streamDurations);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error("Media duration is unavailable");
+  }
+  return duration;
+}
+
+export async function probeRandomSeekAtUrl({
+  streamUrl,
+  targetSeconds,
+  signal,
+  timeoutMs = 20_000,
+}: {
+  streamUrl: string;
+  targetSeconds: number;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}) {
+  if (!Number.isFinite(targetSeconds) || targetSeconds <= 0) {
+    throw new Error("Random seek probe target is invalid");
+  }
+  const document = await probeDocumentAtUrl({
+    streamUrl,
+    signal,
+    timeoutMs,
+    operation: "Random seek probe",
+    args: ["-select_streams", "v:0", "-read_intervals", `${targetSeconds}%+1`],
+    entries: ["frame=best_effort_timestamp_time"],
+  });
+  const frameSeconds = Number(document.frames?.[0]?.best_effort_timestamp_time);
+  if (!Number.isFinite(frameSeconds) || frameSeconds <= 0) {
+    throw new Error("Random seek probe returned no frame");
+  }
+  return frameSeconds;
 }
 
 export function createMediaProbeCache({

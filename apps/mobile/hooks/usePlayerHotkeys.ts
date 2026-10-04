@@ -1,6 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import type { ExpoVideoPlayerLike } from "../services/playback/mediaPlayerAdapters/ExpoVideoAdapterBase";
+import {
+  isMediaPositionSeekable,
+  type MediaTimeRange,
+} from "../services/playback/MediaPlayerAdapter";
 
 interface UsePlayerHotkeysArgs {
   player: ExpoVideoPlayerLike | null;
@@ -11,10 +15,14 @@ interface UsePlayerHotkeysArgs {
   > | null>;
   SEEK_SECONDS: number;
   canSeek?: boolean;
+  currentTime?: number;
+  duration?: number;
+  seekableRanges?: readonly MediaTimeRange[];
+  seekableOnRequest?: boolean;
   onToggleFullscreen?: () => void;
   onToggleMute?: () => void;
-  onSeekBy?: (seconds: number) => void;
-  onSeekPercent?: (percent: number) => void;
+  onSeekBy?: (seconds: number) => void | boolean | Promise<void | boolean>;
+  onSeekPercent?: (percent: number) => void | boolean | Promise<void | boolean>;
   onEscape?: () => boolean | void;
 }
 
@@ -74,6 +82,22 @@ export function isPlayerHotkeyTargetInteractive(
 export type PlayerSeekShortcut =
   { type: "relative"; seconds: number } | { type: "percent"; percent: number };
 
+function completeSeekFeedback(
+  result: void | boolean | Promise<void | boolean>,
+  onAccepted: () => void,
+) {
+  if (result && typeof result !== "boolean") {
+    void result.then(
+      (accepted) => {
+        if (accepted !== false) onAccepted();
+      },
+      () => {},
+    );
+    return;
+  }
+  if (result !== false) onAccepted();
+}
+
 export function getPlayerSeekShortcut(
   rawKey: string,
   shiftKey: boolean,
@@ -102,12 +126,46 @@ export function usePlayerHotkeys({
   seekFeedbackTimer,
   SEEK_SECONDS,
   canSeek = true,
+  currentTime,
+  duration,
+  seekableRanges,
+  seekableOnRequest = false,
   onToggleFullscreen,
   onToggleMute,
   onSeekBy,
   onSeekPercent,
   onEscape,
 }: UsePlayerHotkeysArgs) {
+  const seekContextRef = useRef<{
+    currentTime: number;
+    duration: number;
+    seekableRanges: readonly MediaTimeRange[] | undefined;
+    seekableOnRequest: boolean;
+  }>({
+    currentTime: 0,
+    duration: 0,
+    seekableRanges: undefined,
+    seekableOnRequest: false,
+  });
+  seekContextRef.current = {
+    currentTime:
+      typeof currentTime === "number" && Number.isFinite(currentTime)
+        ? currentTime
+        : typeof player?.currentTime === "number" &&
+            Number.isFinite(player.currentTime)
+          ? player.currentTime
+          : 0,
+    duration:
+      typeof duration === "number" && Number.isFinite(duration)
+        ? duration
+        : typeof player?.duration === "number" &&
+            Number.isFinite(player.duration)
+          ? player.duration
+          : 0,
+    seekableRanges,
+    seekableOnRequest,
+  };
+
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
@@ -140,30 +198,48 @@ export function usePlayerHotkeys({
       if (seekShortcut) {
         e.preventDefault();
         if (!canSeek) return;
+        const seekContext = seekContextRef.current;
+        if (seekContext.duration <= 0) return;
+        const relativeSeconds =
+          seekShortcut.type === "relative"
+            ? Math.abs(seekShortcut.seconds) === 10
+              ? Math.sign(seekShortcut.seconds) * SEEK_SECONDS
+              : seekShortcut.seconds
+            : 0;
+        const requestedPosition =
+          seekShortcut.type === "percent"
+            ? (seekContext.duration * seekShortcut.percent) / 100
+            : seekContext.currentTime + relativeSeconds;
+        const targetPosition = Math.min(
+          seekContext.duration,
+          Math.max(0, requestedPosition),
+        );
+        if (
+          !isMediaPositionSeekable(
+            targetPosition,
+            seekContext.seekableRanges,
+            seekContext.seekableOnRequest,
+          )
+        ) {
+          return;
+        }
         if (seekShortcut.type === "percent") {
-          if (player?.duration) {
-            if (onSeekPercent) onSeekPercent(seekShortcut.percent);
-            else
-              player.currentTime =
-                (player.duration * seekShortcut.percent) / 100;
-            showControls();
-          }
+          completeSeekFeedback(onSeekPercent?.(seekShortcut.percent), () =>
+            showControls(),
+          );
           return;
         }
 
-        const relativeSeconds =
-          Math.abs(seekShortcut.seconds) === 10
-            ? Math.sign(seekShortcut.seconds) * SEEK_SECONDS
-            : seekShortcut.seconds;
-        if (onSeekBy) onSeekBy(relativeSeconds);
-        else player?.seekBy(relativeSeconds);
-        setSeekFeedback(relativeSeconds < 0 ? "left" : "right");
-        if (seekFeedbackTimer.current) clearTimeout(seekFeedbackTimer.current);
-        seekFeedbackTimer.current = setTimeout(
-          () => setSeekFeedback(null),
-          600,
-        );
-        showControls();
+        completeSeekFeedback(onSeekBy?.(relativeSeconds), () => {
+          setSeekFeedback(relativeSeconds < 0 ? "left" : "right");
+          if (seekFeedbackTimer.current)
+            clearTimeout(seekFeedbackTimer.current);
+          seekFeedbackTimer.current = setTimeout(
+            () => setSeekFeedback(null),
+            600,
+          );
+          showControls();
+        });
         return;
       }
 

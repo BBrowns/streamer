@@ -219,6 +219,15 @@ logged. A caller can abort its own wait. Before any fast response, a run with
 no remaining caller is aborted; after a partial response, the short background
 completion is intentionally allowed to warm the cache.
 
+The aggregator keeps `AggregatorService` as the existing controller-facing
+façade. `upstream.ts` owns validated add-on fetches and resilience handling;
+`addon-data.ts` owns installed add-on reads and capability checks;
+`aggregator-search.service.ts` and `search-schema.ts` own search execution,
+input bounds, and search caches; `subtitle-provider.service.ts` owns subtitle
+lookup and its short-lived document identities; and
+`stream-discovery.service.ts` owns stream fan-out, cancellation, and its cache.
+Each mutable cache stays with the feature that defines its behavior.
+
 **SSRF protection:** Add-on manifest, catalog, meta, and stream requests are
 validated before every outbound fetch. The validator blocks credentials,
 non-HTTPS URLs by default, localhost, link-local, private, carrier-grade NAT,

@@ -20,6 +20,10 @@ import {
   clampTimelinePosition,
   type TimelineScrubbingChange,
 } from "../../services/playback/TimelineController";
+import {
+  isMediaPositionSeekable,
+  type MediaTimeRange,
+} from "../../services/playback/MediaPlayerAdapter";
 import { playerChrome } from "./playerChrome";
 import {
   getNativePointerEvents,
@@ -47,6 +51,9 @@ export interface PlayerTimelineProps {
   currentTime: number;
   duration: number;
   bufferedPosition: number;
+  bufferedRanges?: MediaTimeRange[];
+  seekableRanges?: MediaTimeRange[];
+  seekableOnRequest?: boolean;
   isPlaying: boolean;
   canSeek: boolean;
   unavailableMessage?: string;
@@ -61,9 +68,14 @@ export interface PlayerTimelineProps {
 
 export function formatTimelineTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
   const remainder = Math.floor(seconds % 60);
-  return `${minutes}:${remainder < 10 ? "0" : ""}${remainder}`;
+  const paddedRemainder = `${remainder < 10 ? "0" : ""}${remainder}`;
+  if (hours > 0) {
+    return `${hours}:${minutes < 10 ? "0" : ""}${minutes}:${paddedRemainder}`;
+  }
+  return `${Math.floor(seconds / 60)}:${paddedRemainder}`;
 }
 
 function pointerOffset(event: TimelinePointerEvent) {
@@ -83,6 +95,9 @@ export function PlayerTimeline({
   currentTime,
   duration,
   bufferedPosition,
+  bufferedRanges,
+  seekableRanges,
+  seekableOnRequest = false,
   isPlaying,
   canSeek,
   unavailableMessage,
@@ -177,16 +192,31 @@ export function PlayerTimeline({
 
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
   const safeCurrentTime = clampTimelinePosition(currentTime, safeDuration);
-  const safeBufferedPosition = clampTimelinePosition(
-    bufferedPosition,
-    safeDuration,
-  );
   const watchedPercent =
     canSeek && safeDuration > 0 ? (safeCurrentTime / safeDuration) * 100 : 0;
-  const bufferedPercent =
-    canSeek && safeDuration > 0
-      ? Math.max(watchedPercent, (safeBufferedPosition / safeDuration) * 100)
-      : 0;
+  const normalizeRanges = (ranges: readonly MediaTimeRange[]) =>
+    ranges.flatMap(({ start, end }) => {
+      const safeStart = clampTimelinePosition(start, safeDuration);
+      const safeEnd = clampTimelinePosition(end, safeDuration);
+      return safeEnd > safeStart && safeDuration > 0
+        ? [
+            {
+              start: safeStart,
+              end: safeEnd,
+              left: (safeStart / safeDuration) * 100,
+              width: ((safeEnd - safeStart) / safeDuration) * 100,
+            },
+          ]
+        : [];
+    });
+  const seekableSegments = normalizeRanges(seekableRanges ?? []);
+  const bufferedSegments = normalizeRanges(
+    bufferedRanges !== undefined
+      ? bufferedRanges
+      : bufferedPosition > 0
+        ? [{ start: 0, end: bufferedPosition }]
+        : [],
+  );
   const visiblePreview = isScrubbing ? previewPosition : hoverPosition;
   const currentLabel = formatTimelineTime(safeCurrentTime);
   const durationLabel =
@@ -197,6 +227,8 @@ export function PlayerTimeline({
         defaultValue: "Playback progress unavailable",
       });
   const timelineActive = isScrubbing || isFocused || hoverPosition !== null;
+  const isPositionSeekable = (position: number) =>
+    isMediaPositionSeekable(position, seekableRanges, seekableOnRequest);
 
   const begin = (offset: number) => {
     if (!canSeek || width <= 0) return;
@@ -221,6 +253,15 @@ export function PlayerTimeline({
   };
 
   const end = () => {
+    const previewPosition = controllerRef.current?.snapshot().previewPosition;
+    if (
+      previewPosition !== null &&
+      previewPosition !== undefined &&
+      !isPositionSeekable(previewPosition)
+    ) {
+      controllerRef.current?.cancelDrag();
+      return;
+    }
     controllerRef.current?.commitDrag();
   };
 
@@ -266,10 +307,21 @@ export function PlayerTimeline({
     if (!["arrowleft", "arrowright", "home", "end"].includes(key)) return;
     event.preventDefault();
     event.stopPropagation();
-    if (key === "home") onSeekTo(0);
-    else if (key === "end") onSeekTo(safeDuration);
-    else
-      onSeekBy?.(key === "arrowright" ? SEEK_STEP_SECONDS : -SEEK_STEP_SECONDS);
+    if (key === "home") {
+      if (isPositionSeekable(0)) onSeekTo(0);
+    } else if (key === "end") {
+      if (isPositionSeekable(safeDuration)) onSeekTo(safeDuration);
+    } else {
+      const delta =
+        key === "arrowright" ? SEEK_STEP_SECONDS : -SEEK_STEP_SECONDS;
+      const target = clampTimelinePosition(
+        safeCurrentTime + delta,
+        safeDuration,
+      );
+      if (isPositionSeekable(target)) {
+        onSeekBy?.(delta);
+      }
+    }
   };
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -308,7 +360,9 @@ export function PlayerTimeline({
       ) : null}
 
       <View style={styles.row}>
-        <Text style={styles.timeText}>{currentLabel}</Text>
+        <Text testID="player-timeline-current-time" style={styles.timeText}>
+          {currentLabel}
+        </Text>
         <GestureDetector gesture={panGesture}>
           <View
             testID="player-progress-slider"
@@ -340,11 +394,15 @@ export function PlayerTimeline({
             }
             onAccessibilityAction={(event) => {
               if (!canSeek) return;
-              onSeekBy?.(
+              const delta =
                 event.nativeEvent.actionName === "increment"
                   ? SEEK_STEP_SECONDS
-                  : -SEEK_STEP_SECONDS,
+                  : -SEEK_STEP_SECONDS;
+              const target = clampTimelinePosition(
+                safeCurrentTime + delta,
+                safeDuration,
               );
+              if (isPositionSeekable(target)) onSeekBy?.(delta);
             }}
             onLayout={handleLayout}
             onFocus={() => setIsFocused(true)}
@@ -362,10 +420,34 @@ export function PlayerTimeline({
             } as any)}
           >
             <View style={[styles.track, timelineActive && styles.trackActive]}>
-              <View
-                testID="player-timeline-buffered"
-                style={[styles.buffered, { width: `${bufferedPercent}%` }]}
-              />
+              {seekableSegments.map((range, index) => (
+                <View
+                  key={`seekable-${index}`}
+                  testID={
+                    seekableOnRequest
+                      ? "player-timeline-seekable-on-request"
+                      : `player-timeline-seekable-${index}`
+                  }
+                  style={[
+                    styles.seekable,
+                    { left: `${range.left}%`, width: `${range.width}%` },
+                  ]}
+                />
+              ))}
+              {bufferedSegments.map((range, index) => (
+                <View
+                  key={`buffered-${index}`}
+                  testID={
+                    index === 0
+                      ? "player-timeline-buffered"
+                      : `player-timeline-buffered-${index}`
+                  }
+                  style={[
+                    styles.buffered,
+                    { left: `${range.left}%`, width: `${range.width}%` },
+                  ]}
+                />
+              ))}
               <View
                 testID="player-timeline-watched"
                 style={[
@@ -426,11 +508,17 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   trackActive: { height: 6 },
+  seekable: {
+    ...StyleSheet.absoluteFill,
+    right: undefined,
+    borderRadius: uiRadii.pill,
+    backgroundColor: "rgba(91,158,255,0.4)",
+  },
   buffered: {
     ...StyleSheet.absoluteFill,
     right: undefined,
     borderRadius: uiRadii.pill,
-    backgroundColor: "rgba(244,245,247,0.48)",
+    backgroundColor: "rgba(244,245,247,0.62)",
   },
   watched: {
     ...StyleSheet.absoluteFill,

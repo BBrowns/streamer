@@ -1,6 +1,7 @@
 import {
   classifyHlsFatalError,
   createHlsPlayerFacade,
+  getHlsFragmentLoaderConfig,
   getPublishedHlsWindow,
   HlsWebVideoAdapter,
   isHlsMediaRecoveryExhausted,
@@ -38,6 +39,29 @@ describe("HLS fatal error classification", () => {
   });
 });
 
+describe("HLS fragment loading configuration", () => {
+  it("gives bounded random-access chunk rendering time to finish", () => {
+    expect(getHlsFragmentLoaderConfig()).toEqual({
+      fragLoadPolicy: {
+        default: {
+          maxTimeToFirstByteMs: 45_000,
+          maxLoadTimeMs: 45_000,
+          timeoutRetry: {
+            maxNumRetry: 1,
+            retryDelayMs: 1_000,
+            maxRetryDelayMs: 1_000,
+          },
+          errorRetry: {
+            maxNumRetry: 1,
+            retryDelayMs: 1_000,
+            maxRetryDelayMs: 1_000,
+          },
+        },
+      },
+    });
+  });
+});
+
 function createFakeVideo(seekableRange = { start: 0, end: 4 }) {
   const listeners = new Map<string, Set<() => void>>();
   const video = {
@@ -50,7 +74,8 @@ function createFakeVideo(seekableRange = { start: 0, end: 4 }) {
     playbackRate: 1,
     buffered: {
       length: 1,
-      end: () => 4,
+      start: () => seekableRange.start,
+      end: () => seekableRange.end,
     },
     seekable: {
       length: 1,
@@ -112,14 +137,14 @@ describe("HlsWebVideoAdapter", () => {
     expect(player.playing).toBe(true);
     expect(player.duration).toBe(8);
     expect(player.currentTime).toBe(3);
-    expect(player.bufferedPosition).toBe(4);
+    expect(player.bufferedPosition).toBe(8);
     expect(player.play).toBeDefined();
     expect(player.pause).toBeDefined();
 
     adapter.unmount();
   });
 
-  it("does not clamp a seek outside the currently published HLS window", () => {
+  it("rejects a seek outside the currently published HLS window", async () => {
     const adapter = new HlsWebVideoAdapter();
     const video = createFakeVideo();
     const rejected = jest.fn();
@@ -128,7 +153,9 @@ describe("HlsWebVideoAdapter", () => {
     });
     adapter.mount(video);
 
-    adapter.commitSeek(6);
+    await expect(adapter.commitSeek(6)).rejects.toThrow(
+      "outside the seekable media range",
+    );
 
     expect(video.currentTime).toBe(0);
     expect(rejected).toHaveBeenCalledWith({
@@ -201,23 +228,61 @@ describe("HlsWebVideoAdapter", () => {
     }
   });
 
-  it("exposes a zero-based timeline for a rolling HLS seek window", () => {
+  it("keeps HLS time and range coordinates relative to the title, not the window", async () => {
+    const adapter = new HlsWebVideoAdapter();
+    const video = createFakeVideo({ start: 20, end: 24 });
+    video.currentTime = 22;
+    adapter.mount(video);
+    video.dispatch("loadedmetadata");
+
+    expect(adapter.snapshot()).toEqual(
+      expect.objectContaining({
+        currentTime: 22,
+        duration: 24,
+        seekableRanges: [{ start: 20, end: 24 }],
+        bufferedRanges: [{ start: 20, end: 24 }],
+        bufferedPosition: 24,
+        canSeek: true,
+      }),
+    );
+
+    await expect(adapter.commitSeek(23)).resolves.toBe(23);
+    expect(video.currentTime).toBe(23);
+    adapter.unmount();
+  });
+
+  it("translates nonzero source timestamps onto the title timeline", async () => {
+    const adapter = new HlsWebVideoAdapter({ timeOriginSeconds: 20 });
+    const video = createFakeVideo({ start: 20, end: 24 });
+    video.duration = 28;
+    video.currentTime = 22;
+    adapter.mount(video);
+    video.dispatch("loadedmetadata");
+
+    expect(adapter.snapshot()).toEqual(
+      expect.objectContaining({
+        currentTime: 2,
+        timeOriginSeconds: 20,
+        duration: 8,
+        bufferedPosition: 4,
+        bufferedRanges: [{ start: 0, end: 4 }],
+        seekableRanges: [{ start: 0, end: 4 }],
+      }),
+    );
+    await expect(adapter.commitSeek(3)).resolves.toBe(3);
+    expect(video.currentTime).toBe(23);
+    adapter.unmount();
+  });
+
+  it("keeps the media position unchanged while previewing a scrub", () => {
     const adapter = new HlsWebVideoAdapter();
     const video = createFakeVideo({ start: 20, end: 24 });
     video.currentTime = 22;
     adapter.mount(video);
 
-    expect(adapter.snapshot()).toEqual(
-      expect.objectContaining({
-        currentTime: 2,
-        duration: 4,
-        bufferedPosition: 0,
-        canSeek: true,
-      }),
-    );
+    adapter.previewSeek(23);
 
-    adapter.commitSeek(3);
-    expect(video.currentTime).toBe(23);
+    expect(video.currentTime).toBe(22);
     adapter.unmount();
   });
 });

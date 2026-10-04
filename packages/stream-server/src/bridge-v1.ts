@@ -126,6 +126,10 @@ function gatewayInputForDelivery(
     episode?: number;
     audioLanguage?: string | null;
   },
+  seek?: {
+    seekMode?: CreateBridgeJobV1["seekMode"];
+    expectedDurationSeconds?: number;
+  },
 ) {
   const remux = delivery !== "range-http";
   return {
@@ -147,6 +151,10 @@ function gatewayInputForDelivery(
           ? ("hls" as const)
           : ("seekable-cache" as const),
     requestedDelivery: delivery,
+    ...(seek?.seekMode ? { seekMode: seek.seekMode } : {}),
+    ...(seek?.expectedDurationSeconds !== undefined
+      ? { expectedDurationSeconds: seek.expectedDurationSeconds }
+      : {}),
   };
 }
 
@@ -154,12 +162,29 @@ function idempotencyDigest(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("base64url");
 }
 
-function serializeBridgeJobForResponse(
+export function serializeBridgeJobForResponse(
   job: Parameters<typeof serializeBridgeJobV1>[0],
+  options: { randomHlsSeekingRequested?: boolean } = {},
 ) {
   const response = serializeBridgeJobV1(job);
+  if (!options.randomHlsSeekingRequested) {
+    delete response.job.media.randomSeek;
+  }
   recordBridgeTerminalState(response.job.id, response.job.state);
   return response;
+}
+
+function requestedBridgeFeatures(req: Request) {
+  return new Set(
+    String(req.get(BRIDGE_HLS_FEATURE_HEADER) ?? "")
+      .split(",")
+      .map((feature) => feature.trim())
+      .filter(Boolean),
+  );
+}
+
+function requestsRandomHlsSeeking(req: Request) {
+  return requestedBridgeFeatures(req).has(BRIDGE_RANDOM_HLS_SEEK_FEATURE);
 }
 
 function pruneIdempotencyRecords() {
@@ -326,11 +351,13 @@ export function buildBridgeHelloV1() {
 export const BRIDGE_HLS_FEATURE_HEADER = "X-Streamer-Bridge-Features";
 export const BRIDGE_HLS_FEATURE = "hls-segments";
 export const BRIDGE_AUDIO_FEATURE = "audio-preferences";
+export const BRIDGE_RANDOM_HLS_SEEK_FEATURE = "hls-random-seek";
 
 export async function buildBridgeCapabilitiesV1(
   options: {
     hlsSegments?: boolean;
     audioPreferences?: boolean;
+    randomHlsSeeking?: boolean;
   } = {},
 ) {
   const torrent = getTorrentEngineStatus();
@@ -348,6 +375,9 @@ export async function buildBridgeCapabilitiesV1(
     capabilities: {
       jobs: {
         ...(options.audioPreferences ? { audioPreferences: true } : {}),
+        ...(options.randomHlsSeeking && torrent.available && remux.available
+          ? { randomHlsSeeking: true }
+          : {}),
         sourceKinds: ["magnet"],
         deliveries: [
           {
@@ -379,7 +409,7 @@ export async function buildBridgeCapabilitiesV1(
                 }
               : {}),
           },
-          ...(options.hlsSegments
+          ...(options.hlsSegments || options.randomHlsSeeking
             ? [
                 {
                   delivery: "hls" as const,
@@ -441,7 +471,10 @@ export async function createBridgeJobV1(
   }
 
   const job = await createGatewayJob({
-    ...gatewayInputForDelivery(input.delivery, input.source, input.selection),
+    ...gatewayInputForDelivery(input.delivery, input.source, input.selection, {
+      seekMode: input.seekMode,
+      expectedDurationSeconds: input.expectedDurationSeconds,
+    }),
     attemptId: input.requestId,
   });
   idempotencyRecords.set(idempotencyKey, {
@@ -460,14 +493,12 @@ bridgeV1Router.get(
   bridgeV1RateLimiter,
   requireBridgeV1Scope("capabilities:read"),
   async (req, res) => {
-    const requestedFeatures = String(req.get(BRIDGE_HLS_FEATURE_HEADER) ?? "")
-      .split(",")
-      .map((feature) => feature.trim())
-      .filter(Boolean);
+    const requestedFeatures = requestedBridgeFeatures(req);
     return res.json(
       await buildBridgeCapabilitiesV1({
-        hlsSegments: requestedFeatures.includes(BRIDGE_HLS_FEATURE),
-        audioPreferences: requestedFeatures.includes(BRIDGE_AUDIO_FEATURE),
+        hlsSegments: requestedFeatures.has(BRIDGE_HLS_FEATURE),
+        audioPreferences: requestedFeatures.has(BRIDGE_AUDIO_FEATURE),
+        randomHlsSeeking: requestedFeatures.has(BRIDGE_RANDOM_HLS_SEEK_FEATURE),
       }),
     );
   },
@@ -575,6 +606,20 @@ bridgeV1Router.post(
       );
     }
 
+    const randomHlsSeekingRequested = requestsRandomHlsSeeking(req);
+    if (
+      (parsed.data.seekMode !== undefined ||
+        parsed.data.expectedDurationSeconds !== undefined) &&
+      !randomHlsSeekingRequested
+    ) {
+      return sendBridgeV1Error(
+        res,
+        400,
+        "INVALID_REQUEST",
+        "The random HLS seek fields were not negotiated.",
+      );
+    }
+
     const auth = getBridgeV1AuthContext(res);
     if (!auth) {
       return sendBridgeV1Error(
@@ -595,7 +640,11 @@ bridgeV1Router.post(
           "The requestId was already used with a different payload.",
         );
       }
-      return res.status(202).json(serializeBridgeJobForResponse(result.job));
+      return res.status(202).json(
+        serializeBridgeJobForResponse(result.job, {
+          randomHlsSeekingRequested,
+        }),
+      );
     } catch (error) {
       if (isTorrentEngineUnavailableError(error)) {
         return sendBridgeV1Error(
@@ -630,7 +679,11 @@ bridgeV1Router.get(
         "The bridge job was not found.",
       );
     }
-    return res.json(serializeBridgeJobForResponse(job));
+    return res.json(
+      serializeBridgeJobForResponse(job, {
+        randomHlsSeekingRequested: requestsRandomHlsSeeking(req),
+      }),
+    );
   },
 );
 
@@ -927,7 +980,11 @@ bridgeV1Router.delete(
     if (!job) return res.status(204).send();
     await cancelGatewayJob(job);
     mediaIdentitiesByJobId.delete(job.id);
-    return res.json(serializeBridgeJobForResponse(job));
+    return res.json(
+      serializeBridgeJobForResponse(job, {
+        randomHlsSeekingRequested: requestsRandomHlsSeeking(req),
+      }),
+    );
   },
 );
 

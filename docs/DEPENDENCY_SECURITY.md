@@ -110,9 +110,10 @@ coverage providers require the exact Vitest peer version. These updates remain
 manual. The root Compose manifest uses the `docker-compose` updater; the server
 Dockerfile keeps the `docker` updater.
 
-The obsolete brace-expansion audit exception was removed on 2026-09-07:
-`test-exclude` now resolves the compatible 1.1.18 release, and the full audit no
-longer reports the advisory. Future regressions fail the normal audit policy.
+The obsolete `GHSA-MH99-V99M-4GVG` brace-expansion exception was removed on
+2026-09-07 after `test-exclude` resolved the compatible 1.1.18 release. The
+October 2026 lockfile remediation below advances all compatible brace-expansion
+lines beyond their current patched versions.
 
 The root override keeps `js-yaml@4.3.2` for Hono consumers. Nodemailer is
 pinned to `10.0.10` in the root workspace and root override, while the server
@@ -126,9 +127,9 @@ declares a compatible range and keep the production audit as the gate.
 
 Nodemailer 10 changes are recorded in the [official changelog](https://github.com/nodemailer/nodemailer/blob/master/CHANGELOG.md) and [README](https://github.com/nodemailer/nodemailer).
 
-The 2026-09-08 full and production dependency audits report no advisories with
-this lockfile. The obsolete brace-expansion exception is removed; no audit
-threshold or exception was added for this maintenance change.
+The 2026-09-08 full and production dependency audits reported no advisories at
+that time. Current production findings and any temporary exceptions are tracked
+below.
 
 Vitest and its V8 coverage provider now use the same exact 5.0.0 version in
 all three test workspaces. Vite stays on the supported 7.x override and Node
@@ -168,6 +169,28 @@ The existing Expo Updates Android dev-client patch is retargeted unchanged to
 57.0.22. Remove it after an upstream update preserves the tested Detox startup
 behavior without the patch. Owner: mobile platform maintainers. Review these
 patches at the next dependency upgrade and before the next release candidate.
+
+## October 2026 CI Remediation
+
+The lockfile resolves `brace-expansion` to 1.1.21, 2.1.7, and 5.0.12, which
+include the published fixes for [GHSA-6J4F-FJ2G-MC7P](https://github.com/advisories/GHSA-6J4F-FJ2G-MC7P)
+and [GHSA-QHR7-859C-M2P7](https://github.com/advisories/GHSA-QHR7-859C-M2P7).
+The root override applies only to `brace-expansion` under Minimatch 10, keeping
+the other Minimatch major lines on their compatible patched releases. Owner:
+repository dependency maintainers. Remove this override after Minimatch 10
+raises its own minimum to a patched brace-expansion release and a clean lockfile
+resolves that minimum without the override.
+
+The current production audit also reports two packages for which the GitHub
+Advisory Database lists no patched version: `braces@3.0.3` at
+`node_modules/braces` ([GHSA-VFJ7-8CJW-P6XM](https://github.com/advisories/GHSA-VFJ7-8CJW-P6XM))
+and `node-forge@1.4.0` at `node_modules/node-forge`
+([GHSA-86W9-CPQP-85RV](https://github.com/advisories/GHSA-86W9-CPQP-85RV)). The
+audit permits only those exact package paths until 2026-10-18. Owner: mobile
+platform maintainers. Re-check upstream status by that date, upgrade to a fixed
+release as soon as one is available, and remove the matching exception. If
+either package still has no compatible fix on the expiry date, the production
+audit blocks until the exception receives a fresh review.
 
 Sources: [Vitest 5 migration](https://vitest.dev/guide/migration),
 [Sentry CLI 3.8 update](https://github.com/getsentry/sentry-cli/compare/3.7.0...3.8.0),

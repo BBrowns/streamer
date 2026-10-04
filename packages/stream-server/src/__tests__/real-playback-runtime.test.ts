@@ -54,6 +54,8 @@ type BrowserSnapshot = {
 type HarnessWindow = Window & {
   fixture: {
     start(source: string, mode?: "hls" | "direct"): void;
+    play(): void;
+    pause(): void;
     seek(target: number): void;
     stop(): void;
     snapshot(): BrowserSnapshot;
@@ -94,7 +96,26 @@ window.fixture = {
     callback = video.requestVideoFrameCallback(frame);
     if (mode === 'hls') {
       if (!hlsSupported) { fatalErrors += 1; return; }
-      hls = new Hls({ startPosition: 0, lowLatencyMode: false });
+      hls = new Hls({
+        startPosition: 0,
+        lowLatencyMode: false,
+        fragLoadPolicy: {
+          default: {
+            maxTimeToFirstByteMs: 45_000,
+            maxLoadTimeMs: 45_000,
+            timeoutRetry: {
+              maxNumRetry: 1,
+              retryDelayMs: 1_000,
+              maxRetryDelayMs: 1_000,
+            },
+            errorRetry: {
+              maxNumRetry: 1,
+              retryDelayMs: 1_000,
+              maxRetryDelayMs: 1_000,
+            },
+          },
+        },
+      });
       hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) fatalErrors += 1; });
       hls.on(Hls.Events.LEVEL_UPDATED, (_, data) => {
         const fragments = data.details.fragments;
@@ -111,6 +132,8 @@ window.fixture = {
     if (!nativeSupported) { fatalErrors += 1; return; }
     video.src = source;
   },
+  play() { video.play().catch(() => fatalErrors += 1); },
+  pause() { video.pause(); },
   seek(target) { video.currentTime = target; },
   stop() {
     video.pause();
@@ -241,6 +264,7 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
     let runtimeErrors = 0;
     const mkvName = "Fixture.S01E02.mkv";
     const mp4Name = "Fixture.S01E03.mp4";
+    const longGopName = "Fixture.S01E04-long-gop.mkv";
     const ffmpeg = process.env.STREAMER_FFMPEG_PATH?.trim() || "ffmpeg";
     const ffprobe = process.env.STREAMER_FFPROBE_PATH?.trim() || "ffprobe";
 
@@ -324,6 +348,47 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         "-disposition:a:1",
         "default",
         mkvPath,
+      ]);
+      await mediaCommand(ffmpeg, [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=24",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000",
+        "-t",
+        "420",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p",
+        "-g",
+        "2880",
+        "-keyint_min",
+        "2880",
+        "-sc_threshold",
+        "0",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "64k",
+        "-metadata:s:a:0",
+        "language=eng",
+        "-metadata:s:a:0",
+        "title=English",
+        path.join(root, "seed", longGopName),
       ]);
       await mediaCommand(ffmpeg, [
         "-hide_banner",
@@ -455,11 +520,11 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         legacyHeaders: false,
       });
       app.get("/fixture", (_req, res) => res.type("html").send(browserHarness));
-      const hlsBundle = createRequire(import.meta.url).resolve(
-        "hls.js/dist/hls.js",
+      const hlsBundle = await readFile(
+        createRequire(import.meta.url).resolve("hls.js/dist/hls.js"),
       );
       app.get("/fixture/hls.js", fixtureAssetLimiter, (_req, res) =>
-        res.sendFile(hlsBundle),
+        res.type("application/javascript").send(hlsBundle),
       );
       app.use("/origin-media", express.static(path.join(root, "seed")));
       app.use("/origin-hls", express.static(path.join(root, "origin-hls")));
@@ -540,6 +605,61 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
         `[real-fixture] episode=${episode}; readyMs=${Date.now() - started}; receivedBytes=${torrent.downloaded}; seekableCacheEntries=0\n`,
       );
       return { job, torrent };
+    }
+
+    async function readyRandomHlsJob() {
+      const fileIdx = seeded.files.findIndex(
+        (file) => file.name === longGopName,
+      );
+      check(fileIdx >= 0, "Long-GOP fixture file was not seeded");
+      const job = await bounded(
+        gateway.createGatewayJob({
+          magnet: seeded.magnetURI,
+          fileIdx,
+          mode: "remux",
+          remuxStrategy: "hls",
+          requestedDelivery: "hls",
+          seekMode: "random",
+          // Deliberately wrong: only the selected media probe may index VOD.
+          expectedDurationSeconds: 540,
+        }),
+        "Random HLS gateway creation",
+      );
+      jobs.push(job);
+      await until(
+        () => {
+          const current = gateway.getGatewayJob(job.id);
+          check(current, "Random HLS gateway job disappeared");
+          if (current.state !== "preparing" && current.state !== "ready") {
+            throw new Error(
+              "Random HLS gateway preparation failed: state=" +
+                current.state +
+                "; reason=" +
+                (current.failureReason ?? "unknown") +
+                "; code=" +
+                (current.failureCode ?? "none") +
+                "; randomSeek=" +
+                (current.randomSeekStatus ?? "unknown"),
+            );
+          }
+          return current.state === "ready";
+        },
+        "Random HLS gateway readiness",
+        60_000,
+      );
+      const torrent = downloader?.torrents.find(
+        (item) => item.infoHash === job.infoHash,
+      );
+      check(torrent, "Random HLS downloader lost its torrent");
+      const selected = torrent.files[fileIdx];
+      check(selected, "Random HLS selected file disappeared");
+      expect(job.randomSeekStatus).toBe("ready");
+      expect(job.randomSeekDurationSeconds).toBeCloseTo(420, 0);
+      check(
+        selected.downloaded < selected.length,
+        "Random HLS fixture completed before the distant seek",
+      );
+      return { job, torrent, selected };
     }
 
     async function http(relative: string, init?: RequestInit) {
@@ -1091,7 +1211,357 @@ describe.skipIf(process.env.STREAMER_TEST_REAL_TORRENT !== "1")(
       expect(browser.isConnected()).toBe(false);
     }, 75_000);
 
+    it("serves a distant long-GOP VOD seek and contiguous A/V segments without processing intervening chunks", async () => {
+      seed.throttleUpload(192 * 1024);
+      const { job, selected } = await readyRandomHlsJob();
+      const sourcePath = path.join(root, "seed", longGopName);
+      const keyframeOutput = await mediaCommand(ffprobe, [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-skip_frame",
+        "nokey",
+        "-show_frames",
+        "-show_entries",
+        "frame=best_effort_timestamp_time",
+        "-of",
+        "json",
+        sourcePath,
+      ]);
+      const keyframeTimes = (
+        JSON.parse(keyframeOutput.toString()) as {
+          frames: Array<{ best_effort_timestamp_time: string }>;
+        }
+      ).frames.map((frame) => Number(frame.best_effort_timestamp_time));
+      for (let index = 1; index < 4; index += 1) {
+        expect(
+          Math.abs(keyframeTimes[index] - keyframeTimes[index - 1] - 120),
+        ).toBeLessThan(0.1);
+      }
+
+      const manifestResponse = await http(
+        security.createSignedGatewayStreamPath(job.id),
+      );
+      expect(manifestResponse.status).toBe(200);
+      const manifest = (await bytes(manifestResponse)).toString();
+      expect(manifest).toContain("#EXT-X-PLAYLIST-TYPE:VOD");
+      expect(manifest).toContain("#EXT-X-ENDLIST");
+      const playlistDuration = [...manifest.matchAll(/^#EXTINF:([\d.]+)/gm)]
+        .map((match) => Number(match[1]))
+        .reduce((total, duration) => total + duration, 0);
+      expect(playlistDuration).toBeCloseTo(420, 0);
+      expect(playlistDuration).not.toBeCloseTo(
+        job.expectedDurationSeconds ?? 0,
+        0,
+      );
+
+      const { chromium } = await bounded(
+        import("playwright"),
+        "Installed Playwright import",
+      );
+      const browser = await bounded(
+        chromium.launch({ headless: true, timeout: 15_000 }),
+        "Installed Chromium launch",
+        20_000,
+      );
+      let stage = "browser setup";
+      let last: BrowserSnapshot | undefined;
+      let pageErrors = 0;
+      let externalRequests = 0;
+      const requestedSegments = new Set<number>();
+      try {
+        const context = await browser.newContext({
+          viewport: { width: 800, height: 600 },
+          serviceWorkers: "block",
+        });
+        context.setDefaultTimeout(12_000);
+        await context.route("**/*", (route) => {
+          if (new URL(route.request().url()).origin === origin)
+            return route.continue();
+          externalRequests += 1;
+          return route.abort();
+        });
+        const page = await context.newPage();
+        page.on("pageerror", () => {
+          pageErrors += 1;
+        });
+        page.on("request", (request) => {
+          const pathname = new URL(request.url()).pathname;
+          const match = /\/segments\/segment-(\d{6})\.m4s$/.exec(pathname);
+          if (match) requestedSegments.add(Number(match[1]));
+        });
+        await page.goto(origin + "/fixture", { waitUntil: "load" });
+        await page.evaluate(
+          (source) =>
+            (window as unknown as HarnessWindow).fixture.start(source),
+          security.createSignedGatewayStreamPath(job.id),
+        );
+        await page.getByRole("button", { name: "Play fixture" }).click();
+
+        const snapshot = async () => {
+          last = await page.evaluate(() =>
+            (window as unknown as HarnessWindow).fixture.snapshot(),
+          );
+          check(
+            last.fatalErrors === 0 && last.mediaError === 0 && pageErrors === 0,
+            "Long-GOP browser playback reported an error",
+          );
+          return last;
+        };
+        stage = "initial VOD frame";
+        await until(
+          async () => {
+            const state = await snapshot();
+            return (
+              state.firstFrameMs !== null &&
+              state.frames > 0 &&
+              state.width === 160 &&
+              state.height === 90 &&
+              !state.paused
+            );
+          },
+          "Long-GOP first frame",
+          15_000,
+        );
+        const initial = await snapshot();
+        check(
+          selected.downloaded < selected.length / 2,
+          "Initial playback downloaded half or more of the selected file",
+        );
+
+        stage = "distant VOD seek";
+        const target = 300.25;
+        await page.evaluate(
+          (position) =>
+            (window as unknown as HarnessWindow).fixture.seek(position),
+          target,
+        );
+        await until(
+          async () => {
+            const state = await snapshot();
+            return (
+              state.seeked > initial.seeked &&
+              !state.seeking &&
+              state.frames > initial.frames &&
+              Math.abs(state.mediaTime - target) < 0.5
+            );
+          },
+          "Presented frame after distant VOD seek",
+          50_000,
+        );
+        const sought = await snapshot();
+        await page.evaluate(() =>
+          (window as unknown as HarnessWindow).fixture.pause(),
+        );
+        await page.evaluate(() =>
+          (window as unknown as HarnessWindow).fixture.play(),
+        );
+        await until(
+          async () => {
+            const state = await snapshot();
+            return (
+              !state.paused &&
+              state.frames > sought.frames &&
+              state.currentTime >= target + 0.35
+            );
+          },
+          "Playback resuming at the distant VOD position",
+          8_000,
+        );
+
+        stage = "adjacent A/V segment continuity";
+        const signedStream = new URL(
+          security.createSignedGatewayStreamPath(job.id),
+          "http://bridge.invalid",
+        );
+        const segmentPath = (name: string) =>
+          "/api/bridge/v1/jobs/" +
+          encodeURIComponent(job.id) +
+          "/segments/" +
+          encodeURIComponent(name) +
+          signedStream.search;
+        const initResponse = await http(segmentPath("init-000148.mp4"));
+        const firstResponse = await http(segmentPath("segment-000149.m4s"));
+        const nextResponse = await http(segmentPath("segment-000150.m4s"));
+        process.stdout.write(
+          "[real-fixture] adjacentObjects=" +
+            JSON.stringify({
+              statuses: [
+                initResponse.status,
+                firstResponse.status,
+                nextResponse.status,
+              ],
+              initType: initResponse.headers.get("content-type"),
+            }) +
+            "\n",
+        );
+        expect([
+          initResponse.status,
+          firstResponse.status,
+          nextResponse.status,
+        ]).toEqual([200, 200, 200]);
+        expect(initResponse.headers.get("content-type")).toBe("video/mp4");
+        const initBytes = await bytes(initResponse);
+        const firstBytes = await bytes(firstResponse);
+        const nextBytes = await bytes(nextResponse);
+
+        const packetRange = async (segment: Buffer) => {
+          const packetOutput = await mediaCommand(
+            ffprobe,
+            [
+              "-v",
+              "error",
+              "-show_packets",
+              "-show_entries",
+              "packet=stream_index,pts_time,duration_time",
+              "-of",
+              "json",
+              "-i",
+              "pipe:0",
+            ],
+            Buffer.concat([initBytes, segment]),
+          );
+          const packets = (
+            JSON.parse(packetOutput.toString()) as {
+              packets: Array<{
+                stream_index: number;
+                pts_time?: string;
+                duration_time?: string;
+              }>;
+            }
+          ).packets;
+          return [0, 1].map((streamIndex) => {
+            const streamPackets = packets.filter(
+              (packet) => packet.stream_index === streamIndex,
+            );
+            const starts = streamPackets
+              .map((packet) => Number(packet.pts_time))
+              .filter(Number.isFinite);
+            const ends = streamPackets
+              .map(
+                (packet) =>
+                  Number(packet.pts_time) +
+                  (Number.isFinite(Number(packet.duration_time))
+                    ? Number(packet.duration_time)
+                    : 0),
+              )
+              .filter(Number.isFinite);
+            return {
+              start: Math.min(...starts),
+              end: Math.max(...ends),
+            };
+          });
+        };
+        const firstRanges = await packetRange(firstBytes);
+        const nextRanges = await packetRange(nextBytes);
+        process.stdout.write(
+          "[real-fixture] adjacentPacketRanges=" +
+            JSON.stringify({ firstRanges, nextRanges }) +
+            "\n",
+        );
+        for (let index = 0; index < 2; index += 1) {
+          expect(Math.abs(firstRanges[index].start - 298)).toBeLessThan(0.1);
+          expect(
+            Math.abs(firstRanges[index].end - nextRanges[index].start),
+          ).toBeLessThan(0.08);
+          expect(Math.abs(nextRanges[index].end - 302)).toBeLessThan(0.1);
+        }
+        await mediaCommand(
+          ffmpeg,
+          [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            "pipe:0",
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0",
+            "-f",
+            "null",
+            "-",
+          ],
+          Buffer.concat([initBytes, firstBytes, nextBytes]),
+        );
+
+        const sessionDirectories = await readdir(path.join(root, "hls"));
+        const randomSession = sessionDirectories.find((name) =>
+          name.startsWith("streamer-hls-random-"),
+        );
+        check(randomSession, "Random HLS temporary directory disappeared");
+        const hlsSession = job.hlsSessions?.get(job.audioTrackId ?? "default");
+        check(hlsSession, "Random HLS job lost its session");
+        const abandonedRequest = new AbortController();
+        const abandonedRead = hlsSession.readSegment(
+          "segment-000180.m4s",
+          abandonedRequest.signal,
+        );
+        const survivingRead = hlsSession.readSegment("segment-000180.m4s");
+        abandonedRequest.abort();
+        await expect(abandonedRead).rejects.toThrow(
+          "Random HLS segment request cancelled.",
+        );
+        expect((await survivingRead).byteLength).toBeGreaterThan(0);
+
+        const generatedSegments = (
+          await readdir(path.join(root, "hls", randomSession))
+        )
+          .filter((name) => /^segment-\d{6}\.m4s$/.test(name))
+          .map((name) => Number(/segment-(\d{6})\.m4s$/.exec(name)?.[1]))
+          .filter(Number.isFinite);
+        expect(
+          generatedSegments.some((index) => index >= 4 && index < 148),
+        ).toBe(false);
+        expect(generatedSegments).toContain(180);
+        check(
+          selected.downloaded < selected.length / 2,
+          "Distant seek downloaded half or more of the selected file",
+        );
+        expect(
+          [...requestedSegments].some((index) => index >= 150 && index < 152),
+        ).toBe(true);
+        expect([externalRequests, pageErrors]).toEqual([0, 0]);
+        const generatedChunkStarts = [
+          ...new Set(
+            generatedSegments.map((index) => Math.floor(index / 4) * 4),
+          ),
+        ].sort((left, right) => left - right);
+        process.stdout.write(
+          "[real-fixture] longGopSeconds=120; titleDuration=" +
+            job.randomSeekDurationSeconds +
+            "; providerHint=" +
+            job.expectedDurationSeconds +
+            "; distantTarget=300.25; presented=" +
+            sought.mediaTime.toFixed(2) +
+            "; selectedBytes=" +
+            selected.downloaded +
+            "/" +
+            selected.length +
+            "; generatedChunkStarts=" +
+            JSON.stringify(generatedChunkStarts) +
+            "; priorChunksGenerated=0; adjacentAudioVideo=gap-free; resumed=true\n",
+        );
+        await page.evaluate(() =>
+          (window as unknown as HarnessWindow).fixture.stop(),
+        );
+        await context.close();
+      } catch {
+        throw new Error(
+          "Long-GOP fixture failed at " +
+            stage +
+            "; safeState=" +
+            JSON.stringify(last ?? {}),
+        );
+      } finally {
+        await bounded(browser.close(), "Chromium shutdown", 10_000);
+      }
+      expect(browser.isConnected()).toBe(false);
+    }, 120_000);
+
     afterEach(async () => {
+      seed.throttleUpload(-1);
       for (const job of jobs) {
         const streamPath = security.createSignedGatewayStreamPath(job.id);
         await bounded(gateway.cancelGatewayJob(job), "Gateway cancellation");

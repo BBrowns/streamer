@@ -25,6 +25,8 @@ export interface CreateMediaPlayerAdapterOptions {
   };
   /** Opt-in HLS surface for web/Electron; native targets use Expo Video. */
   hls?: boolean;
+  /** Raw media timestamp that corresponds to title time zero. */
+  timeOriginSeconds?: number;
 }
 
 export function detectMediaPlayerRuntime(): MediaPlayerRuntime {
@@ -49,14 +51,21 @@ export function createMediaPlayerAdapter({
   native,
   web,
   hls = false,
+  timeOriginSeconds = 0,
 }: CreateMediaPlayerAdapterOptions): MediaPlayerAdapter {
   if (runtime === "ios" || runtime === "android") {
-    return new NativeExpoVideoAdapter(player, runtime, native);
+    return new NativeExpoVideoAdapter(
+      player,
+      runtime,
+      native,
+      timeOriginSeconds,
+    );
   }
 
   if (hls) {
     return new HlsWebVideoAdapter({
       document: web?.document ?? defaultWebDocument(),
+      timeOriginSeconds,
     });
   }
 
@@ -65,6 +74,6 @@ export function createMediaPlayerAdapter({
     document: web?.document ?? defaultWebDocument(),
   };
   return runtime === "electron"
-    ? new ElectronVideoAdapter(player, webOptions)
-    : new WebVideoAdapter(player, webOptions);
+    ? new ElectronVideoAdapter(player, webOptions, timeOriginSeconds)
+    : new WebVideoAdapter(player, webOptions, "web", timeOriginSeconds);
 }

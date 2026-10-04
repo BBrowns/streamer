@@ -77,6 +77,117 @@ function binaryResponse(options: {
 }
 
 describe("BridgeClient protocol negotiation", () => {
+  it("requests random HLS fields on capabilities and every job lifecycle call", async () => {
+    const capabilities = {
+      protocolVersion: 1,
+      owner: "standalone",
+      health: "ready",
+      capabilities: {
+        jobs: {
+          sourceKinds: ["magnet"],
+          randomHlsSeeking: true,
+          deliveries: [
+            { delivery: "hls", available: true },
+            { delivery: "range-http", available: true },
+          ],
+          cancellation: true,
+          tracks: true,
+          subtitles: true,
+          thumbnails: true,
+          metrics: true,
+        },
+        cast: {
+          available: true,
+          controls: ["play", "pause", "resume", "seek", "stop"],
+        },
+      },
+      limits: {
+        maxRequestBytes: 16_384,
+        maxSubtitleBytes: 8 * 1024 * 1024,
+        thumbnailBucketSeconds: 10,
+        maxThumbnailBucket: 864,
+        maxThumbnailBytes: 512 * 1024,
+      },
+    };
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(response(200, HELLO))
+      .mockResolvedValueOnce(response(200, capabilities))
+      .mockResolvedValueOnce(response(202, JOB_RESPONSE))
+      .mockResolvedValueOnce(response(200, JOB_RESPONSE))
+      .mockResolvedValueOnce(response(204, {}));
+    const client = new BridgeClient({
+      baseUrl: "http://bridge.test:11470",
+      fetchImpl,
+    });
+
+    await client.getCapabilities();
+    await client.createJob({
+      requestId: "33333333-3333-4333-8333-333333333333",
+      source: { kind: "magnet", magnet: "magnet:?xt=urn:btih:abcdef" },
+      delivery: "hls",
+      seekMode: "random",
+      expectedDurationSeconds: 7_200,
+    });
+    await client.getJob(JOB_ID);
+    await client.cancelJob(JOB_ID);
+
+    for (const [, init] of fetchImpl.mock.calls.slice(1)) {
+      expect(
+        new Headers(init.headers).get("X-Streamer-Bridge-Features"),
+      ).toContain("hls-random-seek");
+    }
+  });
+
+  it("accepts an older bridge response while requesting the optional feature", async () => {
+    const legacyCapabilities = {
+      protocolVersion: 1,
+      owner: "standalone",
+      health: "ready",
+      capabilities: {
+        jobs: {
+          sourceKinds: ["magnet"],
+          deliveries: [{ delivery: "hls", available: true }],
+          cancellation: true,
+          tracks: true,
+          subtitles: true,
+          thumbnails: true,
+          metrics: true,
+        },
+        cast: {
+          available: true,
+          controls: ["play", "pause", "resume", "seek", "stop"],
+        },
+      },
+      limits: {
+        maxRequestBytes: 16_384,
+        maxSubtitleBytes: 8 * 1024 * 1024,
+        thumbnailBucketSeconds: 10,
+        maxThumbnailBucket: 864,
+        maxThumbnailBytes: 512 * 1024,
+      },
+    };
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(response(200, HELLO))
+      .mockResolvedValueOnce(response(200, legacyCapabilities));
+    const client = new BridgeClient({
+      baseUrl: "http://bridge.test:11470",
+      fetchImpl,
+    });
+
+    await expect(client.getCapabilities()).resolves.toMatchObject({
+      capabilities: {
+        jobs: { deliveries: [{ delivery: "hls", available: true }] },
+      },
+    });
+    expect(
+      new Headers(fetchImpl.mock.calls[1]?.[1]?.headers).get(
+        "X-Streamer-Bridge-Features",
+      ),
+    ).toContain("hls-random-seek");
+  });
+
   it("requests the optional torrent network probe without source data", async () => {
     const fetchImpl = jest
       .fn()
@@ -263,7 +374,11 @@ describe("BridgeClient protocol negotiation", () => {
       2,
       `http://bridge.test:11470/api/bridge/v1/jobs/${JOB_ID}`,
       expect.objectContaining({
-        headers: { "X-Streamer-Bridge-Token": "scoped-token" },
+        headers: expect.objectContaining({
+          "X-Streamer-Bridge-Token": "scoped-token",
+          "X-Streamer-Bridge-Features":
+            expect.stringContaining("hls-random-seek"),
+        }),
         redirect: "error",
       }),
     );

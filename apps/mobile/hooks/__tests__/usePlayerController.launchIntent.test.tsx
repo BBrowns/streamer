@@ -245,6 +245,10 @@ describe("usePlayerController playback launch intent", () => {
       ({ playbackUri }: { playbackUri: string | null }) =>
         usePlayerController({
           player,
+          commitSeek: async (position) => {
+            player.currentTime = position;
+            return position;
+          },
           playbackUri,
           onClose: jest.fn(),
           showControls: jest.fn(),
@@ -425,6 +429,41 @@ describe("usePlayerController playback launch intent", () => {
         background: "https://images.example.test/launch-backdrop.jpg",
       }),
     );
+    await screen.unmount();
+  });
+
+  it("keeps watch progress title-relative when the native media clock has an offset", async () => {
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    player.duration = 300;
+    player.currentTime = 105;
+    const readMediaSnapshot = jest.fn(() => ({
+      currentTime: 5,
+      duration: 300,
+    }));
+    startSession({ type: "play" });
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        readMediaSnapshot: readMediaSnapshot as any,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    await act(() => {
+      player.emit("timeUpdate", { currentTime: 105 });
+      player.emit("playingChange", { isPlaying: false });
+    });
+
+    expect(mockUpdateProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentTime: 5,
+        duration: 300,
+      }),
+    );
+    expect(readMediaSnapshot).toHaveBeenCalled();
     await screen.unmount();
   });
 

@@ -40,6 +40,12 @@ const NEGOTIATION_TTL_MS = 30_000;
 export const BRIDGE_HLS_FEATURE_HEADER = "X-Streamer-Bridge-Features";
 export const BRIDGE_HLS_FEATURE = "hls-segments";
 export const BRIDGE_AUDIO_FEATURE = "audio-preferences";
+export const BRIDGE_RANDOM_HLS_SEEK_FEATURE = "hls-random-seek";
+const NEGOTIATED_FEATURES = [
+  BRIDGE_HLS_FEATURE,
+  BRIDGE_AUDIO_FEATURE,
+  BRIDGE_RANDOM_HLS_SEEK_FEATURE,
+].join(", ");
 export const BRIDGE_V1_CLIENT_MAX_SUBTITLE_BYTES = 8 * 1024 * 1024;
 export const BRIDGE_V1_CLIENT_MAX_THUMBNAIL_BYTES = 512 * 1024;
 
@@ -370,7 +376,7 @@ export class BridgeClient {
       {
         headers: {
           ...this.authHeaders(),
-          [BRIDGE_HLS_FEATURE_HEADER]: `${BRIDGE_HLS_FEATURE}, ${BRIDGE_AUDIO_FEATURE}`,
+          [BRIDGE_HLS_FEATURE_HEADER]: NEGOTIATED_FEATURES,
         },
         signal,
       },
@@ -406,7 +412,10 @@ export class BridgeClient {
       bridgeJobResponseV1Schema,
       {
         method: "POST",
-        headers: this.jsonHeaders(),
+        headers: {
+          ...this.jsonHeaders(),
+          [BRIDGE_HLS_FEATURE_HEADER]: NEGOTIATED_FEATURES,
+        },
         body: JSON.stringify(validatedInput),
         signal,
       },
@@ -422,7 +431,13 @@ export class BridgeClient {
     return this.requestJson(
       `/api/bridge/v1/jobs/${encodeURIComponent(validatedJobId)}`,
       bridgeJobResponseV1Schema,
-      { headers: this.authHeaders(), signal },
+      {
+        headers: {
+          ...this.authHeaders(),
+          [BRIDGE_HLS_FEATURE_HEADER]: NEGOTIATED_FEATURES,
+        },
+        signal,
+      },
     );
   }
 
@@ -433,7 +448,14 @@ export class BridgeClient {
     const validatedJobId = this.requireOpaqueId(jobId);
     const response = await this.request(
       `/api/bridge/v1/jobs/${encodeURIComponent(validatedJobId)}`,
-      { method: "DELETE", headers: this.authHeaders(), signal },
+      {
+        method: "DELETE",
+        headers: {
+          ...this.authHeaders(),
+          [BRIDGE_HLS_FEATURE_HEADER]: NEGOTIATED_FEATURES,
+        },
+        signal,
+      },
     );
     if (response.status === 204) return null;
     return this.parseSuccessfulResponse(

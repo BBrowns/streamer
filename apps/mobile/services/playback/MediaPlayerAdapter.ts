@@ -12,6 +12,34 @@ export type MediaPlayerTarget =
 
 export type MediaAdapterStatus = "idle" | "loading" | "ready" | "error";
 
+export interface MediaTimeRange {
+  start: number;
+  end: number;
+}
+
+/** Whether the active source can reach a title-relative position right now. */
+export function isMediaPositionSeekable(
+  position: number,
+  seekableRanges: readonly MediaTimeRange[] | undefined,
+  seekableOnRequest = false,
+): boolean {
+  if (!Number.isFinite(position) || position < 0) return false;
+  if (seekableOnRequest || seekableRanges === undefined) return true;
+  return seekableRanges.some(
+    ({ start, end }) =>
+      Number.isFinite(start) &&
+      Number.isFinite(end) &&
+      end > start &&
+      position >= start &&
+      position <= end,
+  );
+}
+
+export interface MediaSeekOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 export interface NormalizedMediaTrack {
   id: string;
   kind: "audio" | "subtitle";
@@ -24,9 +52,18 @@ export interface NormalizedMediaTrack {
 
 export interface MediaPlayerSnapshot {
   status: MediaAdapterStatus;
+  /** Current position in seconds from the start of the title. */
   currentTime: number;
+  /** Raw player timestamp that maps to title time zero. */
+  timeOriginSeconds: number;
   duration: number;
   bufferedPosition: number;
+  /** Title-relative ranges for media currently loaded by the player. */
+  bufferedRanges: MediaTimeRange[];
+  /** Title-relative ranges the media runtime can seek to immediately. */
+  seekableRanges: MediaTimeRange[];
+  /** The HLS VOD manifest can generate a requested range on demand. */
+  seekableOnRequest?: boolean;
   playing: boolean;
   muted: boolean;
   volume: number;
@@ -90,9 +127,9 @@ export interface MediaPlayerAdapter {
   subscribe(listener: MediaPlayerEventListener): MediaPlayerUnsubscribe;
   play(): void;
   pause(): void;
-  seekBy(seconds: number): void;
+  seekBy(seconds: number, options?: MediaSeekOptions): Promise<number>;
   previewSeek(position: number): void;
-  commitSeek(position: number): void;
+  commitSeek(position: number, options?: MediaSeekOptions): Promise<number>;
   beginScrubbing(): void;
   endScrubbing(options: { shouldResume: boolean }): void;
   replaceSource(source: string): Promise<void>;

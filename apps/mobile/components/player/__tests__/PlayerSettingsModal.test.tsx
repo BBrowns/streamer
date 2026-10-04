@@ -1,10 +1,14 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
-import { PlayerSettingsModal } from "../PlayerSettingsModal";
+import {
+  PlayerSettingsModal,
+  resolvePlayerSettingsBottomClearance,
+} from "../PlayerSettingsModal";
 import { playerChrome } from "../playerChrome";
 
 let mockPlayerLocale: "keys" | "nl" = "keys";
+let mockBottomInset = 0;
 const mockEnglishPlayerSettings: Record<string, string> = {
   "player.settings.playback": "Playback",
   "player.settings.audioTab": "Audio",
@@ -41,6 +45,19 @@ jest.mock("@expo/vector-icons", () => ({
   Ionicons: () => null,
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({
+    top: 0,
+    right: 0,
+    bottom: mockBottomInset,
+    left: 0,
+  }),
+}));
+
+jest.mock("../../../hooks/useWindowClass", () => ({
+  useWindowClass: () => ({ windowClass: "compact" }),
+}));
+
 jest.mock("../../../hooks/useReducedMotion", () => ({
   useReducedMotion: () => false,
 }));
@@ -48,9 +65,25 @@ jest.mock("../../../hooks/useReducedMotion", () => ({
 describe("PlayerSettingsModal", () => {
   beforeEach(() => {
     mockPlayerLocale = "keys";
+    mockBottomInset = 0;
   });
 
+  it.each([
+    ["compact without a reported inset", "compact", 0, 24],
+    ["compact with an iPhone inset", "compact", 34, 42],
+    ["medium without compact padding", "medium", 34, 0],
+    ["large without compact padding", "large", 34, 0],
+  ] as const)(
+    "resolves safe-area clearance for %s",
+    (_label, windowClass, bottomInset, expected) => {
+      expect(
+        resolvePlayerSettingsBottomClearance(windowClass, bottomInset),
+      ).toBe(expected);
+    },
+  );
+
   it("uses the cinema-dark sheet regardless of the surrounding application theme", async () => {
+    mockBottomInset = 34;
     const onSelectPlaybackRate = jest.fn();
     const onSelectSubtitleMode = jest.fn();
     const onSelectSubtitleTextSize = jest.fn();
@@ -97,6 +130,7 @@ describe("PlayerSettingsModal", () => {
     );
     expect(sheetStyle.backgroundColor).toBe(playerChrome.surfaceStrong);
     expect(sheetStyle.borderColor).toBe(playerChrome.border);
+    expect(sheetStyle.paddingBottom).toBe(42);
 
     await fireEvent.press(screen.getByLabelText("Playback"));
     await fireEvent.press(screen.getByLabelText("player.settings.speed: 1.5x"));

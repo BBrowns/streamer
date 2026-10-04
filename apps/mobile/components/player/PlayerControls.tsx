@@ -24,6 +24,10 @@ import { useWindowClass } from "../../hooks/useWindowClass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { playerChrome } from "./playerChrome";
 import { PlayerTimeline } from "./PlayerTimeline";
+import {
+  isMediaPositionSeekable,
+  type MediaTimeRange,
+} from "../../services/playback/MediaPlayerAdapter";
 import type { TimelineScrubbingChange } from "../../services/playback/TimelineController";
 import type { PlaybackSegmentKind } from "../../services/playback/PlaybackSegmentsProvider";
 import {
@@ -55,6 +59,9 @@ interface PlayerControlsProps {
   currentTime: number;
   duration: number;
   bufferedPosition?: number;
+  bufferedRanges?: MediaTimeRange[];
+  seekableRanges?: MediaTimeRange[];
+  seekableOnRequest?: boolean;
   isVisible: boolean;
   onPlayPause: () => void;
   isPlaying: boolean;
@@ -140,6 +147,9 @@ export function PlayerControls({
   currentTime,
   duration,
   bufferedPosition = 0,
+  bufferedRanges,
+  seekableRanges,
+  seekableOnRequest = false,
   isVisible,
   onPlayPause,
   isPlaying,
@@ -181,6 +191,15 @@ export function PlayerControls({
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
   const canSeek = capabilities?.canSeek ?? safeDuration > 0;
   const hasTimeline = canSeek && safeDuration > 0;
+  const isStepTargetSeekable = (seconds: number) => {
+    const target = Math.min(safeDuration, Math.max(0, currentTime + seconds));
+    return (
+      hasTimeline &&
+      isMediaPositionSeekable(target, seekableRanges, seekableOnRequest)
+    );
+  };
+  const canSeekBackward = isStepTargetSeekable(-SEEK_STEP_SECONDS);
+  const canSeekForward = isStepTargetSeekable(SEEK_STEP_SECONDS);
   const isLive = Boolean(capabilities?.isLive || duration === Infinity);
   const seekDisabledLabel = t("player.controls.seekUnavailable", {
     defaultValue: "Seek unavailable",
@@ -216,14 +235,14 @@ export function PlayerControls({
   const playPauseLabel = isPlaying
     ? t("player.controls.pause", { defaultValue: "Pause playback" })
     : t("player.controls.play", { defaultValue: "Play playback" });
-  const seekBackLabel = hasTimeline
+  const seekBackLabel = canSeekBackward
     ? t("player.controls.seekBack", {
         defaultValue: "Seek back 10 seconds",
       })
     : t("player.controls.seekBackUnavailable", {
         defaultValue: "Seek back unavailable",
       });
-  const seekForwardLabel = hasTimeline
+  const seekForwardLabel = canSeekForward
     ? t("player.controls.seekForward", {
         defaultValue: "Seek forward 10 seconds",
       })
@@ -252,9 +271,8 @@ export function PlayerControls({
           : seekDisabledLabel
     : null;
   const seekBy = (seconds: number) => {
-    if (!hasTimeline) return;
-    if (onSeekBy) onSeekBy(seconds);
-    else player.seekBy(seconds);
+    if (!isStepTargetSeekable(seconds)) return;
+    onSeekBy?.(seconds);
   };
   const skipSegmentLabel = activeSegment
     ? activeSegment.kind === "intro"
@@ -342,7 +360,7 @@ export function PlayerControls({
           label={seekBackLabel}
           onPress={() => seekBy(-SEEK_STEP_SECONDS)}
           reducedMotion={reducedMotion}
-          disabled={!hasTimeline}
+          disabled={!canSeekBackward}
           focusColor={focusColor}
         />
         <Pressable
@@ -380,7 +398,7 @@ export function PlayerControls({
           label={seekForwardLabel}
           onPress={() => seekBy(SEEK_STEP_SECONDS)}
           reducedMotion={reducedMotion}
-          disabled={!hasTimeline}
+          disabled={!canSeekForward}
           focusColor={focusColor}
         />
       </View>
@@ -413,17 +431,18 @@ export function PlayerControls({
             currentTime={currentTime}
             duration={safeDuration}
             bufferedPosition={bufferedPosition}
+            bufferedRanges={bufferedRanges}
+            seekableRanges={seekableRanges}
+            seekableOnRequest={seekableOnRequest}
             isPlaying={isPlaying}
             canSeek={hasTimeline}
             unavailableMessage={seekUnavailableDetail}
             onSeekBy={seekBy}
             onPreviewSeek={(position) => {
               if (onPreviewSeek) onPreviewSeek(position);
-              else player.currentTime = position;
             }}
             onSeekTo={(position) => {
-              if (onSeekTo) onSeekTo(position);
-              else player.currentTime = position;
+              onSeekTo?.(position);
             }}
             onScrubbingChange={onScrubbingChange}
             getThumbnail={getThumbnail}

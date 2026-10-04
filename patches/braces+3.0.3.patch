@@ -1,0 +1,32 @@
+diff --git a/node_modules/braces/lib/parse.js b/node_modules/braces/lib/parse.js
+index 3a6988e..ccc3009 100644
+--- a/node_modules/braces/lib/parse.js
++++ b/node_modules/braces/lib/parse.js
+@@ -29,6 +29,7 @@ const {
+  */
+ 
+ const parse = (input, options = {}) => {
++  const MAX_DEPTH = 100;
+   if (typeof input !== 'string') {
+     throw new TypeError('Expected a string');
+   }
+@@ -143,6 +144,9 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_PARENTHESES) {
++      if (stack.length > MAX_DEPTH) {
++        throw new SyntaxError(`Input nesting depth exceeds max (${MAX_DEPTH})`);
++      }
+       block = push({ type: 'paren', nodes: [] });
+       stack.push(block);
+       push({ type: 'text', value });
+@@ -195,6 +199,9 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_CURLY_BRACE) {
++      if (stack.length > MAX_DEPTH) {
++        throw new SyntaxError(`Input nesting depth exceeds max (${MAX_DEPTH})`);
++      }
+       depth++;
+ 
+       const dollar = prev.value && prev.value.slice(-1) === '$' || block.dollar === true;

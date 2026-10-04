@@ -2,6 +2,7 @@ import {
   NativeExpoVideoAdapter,
   WebVideoAdapter,
 } from "../mediaPlayerAdapters";
+import { SeekSupersededError } from "../ConfirmedMediaSeek";
 
 function createPlayer() {
   return {
@@ -45,6 +46,73 @@ describe("explicit media player adapters", () => {
     });
   });
 
+  it("normalizes source time ranges and converts confirmed title seeks back to player time", async () => {
+    const player = createPlayer();
+    player.currentTime = 42;
+    player.bufferedPosition = 50;
+    (player as any).bufferedRanges = [{ start: 40, end: 50 }];
+    (player as any).seekableTimeRanges = [{ start: 40, end: 160 }];
+    const adapter = new WebVideoAdapter(player as any, {}, "web", 40);
+
+    expect(adapter.snapshot()).toMatchObject({
+      currentTime: 2,
+      timeOriginSeconds: 40,
+      duration: 120,
+      bufferedPosition: 10,
+      bufferedRanges: [{ start: 0, end: 10 }],
+      seekableRanges: [{ start: 0, end: 120 }],
+    });
+    await expect(adapter.commitSeek(5)).resolves.toBe(5);
+    expect(player.currentTime).toBe(45);
+  });
+
+  it("confirms a native seek at the title-relative duration without a buffer range", async () => {
+    const player = createPlayer();
+    player.duration = 120;
+    const adapter = new NativeExpoVideoAdapter(
+      player as any,
+      "android",
+      {},
+      40,
+    );
+
+    expect(adapter.snapshot().duration).toBe(120);
+    await expect(adapter.commitSeek(120, { timeoutMs: 30 })).resolves.toBe(120);
+    expect(player.currentTime).toBe(160);
+  });
+
+  it("preserves an explicitly empty buffer range list instead of inferring from a stale edge", () => {
+    const player = createPlayer();
+    player.currentTime = 90;
+    player.bufferedPosition = 105;
+    (player as any).bufferedRanges = [];
+    const adapter = new WebVideoAdapter(player as any);
+
+    expect(adapter.snapshot()).toMatchObject({
+      bufferedPosition: 105,
+      bufferedRanges: [],
+    });
+  });
+
+  it("uses the scalar buffer edge only when the runtime does not expose ranges", () => {
+    const player = createPlayer();
+    const adapter = new WebVideoAdapter(player as any);
+
+    expect(adapter.snapshot().bufferedRanges).toEqual([{ start: 24, end: 48 }]);
+  });
+
+  it("preserves an explicitly empty seekable range list instead of inferring full-duration seeking", () => {
+    const player = createPlayer();
+    (player as any).seekableTimeRanges = [];
+    const adapter = new WebVideoAdapter(player as any);
+
+    expect(adapter.snapshot()).toMatchObject({
+      duration: 120,
+      seekableRanges: [],
+      canSeek: false,
+    });
+  });
+
   it("enables bounded scrubbing optimizations only during a drag", () => {
     const player = createPlayer();
     const adapter = new NativeExpoVideoAdapter(player as any, "android");
@@ -83,23 +151,33 @@ describe("explicit media player adapters", () => {
     expect(player.pause).toHaveBeenCalledTimes(2);
   });
 
-  it("uses precise committed seeks after preview scrubbing", () => {
+  it("uses precise committed seeks after preview scrubbing", async () => {
     const player = createPlayer();
     const adapter = new NativeExpoVideoAdapter(player as any, "ios");
 
     adapter.beginScrubbing();
     adapter.previewSeek(33.4);
-    expect(player.currentTime).toBe(33.4);
+    expect(player.currentTime).toBe(24);
     expect(player.seekTolerance).toEqual({
       toleranceBefore: 1,
       toleranceAfter: 1,
     });
 
-    adapter.commitSeek(35);
+    await expect(adapter.commitSeek(35)).resolves.toBe(35);
     expect(player.currentTime).toBe(35);
     expect(player.seekTolerance).toEqual({
       toleranceBefore: 0,
       toleranceAfter: 0,
     });
+  });
+
+  it("rejects a pending seek when a new source takes ownership", async () => {
+    const player = createPlayer();
+    const adapter = new WebVideoAdapter(player as any);
+    const pendingSeek = adapter.commitSeek(90);
+
+    await adapter.replaceSource("https://cdn.example.test/replacement.mp4");
+
+    await expect(pendingSeek).rejects.toBeInstanceOf(SeekSupersededError);
   });
 });

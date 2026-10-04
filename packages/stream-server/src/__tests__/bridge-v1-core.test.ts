@@ -29,7 +29,14 @@ vi.mock("../gateway.js", () => ({
   createGatewayJob: gatewayMocks.createGatewayJob,
   getGatewayJob: gatewayMocks.getGatewayJob,
   getGatewaySubtitleDocument: gatewayMocks.getGatewaySubtitleDocument,
-  serializeBridgeJobV1: vi.fn((job) => job),
+  serializeBridgeJobV1: vi.fn((job) => ({
+    protocolVersion: 1,
+    job: {
+      id: job.id,
+      state: job.state,
+      media: { ...job.media },
+    },
+  })),
   serveGatewayJobSegment: vi.fn(),
   serveGatewayJobStream: vi.fn(),
 }));
@@ -47,6 +54,7 @@ import {
   buildBridgeHelloV1,
   buildBridgeTrackCatalogV1,
   createBridgeJobV1,
+  serializeBridgeJobForResponse,
 } from "../bridge-v1.js";
 import { getBridgeOperationalMetricsSnapshot } from "../bridge-metrics.js";
 
@@ -135,6 +143,86 @@ describe("bridge v1 application contract", () => {
       (await buildBridgeCapabilitiesV1({ audioPreferences: true })).capabilities
         .jobs.audioPreferences,
     ).toBe(true);
+  });
+
+  it("negotiates random HLS seeking only when a client requests it", async () => {
+    expect(
+      (await buildBridgeCapabilitiesV1()).capabilities.jobs,
+    ).not.toHaveProperty("randomHlsSeeking");
+    expect(
+      (
+        await buildBridgeCapabilitiesV1({
+          hlsSegments: true,
+          randomHlsSeeking: true,
+        })
+      ).capabilities.jobs.randomHlsSeeking,
+    ).toBe(true);
+  });
+
+  it("serves new bridge random-seek fields only to clients that negotiated them", () => {
+    const job = {
+      id: "00000000-0000-4000-8000-000000000052",
+      state: "ready",
+      media: {
+        randomSeek: { status: "ready", durationSeconds: 7_200 },
+      },
+    };
+
+    expect(
+      serializeBridgeJobForResponse(job as any).job.media,
+    ).not.toHaveProperty("randomSeek");
+    expect(
+      serializeBridgeJobForResponse(job as any, {
+        randomHlsSeekingRequested: true,
+      }).job.media.randomSeek,
+    ).toEqual({ status: "ready", durationSeconds: 7_200 });
+    expect(job.media.randomSeek).toEqual({
+      status: "ready",
+      durationSeconds: 7_200,
+    });
+  });
+
+  it("passes explicit seek mode and provider duration hint into the gateway job", async () => {
+    const input = {
+      requestId: REQUEST_ID,
+      source: {
+        kind: "magnet" as const,
+        magnet: "magnet:?xt=urn:btih:abcdef",
+      },
+      delivery: "hls" as const,
+      seekMode: "random" as const,
+      expectedDurationSeconds: 7_200,
+    };
+
+    await createBridgeJobV1("principal", input);
+
+    expect(gatewayMocks.createGatewayJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seekMode: "random",
+        expectedDurationSeconds: 7_200,
+      }),
+    );
+  });
+
+  it("accepts a legacy HLS job request without random-seek fields", async () => {
+    await createBridgeJobV1("principal", {
+      requestId: REQUEST_ID,
+      source: {
+        kind: "magnet",
+        magnet: "magnet:?xt=urn:btih:abcdef",
+      },
+      delivery: "hls",
+    });
+
+    expect(gatewayMocks.createGatewayJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestedDelivery: "hls",
+        remuxStrategy: "hls",
+      }),
+    );
+    const gatewayInput = gatewayMocks.createGatewayJob.mock.calls[0]?.[0];
+    expect(gatewayInput).not.toHaveProperty("seekMode");
+    expect(gatewayInput).not.toHaveProperty("expectedDurationSeconds");
   });
 
   it("binds the audio preference and Specials to idempotency", async () => {

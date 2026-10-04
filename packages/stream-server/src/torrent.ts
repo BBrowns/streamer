@@ -65,6 +65,15 @@ import {
   formatMediaRuntimeError,
   getFfmpegBinaryPath,
 } from "./media-runtime.js";
+import {
+  probeMediaDurationAtUrl,
+  probeRandomSeekAtUrl,
+} from "./media-probe.js";
+import {
+  buildRandomAccessHlsManifest,
+  getRandomAccessSegmentCount,
+  parseRandomAccessObjectName,
+} from "./hls-random-access.js";
 
 // Re-export pure helpers for stats.ts and tests
 export {
@@ -1262,12 +1271,12 @@ async function serveProgressiveRemuxedFile(
 export interface HlsRemuxSession {
   waitUntilReady(signal?: AbortSignal): Promise<void>;
   readManifest(): Promise<string>;
-  readSegment(name: string): Promise<Buffer>;
+  readSegment(name: string, signal?: AbortSignal): Promise<Buffer>;
   getPublishedWindow(): { durationSeconds: number; segmentCount: number };
   close(reason?: string): void;
 }
 
-const HLS_SEGMENT_NAME = /^(?:init\.mp4|segment-\d{6}\.m4s)$/;
+const HLS_SEGMENT_NAME = /^(?:init(?:-\d{6})?\.mp4|segment-\d{6}\.m4s)$/;
 const HLS_POLL_INTERVAL_MS = 100;
 const HLS_SEGMENT_DURATION_SECONDS = 2;
 // Keep a bounded rolling seek window on disk. The player can scrub within the
@@ -1284,8 +1293,8 @@ function parseHlsSegmentNames(manifest: string) {
 }
 
 function manifestPublishesHlsSegment(manifest: string, name: string) {
-  if (name === "init.mp4") {
-    return /#EXT-X-MAP:.*URI="init\.mp4"/.test(manifest);
+  if (name.startsWith("init")) {
+    return manifest.includes(`URI="${name}"`);
   }
   return parseHlsSegmentNames(manifest).includes(name);
 }
@@ -1468,7 +1477,7 @@ export async function createHlsRemuxSession(
   };
 
   const readManifest = () => readFile(manifestPath, "utf8");
-  const readSegment = async (name: string) => {
+  const readSegment = async (name: string, _signal?: AbortSignal) => {
     if (!HLS_SEGMENT_NAME.test(name)) {
       throw new Error("HLS segment is invalid.");
     }
@@ -1500,6 +1509,592 @@ export async function createHlsRemuxSession(
         return { durationSeconds: 0, segmentCount: 0 };
       }
     },
+    close,
+  };
+}
+
+const RANDOM_HLS_SEGMENT_SECONDS = 2;
+const RANDOM_HLS_SEGMENTS_PER_CHUNK = 4;
+const RANDOM_HLS_RENDER_CONCURRENCY = 2;
+const RANDOM_HLS_RENDER_QUEUE_LIMIT = 8;
+const RANDOM_HLS_CHUNK_TEMP_LIMIT_BYTES = 64 * 1024 * 1024;
+const RANDOM_HLS_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
+const RANDOM_HLS_RENDER_TIMEOUT_MS = 30_000;
+
+interface RandomHlsCacheChunk {
+  key: string;
+  sessionId: string;
+  chunkStartIndex: number;
+  files: Map<string, string>;
+  bytes: number;
+  readers: number;
+  touchedAt: number;
+}
+
+interface RandomHlsRenderWaiter {
+  signal?: AbortSignal;
+  resolve: (release: () => void) => void;
+  reject: (error: Error) => void;
+  onAbort: () => void;
+}
+
+interface RandomHlsChunkTask {
+  controller: AbortController;
+  waiters: number;
+  settled: boolean;
+  result?: RandomHlsCacheChunk;
+  promise: Promise<RandomHlsCacheChunk>;
+}
+
+const randomHlsRenderQueue: RandomHlsRenderWaiter[] = [];
+let activeRandomHlsRenders = 0;
+const randomHlsCache = new Map<string, RandomHlsCacheChunk>();
+let randomHlsCachedBytes = 0;
+
+function makeRandomHlsRelease() {
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    activeRandomHlsRenders = Math.max(0, activeRandomHlsRenders - 1);
+    while (randomHlsRenderQueue.length > 0) {
+      const next = randomHlsRenderQueue.shift()!;
+      next.signal?.removeEventListener("abort", next.onAbort);
+      if (next.signal?.aborted) {
+        next.reject(new Error("Random HLS generation was cancelled."));
+        continue;
+      }
+      activeRandomHlsRenders += 1;
+      next.resolve(makeRandomHlsRelease());
+      break;
+    }
+  };
+}
+
+function acquireRandomHlsRender(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    return Promise.reject(new Error("Random HLS generation was cancelled."));
+  }
+  if (activeRandomHlsRenders < RANDOM_HLS_RENDER_CONCURRENCY) {
+    activeRandomHlsRenders += 1;
+    return Promise.resolve(makeRandomHlsRelease());
+  }
+  if (randomHlsRenderQueue.length >= RANDOM_HLS_RENDER_QUEUE_LIMIT) {
+    return Promise.reject(new Error("Random HLS generation queue is full."));
+  }
+
+  return new Promise<() => void>((resolve, reject) => {
+    const waiter: RandomHlsRenderWaiter = {
+      signal,
+      resolve,
+      reject,
+      onAbort: () => {
+        const index = randomHlsRenderQueue.indexOf(waiter);
+        if (index >= 0) randomHlsRenderQueue.splice(index, 1);
+        signal?.removeEventListener("abort", waiter.onAbort);
+        reject(new Error("Random HLS generation was cancelled."));
+      },
+    };
+    randomHlsRenderQueue.push(waiter);
+    signal?.addEventListener("abort", waiter.onAbort, { once: true });
+    if (signal?.aborted) waiter.onAbort();
+  });
+}
+
+async function deleteRandomHlsCacheChunk(chunk: RandomHlsCacheChunk) {
+  if (chunk.readers > 0 || randomHlsCache.get(chunk.key) !== chunk)
+    return false;
+  randomHlsCache.delete(chunk.key);
+  randomHlsCachedBytes = Math.max(0, randomHlsCachedBytes - chunk.bytes);
+  await Promise.all(
+    [...chunk.files.values()].map((filePath) =>
+      rm(filePath, { force: true }).catch(() => undefined),
+    ),
+  );
+  return true;
+}
+
+async function storeRandomHlsCacheChunk(chunk: RandomHlsCacheChunk) {
+  if (chunk.bytes > RANDOM_HLS_CACHE_LIMIT_BYTES) {
+    throw new Error("Random HLS segment cache limit exceeded.");
+  }
+  while (randomHlsCachedBytes + chunk.bytes > RANDOM_HLS_CACHE_LIMIT_BYTES) {
+    const oldest = [...randomHlsCache.values()]
+      .filter((candidate) => candidate.readers === 0 && candidate !== chunk)
+      .sort((left, right) => left.touchedAt - right.touchedAt)[0];
+    if (!oldest || !(await deleteRandomHlsCacheChunk(oldest))) {
+      throw new Error("Random HLS segment cache is full.");
+    }
+  }
+  randomHlsCache.set(chunk.key, chunk);
+  randomHlsCachedBytes += chunk.bytes;
+}
+
+async function releaseRandomHlsCache(sessionId: string) {
+  const entries = [...randomHlsCache.values()].filter(
+    (chunk) => chunk.sessionId === sessionId,
+  );
+  for (const entry of entries) await deleteRandomHlsCacheChunk(entry);
+}
+
+function waitForSharedRandomHlsTask<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+) {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    return Promise.reject(new Error("Random HLS segment request cancelled."));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(new Error("Random HLS segment request cancelled."));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+export interface RandomAccessHlsSession extends HlsRemuxSession {
+  readonly randomAccess: true;
+  readonly durationSeconds: number;
+}
+
+/**
+ * Creates a stable, full-duration VOD playlist for a range-readable source.
+ * Each signed segment request starts a bounded remux only for its containing
+ * eight-second chunk. Provider duration is intentionally not accepted here:
+ * the playlist is built only from the selected media's probed duration.
+ */
+export async function createRandomAccessHlsSession(
+  inputUrl: string,
+  options: {
+    signal?: AbortSignal;
+    audioTrackId?: string;
+    durationHintSeconds?: number;
+    onDuration?: (durationSeconds: number) => void;
+    onFirstFragment?: () => void;
+  } = {},
+): Promise<RandomAccessHlsSession> {
+  // The metadata hint is deliberately not used as an index or manifest input.
+  void options.durationHintSeconds;
+  const durationSeconds = await probeMediaDurationAtUrl({
+    streamUrl: inputUrl,
+    signal: options.signal,
+  });
+  const segmentCount = getRandomAccessSegmentCount({
+    durationSeconds,
+    segmentSeconds: RANDOM_HLS_SEGMENT_SECONDS,
+  });
+  options.onDuration?.(durationSeconds);
+  await probeRandomSeekAtUrl({
+    streamUrl: inputUrl,
+    targetSeconds: Math.min(durationSeconds * 0.8, durationSeconds - 0.25),
+    signal: options.signal,
+  });
+
+  const directory = await mkdtemp(path.join(tmpdir(), "streamer-hls-random-"));
+  const sessionId = directory;
+  const manifest = buildRandomAccessHlsManifest({
+    durationSeconds,
+    segmentSeconds: RANDOM_HLS_SEGMENT_SECONDS,
+    segmentsPerChunk: RANDOM_HLS_SEGMENTS_PER_CHUNK,
+  });
+  const chunkTasks = new Map<number, RandomHlsChunkTask>();
+  const sessionController = new AbortController();
+  let closed = false;
+  let firstFragmentReported = false;
+  let cleanupPromise: Promise<void> | null = null;
+
+  const cleanup = () => {
+    if (cleanupPromise) return cleanupPromise;
+    const pendingTasks = [...chunkTasks.values()].map((task) => task.promise);
+    cleanupPromise = Promise.allSettled(pendingTasks)
+      .then(() => releaseRandomHlsCache(sessionId))
+      .then(() => rm(directory, { recursive: true, force: true }))
+      .catch(() => undefined);
+    return cleanupPromise;
+  };
+
+  const close = (_reason = "Random HLS session cancelled") => {
+    if (closed) return;
+    closed = true;
+    sessionController.abort(new Error("Random HLS session cancelled."));
+    for (const task of chunkTasks.values()) {
+      task.controller.abort(new Error("Random HLS session cancelled."));
+    }
+    void cleanup();
+  };
+
+  const renderChunk = async (
+    chunkStartIndex: number,
+    signal: AbortSignal,
+  ): Promise<RandomHlsCacheChunk> => {
+    const releaseSlot = await acquireRandomHlsRender(signal);
+    const chunkStartSeconds = chunkStartIndex * RANDOM_HLS_SEGMENT_SECONDS;
+    const chunkDurationSeconds = Math.min(
+      RANDOM_HLS_SEGMENTS_PER_CHUNK * RANDOM_HLS_SEGMENT_SECONDS,
+      durationSeconds - chunkStartSeconds,
+    );
+    const chunkCount = Math.min(
+      RANDOM_HLS_SEGMENTS_PER_CHUNK,
+      segmentCount - chunkStartIndex,
+    );
+    let temporaryDirectory: string | undefined;
+    try {
+      temporaryDirectory = await mkdtemp(path.join(directory, ".render-"));
+    } catch (error) {
+      releaseSlot();
+      throw error;
+    }
+    const localManifestPath = path.join(temporaryDirectory, "index.m3u8");
+    const ffmpegArgs = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-ss",
+      String(chunkStartSeconds),
+      "-i",
+      inputUrl,
+      "-t",
+      String(chunkDurationSeconds),
+      "-map",
+      "0:v:0?",
+    ];
+    appendAudioMapping(ffmpegArgs, options.audioTrackId);
+    ffmpegArgs.push(
+      "-map_metadata",
+      "-1",
+      "-map_chapters",
+      "-1",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      "24",
+      "-g",
+      "48",
+      "-keyint_min",
+      "48",
+      "-sc_threshold",
+      "0",
+      "-bf",
+      "0",
+      "-force_key_frames",
+      `expr:gte(t,n_forced*${RANDOM_HLS_SEGMENT_SECONDS})`,
+      "-b:v",
+      "4M",
+      "-maxrate",
+      "8M",
+      "-bufsize",
+      "16M",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-ar",
+      "44100",
+      "-ac",
+      "2",
+      "-movflags",
+      "+frag_keyframe+empty_moov+default_base_moof",
+      "-f",
+      "hls",
+      "-hls_time",
+      String(RANDOM_HLS_SEGMENT_SECONDS),
+      "-hls_playlist_type",
+      "vod",
+      "-hls_start_number_source",
+      "generic",
+      "-start_number",
+      String(chunkStartIndex),
+      "-hls_flags",
+      "independent_segments+temp_file",
+      "-hls_segment_type",
+      "fmp4",
+      "-hls_fmp4_init_filename",
+      "init.mp4",
+      "-hls_segment_filename",
+      path.join(temporaryDirectory, "segment-%06d.m4s"),
+      "-output_ts_offset",
+      String(chunkStartSeconds),
+      "-fs",
+      String(RANDOM_HLS_CHUNK_TEMP_LIMIT_BYTES),
+      localManifestPath,
+    );
+
+    try {
+      if (signal.aborted || closed) {
+        throw new Error("Random HLS generation was cancelled.");
+      }
+      const ffmpeg = spawnFfmpeg(getFfmpegBinaryPath(), ffmpegArgs, {
+        stdio: "ignore",
+      });
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        let killTimer: ReturnType<typeof setTimeout> | null = null;
+        let hardStopTimer: ReturnType<typeof setTimeout> | null = null;
+        let stopReason: Error | null = null;
+        const timeout = setTimeout(() => {
+          stop(new Error("Random HLS render timed out."));
+        }, RANDOM_HLS_RENDER_TIMEOUT_MS);
+        timeout.unref?.();
+        const settle = (error?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          if (killTimer) clearTimeout(killTimer);
+          if (hardStopTimer) clearTimeout(hardStopTimer);
+          signal.removeEventListener("abort", abort);
+          if (error) reject(error);
+          else resolve();
+        };
+        const stop = (error: Error) => {
+          if (settled || stopReason) return;
+          stopReason = error;
+          try {
+            ffmpeg.kill("SIGTERM");
+          } catch {}
+          killTimer = setTimeout(() => {
+            try {
+              ffmpeg.kill("SIGKILL");
+            } catch {}
+            hardStopTimer = setTimeout(
+              () => settle(stopReason ?? error),
+              2_000,
+            );
+            hardStopTimer.unref?.();
+          }, HLS_CLOSE_GRACE_MS);
+          killTimer.unref?.();
+        };
+        const abort = () =>
+          stop(new Error("Random HLS generation was cancelled."));
+        signal.addEventListener("abort", abort, { once: true });
+        if (signal.aborted) abort();
+        ffmpeg.once?.("error", () => {
+          if (stopReason) settle(stopReason);
+          else settle(new Error("Random HLS render failed."));
+        });
+        ffmpeg.once?.("close", (code: number | null) => {
+          if (stopReason) {
+            settle(stopReason);
+          } else if (signal.aborted) {
+            settle(new Error("Random HLS generation was cancelled."));
+          } else if (code === 0) settle();
+          else settle(new Error("Random HLS render failed."));
+        });
+      });
+      if (signal.aborted || closed) {
+        throw new Error("Random HLS generation was cancelled.");
+      }
+
+      const localManifest = await readFile(localManifestPath, "utf8");
+      const names = parseHlsSegmentNames(localManifest).filter((name) =>
+        name.endsWith(".m4s"),
+      );
+      const expectedNames = Array.from(
+        { length: chunkCount },
+        (_, offset) =>
+          `segment-${String(chunkStartIndex + offset).padStart(6, "0")}.m4s`,
+      );
+      if (
+        names.length !== expectedNames.length ||
+        expectedNames.some((name) => !names.includes(name))
+      ) {
+        throw new Error("Random HLS render produced an incomplete chunk.");
+      }
+
+      const localFiles = ["init.mp4", ...expectedNames];
+      const sizes = await Promise.all(
+        localFiles.map((name) => stat(path.join(temporaryDirectory, name))),
+      );
+      const bytes = sizes.reduce((total, file) => total + file.size, 0);
+      if (bytes > RANDOM_HLS_CHUNK_TEMP_LIMIT_BYTES) {
+        throw new Error("Random HLS temporary storage limit exceeded.");
+      }
+
+      const files = new Map<string, string>();
+      const finalNames = [
+        `init-${String(chunkStartIndex).padStart(6, "0")}.mp4`,
+        ...expectedNames,
+      ];
+      for (let index = 0; index < localFiles.length; index += 1) {
+        const localPath = path.join(temporaryDirectory, localFiles[index]);
+        const finalPath = path.join(directory, finalNames[index]);
+        await rename(localPath, finalPath);
+        files.set(finalNames[index], finalPath);
+      }
+      const cacheChunk: RandomHlsCacheChunk = {
+        key: `${sessionId}:${chunkStartIndex}`,
+        sessionId,
+        chunkStartIndex,
+        files,
+        bytes,
+        readers: 0,
+        touchedAt: Date.now(),
+      };
+      await storeRandomHlsCacheChunk(cacheChunk);
+      if (chunkStartIndex === 0 && !firstFragmentReported) {
+        firstFragmentReported = true;
+        options.onFirstFragment?.();
+      }
+      return cacheChunk;
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true }).catch(
+        () => undefined,
+      );
+      releaseSlot();
+    }
+  };
+
+  const getChunk = async (chunkStartIndex: number, signal?: AbortSignal) => {
+    const cacheKey = `${sessionId}:${chunkStartIndex}`;
+    const cached = randomHlsCache.get(cacheKey);
+    if (cached) {
+      cached.touchedAt = Date.now();
+      cached.readers += 1;
+      return cached;
+    }
+    let task = chunkTasks.get(chunkStartIndex);
+    if (!task) {
+      const controller = new AbortController();
+      const abortForSession = () =>
+        controller.abort(new Error("Random HLS session cancelled."));
+      if (sessionController.signal.aborted) abortForSession();
+      else
+        sessionController.signal.addEventListener("abort", abortForSession, {
+          once: true,
+        });
+      task = {
+        controller,
+        waiters: 0,
+        settled: false,
+        promise: Promise.resolve(null as unknown as RandomHlsCacheChunk),
+      };
+      const activeTask = task;
+      activeTask.promise = renderChunk(chunkStartIndex, controller.signal)
+        .then((chunk) => {
+          // Reserve cache readers for every caller already waiting on this
+          // shared render before another render can evict its output.
+          activeTask.settled = true;
+          activeTask.result = chunk;
+          chunk.readers += activeTask.waiters;
+          return chunk;
+        })
+        .catch((error) => {
+          activeTask.settled = true;
+          throw error;
+        })
+        .finally(() => {
+          activeTask.settled = true;
+          sessionController.signal.removeEventListener(
+            "abort",
+            abortForSession,
+          );
+          if (chunkTasks.get(chunkStartIndex) === activeTask) {
+            chunkTasks.delete(chunkStartIndex);
+          }
+        });
+      chunkTasks.set(chunkStartIndex, activeTask);
+    }
+
+    const activeTask = task;
+    activeTask.waiters += 1;
+    try {
+      return await waitForSharedRandomHlsTask(activeTask.promise, signal);
+    } catch (error) {
+      // A lease was reserved when the shared render completed. If this
+      // caller cancelled at the same time, return its unused reservation.
+      if (activeTask.result) {
+        activeTask.result.readers = Math.max(0, activeTask.result.readers - 1);
+        if (closed && activeTask.result.readers === 0) {
+          await deleteRandomHlsCacheChunk(activeTask.result);
+        }
+      }
+      throw error;
+    } finally {
+      activeTask.waiters = Math.max(0, activeTask.waiters - 1);
+      if (!activeTask.waiters && !activeTask.settled) {
+        activeTask.controller.abort(
+          new Error("No HLS segment requests still need this render."),
+        );
+      }
+    }
+  };
+
+  const readSegment = async (name: string, signal?: AbortSignal) => {
+    if (closed || signal?.aborted) {
+      throw new Error("Random HLS segment request cancelled.");
+    }
+    const object = parseRandomAccessObjectName(name, segmentCount);
+    if (
+      !object ||
+      (object.kind === "init"
+        ? !manifest.includes(`URI="${name}"`)
+        : !manifest.includes(name))
+    ) {
+      throw new Error("HLS segment is outside the published playlist.");
+    }
+    const chunkStartIndex =
+      object.kind === "init"
+        ? object.index
+        : Math.floor(object.index / RANDOM_HLS_SEGMENTS_PER_CHUNK) *
+          RANDOM_HLS_SEGMENTS_PER_CHUNK;
+    const chunk = await getChunk(chunkStartIndex, signal);
+    try {
+      const finalName =
+        object.kind === "init"
+          ? `init-${String(chunkStartIndex).padStart(6, "0")}.mp4`
+          : name;
+      const filePath = chunk.files.get(finalName);
+      if (!filePath) throw new Error("HLS segment is unavailable.");
+      if (closed || signal?.aborted) {
+        throw new Error("Random HLS segment request cancelled.");
+      }
+      chunk.touchedAt = Date.now();
+      return await readFile(filePath, signal ? { signal } : undefined);
+    } finally {
+      chunk.readers = Math.max(0, chunk.readers - 1);
+      if (closed && chunk.readers === 0) {
+        await deleteRandomHlsCacheChunk(chunk);
+      }
+    }
+  };
+
+  if (options.signal) {
+    if (options.signal.aborted) close("Random HLS session was cancelled.");
+    else
+      options.signal.addEventListener(
+        "abort",
+        () => close("Random HLS session was cancelled."),
+        { once: true },
+      );
+  }
+
+  return {
+    randomAccess: true as const,
+    durationSeconds,
+    waitUntilReady: async (signal?: AbortSignal) => {
+      await readSegment("segment-000000.m4s", signal);
+    },
+    readManifest: async () => manifest,
+    readSegment,
+    getPublishedWindow: () => ({
+      durationSeconds,
+      segmentCount,
+    }),
     close,
   };
 }

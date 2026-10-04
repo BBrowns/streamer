@@ -1,5 +1,6 @@
 import {
   validateActionBridgeUrl,
+  type BridgeCapabilitiesV1,
   type BridgeDelivery,
   type BridgeJobResponseV1,
   type BridgeJobV1,
@@ -474,13 +475,32 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
       let selection: CreateBridgeJobV1["selection"] = buildSelection(
         request.candidate.stream,
       );
+      const needsCapabilities =
+        delivery === "hls" ||
+        (request.action === "play" && request.audioLanguage !== undefined);
+      let capabilities: BridgeCapabilitiesV1 | undefined;
+      if (needsCapabilities) {
+        try {
+          capabilities = await awaitWithPreparationAbort(
+            this.client.getCapabilities(request.signal),
+            request.signal,
+          );
+        } catch (error) {
+          throwIfPreparationAborted(request.signal);
+          if (
+            delivery !== "hls" ||
+            (request.action === "play" && request.audioLanguage !== undefined)
+          ) {
+            throw error;
+          }
+          // A capabilities failure must not break a bridge that still speaks
+          // the old HLS contract. Continue without the random-seek extension.
+          capabilities = undefined;
+        }
+      }
       if (request.action === "play" && request.audioLanguage !== undefined) {
-        const capabilities = await awaitWithPreparationAbort(
-          this.client.getCapabilities(request.signal),
-          request.signal,
-        );
         throwIfPreparationAborted(request.signal);
-        if (capabilities.capabilities.jobs.audioPreferences) {
+        if (capabilities?.capabilities.jobs.audioPreferences) {
           selection = { ...selection, audioLanguage: request.audioLanguage };
         } else if (request.audioLanguage !== "en") {
           throw new SourcePreparationError(
@@ -509,6 +529,17 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
           })(),
         },
         delivery,
+        ...(delivery === "hls" &&
+        capabilities?.capabilities.jobs.randomHlsSeeking
+          ? {
+              seekMode: "random" as const,
+              ...(Number.isFinite(request.durationHintSeconds) &&
+              (request.durationHintSeconds ?? 0) > 0 &&
+              (request.durationHintSeconds ?? 0) <= 86_400
+                ? { expectedDurationSeconds: request.durationHintSeconds }
+                : {}),
+            }
+          : {}),
         ...(selection ? { selection } : {}),
       };
       recordPlaybackDebugEvent({
@@ -606,6 +637,27 @@ export class BridgeV1SourceAdapter implements SourcePreparationAdapter {
             route: effectiveRoute,
             bridgeJobId: job.id,
             runtime,
+            ...(job.media.randomSeek?.durationSeconds
+              ? {
+                  timeline: {
+                    durationSeconds: job.media.randomSeek.durationSeconds,
+                    durationSource: "media" as const,
+                    seekableOnRequest: job.media.randomSeek.status === "ready",
+                    timeOriginSeconds: 0,
+                  },
+                }
+              : Number.isFinite(request.durationHintSeconds) &&
+                  (request.durationHintSeconds ?? 0) > 0 &&
+                  (request.durationHintSeconds ?? 0) <= 86_400
+                ? {
+                    timeline: {
+                      durationSeconds: request.durationHintSeconds!,
+                      durationSource: "metadata" as const,
+                      seekableOnRequest: false,
+                      timeOriginSeconds: 0,
+                    },
+                  }
+                : {}),
             release: async () => {
               runtime.stop();
               await cancelJobOnce(job.id);
