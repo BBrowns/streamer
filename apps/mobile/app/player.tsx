@@ -302,8 +302,10 @@ export default function PlayerScreen() {
           streamState !== "error" &&
           activeSession?.status !== "failed",
         );
+  const playerE2eEnabled =
+    __DEV__ && process.env.EXPO_PUBLIC_STREAMER_E2E === "true";
   const controlsAutoHideAllowed = shouldAutoHidePlayerChrome({
-    isPlaying,
+    isPlaying: isPlaying && !playerE2eEnabled,
     isScrubbing: runtimeViewState.kind === "scrubbing",
     settingsOpen,
     hasControlFocus: controlsFocused,

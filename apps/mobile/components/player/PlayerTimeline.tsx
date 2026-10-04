@@ -360,7 +360,9 @@ export function PlayerTimeline({
       ) : null}
 
       <View style={styles.row}>
-        <Text style={styles.timeText}>{currentLabel}</Text>
+        <Text testID="player-timeline-current-time" style={styles.timeText}>
+          {currentLabel}
+        </Text>
         <GestureDetector gesture={panGesture}>
           <View
             testID="player-progress-slider"
