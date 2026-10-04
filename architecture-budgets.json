@@ -2,13 +2,5 @@
   "version": 1,
   "scope": "server/src/modules",
   "defaultMaxLines": 900,
-  "exceptions": {
-    "server/src/modules/aggregator/aggregator.service.ts": {
-      "maxLines": 2300,
-      "owner": "server platform maintainers",
-      "reviewBy": "2026-11-04",
-      "reason": "Central legacy boundary with characterization coverage; this scoped CI repair preserves the existing controller and planner contracts while the first extraction is prepared.",
-      "nextAction": "Extract upstream fetch and response validation with focused consumer tests by 2026-11-04; keep this file at or below 2300 lines."
-    }
-  }
+  "exceptions": {}
 }

@@ -1,31 +1,46 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
-export const REVIEWED_ADVISORIES = Object.freeze({
+export const REVIEWED_ADVISORIES = Object.freeze({});
+
+export const LOCAL_SECURITY_PATCHES = Object.freeze({
   "GHSA-VFJ7-8CJW-P6XM": {
     dependency: "braces",
-    expiresOn: "2026-10-18",
+    version: "3.0.3",
+    reviewBy: "2026-10-18",
     owner: "mobile platform maintainers",
     reason:
-      "The advisory has no published fix, and Tailwind 3 remains required by the current NativeWind compatibility contract.",
+      "The published braces 3.0.3 package has no upstream fix; the parser now bounds nesting before recursive AST walkers run.",
     nextAction:
-      "Re-check by 2026-10-18 and remove this exception as soon as a patched braces 3.x release is available and resolved.",
-    scope: "braces@3.0.3 at node_modules/braces, currently used by Tailwind CSS 3.4.19",
+      "Re-check the upstream advisory by 2026-10-18 and remove this local patch when a fixed braces 3.x release is available and resolved.",
+    scope:
+      "braces@3.0.3 at node_modules/braces, currently used by Tailwind CSS 3.4.19",
     allowedNodes: ["node_modules/braces"],
+    packageJsonPath: "node_modules/braces/package.json",
+    sourcePath: "node_modules/braces/lib/parse.js",
+    patchFile: "patches/braces+3.0.3.patch",
+    sourceMarkers: ["const MAX_DEPTH = 100;", "if (stack.length > MAX_DEPTH)"],
   },
   "GHSA-86W9-CPQP-85RV": {
     dependency: "node-forge",
-    expiresOn: "2026-10-18",
+    version: "1.4.0",
+    reviewBy: "2026-10-18",
     owner: "mobile platform maintainers",
     reason:
-      "The advisory has no published fix, and Expo SDK 57 currently resolves node-forge 1.4.0.",
+      "The published node-forge 1.4.0 package has no upstream release fix; verification now rejects unconsumed nested DigestAlgorithm elements.",
     nextAction:
-      "Re-check by 2026-10-18, update Expo or node-forge when a fixed release is available, and remove this exception.",
+      "Re-check upstream PR #1152 by 2026-10-18 and remove this local patch when a fixed node-forge release is available and resolved.",
     scope:
       "node-forge@1.4.0 at node_modules/node-forge, used by Expo SDK 57 and @expo/cli 57.0.27",
     allowedNodes: ["node_modules/node-forge"],
+    packageJsonPath: "node_modules/node-forge/package.json",
+    sourcePath: "node_modules/node-forge/lib/rsa.js",
+    patchFile: "patches/node-forge+1.4.0.patch",
+    sourceMarkers: ["CVE-2026-85393", "obj.value[0].value.length !=="],
   },
 });
 
@@ -50,12 +65,51 @@ function isExceptionActive(exception, now) {
   );
 }
 
+function isLocalPatchActive(patch, now, root) {
+  const reviewBy = Date.parse(`${patch.reviewBy}T23:59:59.999Z`);
+  if (
+    typeof patch.owner !== "string" ||
+    !patch.owner.trim() ||
+    typeof patch.reason !== "string" ||
+    !patch.reason.trim() ||
+    typeof patch.nextAction !== "string" ||
+    !patch.nextAction.trim() ||
+    typeof patch.scope !== "string" ||
+    !patch.scope.trim() ||
+    !Number.isFinite(reviewBy) ||
+    now.getTime() > reviewBy
+  ) {
+    return false;
+  }
+
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(join(root, patch.packageJsonPath), "utf8"),
+    );
+    const source = readFileSync(join(root, patch.sourcePath), "utf8");
+    const patchSource = readFileSync(join(root, patch.patchFile), "utf8");
+    return (
+      packageJson.version === patch.version &&
+      patchSource.length > 0 &&
+      patch.sourceMarkers.every((marker) => source.includes(marker))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function evaluateAuditReport(
   report,
-  { now = new Date(), exceptions = REVIEWED_ADVISORIES } = {},
+  {
+    now = new Date(),
+    exceptions = REVIEWED_ADVISORIES,
+    localPatches = LOCAL_SECURITY_PATCHES,
+    root = process.cwd(),
+  } = {},
 ) {
   const blocking = [];
   const reviewed = [];
+  const patched = [];
   const seen = new Set();
 
   for (const vulnerability of Object.values(report?.vulnerabilities ?? {})) {
@@ -75,12 +129,24 @@ export function evaluateAuditReport(
       seen.add(key);
 
       const exception = id ? exceptions[id] : undefined;
+      const localPatch = id ? localPatches[id] : undefined;
       const allowedNodes = exception?.allowedNodes;
       const nodesMatch =
         Array.isArray(allowedNodes) &&
         allowedNodes.length === nodes.length &&
         nodes.every((node, index) => node === allowedNodes[index]);
+      const patchNodesMatch =
+        Array.isArray(localPatch?.allowedNodes) &&
+        localPatch.allowedNodes.length === nodes.length &&
+        nodes.every((node, index) => node === localPatch.allowedNodes[index]);
       if (
+        localPatch &&
+        localPatch.dependency === via.name &&
+        patchNodesMatch &&
+        isLocalPatchActive(localPatch, now, root)
+      ) {
+        patched.push({ id, advisory: via, patch: localPatch });
+      } else if (
         exception &&
         exception.dependency === via.name &&
         nodesMatch &&
@@ -93,7 +159,7 @@ export function evaluateAuditReport(
     }
   }
 
-  return { blocking, reviewed };
+  return { blocking, reviewed, patched };
 }
 
 function runAudit() {
@@ -132,7 +198,14 @@ function runAudit() {
     return 1;
   }
 
-  const { blocking, reviewed } = evaluateAuditReport(report);
+  const { blocking, reviewed, patched } = evaluateAuditReport(report);
+  for (const finding of patched) {
+    console.warn(
+      `Verified local security patch: ${finding.id} (${finding.advisory.name}); ` +
+        `owner: ${finding.patch.owner}; review by ${finding.patch.reviewBy}; ` +
+        `scope: ${finding.patch.scope}; next: ${finding.patch.nextAction}.`,
+    );
+  }
   for (const finding of reviewed) {
     console.warn(
       `Reviewed dependency finding: ${finding.id} (${finding.advisory.name}); ` +
@@ -153,7 +226,7 @@ function runAudit() {
   }
 
   console.log(
-    `Dependency audit passed with ${reviewed.length} reviewed advisory exception(s).`,
+    `Dependency audit passed with ${patched.length} verified local security patch(es) and ${reviewed.length} reviewed exception(s).`,
   );
   return 0;
 }
